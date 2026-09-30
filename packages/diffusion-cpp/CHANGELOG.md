@@ -1,5 +1,93 @@
 # Changelog
 
+## [0.26.0] - 2026-09-28
+
+### Added
+
+- `assessFit` projects a load's memory demand against the memory free right
+  now, without loading weights. It takes the same `files` and `config` as
+  `createInstance`, plus the generation `workload` the projection is sized for,
+  and returns a `fits` / `does-not-fit` / `error` status and reason, the backend
+  and params placement, whether VAE tiling or layer streaming were needed, and
+  a per-device, per-module memory report. A configuration the engine cannot
+  plan for — a pinned `main-gpu`, `device: 'cpu'`, a module-specific
+  `paramsBackend`, or an OpenCL preference that is not the first enumerated
+  GPU — is refused as `unsupported-config`. Exported from the package root with
+  `DiffusionFitRequest`, `DiffusionFitResult`, `DiffusionFitStatus` and
+  `DiffusionFitWorkload` types
+  ([#4668](https://github.com/tetherto/qvac/pull/4668)).
+
+### Changed
+
+- The mapping from a file set to engine parameters is shared between the image
+  load and `assessFit`, so a fit refuses and describes the same paths a load
+  does.
+
+## [0.25.1] - 2026-09-23
+
+### Fixed
+
+- Update the native engine to support header-only safetensors in its memory-fit
+  C API, including auxiliary models and LoRAs. Normal model loading continues
+  to require complete weight files. No JavaScript API changes.
+
+## [0.25.0] - 2026-09-15
+
+### Added
+
+- ABot-World sessions expose `paramsBackend`, `maxVram`, and `streamLayers`,
+  using the same parameter manager and graph-cut executor as MiniMax-H3.
+  CPU-backed streaming and explicit disk residency work with the walk's KV cache.
+- World `verbosity` exposes native placement and segment-residency logs.
+
+### Changed
+
+- Resolve `stable-diffusion-cpp@2026-08-11#2` from the registry without an overlay.
+- World verbosity accepts numeric strings, validates levels 0..3, and restores
+  the shared log level on unload. Native log-level reads are thread-safe.
+- Invalid World budgets and decoder disk placement report typed input errors.
+
+## [0.24.0] - 2026-09-15
+
+This release adds explicit model-placement and layer-streaming controls, with
+hardware validation on NVIDIA RTX 5090, AMD Strix Halo, and NVIDIA DGX Spark.
+It also removes deprecated CPU-placement options and the explicit FLUX.1
+compatibility route.
+
+### Added
+
+- `backend`, `params_backend`, `max_vram`, and `stream_layers` configure graph
+  execution, parameter residency, VRAM-budgeted graph cutting, and diffusion
+  layer streaming from CPU RAM.
+- Disk-backed parameter residency remains available through
+  `params_backend`, with effective assignments logged for validation.
+
+### Changed
+
+- `offload_to_cpu` now composes with explicit `params_backend` assignments as
+  a `*=cpu` default, so later per-module assignments override it.
+- The package has pnpm/Nx project configuration and direct build dependencies
+  needed by the monorepo workspace.
+
+### Removed
+
+- Deprecated `control_net_cpu`, `clip_on_cpu`, and `vae_on_cpu` configuration
+  options. Use `backend` for graph execution or `params_backend` to preserve
+  the previous parameter-residency behaviour.
+- The public `flux_flow` prediction route for FLUX.1. FLUX.2 continues to use
+  `flux2_flow`.
+
+### Pull Requests
+
+- [#4372](https://github.com/tetherto/qvac/pull/4372) - QVAC-23754
+  feat[bc]: complete diffusion layer streaming support
+- [#4325](https://github.com/tetherto/qvac/pull/4325) - QVAC-22798 fix[bc]:
+  remove FLUX.1 compatibility
+- [#3543](https://github.com/tetherto/qvac/pull/3543) - QVAC-19792: pnpm+nx
+  monorepo foundation + first nx-affected CI consolidations
+- [#4345](https://github.com/tetherto/qvac/pull/4345) - QVAC-24727 chore:
+  remove co-load smoke workflows, actions and code
+
 ## [0.23.0] - 2026-09-07
 
 ### Changed

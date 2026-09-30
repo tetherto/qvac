@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0]
+
+Release Date: 2026-09-17
+
+### ✨ Features
+
+- `model` records carry an optional `fitBlobBinding`, a second `model-blob-binding` addressing a weightless description of the artifact — the tensor list an engine's dry-run fitter reads, with none of the weights. Spec version 3; the field is appended and optional, so a reader on version 2 skips it. (see PR [#4445](https://github.com/tetherto/qvac/pull/4445))
+
 ## [0.3.0]
 
 Release Date: 2026-05-25

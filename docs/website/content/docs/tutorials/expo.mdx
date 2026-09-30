@@ -146,6 +146,33 @@ Create `qvac.config.json` in the project root and enable only the LLM plugin use
 ```
 
 Without a `plugins` selection, QVAC bundles every built-in AI capability. Keeping this tutorial to the LLM plugin avoids linking native engines the app does not use.
+
+Speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) ship Android and iOS binaries in a separate package. If you enable those plugins, add that package as a direct dependency, pinned to the same exact version as the JavaScript package:
+
+```json
+{
+  "dependencies": {
+    "@qvac/tts-ggml": "x.y.z",
+    "@qvac/tts-ggml-android-arm64": "x.y.z"
+  }
+}
+```
+
+iOS uses `@qvac/tts-ggml-ios` instead of `@qvac/tts-ggml-android-arm64`. Llama does not need an extra package. `npx expo prebuild` names the missing pin if you forget.
+
+To have `npx expo prebuild` add the missing packages for you, pass `installMissingPrebuilds` to the plugin. It adds them to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the exact addon version, for the platform being prebuilt:
+
+```json title="app.json"
+{
+  "expo": {
+    "plugins": [
+      ["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }]
+    ]
+  }
+}
+```
+
+The option is off by default because it changes `package.json` and needs network access during `expo prebuild`.
 </Step>
 
 <Step>

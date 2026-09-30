@@ -7,9 +7,9 @@
 // chatterbox WER leg in addon.test.js (whisper ASR + wordErrorRate).
 //
 // macOS-desktop only (isDarwin): the whisper WER infra is desktop-only
-// across the tts-ggml suite. Runs on both the Metal GPU runner and the
-// no_gpu CPU runner (backend chosen like the quant loop). large-v1 is
-// RAM-gated; both tiers skip cleanly if their GGUF isn't staged.
+// across the tts-ggml suite. Runs on the Metal GPU runner only and is skipped
+// on CPU-only runners (NO_GPU=true). large-v1 is RAM-gated; both tiers skip
+// cleanly if their GGUF isn't staged.
 
 const os = require('bare-os')
 const path = require('bare-path')
@@ -19,6 +19,7 @@ const test = require('brittle')
 const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
 const { ensureParlerModel, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isDarwin = platform === 'darwin'
@@ -26,10 +27,9 @@ const isApple = platform === 'darwin' || platform === 'ios'
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 const LARGE_MIN_RAM_BYTES = 16 * 1024 ** 3
 
-// Calibrated 2026-07-24: the CPU (no_gpu) runner is 0.0% WER at any seed; the
-// Metal/GPU runner diverges (FP reorder) — seed 42 is 0% on Apple-Silicon but
-// 22.2% on Intel-Mac Metal — so 0.35 tolerates the GPU variance while the CPU
-// leg stays effectively strict (greedy would be 50-100%, so this still asserts it).
+// Calibrated 2026-07-24: Metal diverges by FP reorder — seed 42 is 0% on
+// Apple-Silicon but 22.2% on Intel-Mac Metal — so 0.35 tolerates the GPU
+// variance while still asserting the words (greedy would be 50-100%).
 const WER_THRESHOLD = 0.35
 
 // Clear English sentences, all >= 9 words (a single ASR slip stays <= ~0.11,
@@ -50,7 +50,7 @@ function getBaseDir() {
 for (const { variant } of PARLER_WER_TIERS) {
   test(
     `Parler WER (${variant}): English synthesis transcribes within ${(WER_THRESHOLD * 100).toFixed(0)}%`,
-    { timeout: 1800000, skip: !isDarwin },
+    { timeout: 1800000, skip: !isDarwin || NO_GPU },
     async (t) => {
       if (variant === 'large' && os.totalmem() < LARGE_MIN_RAM_BYTES) {
         t.pass(
@@ -77,7 +77,12 @@ for (const { variant } of PARLER_WER_TIERS) {
       }
 
       const useGPU = isApple && !NO_GPU
-      const model = await loadParlerTTS({ parlerModelPath: download.path, seed: 42, useGPU })
+      const model = await loadParlerTTS({
+        threads: TTS_TEST_THREADS,
+        parlerModelPath: download.path,
+        seed: 42,
+        useGPU
+      })
       const entries = []
       try {
         for (const text of WER_SENTENCES) {

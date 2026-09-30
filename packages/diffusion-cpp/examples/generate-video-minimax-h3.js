@@ -4,9 +4,12 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const VideoStableDiffusion = require('../video')
+const { setLogger, releaseLogger } = require('../addonLogging')
 
-const MODELS_DIR = path.resolve(__dirname, '../models/minimax-h3')
-const OUTPUT_DIR = path.resolve(__dirname, '../output')
+const MODELS_DIR = path.resolve(
+  process.env.H3_MODELS_DIR || path.join(__dirname, '../models/minimax-h3')
+)
+const OUTPUT_DIR = path.resolve(process.env.H3_OUTPUT_DIR || path.join(__dirname, '../output'))
 
 const files = {
   model: path.join(MODELS_DIR, process.env.H3_MODEL || 'minimax_h3_fl2va_pruned-Q4_K.gguf'),
@@ -20,27 +23,36 @@ function requireFile(label, filePath) {
 }
 
 async function main() {
-  for (const [label, filePath] of Object.entries(files)) requireFile(`MiniMax-H3 ${label}`, filePath)
+  for (const [label, filePath] of Object.entries(files))
+    requireFile(`MiniMax-H3 ${label}`, filePath)
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
+
+  const logPriorities = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+  setLogger((priority, message) => {
+    const label = logPriorities[priority] || `UNKNOWN(${priority})`
+    process.stdout.write(`[C++ ${label}] ${message}`)
+    if (!message.endsWith('\n')) process.stdout.write('\n')
+  })
 
   const config = {
     device: process.env.H3_DEVICE || 'gpu',
     diffusion_fa: true,
     offload_to_cpu: process.env.H3_OFFLOAD_TO_CPU !== '0',
-    stream_layers: process.env.H3_STREAM_LAYERS === '1'
+    stream_layers: process.env.H3_STREAM_LAYERS === '1',
+    verbosity: process.env.H3_VERBOSITY || 0
   }
   if (process.env.H3_BACKEND) config.backend = process.env.H3_BACKEND
   if (process.env.H3_PARAMS_BACKEND) config.params_backend = process.env.H3_PARAMS_BACKEND
   if (process.env.H3_MAX_VRAM) config.max_vram = process.env.H3_MAX_VRAM
 
-  const model = new VideoStableDiffusion({
-    files,
-    config,
-    opts: { stats: true },
-    logger: console
-  })
-
+  let model
   try {
+    model = new VideoStableDiffusion({
+      files,
+      config,
+      opts: { stats: true },
+      logger: console
+    })
     await model.load()
     const response = await model.run({
       mode: 'txt2vid',
@@ -74,9 +86,14 @@ async function main() {
     const output = path.join(OUTPUT_DIR, process.env.OUTPUT || 'minimax-h3-coffee-commercial.avi')
     fs.writeFileSync(output, avi)
     console.log(`Saved ${output}`)
-    if (stats) console.log(`Stats: ${stats.videoFrames} frames @ ${stats.fps} fps; audio=${stats.hasAudio}`)
+    if (stats)
+      console.log(`Stats: ${stats.videoFrames} frames @ ${stats.fps} fps; audio=${stats.hasAudio}`)
   } finally {
-    await model.unload()
+    try {
+      if (model) await model.unload()
+    } finally {
+      releaseLogger()
+    }
   }
 }
 

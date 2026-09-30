@@ -9,8 +9,8 @@ export const SLICE_DEFINITIONS = [
   { suffix: 'darwin-arm64', hosts: ['darwin-arm64'], os: ['darwin'], cpu: ['arm64'] },
   { suffix: 'darwin-x64', hosts: ['darwin-x64'], os: ['darwin'], cpu: ['x64'] },
   { suffix: 'win32-x64', hosts: ['win32-x64'], os: ['win32'], cpu: ['x64'] },
-  { suffix: 'android-arm64', hosts: ['android-arm64'], os: ['android'], cpu: ['arm64'] },
-  { suffix: 'ios', hosts: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'], os: ['ios'] }
+  { suffix: 'android-arm64', hosts: ['android-arm64'], crossBuilt: true },
+  { suffix: 'ios', hosts: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'], crossBuilt: true }
 ]
 
 export const PLATFORM_INDEX_SOURCE = "module.exports = require.addon('./addon')\n"
@@ -79,7 +79,6 @@ export function buildSliceManifest (metaManifest, definition) {
       './package': './package.json'
     },
     files: ['index.js', 'addon', 'NOTICE'],
-    os: definition.os,
     repository: metaManifest.repository,
     author: metaManifest.author,
     license: metaManifest.license,
@@ -87,6 +86,7 @@ export function buildSliceManifest (metaManifest, definition) {
     homepage: metaManifest.homepage,
     engines: metaManifest.engines
   }
+  if (definition.os) manifest.os = definition.os
   if (definition.cpu) manifest.cpu = definition.cpu
   if (definition.libc) manifest.libc = definition.libc
   return manifest
@@ -104,7 +104,17 @@ export function buildSliceReadme (metaManifest, definition) {
   return '# ' + metaManifest.name + '-' + definition.suffix + '\n\n' +
     'Prebuilt ' + definition.suffix + ' binaries for [' + metaManifest.name +
     '](https://www.npmjs.com/package/' + metaManifest.name + ').\n\n' +
-    'Do not depend on this package directly. Install ' + metaManifest.name +
+    buildSliceReadmeUsage(metaManifest, definition)
+}
+
+function buildSliceReadmeUsage (metaManifest, definition) {
+  if (definition.crossBuilt) {
+    return 'This target is cross-built: no install host ever reports its platform, so\n' +
+      '`os`/`cpu` filtered optional dependencies can never select it. Applications\n' +
+      'targeting ' + definition.suffix + ' must depend on this package directly,\n' +
+      'pinned to the exact ' + metaManifest.name + ' version.\n'
+  }
+  return 'Do not depend on this package directly. Install ' + metaManifest.name +
     ' instead; package managers that support `os`/`cpu` filtered optional\n' +
     'dependencies (npm 7+, pnpm, bun, Yarn Berry) select the right platform\n' +
     'package automatically.\n'
@@ -112,10 +122,14 @@ export function buildSliceReadme (metaManifest, definition) {
 
 export function buildOptionalDependencies (metaManifest, definitions) {
   const optionalDependencies = {}
-  for (const definition of definitions) {
+  for (const definition of selectHostFilteredDefinitions(definitions)) {
     optionalDependencies[metaManifest.name + '-' + definition.suffix] = metaManifest.version
   }
   return optionalDependencies
+}
+
+function selectHostFilteredDefinitions (definitions) {
+  return definitions.filter((definition) => !definition.crossBuilt)
 }
 
 function readManifest (manifestPath) {
@@ -126,15 +140,30 @@ function writeManifest (manifestPath, manifest) {
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, MANIFEST_INDENT) + '\n')
 }
 
-function listHostDirs (prebuildsDir) {
+function listHostDirs (prebuildsDir, keepDirs) {
   if (!fs.existsSync(prebuildsDir)) {
     throw new Error('No prebuilds directory at ' + prebuildsDir)
   }
   return fs
     .readdirSync(prebuildsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && !keepDirs.includes(entry.name))
     .map((entry) => entry.name)
     .sort()
+}
+
+// A kept dir is part of what the meta ships (fabric's C++ SDK under include/
+// and share/), so publishing without it is as broken as a binary-less slice.
+function assertKeepDirsPresent (prebuildsDir, keepDirs) {
+  const missing = keepDirs.filter((dir) => {
+    const dirPath = path.join(prebuildsDir, dir)
+    return !fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()
+  })
+  if (missing.length > 0) {
+    throw new Error(
+      'Merged prebuilds artifact is missing the meta package dirs: ' + missing.join(', ') +
+      '. Refusing to publish a meta package without them.'
+    )
+  }
 }
 
 function sliceDirName (metaManifest, definition) {
@@ -173,12 +202,12 @@ function moveHostDirs (hosts, prebuildsDir, addonPrebuildsDir) {
   }
 }
 
-function removeEmptiedPrebuildsDir (prebuildsDir) {
-  const leftovers = fs.readdirSync(prebuildsDir)
+function removeEmptiedPrebuildsDir (prebuildsDir, keepDirs) {
+  const leftovers = fs.readdirSync(prebuildsDir).filter((entry) => !keepDirs.includes(entry))
   if (leftovers.length > 0) {
     throw new Error('Unexpected leftover entries under ' + prebuildsDir + ': ' + leftovers.join(', '))
   }
-  fs.rmdirSync(prebuildsDir)
+  if (keepDirs.length === 0) fs.rmdirSync(prebuildsDir)
 }
 
 function directorySizeBytes (dir) {
@@ -202,22 +231,27 @@ function assertSliceSize (sliceDir, maxSliceMb) {
 }
 
 export function slicePlatformPackages (options) {
-  const { workdir, outDir, maxSliceMb = DEFAULT_MAX_SLICE_MB, log = () => {} } = options
+  const { workdir, outDir, maxSliceMb = DEFAULT_MAX_SLICE_MB, keepDirs = [], log = () => {} } = options
   const metaManifestPath = path.join(workdir, 'package.json')
   const metaManifest = readManifest(metaManifestPath)
   const prebuildsDir = path.join(workdir, 'prebuilds')
 
-  validateHostDirs(listHostDirs(prebuildsDir))
+  validateHostDirs(listHostDirs(prebuildsDir, keepDirs))
   assertAllHostAddonsPresent(prebuildsDir)
+  assertKeepDirsPresent(prebuildsDir, keepDirs)
   fs.mkdirSync(outDir, { recursive: true })
 
   const context = { metaManifest, workdir, outDir, prebuildsDir }
   const sliceDirs = stageAllSlices(context, maxSliceMb, log)
 
-  removeEmptiedPrebuildsDir(prebuildsDir)
+  removeEmptiedPrebuildsDir(prebuildsDir, keepDirs)
   metaManifest.optionalDependencies = buildOptionalDependencies(metaManifest, SLICE_DEFINITIONS)
   writeManifest(metaManifestPath, metaManifest)
-  log('Injected ' + SLICE_DEFINITIONS.length + ' optionalDependencies into ' + metaManifest.name)
+  log(
+    'Injected ' + Object.keys(metaManifest.optionalDependencies).length +
+    ' host-filtered optionalDependencies into ' + metaManifest.name +
+    '; cross-built targets are direct dependencies of the consuming application'
+  )
 
   return sliceDirs
 }
@@ -242,10 +276,14 @@ function parseArgs (argv) {
     if (flag === '--workdir') options.workdir = value
     else if (flag === '--out-dir') options.outDir = value
     else if (flag === '--max-slice-mb') options.maxSliceMb = Number(value)
+    else if (flag === '--keep-dirs') options.keepDirs = value.split(/[\s,]+/).filter(Boolean)
     else throw new Error('Unknown option: ' + flag)
   }
   if (!options.workdir || !options.outDir) {
-    throw new Error('Usage: slice-platform-packages.mjs --workdir <dir> --out-dir <dir> [--max-slice-mb <n>]')
+    throw new Error(
+      'Usage: slice-platform-packages.mjs --workdir <dir> --out-dir <dir> ' +
+      '[--max-slice-mb <n>] [--keep-dirs "<dir> <dir>"]'
+    )
   }
   return options
 }

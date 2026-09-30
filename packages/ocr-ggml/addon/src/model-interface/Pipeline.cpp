@@ -121,7 +121,7 @@ Pipeline::Pipeline(
   // device is handed to every inference step; CPU is selected when VULKAN was
   // requested but unavailable (see OcrBackendSelection).
   backendInfo_ = ocr_backend_selection::selectBackendDevice(
-      config_.backendDevice, config_.gpuDevice);
+      config_.backendDevice, config_.gpuDevice, config_.mainGpu);
   ggml_backend_dev_t selectedDevice = backendInfo_.device;
 
   // Resolve the recognizer feature-extractor batch (0 = auto). On Vulkan, many
@@ -168,7 +168,7 @@ Pipeline::Pipeline(
   ggml_backend_dev_t detectionDevice = selectedDevice;
   if (config_.detectionBackendDevice.has_value()) {
     const auto detectionInfo = ocr_backend_selection::selectBackendDevice(
-        *config_.detectionBackendDevice, config_.gpuDevice);
+        *config_.detectionBackendDevice, config_.gpuDevice, config_.mainGpu);
     detectionDevice = detectionInfo.device;
   } else if (config_.mode == PipelineMode::DOCTR && isMaliVulkan) {
     const auto detectionInfo =

@@ -108,6 +108,16 @@ export interface PluginModelResult {
 }
 
 export interface PluginLogging {
+  /**
+   * The addon's logging module — an object with `setLogger(callback)` and an
+   * optional `releaseLogger()` — or a function returning one (a promise is
+   * awaited, and a CommonJS `default` export is unwrapped).
+   *
+   * Pass the function form when reaching the module means loading the addon's
+   * native binding: it is called the first time a model of this type loads,
+   * so a host without that addon's platform package fails the load it asked
+   * for rather than every plugin registration at startup.
+   */
   module: unknown
   namespace: string
 }

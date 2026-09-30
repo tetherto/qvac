@@ -37,6 +37,13 @@ void readBool(js::Object& obj, js_env_t* env, const char* name, bool& target) {
   }
 }
 
+void readFloat(
+    js::Object& obj, js_env_t* env, const char* name, float& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    target = static_cast<float>(*value);
+  }
+}
+
 void readString(
     js::Object& obj, js_env_t* env, const char* name, std::string& target) {
   if (auto value =
@@ -179,6 +186,22 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
   readBool(
       jsObject, env, "streamingEmitPartials", config.streamingEmitPartials);
   readBool(jsObject, env, "streamingEnergyVad", config.streamingEnergyVad);
+  readFloat(
+      jsObject,
+      env,
+      "streamingEnergyVadThresholdDb",
+      config.streamingEnergyVadThresholdDb);
+  readInt(
+      jsObject,
+      env,
+      "streamingEnergyVadWindowMs",
+      config.streamingEnergyVadWindowMs);
+  readInt(
+      jsObject,
+      env,
+      "streamingEnergyVadHangoverMs",
+      config.streamingEnergyVadHangoverMs);
+  readBool(jsObject, env, "streamingSpeakerVad", config.streamingSpeakerVad);
   readInt(
       jsObject, env, "streamingLeftContextMs", config.streamingLeftContextMs);
   readInt(
@@ -207,6 +230,18 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
       env,
       "streamingSpkCacheUpdatePeriod",
       config.streamingSpkCacheUpdatePeriod);
+
+  // Sortformer segmentation (offline and streaming); negative keeps the
+  // addon defaults.
+  readFloat(jsObject, env, "diarizationThreshold", config.diarizationThreshold);
+  readInt(
+      jsObject, env, "diarizationMinSegmentMs", config.diarizationMinSegmentMs);
+
+  // Engine construction: first-call prewarm and long-form windowing.
+  readBool(jsObject, env, "prewarm", config.prewarm);
+  readFloat(jsObject, env, "prewarmAudioSeconds", config.prewarmAudioSeconds);
+  readInt(jsObject, env, "longFormWindowFrames", config.longFormWindowFrames);
+  readInt(jsObject, env, "longFormContextFrames", config.longFormContextFrames);
 
   // Dynamic-backend loading; empty -> leave the existing setting alone.
   readString(jsObject, env, "backendsDir", config.backendsDir);
@@ -245,7 +280,16 @@ void JSAdapter::loadMap(
   for (auto i = 0; i < namesSize; ++i) {
     auto key = names.get<js::String>(env, i);
     auto value = jsObject.getProperty(env, key);
-    switch (getValueType(env, value)) {
+    const auto valueType = getValueType(env, value);
+    const auto keyName = key.as<std::string>(env);
+    if ((keyName == "main-gpu" || keyName == "main_gpu") &&
+        valueType != js_number && valueType != js_string) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+          "'integrated'");
+    }
+    switch (valueType) {
     // addConfigParam throws if the key already exists
     case js_boolean:
       addConfigParam(

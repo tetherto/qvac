@@ -24,7 +24,11 @@ If nothing is detected on localhost, the command prompts to install `aedes` + `w
 keeps an embedded broker alive while tests are running. Bring your own broker if you prefer — just expose
 `ws://...:8080` and `mqtt://...:1883`.
 
-**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`, `--runId`.
+**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`,
+`--include`, `--runId`. `--suite`, `--exclude-suite` and `--filter` narrow each other;
+`--include` takes exact testIds and adds them on top, so it is how you run a suite plus a
+specific test. An id it cannot find fails the run rather than being skipped. It needs
+`@qvac/test-suite` 0.11.2 or newer.
 Mobile and Electron add `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the
 full list.
 
@@ -200,7 +204,25 @@ other's bundle.
 
 See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-test-sdk.yml).
 
-- `test-e2e-smoke` — runs the `smoke` suite on desktop and mobile consumers.
+- `test-e2e-smoke` — runs the `smoke` suite **plus the tests this PR touched**, on desktop and
+  mobile consumers. The smoke suite is only a fraction of the catalog, so without this a green
+  smoke run says nothing about tests the PR added or changed. "Touched" means changed files under
+  `packages/sdk/e2e/{tests,fixtures,assets}`, plus an inference engine directory, an SDK
+  `client/api` file, and a handler module registered in `registry.ts`. Source with no declared link
+  to a test maps to nothing and leaves a plain smoke run.
+  A PR comment reports what was added, and anything
+  the impact mapper could not attribute. See
+  [Smoke runs cover the tests a PR touched](../../../docs/ci/LABELS.md#smoke-runs-cover-the-tests-a-pr-touched).
+  To check locally what a smoke run would add for your branch — this is the same code CI runs, so
+  it answers "which tests will this PR pull in?" before you push:
+
+  ```bash
+  node scripts/impacted-tests.mjs --base main --head HEAD
+  ```
+
+  It reads the TypeScript sources while `run:producer` loads `dist/tests`, so run `npm run build`
+  first if you want the two to agree locally. CI always builds before the producer.
+
 - `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
 - Both labels build `packages/inference` and test it together with `packages/sdk` from the authorized PR HEAD.
 - Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.

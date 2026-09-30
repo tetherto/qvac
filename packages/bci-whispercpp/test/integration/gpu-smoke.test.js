@@ -24,12 +24,17 @@ const os = require('bare-os')
 const path = require('bare-path')
 const test = require('brittle')
 const BCIWhispercpp = require('../../index')
-const { getTestPaths, getModelPath, detectPlatform } = require('./helpers')
+const {
+  getTestPaths,
+  getModelPath,
+  detectPlatform,
+  BCI_TEST_THREADS,
+  NO_GPU
+} = require('./helpers')
 const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
 const { platform } = detectPlatform()
 const RELAX = os.hasEnv('QVAC_BCI_GPU_SMOKE_RELAX') && os.getEnv('QVAC_BCI_GPU_SMOKE_RELAX') === '1'
-const NO_GPU = os.hasEnv('NO_GPU') && os.getEnv('NO_GPU') === 'true'
 
 const { manifest, getSamplePath } = getTestPaths()
 
@@ -152,7 +157,7 @@ async function runBci(useGpu, samplePath, sample) {
       opts: { stats: true }
     },
     {
-      whisperConfig: { language: 'en', temperature: 0.0 },
+      whisperConfig: { language: 'en', temperature: 0.0, n_threads: BCI_TEST_THREADS },
       miscConfig: { caption_enabled: false },
       contextParams: { use_gpu: useGpu },
       ...(typeof sample?.day_idx === 'number' ? { bciConfig: { day_idx: sample.day_idx } } : {})

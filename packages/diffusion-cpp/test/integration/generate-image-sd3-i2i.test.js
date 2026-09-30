@@ -57,7 +57,7 @@ safeTest(
           threads: 4,
           device: useCpu ? 'cpu' : 'gpu',
           diffusion_fa: true,
-          vae_on_cpu: true,
+          params_backend: 'vae=cpu',
           prediction: 'flow',
           flow_shift: '3.0',
           verbosity: 2

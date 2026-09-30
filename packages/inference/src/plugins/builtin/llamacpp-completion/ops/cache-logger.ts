@@ -28,14 +28,9 @@ export function logCacheStatus(cacheKey: string, isReusing: boolean): void {
   logger.debug(`[kv-cache] [${cacheKey}] ${status} cache`)
 }
 
-export function logCacheInit(cacheKey: string, systemPrompt: string): void {
-  const promptLen = systemPrompt.length
-  logger.debug(`[kv-cache] [${cacheKey}] Initializing cache (prompt: ${promptLen} chars)`)
-}
-
 export function logMessagesToAddon(
   messages: unknown[],
-  phase: 'CACHE_INIT' | 'PROMPT_SEND' | 'NO_CACHE' = 'PROMPT_SEND'
+  phase: 'PROMPT_SEND' | 'NO_CACHE' = 'PROMPT_SEND'
 ): void {
   const typedMessages = messages as ChatMessage[]
   logger.debug(

@@ -46,6 +46,8 @@ const ENV_KEYS = {
   QVAC_ADDITIONAL_INDEXERS: 'QVAC_ADDITIONAL_INDEXERS',
   // Indexer keys to remove from quorum on startup (comma-separated z-base-32, one-shot)
   QVAC_REMOVE_INDEXERS: 'QVAC_REMOVE_INDEXERS',
+  // Generation suffix for the active model blob core
+  QVAC_BLOB_CORE_GENERATION: 'QVAC_BLOB_CORE_GENERATION',
 
   // AWS S3 credentials
   AWS_ACCESS_KEY_ID: 'AWS_ACCESS_KEY_ID',

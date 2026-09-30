@@ -4,7 +4,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const { fitParams, FIT_STATUS } = require('../../index.js')
+const { fitParams, fitParamsAsync, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
 
 // Deliberately never created. Argument validation must reject configs using it
@@ -309,6 +309,50 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
     // llama only reduces the context when it is 0.
     t.is(res.nCtx, 2048, 'an explicitly requested context is returned unchanged')
   }
+})
+
+test('a decided verdict carries its per-device memory projection', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
+
+  t.not(res.status, FIT_STATUS.ERROR, 'fixture yields a decided verdict')
+
+  const projection = Array.isArray(res.projection) ? res.projection : []
+  t.ok(Array.isArray(res.projection), 'projection is present on a decided verdict')
+  t.ok(projection.length >= 1, 'projection has at least the host row')
+
+  // Absent or empty is a documented outcome (a failed probe, an older runner),
+  // so stop before dereferencing rows: that reports one failed assertion
+  // instead of a TypeError that takes the rest of the file down with it.
+  if (projection.length === 0) {
+    return
+  }
+
+  const host = projection[projection.length - 1]
+  t.is(host.name, 'host', 'the trailing row is the host')
+  for (const row of projection) {
+    t.ok(typeof row.name === 'string' && row.name.length > 0, 'row is named')
+    for (const key of [
+      'totalBytes',
+      'freeBytes',
+      'marginBytes',
+      'modelBytes',
+      'contextBytes',
+      'computeBytes'
+    ]) {
+      t.ok(
+        Number.isFinite(row[key]) && row[key] >= 0,
+        `${row.name}.${key} is a non-negative number`
+      )
+    }
+    // The budget the verdict was judged against is `freeBytes - marginBytes`,
+    // so the row has to carry the margin the request asked for.
+    t.is(row.marginBytes, 1024 * 1024 * 1024, `${row.name} carries the requested margin`)
+  }
+
+  // Describes this load, not a machine snapshot: the weight bytes must land somewhere.
+  const projectedModelBytes = projection.reduce((sum, row) => sum + row.modelBytes, 0)
+  t.ok(projectedModelBytes > 0, 'the model bytes were projected onto some row')
 })
 
 test('the plan carries every parameter the fitter is free to rewrite', async function (t) {
@@ -743,4 +787,56 @@ test('fitParams on a missing file reports ERROR (does not throw)', function (t) 
   // status alone cannot separate an unreadable model from a machine with no
   // usable backend; the SDK needs to tell "retry later" from "never will work".
   t.is(res.reason, 'model-unreadable', 'the ERROR cause is distinguishable')
+})
+
+test('fitParamsAsync rejects invalid config before any native work', async function (t) {
+  await t.exception.all(fitParamsAsync(), /config object is required/)
+  await t.exception.all(fitParamsAsync({}), /modelPath must be a non-empty string/)
+  await t.exception.all(
+    fitParamsAsync({ modelPath: UNREACHABLE_MODEL, nCtx: 'big' }),
+    /nCtx must be a safe integer/
+  )
+  await t.exception.all(
+    fitParamsAsync({ modelPath: UNREACHABLE_MODEL, backendsDir: 'relative/backends' }),
+    /backendsDir must be an absolute path/
+  )
+  await t.exception.all(
+    fitParamsAsync({ modelPath: UNREACHABLE_MODEL, backendsDir: UNREACHABLE_BACKENDS_DIR }),
+    /backendsDir is not an existing directory/
+  )
+})
+
+test('fitParamsAsync resolves the verdict fitParams returns', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+
+  const sync = fitParams({ modelPath })
+  const async = await fitParamsAsync({ modelPath })
+  // Projection rows track live free memory; compare verdict and plan only.
+  t.is(async.status, sync.status)
+  t.is(async.reason, sync.reason)
+  t.is(async.nCtx, sync.nCtx)
+  t.is(async.nGpuLayers, sync.nGpuLayers)
+  t.is(async.nDevices, sync.nDevices)
+  t.alike(async.tensorSplit, sync.tensorSplit)
+  t.alike(Object.keys(async).sort(), Object.keys(sync).sort())
+})
+
+test('fitParamsAsync surfaces a native argument error as a rejection', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  await t.exception.all(
+    fitParamsAsync({ modelPath, nCtx: 75000000 }),
+    /exceeds the context length the model declares/
+  )
+})
+
+test('concurrent fitParamsAsync calls serialise and all settle', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const results = await Promise.all([
+    fitParamsAsync({ modelPath }),
+    fitParamsAsync({ modelPath }),
+    fitParamsAsync({ modelPath: path.join(process.cwd(), 'nonexistent', 'does-not-exist.gguf') })
+  ])
+  t.not(results[0].status, FIT_STATUS.ERROR)
+  t.not(results[1].status, FIT_STATUS.ERROR)
+  t.is(results[2].reason, 'model-unreadable')
 })

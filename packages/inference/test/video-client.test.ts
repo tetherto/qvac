@@ -1,6 +1,22 @@
 import test from 'brittle'
 import { createVideoStreamRequest } from '@/api/video-request'
 
+test('video client: forwards H3 frames and preserves omitted native defaults', (t) => {
+  const base = { modelId: 'h3', mode: 'txt2vid' as const, prompt: 'Steam rises from coffee.' }
+  const request = createVideoStreamRequest(
+    { ...base, video_frames: 124, fps: 24, cfg_scale: 1, scheduler: 'discrete' },
+    'h3-request'
+  )
+  t.is(request.video_frames, 124)
+  t.is(request.fps, 24)
+  t.is(request.cfg_scale, 1)
+  t.is(request.scheduler, 'discrete')
+  const defaults = createVideoStreamRequest(base, 'h3-defaults')
+  for (const field of ['video_frames', 'fps', 'cfg_scale', 'scheduler', 'steps'] as const) {
+    t.is(defaults[field], undefined)
+  }
+})
+
 test('video client: base64-encodes the LTX reference sheet', (t) => {
   const request = createVideoStreamRequest(
     {

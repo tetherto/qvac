@@ -1,10 +1,34 @@
 {
   "name": "@qvac/fabric",
-  "version": "0.13.1",
+  "version": "0.18.1",
   "description": "Shared bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons",
   "addon": true,
   "engines": {
     "bare": ">=1.24.0"
+  },
+  "imports": {
+    "#host-addon": {
+      "linux": {
+        "x64": ["@qvac/fabric-linux-x64", "./addon-unavailable.js"],
+        "arm64": ["@qvac/fabric-linux-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "darwin": {
+        "arm64": ["@qvac/fabric-darwin-arm64", "./addon-unavailable.js"],
+        "x64": ["@qvac/fabric-darwin-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "win32": {
+        "x64": ["@qvac/fabric-win32-x64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "android": {
+        "arm64": ["@qvac/fabric-android-arm64", "./addon-unavailable.js"],
+        "default": "./addon-unavailable.js"
+      },
+      "ios": ["@qvac/fabric-ios", "./addon-unavailable.js"],
+      "default": "./addon-unavailable.js"
+    }
   },
   "scripts": {
     "build": "bare-make generate && bare-make build && bare-make install",
@@ -12,10 +36,14 @@
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy fabric prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy fabric prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy fabric prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "lint": "standard",
     "lint:fix": "standard --fix",
+    "test:unit": "node --test test/unit/*.test.js",
     "test:integration:install": "npm --prefix test/integration install",
     "test:integration": "npm --prefix test/integration install && bare test/integration/shared-runtime.test.js"
   },
   "files": [
+    "addon-unavailable.js",
+    "backends.js",
+    "backends.d.ts",
     "binding.js",
     "prebuilds/*/*.bare",
     "prebuilds/*/*.bare.exports",
@@ -27,6 +55,10 @@
   ],
   "exports": {
     ".": "./binding.js",
+    "./backends": {
+      "types": "./backends.d.ts",
+      "default": "./backends.js"
+    },
     "./package": "./package.json"
   },
   "author": "Tether",

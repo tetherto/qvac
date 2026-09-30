@@ -83,6 +83,16 @@ TEST(LoadConfigHandlers_ImageNoUpscale, RejectsUnknownValue) {
   EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
 }
 
+// Both spellings must be registered. The addon skips audio by default, so the
+// load-bearing case is "off": an alias missing from the table would leave the
+// caller unable to turn the audio encoder back on.
+TEST(LoadConfigHandlers_MmprojNoAudio, BothAliasesParse) {
+  EXPECT_TRUE(applyOne("mmproj-no-audio", "on").mmproj_no_audio);
+  EXPECT_TRUE(applyOne("mmproj_no_audio", "1").mmproj_no_audio);
+  EXPECT_FALSE(applyOne("mmproj-no-audio", "off").mmproj_no_audio);
+  EXPECT_FALSE(applyOne("mmproj_no_audio", "false").mmproj_no_audio);
+}
+
 TEST(LoadConfigHandlers_ImageTokens, ParsesMaxAndMin) {
   EXPECT_EQ(applyOne("image-max-tokens", "1024").image_max_tokens, 1024);
   EXPECT_EQ(applyOne("image-min-tokens", "16").image_min_tokens, 16);

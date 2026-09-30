@@ -163,17 +163,19 @@ qvac bundle sdk [options]
 2. Resolves enabled plugins from the `plugins` array (defaults to all built-in plugins if omitted)
 3. Generates worker entry files with **static imports only**
 4. Bundles with `bare-pack --linked`
-5. Generates `addons.manifest.json` from the bundle graph
+5. For mobile hosts (`android-arm64`, `ios-*`), adds any addon platform packages the bundle needs (for example `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version, and bundles again. If it cannot install them, it prints the dependencies to add and continues without them. Skip this step with `--no-install`.
+6. Generates `addons.manifest.json` from the bundle graph
 
 **Options:**
 
-| Flag                  | Description                                             |
-| --------------------- | ------------------------------------------------------- |
-| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `--host <target>`     | Target host (repeatable, default: all platforms)        |
-| `--defer <module>`    | Defer a module (repeatable, for mobile targets)         |
-| `--quiet, -q`         | Minimal output                                          |
-| `--verbose, -v`       | Detailed output                                         |
+| Flag                  | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`)         |
+| `--host <target>`     | Target host (repeatable, default: all platforms)                |
+| `--defer <module>`    | Defer a module (repeatable, for mobile targets)                 |
+| `--no-install`        | Do not install missing addon platform packages for mobile hosts |
+| `--quiet, -q`         | Minimal output                                                  |
+| `--verbose, -v`       | Detailed output                                                 |
 
 **Examples:**
 
@@ -326,7 +328,7 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 
 | Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                                                                 |
 | -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `missing-prebuild`         | error   | The addon's `<packageRoot>/prebuilds/<host>/*.bare` directory is missing or empty.                                                                                                                                                                                                                                                      |
+| `missing-prebuild`         | error   | No `.bare` for the host: the addon's `<packageRoot>/prebuilds/<host>/` is missing or empty, and no per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) with `addon/prebuilds/<host>/*.bare` resolves from the addon's package root.                                                                           |
 | `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the resolved runtime version.                                                                                                                                                                                                                                                |
 | `unknown-runtime-version`  | warning | At least one addon declares `engines.bare`, but no Bare runtime version could be auto-detected. Pass `--bare-runtime-version` to enable strict ABI verification.                                                                                                                                                                        |
 | `invalid-runtime-version`  | error   | The value passed via `--bare-runtime-version` or via the config `bareRuntimeVersion` field is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification. ABI resolution is skipped, but prebuild checks still run. |
@@ -476,7 +478,7 @@ For tests that touch `qvac serve --openai`, `@qvac/ai-sdk-provider`, or agent-to
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
-The CLI depends on the published `@qvac/sdk` (`^0.17.0`), which provides the
+The CLI depends on the published `@qvac/sdk` (`^0.20.0`), which provides the
 `./commands` subpath that `bundle`/`verify` re-export and the server runtime
 the `serve` commands use. A normal `npm install` pulls it from the registry —
 no local SDK build is required.
@@ -504,11 +506,11 @@ npm run dev:unlink
 ```
 
 This runs `git checkout HEAD -- package.json` and re-installs, so the
-committed `@qvac/sdk` dependency (`^0.17.0`) is restored regardless of what you
+committed `@qvac/sdk` dependency (`^0.20.0`) is restored regardless of what you
 swapped in locally. `package-lock.json` is gitignored and is regenerated by the
 trailing `npm install`.
 
-**How CI tests the CLI/SDK pair** (SDK Pod Checks):
+**How CI tests the CLI/SDK pair**:
 
 - PRs into `main` (and `feature-*` / `tmp-*`) build and test the CLI against the
   **in-repo SDK** — the source that will ship. CI runs the
@@ -520,6 +522,8 @@ trailing `npm install`.
   proves the CLI works against the exact SDK version it will ship against. If it
   fails, widen the committed `@qvac/sdk` range to a published version that
   carries the API the CLI now needs.
+- Push CI (`General CI/CD (cli)`) uses the same split: in-repo SDK on `main` /
+  `feature-*` / `tmp-*`, published SDK on `release-*`.
 
 The committed `@qvac/sdk` range is never changed for testing — the in-repo link
 is a CI-time/local-only override (`sdk-source:workspace` / `dev:link`), never

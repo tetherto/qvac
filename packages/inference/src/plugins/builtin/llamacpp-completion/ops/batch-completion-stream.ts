@@ -14,11 +14,18 @@ import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/utils/addon-responses'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import {
+  seedConfiguredSystemPrompt,
   transformMessages,
   type CompletionGenerationParams
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { prependToolsToHistory } from '@/utils/tool-integration'
+import {
+  resolveDeferredTools,
+  toWireTool,
+  withDeferredToolChoice,
+  type DeferredResolution
+} from '@/utils/tools/defer'
 
 const logger = getEngineLogger()
 
@@ -69,6 +76,7 @@ type BatchModelStreamResult = {
 
 type BatchPromptRenderOptions = {
   toolsEnabled: boolean
+  modelConfig: unknown
 }
 
 function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
@@ -96,14 +104,18 @@ function mergeGenerationParams(
 
 function renderPromptHistory(
   prompt: BatchCompletionStreamPrompt,
+  history: HistoryMessage[],
+  deferred: DeferredResolution | null,
   options: BatchPromptRenderOptions
 ) {
   const tools =
-    options.toolsEnabled && prompt.tools && prompt.tools.length > 0 ? prompt.tools : undefined
-  let historyWithTools: Array<HistoryMessage | Tool> = prompt.history
+    options.toolsEnabled && prompt.tools && prompt.tools.length > 0
+      ? (deferred?.toolsToRender ?? prompt.tools.map(toWireTool))
+      : undefined
+  let historyWithTools: Array<HistoryMessage | Tool> = history
 
   if (tools) {
-    historyWithTools = prependToolsToHistory(prompt.history, tools)
+    historyWithTools = prependToolsToHistory(history, tools)
   }
 
   // Uses the same attachment expansion as single completion: each
@@ -115,13 +127,15 @@ function buildBatchPrompt(
   prompt: BatchCompletionStreamPrompt,
   options: BatchPromptRenderOptions
 ): AddonBatchPrompt {
-  const mergedGenerationParams = mergeGenerationParams(
-    prompt.generationParams,
-    prompt.responseFormat
+  const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
+  const deferred = resolveDeferredTools(prompt.tools, history)
+  const mergedGenerationParams = withDeferredToolChoice(
+    mergeGenerationParams(prompt.generationParams, prompt.responseFormat),
+    options.toolsEnabled ? deferred : null
   )
   return {
     ...(prompt.id !== undefined && { id: prompt.id }),
-    prompt: renderPromptHistory(prompt, options),
+    prompt: renderPromptHistory(prompt, history, deferred, options),
     ...(mergedGenerationParams && {
       runOptions: { generationParams: mergedGenerationParams }
     })
@@ -156,7 +170,8 @@ export async function* batchCompletion(
   const model = getModel(modelId)
   const modelConfig = getModelConfig(modelId)
   const renderOptions: BatchPromptRenderOptions = {
-    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true
+    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true,
+    modelConfig
   }
 
   // Cancel via the batch response, mirroring completion(): the addon routes

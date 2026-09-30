@@ -31,8 +31,6 @@ export interface SdConfig {
     type?: WeightType;
     rng?: RngType;
     sampler_rng?: RngType;
-    clip_on_cpu?: boolean;
-    vae_on_cpu?: boolean;
     vae_auto_cpu_fallback?: boolean;
     vae_auto_cpu_fallback_memory_ratio?: number;
     vae_decode_only?: boolean;
@@ -41,6 +39,9 @@ export interface SdConfig {
     diffusion_fa?: boolean;
     mmap?: boolean;
     offload_to_cpu?: boolean;
+    control_net_cpu?: never;
+    clip_on_cpu?: never;
+    vae_on_cpu?: never;
     backend?: string;
     params_backend?: string;
     max_vram?: number | string;
@@ -232,6 +233,8 @@ export declare class EsrganUpscaler {
 export declare function applyFluxImg2ImgDimDefaults(params: GenerationParams, prediction: string, hasInitImages: boolean): GenerationParams;
 export type { VideoDiffusionFiles, VideoGenerationParams, VideoMode, VideoRuntimeStats, VideoStableDiffusionArgs } from './video';
 export type { QvacResponse };
+export { assessFit } from './fit';
+export type { DiffusionFitRequest, DiffusionFitResult, DiffusionFitStatus, DiffusionFitWorkload } from './fit';
 export type VideoStableDiffusion = InstanceType<typeof VideoStableDiffusionConstructor>;
 export declare const VideoStableDiffusion: typeof VideoStableDiffusionConstructor;
 export default ImgStableDiffusion;

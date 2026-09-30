@@ -45,6 +45,7 @@ permissions:
   pull-requests: write
   id-token: write
   issues: write
+  actions: read
 
 concurrency:
   group: weekend-mobile-llm-${{ github.ref }}

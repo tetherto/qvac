@@ -5,6 +5,7 @@ import type { QvacPlugin } from '@/schemas/plugin'
 export {
   registerPlugin,
   registerPlugins,
+  ensureAddonLoggerReady,
   getPlugin,
   getPluginHandler,
   getTurboVecIndexProvider,

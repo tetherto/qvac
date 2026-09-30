@@ -4,7 +4,7 @@ import {
 } from "./lib/error";
 
 export interface TTSConfigurationParams {
-  [key: string]: string | number | boolean | undefined;
+  [key: string]: string | number | boolean | string[] | undefined;
 }
 
 export interface TTSJobData {
@@ -22,6 +22,9 @@ export interface TTSJobData {
   noise?: string;
   reverb?: string;
   quality?: string;
+  // CosyVoice3 per-call instruction (sibling of `input`), read by
+  // JSAdapter::readVoiceControls with emotion / pace.
+  instruct?: string;
   // Audio8 per-call voice cloning (siblings of `input`), read by
   // JSAdapter::readAudio8Voice. Ignored by other engines.
   referenceAudio?: string;
@@ -41,14 +44,22 @@ export type TTSOutputCallback = (
   error: unknown,
 ) => void;
 
+/** getVoiceControls() payload, keyed by tts-cpp's engine names. */
+export interface NativeVoiceControls {
+  emotions: string[];
+  paces: string[];
+  engines: Record<string, { emotions: string[]; paces: string[] }>;
+}
+
 export interface TTSBinding {
+  getVoiceControls(): NativeVoiceControls;
   createInstance(
     owner: TTSInterface,
     configuration: TTSConfigurationParams,
     outputCallback: TTSOutputCallback | null,
   ): object;
   activate(handle: object | null): Promise<void>;
-  runJob(handle: object | null, data: TTSJobData): void;
+  runJob(handle: object | null, data: TTSJobData): boolean | void | Promise<boolean | void>;
   loadWeights(
     handle: object | null,
     weightsData: TTSWeightData,
@@ -100,10 +111,11 @@ export class TTSInterface {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- preserves the established promise-returning wrapper API.
   async runJob(data: TTSJobData): Promise<void> {
     try {
-      this._binding.runJob(this._handle, data);
+      if (await this._binding.runJob(this._handle, data) === false) {
+        throw new Error("Native addon rejected the job");
+      }
     } catch (error) {
       throw new QvacErrorAddonTTSGgml({
         code: ERR_CODES.FAILED_TO_APPEND,

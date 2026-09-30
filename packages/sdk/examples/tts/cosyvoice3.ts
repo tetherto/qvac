@@ -11,6 +11,8 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 // synthesis (emotion, pace, or instruct). The LLM GGUF's registry companion
 // set downloads the flow/HiFT models, baked voice and tokenizer alongside it.
 // Native output is 24 kHz.
+// Only a fallback: the engine reports the rate it actually produced, and
+// `outputSampleRate` (plus the LavaSR enhancer) can move it off this default.
 const COSYVOICE3_SAMPLE_RATE = 24000
 
 try {
@@ -40,18 +42,16 @@ try {
   })
 
   const audioBuffer = await result.buffer
+  const sampleRate = (await result.sampleRate) ?? COSYVOICE3_SAMPLE_RATE
   console.log(`▸ TTS complete. Total samples: ${audioBuffer.length}`)
 
   console.log('▸ Saving audio to file...')
-  createWav(audioBuffer, COSYVOICE3_SAMPLE_RATE, 'cosyvoice3-output.wav')
+  createWav(audioBuffer, sampleRate, 'cosyvoice3-output.wav')
   console.log('▸ Audio saved to cosyvoice3-output.wav')
 
   console.log('▸ Playing audio...')
   const audioData = int16ArrayToBuffer(audioBuffer)
-  const wavBuffer = Buffer.concat([
-    createWavHeader(audioData.length, COSYVOICE3_SAMPLE_RATE),
-    audioData
-  ])
+  const wavBuffer = Buffer.concat([createWavHeader(audioData.length, sampleRate), audioData])
   playAudio(wavBuffer)
   console.log('▸ Audio playback complete')
 

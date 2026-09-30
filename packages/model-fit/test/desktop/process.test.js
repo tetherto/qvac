@@ -180,6 +180,135 @@ test('response parser accepts canonical results and unsupported config', (t) => 
   t.is(unsupported.result.reason, 'unsupported-config')
 })
 
+test('response parser accepts, omits, and rejects projections', async (t) => {
+  // Present and well-formed: accepted on success and on does-not-fit alike.
+  const withProjection = parseFitProcessResponse({
+    version: 1,
+    status: 'completed',
+    result: {
+      ...completedFitResult(),
+      projection: [
+        {
+          name: 'MTL0',
+          totalBytes: 19998441472,
+          freeBytes: 1443887104,
+          marginBytes: 1073741824,
+          modelBytes: 11355000000,
+          contextBytes: 6442450944,
+          computeBytes: 460000000
+        },
+        {
+          name: 'host',
+          totalBytes: 25769803776,
+          freeBytes: 20000000000,
+          marginBytes: 1073741824,
+          modelBytes: 0,
+          contextBytes: 0,
+          computeBytes: 46137344
+        }
+      ]
+    }
+  })
+  t.is(withProjection.result.projection.length, 2)
+  t.is(withProjection.result.projection[1].name, 'host')
+
+  const failureWithProjection = parseFitProcessResponse({
+    version: 1,
+    status: 'completed',
+    result: {
+      status: 1,
+      fits: false,
+      reason: 'does-not-fit',
+      maxDevices: 1,
+      nDevices: 1,
+      nGpuDevices: 1,
+      projection: [
+        {
+          name: 'MTL0',
+          totalBytes: 19998441472,
+          freeBytes: 0,
+          marginBytes: 1073741824,
+          modelBytes: 19998441472,
+          contextBytes: 0,
+          computeBytes: 0
+        }
+      ]
+    }
+  })
+  t.is(failureWithProjection.result.projection[0].freeBytes, 0)
+
+  // Absent: an older addon or runner predates the field.
+  const withoutProjection = parseFitProcessResponse({
+    version: 1,
+    status: 'completed',
+    result: completedFitResult()
+  })
+  t.is(withoutProjection.result.projection, undefined)
+
+  // Present but malformed.
+  await t.exception.all(
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: { ...completedFitResult(), projection: [{ name: 'MTL0', totalBytes: 1 }] }
+      }),
+    /must be a number/
+  )
+  await t.exception.all(
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: {
+          ...completedFitResult(),
+          projection: [
+            {
+              totalBytes: 1,
+              freeBytes: 1,
+              marginBytes: 1,
+              modelBytes: 1,
+              contextBytes: 1,
+              computeBytes: 1
+            }
+          ]
+        }
+      }),
+    /must carry a string name/
+  )
+  // A row without the margin cannot be turned into a budget.
+  await t.exception.all(
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: {
+          ...completedFitResult(),
+          projection: [
+            {
+              name: 'MTL0',
+              totalBytes: 1,
+              freeBytes: 1,
+              modelBytes: 1,
+              contextBytes: 1,
+              computeBytes: 1
+            }
+          ]
+        }
+      }),
+    /marginBytes must be a number/
+  )
+  await t.exception.all(
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: { ...completedFitResult(), projection: {} }
+      }),
+    /projection must be an array/
+  )
+})
+
 test('response parser rejects malformed results', async (t) => {
   await t.exception.all(() => parseFitProcessResponse(null), /must be an object/)
   await t.exception.all(

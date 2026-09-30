@@ -61,23 +61,24 @@ endif()
 
 # AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
 # addon-test dynamically links the shared @qvac/fabric runtime
-# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
-# -static-libstdc++ (see packages/fabric/CMakeLists.txt). Its module-local
-# static libc++ provides fabric's OWN operator new/delete, bound internally by
-# the symbols.map `local: *` rule, so allocations made inside fabric bottom out
-# at plain malloc while addon-test's operator new/delete resolve to the ASan
-# runtime. Any object that crosses the module boundary (new'd on one side,
-# delete'd on the other) trips ASan's alloc-dealloc / new-delete mismatch check
-# and aborts the run, and fabric's long-lived runtime globals + dlopen'd ggml
-# backends look like leaks at exit. A fully ASan-clean link would need an
-# ASan-instrumented fabric (QVAC_FABRIC_ASAN=1 -> shared libc++), which the npm
-# prebuild does not ship. So we keep ASan for its heap-overflow / use-after-free
-# value on the addon's own code and require the CI runner to relax the checks
-# the static-libstdc++ boundary provokes:
+# (qvac__fabric@0.bare), and the npm prebuild of it is not ASan-instrumented, so
+# nothing fabric does internally is checked and its long-lived runtime globals
+# plus its dlopen'd ggml backends look like leaks at exit. A fully ASan-clean
+# link would need an ASan-instrumented fabric (QVAC_FABRIC_ASAN=1), which the
+# npm prebuild does not ship. So we keep ASan for its heap-overflow /
+# use-after-free value on the addon's own code and require the runner to relax
+# the checks the module boundary provokes:
 #   ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0
 # (see .github/workflows/cpp-tests-classification.yml). No LD_PRELOAD is needed
 # because the ASan runtime is linked directly into this executable and
 # initializes before the fabric module loads.
+#
+# On Linux operator new/delete are no longer duplicated across the boundary:
+# fabric exports them and this binary links -nostdlib++ (see
+# qvac_addon_import_fabric_cxx_runtime), so ASan's operators — defined in this
+# executable, which the dynamic loader searches first — serve both sides.
+# alloc_dealloc_mismatch stays relaxed as a backstop for the other platforms and
+# for allocations fabric makes before ASan is ready.
 if(NOT WIN32)
   target_link_libraries(addon-test PRIVATE -fsanitize=address)
 endif()

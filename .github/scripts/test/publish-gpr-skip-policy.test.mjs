@@ -55,7 +55,7 @@ function jobBlock(source, jobName) {
 // The `if:` value, flattened to one line. Accepts BOTH block-scalar styles:
 // `>`/`>-`/`>+` and `|`/`|-`/`|+`. Handling only `>-` made a `|-` job fall
 // through to the inline branch and return the scalar indicator itself ("|-")
-// as the condition — on-merge-decoder-audio.yml uses `if: |-` today.
+// as the condition, which on-merge-decoder-audio.yml hit before consolidation.
 function condition(jobText) {
   if (!jobText) return ''
   const folded = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|\n)*)/m)
@@ -72,8 +72,8 @@ function condition(jobText) {
 //
 //   needs: [a, b]     inline array
 //   needs:\n  - a     block sequence  (may be interleaved with comments)
-//   needs: a          plain scalar    — on-merge-vla.yml and
-//                                       on-merge-classification-ggml.yml use it
+//   needs: a          plain scalar    — used by the per-package on-merge
+//                                       workflows before consolidation
 //
 // Returns null (not []) when a `needs:` key exists but nothing parses out, so
 // callers can fail loudly instead of treating a parser failure as a clean bill
@@ -111,8 +111,25 @@ function needsOf(jobText) {
 
 const WORKFLOWS = onMergeWorkflows()
 
-test('on-merge workflows were discovered', () => {
-  assert.ok(WORKFLOWS.length >= 12, `found ${WORKFLOWS.length}`)
+// The per-package on-merge-<pkg>.yml files are consolidated into on-merge-nx.yml,
+// so a raw count stopped meaning anything. What still has to hold is that every
+// package that publishes on merge is carried by some discovered workflow, and the
+// consolidated one really is matrix-driven rather than a same-named stub.
+const CONSOLIDATED = '.github/workflows/on-merge-nx.yml'
+const consolidated = WORKFLOWS.includes(CONSOLIDATED)
+
+test('on-merge publishing is carried by a discovered workflow', () => {
+  assert.ok(WORKFLOWS.length > 0, 'no on-merge workflow found at all')
+
+  if (!consolidated) {
+    assert.ok(WORKFLOWS.length >= 12, `found ${WORKFLOWS.length}`)
+    return
+  }
+
+  const source = read(CONSOLIDATED)
+  assert.match(source, /include: \$\{\{ fromJSON\(needs\.detect\.outputs\.matrix\) \}\}/)
+  assert.ok(jobBlock(source, 'publish-gpr'), 'consolidated workflow has a publish-gpr job')
+  assert.ok(jobBlock(source, 'publish-npm'), 'consolidated workflow has a publish-npm job')
 })
 
 for (const relativePath of WORKFLOWS) {
@@ -214,13 +231,24 @@ for (const relativePath of WORKFLOWS) {
 }
 
 // The two addons this ticket was raised for, named explicitly so an edit that
-// reintroduces the defect fails a test that mentions them.
+// reintroduces the defect fails a test that mentions them. Once their
+// per-package workflows are consolidated away, the same invariants are asserted
+// against on-merge-nx.yml, which publishes them from its matrix.
 for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
+  const ownWorkflow = `.github/workflows/on-merge-${slug}.yml`
+  const carrier = WORKFLOWS.includes(ownWorkflow) ? ownWorkflow : CONSOLIDATED
+
   test(`${slug}: publish-gpr can run off release-* (QVAC-24365 regression)`, () => {
-    const cond = condition(jobBlock(read(`.github/workflows/on-merge-${slug}.yml`), 'publish-gpr'))
+    const cond = condition(jobBlock(read(carrier), 'publish-gpr'))
     assert.match(cond, /!cancelled\(\)/, `${slug} publish-gpr lost its !cancelled()`)
-    assert.match(cond, /needs\.build\.result\s*==\s*'success'/)
     assert.match(cond, /publish_tmp\s*==\s*'true'/, 'tmp-* must remain a publishing branch')
+
+    // The per-package workflows name the prebuild job `build`; the consolidated
+    // one calls it `prebuild` and does not wire release-merge-guard into
+    // publish-gpr's chain at all, so there is no skip to survive there.
+    if (carrier === ownWorkflow) {
+      assert.match(cond, /needs\.build\.result\s*==\s*'success'/)
+    }
   })
 
   // Fixing publish-gpr must not switch merge-time integration tests on: they
@@ -231,8 +259,30 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
   // publish-gpr's result must not gate this step at all, however it is written
   // (==, single quotes, or moved into `env:`).
   test(`${slug}: a GPR publish does not re-run integration tests on merge`, () => {
-    const gate = jobBlock(read(`.github/workflows/on-merge-${slug}.yml`), 'post-build-gate')
+    const gate = jobBlock(read(carrier), 'post-build-gate')
     assert.ok(gate, 'post-build-gate exists')
+
+    // The consolidated gate serves five packages under two policies, so the rule
+    // cannot be "publish-gpr is absent from the step". It is per package: this
+    // slug must not opt in. asr-ggml, bci-whispercpp and tts-ggml do opt in,
+    // matching what their own on-merge-<pkg>.yml intends on main.
+    if (carrier === CONSOLIDATED) {
+      assert.match(
+        gate,
+        /needs\.publish-npm\.result/,
+        'the gate must still open for a real npm release',
+      )
+      const ci =
+        JSON.parse(read(`packages/${slug}/project.json`)).targets?.['on-merge']?.options?.ci ?? {}
+      assert.notEqual(
+        ci.postIntegrationOnGpr,
+        true,
+        `${slug} must not set postIntegrationOnGpr: a GPR dev publish must not ` +
+          're-run its integration tests, they already ran on the PR and ' +
+          'merge-guard gated on them (#4175).',
+      )
+      return
+    }
 
     // Only the shell `if` test decides; an `echo` naming publish-gpr is
     // deliberate diagnostics, so the assertion must look at the gating

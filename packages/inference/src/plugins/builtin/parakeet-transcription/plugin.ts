@@ -1,4 +1,3 @@
-import asrAddonLogging from '@qvac/asr-ggml/addonLogging'
 import ASRGgml from '@qvac/asr-ggml'
 import {
   definePlugin,
@@ -13,17 +12,15 @@ import {
   LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS,
   ADDON_ASR,
   type ParakeetConfig,
+  type TranscribeSegment,
   type CreateModelParams,
   type PluginModelResult,
   type ResolveResult
 } from '@/schemas/index'
-import {
-  ModelLoadFailedError,
-  TranscriptionFailedError,
-  LegacyParakeetModelDeprecatedError
-} from '@/errors/index'
+import { ModelLoadFailedError, LegacyParakeetModelDeprecatedError } from '@/errors/index'
 import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildParakeetEngineConfig } from '@/plugins/builtin/asr-ggml/config'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
@@ -80,41 +77,59 @@ export const parakeetPlugin = definePlugin({
       cancel: { scope: 'model', hard: true },
 
       handler: async function* (request) {
-        if (request.metadata === true) {
-          throw new TranscriptionFailedError(
-            `Parakeet transcription does not support metadata: true; only the whisper engine emits per-segment metadata. Use a whisper model to receive segments.`
-          )
-        }
-
-        const stream = transcribe(
-          {
-            modelId: request.modelId,
-            audioChunk: request.audioChunk,
-            prompt: request.prompt
-          },
-          request.requestId
-        )
+        // The native serializer emits start/end/id/toAppend/isEndOfTurn/
+        // startsWord on every segment, so metadata mode is forwarded exactly
+        // as the whisper plugin does. Branching the call keeps the op's
+        // `metadata: true` overload, which is what types results as segments.
+        const metadata = request.metadata === true
+        const stream = metadata
+          ? transcribe(
+              {
+                modelId: request.modelId,
+                audioChunk: request.audioChunk,
+                prompt: request.prompt,
+                metadata: true
+              },
+              request.requestId
+            )
+          : transcribe(
+              {
+                modelId: request.modelId,
+                audioChunk: request.audioChunk,
+                prompt: request.prompt
+              },
+              request.requestId
+            )
 
         try {
           let result = await stream.next()
           while (!result.done) {
-            yield {
-              type: 'transcribe' as const,
-              text: result.value
-            }
+            yield metadata
+              ? {
+                  type: 'transcribe' as const,
+                  segment: result.value as TranscribeSegment
+                }
+              : {
+                  type: 'transcribe' as const,
+                  text: result.value as string
+                }
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
-          yield attachModelExecutionMs(
+          const { modelExecutionMs, stats, diagnostics } = result.value
+          // The field is what reaches an RPC client; the symbol is what the
+          // profiling layer reads to set `event.backend`, as audiogen does.
+          const terminal = attachModelExecutionMs(
             {
               type: 'transcribe' as const,
               text: '',
               done: true,
-              ...(stats && { stats })
+              ...(stats && { stats }),
+              ...(diagnostics && { diagnostics })
             },
             modelExecutionMs
           )
+          yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
         } finally {
           await stream.return?.(undefined as never)
         }
@@ -136,26 +151,30 @@ export const parakeetPlugin = definePlugin({
       // the duplex RPC writer — backpressure is not yet characterised. Pair
       // the fix with request-lifecycle `cancel({ requestId })` routing.
       handler: async function* (request, inputStream) {
-        if (request.metadata === true) {
-          throw new TranscriptionFailedError(
-            `Parakeet transcribeStream does not support metadata: true; only the whisper engine emits per-segment metadata.`
-          )
-        }
-
+        const metadata = request.metadata === true
         const streamOpts = {
           ...(request.parakeetStreamingConfig && {
             parakeetStreamingConfig: request.parakeetStreamingConfig
           })
         }
 
-        const iterator = transcribeStream(
-          request.modelId,
-          inputStream,
-          undefined,
-          false,
-          streamOpts,
-          request.requestId
-        )
+        const iterator = metadata
+          ? transcribeStream(
+              request.modelId,
+              inputStream,
+              undefined,
+              true,
+              streamOpts,
+              request.requestId
+            )
+          : transcribeStream(
+              request.modelId,
+              inputStream,
+              undefined,
+              false,
+              streamOpts,
+              request.requestId
+            )
 
         try {
           let result = await iterator.next()
@@ -172,23 +191,32 @@ export const parakeetPlugin = definePlugin({
               continue
             }
 
-            yield {
-              type: 'transcribeStream' as const,
-              text: value
-            }
+            yield metadata
+              ? {
+                  type: 'transcribeStream' as const,
+                  segment: value as TranscribeSegment
+                }
+              : {
+                  type: 'transcribeStream' as const,
+                  text: value as string
+                }
             result = await iterator.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
-          yield attachModelExecutionMs(
+          const { modelExecutionMs, stats, diagnostics } = result.value
+          // The field is what reaches an RPC client; the symbol is what the
+          // profiling layer reads to set `event.backend`, as audiogen does.
+          const terminal = attachModelExecutionMs(
             {
               type: 'transcribeStream' as const,
               text: '',
               done: true,
-              ...(stats && { stats })
+              ...(stats && { stats }),
+              ...(diagnostics && { diagnostics })
             },
             modelExecutionMs
           )
+          yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
         } finally {
           await iterator.return?.(undefined as never)
         }
@@ -197,7 +225,7 @@ export const parakeetPlugin = definePlugin({
   },
 
   logging: {
-    module: asrAddonLogging,
+    module: () => import('@qvac/asr-ggml/addonLogging'),
     namespace: ADDON_ASR
   }
 })

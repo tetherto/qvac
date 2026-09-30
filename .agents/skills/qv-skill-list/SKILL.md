@@ -42,6 +42,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-devops-pr-status`](../qv-devops-pr-status/SKILL.md) | Team DevOps PR dashboard: re-review, stale, needs-review, conflicts. | DevOps pod PR queue health. **Manual:** `/qv-devops-pr-status` |
 | [`qv-devops-why-my-pr-not`](../qv-devops-why-my-pr-not/SKILL.md) | Diagnose missing CI checks or merge blockers (labels, CODEOWNERS, approvals). | "Why aren't checks running?" / "Why can't I merge?" **Manual:** `/qv-devops-why-my-pr-not` |
 | [`qv-devops-daily-update`](../qv-devops-daily-update/SKILL.md) | Slack standup (Done / Planned / Blockers) from PRs, reviews, CI. | DevOps EOD or standup. **Manual:** `/qv-devops-daily-update` |
+| [`qv-mobile-test-dispatch`](../qv-mobile-test-dispatch/SKILL.md) | Start an addon mobile (Device Farm) test and pick the right prebuild source; where the Android/iOS and C++ logs are. | "Run mobile tests for X" / "test my native change on a device" / reading a mobile failure. **Manual:** `/qv-mobile-test-dispatch` |
 
 ---
 
@@ -77,6 +78,14 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 ---
 
+## Documentation website
+
+| Skill | Purpose | Use when |
+|-------|---------|----------|
+| [`qv-docs-solution-create`](../qv-docs-solution-create/SKILL.md) | Solutions pages: generalize a supported use case into a docs page and register it in the site navigation. | A real developer, company, or partner scenario should become reusable documentation. **Manual:** `/qv-docs-solution-create` |
+
+---
+
 ## Developer diary and standup
 
 | Skill | Purpose | Use when |
@@ -94,6 +103,14 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 |-------|---------|----------|
 | [`qv-holepunch-dev`](../qv-holepunch-dev/SKILL.md) | Holepunch/P2P/Bare/Pear API discovery via docs.pears.com and `gh`. | Hypercore, Hyperswarm, Autobase, Bare, Pear development. **Auto** |
 | [`qv-notice-generate`](../qv-notice-generate/SKILL.md) | NOTICE files and third-party attributions for monorepo packages. | License compliance, release NOTICE updates. **Auto** |
+
+---
+
+## Documentation site
+
+| Skill | Purpose | Use when |
+|-------|---------|----------|
+| [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
 
 ---
 
@@ -120,6 +137,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | SDK team PR board | `qv-sdk-pr-status` |
 | DevOps team PR board | `qv-devops-pr-status` |
 | Why CI/merge is blocked | `qv-devops-why-my-pr-not` |
+| Run mobile tests on a device | `qv-mobile-test-dispatch` |
 | Write SDK PR body | `qv-sdk-pr-create` |
 | Sync SDK models.ts from registry | `qv-sdk-update-models` |
 | Write addon PR body | `qv-addon-pr-create` |
@@ -129,8 +147,10 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Sync CLI/provider/OpenCode/OpenClaw to SDK | `qv-agent-stack-sync` |
 | New SDK e2e tests | `qv-sdk-e2e-create` |
 | Registry Autobase/HyperDB help | `qv-registry-autobase-patterns` |
+| Publish a Solutions page from a use case | `qv-docs-solution-create` |
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
+| Update the docs website after an SDK/CLI change | `qv-docs-update` |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |

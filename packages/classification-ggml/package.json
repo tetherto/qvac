@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.25.0",
+  "version": "0.28.0",
   "description": "GGML image classification addon for QVAC (MobileNetV3-Small CPU inference)",
   "addon": true,
   "scripts": {
@@ -71,6 +71,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
+    "@qvac/fabric-android-arm64": "^0.18.0",
+    "@qvac/fabric-ios": "^0.18.0",
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -87,7 +89,7 @@
     "bare-process": "^4.2.2"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.13.0",
+    "@qvac/fabric": "^0.18.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",

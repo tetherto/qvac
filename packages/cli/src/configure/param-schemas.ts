@@ -62,6 +62,17 @@ type JsonNode = {
   default?: unknown
   properties?: unknown
   required?: unknown
+  not?: unknown
+  deprecated?: unknown
+}
+
+function isForbiddenField(node: JsonNode | undefined) {
+  return (
+    node?.deprecated === true &&
+    typeof node.not === 'object' &&
+    node.not !== null &&
+    Object.keys(node.not as object).length === 0
+  )
 }
 
 // Render an object node's shape as just its required keys (e.g. `{ src: string }`)
@@ -173,7 +184,7 @@ function fieldsFromObject(schema: z.ZodType, skip?: string, depth = 0): ParamFie
   const props = json.properties ?? {}
   const required = new Set(json.required ?? [])
   return Object.entries(shape)
-    .filter(([name]) => name !== skip)
+    .filter(([name]) => name !== skip && !isForbiddenField(props[name]))
     .map(([name, field]) => {
       const node = props[name]
       const objArm = depth < MAX_OBJECT_FIELD_DEPTH ? objectArmSchema(field) : null

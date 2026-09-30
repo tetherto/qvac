@@ -9,6 +9,8 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 
 // Parler-TTS (GGML): description-conditioned speech with per-call voice controls.
 // Uses the registry-hosted Mini v1 Q8_0 model and its native 44.1 kHz output.
+// Only a fallback: the engine reports the rate it actually produced, and
+// `outputSampleRate` (plus the LavaSR enhancer) can move it off this default.
 const PARLER_SAMPLE_RATE = 44100
 
 try {
@@ -39,18 +41,16 @@ try {
   })
 
   const audioBuffer = await result.buffer
+  const sampleRate = (await result.sampleRate) ?? PARLER_SAMPLE_RATE
   console.log(`▸ TTS complete. Total samples: ${audioBuffer.length}`)
 
   console.log('▸ Saving audio to file...')
-  createWav(audioBuffer, PARLER_SAMPLE_RATE, 'parler-output.wav')
+  createWav(audioBuffer, sampleRate, 'parler-output.wav')
   console.log('▸ Audio saved to parler-output.wav')
 
   console.log('▸ Playing audio...')
   const audioData = int16ArrayToBuffer(audioBuffer)
-  const wavBuffer = Buffer.concat([
-    createWavHeader(audioData.length, PARLER_SAMPLE_RATE),
-    audioData
-  ])
+  const wavBuffer = Buffer.concat([createWavHeader(audioData.length, sampleRate), audioData])
   playAudio(wavBuffer)
   console.log('▸ Audio playback complete')
 

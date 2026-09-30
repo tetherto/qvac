@@ -35,10 +35,11 @@ class TTSInterface {
             });
         }
     }
-    // eslint-disable-next-line @typescript-eslint/require-await -- preserves the established promise-returning wrapper API.
     async runJob(data) {
         try {
-            this._binding.runJob(this._handle, data);
+            if (await this._binding.runJob(this._handle, data) === false) {
+                throw new Error("Native addon rejected the job");
+            }
         }
         catch (error) {
             throw new error_1.QvacErrorAddonTTSGgml({

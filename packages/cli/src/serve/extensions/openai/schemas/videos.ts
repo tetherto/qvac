@@ -36,7 +36,7 @@ export const videosCreateBody = z
       )
       .optional()
       .describe(
-        'Target duration in seconds, as a string. Mapped to `video_frames = nearest_4k+1(seconds * fps)`.'
+        'Target duration in seconds. MiniMax-H3 uses 24 FPS and the nearest `17*k+5` frame count; other models use the existing nearest `4*k+1` mapping with the requested or default FPS, followed by normal model-specific validation.'
       ),
     size: z
       .string()
@@ -74,7 +74,9 @@ export const videosCreateBody = z
       .positive()
       .max(120)
       .optional()
-      .describe('QVAC extension. 0 < fps ≤ 120, default 16.'),
+      .describe(
+        'QVAC extension. 0 < fps ≤ 120, default 16. MiniMax-H3 requires exactly 24 and rejects any other value; its `seconds` mapping always uses 24 regardless of what is sent here.'
+      ),
     steps: z.coerce
       .number()
       .int()
@@ -224,7 +226,20 @@ function parseSizeFields(size: string): { width: number; height: number } {
   return { width: Number(match[1]), height: Number(match[2]) }
 }
 
-function videoFramesFor(seconds: string, fps: number | undefined): number {
+function videoFramesFor(seconds: string, fps: number | undefined, config: Record<string, unknown>) {
+  const isH3 =
+    config['mode'] === 'video' &&
+    config['llmModelSrc'] &&
+    config['vaeModelSrc'] &&
+    config['audioVaeModelSrc'] &&
+    !config['embeddingsConnectorsModelSrc'] &&
+    !config['t5XxlModelSrc'] &&
+    !config['highNoiseDiffusionModelSrc'] &&
+    !config['clipVisionModelSrc']
+  if (isH3) {
+    const frames = Number(seconds) * 24
+    return Number.isFinite(frames) ? 17 * Math.max(0, Math.round((frames - 5) / 17)) + 5 : 5
+  }
   return nearestVideoFrameCount(Number(seconds) * (fps ?? DEFAULT_FPS))
 }
 
@@ -256,7 +271,8 @@ function coerceStrength(raw: string | number | undefined): number | undefined {
 export function extractVideoCreateParams(
   body: VideosCreateBody,
   initImage: Uint8Array | undefined,
-  modelId: string
+  modelId: string,
+  config: Record<string, unknown> = {}
 ): VideoClientParams {
   const direct: Record<string, unknown> = {}
   for (const key of DIRECT_PARAM_KEYS) {
@@ -267,7 +283,9 @@ export function extractVideoCreateParams(
     prompt: body.prompt,
     ...direct,
     ...(body.size !== undefined ? parseSizeFields(body.size) : {}),
-    ...(body.seconds !== undefined ? { video_frames: videoFramesFor(body.seconds, body.fps) } : {})
+    ...(body.seconds !== undefined
+      ? { video_frames: videoFramesFor(body.seconds, body.fps, config) }
+      : {})
   }
   if (initImage !== undefined) {
     const strength = coerceStrength(body.strength as string | number | undefined)

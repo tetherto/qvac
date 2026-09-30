@@ -30,6 +30,10 @@ or other volatile facts into agent instructions. Link to their owning source.
   before handoff. Report any check that cannot run.
 - Do not delete, disable, skip, or weaken tests to make a check pass. Fix the
   confirmed failure or report the blocker.
+- Regenerate the lockfile in the same commit as any `package.json` dependency
+  change, and never hand-edit it. CI installs frozen, so a stale lockfile blocks
+  every pull request, not only the bumped package. See the dependency bump
+  section of [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Do not commit, push, post reviews or comments, publish, or otherwise mutate remote
   systems unless the user explicitly requests it.
 

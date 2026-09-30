@@ -5,6 +5,8 @@ import {
   textToSpeechStreamRequestSchema,
   textToSpeechStreamResponseSchema,
   ttsConfigSchema,
+  ttsRuntimeConfigSchema,
+  ttsParlerLoadConfigSchema,
   ttsChatterboxRuntimeConfigSchema,
   ttsParlerRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
@@ -13,6 +15,8 @@ import {
   TTS_COSYVOICE3_EMOTIONS,
   TTS_PACES,
   TTS_SUPERTONIC_LANGUAGES,
+  TTS_ENGINES,
+  TTS_SENTENCE_DELIMITER_PRESETS,
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
 } from '@/schemas/text-to-speech'
 
@@ -130,16 +134,34 @@ test('ttsConfigSchema: accepts LavaSR enhancer/denoiser (chatterbox)', (t) => {
   t.is(r.success, true)
 })
 
-test('ttsConfigSchema: rejects outputSampleRate for chatterbox (supertonic-only)', (t) => {
-  // Chatterbox does not resample its output yet, so the field is not part of
-  // its schema and .strict() must reject it.
+test('ttsConfigSchema: accepts outputSampleRate for chatterbox', (t) => {
+  // Chatterbox does resample: @qvac/tts-ggml forwards outputSampleRate for it
+  // through _assignCommonNativeParams, and JSAdapter::buildChatterboxConfig
+  // reads it. This used to assert a rejection, which contradicted both the
+  // addon and the SDK's own published sample-rate table.
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'chatterbox',
     language: 'en',
     s3genModelSrc: 's3:///example/s3gen.gguf',
     outputSampleRate: 48000
   })
-  t.is(r.success, false, 'chatterbox must reject outputSampleRate')
+  t.is(r.success, true, 'chatterbox must accept outputSampleRate')
+  if (r.success) {
+    const data = r.data as Record<string, unknown>
+    t.is(data['outputSampleRate'], 48000)
+  }
+})
+
+test('ttsConfigSchema: rejects outputSampleRate outside 8000-192000 for chatterbox', (t) => {
+  for (const outputSampleRate of [7999, 192001]) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      s3genModelSrc: 's3:///example/s3gen.gguf',
+      outputSampleRate
+    })
+    t.is(r.success, false, `chatterbox outputSampleRate ${outputSampleRate} must be rejected`)
+  }
 })
 
 test('ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (supertonic)', (t) => {
@@ -896,4 +918,421 @@ test('ttsConfigSchema: validates Audio8 sampling ranges', (t) => {
     temperature: -1
   })
   t.is(negativeTemperature.success, false)
+})
+
+// === Chatterbox parity with @qvac/tts-ggml ===
+
+function chatterbox(extra: Record<string, unknown>) {
+  return ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
+    ...extra
+  })
+}
+
+test('ttsConfigSchema: accepts Chatterbox ttsSpeed inside the WSOLA range', (t) => {
+  for (const ttsSpeed of [0.25, 1, 4]) {
+    t.is(chatterbox({ ttsSpeed }).success, true, `ttsSpeed ${ttsSpeed} must be accepted`)
+  }
+})
+
+test('ttsConfigSchema: rejects Chatterbox ttsSpeed outside the WSOLA range', (t) => {
+  // ChatterboxModel.cpp rejects anything outside [0.25, 4.0]; catching it here
+  // turns a native throw into a field-level validation error.
+  for (const ttsSpeed of [0.2, 4.1, 0]) {
+    t.is(chatterbox({ ttsSpeed }).success, false, `ttsSpeed ${ttsSpeed} must be rejected`)
+  }
+})
+
+test('ttsConfigSchema: accepts Chatterbox nCtx and kvCacheType', (t) => {
+  const r = chatterbox({ nCtx: 1000, kvCacheType: 'q8_0' })
+  t.is(r.success, true)
+  if (r.success) {
+    const data = r.data as Record<string, unknown>
+    t.is(data['nCtx'], 1000)
+    t.is(data['kvCacheType'], 'q8_0')
+  }
+
+  t.is(chatterbox({ nCtx: -1 }).success, false, 'negative nCtx must be rejected')
+  t.is(chatterbox({ kvCacheType: 'q4_0' }).success, false, 'unknown kvCacheType must be rejected')
+})
+
+test('ttsConfigSchema: rejects the Chatterbox LavaSR denoiser with native chunk streaming', (t) => {
+  // The addon's guard is engine-agnostic; it was previously mirrored for
+  // CosyVoice3 only, so this combination reached a raw addon throw.
+  const r = chatterbox({
+    lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf',
+    streamChunkTokens: 25
+  })
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'lavasrDenoiserModelSrc')
+  }
+
+  t.is(
+    chatterbox({ lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf' }).success,
+    true,
+    'batch synthesis still accepts the denoiser'
+  )
+})
+
+// === Supertonic parity with @qvac/tts-ggml ===
+
+function supertonic(extra: Record<string, unknown>) {
+  return ttsConfigSchema.safeParse({ ttsEngine: 'supertonic', language: 'en', ...extra })
+}
+
+test('ttsConfigSchema: accepts the Supertonic backend knobs the addon honours', (t) => {
+  const r = supertonic({ threads: 4, nGpuLayers: 99, seed: 7 })
+  t.is(r.success, true)
+  if (r.success) {
+    const data = r.data as Record<string, unknown>
+    t.is(data['threads'], 4)
+    t.is(data['nGpuLayers'], 99)
+    t.is(data['seed'], 7)
+  }
+})
+
+test('ttsConfigSchema: accepts Supertonic pace', (t) => {
+  for (const pace of TTS_PACES) {
+    t.is(supertonic({ pace }).success, true, `pace ${pace} must be accepted`)
+  }
+})
+
+test('ttsConfigSchema: rejects Supertonic pace together with ttsSpeed', (t) => {
+  // SupertonicConfig.hpp: "Exact rate multiplier. Mutually exclusive with
+  // `pace` (engine rejects)."
+  const r = supertonic({ pace: 'fast', ttsSpeed: 1.2 })
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'pace')
+  }
+})
+
+test('ttsConfigSchema: rejects a negative Supertonic ttsSpeed', (t) => {
+  t.is(supertonic({ ttsSpeed: -1 }).success, false)
+})
+
+// === Parler LavaSR ===
+
+test('ttsConfigSchema: accepts the LavaSR sources for Parler', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'parler',
+    lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf',
+    lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf'
+  })
+  t.is(r.success, true, 'Parler is one of the four engines whose native config reads LavaSR')
+})
+
+test('ttsConfigSchema: pins Parler native streaming to 44.1 kHz only without the enhancer', (t) => {
+  // ParlerModel.cpp waives the pin when enhancerGgufPath is set: the enhancer's
+  // overlap-reprocess window resamples seam-free. Mirror of the CosyVoice3 rule.
+  for (const schema of [ttsConfigSchema, ttsParlerLoadConfigSchema]) {
+    const pinned = schema.safeParse({
+      ttsEngine: 'parler',
+      streamChunkTokens: 20,
+      outputSampleRate: 48000
+    })
+    t.is(pinned.success, false, 'without the enhancer the pin applies')
+    if (!pinned.success) {
+      t.is(pinned.error.issues[0]?.path.join('.'), 'outputSampleRate')
+    }
+
+    for (const outputSampleRate of [48000, 16000]) {
+      const waived = schema.safeParse({
+        ttsEngine: 'parler',
+        streamChunkTokens: 20,
+        outputSampleRate,
+        lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf'
+      })
+      t.is(waived.success, true, `with the enhancer ${outputSampleRate} Hz is accepted`)
+    }
+  }
+})
+
+test('ttsConfigSchema: bounds the Chatterbox and Supertonic integer knobs to int32', (t) => {
+  // The addon narrows every integer knob with `| 0`; a wider value would wrap
+  // silently (nGpuLayers 2^32 -> 0, contradicting the derived useGPU).
+  t.is(chatterbox({ nCtx: 2147483648 }).success, false)
+  t.is(chatterbox({ nGpuLayers: 4294967296 }).success, false)
+  t.is(chatterbox({ streamChunkTokens: 2147483648 }).success, false)
+  t.is(supertonic({ nGpuLayers: 4294967296 }).success, false)
+  t.is(supertonic({ seed: 2147483648 }).success, false)
+  t.is(chatterbox({ nCtx: 2147483647, nGpuLayers: 99, seed: -2147483648 }).success, true)
+})
+
+test('ttsConfigSchema: bounds Supertonic ttsNumInferenceSteps like the native check', (t) => {
+  // SupertonicModel::validateConfig rejects negatives with 'steps must be >= 0'
+  // and the addon narrows with `| 0`, so a fraction would silently truncate.
+  for (const ttsNumInferenceSteps of [-1, 2.7]) {
+    const r = supertonic({ ttsNumInferenceSteps })
+    t.is(r.success, false, `ttsNumInferenceSteps ${ttsNumInferenceSteps} must be rejected`)
+    if (!r.success) t.is(r.error.issues[0]?.path.join('.'), 'ttsNumInferenceSteps')
+  }
+  for (const ttsNumInferenceSteps of [0, 4]) {
+    t.is(supertonic({ ttsNumInferenceSteps }).success, true)
+  }
+})
+
+test('ttsResponseSchema: carries stopReason on the terminal frame', (t) => {
+  for (const stopReason of ['completed', 'cancelled']) {
+    const r = ttsResponseSchema.safeParse({
+      type: 'textToSpeech',
+      buffer: [],
+      done: true,
+      stopReason
+    })
+    t.is(r.success, true, stopReason)
+  }
+  t.is(
+    ttsResponseSchema.safeParse({ type: 'textToSpeech', buffer: [], done: true, stopReason: 'x' })
+      .success,
+    false
+  )
+})
+
+test('ttsConfigSchema: rejects the Parler LavaSR denoiser with native chunk streaming', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'parler',
+    lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf',
+    streamChunkTokens: 25
+  })
+  t.is(r.success, false)
+})
+
+// === CosyVoice3 voice cloning ===
+
+function cosyvoice3(extra: Record<string, unknown>) {
+  return ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3', ...extra })
+}
+
+test('ttsConfigSchema: accepts a complete CosyVoice3 zero-shot cloning config', (t) => {
+  const r = cosyvoice3({
+    referenceAudioSrc: 's3:///example/reference.wav',
+    cosyvoice3S3tokModelSrc: 'registry://s3/cosyvoice3-s3tok-f16.gguf',
+    cosyvoice3CampplusModelSrc: 'registry://s3/cosyvoice3-campplus-f32.gguf',
+    promptText: 'the verbatim transcript of the recording'
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    const data = r.data as Record<string, unknown>
+    t.is(data['promptText'], 'the verbatim transcript of the recording')
+  }
+})
+
+test('ttsConfigSchema: accepts CosyVoice3 cross-lingual cloning (no promptText)', (t) => {
+  // Omitting promptText is what selects cross-lingual mode, so it must not be
+  // required alongside the reference recording.
+  const r = cosyvoice3({
+    referenceAudioSrc: 's3:///example/reference.wav',
+    cosyvoice3S3tokModelSrc: 'registry://s3/cosyvoice3-s3tok-f16.gguf',
+    cosyvoice3CampplusModelSrc: 'registry://s3/cosyvoice3-campplus-f32.gguf'
+  })
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: rejects CosyVoice3 reference audio without the cloning GGUFs', (t) => {
+  // The addon fails the native load rather than falling back to the baked
+  // voice, so the incomplete set has to be caught here.
+  const noS3tok = cosyvoice3({
+    referenceAudioSrc: 's3:///example/reference.wav',
+    cosyvoice3CampplusModelSrc: 'registry://s3/cosyvoice3-campplus-f32.gguf'
+  })
+  t.is(noS3tok.success, false)
+  if (!noS3tok.success) {
+    t.is(noS3tok.error.issues[0]?.path.join('.'), 'cosyvoice3S3tokModelSrc')
+  }
+
+  const noCampplus = cosyvoice3({
+    referenceAudioSrc: 's3:///example/reference.wav',
+    cosyvoice3S3tokModelSrc: 'registry://s3/cosyvoice3-s3tok-f16.gguf'
+  })
+  t.is(noCampplus.success, false)
+  if (!noCampplus.success) {
+    t.is(noCampplus.error.issues[0]?.path.join('.'), 'cosyvoice3CampplusModelSrc')
+  }
+})
+
+test('ttsConfigSchema: rejects CosyVoice3 cloning GGUFs without a reference recording', (t) => {
+  const r = cosyvoice3({ cosyvoice3S3tokModelSrc: 'registry://s3/cosyvoice3-s3tok-f16.gguf' })
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'referenceAudioSrc')
+  }
+})
+
+test('ttsConfigSchema: accepts CosyVoice3 promptText without a reference recording', (t) => {
+  // Without referenceAudioSrc it still overrides the baked voice's transcript
+  // metadata for the LM prompt.
+  t.is(cosyvoice3({ promptText: 'baked voice transcript' }).success, true)
+  t.is(cosyvoice3({ promptText: '   ' }).success, false, 'whitespace-only must be rejected')
+})
+
+// === ggml backend knobs ===
+
+test('ttsConfigSchema: accepts backendsDir on every engine', (t) => {
+  t.is(chatterbox({ backendsDir: '/opt/backends' }).success, true)
+  t.is(supertonic({ backendsDir: '/opt/backends' }).success, true)
+  t.is(ttsConfigSchema.safeParse({ ttsEngine: 'parler', backendsDir: '/o' }).success, true)
+  t.is(cosyvoice3({ backendsDir: '/opt/backends' }).success, true)
+  t.is(
+    ttsConfigSchema.safeParse({
+      ttsEngine: 'audio8',
+      audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+      backendsDir: '/opt/backends'
+    }).success,
+    true
+  )
+})
+
+test('ttsConfigSchema: exposes openclCacheDir only where the native config reads it', (t) => {
+  t.is(chatterbox({ openclCacheDir: '/cache/opencl' }).success, true)
+  t.is(supertonic({ openclCacheDir: '/cache/opencl' }).success, true)
+  t.is(cosyvoice3({ openclCacheDir: '/cache/opencl' }).success, true)
+
+  // JSAdapter's Parler and Audio8 builders never read openclCacheDir, so the
+  // SDK must not pretend they do.
+  t.is(
+    ttsConfigSchema.safeParse({ ttsEngine: 'parler', openclCacheDir: '/cache/opencl' }).success,
+    false
+  )
+  t.is(
+    ttsConfigSchema.safeParse({
+      ttsEngine: 'audio8',
+      audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+      openclCacheDir: '/cache/opencl'
+    }).success,
+    false
+  )
+})
+
+// === GPU intent ===
+
+test('ttsConfigSchema: rejects a useGPU that contradicts nGpuLayers', (t) => {
+  // Mirrors the addon's assertGpuIntentConsistent, which throws at construction.
+  t.is(chatterbox({ useGPU: false, nGpuLayers: 99 }).success, false)
+  t.is(chatterbox({ useGPU: true, nGpuLayers: 0 }).success, false)
+  t.is(supertonic({ useGPU: false, nGpuLayers: 99 }).success, false)
+  t.is(cosyvoice3({ useGPU: true, nGpuLayers: 0 }).success, false)
+  t.is(
+    ttsConfigSchema.safeParse({ ttsEngine: 'parler', useGPU: false, nGpuLayers: 1 }).success,
+    false
+  )
+  t.is(
+    ttsConfigSchema.safeParse({
+      ttsEngine: 'audio8',
+      audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+      useGPU: false,
+      nGpuLayers: 99
+    }).success,
+    false
+  )
+})
+
+test('ttsConfigSchema: accepts agreeing or partial GPU intent', (t) => {
+  t.is(chatterbox({ useGPU: true, nGpuLayers: 99 }).success, true)
+  t.is(chatterbox({ useGPU: false, nGpuLayers: 0 }).success, true)
+  t.is(chatterbox({ nGpuLayers: 99 }).success, true, 'nGpuLayers alone states the intent')
+  t.is(chatterbox({ useGPU: true }).success, true, 'useGPU alone states the intent')
+})
+
+// === Response surface ===
+
+test('ttsResponseSchema: carries sampleRate and isLast', (t) => {
+  const r = ttsResponseSchema.safeParse({
+    type: 'textToSpeech',
+    buffer: [1, 2, 3],
+    sampleRate: 48000,
+    chunkIndex: 0,
+    sentenceChunk: 'Hello.',
+    isLast: true
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    t.is(r.data.sampleRate, 48000)
+    t.is(r.data.isLast, true)
+  }
+
+  t.is(
+    ttsResponseSchema.safeParse({ type: 'textToSpeech', buffer: [], sampleRate: 0 }).success,
+    false,
+    'a zero sample rate is not a rate'
+  )
+})
+
+test('textToSpeechStreamResponseSchema: carries sampleRate and isLast', (t) => {
+  const r = textToSpeechStreamResponseSchema.safeParse({
+    type: 'textToSpeechStream',
+    buffer: [1],
+    sampleRate: 24000,
+    isLast: false
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    t.is(r.data.sampleRate, 24000)
+    t.is(r.data.isLast, false)
+  }
+})
+
+test('ttsStatsSchema: carries the addon RuntimeStats surface', (t) => {
+  const r = ttsResponseSchema.safeParse({
+    type: 'textToSpeech',
+    buffer: [],
+    done: true,
+    stats: {
+      audioDuration: 1200,
+      totalTime: 400,
+      realTimeFactor: 0.33,
+      tokensPerSecond: 75,
+      totalSamples: 28800,
+      generatedFrames: 26,
+      backendDevice: 1,
+      backendId: 1,
+      gpuUnsupported: 0,
+      enhancerBackendDevice: 0,
+      enhancerBackendId: 0
+    }
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    t.is(r.data.stats?.realTimeFactor, 0.33)
+    t.is(r.data.stats?.backendId, 1)
+    t.is(r.data.stats?.generatedFrames, 26)
+  }
+})
+
+test('TTS_ENGINES matches the ttsEngine discriminator of every config arm', (t) => {
+  // The exported constant is the machine-readable engine list; it must not
+  // drift from the discriminated union it describes — derive the arms from the
+  // union itself so adding an engine to one side without the other fails here.
+  const armEngines = ttsRuntimeConfigSchema.options.map(
+    (arm) => (arm.shape as { ttsEngine: { value: string } }).ttsEngine.value
+  )
+  t.alike(armEngines, [...TTS_ENGINES], 'one arm per exported engine, in addon order')
+  for (const engine of TTS_ENGINES) {
+    const r = ttsConfigSchema.safeParse({ ttsEngine: engine })
+    // Some arms need required companions; what matters is that the
+    // discriminator itself is recognised, i.e. no "invalid union" issue.
+    const unrecognised =
+      !r.success && r.error.issues.some((issue) => issue.path.join('.') === 'ttsEngine')
+    t.is(unrecognised, false, `${engine} must be a recognised ttsEngine`)
+  }
+})
+
+test('TTS_SENTENCE_DELIMITER_PRESETS drives the stream request schema', (t) => {
+  for (const preset of TTS_SENTENCE_DELIMITER_PRESETS) {
+    const r = textToSpeechStreamRequestSchema.safeParse({
+      type: 'textToSpeechStream',
+      modelId: 'm',
+      sentenceDelimiterPreset: preset
+    })
+    t.is(r.success, true, `${preset} must be accepted`)
+  }
+  const bad = textToSpeechStreamRequestSchema.safeParse({
+    type: 'textToSpeechStream',
+    modelId: 'm',
+    sentenceDelimiterPreset: 'cyrillic'
+  })
+  t.is(bad.success, false)
 })

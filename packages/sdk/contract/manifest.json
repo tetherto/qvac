@@ -7,10 +7,22 @@
       "responseSchema": "schema.json#/$defs/assessModelFit.response"
     },
     {
+      "name": "audioEditStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/audioEditStream.request",
+      "responseSchema": "schema.json#/$defs/audioEditStream.response"
+    },
+    {
       "name": "audioGenStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/audioGenStream.request",
       "responseSchema": "schema.json#/$defs/audioGenStream.response"
+    },
+    {
+      "name": "audioUnderstand",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/audioUnderstand.request",
+      "responseSchema": "schema.json#/$defs/audioUnderstand.response"
     },
     {
       "name": "batchCompletionStream",
@@ -237,6 +249,12 @@
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/upscaleStream.request",
       "responseSchema": "schema.json#/$defs/upscaleStream.response"
+    },
+    {
+      "name": "vectorIndex",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/vectorIndex.request",
+      "responseSchema": "schema.json#/$defs/vectorIndex.response"
     },
     {
       "name": "videoStream",

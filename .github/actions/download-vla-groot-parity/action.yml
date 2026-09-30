@@ -1,0 +1,50 @@
+name: Download vla-ggml GR00T parity artefacts
+description: |
+  Pulls the GR00T GGUFs and their parity oracles into `<workdir>/model/vla/groot`
+  and `<workdir>/test/groot-oracle` for the C++ tests. Shared by cpp-tests-vla
+  and the on-merge cache seed so the two cannot drift.
+
+  This file is also the cache key's hash input, so editing the S3 paths below
+  invalidates the cache -- which is the intended behaviour.
+
+  Distinct from download-vla-models: the C++ tests need BOTH checkpoints, the
+  JS integration lane needs only the multi GGUF plus activations_v4.
+
+inputs:
+  model-s3-bucket:
+    description: S3 bucket holding the compiled models.
+    required: true
+  workdir:
+    description: Package directory to download into.
+    required: false
+    default: packages/vla-ggml
+
+runs:
+  using: composite
+  steps:
+    # TWO GGUFs on purpose, each paired with the oracle dumped from the SAME
+    # checkpoint. Pointing the milestone tests (M4.1-M4.7, infer-parity) at the
+    # multi GGUF while they still read the libero v4 oracle compares one
+    # converted checkpoint's weights against another's recorded activations;
+    # that aborted GrootM4_2 inside ggml_mul_mat (GGML_ASSERT(ggml_can_mul_mat)),
+    # and because GGML_ASSERT calls abort() it took the whole binary down with
+    # it, so every test after M4_2 silently never ran and no results XML was
+    # written.
+    #   groot-q8_vf16.gguf       (libero) <-> activations_v4
+    #   groot-multi-q8_vf16.gguf (multi)  <-> activations_sweep
+    # Multi-embodiment parity is the sweep test's job and it has its own
+    # matching oracle, so nothing is lost by keeping the two separate.
+    - name: Download GR00T parity artefacts from S3
+      working-directory: ${{ inputs.workdir }}
+      shell: bash
+      env:
+        MODEL_S3_BUCKET: ${{ inputs.model-s3-bucket }}
+      run: |
+        set -euo pipefail
+        mkdir -p model/vla/groot test/groot-oracle
+        S3_ROOT="s3://${MODEL_S3_BUCKET}/qvac_models_compiled/vla"
+        aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf"           model/vla/groot/groot-q8_vf16.gguf
+        aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors"   test/groot-oracle/activations_v4.safetensors
+        aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf"            model/vla/groot/groot-multi-q8_vf16.gguf
+        aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/activations_sweep.safetensors" test/groot-oracle/activations_sweep.safetensors
+        ls -la model/vla/groot/ test/groot-oracle/

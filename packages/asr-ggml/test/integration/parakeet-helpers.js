@@ -6,10 +6,13 @@ const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const { roundTo } = require('./parakeet-memory-usage.js')
+const { linkOrCopySync } = require('./_link-or-copy.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
+const NO_GPU = process.env && process.env.NO_GPU === 'true'
+const GPU_ONLY_USE_GPU = !isMobile
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 let _mobileModelManifest = null
 
@@ -1267,8 +1270,11 @@ async function ensureGgufForType(modelType, override = null, options = {}) {
   const staged = prestagedModelDir(preferred.file)
   if (staged) {
     fs.mkdirSync(modelsDir, { recursive: true })
-    console.log(`  Using pre-staged GGUF ${preferred.file} (copying into writable models dir)`)
-    fs.copyFileSync(path.join(staged, preferred.file), cachePath)
+    const how = linkOrCopySync({ src: path.join(staged, preferred.file), dest: cachePath })
+    console.log(
+      `  Using pre-staged GGUF ${preferred.file} ` +
+        `(${how === 'link' ? 'hardlinked' : 'copied'} into writable models dir)`
+    )
     if (fs.existsSync(cachePath) && fs.statSync(cachePath).size >= (cfg.minSize || 0)) {
       return cachePath
     }
@@ -1443,6 +1449,7 @@ module.exports = {
   ensureModel,
   ensureModelForType,
   ensureGgufForType,
+  linkOrCopySync,
   quantFromGgufName,
   loadGgufOrSkip,
   readFileChunked,
@@ -1450,6 +1457,8 @@ module.exports = {
   canonicalModelType,
   testGgufEnvKey,
   isMobile,
+  NO_GPU,
+  GPU_ONLY_USE_GPU,
   platform,
   arch,
   MODEL_CONFIGS,

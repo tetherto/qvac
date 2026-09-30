@@ -21,7 +21,6 @@
     "tetherto/data-github-ops",
     "tetherto/qvac-workbench",
     "tetherto/qvac-internal",
-    "tetherto/qvac-test-suite",
     "tetherto/qvac-registry-vcpkg",
     "tetherto/qvac-fabric-speech.cpp",
     "tetherto/qvac-ext-stable-diffusion.cpp",

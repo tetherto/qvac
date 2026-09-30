@@ -1,4 +1,3 @@
-import asrAddonLogging from '@qvac/asr-ggml/addonLogging'
 import ASRGgml from '@qvac/asr-ggml'
 import {
   definePlugin,
@@ -19,6 +18,7 @@ import {
 } from '@/schemas/index'
 import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildWhisperEngineConfig } from '@/plugins/builtin/asr-ggml/config'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
@@ -121,16 +121,20 @@ export const whisperPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
-          yield attachModelExecutionMs(
+          const { modelExecutionMs, stats, diagnostics } = result.value
+          // The field is what reaches an RPC client; the symbol is what the
+          // profiling layer reads to set `event.backend`, as audiogen does.
+          const terminal = attachModelExecutionMs(
             {
               type: 'transcribe' as const,
               text: '',
               done: true,
-              ...(stats && { stats })
+              ...(stats && { stats }),
+              ...(diagnostics && { diagnostics })
             },
             modelExecutionMs
           )
+          yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
         } finally {
           await stream.return?.(undefined as never)
         }
@@ -188,7 +192,8 @@ export const whisperPlugin = definePlugin({
                   type: 'transcribeStream' as const,
                   vad: {
                     speaking: value.speaking,
-                    probability: value.probability
+                    probability: value.probability,
+                    ...(value.source && { source: value.source })
                   }
                 }
                 result = await iterator.next()
@@ -224,16 +229,20 @@ export const whisperPlugin = definePlugin({
             result = await iterator.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
-          yield attachModelExecutionMs(
+          const { modelExecutionMs, stats, diagnostics } = result.value
+          // The field is what reaches an RPC client; the symbol is what the
+          // profiling layer reads to set `event.backend`, as audiogen does.
+          const terminal = attachModelExecutionMs(
             {
               type: 'transcribeStream' as const,
               text: '',
               done: true,
-              ...(stats && { stats })
+              ...(stats && { stats }),
+              ...(diagnostics && { diagnostics })
             },
             modelExecutionMs
           )
+          yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
         } finally {
           await iterator.return?.(undefined as never)
         }
@@ -242,7 +251,7 @@ export const whisperPlugin = definePlugin({
   },
 
   logging: {
-    module: asrAddonLogging,
+    module: () => import('@qvac/asr-ggml/addonLogging'),
     namespace: ADDON_ASR
   }
 })

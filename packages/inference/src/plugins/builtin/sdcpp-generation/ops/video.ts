@@ -12,6 +12,8 @@ import { formatZodError } from '@/utils/zod-error'
 import { ModelType } from '@/schemas/index'
 import {
   ltxVideoRequestSchema,
+  h3VideoRequestSchema,
+  wanVideoRequestSchema,
   nonLtxVideoRequestSchema,
   sdcppConfigSchema,
   singleExpertVideoRequestSchema,
@@ -25,10 +27,15 @@ interface ResponseWithStats {
 }
 
 const ltxVideoModels = new WeakSet<VideoStableDiffusion>()
+const h3VideoModels = new WeakSet<VideoStableDiffusion>()
 const moeCapableVideoModels = new WeakSet<VideoStableDiffusion>()
 
 export function markLtxVideoModel(model: VideoStableDiffusion) {
   ltxVideoModels.add(model)
+}
+
+export function markH3VideoModel(model: VideoStableDiffusion) {
+  h3VideoModels.add(model)
 }
 
 export function markMoeCapableVideoModel(model: VideoStableDiffusion) {
@@ -87,7 +94,13 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
   const model = asVideoModel(getModel(request.modelId), request.modelId)
   if (ltxVideoModels.has(model)) parseVideoRequest(ltxVideoRequestSchema, request)
-  else parseVideoRequest(nonLtxVideoRequestSchema, request)
+  else {
+    parseVideoRequest(nonLtxVideoRequestSchema, request)
+    parseVideoRequest(
+      h3VideoModels.has(model) ? h3VideoRequestSchema : wanVideoRequestSchema,
+      request
+    )
+  }
   if (!moeCapableVideoModels.has(model)) parseVideoRequest(singleExpertVideoRequestSchema, request)
   validateProviderPaths(request)
   const modelEntry = getModelEntry(request.modelId)

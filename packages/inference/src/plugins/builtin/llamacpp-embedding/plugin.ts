@@ -1,5 +1,4 @@
 import EmbedLlamacpp, { IdMapIndex } from '@qvac/embed-llamacpp'
-import embedAddonLogging from '@qvac/embed-llamacpp/addonLogging'
 import type { TurboVecIndexProvider } from '@qvac/rag'
 import {
   definePlugin,
@@ -105,7 +104,7 @@ export const embeddingsPlugin = definePlugin({
   },
 
   logging: {
-    module: embedAddonLogging,
+    module: () => import('@qvac/embed-llamacpp/addonLogging'),
     namespace: ModelType.llamacppEmbedding
   }
 })

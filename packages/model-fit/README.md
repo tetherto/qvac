@@ -48,9 +48,60 @@ const plan = fitParams({
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
 //   nDevices,     // devices actually registered; 0 => ERROR
 //   nGpuDevices,  // raw GPU/iGPU count; may include unsupported families
-//   tensorSplit   // number[] offload proportion per device
+//   tensorSplit,  // number[] offload proportion per device
+//   projection    // per-device projected memory (see below); optional
 // }
 ```
+
+`fitParamsAsync(config)` takes the same config and resolves to the same result
+from a worker thread, so the caller's JS loop is not blocked while the fitter
+probes the devices. Validation failures reject. Fits are serialised
+process-wide either way — see below.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
+### The memory projection
+
+`projection` explains the verdict in bytes: one row per device the model was
+assigned to, in the order llama.cpp holds them (`llama_model_get_device`, the
+same index `tensorSplit` uses), then a final `"host"` row. Each row carries
+`totalBytes`/`freeBytes` (the raw backend gauge), `marginBytes` (the margin
+the fitter applied to that row, `marginMiB` × 1 MiB) and
+`modelBytes`/`contextBytes`/`computeBytes` (the projected demand at the
+parameters the result reports — on a FAILURE the fitter restores the caller's
+originals, so nothing was resolved). The budget the verdict was judged against
+is `freeBytes - marginBytes`, so headroom on a row is
+`freeBytes - marginBytes - (modelBytes + contextBytes + computeBytes)`; the
+raw `freeBytes` alone reads positive for a `does-not-fit` that missed by less
+than the margin. A `does-not-fit` with numbers shows how far it missed; a
+`fits` shows how much headroom the margin left.
+
+That identity holds on a device with its own memory. On one that shares the
+host pool — Metal on Apple silicon, Vulkan/OpenCL on Adreno and Mali — fabric
+additionally clamps the row to a share of what is left of host memory, so the
+budget is at most `freeBytes - marginBytes` and the headroom above is an upper
+bound. Read a non-negative result on those rows as "the per-device gauge did
+not rule it out", not as free space. The clamp's own inputs are not on the row
+today; treat the verdict, not the arithmetic, as the answer to "does it fit".
+
+The device rows are not `nDevices`. `nDevices` is `ggml_backend_dev_count()`
+and includes the CPU device, whose demand is folded into the `"host"` row, so
+`projection.length - 1` is usually `nDevices - 1`. Match rows by `name`, never
+by position against `nDevices`.
+
+It is present on SUCCESS and FAILURE, and absent in three cases a consumer must
+handle: an ERROR verdict, a result from an older addon or process runner, and a
+failure of the extra no-alloc probe that gathers it. That probe costs roughly
+what the fit itself cost.
+
+`freeBytes` inherits every caveat of the underlying backend gauges
+(per-process accounting on Metal, host-memory assumptions — see the fit
+semantics above), so the rows are "what the fitter believed", not ground truth
+about the machine.
 
 ### Backend registration
 
@@ -129,6 +180,22 @@ resolves against the process working directory, so the same call could name a
 different file, or no file, from one launch to the next. It is not required to
 exist: a missing model is the documented `ERROR` / `model-unreadable` outcome
 rather than a thrown error.
+
+It may be a **fit stub** instead of the artefact: a short GGUF carrying the
+hyperparameters and the tensor infos, with the tokenizer tables dropped and no
+data section — tens of KB against gigabytes, with tensor offsets that run past
+its own EOF. It projects the same plan as the full file, single-file or split.
+
+The fit loads with `no_alloc` and no mmap and never reads tensor bytes, so the
+data section can be absent rather than padded out to the artefact length — and
+it should be: a sparse file is fully allocated on NTFS. That needs qvac-fabric
+10549.0.0 or newer, which `@qvac/fabric` 0.13.0 is the first release to carry.
+
+The vocab load still runs, so a stub cannot drop every `tokenizer.*` key. It
+must declare `tokenizer.ggml.model = none`, which takes that load to its early
+return, and keep `{arch}.vocab_size` (derivable from `token_embd.weight`, which
+is `[n_embd, n_vocab]`). BERT-family models also need
+`tokenizer.ggml.token_type_count`.
 
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
 and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
@@ -427,7 +494,5 @@ returns a real projection rather than `ERROR`.
 - Narrow llama.cpp LLM path only. Multimodal `mmproj` GPU memory is **not**
   counted by the fitter yet (upstream issue) — projections under-count for
   VLM/OCR models, so treat those as "unknown".
-- The per-device MiB breakdown is only emitted to the log by llama.cpp
-  (`llama_memory_breakdown_print`); it is not exposed as data here. This addon
-  returns the actionable plan (layers / context / split), not the raw byte
-  breakdown.
+- The per-device byte breakdown (`projection`) comes from one extra no-alloc
+  probe after the fit, so a result costs roughly two probes instead of one.

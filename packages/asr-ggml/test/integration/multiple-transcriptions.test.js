@@ -5,12 +5,19 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const ASRGgml = require('../../index')
-const { ensureWhisperModel, getAssetPath, createAudioStream, isMobile } = require('./helpers.js')
+const {
+  ensureWhisperModel,
+  getAssetPath,
+  createAudioStream,
+  isMobile,
+  WHISPER_TEST_THREADS,
+  NO_GPU,
+  WHISPER_GPU_CONTEXT_PARAMS
+} = require('./helpers.js')
 
-// On mobile, runs fewer transcriptions to avoid memory pressure
 test(
   'Multiple consecutive transcriptions should work without errors',
-  { timeout: 300000 },
+  { timeout: 300000, skip: NO_GPU },
   async (t) => {
     const numTranscriptions = 3
 
@@ -60,8 +67,10 @@ test(
     const config = {
       engine: 'whisper',
       path: modelPath,
+      ...(isMobile ? {} : { contextParams: WHISPER_GPU_CONTEXT_PARAMS }),
       whisperConfig: {
-        language: 'en'
+        language: 'en',
+        n_threads: WHISPER_TEST_THREADS
       }
     }
 

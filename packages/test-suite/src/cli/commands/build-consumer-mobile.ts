@@ -32,8 +32,10 @@ function detectTeamIdFromKeychain(): string | undefined {
   return undefined
 }
 
+type MobilePlatform = 'ios' | 'android'
+
 export interface MobileBuildOptions {
-  platform: 'ios' | 'android'
+  platform: MobilePlatform
   config: string
   runId?: string
   mqttBroker?: string
@@ -1066,7 +1068,7 @@ async function generatePackageJson(
   fs.writeFileSync(path.join(outputDir, 'package.json'), JSON.stringify(template, null, 2))
 }
 
-function generateAppJson(
+export function generateAppJson(
   outputDir: string,
   platform: string,
   userPlugins?: Array<string | [string, unknown]>,

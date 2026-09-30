@@ -352,6 +352,7 @@ try {
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isWindows = platform === 'win32'
+const OCR_TEST_THREADS = 4
 
 function _envInt(key, fallback) {
   let raw = ''
@@ -488,7 +489,7 @@ function getBackendDevice() {
 function createOcrGgml(params = {}, opts) {
   const { OcrGgml } = require('../..')
   const instance = new OcrGgml({
-    params: { backendDevice: getBackendDevice(), ...params },
+    params: { backendDevice: getBackendDevice(), nThreads: OCR_TEST_THREADS, ...params },
     opts
   })
   // After load() resolves the backend, record the actual GPU/backend name on
@@ -690,23 +691,55 @@ function prestagedModelPath(modelName) {
   return staged ? staged.src : null
 }
 
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into the model dir spends that whole budget for nothing. Hardlink instead:
+// same inode, zero bytes. On Android the staging dir is a different filesystem,
+// so link() fails EXDEV and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  // Same path in and out — the staged file IS the destination (a caller whose
+  // model dir is testDir itself). Deleting first would destroy the staged model
+  // and leave both link() and copy() failing ENOENT; the copy this replaced was
+  // a harmless no-op here.
+  if (path.resolve(src) === path.resolve(dest)) return 'link'
+
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[prestage] hardlink failed on ${platform} (${err.message}); falling back to a byte copy`
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
 // The host pushes an exact byte-count sidecar with each model. Require both the
-// staged source and copied destination to match it so truncated adb/app copies
-// fall through to the network download.
+// staged source and the materialised destination to match it so truncated
+// adb/app transfers fall through to the network download.
 function copyPrestagedModel(modelName, destPath, minBytes = 1024 * 1024) {
   const staged = readPrestagedModel(modelName)
   if (!staged || staged.expectedSize < minBytes) return false
   try {
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(staged.src, destPath)
+    const how = linkOrCopySync({ src: staged.src, dest: destPath })
     if (fs.statSync(destPath).size === staged.expectedSize) {
-      console.log(`[prestage] Using pre-staged model ${modelName}`)
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${how === 'link' ? 'hardlinked' : 'copied'})`
+      )
       return true
     }
     fs.unlinkSync(destPath)
   } catch (err) {
-    console.log(`[prestage] copy of ${modelName} failed: ${err.message}`)
+    console.log(`[prestage] staging of ${modelName} failed: ${err.message}`)
     try {
       fs.unlinkSync(destPath)
     } catch (_) {}
@@ -1031,7 +1064,7 @@ async function runDoctrOCR(t, params, imagePath) {
     params: {
       langList: ['en'],
       pipelineType: 'doctr',
-      nThreads: 4,
+      nThreads: OCR_TEST_THREADS,
       backendDevice: getBackendDevice(),
       ...params
     },
@@ -1319,7 +1352,7 @@ async function runDoctrWarmProfile(t, cfg) {
     params: {
       langList: ['en'],
       pipelineType: 'doctr',
-      nThreads: 4,
+      nThreads: OCR_TEST_THREADS,
       backendDevice: 'vulkan',
       ...params
     },
@@ -1407,6 +1440,7 @@ module.exports = {
   runDoctrWarmProfile,
   isWindows,
   platform,
+  OCR_TEST_THREADS,
   PERF_RUNS,
   PREBUILDS_DIR,
   findVulkanBackendLib,
@@ -1418,6 +1452,7 @@ module.exports = {
   ensureModelPath,
   ensureDoctrModels,
   copyPrestagedModel,
+  linkOrCopySync,
   prestagedModelPath,
   GGML_MODELS_DIR,
   formatOCRPerformanceMetrics,

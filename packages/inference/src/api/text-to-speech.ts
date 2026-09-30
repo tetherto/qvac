@@ -9,12 +9,14 @@ import {
   type TextToSpeechStreamClientParams,
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
-  type TtsSentenceChunkUpdate
+  type TtsSentenceChunkUpdate,
+  type TtsStats
 } from '@/schemas/index'
 import Buffer from 'bare-buffer'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/dispatch'
 import { getAppLogger } from '@/logging/index'
 import { TextToSpeechStreamFailedError } from '@/errors/index'
+import { generateRequestId } from '@/runtime/request-id'
 
 const logger = getAppLogger()
 
@@ -141,10 +143,11 @@ export class TtsMulticast {
   }
 }
 
-function buildTtsRequest(params: TtsClientParamsInput): TtsRequest {
+function buildTtsRequest(params: TtsClientParamsInput, requestId: string): TtsRequest {
   return {
     type: 'textToSpeech',
     modelId: params.modelId,
+    requestId,
     inputType: params.inputType ?? 'text',
     text: params.text,
     stream: params.stream ?? true,
@@ -169,11 +172,13 @@ function buildTtsRequest(params: TtsClientParamsInput): TtsRequest {
 }
 
 function buildTextToSpeechStreamRequest(
-  params: TextToSpeechStreamClientParams
+  params: TextToSpeechStreamClientParams,
+  requestId: string
 ): TextToSpeechStreamRequest {
   return {
     type: 'textToSpeechStream',
     modelId: params.modelId,
+    requestId,
     inputType: params.inputType ?? 'text',
     ...(params.accumulateSentences !== undefined && {
       accumulateSentences: params.accumulateSentences
@@ -205,9 +210,9 @@ function buildTextToSpeechStreamRequest(
  *
  * Three modes selected by `params.stream` and `params.sentenceStream`:
  *
- * - `stream: false` (default) — collect all PCM samples and resolve once via
+ * - `stream: false` — collect all PCM samples and resolve once via
  *   `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
- * - `stream: true` — yield PCM samples through `result.bufferStream`
+ * - `stream: true` (default) — yield PCM samples through `result.bufferStream`
  *   (`AsyncGenerator<number>`) as they arrive. `buffer` resolves to an empty
  *   array.
  * - `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
@@ -219,10 +224,21 @@ function buildTextToSpeechStreamRequest(
  * if the consumer breaks out before the terminal frame, or rejects on a
  * pipeline error. Awaiting `done` is safe even when no stream is iterated.
  *
+ * `result.sampleRate` resolves from the first audio frame (so it can be awaited
+ * before draining the audio); `result.stats` and `result.stopReason` resolve
+ * from the terminal frame. All three resolve — with `undefined` when the run
+ * produced none — rather than reject. In `stream: true` mode (the default) the
+ * run starts lazily: nothing is sent until `bufferStream` is first iterated, so
+ * `done`, `sampleRate`, `stats` and `stopReason` stay pending until then. In
+ * `stream: false` and `sentenceStream: true` modes the run starts immediately.
+ * Read `sampleRate` rather than assuming the engine default: `outputSampleRate`
+ * and the LavaSR enhancer both change it.
+ *
  * @param params - TTS request parameters (see `TtsClientParamsInput`).
  * @param options - Optional RPC options (timeout, profiling, force new connection).
  * @returns A `TextToSpeechStreamResult` with `bufferStream`, `buffer`, `done`,
- *          and (when `sentenceStream: true`) `chunkUpdates`.
+ *          `sampleRate`, `stats`, and (when `sentenceStream: true`)
+ *          `chunkUpdates`.
  * @throws {TextToSpeechStreamFailedError} When `sentenceStream: true` is paired
  *         with `stream: false`, or when the underlying RPC stream errors.
  */
@@ -239,7 +255,10 @@ export function textToSpeech(
     )
   }
 
-  const request = buildTtsRequest(params)
+  // Minted here and surfaced synchronously on the result so a caller can
+  // cancel a run it has only just started.
+  const requestId = params.requestId ?? generateRequestId()
+  const request = buildTtsRequest(params, requestId)
 
   if (stream && sentenceStream) {
     return sentenceStreamTts(request, options)
@@ -252,16 +271,85 @@ export function textToSpeech(
   return collectTts(request, options)
 }
 
+/**
+ * The output rate and the runtime stats ride the response frames, but the
+ * three result shapes below expose PCM through generators a caller may abandon
+ * early. This collects both off the frames as they pass and hands them back as
+ * promises that always RESOLVE — with `undefined` when the run produced none —
+ * so `await result.sampleRate` can never hang or reject on its own.
+ */
+export type TtsSideChannel = {
+  sampleRate: Promise<number | undefined>
+  stats: Promise<TtsStats | undefined>
+  stopReason: Promise<'completed' | 'cancelled' | undefined>
+  observe(response: TtsResponse): void
+  settle(): void
+}
+
+/** Exported for test use; not part of the public API surface. */
+export function createTtsSideChannel(): TtsSideChannel {
+  let resolveSampleRate!: (value: number | undefined) => void
+  let resolveStats!: (value: TtsStats | undefined) => void
+  let resolveStopReason!: (value: 'completed' | 'cancelled' | undefined) => void
+  const sampleRate = new Promise<number | undefined>((resolve) => {
+    resolveSampleRate = resolve
+  })
+  const stats = new Promise<TtsStats | undefined>((resolve) => {
+    resolveStats = resolve
+  })
+  const stopReason = new Promise<'completed' | 'cancelled' | undefined>((resolve) => {
+    resolveStopReason = resolve
+  })
+
+  let seenSampleRate: number | undefined
+  let latestStats: TtsStats | undefined
+  let seenStopReason: 'completed' | 'cancelled' | undefined
+  let settled = false
+
+  return {
+    sampleRate,
+    stats,
+    stopReason,
+    observe(response) {
+      // Resolve on the FIRST frame that carries a rate, not at end of stream:
+      // a caller opening an audio device wants it before draining the audio.
+      // Promise resolution is idempotent, so settle() can still resolve the
+      // undefined fallback for a run that never reported one.
+      if (seenSampleRate === undefined && response.sampleRate !== undefined) {
+        seenSampleRate = response.sampleRate
+        resolveSampleRate(seenSampleRate)
+      }
+      if (response.stats !== undefined) latestStats = response.stats
+      if (response.stopReason !== undefined) seenStopReason = response.stopReason
+    },
+    settle() {
+      if (settled) return
+      settled = true
+      resolveSampleRate(seenSampleRate)
+      resolveStats(latestStats)
+      resolveStopReason(seenStopReason)
+    }
+  }
+}
+
 // Adapts the raw RPC stream into the filtered `TtsResponse` source the
 // multicast expects. Kept here (not inlined) so the multicast can be
 // constructed in tests with a hand-rolled source instead.
 async function* ttsResponseSource(
   request: TtsRequest,
-  options: RPCOptions | undefined
+  options: RPCOptions | undefined,
+  side: TtsSideChannel
 ): AsyncGenerator<TtsResponse> {
-  for await (const response of streamRpc(request, options)) {
-    if (response.type !== 'textToSpeech') continue
-    yield response
+  try {
+    for await (const response of streamRpc(request, options)) {
+      if (response.type !== 'textToSpeech') continue
+      side.observe(response)
+      yield response
+    }
+  } finally {
+    // Reached on normal end, on error, and when the multicast's pump breaks
+    // out on the terminal frame.
+    side.settle()
   }
 }
 
@@ -269,7 +357,8 @@ function sentenceStreamTts(
   request: TtsRequest,
   options: RPCOptions | undefined
 ): TextToSpeechStreamResult {
-  const multicast = new TtsMulticast(ttsResponseSource(request, options))
+  const side = createTtsSideChannel()
+  const multicast = new TtsMulticast(ttsResponseSource(request, options, side))
   // Subscribe eagerly, synchronously — before pump() can push its first
   // item — so both subscribers see the full queue from index 0. If we
   // deferred subscribing until the generators were iterated, the first
@@ -282,7 +371,11 @@ function sentenceStreamTts(
     bufferStream: sentenceBufferStream(bufferSubscription),
     chunkUpdates: sentenceChunkUpdates(chunkSubscription),
     buffer: Promise.resolve([]),
-    done: multicast.done
+    done: multicast.done,
+    requestId: request.requestId as string,
+    sampleRate: side.sampleRate,
+    stats: side.stats,
+    stopReason: side.stopReason
   }
 }
 
@@ -306,10 +399,12 @@ async function* sentenceChunkUpdates(
     if (hasAudio || hasMeta) {
       yield {
         buffer: hasAudio ? [...m.buffer] : [],
+        ...(m.sampleRate !== undefined ? { sampleRate: m.sampleRate } : {}),
         ...(m.chunkIndex !== undefined ? { chunkIndex: m.chunkIndex } : {}),
         ...(typeof m.sentenceChunk === 'string' && m.sentenceChunk.length > 0
           ? { sentenceChunk: m.sentenceChunk }
-          : {})
+          : {}),
+        ...(m.isLast !== undefined ? { isLast: m.isLast } : {})
       }
     }
     if (m.done) break
@@ -327,11 +422,16 @@ function plainStreamTts(
     rejectDone = reject
   })
   done.catch(() => {})
+  const side = createTtsSideChannel()
 
   return {
-    bufferStream: plainTtsBufferStream(request, options, resolveDone, rejectDone),
+    bufferStream: plainTtsBufferStream(request, options, resolveDone, rejectDone, side),
     buffer: Promise.resolve([]),
-    done
+    done,
+    requestId: request.requestId as string,
+    sampleRate: side.sampleRate,
+    stats: side.stats,
+    stopReason: side.stopReason
   }
 }
 
@@ -339,7 +439,8 @@ async function* plainTtsBufferStream(
   request: TtsRequest,
   options: RPCOptions | undefined,
   resolveDone: (value: boolean) => void,
-  rejectDone: (err: unknown) => void
+  rejectDone: (err: unknown) => void,
+  side: TtsSideChannel
 ): AsyncGenerator<number> {
   let settled = false
   try {
@@ -347,6 +448,7 @@ async function* plainTtsBufferStream(
       if (response.type !== 'textToSpeech') continue
       // See TtsMulticast.pump — skip per-frame Zod validation; the engine is
       // the source of truth for this response shape.
+      side.observe(response)
       if (response.buffer.length > 0) {
         yield* response.buffer
       }
@@ -365,6 +467,7 @@ async function* plainTtsBufferStream(
     // Consumer broke out of the for-await before `done` arrived; resolve
     // with `false` so `await result.done` never hangs.
     if (!settled) resolveDone(false)
+    side.settle()
   }
 }
 
@@ -380,10 +483,16 @@ function collectTts(
   })
   done.catch(() => {})
 
+  const side = createTtsSideChannel()
+
   return {
     bufferStream: emptyBufferStream(),
-    buffer: collectTtsBuffer(request, options, resolveDone, rejectDone),
-    done
+    buffer: collectTtsBuffer(request, options, resolveDone, rejectDone, side),
+    done,
+    requestId: request.requestId as string,
+    sampleRate: side.sampleRate,
+    stats: side.stats,
+    stopReason: side.stopReason
   }
 }
 
@@ -395,12 +504,14 @@ async function collectTtsBuffer(
   request: TtsRequest,
   options: RPCOptions | undefined,
   resolveDone: (value: boolean) => void,
-  rejectDone: (err: unknown) => void
+  rejectDone: (err: unknown) => void,
+  side: TtsSideChannel
 ): Promise<number[]> {
   let buffer: number[] = []
   try {
     for await (const response of streamRpc(request, options)) {
       if (response.type !== 'textToSpeech') continue
+      side.observe(response)
       buffer = buffer.concat(response.buffer)
       if (response.done) {
         resolveDone(true)
@@ -410,6 +521,8 @@ async function collectTtsBuffer(
   } catch (e) {
     rejectDone(e)
     throw e
+  } finally {
+    side.settle()
   }
 }
 
@@ -423,7 +536,8 @@ export async function textToSpeechStream(
   params: TextToSpeechStreamClientParams,
   options?: RPCOptions
 ): Promise<TextToSpeechStreamSession> {
-  const request = buildTextToSpeechStreamRequest(params)
+  const requestId = params.requestId ?? generateRequestId()
+  const request = buildTextToSpeechStreamRequest(params, requestId)
 
   const { requestStream, responseStream } = await duplex(request, options)
 
@@ -436,6 +550,7 @@ export async function textToSpeechStream(
   let closed = false
 
   return {
+    requestId,
     write(textFragment: string | Buffer) {
       if (closed) {
         throw new TextToSpeechStreamFailedError(

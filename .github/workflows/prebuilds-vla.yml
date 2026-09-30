@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-vla.yml.
+# Build-only workflow. Publishing is handled by on-merge-nx.yml.
 #
 # Routed through .github/workflows/reusable-prebuilds.yml after the
 # consolidation in QVAC-17422 (#1806). VLA-specific knobs (Vulkan SDK,
@@ -53,7 +53,6 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: vla-
       linux-extra-packages: libxi-dev libxtst-dev libxrandr-dev
       include-vulkan-sdk: true
       fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}

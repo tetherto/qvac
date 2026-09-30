@@ -34,21 +34,28 @@ export type AudioGenAudioInputName = 'referenceAudio' | 'sourceAudio'
  * Every path is bounded by `AUDIOGEN_INPUT_MAX_SECONDS` and rejects
  * non-finite samples, so malformed or oversized input fails with
  * `InvalidAudioInputError` before the engine is invoked.
+ *
+ * `requireNormalized` additionally holds samples to `[-1, 1]`. Only the edit
+ * path needs it — the addon vets an edit source with `requireNormalizedPcm`
+ * and everything else with `requireFinitePcm`, which takes any finite sample.
+ * It applies to decoded files as much as to raw PCM: decoding does not
+ * normalize, so a loud source comes back above 1.0 either way.
  */
 export async function resolveAudioGenPcm(
   input: AudioGenAudioInput,
-  name: AudioGenAudioInputName
+  name: AudioGenAudioInputName,
+  { requireNormalized = false }: { requireNormalized?: boolean } = {}
 ): Promise<Float32Array> {
   switch (input.type) {
     case 'base64':
-      return toStereoFloat32(Buffer.from(input.value, 'base64'), name)
+      return toStereoFloat32(Buffer.from(input.value, 'base64'), name, requireNormalized)
     case 'filePath': {
       const filePath = input.value
       if (!needsDecoding(filePath)) {
-        return toStereoFloat32(await readRawPcmFile(filePath, name), name)
+        return toStereoFloat32(await readRawPcmFile(filePath, name), name, requireNormalized)
       }
       await assertDecodableFileSize(filePath, name)
-      return monoToStereo(await decodeMonoFloat32(filePath, name), name)
+      return monoToStereo(await decodeMonoFloat32(filePath, name), name, requireNormalized)
     }
     default:
       throw new InvalidAudioInputError(`${name} must be a file path or raw PCM bytes`)
@@ -120,7 +127,11 @@ async function decodeMonoFloat32(filePath: string, name: AudioGenAudioInputName)
   return asFloat32(chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks as Buffer[], total))
 }
 
-function monoToStereo(mono: Float32Array, name: AudioGenAudioInputName) {
+function monoToStereo(
+  mono: Float32Array,
+  name: AudioGenAudioInputName,
+  requireNormalized: boolean
+) {
   if (mono.length === 0) {
     throw new InvalidAudioInputError(`${name} decoded to no usable audio`)
   }
@@ -128,13 +139,18 @@ function monoToStereo(mono: Float32Array, name: AudioGenAudioInputName) {
   for (let frame = 0; frame < mono.length; frame++) {
     const sample = mono[frame]!
     if (!Number.isFinite(sample)) throw nonFiniteError(name)
+    if (requireNormalized && (sample < -1 || sample > 1)) throw outOfRangeError(name, sample)
     stereo[frame * AUDIOGEN_INPUT_CHANNELS] = sample
     stereo[frame * AUDIOGEN_INPUT_CHANNELS + 1] = sample
   }
   return stereo
 }
 
-function toStereoFloat32(bytes: Uint8Array, name: AudioGenAudioInputName) {
+function toStereoFloat32(
+  bytes: Uint8Array,
+  name: AudioGenAudioInputName,
+  requireNormalized: boolean
+) {
   if (bytes.byteLength === 0 || bytes.byteLength % STEREO_FRAME_BYTES !== 0) {
     throw new InvalidAudioInputError(
       `${name} must be non-empty interleaved stereo ${AUDIOGEN_INPUT_SAMPLE_RATE} Hz Float32 PCM ` +
@@ -143,8 +159,13 @@ function toStereoFloat32(bytes: Uint8Array, name: AudioGenAudioInputName) {
   }
   assertWithinLimit(bytes.byteLength, MAX_STEREO_BYTES, STEREO_FRAME_BYTES, name)
   const pcm = asFloat32(bytes)
+  // One pass settles every sample-level invariant this input needs: at the
+  // documented 600 s cap a second walk would be tens of millions of extra
+  // comparisons.
   for (let index = 0; index < pcm.length; index++) {
-    if (!Number.isFinite(pcm[index]!)) throw nonFiniteError(name)
+    const sample = pcm[index]!
+    if (!Number.isFinite(sample)) throw nonFiniteError(name)
+    if (requireNormalized && (sample < -1 || sample > 1)) throw outOfRangeError(name, sample)
   }
   return pcm
 }
@@ -178,4 +199,8 @@ function assertWithinLimit(
 
 function nonFiniteError(name: AudioGenAudioInputName) {
   return new InvalidAudioInputError(`${name} must contain only finite samples`)
+}
+
+function outOfRangeError(name: AudioGenAudioInputName, sample: number) {
+  return new InvalidAudioInputError(`${name} must contain samples in [-1, 1] (got ${sample})`)
 }

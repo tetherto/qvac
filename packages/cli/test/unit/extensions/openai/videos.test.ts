@@ -141,6 +141,62 @@ describe('nearestVideoFrameCount', () => {
 })
 
 describe('extractVideoCreateParams', () => {
+  const h3Config = {
+    mode: 'video',
+    llmModelSrc: '/models/encoder.gguf',
+    vaeModelSrc: '/models/video.safetensors',
+    audioVaeModelSrc: '/models/audio.safetensors'
+  }
+
+  it('maps H3 duration to 17*k+5 frames at 24 FPS from the configured layout', () => {
+    const params = extractVideoCreateParams(
+      { prompt: 'Coffee at sunrise', seconds: '5' },
+      undefined,
+      'neutral-alias',
+      h3Config
+    )
+    assert.equal(params.video_frames, 124)
+    assert.equal(params.fps, undefined)
+    assert.equal(
+      extractVideoCreateParams({ prompt: 'Coffee', seconds: '1' }, undefined, 'm', h3Config)
+        .video_frames,
+      22
+    )
+  })
+
+  it('preserves omitted H3 defaults and invalid explicit FPS for SDK validation', () => {
+    const minimal = extractVideoCreateParams({ prompt: 'Coffee' }, undefined, 'm', h3Config)
+    assert.equal(minimal.video_frames, undefined)
+    assert.equal(minimal.fps, undefined)
+    const invalid = extractVideoCreateParams(
+      { prompt: 'Coffee', seconds: '5', fps: 16 },
+      undefined,
+      'm',
+      h3Config
+    )
+    assert.equal(invalid.fps, 16)
+    assert.equal(invalid.video_frames, 124)
+  })
+
+  it('does not infer H3 from the alias, incomplete configuration or another layout', () => {
+    for (const config of [
+      {},
+      { ...h3Config, audioVaeModelSrc: undefined },
+      { ...h3Config, embeddingsConnectorsModelSrc: '/models/connectors' },
+      { ...h3Config, t5XxlModelSrc: '/models/t5' }
+    ]) {
+      assert.equal(
+        extractVideoCreateParams(
+          { prompt: 'Coffee', seconds: '5' },
+          undefined,
+          'minimax-h3',
+          config
+        ).video_frames,
+        81
+      )
+    }
+  })
+
   it('returns mode=txt2vid when no initImage', () => {
     const params = extractVideoCreateParams({ prompt: 'a cat surfing' }, undefined, 'sdk-vid-1')
     assert.equal(params.modelId, 'sdk-vid-1')

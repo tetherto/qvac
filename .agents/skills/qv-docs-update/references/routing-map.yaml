@@ -1,0 +1,121 @@
+# Area routing map — the R3 fallback of qv-docs-update.
+#
+# R1 (examples, by literal `file=` directive), R2 (symbols, by
+# `/reference/api#<symbol>` anchor) and R4 (CLI commands, by heading) are exact
+# lookups against bindings that already exist in the content. R3 runs per file:
+# it is consulted for each source path the exact routers could not resolve.
+#
+# `source` is a glob relative to the monorepo root.
+# `pages` are globs relative to `docs/website/content/docs/`.
+#
+# `pages: []` is a positive declaration: this path is intentionally not
+# documented. It is not an empty stub. It stops the skill from raising
+# HUMAN_INPUT_REQUIRED over and over for the same infrastructure path. Every
+# such entry carries its reason in a comment, so a later reader can tell a
+# decision from an oversight.
+#
+# The map grows by evidence. When R3 misses and the developer names the right
+# page, append that answer here as a new entry. Edit this file by hand.
+
+# ---------------------------------------------------------------------------
+# SDK — areas outside src/client/api/, which has no anchor binding
+# ---------------------------------------------------------------------------
+
+- source: packages/sdk/src/logging/**
+  pages: [runtime/logging.mdx]
+
+- source: packages/sdk/src/client/config-loader/**
+  pages: [configuration/index.mdx]
+
+- source: packages/sdk/src/models/**
+  pages: [models/**, introduction.mdx]
+
+- source: packages/sdk/src/server/**
+  pages: [cli/http-server/**]
+
+- source: packages/sdk/src/worker/**
+  pages: [runtime/lifecycle.mdx, runtime/cancellation.mdx]
+
+- source: packages/sdk/src/client/rpc/**
+  pages: [p2p-capabilities/**]
+
+# Error schemas, listed BEFORE the general schema entry so they win the match.
+# The generated API summary documents the error contract at `#errors`, not
+# prose on capability pages. Routing them broadly measured badly: in a backtest
+# they alone produced ~25 candidates per commit, all dismissed.
+- source: packages/sdk/src/schemas/sdk-errors-*.ts
+  pages: []
+
+# Shared type and schema surface. Broad on purpose, since a change here is
+# usually a shape several capabilities share, but scoped to ai-capabilities.
+# The Phase 4 candidate filter narrows it.
+- source: packages/sdk/src/types/**
+  pages: [ai-capabilities/**, configuration/index.mdx]
+
+- source: packages/sdk/src/schemas/**
+  pages: [ai-capabilities/**, configuration/index.mdx]
+
+# Packaging integrations. The tutorials cover these, and tutorials are on the
+# docs-scope denylist, so there is no writable target.
+- source: packages/sdk/src/expo/**
+  pages: []          # covered by tutorials/expo.mdx — denylisted, read-only
+- source: packages/sdk/src/electron-forge/**
+  pages: []          # covered by tutorials/electron.mdx — denylisted, read-only
+- source: packages/sdk/src/pear/**
+  pages: []          # Pear runtime integration is not documented on the site
+
+# ---------------------------------------------------------------------------
+# CLI — only what R4 does not already resolve
+#
+# R4 maps a command folder to its `### `qvac <command>`` heading directly, so
+# the command folders are absent from this map on purpose.
+# ---------------------------------------------------------------------------
+
+- source: packages/cli/src/cli/**
+  pages: []          # command framework (option parsing, registration) — no user-facing surface
+
+- source: packages/cli/src/logger.ts
+  pages: []          # log formatting internals; a change to visible output is caught by the Phase 3 impact check, not by routing
+
+- source: packages/cli/src/errors.ts
+  pages: []          # error class plumbing; user-visible message changes route via the command's own heading
+
+- source: packages/cli/src/config.ts
+  pages: [configuration/index.mdx, cli/index.mdx]
+
+# DECIDED: `qvac verify` is intentionally undocumented on the site.
+# `verify deps` diffs native addon changes between two lockfile refs, and
+# `verify bundle` checks prebuild/ABI integrity. Both are CI and release
+# tooling, not SDK application development, which is what the site addresses.
+# Without this entry the skill raises HUMAN_INPUT_REQUIRED on every touch of
+# src/verify/. Revisit if the command is ever pointed at end users.
+- source: packages/cli/src/verify/**
+  pages: []
+
+# ---------------------------------------------------------------------------
+# Python — only what R1 does not already resolve
+#
+# R1 resolves examples by their `file=` directive. What is left is the client
+# surface itself.
+# ---------------------------------------------------------------------------
+
+- source: packages/sdk-python/src/**
+  pages: [python-sdk.mdx]
+
+- source: packages/sdk-python/**
+  pages: [python-sdk.mdx]
+
+# ---------------------------------------------------------------------------
+# Never routed, in any package
+# ---------------------------------------------------------------------------
+
+- source: packages/*/test/**
+  pages: []          # tests are input evidence for Phase 3, never a documentation target
+- source: packages/*/tests/**
+  pages: []
+- source: packages/sdk/e2e/**
+  pages: []          # e2e consumer harness; has its own README
+- source: packages/*/project.json
+  pages: []          # Nx project config
+- source: packages/*/package.json
+  pages: []          # version bumps and dependency ranges are release artefacts

@@ -212,3 +212,5 @@ const result = await verifyBundle({
   hosts: ["android-arm64", "ios-arm64"],
 });
 ```
+
+* **Addon platform packages:** the speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) ship their Android and iOS binaries in separate packages that must be installed at the addon's exact version. Pass `installMissingPrebuilds: true` to `bundleSdk` to add the missing ones to `package.json` with the project's package manager (npm 7+, pnpm, bun, or Yarn Berry) and bundle again. The package manager is read from the project's `packageManager` field, lockfile, or installed `node_modules`; a workspace member uses its workspace root's. If none of those identify it, nothing is installed and the error lists the dependencies to add. It is off by default, so a plain `bundleSdk` call never changes `package.json` or `node_modules`. `ensureHostPrebuilds({ projectRoot, hosts, addons })` runs the install step on its own.

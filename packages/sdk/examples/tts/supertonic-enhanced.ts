@@ -14,6 +14,7 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 // Supplying the enhancer GGUF is what enables enhancement — there is no on/off
 // flag — and it forces the output to 48 kHz regardless of the engine's native
 // rate.
+// Only a fallback; the engine reports the rate it actually produced.
 const ENHANCED_SAMPLE_RATE = 48000
 
 try {
@@ -47,18 +48,16 @@ try {
   })
 
   const audioBuffer = await result.buffer
+  const sampleRate = (await result.sampleRate) ?? ENHANCED_SAMPLE_RATE
   console.log(`▸ TTS complete. Total samples: ${audioBuffer.length}`)
 
   console.log('▸ Saving audio to file...')
-  createWav(audioBuffer, ENHANCED_SAMPLE_RATE, 'supertonic-enhanced-output.wav')
+  createWav(audioBuffer, sampleRate, 'supertonic-enhanced-output.wav')
   console.log('▸ Audio saved to supertonic-enhanced-output.wav')
 
   console.log('▸ Playing audio...')
   const audioData = int16ArrayToBuffer(audioBuffer)
-  const wavBuffer = Buffer.concat([
-    createWavHeader(audioData.length, ENHANCED_SAMPLE_RATE),
-    audioData
-  ])
+  const wavBuffer = Buffer.concat([createWavHeader(audioData.length, sampleRate), audioData])
   playAudio(wavBuffer)
   console.log('▸ Audio playback complete')
 
