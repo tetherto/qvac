@@ -289,7 +289,13 @@ elseif(WIN32)
   # for the same symbol prefixes the ELF/Mach-O builds export, and feed it via
   # /DEF. The export entries double as references that pull the matching members
   # out of the archives, so the listed symbols are always present in the image.
-  find_program(FABRIC_NM NAMES llvm-nm nm)
+  # npm's Windows bin for llvm-nm is three files. The bare name is a
+  # #!/bin/sh script, which find_program selects when generate runs under
+  # Git bash. CreateProcess cannot run that script. The .cmd shim can.
+  find_program(FABRIC_NM NAMES llvm-nm.cmd llvm-nm.exe nm.cmd nm.exe)
+  if(NOT FABRIC_NM)
+    find_program(FABRIC_NM NAMES llvm-nm nm)
+  endif()
   if(NOT FABRIC_NM)
     set(FABRIC_NM "${CMAKE_NM}")
   endif()

@@ -498,12 +498,10 @@ jobs:
           fi
           echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
 
-      # Default shell: bash on Linux and macOS, pwsh on Windows. Git bash
-      # selects npm's extensionless llvm-nm shim, which cmake cannot execute.
-      # pwsh resolves the .cmd / .ps1 shims instead.
       - name: Run bare-make generate
         working-directory: ${{ env.WORKDIR }}
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} ${{ env.DEFINES }}
+        shell: bash
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $DEFINES
 
       - name: Dump vcpkg build logs on failure
         if: failure()
