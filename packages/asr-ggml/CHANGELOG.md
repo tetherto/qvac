@@ -14,6 +14,26 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Fixed
+
+- Nemotron 3 Diarization streaming preserves first-chunk predictions with left
+  context, applies the same peak gain as offline inference, and retains an
+  explicitly requested 80 ms left context.
+- Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
+  reports more free device memory than total once the process has allocated
+  past the GPU's recommended working set, which made a model that does not fit
+  report `fits`. Transcription is unchanged.
+
+### Added
+
+- Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and
+  streaming speaker segments with up to eight speakers.
+
+### Changed
+
+- Raise the `speech-cpp` minimum to `2026-09-29#1` for Nemotron 3
+  Diarization support.
+
 ## [0.7.0] - 2026-09-29
 
 ### Added
