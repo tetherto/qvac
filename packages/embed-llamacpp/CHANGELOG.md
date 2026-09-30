@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `assessFit` now honours `moe-cache-mib: auto` the way the load does. Since
+  `qvac-fabric` 10549.5.0 an automatic MoE expert cache is sized by default only
+  on CUDA, and `auto` opts other backends in; the load's fit received that
+  choice but the projection did not. Needs `@qvac/fabric` carrying
+  `qvac-fabric` 10549.5.0.
+
 ## [0.43.0] - 2026-09-28
 
 ### Added
