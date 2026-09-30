@@ -43,7 +43,9 @@ const {
   ASRGgml,
   setupJsLogger,
   getTestPaths,
-  loadGgufOrSkip
+  loadGgufOrSkip,
+  NO_GPU,
+  GPU_ONLY_USE_GPU
 } = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
@@ -132,7 +134,7 @@ async function streamEou(model, audioData) {
 
 test(
   'EOU streaming — emits transcript segments and end-of-turn boundaries',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const loggerBinding = setupJsLogger(binding)
 
@@ -154,7 +156,7 @@ test(
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,
             maxThreads: 4,
-            useGPU: false
+            useGPU: GPU_ONLY_USE_GPU
           }
         }
       })

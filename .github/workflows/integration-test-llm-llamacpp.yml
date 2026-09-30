@@ -201,7 +201,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
+        run: npm install -g --force bare bare-make@1.8.0 bare-runtime bare-https brittle
 
       # Shared placement action: handles the Windows path hazard where Git Bash
       # mangles runner.temp ("C:\a\_temp") and the copy silently no-ops.

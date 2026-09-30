@@ -16,3 +16,4 @@ addon.js
 batchHandler.js
 addonLogging.js
 *.d.ts
+fit.js

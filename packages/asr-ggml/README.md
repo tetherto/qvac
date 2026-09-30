@@ -26,6 +26,7 @@ breaking changes the merge introduced.
   - [Parakeet — duplex streaming `runStreaming()`](#parakeet--duplex-streaming-runstreaming)
 - [Engine Selection](#engine-selection)
 - [API Surface](#api-surface)
+- [Assessing fit](#assessing-fit)
 - [Configuration Reference](#configuration-reference)
 - [Audio Input](#audio-input)
 - [Backends and GPU Acceleration](#backends-and-gpu-acceleration)
@@ -408,8 +409,68 @@ Constructor options:
 
 - bare `TranscriptionSegment[]` (or a single segment) for transcripts — there
   is no `{ type: 'segment' }` wrapper;
-- `{ type: 'vad', speaking, score, source }` for voice-activity events;
+- `{ type: 'vad', speaking, score, source, timestamp?, speakerId? }` for
+  voice-activity events, emitted on each speech/silence change. `source` is
+  `'silero'` (Whisper streaming), `'energy'` (Parakeet ASR energy detector;
+  `score` is the window RMS), or `'sortformer'` (Parakeet speaker activity;
+  `speakerId` names the dominant speaker when speech starts). Parakeet events
+  carry `timestamp`, in seconds from the start of the session;
 - `{ type: 'endOfTurn', source, silenceDurationMs? }` for turn boundaries.
+
+Engine-specific segment fields:
+
+- Whisper segments carry `noSpeechProb`, and `language` whenever whisper
+  reports one (the decoded language, the detected one under
+  `language: 'auto'`). With
+  `token_timestamps: true` they add `tokens: [{ text, start, end,
+  probability }]` (special tokens left out); with `tdrz_enable: true` on a
+  tinydiarize model they add `speakerTurnNext`.
+- Parakeet Sortformer keeps the `"Speaker N: start - end"` text and adds the
+  same data in structured form: a streamed diarization segment carries
+  `speakerId`, and the offline transcript carries
+  `speakerSegments: [{ speakerId, start, end }]`, one entry per text line.
+
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. Parakeet is GGUF, so the registry's weightless copy of a parakeet model answers the same as the model itself and the projection can run before it is downloaded. Whisper ships as `.bin`, which the registry has no weightless form for, so a whisper projection needs the file. It is a module export, not an instance method — nothing is loaded to call it.
+
+```js
+const ASRGgml = require('@qvac/asr-ggml')
+
+const fit = ASRGgml.assessFit({
+  engine: 'whisper',
+  modelPath: '/models/whisper.bin',
+  vadModelPath: '/models/silero-vad.bin',
+  audioSeconds: 300,
+  decoders: 5
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
+fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer'
+fit.deviceName
+fit.deviceBytes
+fit.weightsBytes
+fit.hostBytes
+fit.report
+```
+
+`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet reports `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
+
+| Option | Description |
+| --- | --- |
+| `modelPath` | **Required.** Absolute path to the model, or to the registry's weightless copy where one exists. |
+| `audioSeconds` | Longest single transcribe the projection must cover. Defaults to 300. |
+| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet projects on the CPU and whisper on the GPU, matching what each load does. |
+| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet. |
+| `backendsDir` | The prebuilds root. The backends are read from the per-target subdir under it, the same path a load reads. |
+| `vadModelPath` | Whisper: projected alongside the model. Omitted means no VAD. |
+| `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
+| `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
+| `threads`, `longFormWindowFrames`, `longFormContextFrames` | Parakeet: as the load takes them. |
+| `nemotronChunkMs` | Nemotron: the streaming operating point the projection must also cover. 0 projects the largest allowed one. |
+
+A model the fitter cannot read is `status: "error"` with the engine's reason; only a broken request throws.
 
 ## Configuration Reference
 
@@ -466,6 +527,8 @@ Notes:
   backend libraries are found. See
   [Backends and GPU Acceleration](#backends-and-gpu-acceleration).
 - `max_seconds` is a convenience that derives `duration_ms`.
+- `carry_initial_prompt: true` prepends `initial_prompt` to every decode
+  window instead of only the first.
 
 Whisper `runStreaming(audio, opts)` options:
 
@@ -500,8 +563,10 @@ key is documented inline there, and any key outside it throws
 | Audio | `sampleRate` (16000), `channels` (1) |
 | Output | `captionEnabled`, `timestampsEnabled` |
 | Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on monolingual CTC |
-| Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
-| Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
+| Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, `streamingEnergyVadHangoverMs`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
+| Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
+| Diarization (Sortformer, offline and streaming) | `diarizationThreshold` (0.641), `diarizationMinSegmentMs` (510) |
+| Engine | `prewarm`, `prewarmAudioSeconds`, `longFormWindowFrames`, `longFormContextFrames` |
 | Backends | `backendsDir`, `openclCacheDir` |
 
 The `streamingSpkCache*` / `streamingFifoLen` /
@@ -512,9 +577,24 @@ and Sortformer v1 vs v2.1+AOSC, are all detected from the GGUF metadata.
 
 Parakeet `runStreaming(audio, opts)` options are per-call overrides of the same
 knobs without the `streaming` prefix: `chunkMs`, `historyMs`, `leftContextMs`,
-`rightLookaheadMs`, `emitPartials`, `emitEnergyVad`, `spkCacheEnable`,
+`rightLookaheadMs`, `emitPartials`, `emitEnergyVad`, `energyVadThresholdDb`,
+`energyVadWindowMs`, `energyVadHangoverMs`, `emitSpeakerVad`,
+`diarizationThreshold`, `diarizationMinSegmentMs`, `spkCacheEnable`,
 `spkCacheLen`, `fifoLen`, `chunkLeftContextMs`, `chunkRightContextMs`,
 `spkCacheUpdatePeriod`.
+
+Voice-activity events are opt-in. `streamingEnergyVad` / `emitEnergyVad` runs
+the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron sessions
+(EOU models signal turns through `<EOU>` instead); the threshold is in dBFS
+(default -35) and the hangover is how long the audio must stay below it
+before the state returns to silence (default 200 ms).
+`streamingSpeakerVad` / `emitSpeakerVad` reports Sortformer speaker activity.
+
+`prewarm` runs one synthetic encoder pass while loading so the first request
+does not pay the GPU shader or kernel compile. `longFormWindowFrames` bounds
+the offline encoder window (0 picks it from the model, a negative value
+always runs one pass), which keeps memory flat on long `run()` inputs;
+`cancel()` also takes effect between those windows.
 
 For streaming diarization, use the Sortformer v2.1 GGUF. Its metadata enables
 AOSC automatically; keep the speaker-cache defaults unless you are comparing
@@ -615,9 +695,12 @@ This selector currently applies to the Whisper engine.
 
 `getBackendInfo()` reports what actually ran — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,
-`encoderBackend`, and `encoderOnCoreml` (Apple: whether a Parakeet Core ML
+`encoderBackend`, `encoderOnCoreml` (Apple: whether a Parakeet Core ML
 encoder sidecar loaded; see
-[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)). Whisper additionally reports
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)), and
+`modelType` (`'whisper'`, or the Parakeet family detected from the GGUF:
+`'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`, `'nemotron'`, `'sortformer'`). Whisper
+additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
@@ -800,6 +883,9 @@ specialized models, hardware, timing conditions, or toolchains:
 `test:integration:parakeet:gpu`, and `test:cpp`.
 The Parakeet GPU command is manual; ASR CI keeps
 `test:integration:gpu` Whisper-only.
+On CPU the standard suites run only brief inference, one short transcription
+per test. Multi-run, long-audio and paced streaming tests run on the GPU and
+are skipped when `NO_GPU=true`, as on the CPU-only CI rows.
 `test:integration:live-stream-simulation` runs only the long-lived Whisper
 stream test; the misspelled `test:integration:live-stream-simultion` remains
 as a temporary alias.

@@ -53,7 +53,7 @@ def main():
         parser.error('current pnpm workspace needs bare-pack >= 2 and bare-link >= 3')
     run(['node', source/'scripts/prepare-pocket-worklet.cjs', source, output, modules], 'pack-link.log')
     run(['xcrun', '--sdk', 'iphonesimulator', 'clang++', '-std=c++17',
-         '-target', 'arm64-apple-ios15.0-simulator', source/'test/mobile/pocket-worklet-host.cpp',
+         '-target', 'arm64-apple-ios15.0-simulator', source/'test/pocket-worklet/pocket-worklet-host.cpp',
          '-F', framework_dir, '-framework', 'Foundation', '-framework', 'BareKit',
          '-Wl,-rpath,'+str(framework_dir), '-Wl,-rpath,'+str(output/'frameworks'),
          '-o', output/'host'], 'host-build.log')

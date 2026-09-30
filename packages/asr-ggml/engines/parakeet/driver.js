@@ -19,6 +19,10 @@ const PARAKEET_CONFIG_KEYS = [
     "streamingHistoryMs",
     "streamingEmitPartials",
     "streamingEnergyVad",
+    "streamingEnergyVadThresholdDb",
+    "streamingEnergyVadWindowMs",
+    "streamingEnergyVadHangoverMs",
+    "streamingSpeakerVad",
     "streamingLeftContextMs",
     "streamingRightLookaheadMs",
     "streamingSpkCacheEnable",
@@ -27,6 +31,12 @@ const PARAKEET_CONFIG_KEYS = [
     "streamingChunkLeftContextMs",
     "streamingChunkRightContextMs",
     "streamingSpkCacheUpdatePeriod",
+    "diarizationThreshold",
+    "diarizationMinSegmentMs",
+    "prewarm",
+    "prewarmAudioSeconds",
+    "longFormWindowFrames",
+    "longFormContextFrames",
     "backendsDir",
     "openclCacheDir",
 ];
@@ -37,6 +47,12 @@ const PARAKEET_STREAMING_OPT_KEYS = [
     "rightLookaheadMs",
     "emitPartials",
     "emitEnergyVad",
+    "energyVadThresholdDb",
+    "energyVadWindowMs",
+    "energyVadHangoverMs",
+    "emitSpeakerVad",
+    "diarizationThreshold",
+    "diarizationMinSegmentMs",
     "spkCacheEnable",
     "spkCacheLen",
     "fifoLen",
@@ -250,6 +266,10 @@ class ParakeetDriver {
             streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,
             streamingEmitPartials: this.params.streamingEmitPartials !== false,
             streamingEnergyVad: this.params.streamingEnergyVad === true,
+            streamingEnergyVadThresholdDb: this.params.streamingEnergyVadThresholdDb,
+            streamingEnergyVadWindowMs: this.params.streamingEnergyVadWindowMs,
+            streamingEnergyVadHangoverMs: this.params.streamingEnergyVadHangoverMs,
+            streamingSpeakerVad: this.params.streamingSpeakerVad === true,
             streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
             streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1,
             streamingSpkCacheEnable: this.params.streamingSpkCacheEnable !== false,
@@ -258,6 +278,12 @@ class ParakeetDriver {
             streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs,
             streamingChunkRightContextMs: this.params.streamingChunkRightContextMs,
             streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod,
+            diarizationThreshold: this.params.diarizationThreshold,
+            diarizationMinSegmentMs: this.params.diarizationMinSegmentMs,
+            prewarm: this.params.prewarm === true,
+            prewarmAudioSeconds: this.params.prewarmAudioSeconds,
+            longFormWindowFrames: this.params.longFormWindowFrames,
+            longFormContextFrames: this.params.longFormContextFrames,
             backendsDir: this.params.backendsDir,
             openclCacheDir: this.params.openclCacheDir,
         };
@@ -282,6 +308,12 @@ class ParakeetDriver {
             if (segment?.isEndOfTurn === true) {
                 this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
             }
+            return;
+        }
+        if (event === "VadState") {
+            // The native payload is already VadEvent-shaped (energy detector or
+            // Sortformer speaker activity).
+            this.ctx.job.output(data);
             return;
         }
         if (event === "JobEnded") {

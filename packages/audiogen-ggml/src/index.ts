@@ -46,12 +46,16 @@ const SUPPORTED_ENGINES: readonly string[] = [ENGINE_ACESTEP, ENGINE_MINIMAX]
 export const MINIMAX_FRAMES_PER_SECOND = 25
 export const MINIMAX_DEFAULT_MAX_FRAMES = 300
 const MINIMAX_MIN_FRAMES = 1
-const MINIMAX_MAX_INFERENCE_STEPS = 1000
+const MAX_INFERENCE_STEPS = 1000
 const INT32_MAX = 2147483647
 const FLOAT32_MAX = 3.4028234663852886e38
 const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45
 
 export type AudioGenEngine = typeof ENGINE_ACESTEP | typeof ENGINE_MINIMAX
+
+/** MiniMax compute device, see `AudioGenRuntimeConfig.device`. */
+export type AudiogenMinimaxDevice = 'cpu' | 'gpu' | 'auto'
+const MINIMAX_DEVICES: readonly string[] = ['cpu', 'gpu', 'auto']
 
 type RunExclusive = <T>(callback: () => Promise<T>) => Promise<T>
 
@@ -87,6 +91,12 @@ export interface AudioGenRuntimeConfig {
    * in use. MiniMax puts the whole model pair on the device (~22 GB for f16).
    */
   useGPU?: boolean
+  /**
+   * MiniMax only, instead of `useGPU`: `'gpu'` requires a usable GPU and fails
+   * `load()` otherwise, `'auto'` (what `useGPU: true` means) falls back to the
+   * CPU, `'cpu'` never touches a GPU.
+   */
+  device?: AudiogenMinimaxDevice
   /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
   nGpuLayers?: number
   /** 0 = engine auto-picks. */
@@ -129,10 +139,20 @@ export interface GenerateOptions {
   duration?: number
   /** MiniMax semantic-frame cap. Cannot be combined with `duration`. */
   maxFrames?: number
-  /** MiniMax flow steps for this generation; 0 uses the engine default (20). */
+  /**
+   * Diffusion steps for this generation, 0..1000; omit to keep
+   * `config.inferenceSteps`. 0 is the engine default: MiniMax 20 flow steps,
+   * ACE-Step 8 on turbo DiTs and 50 on base/sft.
+   */
   inferenceSteps?: number
   /** MiniMax flow classifier-free guidance scale for this generation. */
   cfgScale?: number
+  /**
+   * ACE-Step DiT timestep shift for this generation; omit to keep
+   * `config.shift`. 0 is the engine default: 3.0 on turbo DiTs, 1.0 on
+   * base/sft.
+   */
+  shift?: number
   /** LM sampling temperature (ACE-Step default: 0.85). */
   lmTemperature?: number
   /** LM nucleus-sampling probability (ACE-Step default: 0.9). */
@@ -285,6 +305,31 @@ export interface RepaintOptions extends AudioEditPrompt {
 export interface AudioEditRunOptions {
   /** Seeds the first operation; each following operation uses seed + its index. */
   seed?: number
+  /**
+   * Optional timbre reference for every operation: interleaved stereo float
+   * PCM at 48 kHz, the same layout `GenerateOptions.referenceAudio` uses.
+   */
+  referenceAudio?: Float32Array
+  /** Vocal language hint for the edit prompts; the engine defaults to `'unknown'`. */
+  vocalLanguage?: string
+  /** Beats per minute for the edit prompts; 0/undefined leaves it unset. */
+  bpm?: number
+  /** Key + scale for the edit prompts, e.g. "C minor". */
+  keyscale?: string
+  /** Time signature for the edit prompts, e.g. "4/4". */
+  timesignature?: string
+  /** Append BPM, time signature and key to each operation's conditioning caption. */
+  augmentCaptionWithMetadata?: boolean
+  /** Repaint only: apply the Haar DCW sampler correction (default: true). */
+  dcwEnabled?: boolean
+  /** Repaint only: DCW low-frequency correction strength (default: 0.05). */
+  dcwScaler?: number
+  /** Repaint only: DCW high-frequency correction strength (default: 0.02). */
+  dcwHighScaler?: number
+  /** DiT steps for every operation, 0..1000; omit to keep `config.inferenceSteps`. */
+  inferenceSteps?: number
+  /** DiT timestep shift for every operation; omit to keep `config.shift`. */
+  shift?: number
 }
 
 interface NativeFlowEditOperation {
@@ -317,6 +362,39 @@ export interface AudiogenProgress {
   total: number
 }
 
+/**
+ * The request an ACE-Step run actually rendered, after the LM filled in what
+ * the caller left unset (Phase 1, Simple Mode, Query Rewriting). An edit run
+ * reports its base seed and the prompt metadata it was given; its caption is
+ * empty (each operation carries its own) and `codeFrames` is 0. MiniMax runs
+ * report none.
+ */
+export interface AudiogenGenerationMetadata {
+  /**
+   * The caption the run used: the LM-composed one under Simple Mode or Query
+   * Rewriting. With `augmentCaptionWithMetadata` set it is always the caller's
+   * own caption (before the metadata suffix), even under those modes.
+   */
+  caption: string
+  /** The lyrics the run used (LM-written under Simple Mode). */
+  lyrics: string
+  /** Beats per minute; 0 when unresolved. */
+  bpm: number
+  keyscale: string
+  /** Beats per bar, the time-signature numerator (4 for "4/4"); 0 when unresolved. */
+  beatsPerBar: number
+  vocalLanguage: string
+  /** The seed the run used: the engine-drawn one when no `seed` was passed. */
+  seed: number
+  /**
+   * 5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and
+   * detokenizer are skipped (cover-nofsq, lego, edits).
+   */
+  codeFrames: number
+  /** Per-condition breakdown of `stats.qualityScore`; present only with `computeQualityScore`. */
+  qualityReport?: string
+}
+
 /** One interleaved-Int16 PCM chunk emitted by the engine. */
 export interface AudiogenPcmChunk {
   outputArray: Int16Array
@@ -324,6 +402,8 @@ export interface AudiogenPcmChunk {
   channels: number
   /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
   lrc?: string
+  /** What an ACE-Step run rendered; absent for MiniMax. */
+  metadata?: AudiogenGenerationMetadata
 }
 
 /** A progress tick delivered through the run's output stream. */
@@ -345,6 +425,8 @@ export interface AudiogenUnderstandResult {
   timesignature: string
   vocalLanguage: string
   audioCodes: Int32Array
+  /** The seed the LM decode used: the engine-drawn one when no `seed` was passed. */
+  seed: number
 }
 
 /** The understand result delivered through the response's output stream. */
@@ -377,6 +459,19 @@ export interface AudiogenStats {
   /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
   gpuFallbackReason?: number
   /**
+   * MiniMax only: semantic frames the AR stage emitted (25 per second). Below
+   * the frame cap when the song ended at the model's end-of-sequence.
+   */
+  emittedFrames?: number
+  /** MiniMax only: engine time in the autoregressive semantic stage. */
+  arMs?: number
+  /** MiniMax only: engine time building the flow conditioning. */
+  conditionMs?: number
+  /** MiniMax only: engine time in the flow-matching DiT. */
+  flowMs?: number
+  /** MiniMax only: engine time in the vocoder. */
+  vocoderMs?: number
+  /**
    * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
    * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
    * is repeated here for convenience.
@@ -395,6 +490,11 @@ export interface AudiogenStats {
    * by an `understand()` response; also streamed as an output item.
    */
   understand?: AudiogenUnderstandResult
+  /**
+   * What an ACE-Step run rendered, repeated from the PCM chunk
+   * (`AudiogenPcmChunk.metadata`). Absent for `understand()` and MiniMax.
+   */
+  metadata?: AudiogenGenerationMetadata
 }
 
 /** Options accepted by `understand()`. */
@@ -466,8 +566,14 @@ interface NativeAudiogenData {
   backendDevice?: number
   backendId?: number
   gpuFallbackReason?: number
+  emittedFrames?: number
+  arMs?: number
+  conditionMs?: number
+  flowMs?: number
+  vocoderMs?: number
   lyricsScore?: number
   lrc?: string
+  metadata?: AudiogenGenerationMetadata
   qualityScore?: number
   progressStage?: string
   progressStep?: number
@@ -480,6 +586,7 @@ interface NativeAudiogenData {
   keyscale?: string
   timesignature?: string
   vocalLanguage?: string
+  seed?: number
 }
 
 function asNativeData(data: unknown): NativeAudiogenData | null {
@@ -519,12 +626,45 @@ function requireSafeInteger(value: number, name: string): number {
   return value
 }
 
-function requireMinimaxInferenceSteps(value: number): number {
-  const steps = requireSafeInteger(value, 'inferenceSteps')
-  if (steps < 0 || steps > MINIMAX_MAX_INFERENCE_STEPS) {
-    throw invalidInput(`inferenceSteps must be between 0 and ${MINIMAX_MAX_INFERENCE_STEPS}`)
+function optionalFloat32(value: number | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined
+  requireFiniteNumber(value, name)
+  if (Math.abs(value) > FLOAT32_MAX) {
+    throw invalidInput(`${name} must be within the float32 range, got ${value}`)
+  }
+  return value
+}
+
+function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw invalidInput(`${name} must be a boolean`)
+  }
+  return value
+}
+
+function optionalString(value: unknown, name: string): string | undefined {
+  if (value !== undefined && typeof value !== 'string') {
+    throw invalidInput(`${name} must be a string`)
+  }
+  return value
+}
+
+function requireInferenceSteps(value: number, name = 'inferenceSteps'): number {
+  const steps = requireSafeInteger(value, name)
+  if (steps < 0 || steps > MAX_INFERENCE_STEPS) {
+    throw invalidInput(`${name} must be between 0 and ${MAX_INFERENCE_STEPS}`)
   }
   return steps
+}
+
+// ACE-Step DiT timestep shift; 0 = auto (turbo 3.0, base/sft 1.0). A positive
+// value that rounds to a float32 zero would silently select auto instead.
+function requireAcestepShift(value: number, name = 'shift'): number {
+  const shift = requireFiniteNumber(value, name)
+  if (shift < 0 || shift > FLOAT32_MAX || (shift > 0 && shift < FLOAT32_MIN_POSITIVE)) {
+    throw invalidInput(`${name} must be 0 or a positive float32 value`)
+  }
+  return shift
 }
 
 function requireNonNegativeInt32(value: number, name: string): number {
@@ -722,7 +862,8 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'coverNoiseStrength',
   'generateLrc',
   'computeQualityScore',
-  'rewriteQuery'
+  'rewriteQuery',
+  'shift'
 ]
 
 function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
@@ -775,6 +916,9 @@ function validateAcestepOptions(files: AudioGenFiles, config: AudioGenRuntimeCon
   if (config.cfgScale !== undefined) {
     throw invalidInput('ACE-Step does not accept cfgScale')
   }
+  if (config.device !== undefined) {
+    throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)')
+  }
 }
 
 function validateMinimaxConfig(config: AudioGenRuntimeConfig): void {
@@ -783,6 +927,14 @@ function validateMinimaxConfig(config: AudioGenRuntimeConfig): void {
   }
   if (config.shift !== undefined || config.nGpuLayers !== undefined) {
     throw invalidInput('MiniMax does not accept shift or nGpuLayers')
+  }
+  if (config.device !== undefined) {
+    if (typeof config.device !== 'string' || !MINIMAX_DEVICES.includes(config.device)) {
+      throw invalidInput("device must be 'cpu', 'gpu' or 'auto'")
+    }
+    if (config.useGPU !== undefined) {
+      throw invalidInput('MiniMax accepts either useGPU or device, not both')
+    }
   }
 }
 
@@ -795,12 +947,8 @@ function assertNoAcestepGenerateOptions(options: GenerateOptions): void {
 }
 
 function assertNoMinimaxGenerateOptions(options: GenerateOptions): void {
-  if (
-    options.maxFrames !== undefined ||
-    options.inferenceSteps !== undefined ||
-    options.cfgScale !== undefined
-  ) {
-    throw invalidInput('ACE-Step does not accept maxFrames, inferenceSteps, or cfgScale per run')
+  if (options.maxFrames !== undefined || options.cfgScale !== undefined) {
+    throw invalidInput('ACE-Step does not accept maxFrames or cfgScale per run')
   }
 }
 
@@ -825,6 +973,57 @@ function resolveMinimaxMaxFrames(options: GenerateOptions): number {
 function isMobilePlatform(): boolean {
   const platform = os.platform()
   return platform === 'android' || platform === 'ios'
+}
+
+/** The ACE-Step options `run()` and `edit().run()` share. */
+type AcestepSharedOptions = Pick<
+  GenerateOptions,
+  | 'seed'
+  | 'vocalLanguage'
+  | 'bpm'
+  | 'keyscale'
+  | 'timesignature'
+  | 'augmentCaptionWithMetadata'
+  | 'dcwEnabled'
+  | 'dcwScaler'
+  | 'dcwHighScaler'
+  | 'inferenceSteps'
+  | 'shift'
+>
+
+/** One validation for the options both paths hand the engine; `prefix` names the path. */
+function requireAcestepSharedOptions(
+  options: AcestepSharedOptions,
+  prefix = ''
+): AcestepSharedOptions {
+  const key = (name: string): string => `${prefix}${name}`
+  return {
+    seed: options.seed === undefined ? undefined : requireSafeInteger(options.seed, key('seed')),
+    vocalLanguage: optionalString(options.vocalLanguage, key('vocalLanguage')),
+    bpm: options.bpm === undefined ? undefined : requireNonNegativeInt32(options.bpm, key('bpm')),
+    keyscale: optionalString(options.keyscale, key('keyscale')),
+    timesignature: optionalString(options.timesignature, key('timesignature')),
+    augmentCaptionWithMetadata: optionalBoolean(
+      options.augmentCaptionWithMetadata,
+      key('augmentCaptionWithMetadata')
+    ),
+    dcwEnabled: optionalBoolean(options.dcwEnabled, key('dcwEnabled')),
+    dcwScaler: optionalFloat32(options.dcwScaler, key('dcwScaler')),
+    dcwHighScaler: optionalFloat32(options.dcwHighScaler, key('dcwHighScaler')),
+    inferenceSteps:
+      options.inferenceSteps === undefined
+        ? undefined
+        : requireInferenceSteps(options.inferenceSteps, key('inferenceSteps')),
+    shift:
+      options.shift === undefined ? undefined : requireAcestepShift(options.shift, key('shift'))
+  }
+}
+
+function requireEditRunOptions(options: AudioEditRunOptions): AudioEditRunOptions {
+  return {
+    ...requireAcestepSharedOptions(options, 'edit.'),
+    referenceAudio: optionalStereoPcm(options.referenceAudio, 'edit.referenceAudio')
+  }
 }
 
 type EditRunner = (
@@ -924,9 +1123,9 @@ export class AudioEditSession {
     if (typeof options !== 'object' || options === null) {
       throw invalidInput('edit session run options must be an object')
     }
-    const seed = optionalFiniteNumber(options.seed, 'edit.seed', true)
+    const runOptions = requireEditRunOptions(options)
     this._started = true
-    return this._runner(this._source, this._operations, { seed })
+    return this._runner(this._source, this._operations, runOptions)
   }
 }
 
@@ -959,6 +1158,7 @@ export class AudioGen {
   private _lastLrc: string | undefined
   private _cancelTerminalResolve: (() => void) | null
   private _lastUnderstand: AudiogenUnderstandResult | undefined
+  private _lastMetadata: AudiogenGenerationMetadata | undefined
 
   constructor(options: AudioGenOptions = {}) {
     this._logger = new QvacLogger(options.logger)
@@ -975,7 +1175,7 @@ export class AudioGen {
       }
       validateMinimaxFiles(files)
       validateMinimaxConfig(config)
-      this._defaultInferenceSteps = requireMinimaxInferenceSteps(config.inferenceSteps ?? 0)
+      this._defaultInferenceSteps = requireInferenceSteps(config.inferenceSteps ?? 0)
       this._defaultCfgScale = requireMinimaxCfgScale(config.cfgScale ?? 0)
       this._configuration = {
         engineType: ENGINE_MINIMAX,
@@ -984,15 +1184,12 @@ export class AudioGen {
         synthModelPath: files.synthModel,
         threads,
         useGPU: config.useGPU ?? false,
+        device: config.device,
         backendsDir
       }
     } else {
       validateAcestepOptions(files, config)
-      this._defaultInferenceSteps = requireFiniteNumber(
-        config.inferenceSteps ?? 0,
-        'inferenceSteps',
-        true
-      )
+      this._defaultInferenceSteps = requireInferenceSteps(config.inferenceSteps ?? 0)
       this._defaultCfgScale = 0
       const ditModelPath = resolveDitModelPath({
         modelDir: files.modelDir,
@@ -1007,7 +1204,7 @@ export class AudioGen {
         ditModelPath,
         vaeModelPath: files.vaeModel,
         inferenceSteps: this._defaultInferenceSteps,
-        shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
+        shift: requireAcestepShift(config.shift ?? 0),
         useGPU: config.useGPU ?? false,
         nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
         threads,
@@ -1155,7 +1352,18 @@ export class AudioGen {
       input: '',
       sourceAudio,
       editOperations: [...operations],
-      seed: options.seed
+      seed: options.seed,
+      referenceAudio: options.referenceAudio,
+      vocalLanguage: options.vocalLanguage,
+      bpm: options.bpm,
+      keyscale: options.keyscale,
+      timesignature: options.timesignature,
+      augmentCaptionWithMetadata: options.augmentCaptionWithMetadata,
+      dcwEnabled: options.dcwEnabled,
+      dcwScaler: options.dcwScaler,
+      dcwHighScaler: options.dcwHighScaler,
+      inferenceSteps: options.inferenceSteps,
+      shift: options.shift
     }
     const revision = this._lifecycleRevision
     return new Promise((resolve, reject) => {
@@ -1178,6 +1386,7 @@ export class AudioGen {
     const addon = this._requireAddon()
     this._lastLrc = undefined
     this._lastUnderstand = undefined
+    this._lastMetadata = undefined
     const response = this._job.start() as QvacResponse<AudiogenOutputChunk>
     let accepted: boolean
     try {
@@ -1228,7 +1437,7 @@ export class AudioGen {
       inferenceSteps:
         opts.inferenceSteps === undefined
           ? this._defaultInferenceSteps
-          : requireMinimaxInferenceSteps(opts.inferenceSteps),
+          : requireInferenceSteps(opts.inferenceSteps),
       cfgScale:
         opts.cfgScale === undefined ? this._defaultCfgScale : requireMinimaxCfgScale(opts.cfgScale)
     }
@@ -1239,15 +1448,7 @@ export class AudioGen {
     if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
       throw invalidInput('lmPhase1 must be a boolean')
     }
-    if (
-      opts.augmentCaptionWithMetadata !== undefined &&
-      typeof opts.augmentCaptionWithMetadata !== 'boolean'
-    ) {
-      throw invalidInput('augmentCaptionWithMetadata must be a boolean')
-    }
-    if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
-      throw invalidInput('dcwEnabled must be a boolean')
-    }
+    const shared = requireAcestepSharedOptions(opts)
     if (opts.audioCodes !== undefined && !(opts.audioCodes instanceof Int32Array)) {
       throw invalidInput('audioCodes must be an Int32Array')
     }
@@ -1341,21 +1542,21 @@ export class AudioGen {
       normalizeLoudness: opts.normalizeLoudness,
       generateLrc: opts.generateLrc,
       computeQualityScore: opts.computeQualityScore,
-      seed: optionalFiniteNumber(opts.seed, 'seed', true),
-      vocalLanguage: opts.vocalLanguage,
-      bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
-      keyscale: opts.keyscale,
-      timesignature: opts.timesignature,
-      augmentCaptionWithMetadata: opts.augmentCaptionWithMetadata,
+      seed: shared.seed,
+      vocalLanguage: shared.vocalLanguage,
+      bpm: shared.bpm,
+      keyscale: shared.keyscale,
+      timesignature: shared.timesignature,
+      augmentCaptionWithMetadata: shared.augmentCaptionWithMetadata,
       duration: optionalFiniteNumber(opts.duration, 'duration'),
       lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
       lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
       lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true),
       lmCfgScale: optionalFiniteNumber(opts.lmCfgScale, 'lmCfgScale'),
       lmPhase1: opts.lmPhase1,
-      dcwEnabled: opts.dcwEnabled,
-      dcwScaler: optionalFiniteNumber(opts.dcwScaler, 'dcwScaler'),
-      dcwHighScaler: optionalFiniteNumber(opts.dcwHighScaler, 'dcwHighScaler'),
+      dcwEnabled: shared.dcwEnabled,
+      dcwScaler: shared.dcwScaler,
+      dcwHighScaler: shared.dcwHighScaler,
       audioCodes: opts.audioCodes,
       referenceAudio,
       sourceAudio,
@@ -1363,7 +1564,9 @@ export class AudioGen {
       track: opts.track,
       guidanceScale,
       audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
-      coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
+      coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength'),
+      inferenceSteps: shared.inferenceSteps,
+      shift: shared.shift
     }
   }
 
@@ -1530,11 +1733,14 @@ export class AudioGen {
 
     if (d.outputArray) {
       this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined
+      this._lastMetadata =
+        typeof d.metadata === 'object' && d.metadata !== null ? d.metadata : undefined
       this._job.output({
         outputArray: d.outputArray,
         sampleRate: d.sampleRate ?? 0,
         channels: d.channels ?? 0,
-        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
+        ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
+        ...(this._lastMetadata !== undefined ? { metadata: this._lastMetadata } : {})
       })
       return
     }
@@ -1547,7 +1753,8 @@ export class AudioGen {
         keyscale: d.keyscale ?? '',
         timesignature: d.timesignature ?? '',
         vocalLanguage: d.vocalLanguage ?? '',
-        audioCodes: d.audioCodes
+        audioCodes: d.audioCodes,
+        seed: d.seed ?? 0
       }
       this._lastUnderstand = understood
       this._job.output({ understand: understood })
@@ -1564,10 +1771,16 @@ export class AudioGen {
         ...(typeof d.gpuFallbackReason === 'number'
           ? { gpuFallbackReason: d.gpuFallbackReason }
           : {}),
+        ...(typeof d.emittedFrames === 'number' ? { emittedFrames: d.emittedFrames } : {}),
+        ...(typeof d.arMs === 'number' ? { arMs: d.arMs } : {}),
+        ...(typeof d.conditionMs === 'number' ? { conditionMs: d.conditionMs } : {}),
+        ...(typeof d.flowMs === 'number' ? { flowMs: d.flowMs } : {}),
+        ...(typeof d.vocoderMs === 'number' ? { vocoderMs: d.vocoderMs } : {}),
         ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
         ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
         ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
-        ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
+        ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {}),
+        ...(this._lastMetadata !== undefined ? { metadata: this._lastMetadata } : {})
       }
       this._job.end(stats, stats)
     }
@@ -1613,6 +1826,8 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
 export { resolveBackendsDir } from './lib/backends'
+export { assessFit } from './lib/fit'
+export type { AudiogenFitRequest, AudiogenFitResult, AudiogenFitStatus } from './lib/fit'
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error'
 export { AudioEditOperationType, RepaintMode } from './audiogen'
 

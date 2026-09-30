@@ -1,5 +1,5 @@
 import QvacLogger = require("@qvac/logging");
-import { type QvacResponse } from "@qvac/infer-base";
+import { QvacResponse } from "@qvac/infer-base";
 /** Output sample formats this decoder can resample to. */
 export type AudioFormatName = "s16le" | "f32le";
 export interface AudioFormatConfig {
@@ -20,6 +20,11 @@ export interface FFmpegDecoderConfig {
     audioFormat?: AudioFormatName;
     /** Output sample rate (default: 16000) */
     sampleRate?: number;
+    maxDecodedBytes?: number;
+}
+export interface FFmpegDecoderRunOptions {
+    retainOutput?: boolean;
+    waitForConsumer?: () => Promise<void>;
 }
 export interface FFmpegDecoderConstructorParams {
     config?: FFmpegDecoderConfig;
@@ -48,6 +53,7 @@ interface ResolvedConfig {
     inputBitrate: number;
     audioFormat: AudioFormatName;
     sampleRate: number;
+    maxDecodedBytes: number;
 }
 /**
  * FFmpeg-based audio decoder (single-threaded)
@@ -60,9 +66,9 @@ declare class FFmpegDecoder {
     isLoaded: boolean;
     samplesSkipped: number;
     totalSkipSamples: number;
-    private _cancelled;
     private readonly _job;
     private _runtimeStats;
+    private _activeRun;
     /**
      * Creates an instance of FFmpegDecoder.
      * @param params - Configuration options. Top-level `streamIndex`, `inputBitrate`
@@ -72,6 +78,7 @@ declare class FFmpegDecoder {
     /**
      * Resets the runtime stats
      */
+    private _newStats;
     private _resetStats;
     /**
      * Get the current runtime stats
@@ -91,9 +98,11 @@ declare class FFmpegDecoder {
      * @param audioStream - Input audio stream
      * @returns Response with decoded audio
      */
-    run(audioStream: AsyncIterable<Buffer>): QvacResponse<DecoderOutput>;
+    run(audioStream: AsyncIterable<Buffer>, options?: FFmpegDecoderRunOptions): QvacResponse<DecoderOutput>;
+    private _clearRun;
     private _cancelCurrent;
     private _getBufferSize;
+    private _emitDecodedChunk;
     /**
      * Resolves the output constants populated by `load()`. Unreachable before
      * `load()` succeeds, since every caller sits behind the `isLoaded` guard.

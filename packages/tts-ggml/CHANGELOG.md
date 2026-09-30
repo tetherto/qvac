@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
+  48 kHz sound effects of up to 30 seconds from a text description, from one
+  GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
+  takes per-call `seconds`, `negativePrompt`, `steps`, `guidance` and `shift`;
+  there is no streaming. Desktop, with a GPU recommended.
+
+## [0.10.1] - 2026-09-29
+
+### Fixed
+
+- Raise the `speech-cpp` floor to `2026-09-28`. `assessFit` on a Supertonic,
+  Chatterbox or CosyVoice voice no longer aborts the process on hosts whose GPU
+  does not run the whole graph; the projection is priced on the primary backend
+  and returns a verdict. Synthesis is unchanged.
+- `assessFit` now resolves the backends directory the same way a load does
+  (`prebuilds/<platform>-<arch>/<module>`), so a fit projection finds the ggml
+  backend modules on the split-backend layouts (Linux, macOS, Android) instead
+  of reporting `no-backend-device` or measuring against whatever an earlier
+  load happened to leave in the process.
+
+### Changed
+
+- Raise the `ggml-speech` floor to `2026-09-28` and the `speech-cpp` floor to
+  `2026-09-25#1`. The OpenCL backend no longer crashes on Adreno GPUs when a
+  buffer type is queried before the backend is initialized. Same models, same
+  backends, no API change.
+
+## [0.10.0] - 2026-09-25
+
+### Added
+
 - Native Pocket TTS with converted FlowLM/Mimi bundles, prepared voices or
   reference-WAV conditioning, and native audio streaming through the addon
   run, runStream and runStreaming APIs. Supports explicit flow-sampling steps;
@@ -40,11 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `dialogueReferences` (one 24 kHz recording per speaker, with the text opening
   with their transcripts) drives MOSS-TTSD multi-speaker dialogue on the
   `moss-ttsd-*.gguf` backbone. Desktop only: the backbones have 8B parameters.
-- MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
-  48 kHz sound effects of up to 30 seconds from a text description, from one
-  GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
-  takes per-call `seconds`, `negativePrompt`, `steps`, `guidance` and `shift`;
-  there is no streaming. Desktop, with a GPU recommended.
 - Engine options, results and library queries that tts-cpp already provided
   but the addon did not expose:
   - Chatterbox: `nPredict` (the per-call speech-token cap, previously fixed at
@@ -85,7 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolve Pocket CPU memory planning through the dynamically loaded backend,
   fixing unresolved `ggml_graph_plan` imports in Linux and Android prebuilds.
 - Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to
-  `2026-09-25` for the MOSS and MOSS-SoundEffect engines above. The speech ggml now tracks upstream
+  `2026-09-24` for the MOSS engine above. The speech ggml now tracks upstream
   ggml 0.20.2 (was 0.10.2),
   and its Vulkan backend no longer crashes during CosyVoice3 GPU synthesis on
   NVIDIA GPUs that report cooperative-matrix2 support. The pinned engine also

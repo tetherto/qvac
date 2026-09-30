@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-29
+
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-25#1`, whose ggml no longer crashes on
+  Adreno GPUs when a buffer type is queried before the backend is initialized.
+  Same models, same backends, no API change.
+
+## [0.10.0] - 2026-09-25
+
 ### Added
 
 - Add `contextParams.main-gpu` (alias `main_gpu`) to select a GPU by registry
