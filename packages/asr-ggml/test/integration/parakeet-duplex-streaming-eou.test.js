@@ -29,7 +29,9 @@ const {
   ASRGgml,
   setupJsLogger,
   getTestPaths,
-  loadGgufOrSkip
+  loadGgufOrSkip,
+  NO_GPU,
+  GPU_ONLY_USE_GPU
 } = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
@@ -148,7 +150,7 @@ async function feedDuplex(model, audio) {
 
 test(
   'duplex runStreaming + EOU — emits isEndOfTurn boundaries from <EOU> tokens',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const loggerBinding = setupJsLogger(binding)
 
@@ -170,7 +172,7 @@ test(
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,
             maxThreads: 4,
-            useGPU: false
+            useGPU: GPU_ONLY_USE_GPU
           }
         }
       })

@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdio>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,6 +34,8 @@ std::string toLower(std::string_view value) {
   return lower;
 }
 
+bool isBrokenGpuDevice(ggml_backend_dev_t dev);
+
 // True when a ggml device description identifies a Qualcomm Adreno GPU (the
 // description reads e.g. "Adreno (TM) 830"). Adreno's Vulkan compute path is
 // numerically broken: vla-ggml measured cos-sim ~0.73 vs reference on Adreno
@@ -57,6 +61,52 @@ const char* deviceTypeName(enum ggml_backend_dev_type type) {
   default:
     return "UNKNOWN";
   }
+}
+
+// "name (registry)" identity used in CPU-fallback logs so the operator can see
+// which physical GPU devices were registered but not chosen for the requested
+// backend family. Empty inputs read as `unnamed` / `unknown-registry` so the
+// string is never ambiguous.
+std::string identityOf(ggml_backend_dev_t dev) {
+  const char* namePtr = ggml_backend_dev_name(dev);
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* regPtr = reg != nullptr ? ggml_backend_reg_name(reg) : nullptr;
+  const std::string name = namePtr != nullptr ? namePtr : "unnamed";
+  const std::string registry = regPtr != nullptr ? regPtr : "unknown-registry";
+  return name + " (" + registry + ")";
+}
+
+// Every GPU/IGPU-type registry slot, formatted for the CPU-fallback message so
+// callers can tell whether an unmatched request would have succeeded on a
+// different backend family (e.g. Vulkan asked for, only OpenCL registered).
+std::vector<std::string> unmatchedGpuIdentities(
+    bool (*matches)(std::string_view), bool includeRejectedAdrenoVulkan) {
+  std::vector<std::string> identities;
+  const size_t count = ggml_backend_dev_count();
+  for (size_t i = 0; i < count; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    if (dev == nullptr) {
+      continue;
+    }
+    const enum ggml_backend_dev_type type = ggml_backend_dev_type(dev);
+    if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    const char* namePtr = ggml_backend_dev_name(dev);
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const char* regPtr = reg != nullptr ? ggml_backend_reg_name(reg) : nullptr;
+    const bool nameMatches = namePtr != nullptr && matches(namePtr);
+    const bool regMatches = regPtr != nullptr && matches(regPtr);
+    if (nameMatches || regMatches) {
+      if (includeRejectedAdrenoVulkan && isBrokenGpuDevice(dev)) {
+        identities.push_back(identityOf(dev));
+      }
+      continue;
+    }
+    identities.push_back(identityOf(dev));
+  }
+  return identities;
 }
 
 // A GPU/iGPU device matched against the requested backend, retaining its ggml
@@ -318,7 +368,7 @@ bool deviceSupportsRequiredOcrOps(ggml_backend_dev_t dev) {
 bool trySelectGpu(
     BackendSelection& sel, std::string_view label,
     bool (*matches)(std::string_view), std::optional<int> gpuDevice,
-    bool rejectAdreno) {
+    bool rejectAdreno, const std::optional<MainGpu>& mainGpu) {
   const std::vector<MatchingDevice> matching =
       enumerateMatchingDevices(matches);
   QLOG(Priority::INFO, describeMatchingDevices(label, matching));
@@ -344,6 +394,46 @@ bool trySelectGpu(
     candidates = matching;
   }
 
+  // Preserve raw registry identity when backend/safety filtering removes
+  // devices.
+  if (mainGpu.has_value()) {
+    if (const auto* index = std::get_if<int>(&*mainGpu)) {
+      if (*index >= 0 &&
+          static_cast<size_t>(*index) < ggml_backend_dev_count()) {
+        std::erase_if(candidates, [index](const MatchingDevice& device) {
+          return device.index != static_cast<size_t>(*index);
+        });
+        if (candidates.empty()) {
+          sel.fallbackReason = "main-gpu registry index " +
+                               std::to_string(*index) + " is not an eligible " +
+                               std::string(label) + " GPU; falling back to CPU";
+          return false;
+        }
+      } else {
+        // QLOG is a no-op here; emit an observable warning.
+        std::fprintf(
+            stderr,
+            "ocr-ggml: main-gpu registry index %d is out of range; using "
+            "default GPU selection\n",
+            *index);
+      }
+    } else {
+      const auto requestedType =
+          std::get<MainGpuClass>(*mainGpu) == MainGpuClass::DEDICATED
+              ? GGML_BACKEND_DEVICE_TYPE_GPU
+              : GGML_BACKEND_DEVICE_TYPE_IGPU;
+      std::erase_if(candidates, [requestedType](const MatchingDevice& device) {
+        return device.type != requestedType;
+      });
+      if (candidates.empty()) {
+        sel.fallbackReason =
+            "main-gpu requested GPU class is unavailable for " +
+            std::string(label) + "; falling back to CPU";
+        return false;
+      }
+    }
+  }
+
   const std::optional<size_t> chosen =
       chooseMatchingDevice(candidates, gpuDevice);
   if (!chosen.has_value()) {
@@ -362,6 +452,13 @@ bool trySelectGpu(
       sel.fallbackReason = std::string(label) + " backend requested but no " +
                            std::string(label) +
                            "-capable GPU device was found; falling back to CPU";
+    }
+    const auto others = unmatchedGpuIdentities(matches, rejectAdreno);
+    if (!others.empty()) {
+      sel.fallbackReason += "; other GPU-type devices registered:";
+      for (const auto& identity : others) {
+        sel.fallbackReason += " [" + identity + "]";
+      }
     }
     QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
     return false;
@@ -400,21 +497,27 @@ bool trySelectGpu(
 
 } // namespace
 
-BackendSelection
-selectBackendDevice(BackendDevice requested, std::optional<int> gpuDevice) {
+BackendSelection selectBackendDevice(
+    BackendDevice requested, std::optional<int> gpuDevice,
+    std::optional<MainGpu> mainGpu) {
+  if (gpuDevice.has_value() && mainGpu.has_value()) {
+    throw std::invalid_argument("Use only one of main-gpu or gpuDevice");
+  }
   BackendSelection sel;
   switch (requested) {
   case BackendDevice::VULKAN:
     sel.requested = "vulkan";
     // rejectAdreno = true: Adreno Vulkan is numerically broken (auto-skip).
-    if (trySelectGpu(sel, "Vulkan", isVulkanBackendName, gpuDevice, true)) {
+    if (trySelectGpu(
+            sel, "Vulkan", isVulkanBackendName, gpuDevice, true, mainGpu)) {
       return sel;
     }
     break;
   case BackendDevice::METAL:
     sel.requested = "metal";
     // Metal is Apple-only; no Adreno devices to guard against.
-    if (trySelectGpu(sel, "Metal", isMetalBackendName, gpuDevice, false)) {
+    if (trySelectGpu(
+            sel, "Metal", isMetalBackendName, gpuDevice, false, mainGpu)) {
       return sel;
     }
     break;
@@ -422,7 +525,8 @@ selectBackendDevice(BackendDevice requested, std::optional<int> gpuDevice) {
     sel.requested = "opencl";
     // rejectAdreno = false: OpenCL is Adreno's sound compute path (the inverse
     // of the Vulkan guard), so Adreno OpenCL devices are selected as-is.
-    if (trySelectGpu(sel, "OpenCL", isOpenCLBackendName, gpuDevice, false)) {
+    if (trySelectGpu(
+            sel, "OpenCL", isOpenCLBackendName, gpuDevice, false, mainGpu)) {
       return sel;
     }
     break;

@@ -79,7 +79,7 @@ export interface GenerateOptions {
     duration?: number;
     /** MiniMax semantic-frame cap. Cannot be combined with `duration`. */
     maxFrames?: number;
-    /** MiniMax flow steps for this generation; 0 uses the model default. */
+    /** MiniMax flow steps for this generation; 0 uses the engine default (20). */
     inferenceSteps?: number;
     /** MiniMax flow classifier-free guidance scale for this generation. */
     cfgScale?: number;
@@ -459,6 +459,8 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
 export { resolveBackendsDir } from './lib/backends';
+export { assessFit } from './lib/fit';
+export type { AudiogenFitRequest, AudiogenFitResult, AudiogenFitStatus } from './lib/fit';
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error';
 export { AudioEditOperationType, RepaintMode } from './audiogen';
 export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

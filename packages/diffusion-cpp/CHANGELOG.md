@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.26.0] - 2026-09-28
+
+### Added
+
+- `assessFit` projects a load's memory demand against the memory free right
+  now, without loading weights. It takes the same `files` and `config` as
+  `createInstance`, plus the generation `workload` the projection is sized for,
+  and returns a `fits` / `does-not-fit` / `error` status and reason, the backend
+  and params placement, whether VAE tiling or layer streaming were needed, and
+  a per-device, per-module memory report. A configuration the engine cannot
+  plan for — a pinned `main-gpu`, `device: 'cpu'`, a module-specific
+  `paramsBackend`, or an OpenCL preference that is not the first enumerated
+  GPU — is refused as `unsupported-config`. Exported from the package root with
+  `DiffusionFitRequest`, `DiffusionFitResult`, `DiffusionFitStatus` and
+  `DiffusionFitWorkload` types
+  ([#4668](https://github.com/tetherto/qvac/pull/4668)).
+
+### Changed
+
+- The mapping from a file set to engine parameters is shared between the image
+  load and `assessFit`, so a fit refuses and describes the same paths a load
+  does.
+
+## [0.25.1] - 2026-09-23
+
+### Fixed
+
+- Update the native engine to support header-only safetensors in its memory-fit
+  C API, including auxiliary models and LoRAs. Normal model loading continues
+  to require complete weight files. No JavaScript API changes.
+
+## [0.25.0] - 2026-09-15
+
+### Added
+
+- ABot-World sessions expose `paramsBackend`, `maxVram`, and `streamLayers`,
+  using the same parameter manager and graph-cut executor as MiniMax-H3.
+  CPU-backed streaming and explicit disk residency work with the walk's KV cache.
+- World `verbosity` exposes native placement and segment-residency logs.
+
+### Changed
+
+- Resolve `stable-diffusion-cpp@2026-08-11#2` from the registry without an overlay.
+- World verbosity accepts numeric strings, validates levels 0..3, and restores
+  the shared log level on unload. Native log-level reads are thread-safe.
+- Invalid World budgets and decoder disk placement report typed input errors.
+
 ## [0.24.0] - 2026-09-15
 
 This release adds explicit model-placement and layer-streaming controls, with

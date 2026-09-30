@@ -23,8 +23,35 @@ doesn't get lost when a generated subclass sets its own `model_config`
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any, ClassVar
+
 from pydantic import BaseModel, ConfigDict
+from pydantic_core import CoreSchema, core_schema
 
 
 class GeneratedBaseModel(BaseModel):
     model_config = ConfigDict(validate_default=True, populate_by_name=True)
+    __forbidden_fields__: ClassVar[frozenset[str]] = frozenset()
+    __forbidden_field_guidance__: ClassVar[dict[str, str]] = {}
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source: Any, handler: Any) -> CoreSchema:
+        schema = handler(source)
+        if not cls.__forbidden_fields__:
+            return schema
+
+        def reject_forbidden_fields(value: Any) -> Any:
+            if isinstance(value, Mapping):
+                forbidden = cls.__forbidden_fields__.intersection(value)
+                if forbidden:
+                    details = "; ".join(
+                        f"{field}: {cls.__forbidden_field_guidance__.get(field, 'This field is no longer supported.')}"
+                        for field in sorted(forbidden)
+                    )
+                    raise ValueError(details)
+            return value
+
+        return core_schema.no_info_before_validator_function(
+            reject_forbidden_fields, schema
+        )

@@ -216,6 +216,14 @@ void emplaceIfValidDevice(
     const ggml_backend_dev_t dev, const ggml_backend_reg_t reg,
     const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
+  // RPC devices are intentionally excluded from automatic single-backend
+  // selection. They remain eligible for split modes through
+  // getSplitDeviceSelection(), and callers can name them explicitly with
+  // LoadFitNormalization's devices/device-list option.
+  if (isRpc) {
+    return;
+  }
+
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
     std::string text =

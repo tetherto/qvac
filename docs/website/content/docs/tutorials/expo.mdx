@@ -146,6 +146,19 @@ Create `qvac.config.json` in the project root and enable only the LLM plugin use
 ```
 
 Without a `plugins` selection, QVAC bundles every built-in AI capability. Keeping this tutorial to the LLM plugin avoids linking native engines the app does not use.
+
+Speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) ship Android and iOS binaries in a separate package. If you enable those plugins, add that package as a direct dependency, pinned to the same exact version as the JavaScript package:
+
+```json
+{
+  "dependencies": {
+    "@qvac/tts-ggml": "x.y.z",
+    "@qvac/tts-ggml-android-arm64": "x.y.z"
+  }
+}
+```
+
+iOS uses `@qvac/tts-ggml-ios` instead of `@qvac/tts-ggml-android-arm64`. Llama does not need an extra package. `npx expo prebuild` names the missing pin if you forget.
 </Step>
 
 <Step>

@@ -2,7 +2,7 @@
 
 This document describes how to use the LoRA (Low-Rank Adaptation) finetuning feature in `@qvac/llm-llamacpp`. It covers the JavaScript API, dataset formats, parameters, and usage examples.
 
-**Backend:** Finetuning uses the `fabric-llm-finetune` branch of [tetherto/qvac-fabric-llm.cpp](https://github.com/tetherto/qvac-fabric-llm.cpp) (a llama.cpp fork), pulled in via vcpkg.
+**Backend:** Finetuning uses the `fabric-llm-finetune` branch of [tetherto/qvac-fabric-llm.cpp](https://github.com/tetherto/qvac-fabric-llm.cpp) (a llama.cpp fork), consumed through the shared `@qvac/fabric` npm runtime. The `llama_opt_*` / `ggml_opt_*` training API and `common_opt_sft_dataset_init` resolve at runtime from `qvac__fabric@0.bare`.
 
 ---
 

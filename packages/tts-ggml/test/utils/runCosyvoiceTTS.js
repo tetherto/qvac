@@ -54,6 +54,7 @@ function buildCosyvoiceLoadOptions(params = {}) {
   // the logits, so without it a before/after diff measures the sampler rather
   // than the conditioning.
   if (params.seed !== undefined) options.seed = params.seed
+  if (params.threads !== undefined) options.threads = params.threads
   return options
 }
 

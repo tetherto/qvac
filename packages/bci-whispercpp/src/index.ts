@@ -13,6 +13,7 @@ import {
 import { BCIInterface, type BCIBinding } from "./bci";
 import { QvacErrorAddonBCI, ERR_CODES, errorMessage } from "./lib/error";
 import { computeWER } from "./lib/wer";
+import { assessFit as assessFitImpl } from "./lib/fit";
 import {
   toUint8,
   sliceBody,
@@ -88,6 +89,10 @@ export interface BCIWhispercppConfig {
     use_gpu?: boolean;
     flash_attn?: boolean;
     gpu_device?: number;
+    /** Raw ggml registry index (number or integer string), or GPU class. */
+    "main-gpu"?: number | string;
+    /** Alias of main-gpu; supply only one spelling. */
+    main_gpu?: number | string;
   };
   miscConfig?: {
     caption_enabled?: boolean;
@@ -940,12 +945,17 @@ export class BCIWhispercpp {
 
 export { computeWER };
 
+export { assessFit } from "./lib/fit";
+export type { BciFitRequest, BciFitResult, BciFitStatus } from "./lib/fit";
+
 export default BCIWhispercpp;
 
 const cjsExports = BCIWhispercpp as typeof BCIWhispercpp & {
   BCIWhispercpp?: typeof BCIWhispercpp;
   computeWER?: typeof computeWER;
+  assessFit?: typeof assessFitImpl;
 };
 cjsExports.BCIWhispercpp = BCIWhispercpp;
 cjsExports.computeWER = computeWER;
+cjsExports.assessFit = assessFitImpl;
 module.exports = cjsExports;

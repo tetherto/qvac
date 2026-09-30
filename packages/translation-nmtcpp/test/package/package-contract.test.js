@@ -14,6 +14,7 @@ const PACKAGE_NAME = '@qvac/translation-nmtcpp'
 const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const BARE_COMMAND = process.platform === 'win32' ? 'bare.cmd' : 'bare'
 const JAVASCRIPT_FILE_PATTERN = /\.(?:cjs|js|mjs)$/
+const TEST_FILE_PREFIX = 'test/integration/'
 const IMPORT_PATTERNS = [
   /\b(?:require|loadModule)\(\s*['"]([^'"]+)['"]\s*\)/g,
   /\bimport\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g,
@@ -27,6 +28,7 @@ const REQUIRED_FILES = [
   'lib/bergamot-model-fetcher.d.ts',
   'lib/indictrans-model-fetcher.js',
   'lib/indictrans-model-fetcher.d.ts',
+  'test/integration/bergamot.test.js',
   'test/mobile/integration-runtime.cjs'
 ]
 const OPTIONAL_MODULES = ['bare-fetch', '@qvac/registry-client']
@@ -101,8 +103,16 @@ function optionalPeerModules(packageJson) {
   )
 }
 
-function assertFileImportsDeclared(packageRoot, filePath, declaredModules) {
+function declaredModulesForFile(packageJson, filePath) {
+  const dependencies = filePath.startsWith(TEST_FILE_PREFIX)
+    ? { ...packageJson.dependencies, ...packageJson.devDependencies }
+    : packageJson.dependencies
+  return new Set([...Object.keys(dependencies || {}), ...optionalPeerModules(packageJson)])
+}
+
+function assertFileImportsDeclared(packageRoot, filePath, packageJson) {
   const source = fs.readFileSync(path.join(packageRoot, filePath), 'utf8')
+  const declaredModules = declaredModulesForFile(packageJson, filePath)
   importedModules(source)
     .filter(isExternalModule)
     .forEach((specifier) => {
@@ -113,13 +123,9 @@ function assertFileImportsDeclared(packageRoot, filePath, declaredModules) {
 }
 
 function assertDeclaredImports(packageRoot, packageJson, packedFiles) {
-  const declaredModules = new Set([
-    ...Object.keys(packageJson.dependencies || {}),
-    ...optionalPeerModules(packageJson)
-  ])
   packedFiles
     .filter((filePath) => JAVASCRIPT_FILE_PATTERN.test(filePath))
-    .forEach((filePath) => assertFileImportsDeclared(packageRoot, filePath, declaredModules))
+    .forEach((filePath) => assertFileImportsDeclared(packageRoot, filePath, packageJson))
 }
 
 function assertRuntimeProbe(consumerRoot, installedRoot) {
@@ -266,6 +272,12 @@ function assertOptionalDependencyErrors(consumerRoot) {
   assertTransitiveMissingDependencies(consumerRoot)
 }
 
+test('Brittle is a development-only dependency', () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'))
+  assert.equal(packageJson.dependencies.brittle, undefined)
+  assert.equal(packageJson.devDependencies.brittle, '^3.4.0')
+})
+
 test('packed tarball preserves the public package contract', () => {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'translation-package-'))
 
@@ -292,10 +304,8 @@ test('packed tarball preserves the public package contract', () => {
     assert.equal(packageJson.dependencies['bare-os'], '^3.9.3')
     assert.equal(packageJson.dependencies['bare-process'], '^4.2.2')
     assert.equal(packageJson.dependencies['bare-url'], '^2.1.6')
-    assert.equal(packageJson.dependencies.brittle, '^3.4.0')
     assert.equal(packageJson.devDependencies['bare-os'], undefined)
     assert.equal(packageJson.devDependencies['bare-process'], undefined)
-    assert.equal(packageJson.devDependencies.brittle, undefined)
     assert.equal(packageJson.peerDependencies['bare-fetch'], '^3.0.1')
     assert.equal(packageJson.peerDependencies['@qvac/registry-client'], undefined)
     assert.equal(packageJson.dependencies['@qvac/registry-client'], undefined)

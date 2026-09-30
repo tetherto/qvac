@@ -88,6 +88,9 @@ provision the same files themselves via `@qvac/registry-client`).
 
 ## Hardware requirements
 
+The measurements below use resident weights. Layer streaming changes weight
+residency; it does not make these figures a measured minimum for streamed walks.
+
 Measured on an RTX 5090 (32 GB) with the Q8 DiT, KV cache on, 832x480 —
 the validated end-user configuration:
 
@@ -135,9 +138,53 @@ npm run build:cuda       # NVIDIA CUDA (requires the CUDA toolkit; nvcc on PATH)
 npm run build:vulkan     # explicit Vulkan (the default on Windows/Linux)
 ```
 
-macOS builds default to Metal; Android to OpenCL+Vulkan. The engine
-(`stable-diffusion-cpp 2026-07-03#7` and `ggml 2026-07-03#3`) resolve from the QVAC
-vcpkg registry; this package contains no local overlay ports or patches.
+macOS builds default to Metal; Android to OpenCL+Vulkan. Native dependencies
+are pinned in `vcpkg.json` and `vcpkg-configuration.json`.
+
+## Layer streaming and disk residency
+
+ABot uses the same graph-cut executor and weight manager as MiniMax-H3. Its
+separate World API exposes the controls in camelCase:
+
+```js
+const world = new WorldStableDiffusion({
+  files: { model: ditPath, taehv: decoderPath, scene: scenePath },
+  config: {
+    backend: 'gpu',
+    paramsBackend: 'diffusion=cpu',
+    maxVram: 2,
+    streamLayers: true,
+    kvCache: true,
+    verbosity: 3
+  }
+})
+```
+
+- `paramsBackend` chooses weight residency. `diffusion` is the walk DiT;
+  `vae` is taehv. `offloadParamsToCpu` supplies a `*=cpu` default, with
+  explicit assignments applied afterwards.
+- `maxVram` is the DiT graph budget in GiB. It also accepts strings such as
+  `'cuda0=6,vulkan0=4'`. Negative values reserve that much headroom from free
+  device memory; `0` disables cuts. Leave memory for the KV history, taehv
+  execution, and other allocations: this is not a total process VRAM cap.
+- `streamLayers` retains leading DiT segments within the budget and
+  transfers/evicts the rest. It needs CPU-backed DiT weights, GPU execution,
+  and a nonzero graph budget. Defaults remain unchanged when omitted.
+- `paramsBackend: 'diffusion=disk'` uses lazy disk reads and releases DiT
+  weights after use. This is separate from CPU-backed `streamLayers` and can
+  be combined with graph cutting through `maxVram`. `vae=disk` is rejected
+  because the taehv decoder retains its prepared weights across walk steps.
+
+Both recomputed history and `kvCache: true` work with these controls. The
+separate `createScene()` encoder phase keeps its existing configuration;
+the walk's graph budget does not cut taehv or the scene encoders.
+
+`verbosity: 3` exposes the native graph budget and `residency=STREAMED`
+evidence through `addonLogging`. The level is shared by diffusion instances
+while the session is alive and restored on unload. The most recent explicit
+setting wins; closing an older session does not overwrite a newer setting.
+The demo accepts `ABOT_PARAMS_BACKEND`, `ABOT_MAX_VRAM`,
+`ABOT_STREAM_LAYERS=1`, and `ABOT_VERBOSITY=3`.
 
 ## Running the interactive demo
 

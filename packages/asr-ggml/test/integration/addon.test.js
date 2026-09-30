@@ -15,7 +15,10 @@ const {
   makePcmNoise,
   setupJsLogger,
   getTestPaths,
-  getBackendsDir
+  getBackendsDir,
+  WHISPER_TEST_THREADS,
+  NO_GPU,
+  WHISPER_GPU_CONTEXT_PARAMS
 } = require('./helpers.js')
 
 const platform = detectPlatform()
@@ -311,6 +314,78 @@ test('Real addon with downloaded models - success case', { timeout: 120000 }, as
   }
 })
 
+test(
+  'Whisper segments carry language, noSpeechProb, and opt-in tokens',
+  { timeout: 120000 },
+  async (t) => {
+    await ensureWhisperModel(modelPath)
+    const samplePath = path.join(path.dirname(audioPath), 'sample.raw')
+    if (!fs.existsSync(samplePath)) {
+      t.pass('sample.raw not found - skipping')
+      return
+    }
+
+    const ASRGgml = require('../../index')
+    const model = new ASRGgml({
+      files: { model: modelPath },
+      config: {
+        engine: 'whisper',
+        whisperConfig: {
+          language: 'auto',
+          token_timestamps: true,
+          temperature: 0.0,
+          n_threads: WHISPER_TEST_THREADS
+        }
+      }
+    })
+
+    try {
+      await model.load()
+      const { createAudioStream } = require('./helpers.js')
+      const response = await model.run(createAudioStream(samplePath))
+      const segments = []
+      await response
+        .onUpdate((out) => {
+          for (const seg of Array.isArray(out) ? out : [out]) {
+            if (seg && typeof seg.text === 'string') segments.push(seg)
+          }
+        })
+        .await()
+
+      t.ok(segments.length > 0, 'transcribed the English sample')
+      t.ok(
+        segments.every((s) => s.language === 'en'),
+        'language: "auto" reports the detected language per segment'
+      )
+      t.ok(
+        segments.every((s) => s.noSpeechProb >= 0 && s.noSpeechProb <= 1),
+        'noSpeechProb is a probability'
+      )
+      t.ok(
+        segments.every(
+          (s) =>
+            Array.isArray(s.tokens) &&
+            s.tokens.length > 0 &&
+            s.tokens.map((token) => token.text).join('') === s.text
+        ),
+        'token_timestamps adds the text tokens of each segment'
+      )
+      t.ok(
+        segments.every((s) =>
+          s.tokens.every((token) => token.start <= token.end && token.probability > 0)
+        ),
+        'tokens carry timing and probability'
+      )
+      t.ok(
+        segments.every((s) => s.speakerTurnNext === undefined),
+        'speakerTurnNext appears only with tdrz_enable'
+      )
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
 test('Runtime stats are populated by default (enableStats)', { timeout: 120000 }, async (t) => {
   await ensureWhisperModel(modelPath)
   generateTestAudio(audioPath)
@@ -321,7 +396,8 @@ test('Runtime stats are populated by default (enableStats)', { timeout: 120000 }
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',
-      temperature: 0.0
+      temperature: 0.0,
+      n_threads: WHISPER_TEST_THREADS
     }
   }
 
@@ -625,101 +701,139 @@ test('Caption mode transcription (VAD enabled)', { timeout: 120000 }, async (t) 
   }
 })
 
-test('Audio format transcription tests (s16le and f32le)', { timeout: 120000 }, async (t) => {
-  console.log('Testing Audio Format Transcription')
-  console.log('==================================')
+test(
+  'Audio format transcription tests (s16le and f32le)',
+  { timeout: 120000, skip: NO_GPU },
+  async (t) => {
+    console.log('Testing Audio Format Transcription')
+    console.log('==================================')
 
-  // Helper function to test a specific audio format using runTranscription
-  async function testAudioFormat(audioFile, audioFormat, description) {
-    console.log(`\n=== Testing ${description} ===`)
-    console.log(`Audio file: ${audioFile}`)
-    console.log(`Audio format: ${audioFormat}`)
+    // Helper function to test a specific audio format using runTranscription
+    async function testAudioFormat(audioFile, audioFormat, description) {
+      console.log(`\n=== Testing ${description} ===`)
+      console.log(`Audio file: ${audioFile}`)
+      console.log(`Audio format: ${audioFormat}`)
 
-    const result = await runTranscription(
-      {
-        audioInput: audioFile,
-        modelPath,
-        whisperConfig: {
-          language: 'en',
-          temperature: 0.0,
-          audio_format: audioFormat,
-          vadParams: {
-            threshold: 0.6
+      const result = await runTranscription(
+        {
+          audioInput: audioFile,
+          modelPath,
+          contextParams: WHISPER_GPU_CONTEXT_PARAMS,
+          whisperConfig: {
+            language: 'en',
+            temperature: 0.0,
+            audio_format: audioFormat,
+            vadParams: {
+              threshold: 0.6
+            }
           }
+        },
+        {
+          minSegments: 0
         }
-      },
-      {
-        minSegments: 0
+      )
+
+      console.log('Transcription result:', result.passed ? 'SUCCESS' : 'FAILED')
+      if (result.data.error) {
+        console.log('Error:', result.data.error)
       }
+
+      if (result.data.segments && result.data.segments.length > 0) {
+        const finalTranscription = result.data.fullText
+        console.log(`\n=== FINAL TRANSCRIPTION (${description}) ===`)
+        console.log(finalTranscription)
+        console.log('=== END TRANSCRIPTION ===\n')
+      }
+
+      return {
+        success: result.passed && !result.data.error,
+        transcription: result.data.segments || [],
+        fullText: result.data.fullText || ''
+      }
+    }
+
+    const whisperResult = await ensureWhisperModel(modelPath)
+
+    if (!whisperResult.isReal) {
+      console.log('Real whisper model not available - skipping audio format tests')
+      t.pass('Audio format tests skipped (model not available)')
+      return
+    }
+
+    const s16leFile = path.resolve(__dirname, '../../examples/samples/sample.raw')
+    const f32leFile = path.resolve(__dirname, '../../examples/samples/decodedFile.raw')
+
+    if (!fs.existsSync(s16leFile)) {
+      console.log(`s16le test file not found: ${s16leFile}`)
+      t.pass('Audio format tests skipped (sample.raw not found)')
+      return
+    }
+
+    if (!fs.existsSync(f32leFile)) {
+      console.log(`f32le test file not found: ${f32leFile}`)
+      t.pass('Audio format tests skipped (decodedFile.raw not found)')
+      return
+    }
+
+    const s16leResult = await testAudioFormat(s16leFile, 's16le', 's16le format (sample.raw)')
+
+    const f32leResult = await testAudioFormat(
+      f32leFile,
+      'f32le',
+      'f32le format (decodedFile.raw) - FIXED'
     )
 
-    console.log('Transcription result:', result.passed ? 'SUCCESS' : 'FAILED')
-    if (result.data.error) {
-      console.log('Error:', result.data.error)
-    }
+    console.log('\n=== SUMMARY ===')
+    console.log('✅ s16le format test:', s16leResult.success ? 'PASSED' : 'FAILED')
+    console.log('✅ f32le format test:', f32leResult.success ? 'PASSED' : 'FAILED')
 
-    if (result.data.segments && result.data.segments.length > 0) {
-      const finalTranscription = result.data.fullText
-      console.log(`\n=== FINAL TRANSCRIPTION (${description}) ===`)
-      console.log(finalTranscription)
-      console.log('=== END TRANSCRIPTION ===\n')
-    }
-
-    return {
-      success: result.passed && !result.data.error,
-      transcription: result.data.segments || [],
-      fullText: result.data.fullText || ''
+    if (s16leResult.success && f32leResult.success) {
+      console.log('\n🎉 All audio format tests passed!')
+      console.log(`- s16le format: ${s16leResult.transcription.length} segments`)
+      console.log(`- f32le format: ${f32leResult.transcription.length} segments`)
+      t.pass('Audio format tests passed')
+    } else {
+      console.log('\n❌ Some tests failed.')
+      if (!s16leResult.success) {
+        console.log('s16le test failed')
+      }
+      if (!f32leResult.success) {
+        console.log('f32le test failed')
+      }
+      t.fail('Audio format tests failed')
     }
   }
+)
 
-  const whisperResult = await ensureWhisperModel(modelPath)
-
-  if (!whisperResult.isReal) {
-    console.log('Real whisper model not available - skipping audio format tests')
-    t.pass('Audio format tests skipped (model not available)')
-    return
-  }
-
-  const s16leFile = path.resolve(__dirname, '../../examples/samples/sample.raw')
-  const f32leFile = path.resolve(__dirname, '../../examples/samples/decodedFile.raw')
-
-  if (!fs.existsSync(s16leFile)) {
-    console.log(`s16le test file not found: ${s16leFile}`)
-    t.pass('Audio format tests skipped (sample.raw not found)')
-    return
-  }
-
-  if (!fs.existsSync(f32leFile)) {
-    console.log(`f32le test file not found: ${f32leFile}`)
-    t.pass('Audio format tests skipped (decodedFile.raw not found)')
-    return
-  }
-
-  const s16leResult = await testAudioFormat(s16leFile, 's16le', 's16le format (sample.raw)')
-
-  const f32leResult = await testAudioFormat(
-    f32leFile,
-    'f32le',
-    'f32le format (decodedFile.raw) - FIXED'
-  )
-
-  console.log('\n=== SUMMARY ===')
-  console.log('✅ s16le format test:', s16leResult.success ? 'PASSED' : 'FAILED')
-  console.log('✅ f32le format test:', f32leResult.success ? 'PASSED' : 'FAILED')
-
-  if (s16leResult.success && f32leResult.success) {
-    console.log('\n🎉 All audio format tests passed!')
-    console.log(`- s16le format: ${s16leResult.transcription.length} segments`)
-    console.log(`- f32le format: ${f32leResult.transcription.length} segments`)
-    t.pass('Audio format tests passed')
-  } else {
-    console.log('\n❌ Some tests failed.')
-    if (!s16leResult.success) {
-      console.log('s16le test failed')
+test('native main-gpu rejects unsupported JS values before map conversion', (t) => {
+  const native = require('../../binding')
+  for (const key of ['main-gpu', 'main_gpu']) {
+    for (const value of [{}, [], () => {}, null, undefined, true, 1n]) {
+      t.exception(() => {
+        const handle = native.createInstance(
+          {},
+          {
+            contextParams: { [key]: value },
+            whisperConfig: {},
+            miscConfig: {}
+          },
+          () => {}
+        )
+        // Clean up if a regression lets the invalid configuration through.
+        native.destroyInstance(handle)
+      }, /main-gpu/)
     }
-    if (!f32leResult.success) {
-      console.log('f32le test failed')
-    }
-    t.fail('Audio format tests failed')
   }
+  t.exception(() => {
+    const handle = native.createInstance(
+      {},
+      {
+        contextParams: { 'main-gpu': {}, main_gpu: 0 },
+        whisperConfig: {},
+        miscConfig: {}
+      },
+      () => {}
+    )
+    native.destroyInstance(handle)
+  }, /main-gpu/)
 })

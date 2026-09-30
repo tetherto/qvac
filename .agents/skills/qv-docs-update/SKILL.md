@@ -53,7 +53,7 @@ You have exactly two jobs in this pipeline, and both are verifiable: describe th
 
 A state classifies the documentary impact of a change, and decides what the skill does next: proceed to routing, stop and report, or ask the developer a question.
 
-There are seven. Five classify one source file. Two describe the whole run.
+There are eight. Six classify one source file. Two describe the whole run.
 
 | State | Scope | Meaning |
 | --- | --- | --- |
@@ -62,8 +62,11 @@ There are seven. Five classify one source file. Two describe the whole run.
 | `GENERATED_DOCS_ONLY` | file | User-facing impact, fully covered by a generated surface. |
 | `DOCS_UPDATE_REQUIRED` | file | Editable prose must change. Proceed to routing. |
 | `NEW_CAPABILITY_PAGE` | file | New AI capability with no page. The skill creates it. |
+| `NEW_MODELS_PAGE` | file | New model-lifecycle topic with no page. The skill creates it. |
 | `HUMAN_INPUT_REQUIRED` | file | An ambiguity the repo does not resolve. Ask the developer. |
 | `DONE` | run | Every patch applied and validated. |
+
+The two page-creation states are the same operation on different subtrees, and they are mutually exclusive. Separate them by what the symbol is about, not by where its source file sits. A symbol that performs inference — it takes a prompt, audio, or an image and returns a generated result — is an AI capability. A symbol that acquires, inspects, or prepares a model without performing inference is a model-lifecycle topic. `completion` and `transcribe` are the first. `downloadAsset` and `assessModelFit` are the second.
 
 Assign the file-scoped states one source file at a time. If one file is unresolved, keep the patches already proposed for the files that routed cleanly.
 
@@ -109,7 +112,11 @@ Phase 3 — classify against the impact policy
 Phase 4 — run the router
         │
         ├── new_capability_symbols ───────► NEW_CAPABILITY_PAGE
-        │                                   four append-only edits,
+        │   symbol performs inference       four append-only edits,
+        │                                   then Phase 6
+        │
+        ├── new_capability_symbols ───────► NEW_MODELS_PAGE
+        │   symbol is model lifecycle       three append-only edits,
         │                                   then Phase 6
         │
         ├── unrouted and user-facing ─────► HUMAN_INPUT_REQUIRED
@@ -416,7 +423,9 @@ checking whether routing went wide (candidates that should have been dismissed)
 or the source change mixes scopes. The patches stand.
 ```
 
-6. For each entry in `new_capability_symbols[]`, run the `NEW_CAPABILITY_PAGE` subprocedure, below.
+6. For each entry in `new_capability_symbols[]`, classify the symbol by the rule in [States](#states), then run the matching subprocedure, below. If the symbol performs inference, run `NEW_CAPABILITY_PAGE`. Else run `NEW_MODELS_PAGE`.
+
+Both subprocedures also apply to a symbol the router could not place because **no page links its anchor yet**. R2 binds a page by the `/reference/api#<symbol>` link it already contains, so a public symbol that no prose page mentions routes to nothing and reaches `unrouted[]` whether or not it is new in this run. A symbol in that position, exported from the barrel and listed in the API summary, needs the page the routers found missing rather than a question to the developer. Confirm the absence before creating the page: search `docs/website/content/docs/` for the symbol name and for its anchor, and treat a hit in `reference/**` or `release-notes/**` as no coverage, since both are generated.
 
 7. For each entry in `unrouted[]` that is user-facing **and carries no `newSymbol`**, emit `HUMAN_INPUT_REQUIRED` for that source and ask which page covers the topic.
 
@@ -452,6 +461,7 @@ Match the patch to the change type:
 | New flag on an existing CLI command | Document it inside that command's own `###` block in `cli/index.mdx`, following how the neighbouring flags are shown. |
 | New CLI command | Add a `` ### `qvac <command>` `` heading under `## Reference` in `cli/index.mdx`, matching the shape of the commands already there. Never a new page. |
 | New function that institutes a new capability | Run the `NEW_CAPABILITY_PAGE` subprocedure, below. |
+| New function that institutes a new model-lifecycle topic | Run the `NEW_MODELS_PAGE` subprocedure, below. |
 
 4. Present the diff to the developer before writing to disk.
 
@@ -465,11 +475,11 @@ Match the patch to the change type:
 
 There are five gates. Run them in order. If any gate fails, report the error, leave the patches on disk for the developer to fix, and do not declare `DONE`.
 
-1. List the files **this run wrote** — the targets patched in Phase 5, plus the four registration points when the `NEW_CAPABILITY_PAGE` subprocedure ran — and check each one against the allowlist in [references/docs-scope.md](references/docs-scope.md).
+1. List the files **this run wrote** — the targets patched in Phase 5, plus the registration points when a page-creation subprocedure ran (four for `NEW_CAPABILITY_PAGE`, three for `NEW_MODELS_PAGE`) — and check each one against the allowlist in [references/docs-scope.md](references/docs-scope.md).
 
 Check the files this run wrote, never the dirty working tree. The tree legitimately holds the developer's own changes under `packages/**`, which Phase 1 collected on purpose. Treating those as scope violations would abort every run. To confirm nothing else in the website was touched, run `git status --short -- docs/website/` and verify that every path it lists is one you wrote.
 
-A file outside the allowlist aborts the run. Revert everything already applied. `index.mdx` and `custom-tree.ts` pass only when the diff is an append inside the AI-capabilities block.
+A file outside the allowlist aborts the run. Revert everything already applied. `index.mdx` and `custom-tree.ts` pass only when the diff is an append inside the one block their row in the restricted allowlist names — the AI-capabilities block under `NEW_CAPABILITY_PAGE`, the `Models` block under `NEW_MODELS_PAGE`.
 
 2. Run `git diff` and review the full diff.
 
@@ -488,6 +498,8 @@ bun run .agents/skills/qv-docs-update/scripts/check-capability-parity.ts
 ```
 
 It cross-checks all four registration points, verifies the card's icon is imported and matches the sidebar's, and catches registrations pointing at pages that do not exist. Three of the four points fail silently without it: omit the card, the bullet, or the sidebar entry and the build still succeeds, the tests still pass, and the capability is missing everywhere a user would look.
+
+If the run created a models page instead, then check its three registration points by hand: the page file exists, `introduction.mdx` carries a bullet linking its URL under `### Utilities`, and `custom-tree.ts` carries an entry with the same URL inside the `Models` block. The script does not cover `models/`. The silent failure is the same one — omit the bullet or the entry and every other gate still passes — so do not skip this because no command reports it.
 
 5. Run the website suites from `docs/website/`.
 
@@ -565,6 +577,64 @@ The icon is not derivable from the source. Propose a Lucide name and flag it in 
 
 Base all three strings — frontmatter `description`, card, bullet — on the same sentence. They describe the same thing at different lengths and must agree.
 
+## Subprocedure — `NEW_MODELS_PAGE`
+
+This is not a phase. It is a conditional subprocedure, and it runs only when a change institutes a new model-lifecycle topic — acquiring, inspecting, or preparing a model, with no inference performed. Two places call it: Phase 4 step 6, and the patch-shape table in Phase 5. When it finishes, go to Phase 6.
+
+- **Inputs:** the symbol, its example file, and the question the topic answers for a user.
+- **Outputs:** three edits: one new page, two appends.
+- **Expected result:** the page, the bullet and the sidebar entry all exist and agree.
+
+It is the `NEW_CAPABILITY_PAGE` operation on the `models/` subtree, with one point fewer. There is no card, because the home page's only grid is `## AI capabilities` and this topic is not one.
+
+| # | File | Operation |
+| --- | --- | --- |
+| 1 | `content/docs/models/<slug>.mdx` | **create**, following `models/download-lifecycle.mdx` and `models/sharded-models.mdx` |
+| 2 | `content/docs/introduction.mdx` | **append** 1 bullet at the end of the `### Utilities` list |
+| 3 | `src/lib/custom-tree.ts` | **append** 1 entry at the end of the `Models` block |
+
+1. If the change requires touching any file outside those three, then stop and emit `HUMAN_INPUT_REQUIRED`. The case is not a model-lifecycle topic.
+
+2. Create the page, following the shape both existing `models/` pages share.
+
+```text
+frontmatter:  title, description, schemaType: HowTo
+## Overview
+## Functions
+<topic sections>
+## Example
+<Callout type="success"> footer tip
+```
+
+It is close to the capability skeleton and differs in two ways. There is no `## Models` section: the topic is about handling models, not about which ones a task supports. And the topic sections carry the page, so they are the bulk of it rather than an optional extra — `download-lifecycle.mdx` has five, `sharded-models.mdx` two.
+
+Open `## Overview` by naming the function and the question it answers for the user, then link the function to its API anchor. Do not open by naming an inference engine: that opening belongs to capability pages, which have one, and this topic does not.
+
+3. Append the bullet to `content/docs/introduction.mdx`, under `### Utilities`.
+
+Model-lifecycle topics go in `### Utilities`, not `### AI tasks`. Both existing pages are already there.
+
+```mdx
+* [**Sharded models:**](/models/sharded-models) download a model that is sharded into multiple parts.
+```
+
+4. Append the sidebar entry to `src/lib/custom-tree.ts`, between the `Models` and `AI capabilities` separators.
+
+```ts
+{
+  name: 'Sharded models',
+  url: '/models/sharded-models',
+  type: 'page',
+  icon: resolveIcon('Merge'),
+},
+```
+
+5. Propose a Lucide icon name and flag it in the report as needing editorial confirmation.
+
+The icon is not derivable from the source. Unlike a capability, this page has only one icon to choose, since there is no card to keep in agreement.
+
+6. Base the frontmatter `description` and the bullet on the same sentence. Both describe the topic, at different lengths, and must agree. Keep the description to one line, as both existing pages do.
+
 ## Report formats
 
 Emit one of these three at the end of the run.
@@ -633,7 +703,7 @@ Do not do any of the following:
 - Ground a patch beyond symbol existence and `file=` resolution. Broad factual validation is v2. The developer reviewing the diff wrote the feature, so they catch a false claim.
 - Judge the style guide with a second model pass.
 - Trigger this skill automatically. Hook-based auto-detection belongs to a CI companion outside this skill.
-- Create a page for anything other than a new AI capability. A new page from an information-architecture decision is permanently out of scope: it is not derivable from a source change. A new CLI command is a new section of `cli/index.mdx`. A new Python example is a tab on an existing page, or a section of `python-sdk.mdx`.
+- Create a page for anything other than a new AI capability or a new model-lifecycle topic. Those two are derivable from a source change, because a public symbol with no page is a fact the routers report. A new page from an information-architecture decision is permanently out of scope: reorganising pages that already cover their subject is not derivable from a source change. A new CLI command is a new section of `cli/index.mdx`. A new Python example is a tab on an existing page, or a section of `python-sdk.mdx`.
 
 ## Files
 

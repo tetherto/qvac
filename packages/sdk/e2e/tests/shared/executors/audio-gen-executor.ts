@@ -1,26 +1,45 @@
 import {
+  audioEdit,
   audioGen,
+  audioUnderstand,
   AUDIOGEN_INPUT_CHANNELS,
   AUDIOGEN_INPUT_SAMPLE_RATE,
+  type AudioEditClientParams,
   type AudioGenClientParams,
-  type AudioGenProgress
+  type AudioGenProgress,
+  type AudioGenResult,
+  type AudioUnderstandClientParams
 } from '@qvac/sdk'
 import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import type { ResourceManager } from '../resource-manager.js'
 import {
+  audioEditEmptyPipelineError,
+  audioEditPipeline,
+  audioGenAugmentedCaption,
   audioGenCoverMissingSourceError,
   audioGenCoverNofsq,
   audioGenEmptyCaptionError,
+  audioGenFrozenCodes,
   audioGenHappy,
+  audioGenLegoMissingTrackError,
   audioGenReferenceAudio,
   audioGenShortDuration,
-  audioGenTests
+  audioGenSimpleModeConflictError,
+  audioGenTests,
+  audioUnderstandClip
 } from '../../audio-gen-tests.js'
 
 type AudioGenParams = Omit<AudioGenClientParams, 'modelId'>
 type ReferenceAudioParams = AudioGenParams & { referenceAudioFileName: string }
-type CoverToneParams = AudioGenParams & { sourceTone: { seconds: number; frequency: number } }
+type SourceTone = { seconds: number; frequency: number }
+type CoverToneParams = AudioGenParams & { sourceTone: SourceTone }
+type EditToneParams = Omit<AudioEditClientParams, 'modelId' | 'sourceAudio'> & {
+  sourceTone: SourceTone
+}
+type UnderstandToneParams = Omit<AudioUnderstandClientParams, 'modelId' | 'sourceAudio'> & {
+  sourceTone: SourceTone
+}
 const VALIDATION_MUST_PRECEDE_RPC_MODEL_ID = 'must-not-reach-audiogen-model-lookup'
 
 export interface AudioGenExecutorOptions {
@@ -37,15 +56,22 @@ export interface AudioGenExecutorOptions {
 }
 
 export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests> {
-  pattern = /^audio-gen-/
+  pattern = /^audio-(gen|edit|understand)-/
 
   protected handlers = {
     [audioGenHappy.testId]: this.runGeneration.bind(this),
     [audioGenShortDuration.testId]: this.runGeneration.bind(this),
+    [audioGenAugmentedCaption.testId]: this.runGeneration.bind(this),
+    [audioGenFrozenCodes.testId]: this.runGeneration.bind(this),
     [audioGenReferenceAudio.testId]: this.runReferenceGeneration.bind(this),
     [audioGenCoverNofsq.testId]: this.runCoverGeneration.bind(this),
+    [audioEditPipeline.testId]: this.runEdit.bind(this),
+    [audioUnderstandClip.testId]: this.runUnderstand.bind(this),
     [audioGenEmptyCaptionError.testId]: this.runValidationError.bind(this),
-    [audioGenCoverMissingSourceError.testId]: this.runValidationError.bind(this)
+    [audioGenCoverMissingSourceError.testId]: this.runValidationError.bind(this),
+    [audioGenLegoMissingTrackError.testId]: this.runValidationError.bind(this),
+    [audioGenSimpleModeConflictError.testId]: this.runValidationError.bind(this),
+    [audioEditEmptyPipelineError.testId]: this.runEditValidationError.bind(this)
   } as never
 
   constructor(
@@ -60,9 +86,91 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
     expectation: Expectation
   ): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('audiogen-turbo')
+    return this.collectRun(() => audioGen({ modelId, ...params }), 'generated', expectation)
+  }
 
+  private async runEdit(params: EditToneParams, expectation: Expectation): Promise<TestResult> {
+    const { sourceTone, ...edit } = params
+    const modelId = await this.resources.ensureLoaded('audiogen-turbo')
+    return this.collectRun(
+      () =>
+        audioEdit({
+          modelId,
+          ...edit,
+          sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+        }),
+      'edited',
+      expectation
+    )
+  }
+
+  /**
+   * Drains one `audioUnderstand()` run. The reverse pipeline yields a
+   * description instead of PCM, so it validates the LM's metadata and the
+   * recovered code count rather than a sample count.
+   */
+  private async runUnderstand(
+    params: UnderstandToneParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const { sourceTone, ...understandParams } = params
+    const modelId = await this.resources.ensureLoaded('audiogen-turbo')
     try {
-      const run = audioGen({ modelId, ...params })
+      const run = audioUnderstand({
+        modelId,
+        ...understandParams,
+        sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+      })
+      const progressPromise = collectStageTimings(run.progressStream)
+      const [description, stats, progressReport] = await Promise.all([
+        run.description,
+        run.stats,
+        progressPromise
+      ])
+      const progress = progressReport.ticks
+      const valid =
+        description.caption.length > 0 &&
+        description.audioCodes.length > 0 &&
+        progress.length > 0 &&
+        stats !== undefined
+
+      if (!valid) {
+        return {
+          passed: false,
+          output:
+            `Invalid understand output: caption=${description.caption.length}, ` +
+            `codes=${description.audioCodes.length}, progress=${progress.length}, ` +
+            `stats=${String(stats !== undefined)}`
+        }
+      }
+
+      const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
+      return ValidationHelpers.validate(
+        `described "${description.caption}" as ${description.bpm} BPM ${description.keyscale} ` +
+          `with ${description.audioCodes.length} codes, ${progress.length} progress ticks and ` +
+          `stats [${backend} stages: ${progressReport.summary}]`,
+        expectation
+      )
+    } catch (error) {
+      return {
+        passed: false,
+        output: `audioUnderstand failed: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
+
+  /**
+   * Drains one AudioGen run (generation or edit) and validates the audio,
+   * progress, and stats it produced. `verb` labels the output line so the
+   * test's `contains` expectation can tell the two apart.
+   */
+  private async collectRun(
+    start: () => AudioGenResult,
+    verb: 'generated' | 'edited',
+    expectation: Expectation
+  ): Promise<TestResult> {
+    try {
+      const run = start()
       const progressPromise = collectStageTimings(run.progressStream)
       const [audio, stats, progressReport] = await Promise.all([
         run.audio,
@@ -93,7 +201,7 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
       const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
       const timing = `rtf=${stats?.realTimeFactor ?? '?'} totalMs=${stats?.totalTimeMs ?? '?'}`
       return ValidationHelpers.validate(
-        `generated ${sampleCount} samples at ${audio.sampleRate} Hz with ` +
+        `${verb} ${sampleCount} samples at ${audio.sampleRate} Hz with ` +
           `${progress.length} progress ticks and stats ` +
           `[${backend} ${timing} stages: ${progressReport.summary}]`,
         expectation
@@ -141,10 +249,36 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
     params: AudioGenParams,
     expectation: Expectation
   ): Promise<TestResult> {
+    return this.expectClientValidationError(
+      () => audioGen({ modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID, ...params }),
+      expectation
+    )
+  }
+
+  private async runEditValidationError(
+    params: EditToneParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const { sourceTone, ...edit } = params
+    return this.expectClientValidationError(
+      () =>
+        audioEdit({
+          modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID,
+          ...edit,
+          sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+        }),
+      expectation
+    )
+  }
+
+  private async expectClientValidationError(
+    start: () => AudioGenResult,
+    expectation: Expectation
+  ): Promise<TestResult> {
     const expectedFragment =
       expectation.validation === 'throws-error' ? expectation.errorContains : 'caption'
     try {
-      const run = audioGen({ modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID, ...params })
+      const run = start()
       await run.audio
       return { passed: false, output: 'Expected AudioGen validation to fail' }
     } catch (error) {
@@ -165,7 +299,7 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
 
 /**
  * Raw interleaved stereo 48 kHz Float32 LE PCM: the in-memory form
- * `audioGen()` accepts for `referenceAudio` / `sourceAudio`.
+ * `audioGen()` / `audioEdit()` accept for `referenceAudio` / `sourceAudio`.
  */
 function synthesizeStereoTone(seconds: number, frequency: number) {
   const frames = Math.round(AUDIOGEN_INPUT_SAMPLE_RATE * seconds)

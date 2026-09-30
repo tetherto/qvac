@@ -2,8 +2,8 @@
 
 // ABot-World integration tests.
 //
-// Lanes below run through the addon built against the published
-// stable-diffusion-cpp registry port (2026-07-03#7, engine PRs #22 + #27):
+// Lanes below run through the addon built against its pinned
+// stable-diffusion-cpp registry port:
 //
 //   1. Guard lane — the ABot model set loads natively and batch video
 //      generation is rejected: ABot is a causal/interactive model, not a
@@ -16,6 +16,7 @@
 //      mixed key tape with busy-contract and motion asserts.
 //   4. Variations lane — parameter coverage: small-image upscale path,
 //      448x256 output, JPEG frame encoding.
+//   5. Streaming lane — resident/streamed/disk parity across KV history updates.
 //
 // Model provisioning (self-contained, public):
 //   - The ABot model set is published in the QVAC P2P model registry
@@ -49,8 +50,13 @@ const test = require('brittle')
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
 const { readImageDimensions } = require('@qvac/diffusion-cpp/addon.js')
-const { ensureModelPath, setupJsLogger } = require('./utils.js')
-const { pngLuminanceStddev, readScenePackPromptRows } = require('./abot-guards.js')
+const { ensureModelPath, setupJsLogger, releaseJsLogger } = require('./utils.js')
+const {
+  waitForLogEvidence,
+  pngLuminanceStddev,
+  pngMeanAbsoluteError,
+  readScenePackPromptRows
+} = require('./abot-guards.js')
 
 // The registry client is a devDependency used only by the desktop provisioning
 // path (the lanes skip on mobile). The indirect specifier keeps the literal out
@@ -145,6 +151,7 @@ test(
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const dir = overrideDir || path.resolve(__dirname, '../model/abot')
     if (!overrideDir) {
@@ -197,6 +204,7 @@ test(
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const dir = overrideDir || path.resolve(__dirname, '../model/abot')
     if (!overrideDir) {
@@ -345,11 +353,181 @@ function framesAre(blocks, width, height, magic) {
   )
 }
 
+let streamingScene
+const residentWalks = new Map()
+
+async function provisionStreamingScene(t) {
+  const provisioned = await provisionWorldGeneration(t)
+  if (!provisioned) {
+    if (proc.env.CI === 'true') {
+      throw new Error('streaming validation requires the complete ABot model set in CI')
+    }
+    return null
+  }
+  const { dir, taehvPath, vaePath, t5Xxl } = provisioned
+  const scenePath = path.join(dir, 'scene-streaming-e2e.safetensors')
+  const files = { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath }
+  const scene = new WorldStableDiffusion({ files, config: { backend: 'gpu' }, logger: console })
+  try {
+    const creation = await scene.createScene({
+      prompt:
+        '| unknown | A realistic indoor scene with a person, natural lighting, detailed textures.',
+      image: fs.readFileSync(path.resolve(__dirname, '../../assets/claude-shannon.jpg')),
+      t5: t5Xxl,
+      vae: vaePath,
+      output: scenePath,
+      width: 448,
+      height: 256
+    })
+    await creation.onUpdate(() => {}).await()
+  } finally {
+    await scene.unload()
+  }
+  return files
+}
+
+for (const lane of [
+  {
+    name: 'CPU streaming, KV off',
+    kvCache: false,
+    paramsBackend: 'diffusion=cpu',
+    streamLayers: true
+  },
+  {
+    name: 'CPU streaming, KV on',
+    kvCache: true,
+    paramsBackend: 'diffusion=cpu',
+    streamLayers: true
+  },
+  { name: 'disk residency, KV on', kvCache: true, paramsBackend: 'diffusion=disk' }
+]) {
+  test(
+    `ABot-World: ${lane.name} matches resident frames across history updates`,
+    { skip, timeout: 2_400_000 },
+    async (t) => {
+      streamingScene ??= provisionStreamingScene(t)
+      const files = await streamingScene
+      if (!files) return
+      const addonLogging = require('@qvac/diffusion-cpp/addonLogging')
+      let evidence = []
+      const reportedEvidence = new Set()
+      addonLogging.setLogger((priority, message) => {
+        const line = String(message)
+        if (
+          /ABot-World DiT:|budget merge took|streaming budget =|residency=STREAMED|releasing params backend buffer/.test(
+            line
+          )
+        ) {
+          evidence.push(line)
+          // Keep diagnostics visible even if a native step never completes.
+          if (!reportedEvidence.has(line)) {
+            reportedEvidence.add(line)
+            console.log('[ABot streaming]', line.trim())
+          }
+        }
+      })
+      async function run(config) {
+        evidence = []
+        reportedEvidence.clear()
+        const started = Date.now()
+        console.log('[ABot streaming] starting walk', JSON.stringify(config))
+        const world = new WorldStableDiffusion({
+          files,
+          config: { backend: 'gpu', seed: 42, verbosity: 3, ...config },
+          logger: console
+        })
+        try {
+          await world.load()
+          // Four blocks exercise the KV ring's replacement, not only its initial capture.
+          const blocks = await walkTape(world, [{}, { W: true }, { W: true, L: true }, { S: true }])
+          t.alike(
+            blocks.map((frames) => frames.length),
+            [9, 12, 12, 12],
+            'all blocks complete'
+          )
+          t.ok(framesAre(blocks, 448, 256), 'all frames have the expected dimensions')
+          for (const frames of blocks) {
+            t.ok(pngLuminanceStddev(frames[frames.length - 1]) > 20, 'walk retains image detail')
+          }
+          const markers = config.streamLayers
+            ? ['streaming budget =', 'residency=STREAMED']
+            : config.paramsBackend === 'diffusion=disk'
+              ? ['params=disk', 'releasing params backend buffer']
+              : []
+          await waitForLogEvidence(evidence, markers)
+          if (config.streamLayers) {
+            t.ok(
+              evidence.some((line) => line.includes('streaming budget =')),
+              'shared streaming executor activated'
+            )
+            t.ok(
+              evidence.some((line) => line.includes('residency=STREAMED')),
+              'at least one DiT segment was streamed'
+            )
+          }
+          if (config.paramsBackend === 'diffusion=disk') {
+            t.ok(
+              evidence.some((line) => line.includes('params=disk')),
+              'disk placement reached the engine'
+            )
+            t.ok(
+              evidence.some((line) => line.includes('releasing params backend buffer')),
+              'disk weights are released during the walk'
+            )
+          }
+          console.log(
+            '[ABot streaming evidence]',
+            JSON.stringify(config),
+            [...new Set(evidence)].slice(0, 12)
+          )
+          return blocks
+        } finally {
+          await world.unload()
+          console.log(
+            '[ABot streaming] walk duration ms:',
+            Date.now() - started,
+            JSON.stringify(config)
+          )
+        }
+      }
+      function compare(expected, actual) {
+        for (let block = 0; block < expected.length; block++) {
+          for (let frame = 0; frame < expected[block].length; frame++) {
+            const error = pngMeanAbsoluteError(expected[block][frame], actual[block][frame])
+            t.ok(
+              error <= 1,
+              `block ${block}, frame ${frame}: mean pixel error ${error.toFixed(4)} <= 1/255 against resident execution`
+            )
+          }
+        }
+      }
+      try {
+        if (!residentWalks.has(lane.kvCache)) {
+          residentWalks.set(lane.kvCache, run({ kvCache: lane.kvCache }))
+        }
+        const baseline = await residentWalks.get(lane.kvCache)
+        compare(
+          baseline,
+          await run({
+            kvCache: lane.kvCache,
+            paramsBackend: lane.paramsBackend,
+            streamLayers: lane.streamLayers,
+            maxVram: 4
+          })
+        )
+      } finally {
+        addonLogging.releaseLogger()
+      }
+    }
+  )
+}
+
 test(
   'ABot-World: full world generation - native scene creation + KV-cache walk',
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const provisioned = await provisionWorldGeneration(t)
     if (!provisioned) return
@@ -551,6 +729,7 @@ test(
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const provisioned = await provisionWorldGeneration(t)
     if (!provisioned) return

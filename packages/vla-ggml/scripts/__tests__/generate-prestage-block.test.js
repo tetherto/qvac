@@ -19,7 +19,8 @@ const {
   MODEL_SHARDS,
   buildManifest,
   buildScript,
-  formatYamlBlock
+  formatYamlBlock,
+  readKnownRunners
 } = require('../generate-prestage-block')
 
 function withAssetsDir(fn) {
@@ -166,6 +167,47 @@ test('shard grep is a regex: partial matches stage, an unbaked-but-known shard f
   // The workflow_call lanes never run validate-devices, so this must fail
   // closed on device rather than silently ship an under-staged run.
   const typo = runWithStubs(script, { grep: 'runNope' })
+  assert.notEqual(typo.status, 0)
+  assert.match(out(typo), /matched no known runner \(test-groups <-> model-map drift\)/)
+})
+
+// A runner with no model is still a scheduled runner. The oracle used to be
+// built from MODEL_SHARDS — the subset that HAS a model — so every model-less
+// runner looked like drift and failed closed on device:
+//   -f tests=runEsmNamedExportsTest
+//   [prestage] FATAL: tests grep /runEsmNamedExportsTest/ matched no known runner
+// observed on a real Device Farm run. The oracle reads test-groups.json instead.
+test('readKnownRunners covers every scheduled runner, not just the ones with models', () => {
+  const known = readKnownRunners()
+  for (const name of ['runAddonTest', 'runGrootTest', 'runEsmNamedExportsTest', 'runPi05Test']) {
+    assert.ok(known.includes(name), `${name} must be a known runner, got ${known.join(', ')}`)
+  }
+})
+
+test('readKnownRunners falls back to the model list when test-groups.json is unreadable', () => {
+  // An empty oracle would fail every grep closed, which is worse than a narrow one.
+  const known = readKnownRunners('/nonexistent/test-groups.json')
+  assert.deepEqual([...known].sort(), MODEL_SHARDS.map((s) => s.test).sort())
+})
+
+test('a model-less runner stages nothing instead of failing closed', () => {
+  const man = {
+    runAddonTest: [{ name: 'smolvla.gguf', url: 'https://x/smolvla.gguf' }],
+    runGrootTest: [{ name: 'groot.gguf', url: 'https://x/groot.gguf' }]
+  }
+  const script = buildScript(Buffer.from(JSON.stringify(man)).toString('base64'))
+  const out = (r) => `${r.stdout}${r.stderr}`
+
+  for (const runner of ['runEsmNamedExportsTest', 'runPi05Test']) {
+    const result = runWithStubs(script, { grep: runner })
+    assert.equal(result.status, 0, `${runner} must not fail closed: ${out(result)}`)
+    assert.match(out(result), /known runner with no baked URL yet/)
+    assert.match(out(result), /0 model\(s\) for 0 test\(s\)/)
+    assert.doesNotMatch(out(result), /model-map drift/)
+  }
+
+  // The oracle still fails closed on a name that is in neither list.
+  const typo = runWithStubs(script, { grep: 'runEsmNamedExport' + 'sTypo' })
   assert.notEqual(typo.status, 0)
   assert.match(out(typo), /matched no known runner \(test-groups <-> model-map drift\)/)
 })

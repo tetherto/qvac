@@ -149,11 +149,45 @@ test('groups every ios flavour into one ios package', async (t) => {
     'ios-x64-simulator'
   ])
   const manifest = readJson(outDir, 'qvac-fake-ggml-ios', 'package.json')
-  assert.deepEqual(manifest.os, ['ios'])
+  assert.equal(manifest.os, undefined)
   assert.equal(manifest.cpu, undefined)
 })
 
-test('injects lockstep optionalDependencies into the meta manifest', async (t) => {
+test('leaves cross-built mobile slices installable on any host', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+
+  slicePlatformPackages({ workdir, outDir })
+
+  for (const suffix of ['android-arm64', 'ios']) {
+    const manifest = readJson(outDir, 'qvac-fake-ggml-' + suffix, 'package.json')
+    assert.equal(manifest.os, undefined, suffix + ' must not be os-filtered')
+    assert.equal(manifest.cpu, undefined, suffix + ' must not be cpu-filtered')
+    assert.equal(manifest.libc, undefined, suffix + ' must not be libc-filtered')
+  }
+})
+
+test('documents direct dependency usage for cross-built mobile slices', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+
+  slicePlatformPackages({ workdir, outDir })
+
+  const mobileReadme = fs.readFileSync(
+    path.join(outDir, 'qvac-fake-ggml-android-arm64', 'README.md'),
+    'utf8'
+  )
+  assert.match(mobileReadme, /must depend on this package directly/)
+  const desktopReadme = fs.readFileSync(
+    path.join(outDir, 'qvac-fake-ggml-linux-x64', 'README.md'),
+    'utf8'
+  )
+  assert.match(desktopReadme, /Do not depend on this package directly/)
+})
+
+test('injects lockstep optionalDependencies for host-filtered slices only', async (t) => {
   const { slicePlatformPackages } = await slicerPromise
   const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
@@ -166,9 +200,7 @@ test('injects lockstep optionalDependencies into the meta manifest', async (t) =
     '@qvac/fake-ggml-linux-arm64': '1.2.3',
     '@qvac/fake-ggml-darwin-arm64': '1.2.3',
     '@qvac/fake-ggml-darwin-x64': '1.2.3',
-    '@qvac/fake-ggml-win32-x64': '1.2.3',
-    '@qvac/fake-ggml-android-arm64': '1.2.3',
-    '@qvac/fake-ggml-ios': '1.2.3'
+    '@qvac/fake-ggml-win32-x64': '1.2.3'
   })
 })
 
@@ -195,6 +227,57 @@ test('fails when the merged artifact is missing a host', async (t) => {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
 
   assert.throws(() => slicePlatformPackages({ workdir, outDir }), /win32-x64/)
+})
+
+function addMetaDirs(workdir) {
+  const prebuildsDir = path.join(workdir, 'prebuilds')
+  fs.mkdirSync(path.join(prebuildsDir, 'include'), { recursive: true })
+  fs.writeFileSync(path.join(prebuildsDir, 'include', 'ggml.h'), '// header\n')
+  fs.mkdirSync(path.join(prebuildsDir, 'share', 'fake-ggml'), { recursive: true })
+  fs.writeFileSync(
+    path.join(prebuildsDir, 'share', 'fake-ggml', 'fake-ggml-config.cmake'),
+    '# config\n'
+  )
+}
+
+test('keeps the declared meta dirs in the meta package', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  addMetaDirs(workdir)
+
+  const sliceDirs = slicePlatformPackages({ workdir, outDir, keepDirs: ['include', 'share'] })
+
+  assert.equal(sliceDirs.length, EXPECTED_SLICE_SUFFIXES.length)
+  assert.deepEqual(fs.readdirSync(path.join(workdir, 'prebuilds')).sort(), ['include', 'share'])
+  assert.ok(fs.existsSync(path.join(workdir, 'prebuilds', 'include', 'ggml.h')))
+  for (const dir of sliceDirs) {
+    const prebuilds = fs.readdirSync(path.join(dir, 'addon', 'prebuilds'))
+    assert.ok(!prebuilds.includes('include'), path.basename(dir) + ' must not carry include/')
+    assert.ok(!prebuilds.includes('share'), path.basename(dir) + ' must not carry share/')
+  }
+})
+
+test('treats undeclared meta dirs as unmapped hosts', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  addMetaDirs(workdir)
+
+  assert.throws(() => slicePlatformPackages({ workdir, outDir }), /include, share/)
+})
+
+test('fails when a declared meta dir is missing from the artifact', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  addMetaDirs(workdir)
+  fs.rmSync(path.join(workdir, 'prebuilds', 'share'), { recursive: true })
+
+  assert.throws(
+    () => slicePlatformPackages({ workdir, outDir, keepDirs: ['include', 'share'] }),
+    /missing the meta package dirs: share/
+  )
 })
 
 test('fails when a slice exceeds the size budget', async (t) => {

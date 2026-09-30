@@ -186,18 +186,24 @@ class WhisperDriver {
         addon.startStreaming(streamingConfig);
         this._pendingJobId = null;
         const response = this.ctx.job.start();
+        let closing = false;
         const finalized = response.await().finally(() => {
             addon.finishStreaming();
         });
         void finalized.catch(() => { });
         response.await = () => finalized;
-        void this._pumpStreamingAudio(audio).catch((error) => {
+        void this._pumpStreamingAudio(audio, () => {
+            closing = true;
+        }).catch((error) => {
             this._pendingJobId = null;
             this.ctx.job.fail(error);
         });
         return Promise.resolve({
             response,
             done: finalized.then(() => { }, () => { }),
+            get closing() {
+                return closing;
+            },
         });
     }
     _validateStreamingOptions(opts) {
@@ -234,13 +240,14 @@ class WhisperDriver {
         this.ctx.logger.debug("Sending end-of-input signal");
         await addon.append({ type: constants_1.END_OF_INPUT });
     }
-    async _pumpStreamingAudio(audio) {
+    async _pumpStreamingAudio(audio, markClosing) {
         this.ctx.logger.debug("Start handling streaming audio");
         const addon = this._requiredAddon();
         for await (const chunk of audio) {
             addon.appendStreamingAudio({ type: "audio", input: bytesOf(chunk) });
         }
         this.ctx.logger.debug("Ending streaming session");
+        markClosing();
         addon.endStreaming();
     }
     _resolveVadModelPath() {

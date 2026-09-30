@@ -6,6 +6,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runFitStubTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit-stub.test.js', options)
+}
+
 async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/fit.test.js', options)
 }
