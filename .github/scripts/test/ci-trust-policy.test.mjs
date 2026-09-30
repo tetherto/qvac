@@ -1856,12 +1856,20 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
   )
   assert.match(awaitJob, /check_name:\s*\$\{\{ matrix\.tsCheckName \}\}/)
 
-  // pull_request_target: the local sanity action must come from the trusted
-  // base checkout, never from PR head.
+  // The sanity-checks composite checks out PR head and runs its local
+  // run-lint-and-unit-tests, so this job runs PR-controlled code. It is trusted
+  // only behind fork approval, with GITHUB_TOKEN and no job-level write grant.
+  assert.match(sanity, /needs:\s*\[[^\]]*\bfork-approval\b[^\]]*\bauthorize\b/)
+  assert.match(sanity, /if:[^\n]*needs\.authorize\.outputs\.allowed == 'true'/)
   assert.doesNotMatch(
     sanity,
-    /ref:[^\n]*pull_request\.head/,
-    'sanity checks must not run a PR-controlled local action from pull_request_target',
+    /secrets\.(?!GITHUB_TOKEN\b)/,
+    'sanity checks run PR-head code, so they must not receive a PAT or other secret',
+  )
+  assert.doesNotMatch(
+    sanity,
+    /^\s+[a-z-]+:\s*write\b/m,
+    'sanity checks run PR-head code, so they must not grant write permissions',
   )
   assert.match(guard, /needs:\s*\[[^\]]*\bts-checks\b/)
   assert.match(
