@@ -1422,6 +1422,20 @@ NormalizedLoad normalizeLoadForFit(
 
     const bool backendRequired =
         tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+    const auto matchesRequiredLocal =
+        [&backendOverride](const SplitDevice& device) {
+          if (device.isRpc) {
+            return false;
+          }
+          const std::string name = toLowerAscii(device.name);
+          return std::ranges::any_of(
+              backendOverride, [&name](const std::string& family) {
+                return name.find(family) != std::string::npos ||
+                       (family == "rocm" &&
+                        name.find("hip") != std::string::npos) ||
+                       (family == "metal" && name.rfind("mtl", 0) == 0);
+              });
+        };
 
     LoadConstraints constraints;
     for (const char* key :
@@ -1446,7 +1460,7 @@ NormalizedLoad normalizeLoadForFit(
     request.mainGpu = mainGpu;
     request.isFinetuning = finetuneOverrides.active;
     request.backendOverride = backendOverride;
-    request.backendRequired = backendRequired;
+    request.backendRequired = backendRequired && !rpcDevicesRegistered;
     request.constraints = constraints;
     if (splitMode != LLAMA_SPLIT_MODE_NONE) {
       request.mainGpu.reset();
@@ -1456,8 +1470,9 @@ NormalizedLoad normalizeLoadForFit(
     SelectedBackend selected = dependencies.resolveBackend(request);
     std::optional<int> mmprojAdrenoVersion = selected.adrenoVersion;
     if (preferredBackend == BackendType::GPU &&
-        (!explicitDevices.empty() || (selected.type == BackendType::GPU &&
-                                      splitMode != LLAMA_SPLIT_MODE_NONE))) {
+        (!explicitDevices.empty() ||
+         ((selected.type == BackendType::GPU || rpcDevicesRegistered) &&
+          splitMode != LLAMA_SPLIT_MODE_NONE))) {
       splitSelection =
           explicitDevices.empty()
               ? dependencies.splitDevices(selected.name, constraints)
@@ -1486,17 +1501,7 @@ NormalizedLoad normalizeLoadForFit(
       if (backendRequired) {
         for (const backend_selection::SplitDevice& device :
              splitSelection.devices) {
-          const std::string name = toLowerAscii(device.name);
-          const bool matches =
-              device.isRpc ||
-              std::ranges::any_of(
-                  backendOverride, [&name](const std::string& family) {
-                    return name.find(family) != std::string::npos ||
-                           (family == "rocm" &&
-                            name.find("hip") != std::string::npos) ||
-                           (family == "metal" && name.rfind("mtl", 0) == 0);
-                  });
-          if (!matches) {
+          if (!device.isRpc && !matchesRequiredLocal(device)) {
             throw qvac_errors::StatusError(
                 qvac_errors::general_error::InvalidArgument,
                 string_format(
@@ -1555,8 +1560,9 @@ NormalizedLoad normalizeLoadForFit(
         if (projector == nullptr) {
           const auto localFallback = std::ranges::find_if(
               availableSelection.devices,
-              [](const backend_selection::SplitDevice& device) {
-                return !device.isRpc;
+              [&](const backend_selection::SplitDevice& device) {
+                return !device.isRpc &&
+                       (!backendRequired || matchesRequiredLocal(device));
               });
           if (localFallback != availableSelection.devices.end()) {
             projector = &*localFallback;

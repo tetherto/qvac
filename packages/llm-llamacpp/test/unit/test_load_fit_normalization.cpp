@@ -622,6 +622,40 @@ TEST_F(LoadFitNormalizationTest, StrictBackendAllowsExplicitRpcDevice) {
   EXPECT_EQ(result.params.devices[2], nullptr);
 }
 
+TEST_F(LoadFitNormalizationTest, StrictBackendAllowsRpcOnlySplit) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+  config["rpc-servers"] = "127.0.0.1:50052";
+  auto dependencies = backend(
+      {.type = backend_selection::CPU, .name = "none"},
+      {"RPC0"},
+      nullptr,
+      std::vector<std::string>{"RPC0"});
+  dependencies.resolveBackend =
+      [](const backend_selection::BackendRequest& request) {
+        EXPECT_FALSE(request.backendRequired);
+        return lfn::SelectedBackend{
+            .type = backend_selection::CPU, .name = "none"};
+      };
+  auto selection = splitSelection({"RPC0"});
+  selection.devices[0].isRpc = true;
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "RPC0");
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_EQ(result.params.devices[0], selection.devices[0].handle);
+}
+
 TEST_F(LoadFitNormalizationTest, StrictBackendRejectsEmptySplit) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
