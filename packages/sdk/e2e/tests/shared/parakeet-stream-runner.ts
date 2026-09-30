@@ -7,12 +7,13 @@
  */
 import {
   transcribeStream,
+  type TranscribeSegment,
   type TranscribeStreamConversationSession,
-  type TranscribeStreamSession,
   type TranscribeStats
 } from '@qvac/sdk'
 import type { TestResult } from '@qvac/test-suite'
 import { decodeWavToMonoF32 } from './wav-pcm.js'
+import { checkParakeetFlags } from './transcription-segments.js'
 
 export interface ParakeetStreamParams {
   chunkMs?: number
@@ -154,36 +155,107 @@ export async function runParakeetStreamEou(
   }
 }
 
-export async function runParakeetStreamMetadataRejected(modelId: string): Promise<TestResult> {
-  let session: TranscribeStreamSession | null = null
+/**
+ * Same paced feed as `runParakeetStreamHappy`, with `metadata: true`. The
+ * conversation session then yields `segment` events instead of `text`; each
+ * must carry timings and the parakeet-only `isEndOfTurn` / `startsWord` flags.
+ *
+ * Streaming segment ids and timings are per-window, so unlike the batch
+ * check this asserts each segment's own interval but not audio-time ordering
+ * across segments.
+ */
+export async function runParakeetStreamMetadata(
+  modelId: string,
+  audioBytes: Uint8Array,
+  params: ParakeetStreamParams
+): Promise<TestResult> {
+  let session: TranscribeStreamConversationSession | null = null
   try {
-    session = (await transcribeStream({
+    const decoded = decodeWavToMonoF32(audioBytes)
+    if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
+      return {
+        passed: false,
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`
+      }
+    }
+
+    const trailingMs = params.trailingSilenceMs ?? 1500
+    const chunkMs = params.chunkMs ?? 1000
+    const trailingSamples = Math.floor((trailingMs / 1000) * EXPECTED_SAMPLE_RATE)
+
+    const speech = f32ToS16LeBytes(decoded.samplesMono)
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE)
+    const chunkSize = Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) * BYTES_PER_S16_SAMPLE
+
+    session = await transcribeStream({
       modelId,
       metadata: true,
-      parakeetStreamingConfig: { chunkMs: 1000 }
-    } as never)) as unknown as TranscribeStreamSession
+      parakeetStreamingConfig: {
+        chunkMs,
+        ...(params.emitPartials !== undefined && {
+          emitPartials: params.emitPartials
+        })
+      }
+    })
+
+    await writeInChunks(session, speech, chunkSize, chunkMs)
+    await writeInChunks(session, silence, chunkSize, chunkMs)
     session.end()
 
-    let receivedAny = false
-    for await (const _ of session) {
-      receivedAny = true
-      break
+    const segments: Partial<TranscribeSegment>[] = []
+    let textEvents = 0
+    for await (const event of session) {
+      if (event.type === 'segment') segments.push(event.segment)
+      if (event.type === 'text') textEvents++
+    }
+
+    // Metadata mode replaces text events with segment events outright, so any
+    // text event is a failure however many segments came alongside it.
+    if (textEvents > 0) {
+      return {
+        passed: false,
+        output: `metadata: true still yielded ${textEvents} plain text event(s) alongside ${segments.length} segment(s)`
+      }
+    }
+    if (segments.length === 0) {
+      return { passed: false, output: 'metadata: true produced no segment events' }
+    }
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i]!
+      if (typeof seg.text !== 'string') {
+        return { passed: false, output: `Segment ${i}: missing/invalid text` }
+      }
+      if (typeof seg.startMs !== 'number' || !Number.isFinite(seg.startMs)) {
+        return { passed: false, output: `Segment ${i}: missing/invalid startMs` }
+      }
+      if (typeof seg.endMs !== 'number' || !Number.isFinite(seg.endMs)) {
+        return { passed: false, output: `Segment ${i}: missing/invalid endMs` }
+      }
+      // Timings may restart between windows, so only each segment's own
+      // interval is checked, not the order across segments.
+      if (seg.endMs < seg.startMs) {
+        return {
+          passed: false,
+          output: `Segment ${i}: endMs (${seg.endMs}) < startMs (${seg.startMs})`
+        }
+      }
+      const flags = checkParakeetFlags(seg, i)
+      if (flags) return flags
+    }
+    const transcript = segments
+      .map((seg) => seg.text)
+      .join('')
+      .trim()
+    if (!transcript) {
+      return { passed: false, output: `${segments.length} segment(s) but no transcript text` }
     }
     return {
-      passed: false,
-      output: receivedAny
-        ? 'expected parakeet to reject metadata: true; received an event instead'
-        : 'expected parakeet to reject metadata: true; iteration completed silently'
+      passed: true,
+      output: `${segments.length} segment(s) with timings and parakeet flags; transcript: "${transcript.slice(0, 80)}"`
     }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error)
-    if (/metadata/i.test(msg) && /parakeet/i.test(msg)) {
-      return { passed: true, output: msg }
-    }
-    return {
-      passed: false,
-      output: `unexpected error message: ${msg}`
-    }
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    return { passed: false, output: `parakeet metadata stream failed: ${errorMsg}` }
   } finally {
     try {
       session?.destroy()

@@ -25,13 +25,16 @@ const {
   ensureCangjieTsv
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
-// Language coverage test, not a GPU policy test: rely on the package
-// default (`useGPU: false`) rather than opting into GPU here.
-// Tests that *are* about GPU live in gpu-smoke.test.js.
+// Language coverage, not a GPU policy test. A single MTL synthesis already
+// takes close to a minute on the CPU-only runners, so these tests run on the
+// GPU only and are skipped there (NO_GPU=true). Tests that *are* about GPU live
+// in gpu-smoke.test.js.
 
 function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -61,6 +64,7 @@ async function loadChatterboxMtlTTS(params) {
   }
 
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     files: {
       modelDir: params.modelDir,
       t3Model: params.t3ModelPath,
@@ -81,7 +85,7 @@ async function loadChatterboxMtlTTS(params) {
 
 test(
   'Chatterbox MTL TTS (ggml): synthesizes across es/fr/de with shared engine',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
@@ -96,7 +100,8 @@ test(
       modelDir: download.targetDir,
       t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
       s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
-      language: MTL_SENTENCES[0].lang
+      language: MTL_SENTENCES[0].lang,
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       for (let i = 0; i < MTL_SENTENCES.length; i++) {
@@ -145,6 +150,10 @@ test(
               'backendDevice surfaced in stats'
             )
             t.ok(typeof result.data.stats.backendId === 'number', 'backendId surfaced in stats')
+            const { t3Tokens, t3Ms, s3genMs, denoiserBackendDevice } = result.data.stats
+            t.ok(t3Tokens > 0, 'stats report the speech tokens T3 emitted')
+            t.ok(t3Ms > 0 && s3genMs > 0, 'stats report the T3 and S3Gen stage times')
+            t.is(denoiserBackendDevice, -1, 'no denoiser loaded -> denoiserBackendDevice=-1')
           } else {
             t.fail('expected stats from MTL run')
           }
@@ -160,7 +169,7 @@ test(
 
 test(
   'Chatterbox MTL TTS (ggml): synthesizes Japanese with MeCab dictionary',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
@@ -182,7 +191,8 @@ test(
       t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
       s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
       mecabDictDir: mecab.dir,
-      language: 'ja'
+      language: 'ja',
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       const t0 = Date.now()
@@ -227,7 +237,7 @@ test(
 
 test(
   'Chatterbox MTL TTS (ggml): synthesizes Chinese with Cangjie table',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
@@ -249,7 +259,8 @@ test(
       t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
       s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
       cangjieTsvPath: cangjie.path,
-      language: 'zh'
+      language: 'zh',
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       const t0 = Date.now()

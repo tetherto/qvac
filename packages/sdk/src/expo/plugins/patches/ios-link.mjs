@@ -5,12 +5,15 @@
  * Otherwise, falls back to linking all installed addons.
  *
  * This file is copied over react-native-bare-kit/ios/link.mjs
- * by withMobileBundle.ts during expo prebuild.
+ * by withMobileBundle.ts during expo prebuild. The resolver it imports is
+ * compiled from qvac-platform-addons.ts and installed beside this file as
+ * qvac-platform-addons.mjs.
  */
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import link from 'bare-link'
+import { resolvePlatformAddonRoots } from './qvac-platform-addons.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.join(__dirname, '..', '..', '..')
@@ -24,10 +27,12 @@ if (fs.existsSync(addonsDir)) {
 const manifestPath = path.join(projectRoot, 'qvac', 'addons.manifest.json')
 
 let pkg = null
+let addonNames = []
 if (fs.existsSync(manifestPath)) {
   try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
     const addons = Array.isArray(manifest.addons) ? manifest.addons : []
+    addonNames = addons
 
     if (addons.length > 0) {
       console.log(`[QVAC] Using addons manifest (${addons.length} addons): ${addons.join(', ')}`)
@@ -46,13 +51,17 @@ if (fs.existsSync(manifestPath)) {
   console.log('[QVAC] No addons manifest found, linking all addons')
 }
 
-for await (const resource of link(
-  projectRoot,
-  {
-    hosts: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'],
-    out: addonsDir
-  },
-  pkg
-)) {
+const hosts = ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
+
+for await (const resource of link(projectRoot, { hosts, out: addonsDir }, pkg)) {
   console.log('Wrote', resource)
+}
+
+// Split addons keep their binaries in a per-platform package; bare-link only
+// reaches the meta, which has shipped no prebuilds/ since the split.
+for (const addon of resolvePlatformAddonRoots(projectRoot, addonNames, 'ios')) {
+  console.log(`[QVAC] Linking split addon ${addon.pkg.name} from its platform package`)
+  for await (const resource of link(addon.dir, { hosts, out: addonsDir }, addon.pkg)) {
+    console.log('Wrote', resource)
+  }
 }

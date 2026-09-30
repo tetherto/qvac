@@ -158,6 +158,12 @@ export interface AuditDiagnostic {
 export interface AuditOptions {
   strict?: boolean;
   quiet?: boolean;
+  /**
+   * Extra `Variable` reflections to audit alongside the project's own, for the
+   * curated singletons declared outside the SDK program. Typed loosely so this
+   * module stays free of a TypeDoc import.
+   */
+  curatedVariables?: unknown[];
 }
 
 export interface AuditResult {

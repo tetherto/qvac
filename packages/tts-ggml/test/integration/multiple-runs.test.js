@@ -29,13 +29,16 @@ const {
 } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
-// Lifecycle / sequential-run test, not a GPU policy test: rely on the
-// package default (`useGPU: false`) rather than opting into GPU here.
-// Tests that *are* about GPU live in gpu-smoke.test.js.
+// Lifecycle / sequential-run tests, not GPU policy tests. The Chatterbox ones
+// run several syntheses, so they run on the GPU only and are skipped on CPU-only
+// runners (NO_GPU=true); the Supertonic reload keeps the package default
+// (`useGPU: false`). Tests that *are* about GPU live in gpu-smoke.test.js.
 
 function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -49,7 +52,7 @@ const PHRASES = [
 
 test(
   'Chatterbox: multiple sequential runs reuse the same engine instance',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
@@ -73,9 +76,11 @@ test(
     }
 
     const model = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
       modelDir: download.targetDir,
       refWavPath,
-      language: 'en'
+      language: 'en',
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       const timings = []
@@ -109,7 +114,7 @@ test(
 
 test(
   'Chatterbox: fresh instance per run (app-restart simulation)',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
@@ -137,9 +142,11 @@ test(
     for (let i = 0; i < N; i++) {
       const t0 = Date.now()
       const model = await loadChatterboxTTS({
+        threads: TTS_TEST_THREADS,
         modelDir: download.targetDir,
         refWavPath,
-        language: 'en'
+        language: 'en',
+        useGPU: GPU_ONLY_USE_GPU
       })
       const loadMs = Date.now() - t0
       try {
@@ -172,57 +179,63 @@ test(
   }
 )
 
-test('Chatterbox: reload() between runs preserves stability', { timeout: 1800000 }, async (t) => {
-  const baseDir = getBaseDir()
-  const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
-  if (!download.success) {
-    t.fail(
-      'Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-    )
-    return
-  }
+test(
+  'Chatterbox: reload() between runs preserves stability',
+  { timeout: 1800000, skip: NO_GPU },
+  async (t) => {
+    const baseDir = getBaseDir()
+    const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
+    if (!download.success) {
+      t.fail(
+        'Chatterbox GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
+      )
+      return
+    }
 
-  // Mobile-aware resolution: on iOS / Android the asset is staged into
-  // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
-  // back to the in-tree `test/reference-audio/jfk.wav`. The bundled
-  // path is not readable from native code on iOS, which would trip
-  // `ModelFileNotFound` the moment `model.load()` reaches the C++
-  // `ChatterboxModel::validateConfig` check.
-  const refWavPath = resolveRefWavPath({})
-  if (!fs.existsSync(refWavPath)) {
-    t.pass('Skipped: reference audio missing')
-    return
-  }
+    // Mobile-aware resolution: on iOS / Android the asset is staged into
+    // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
+    // back to the in-tree `test/reference-audio/jfk.wav`. The bundled
+    // path is not readable from native code on iOS, which would trip
+    // `ModelFileNotFound` the moment `model.load()` reaches the C++
+    // `ChatterboxModel::validateConfig` check.
+    const refWavPath = resolveRefWavPath({})
+    if (!fs.existsSync(refWavPath)) {
+      t.pass('Skipped: reference audio missing')
+      return
+    }
 
-  const model = await loadChatterboxTTS({
-    modelDir: download.targetDir,
-    refWavPath,
-    language: 'en'
-  })
-  try {
-    const r1 = await runChatterboxTTS(
-      model,
-      { text: 'First run before reload.' },
-      { minSamples: 5000 }
-    )
-    t.ok(r1.passed, 'first run before reload should pass')
-
-    await model.reload({ language: 'en' })
-    t.pass('reload() resolved')
-
-    const r2 = await runChatterboxTTS(
-      model,
-      { text: 'Second run after reload.' },
-      { minSamples: 5000 }
-    )
-    t.ok(r2.passed, 'second run after reload should pass')
-    t.ok(r2.data.sampleCount > 0, 'reloaded model produces audio')
-  } finally {
+    const model = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
+      modelDir: download.targetDir,
+      refWavPath,
+      language: 'en',
+      useGPU: GPU_ONLY_USE_GPU
+    })
     try {
-      await model.unload()
-    } catch (_e) {}
+      const r1 = await runChatterboxTTS(
+        model,
+        { text: 'First run before reload.' },
+        { minSamples: 5000 }
+      )
+      t.ok(r1.passed, 'first run before reload should pass')
+
+      await model.reload({ language: 'en' })
+      t.pass('reload() resolved')
+
+      const r2 = await runChatterboxTTS(
+        model,
+        { text: 'Second run after reload.' },
+        { minSamples: 5000 }
+      )
+      t.ok(r2.passed, 'second run after reload should pass')
+      t.ok(r2.data.sampleCount > 0, 'reloaded model produces audio')
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
   }
-})
+)
 
 test('Supertonic: reload() between runs preserves stability', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
@@ -235,6 +248,7 @@ test('Supertonic: reload() between runs preserves stability', { timeout: 1800000
   }
 
   const model = await loadSupertonicTTS({
+    threads: TTS_TEST_THREADS,
     supertonicModelPath: download.path,
     voice: 'F1',
     language: 'en',
@@ -267,7 +281,7 @@ test('Supertonic: reload() between runs preserves stability', { timeout: 1800000
 
 test(
   'Engine swap: chatterbox -> supertonic -> chatterbox in separate instances',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const cb = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
@@ -291,7 +305,13 @@ test(
       return
     }
 
-    const c1 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en' })
+    const c1 = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
+      modelDir: cb.targetDir,
+      refWavPath,
+      language: 'en',
+      useGPU: GPU_ONLY_USE_GPU
+    })
     try {
       const r = await runChatterboxTTS(c1, { text: 'Hello from chatterbox.' }, { minSamples: 5000 })
       t.ok(r.passed, 'first chatterbox instance OK')
@@ -302,10 +322,11 @@ test(
     }
 
     const s1 = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: st.path,
       voice: 'F1',
       language: 'en',
-      useGPU: false
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       const r = await runSupertonicTTS(s1, { text: 'Hello from supertonic.' }, { minSamples: 5000 })
@@ -316,7 +337,13 @@ test(
       } catch (_e) {}
     }
 
-    const c2 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en' })
+    const c2 = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
+      modelDir: cb.targetDir,
+      refWavPath,
+      language: 'en',
+      useGPU: GPU_ONLY_USE_GPU
+    })
     try {
       const r = await runChatterboxTTS(
         c2,

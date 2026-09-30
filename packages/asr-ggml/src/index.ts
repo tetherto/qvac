@@ -11,6 +11,14 @@ import {
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
 import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import {
+  assessFit as assessFitImpl,
+  type AsrFitRequest,
+  type AsrFitResult,
+  type AsrFitStatus,
+  type ParakeetFitRequest,
+  type WhisperFitRequest,
+} from "./lib/fit";
+import {
   BackendId as BackendIdEnum,
   type ASRRunOutput,
   type ASRStreamOutput,
@@ -417,11 +425,13 @@ class ASRGgml {
   }
 
   async run(audio: AudioInput): Promise<QvacResponse<ASRRunOutput>> {
-    this._assertNoOpenSession(
-      "concurrent run() during an open streaming session",
-    );
-    const runFn = (): Promise<QvacResponse<ASRRunOutput>> =>
-      this._driver.run(this._driver.normalizeAudio(audio));
+    const runFn = async (): Promise<QvacResponse<ASRRunOutput>> => {
+      await this._waitForClosingSessionOrThrow(
+        "concurrent run() during an open streaming session",
+      );
+      return await this._driver.run(this._driver.normalizeAudio(audio));
+    };
+
     if (this.exclusiveRun) {
       return await this._inferenceQueue.run(runFn, "onSettle");
     }
@@ -432,10 +442,10 @@ class ASRGgml {
     audio: AudioInput,
     opts: ASRStreamingOptions = {},
   ): Promise<QvacResponse<ASRStreamOutput>> {
-    this._assertNoOpenSession(
-      "concurrent runStreaming() during an open streaming session",
-    );
     const startFn = async (): Promise<QvacResponse<ASRStreamOutput>> => {
+      await this._waitForClosingSessionOrThrow(
+        "concurrent runStreaming() during an open streaming session",
+      );
       const session = await this._driver.createStreamingSession(
         this._driver.normalizeAudio(audio),
         opts,
@@ -510,13 +520,19 @@ class ASRGgml {
     }
   }
 
-  private _assertNoOpenSession(adds: string): void {
-    if (this._openSession) {
+  private async _waitForClosingSessionOrThrow(adds: string): Promise<void> {
+    const session = this._openSession;
+    if (!session) return;
+
+    if (!session.closing) {
       throw new QvacErrorAddonASRGgml({
         code: ERR_CODES.STREAMING_SESSION_ACTIVE,
         adds,
       });
     }
+
+    await session.done;
+    if (this._openSession === session) this._openSession = null;
   }
 
 }
@@ -547,6 +563,11 @@ type WhisperRuntimeStatsShape = WhisperRuntimeStats;
 type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
 type RuntimeStatsShape = RuntimeStats;
 type InferenceClientStateShape = InferenceClientState;
+type AsrFitRequestShape = AsrFitRequest;
+type AsrFitResultShape = AsrFitResult;
+type AsrFitStatusShape = AsrFitStatus;
+type ParakeetFitRequestShape = ParakeetFitRequest;
+type WhisperFitRequestShape = WhisperFitRequest;
 
 // The namespace merge preserves the package's established `export =` API and
 // namespace-qualified public types such as `ASRGgml.RuntimeStats`.
@@ -578,10 +599,16 @@ namespace ASRGgml {
   export type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
   export type RuntimeStats = RuntimeStatsShape;
   export type InferenceClientState = InferenceClientStateShape;
+  export type AsrFitRequest = AsrFitRequestShape;
+  export type AsrFitResult = AsrFitResultShape;
+  export type AsrFitStatus = AsrFitStatusShape;
+  export type ParakeetFitRequest = ParakeetFitRequestShape;
+  export type WhisperFitRequest = WhisperFitRequestShape;
 
   export import BackendId = BackendIdEnum;
 
   export const resolveBackendsDir = resolveBackendsDirImpl;
+  export const assessFit = assessFitImpl;
 }
 
 export = ASRGgml;

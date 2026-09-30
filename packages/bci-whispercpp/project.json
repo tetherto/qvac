@@ -135,6 +135,8 @@
               "platform": "darwin",
               "arch": "x64",
               "noGpu": true,
+              "timeoutMinutes": 30,
+              "testScript": "test:integration:smoke",
               "benchmarkMatrixJson": [
                 {
                   "useGPU": false,
@@ -203,11 +205,11 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/bci-whispercpp",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "bci-whispercpp",
-          "testGateMode": "post-publish-integration"
+          "testGateMode": "post-publish-integration",
+          "postIntegrationOnGpr": true
         }
       }
     }

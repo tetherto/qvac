@@ -3,7 +3,6 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
-const proc = require('bare-process')
 const {
   binding,
   ParakeetInterface,
@@ -16,12 +15,13 @@ const {
   getNamedPathsConfig,
   loadGgufOrSkip,
   isMobile,
+  NO_GPU,
+  GPU_ONLY_USE_GPU,
   recordParakeetStats
 } = require('./parakeet-helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
-const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
 function loadAudio(samplePath) {
   const rawBuffer = fs.readFileSync(samplePath)
@@ -49,11 +49,7 @@ const ALL_DEVICE_CONFIGS = [
   { id: 'gpu', useGPU: true },
   { id: 'cpu', useGPU: false }
 ]
-const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter((c) => {
-  if (NO_GPU && c.useGPU) return false
-  if (!isMobile && c.useGPU) return false
-  return true
-})
+const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter((c) => isMobile || c.useGPU)
 const MOBILE_PERF_MODEL_TYPES = ['tdt']
 const PERF_MODEL_TYPES = isMobile ? MOBILE_PERF_MODEL_TYPES : ['tdt']
 
@@ -81,7 +77,7 @@ for (const modelType of PERF_MODEL_TYPES) {
 
     test(
       `Multiple consecutive transcriptions ${testLabel} should work without errors`,
-      { timeout: 600000 },
+      { timeout: 600000, skip: NO_GPU && deviceConfig.useGPU },
       async (t) => {
         const NUM_TRANSCRIPTIONS = 3
         const loggerBinding = setupJsLogger(binding)
@@ -329,7 +325,7 @@ for (const modelType of PERF_MODEL_TYPES) {
  */
 test(
   'Fresh model instance per transcription (app restart simulation)',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const NUM_INSTANCES = 2
     const loggerBinding = setupJsLogger(binding)
@@ -360,7 +356,7 @@ test(
 
       const model = new ASRGgml({
         files: { model: stagedGguf },
-        config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
+        config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: GPU_ONLY_USE_GPU } }
       })
       try {
         await model.load()

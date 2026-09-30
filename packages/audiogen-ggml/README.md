@@ -43,8 +43,8 @@ MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 ### Platform packages
 
 `@qvac/audiogen-ggml` is a meta package that ships the JavaScript wrapper
-only. The native prebuild for each host lives in a version-locked platform
-package selected at install time through `os`/`cpu` filtered
+only. The native prebuild for each desktop host lives in a version-locked
+platform package selected at install time through `os`/`cpu` filtered
 `optionalDependencies`:
 
 | Host | Package |
@@ -54,16 +54,33 @@ package selected at install time through `os`/`cpu` filtered
 | darwin-arm64 | `@qvac/audiogen-ggml-darwin-arm64` |
 | darwin-x64 | `@qvac/audiogen-ggml-darwin-x64` |
 | win32-x64 | `@qvac/audiogen-ggml-win32-x64` |
-| android-arm64 | `@qvac/audiogen-ggml-android-arm64` |
-| ios (device + simulators) | `@qvac/audiogen-ggml-ios` |
 
-Do not depend on platform packages directly. Supported installers are npm 7+,
-pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip the
-platform package and fail at require time with an error naming the missing
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time with an error naming the missing
 package; a locally built `prebuilds/` directory in the package root always
 takes precedence. Use `require('@qvac/audiogen-ggml').resolveBackendsDir()`
 to locate the directory holding the host's prebuilt binaries and dynamically
 loaded ggml backends.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/audiogen-ggml` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/audiogen-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/audiogen-ggml-ios` |
+
+```json
+{
+  "dependencies": {
+    "@qvac/audiogen-ggml": "x.y.z",
+    "@qvac/audiogen-ggml-android-arm64": "x.y.z"
+  }
+}
+```
 
 The published linux-x64 prebuild bundles the CUDA backend next to Vulkan; the
 linux-arm64 and Windows prebuilds ship Vulkan, and there CUDA is opt-in at
@@ -640,6 +657,58 @@ npx qvac-audiogen-download-models --output ./models/audiogen --variant turbo-q4
 `--output`/`-o` is required. `--variant`/`-v` accepts `turbo-q4`, `turbo-q8`,
 `sft`, or `all`; it defaults to `turbo-q4`. Use `--help` to print the flags.
 The command does not write into the installed package.
+
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads GGUF
+metadata and never weight data, so the registry's weightless copy of each stage
+answers the same as the file itself and the projection can run before anything
+is downloaded. It is a module export, not an instance method — nothing is
+loaded to call it.
+
+```js
+const { assessFit } = require('@qvac/audiogen-ggml')
+
+const fit = assessFit({
+  modelsDir: '/models/ace-step',
+  durationSeconds: 30,
+  textTokens: 256,
+  lyricTokens: 256
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
+fit.modelName
+fit.isTurbo
+fit.deviceName
+fit.deviceBytes // peak across the pipeline phases under the projected residency mode
+fit.hostBytes
+fit.hostFreeBytes // host capacity, a budget of its own where the device has its own memory
+fit.stagesResident
+fit.report
+```
+
+`modelsDir` holds the four stage GGUFs; `textEncoderPath`, `lmPath`, `ditPath`
+and `vaePath` name them individually and win over it.
+
+| Option | Description |
+| --- | --- |
+| `durationSeconds` | Longest single generation the projection must accommodate. |
+| `textTokens`, `lyricTokens` | The prompt the projection is sized for. |
+| `lmPromptTokens` | 0 derives it from the text and lyric budgets. |
+| `lmMaxNewTokens` | 0 derives it from the duration, as the pipeline does. |
+| `lmCfgScale`, `guidanceScale` | 0 picks CFG or no CFG from the checkpoint. |
+| `withSourceAudio` | Projects the extra VAE-encoder phase a cover or reference request loads. |
+| `keepStages` | `-1` mirrors the engine, `0` forces the staged projection, `1` all-resident. |
+| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. |
+| `threads`, `backendsDir` | As the load takes them. |
+| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to 256 MiB. |
+
+`deviceSharesHostMemory` reports that the device pool is system RAM, so host
+bytes compete with device bytes.
+
+A model the engine cannot read is `status: "error"`; a broken request, or a
+host with no native binding, throws.
 
 ## Lifecycle
 

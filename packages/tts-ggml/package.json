@@ -1,7 +1,7 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.9.0",
-  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 engines from tts-cpp)",
+  "version": "0.10.1",
+  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + moss + Pocket engines from tts-cpp)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -52,20 +52,23 @@
     "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
     "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
     "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
+    "example:supertonic-chunk-stream": "bare examples/supertonic-chunk-stream-tts.js",
     "example:cosyvoice": "bare examples/cosyvoice-tts.js \"Hello from CosyVoice three.\"",
     "example:cosyvoice-enhanced": "bare examples/cosyvoice-enhanced.js \"Hello from CosyVoice three.\"",
     "example:parler": "bare examples/parler-tts.js \"Hey, how are you doing today?\"",
     "example:parler-enhanced": "bare examples/parler-enhanced.js \"Hello from enhanced Parler.\"",
     "example:audio8": "bare examples/audio8-tts.js \"Audio eight speaks on-device.\"",
+    "example:moss": "bare examples/moss-tts.js \"MOSS speaks on-device.\"",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" \"addon-unavailable.js\"",
+    "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" \"addon-unavailable.js\"",
+    "format": "prettier --write \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\"",
     "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:node",
     "test:node": "node --test scripts/__tests__/*.test.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "test:integration": "npm run build:ts && brittle-bare test/integration/**/*.test.js",
+    "test:integration:smoke": "npm run build:ts && brittle-bare test/integration/supertonic.test.js",
     "test:benchmark:rtf": "npm run build:ts && brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
     "test:benchmark:streaming": "npm run build:ts && brittle-bare test/benchmark/streaming-benchmark.test.js",
@@ -83,7 +86,10 @@
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-models": "bash scripts/convert-models.sh",
     "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh",
-    "download-models:registry": "node scripts/download-tts-ggml-models.js"
+    "download-models:registry": "node scripts/download-tts-ggml-models.js",
+    "download-models:smoke": "node scripts/download-tts-ggml-models.js --group supertonic",
+    "example:pocket": "bare examples/pocket-tts.js",
+    "test:pocket": "npm run build:ts && brittle-bare test/integration/pocket.integration.test.js"
   },
   "files": [
     "addonLogging.js",
@@ -113,7 +119,8 @@
     "test/utils/textMetrics.js",
     "test/data/sentences-medium.js",
     "test/data/sentences-long.js",
-    "LICENSE"
+    "LICENSE",
+    "docs"
   ],
   "exports": {
     "./package": "./package.json",

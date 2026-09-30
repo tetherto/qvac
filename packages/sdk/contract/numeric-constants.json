@@ -1,0 +1,10 @@
+{
+  "ASR_BACKEND_IDS": {
+    "CPU": 0,
+    "Metal": 1,
+    "CUDA": 2,
+    "Vulkan": 3,
+    "OpenCL": 4,
+    "Other": 99
+  }
+}

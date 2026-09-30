@@ -1,13 +1,30 @@
 import test from 'brittle'
-import { ENGINE_ACESTEP, ENGINE_MINIMAX } from '@qvac/audiogen-ggml'
 import {
+  AudioEditOperationType,
+  ENGINE_ACESTEP,
+  ENGINE_MINIMAX,
+  RepaintMode
+} from '@qvac/audiogen-ggml'
+import {
+  AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_ENGINES,
+  AUDIOGEN_MAX_AUDIO_CODES,
+  AUDIOGEN_REPAINT_MODES,
+  AUDIOGEN_TASK_TYPES,
+  AUDIOGEN_TRACKS,
+  audioEditClientParamsSchema,
+  audioEditStreamRequestSchema,
+  audioEditStreamResponseSchema,
   audioGenClientParamsSchema,
   audioGenConfigSchema,
   audioGenProgressSchema,
   audioGenRuntimeConfigSchema,
   audioGenStreamRequestSchema,
-  audioGenStreamResponseSchema
+  audioGenStreamResponseSchema,
+  audioGenUnderstandResultSchema,
+  audioUnderstandClientParamsSchema,
+  audioUnderstandRequestSchema,
+  audioUnderstandResponseSchema
 } from '@/schemas/audio-gen'
 import { loadModelOptionsToRequestSchema } from '@/schemas/load-model'
 import { ModelType, normalizeModelType } from '@/schemas/model-types'
@@ -244,6 +261,228 @@ test('audioGen client params validate ACE-Step 0.2.1 sampling, DCW, and cover co
   )
 })
 
+test('audioGen client params accept caption augmentation and normalize frozen codes', (t) => {
+  const base = { modelId: 'model-1', caption: 'energetic cumbia with brass stabs' }
+  t.ok(
+    audioGenClientParamsSchema.safeParse({ ...base, bpm: 98, augmentCaptionWithMetadata: true })
+      .success
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({ ...base, augmentCaptionWithMetadata: 'yes' }).success,
+    false
+  )
+
+  const fromTyped = audioGenClientParamsSchema.parse({
+    ...base,
+    audioCodes: new Int32Array([12095, 63487, 12741])
+  })
+  t.alike(fromTyped.audioCodes, [12095, 63487, 12741], 'Int32Array becomes a plain int array')
+  const fromArray = audioGenClientParamsSchema.parse({ ...base, audioCodes: [1, 2, 3] })
+  t.alike(fromArray.audioCodes, [1, 2, 3])
+
+  t.is(audioGenClientParamsSchema.safeParse({ ...base, audioCodes: [] }).success, false)
+  t.is(audioGenClientParamsSchema.safeParse({ ...base, audioCodes: [1.5] }).success, false)
+  t.is(
+    audioGenClientParamsSchema.safeParse({ ...base, audioCodes: [2147483648] }).success,
+    false,
+    'codes are bounded to int32'
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      ...base,
+      audioCodes: new Int32Array(AUDIOGEN_MAX_AUDIO_CODES + 1)
+    }).success,
+    false,
+    'oversized code arrays are rejected'
+  )
+  t.ok(
+    audioGenClientParamsSchema.safeParse({
+      ...base,
+      audioCodes: new Int32Array(AUDIOGEN_MAX_AUDIO_CODES)
+    }).success
+  )
+
+  t.ok(
+    audioGenStreamRequestSchema.safeParse({
+      type: 'audioGenStream',
+      ...base,
+      augmentCaptionWithMetadata: false,
+      audioCodes: [12095, 63487]
+    }).success,
+    'the wire form carries a plain int array'
+  )
+  t.is(
+    audioGenStreamRequestSchema.safeParse({
+      type: 'audioGenStream',
+      ...base,
+      audioCodes: ['12095']
+    }).success,
+    false
+  )
+})
+
+test('audioEdit vocabularies match the addon enums', (t) => {
+  t.alike([...AUDIOGEN_EDIT_OPERATIONS], Object.values(AudioEditOperationType))
+  t.alike([...AUDIOGEN_REPAINT_MODES], Object.values(RepaintMode))
+})
+
+test('audioEdit client params normalize the source and validate the pipeline', (t) => {
+  const pcm = new Float32Array([0.25, -0.25])
+  const parsed = audioEditClientParamsSchema.parse({
+    modelId: 'model-1',
+    sourceAudio: new Uint8Array(pcm.buffer),
+    seed: 7,
+    operations: [
+      {
+        type: 'flow-edit',
+        from: { caption: 'original pop song', lyrics: 'la la' },
+        to: { caption: 'guitar pop-rock' },
+        nMin: 0.1,
+        nMax: 0.9,
+        nAvg: 2
+      },
+      { type: 'repaint', caption: 'analog synth solo', start: 10, end: 20, mode: 'balanced' },
+      { type: 'repaint', caption: 'through the end', start: 30, strength: 0.75 }
+    ]
+  })
+  t.is(parsed.sourceAudio.type, 'base64')
+  t.is(parsed.operations.length, 3)
+  t.is(parsed.seed, 7)
+  t.alike(
+    audioEditClientParamsSchema.parse({
+      modelId: 'model-1',
+      sourceAudio: '/tmp/song.wav',
+      operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+    }).sourceAudio,
+    { type: 'filePath', value: '/tmp/song.wav' }
+  )
+
+  const rejects = (params: Record<string, unknown>, message: string) => {
+    t.is(
+      audioEditClientParamsSchema.safeParse({
+        modelId: 'model-1',
+        sourceAudio: '/tmp/song.wav',
+        ...params
+      }).success,
+      false,
+      message
+    )
+  }
+  rejects({ operations: [] }, 'at least one operation is required')
+  rejects({ operations: [{ type: 'lego', caption: 'x', start: 0 }] }, 'unknown operations')
+  rejects(
+    { operations: [{ type: 'flow-edit', from: { caption: ' ' }, to: { caption: 'b' } }] },
+    'blank prompts'
+  )
+  rejects(
+    {
+      operations: [
+        { type: 'flow-edit', from: { caption: 'a' }, to: { caption: 'b' }, nMin: 0.8, nMax: 0.2 }
+      ]
+    },
+    'nMin must not exceed nMax'
+  )
+  rejects(
+    { operations: [{ type: 'flow-edit', from: { caption: 'a' }, to: { caption: 'b' }, nAvg: 0 }] },
+    'nAvg is at least 1'
+  )
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 5, end: 5 }] },
+    'end must exceed start'
+  )
+  rejects({ operations: [{ type: 'repaint', caption: 'x', start: -1 }] }, 'start is non-negative')
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 0, mode: 'wild' }] },
+    'mode is one of the repaint modes'
+  )
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 0, strength: 1.5 }] },
+    'strength is bounded to [0, 1]'
+  )
+  rejects(
+    { operations: [{ type: 'repaint', caption: 'x', start: 0 }], seed: 1.5 },
+    'seed is an integer'
+  )
+  t.is(
+    audioEditClientParamsSchema.safeParse({
+      modelId: 'model-1',
+      operations: [{ type: 'repaint', caption: 'x', start: 0 }]
+    }).success,
+    false,
+    'sourceAudio is required'
+  )
+})
+
+test('audioEditStreamRequestSchema takes the wire audio form and an optional requestId', (t) => {
+  const request = audioEditStreamRequestSchema.parse({
+    type: 'audioEditStream',
+    requestId: 'audio-edit-request-1',
+    modelId: 'model-1',
+    sourceAudio: { type: 'filePath', value: '/tmp/song.wav' },
+    operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+  })
+  t.is(request.requestId, 'audio-edit-request-1')
+  t.ok(
+    audioEditStreamRequestSchema.safeParse({
+      type: 'audioEditStream',
+      modelId: 'model-1',
+      sourceAudio: { type: 'base64', value: 'AAAAAAAAAAA=' },
+      operations: [{ type: 'flow-edit', from: { caption: 'a' }, to: { caption: 'b' } }]
+    }).success
+  )
+  t.is(
+    audioEditStreamRequestSchema.safeParse({
+      type: 'audioEditStream',
+      modelId: 'model-1',
+      sourceAudio: '/tmp/song.wav',
+      operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+    }).success,
+    false,
+    'the client audio form is not accepted on the wire'
+  )
+  t.is(
+    audioEditStreamRequestSchema.safeParse({
+      type: 'audioEditStream',
+      modelId: 'model-1',
+      sourceAudio: { type: 'filePath', value: '/tmp/song.wav' },
+      operations: [{ type: 'repaint', caption: 'x', start: 2, end: 1 }]
+    }).success,
+    false,
+    'the wire schema enforces the same pipeline rules'
+  )
+})
+
+test('audioEditStreamResponseSchema mirrors the audioGen frames under its own type', (t) => {
+  t.ok(
+    audioEditStreamResponseSchema.safeParse({
+      type: 'audioEditStream',
+      progress: { stage: 'dit', step: 2, total: 8 }
+    }).success
+  )
+  t.ok(
+    audioEditStreamResponseSchema.safeParse({
+      type: 'audioEditStream',
+      data: 'AAECAw==',
+      sampleRate: 48000,
+      channels: 2,
+      bitsPerSample: 16
+    }).success
+  )
+  const terminal = audioEditStreamResponseSchema.parse({
+    type: 'audioEditStream',
+    done: true,
+    stopReason: 'completed',
+    stats: { audioDurationMs: 10000, backendDevice: 0, backendId: 0 },
+    diagnostics: { selectedBackend: 'cpu', selectedDevice: 'cpu' }
+  })
+  t.alike(terminal.stats, { audioDurationMs: 10000, backendDevice: 0, backendId: 0 })
+  t.is(
+    audioEditStreamResponseSchema.safeParse({ type: 'audioGenStream', done: true }).success,
+    false,
+    'the generation type does not parse as an edit frame'
+  )
+})
+
 test('audioGen client params normalize reference and source audio inputs', (t) => {
   const fromPaths = audioGenClientParamsSchema.parse({
     modelId: 'model-1',
@@ -442,5 +681,233 @@ test('audioGenStreamResponseSchema carries backend diagnostics on the terminal f
       diagnostics: { selectedBackend: 'vulkan', selectedDevice: 'tpu' }
     }).success,
     'selectedDevice is limited to the backend device enum'
+  )
+})
+
+// ---------------------------------------------------------------------------
+// 0.4.0 generation controls and their cross-field rules
+// ---------------------------------------------------------------------------
+
+const generationBase = { modelId: 'audiogen', caption: 'dark synthwave' }
+
+function parseGeneration(overrides: Record<string, unknown>) {
+  return audioGenClientParamsSchema.safeParse({ ...generationBase, ...overrides })
+}
+
+/** The first issue path, which is what a caller sees pointed at. */
+function issuePaths(result: ReturnType<typeof parseGeneration>) {
+  return result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'))
+}
+
+test('audioGen accepts the 0.4.0 generation controls', (t) => {
+  const parsed = audioGenClientParamsSchema.parse({
+    ...generationBase,
+    lyrics: 'a real verse',
+    simpleMode: false,
+    rewriteQuery: true,
+    generateLrc: true,
+    computeQualityScore: true,
+    normalizeLoudness: false,
+    guidanceScale: 7
+  })
+  t.is(parsed.rewriteQuery, true)
+  t.is(parsed.generateLrc, true)
+  t.is(parsed.computeQualityScore, true)
+  t.is(parsed.normalizeLoudness, false)
+  t.is(parsed.guidanceScale, 7)
+  t.absent(parseGeneration({ guidanceScale: -1 }).success, 'guidanceScale is a non-negative scale')
+})
+
+test('audioGen rejects Simple Mode combined with Query Rewriting', (t) => {
+  t.ok(parseGeneration({ simpleMode: true }).success)
+  t.ok(parseGeneration({ rewriteQuery: true }).success)
+  const both = parseGeneration({ simpleMode: true, rewriteQuery: true })
+  t.absent(both.success, 'the LM cannot both write and rewrite the lyrics')
+  t.alike(issuePaths(both), ['rewriteQuery'])
+  t.ok(
+    parseGeneration({ simpleMode: true, rewriteQuery: false }).success,
+    'an explicit false is not a conflict'
+  )
+})
+
+test('audioGen restricts the LM controls to the text2music task', (t) => {
+  for (const control of ['simpleMode', 'rewriteQuery', 'generateLrc', 'computeQualityScore']) {
+    t.ok(parseGeneration({ [control]: true }).success, `${control} on the default task`)
+    t.ok(
+      parseGeneration({ [control]: true, taskType: 'text2music' }).success,
+      `${control} on an explicit text2music`
+    )
+    const onLego = parseGeneration({ ...legoBase, [control]: true })
+    t.absent(onLego.success, `${control} is rejected on lego`)
+    t.alike(issuePaths(onLego), [control])
+  }
+  t.ok(
+    parseGeneration({ ...legoBase, generateLrc: false }).success,
+    'an unset control never blocks another task'
+  )
+})
+
+/** A lego request needs both a layer to rebuild and a source to rebuild it from. */
+const legoBase = { taskType: 'lego', track: 'drums', sourceAudio: '/tmp/song.wav' }
+
+test('audioGen binds track to the lego task', (t) => {
+  t.ok(AUDIOGEN_TASK_TYPES.includes('lego'), 'lego is a published task type')
+  t.ok(parseGeneration({ ...legoBase, track: AUDIOGEN_TRACKS[0] }).success)
+
+  const missingTrack = parseGeneration({ taskType: 'lego', sourceAudio: '/tmp/song.wav' })
+  t.absent(missingTrack.success, 'lego has nothing to rebuild without a track')
+  t.alike(issuePaths(missingTrack), ['track'])
+
+  const strayTrack = parseGeneration({ track: AUDIOGEN_TRACKS[0] })
+  t.absent(strayTrack.success, 'a track outside lego is silently ignored by the engine')
+  t.alike(issuePaths(strayTrack), ['track'])
+
+  t.absent(
+    parseGeneration({ ...legoBase, track: 'kazoo' }).success,
+    'track is limited to the published vocabulary'
+  )
+})
+
+test('audioGen requires a source for the lego task', (t) => {
+  const missingSource = parseGeneration({ taskType: 'lego', track: 'drums' })
+  t.absent(missingSource.success, 'the engine rejects a lego run with no source')
+  t.alike(issuePaths(missingSource), ['sourceAudio'])
+  t.ok(
+    !missingSource.success &&
+      missingSource.error.issues.some((issue) => /requires sourceAudio/.test(issue.message)),
+    'the message names what is missing'
+  )
+  t.ok(parseGeneration(legoBase).success, 'a source settles it')
+})
+
+test('audioGen keeps the LM rewrites away from pre-supplied codes', (t) => {
+  const audioCodes = [1, 2, 3]
+  for (const control of ['simpleMode', 'rewriteQuery'] as const) {
+    const withCodes = parseGeneration({ [control]: true, audioCodes, lyrics: 'a line to keep' })
+    t.absent(withCodes.success, `${control} cannot take pre-supplied audioCodes`)
+    t.ok(
+      !withCodes.success &&
+        withCodes.error.issues.some((issue) => /pre-supplied audioCodes/.test(issue.message)),
+      `${control} says why`
+    )
+    t.ok(
+      parseGeneration({ [control]: false, audioCodes }).success,
+      `${control} left off never blocks codes`
+    )
+  }
+})
+
+// ---------------------------------------------------------------------------
+// audioUnderstand
+// ---------------------------------------------------------------------------
+
+const understandResult = {
+  caption: 'downtempo synthwave',
+  bpm: 96,
+  duration: 12.5,
+  keyscale: 'F minor',
+  timesignature: '4/4',
+  vocalLanguage: 'en',
+  audioCodes: [7, -3, 2048]
+}
+
+test('audioUnderstandClientParamsSchema normalizes the source audio and LM knobs', (t) => {
+  const parsed = audioUnderstandClientParamsSchema.parse({
+    modelId: 'audiogen',
+    sourceAudio: '/tmp/song.wav',
+    seed: 11,
+    vocalLanguage: 'es',
+    lmTemperature: 0.7,
+    lmTopP: 0.85,
+    lmTopK: 40
+  })
+  t.alike(parsed.sourceAudio, { type: 'filePath', value: '/tmp/song.wav' })
+  t.is(parsed.seed, 11)
+  t.absent(
+    audioUnderstandClientParamsSchema.safeParse({ modelId: 'audiogen' }).success,
+    'sourceAudio is required'
+  )
+  t.absent(
+    audioUnderstandClientParamsSchema.safeParse({
+      modelId: 'audiogen',
+      sourceAudio: '/tmp/song.wav',
+      caption: 'not a generation'
+    }).success,
+    'generation-only options are rejected'
+  )
+})
+
+test('audioUnderstandRequestSchema is a distinct wire type', (t) => {
+  const parsed = audioUnderstandRequestSchema.parse({
+    type: 'audioUnderstand',
+    requestId: 'req-1',
+    modelId: 'audiogen',
+    sourceAudio: { type: 'filePath', value: '/tmp/song.wav' }
+  })
+  t.is(parsed.type, 'audioUnderstand')
+  t.absent(
+    audioUnderstandRequestSchema.safeParse({
+      type: 'audioGenStream',
+      modelId: 'audiogen',
+      sourceAudio: { type: 'filePath', value: '/tmp/song.wav' }
+    }).success
+  )
+})
+
+test('audioGenUnderstandResultSchema takes plain integer codes within the input bound', (t) => {
+  t.alike(audioGenUnderstandResultSchema.parse(understandResult), understandResult)
+  t.absent(
+    audioGenUnderstandResultSchema.safeParse({
+      ...understandResult,
+      audioCodes: new Int32Array([1, 2])
+    }).success,
+    'the addon Int32Array must be normalized before it reaches the wire'
+  )
+  t.absent(
+    audioGenUnderstandResultSchema.safeParse({
+      ...understandResult,
+      audioCodes: [1.5]
+    }).success,
+    'codes are integers'
+  )
+  t.absent(
+    audioGenUnderstandResultSchema.safeParse({
+      ...understandResult,
+      audioCodes: new Array(AUDIOGEN_MAX_AUDIO_CODES + 1).fill(0)
+    }).success,
+    'recovered codes are bounded like an audioCodes input'
+  )
+})
+
+test('audioUnderstandResponseSchema streams the description and repeats it on stats', (t) => {
+  const streamed = audioUnderstandResponseSchema.parse({
+    type: 'audioUnderstand',
+    understand: understandResult
+  })
+  t.is(streamed.done, false, 'done defaults to false')
+  t.alike(streamed.understand, understandResult)
+
+  const terminal = audioUnderstandResponseSchema.parse({
+    type: 'audioUnderstand',
+    done: true,
+    stopReason: 'completed',
+    stats: { audioDurationMs: 12_500, understand: understandResult },
+    diagnostics: { selectedBackend: 'cpu', selectedDevice: 'cpu' }
+  })
+  t.alike(terminal.stats?.understand, understandResult)
+  t.ok(
+    audioUnderstandResponseSchema.safeParse({
+      type: 'audioUnderstand',
+      done: true,
+      stopReason: 'cancelled'
+    }).success
+  )
+  t.absent(
+    audioUnderstandResponseSchema.safeParse({
+      type: 'audioUnderstand',
+      done: true,
+      data: 'AAECAw=='
+    }).success,
+    'the reverse pipeline never carries PCM'
   )
 })

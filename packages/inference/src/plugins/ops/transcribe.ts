@@ -17,17 +17,19 @@ import { TranscriptionFailedError } from '@/errors/index'
 import type { TranscribeResponse } from '@/utils/addon-responses'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
+import { buildAsrBackendDiagnostics } from '@/utils/asr-diagnostics'
+import type { InferenceBackendDiagnostics } from '@/schemas/index'
 import {
   assertMetadataSupported,
   toTranscribeSegment,
-  type WhisperAddonSegment
+  type AsrAddonSegment
 } from '@/utils/transcribe-metadata'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { isEndOfTurnEvent, isVadEvent, toEndOfTurnEvent, toVadStateEvent } from '@/utils/asr-events'
 import { buildWhisperReloadConfig } from '@/plugins/builtin/asr-ggml/config'
 
-export { assertMetadataSupported, toTranscribeSegment, type WhisperAddonSegment }
+export { assertMetadataSupported, toTranscribeSegment, type AsrAddonSegment }
 
 type StreamingSegment = ASRGgml.TranscriptionSegment
 type StreamingModelOutput = ASRGgml.ASRStreamOutput
@@ -103,7 +105,11 @@ async function restorePrompt(modelId: string, originalConfig: WhisperConfig): Pr
   await model.reload(buildWhisperReloadConfig({ ...originalConfig, initial_prompt: '' }))
 }
 
-type TranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats }
+type TranscribeReturn = {
+  modelExecutionMs: number
+  stats?: TranscribeStats
+  diagnostics?: InferenceBackendDiagnostics
+}
 
 function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats {
   return {
@@ -151,6 +157,29 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
     }),
     ...(stats?.gpuMemFreeMb !== undefined && {
       gpuMemFreeMb: stats.gpuMemFreeMb
+    }),
+    ...(stats?.totalTime !== undefined && { totalTime: stats.totalTime }),
+    ...(stats?.totalWallMs !== undefined && { totalWallMs: stats.totalWallMs }),
+    ...(stats?.totalSamples !== undefined && { totalSamples: stats.totalSamples }),
+    ...(stats?.processCalls !== undefined && { processCalls: stats.processCalls }),
+    ...(stats?.whisperSampleMs !== undefined && {
+      whisperSampleMs: stats.whisperSampleMs
+    }),
+    ...(stats?.whisperBatchdMs !== undefined && {
+      whisperBatchdMs: stats.whisperBatchdMs
+    }),
+    ...(stats?.whisperPromptMs !== undefined && {
+      whisperPromptMs: stats.whisperPromptMs
+    }),
+    ...(stats?.totalTranscriptions !== undefined && {
+      totalTranscriptions: stats.totalTranscriptions
+    }),
+    ...(stats?.modelLoadMs !== undefined && { modelLoadMs: stats.modelLoadMs }),
+    ...(stats?.totalEncodedFrames !== undefined && {
+      totalEncodedFrames: stats.totalEncodedFrames
+    }),
+    ...(stats?.encoderOnCoreml !== undefined && {
+      encoderOnCoreml: stats.encoderOnCoreml
     })
   }
 }
@@ -226,7 +255,7 @@ export async function* transcribe(
     if (ctx.signal.aborted) break
     requestLogger.debug('Streaming Transcription Update:', output)
 
-    const chunks = (Array.isArray(output) ? output : [output]) as WhisperAddonSegment[]
+    const chunks = (Array.isArray(output) ? output : [output]) as AsrAddonSegment[]
 
     if (metadata) {
       for (const chunk of chunks) {
@@ -247,7 +276,12 @@ export async function* transcribe(
     }
   }
   const modelExecutionMs = nowMs() - modelStart
-  return buildStreamResult(modelExecutionMs, mapTranscribeStats(response.stats))
+  const mapped = mapTranscribeStats(response.stats)
+  const diagnostics = buildAsrBackendDiagnostics(mapped)
+  return {
+    ...buildStreamResult(modelExecutionMs, mapped),
+    ...(diagnostics && { diagnostics })
+  }
 }
 
 export interface TranscribeStreamOpts {
@@ -379,7 +413,12 @@ export async function* transcribeStream(
 
   await response.await()
   const modelExecutionMs = nowMs() - modelStart
-  return buildStreamResult(modelExecutionMs, mapTranscribeStats(response.stats))
+  const mapped = mapTranscribeStats(response.stats)
+  const diagnostics = buildAsrBackendDiagnostics(mapped)
+  return {
+    ...buildStreamResult(modelExecutionMs, mapped),
+    ...(diagnostics && { diagnostics })
+  }
 }
 
 function* emitSegment(

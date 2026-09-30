@@ -4,9 +4,12 @@ import type { Tool } from '@qvac/sdk'
 import {
   responseFormat,
   toolDef,
+  toolChoice,
   normalizeToolParameters,
   extractResponseFormat,
   extractGenerationParams,
+  extractToolChoice,
+  withToolChoice,
   type GenerationParams,
   type ResponseFormat
 } from '@/serve/extensions/openai/schemas/common'
@@ -22,6 +25,7 @@ export const responsesBody = z
     conversation: z.unknown().optional(),
     background: z.boolean().optional(),
     tools: z.array(toolDef).optional(),
+    tool_choice: toolChoice.optional(),
     text: z.unknown().optional(),
     response_format: responseFormat.optional(),
     temperature: z.number().optional(),
@@ -424,7 +428,10 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
   return {
     history,
     tools,
-    generationParams: extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
+    generationParams: withToolChoice(
+      extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
+      extractToolChoice(body as Record<string, unknown>, tools)
+    ),
     responseFormat: responseFmt,
     storeEnabled,
     previousResponseId,

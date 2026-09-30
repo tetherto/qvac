@@ -45,7 +45,7 @@ const FLASH_ATTN_TYPE: Record<string, number> = {
 const SPLIT_MODE: Record<string, number> = {
   none: 0,
   layer: 1,
-  row: 2
+  tensor: 3
 }
 
 function parseOptionalInt(value: string | undefined) {
@@ -167,8 +167,8 @@ function formatError(error: unknown) {
 }
 
 async function defaultFit(config: FitConfig) {
-  const { fitParams } = await import('@qvac/model-fit')
-  return fitParams(config)
+  const { fitParamsAsync } = await import('@qvac/model-fit')
+  return fitParamsAsync(config)
 }
 
 async function resolveStateDir(explicit: string | undefined) {
@@ -180,7 +180,8 @@ async function resolveStateDir(explicit: string | undefined) {
 /**
  * In-process llama.cpp fit for hosts with no disposable child (Android/iOS).
  *
- * `fitParams` is a blocking native call. A leftover `.running` marker means a
+ * The fit runs on a model-fit worker thread, so the JS loop stays free, but a
+ * thread is not a process boundary: a leftover `.running` marker means a
  * previous call aborted the process. That is converted to `.crashed` so later
  * launches skip native for the same path+config instead of retrying the abort.
  */

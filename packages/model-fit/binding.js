@@ -10,4 +10,4 @@ require('@qvac/fabric')
 
 const addon = require.addon()
 
-module.exports = { paramsFit: addon.paramsFit }
+module.exports = { paramsFit: addon.paramsFit, paramsFitAsync: addon.paramsFitAsync }

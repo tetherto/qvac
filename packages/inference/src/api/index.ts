@@ -24,6 +24,7 @@ export {
   ragCloseWorkspace,
   ragDeleteWorkspace
 } from '@/api/rag'
+export { createVectorIndex, loadVectorIndex, type VectorIndex } from '@/api/vector-index'
 export { textToSpeech, textToSpeechStream } from '@/api/text-to-speech'
 export { getModelInfo } from '@/api/get-model-info'
 export { getLoadedModelInfo } from '@/api/get-loaded-model-info'
@@ -32,7 +33,7 @@ export { assessModelFit } from '@/api/assess-model-fit'
 export { ocr } from '@/api/ocr'
 export { invokePlugin, invokePluginStream } from '@/api/invoke-plugin'
 export { diffusion, type DiffusionProgressTick } from '@/api/diffusion'
-export { audioGen } from '@/api/audio-gen'
+export { audioGen, audioEdit, audioUnderstand } from '@/api/audio-gen'
 export { classify } from '@/api/classify'
 export { video, type VideoProgressTick } from '@/api/video'
 export { upscale } from '@/api/upscale'

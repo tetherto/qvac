@@ -1,22 +1,12 @@
 {
   "dependencies": [
-    "concurrentqueue",
-    "nlohmann-json",
     {
       "name": "opencl",
       "platform": "android"
     },
     "picojson",
-    {
-      "name": "qvac-fabric",
-      "features": [
-        {
-          "name": "cuda-backend",
-          "platform": "linux | (windows & x64)"
-        }
-      ],
-      "version>=": "10549.1.0#1"
-    },
+    "nlohmann-json",
+    "concurrentqueue",
     {
       "name": "qvac-lib-inference-addon-cpp",
       "version>=": "1.4.0"
@@ -27,33 +17,10 @@
     }
   ],
   "features": {
-    "cuda-jetson": {
-      "description": "Build the CUDA 12 Jetson backend module",
-      "dependencies": [
-        {
-          "name": "qvac-fabric",
-          "features": [
-            "cuda-jetson-backend"
-          ],
-          "platform": "linux & arm64"
-        }
-      ]
-    },
     "tests": {
       "description": "Build tests",
       "dependencies": [
         "gtest"
-      ]
-    },
-    "vk-profiling": {
-      "description": "Force vk performance logging in qvac-fabric",
-      "dependencies": [
-        {
-          "name": "qvac-fabric",
-          "features": [
-            "force-profiler"
-          ]
-        }
       ]
     }
   }

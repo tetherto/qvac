@@ -649,3 +649,445 @@ test('every mobile dispatch input advertises the -mono GPR name', () => {
     `GPR dev builds are published as @tetherto/<addon>-mono:\n${offenders.join('\n')}`,
   )
 })
+
+// ── prebuild_run_id ─────────────────────────────────────────────────────────
+// Resolution logic is unit-tested in
+// .github/actions/run-mobile-integration-tests/setup/test/resolve-prebuild-run.test.mjs.
+// Asserted HERE is the wiring: the route is only as good as the weakest workflow
+// that forgot a piece of it, and a source not gated on the run id would shadow
+// it silently.
+
+// Without the gate a run id could resolve and then be overwritten, or fall
+// through to `npm pack @qvac/<addon>@latest` and go green against the release.
+test('every other prebuild source is gated off when a run id is set', () => {
+  const source = read(ACTION)
+  const gated = [
+    'Download Android prebuilds (from artifacts)',
+    'Download iOS prebuilds (from artifacts)',
+    'Download merged prebuilds artifact (fallback when per-matrix artifacts absent)',
+    STEP,
+  ]
+
+  for (const stepName of gated) {
+    const index = source.indexOf(`name: ${stepName}`)
+    assert.notEqual(index, -1, `step "${stepName}" exists`)
+    const condition = source.slice(index).match(/^\s*if:\s*(.+)$/m)?.[1] ?? ''
+    assert.ok(
+      condition.includes("inputs.prebuild-run-id == ''"),
+      `"${stepName}" must be skipped while prebuild-run-id is set, got: ${condition}`,
+    )
+  }
+})
+
+test('the run-id steps are the first prebuild source and fail closed', () => {
+  const source = read(ACTION)
+
+  const resolveIndex = source.indexOf('name: Resolve prebuilds from a run id')
+  const downloadIndex = source.indexOf("name: Download prebuilds (from the resolved run)")
+  const verifyIndex = source.indexOf("name: Verify the resolved run's prebuilds cover this platform")
+  const androidIndex = source.indexOf('name: Download Android prebuilds (from artifacts)')
+
+  assert.ok(resolveIndex !== -1 && downloadIndex !== -1 && verifyIndex !== -1)
+  // Resolution happens before anything is downloaded, so a bad run id costs
+  // nothing, and before the artifact-first steps so it cannot be shadowed.
+  assert.ok(
+    resolveIndex < downloadIndex && downloadIndex < verifyIndex && verifyIndex < androidIndex,
+    'order must be resolve -> download -> verify -> (gated) artifact-first steps',
+  )
+
+  // continue-on-error on the cross-run download would turn a missing artifact
+  // back into an @latest run. The other artifact downloads tolerate absence by
+  // design; this one must not.
+  const downloadStep = source.slice(downloadIndex, androidIndex)
+  assert.doesNotMatch(
+    downloadStep,
+    /continue-on-error/,
+    'a named run id is an explicit instruction — a failed download must fail the run',
+  )
+  assert.match(downloadStep, /run-id: \$\{\{ steps\.prebuild_run\.outputs\.source_run_id \}\}/)
+  // By ID, not name: a re-run leaves the earlier attempt's artifacts under the
+  // same run id, so a run can hold two live `prebuilds-<pkg>` rows. Selecting
+  // by name would let this step extract a different one than the resolver
+  // validated and printed provenance for.
+  assert.match(downloadStep, /artifact-ids: \$\{\{ steps\.prebuild_run\.outputs\.artifact_id \}\}/)
+  assert.doesNotMatch(
+    downloadStep,
+    /^\s+name: /m,
+    'selecting by name would reintroduce the ambiguity artifact_id removes',
+  )
+})
+
+// Every mobile workflow sparse-checks out only
+// .github/actions/run-mobile-integration-tests, so a move would leave the step
+// calling a file that is not on disk — visible only at dispatch time.
+test('the resolver is reachable from the callers own sparse checkout', () => {
+  const resolver = '.github/actions/run-mobile-integration-tests/setup/resolve-prebuild-run.mjs'
+  assert.ok(existsSync(join(root, resolver)), `${resolver} must exist`)
+  assert.match(
+    read(ACTION),
+    /node "\$ACTION_PATH\/resolve-prebuild-run\.mjs"/,
+    'the step must invoke the resolver through github.action_path',
+  )
+
+  const workflows = spawnSync(
+    'git',
+    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
+    { cwd: root, encoding: 'utf8' },
+  ).stdout.trim().split('\n').filter(Boolean)
+
+  for (const relativePath of workflows) {
+    const source = read(relativePath)
+    if (!source.includes('prebuild-run-id:')) continue
+    assert.match(
+      source,
+      /sparse-checkout: \|\n\s+\.github\/actions\/run-mobile-integration-tests/,
+      `${relativePath} must sparse-check out the directory holding the resolver`,
+    )
+  }
+})
+
+// Two addons deliberately have no run-id route. Pinning them means a third
+// exclusion has to be a decision, not a silent omission.
+const RUN_ID_EXEMPT = {
+  // Native code comes transitively from bare-ffmpeg, so setup skips every
+  // prebuild step (skip-prebuilds: 'true') and has nothing to install.
+  'decoder-audio': /skip-prebuilds:\s*'true'/,
+  // Compiles its own prebuilds in prebuild-android / prebuild-ios jobs in the
+  // SAME run from the dispatched ref, so a dispatch already tests the branch's
+  // native code and the gap this route closes does not exist.
+  'inference-addon-cpp': /^\s{2}prebuild-android:$/m,
+}
+
+test('every mobile dispatch offers the run-id route, or is a pinned exemption', () => {
+  const workflows = spawnSync(
+    'git',
+    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
+    { cwd: root, encoding: 'utf8' },
+  ).stdout.trim().split('\n').filter(Boolean)
+
+  assert.ok(workflows.length >= 13, `found ${workflows.length} mobile workflows`)
+
+  const missing = []
+  for (const relativePath of workflows) {
+    const slug = relativePath.replace(/.*integration-mobile-test-|\.yml$/g, '')
+    const source = read(relativePath)
+
+    if (slug in RUN_ID_EXEMPT) {
+      assert.match(
+        source,
+        RUN_ID_EXEMPT[slug],
+        `${slug} is exempt from the run-id route for a reason that no longer holds`,
+      )
+      assert.ok(
+        !source.includes('prebuild_run_id'),
+        `${slug} is listed as exempt but now exposes prebuild_run_id — drop the exemption`,
+      )
+      continue
+    }
+
+    const problems = []
+    if (!/^      prebuild_run_id:$/m.test(source)) problems.push('no prebuild_run_id input')
+    if (!source.includes('prebuild-run-id: ${{ inputs.prebuild_run_id }}')) {
+      problems.push('input not wired into setup')
+    }
+    // Without actions: read the lookup 403s and the download fails — after the
+    // dispatcher has already waited for a build.
+    if (!/^      actions: read$/m.test(source)) problems.push('no actions: read')
+    if (problems.length > 0) missing.push(`${slug}: ${problems.join(', ')}`)
+  }
+
+  assert.deepEqual(missing, [], `incomplete prebuild_run_id wiring:\n${missing.join('\n')}`)
+})
+
+test('ggml-rpc-server skips same-run prebuilds for a pinned run and verifies the source', () => {
+  const source = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
+  assert.match(source, /prebuild-manual:\n\s+if: inputs\.platform != '' && inputs\.prebuild_run_id == ''/)
+  assert.match(source, /prebuild-run-id: \$\{\{ inputs\.prebuild_run_id \}\}/)
+  assert.match(source, /RESOLVED: \$\{\{ steps\.setup\.outputs\.prebuild-source-run-id \}\}/)
+})
+
+// The dispatch inputs are what people copy from, and the action rejects the
+// combination, so the descriptions must say so.
+test('the run-id input documents its precedence and the mutual exclusion', () => {
+  const workflows = spawnSync(
+    'git',
+    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
+    { cwd: root, encoding: 'utf8' },
+  ).stdout.trim().split('\n').filter(Boolean)
+
+  for (const relativePath of workflows) {
+    const source = read(relativePath)
+    const match = source.match(/^      prebuild_run_id:\n        description: "([^"]*)"/m)
+    if (!match) continue
+
+    const description = match[1]
+    assert.match(description, /Mutually exclusive/, `${relativePath} must state the exclusion`)
+    assert.match(description, /precedence over/, `${relativePath} must state the precedence`)
+    assert.match(
+      description,
+      /fails the run/,
+      `${relativePath} must say a bad run id fails rather than falling back`,
+    )
+  }
+})
+
+test('the documented route is the one docs/ci/MOBILE-ON-DEMAND.md tells people to use', () => {
+  const docs = read('docs/ci/MOBILE-ON-DEMAND.md')
+  assert.match(docs, /prebuild_run_id/, 'the docs must document the input')
+  const rpcDispatch = docs.split('### ggml-rpc-server dispatch\n')[1]?.split('### Quick start')[0]
+  assert.ok(rpcDispatch, 'the ggml-rpc-server dispatch example must exist')
+  assert.match(rpcDispatch, /--ref main -f ref="refs\/pull\/\$PR\/head"/,
+    'fork PRs must dispatch an upstream workflow that checks out the PR head')
+  // The GPR pin stays documented for the cross-branch / published cases.
+  assert.match(docs, /@tetherto\/<addon>-mono/)
+})
+
+// The generic "Verify and prepare prebuilds" step only asserts prebuilds/ is
+// non-empty, which a bundle missing this platform passes. Run the real shell.
+const VERIFY_STEP = "Verify the resolved run's prebuilds cover this platform"
+const verifyScript = extractRunBlock(ACTION, VERIFY_STEP)
+
+assert.ok(
+  !verifyScript.includes('${{'),
+  'the verify step body must stay free of GitHub expressions so it is testable as plain shell',
+)
+
+function runVerify({ dirs = ['android-arm64'], expected = 'android-arm64', platform = 'Android' } = {}) {
+  const directory = mkdtempSync(join(tmpdir(), 'qvac-prebuild-run-verify-'))
+
+  for (const dir of dirs) {
+    mkdirSync(join(directory, 'prebuilds', dir), { recursive: true })
+    writeFileSync(join(directory, 'prebuilds', dir, 'addon.bare'), 'mock')
+  }
+
+  const result = spawnSync(
+    'bash',
+    ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', verifyScript],
+    {
+      cwd: directory,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EXPECTED_DIRS: expected,
+        SOURCE_RUN_ID: '33179656677',
+        SOURCE_HEAD_SHA: 'deadbeefcafe',
+        SOURCE_ARTIFACT: 'prebuilds-llm-llamacpp',
+        PLATFORM: platform,
+      },
+    },
+  )
+
+  rmSync(directory, { recursive: true, force: true })
+  return { status: result.status, output: `${result.stdout}${result.stderr}` }
+}
+
+test('the resolved bundle passes when it carries this platform, and says where it came from', () => {
+  const run = runVerify({ dirs: ['android-arm64', 'ios-arm64'] })
+
+  assert.equal(run.status, 0, run.output)
+  // The run id and head SHA land next to the file list, so the log shows what
+  // was installed without cross-referencing an earlier step.
+  assert.match(run.output, /run 33179656677/)
+  assert.match(run.output, /deadbeefcafe/)
+})
+
+test('a bundle missing this platform fails instead of building around a gap', () => {
+  // The exact shape of a prebuild run whose iOS leg was cancelled.
+  const run = runVerify({ dirs: ['android-arm64'], expected: 'ios-arm64', platform: 'iOS' })
+
+  assert.notEqual(run.status, 0, run.output)
+  assert.match(run.output, /::error::/)
+  assert.match(run.output, /cannot build for iOS/)
+  // Naming what IS there is what turns this into a one-look diagnosis.
+  assert.match(run.output, /android-arm64/)
+})
+
+test('an empty platform dir counts as missing, not present', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'qvac-prebuild-run-verify-'))
+  mkdirSync(join(directory, 'prebuilds/android-arm64'), { recursive: true })
+
+  const result = spawnSync(
+    'bash',
+    ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', verifyScript],
+    {
+      cwd: directory,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EXPECTED_DIRS: 'android-arm64',
+        SOURCE_RUN_ID: '1',
+        SOURCE_HEAD_SHA: 'abc',
+        SOURCE_ARTIFACT: 'prebuilds-llm-llamacpp',
+        PLATFORM: 'Android',
+      },
+    },
+  )
+
+  rmSync(directory, { recursive: true, force: true })
+  assert.notEqual(result.status, 0, `${result.stdout}${result.stderr}`)
+})
+
+// download-artifact overwrites the files it carries and leaves the rest, so a
+// committed prebuilds/ dir or a leftover from an earlier job on the same
+// self-hosted runner could survive and be linked into the app.
+test('the run-id path clears prebuilds/ so nothing can shadow the resolved run', () => {
+  const source = read(ACTION)
+  const resolveStep = source.slice(
+    source.indexOf('name: Resolve prebuilds from a run id'),
+    source.indexOf('name: Download prebuilds (from the resolved run)'),
+  )
+
+  assert.match(
+    resolveStep,
+    /rm -rf "addon\/\$ADDON_WORKDIR\/prebuilds"/,
+    'the resolve step must clear prebuilds/ before the artifact is extracted',
+  )
+  // Ordering matters: clearing before a failed resolve would delete the tree
+  // for a run that is about to be rejected anyway, and `-e` makes the node
+  // invocation the gate.
+  assert.ok(
+    resolveStep.indexOf('resolve-prebuild-run.mjs') < resolveStep.indexOf('rm -rf'),
+    'the clear must happen only after resolution succeeds',
+  )
+})
+
+// The repo is fork-first, so a fork-built source run is the normal case and must
+// not be refused — what matters is that the dispatcher can see it. Behaviour
+// lives in the resolver's unit tests; this pins the surfacing.
+test('the resolver reports which repository built the prebuilds', () => {
+  const resolver = read(
+    '.github/actions/run-mobile-integration-tests/setup/resolve-prebuild-run.mjs',
+  )
+
+  assert.match(
+    resolver,
+    /export function sourceRepositoryWarning/,
+    'the check must stay a named, separately testable function',
+  )
+  // The provenance line itself must carry the head repository, so the fact is
+  // present even when no warning fires.
+  const provenance = resolver.slice(
+    resolver.indexOf('export function formatProvenance'),
+    resolver.indexOf('export function conclusionWarning'),
+  )
+  assert.match(
+    provenance,
+    /head_repository/,
+    'the provenance line must name the repository the binaries were built from',
+  )
+  // Fork-built runs are the documented norm here, so this must not hard-fail.
+  assert.ok(
+    !/throw new ResolveError\(`Refusing prebuilds/.test(resolver),
+    'a fork-built run must warn, not be refused — this repo is fork-first',
+  )
+})
+
+// audiogen-ggml pins its composite actions to the DEFAULT BRANCH as a
+// supply-chain guard, so it runs main's setup action rather than the PR's. An
+// older copy has no `prebuild-run-id` input, and GitHub only WARNS on an unknown
+// input — observed live: the run logged "Unexpected input(s) 'prebuild-run-id'"
+// and then "downloading @qvac/audiogen-ggml@latest from npm", i.e. it silently
+// tested the published release. That is the failure this route exists to remove,
+// so the workflow must assert the input was honoured.
+test('a workflow pinning the composite to the default branch asserts the run id took effect', () => {
+  const workflows = spawnSync(
+    'git',
+    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
+    { cwd: root, encoding: 'utf8' },
+  ).stdout.trim().split('\n').filter(Boolean)
+
+  const offenders = []
+  for (const relativePath of workflows) {
+    const source = read(relativePath)
+    if (!source.includes('prebuild-run-id:')) continue
+
+    // Does this workflow load the setup composite from the default branch?
+    const pinned = /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/.test(source)
+    if (!pinned) continue
+
+    const asserts =
+      source.includes('steps.setup.outputs.prebuild-source-run-id') &&
+      // always(): when the input is ignored, setup fails first, so a plain
+      // conditional would skip the step that explains why.
+      /if: always\(\) && inputs\.prebuild_run_id != ''/.test(source)
+    if (!asserts) offenders.push(relativePath)
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'a default-branch-pinned workflow silently ignores prebuild-run-id until the action is on main,\n' +
+      'so it must assert steps.setup.outputs.prebuild-source-run-id matches the request:\n' +
+      offenders.join('\n'),
+  )
+})
+
+// The assertion above is only possible because the composite exposes what it
+// actually used.
+test('the setup action exposes the run id it installed from', () => {
+  const action = read(ACTION)
+  assert.match(action, /^outputs:$/m, 'the action must declare outputs')
+  assert.match(
+    action,
+    /prebuild-source-run-id:[\s\S]*?value: \$\{\{ steps\.prebuild_run\.outputs\.source_run_id \}\}/,
+    'prebuild-source-run-id must surface the resolver output',
+  )
+})
+
+// Appium's pull_file returns `value` as a base64 string on success and as an
+// error object on failure. Handing the object to Buffer.from threw "The first
+// argument must be of type string...", which replaced Appium's real reason —
+// observed on every Android Device Farm run, pass or fail, while iOS logged
+// "flush ok". The app-side log is the only place a failing runner says why it
+// failed, so masking that error makes every Android failure untriageable.
+test('the bare-log flush reports Appium\'s real error, not a type error', () => {
+  const template = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/wdio.template.js',
+  )
+  const flush = template.slice(
+    template.indexOf('global.flushBareLog'),
+    template.indexOf('global.isAndroid'),
+  )
+
+  assert.match(
+    flush,
+    /typeof b64 !== 'string'/,
+    'the payload must be type-checked before Buffer.from',
+  )
+  assert.match(
+    flush,
+    /pull_file returned no base64 payload/,
+    'the thrown message must name the real failure',
+  )
+  // The guard has to come first, or Buffer.from still throws the type error.
+  assert.ok(
+    flush.indexOf("typeof b64 !== 'string'") < flush.indexOf("Buffer.from(b64"),
+    'the type check must precede the Buffer.from it protects',
+  )
+})
+
+// iOS reads the app-side log fine. Android cannot with the Device Farm artifact:
+// adb hits "Permission denied" on the app's private data dir and run-as is
+// refused with "package not debuggable" on a release-signed APK — both observed
+// on real runs. So Android tries only the world-readable external path and
+// otherwise states plainly that the log is unavailable, rather than burning
+// several doomed pulls per run and reporting a confusing error.
+test('the bare-log pull is platform-appropriate and explains the Android gap', () => {
+  const template = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/wdio.template.js',
+  )
+
+  assert.match(template, /global\.bareLogCandidates = function \(isAndroid, bundleId\)/)
+  // iOS keeps the container form that works.
+  assert.match(template, /return \['@' \+ bundleId \+ ':documents\/bare_console\.log'\]/)
+  // Android: exactly one candidate, the adb-readable external path.
+  assert.match(template, /return \['\/sdcard\/Android\/data\/' \+ bundleId \+ '\/files\/bare_console\.log'\]/)
+  // No run-as: it cannot work on a release-signed APK.
+  assert.doesNotMatch(template, /command: 'run-as'/)
+  // The Android branch must say why, and point at where the output actually is:
+  // the bare runtime logs to logcat, so logcat_full.txt carries the reason.
+  assert.match(template, /no bare_console\.log on Android/)
+  // Match on facts, not on how the comment happens to wrap.
+  assert.match(template, /release-signed APK/)
+  assert.match(template, /logcat_full\.txt under the `bare` tag/)
+})

@@ -8,7 +8,7 @@ schemaType: HowTo
 
 Video generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"` with `modelConfig.mode: "video"`. Then call `video()` with a `mode` and `prompt`.
 
-It supports two modes — `txt2vid` (from a text prompt) and `img2vid` (animate a still image) — across the WAN 2.1, Wan 2.2, and LTX-2 model families. `video()` returns `{ progressStream, outputs, stats }`: `outputs` resolves to the generated video(s) as `Uint8Array` buffers (AVI), `progressStream` streams step-by-step progress, and `stats` carries per-run metadata.
+It supports two modes — `txt2vid` (from a text prompt) and `img2vid` (animate a still image) — across the WAN 2.1, Wan 2.2, LTX-2, and MiniMax-H3 model families. `video()` returns `{ progressStream, outputs, stats }`: `outputs` resolves to the generated video(s) as `Uint8Array` buffers (AVI), `progressStream` streams step-by-step progress, and `stats` carries per-run metadata.
 
 <Callout type="warn">
 Video generation is hardware-intensive: it requires at least **16 GB of video memory** or **20 GB of unified memory**.
@@ -41,7 +41,7 @@ Generates a video from a `prompt` in one of two modes:
 
 Common to all families:
 
-- `video_frames` — number of frames to generate. Must satisfy `4k + 1` (e.g. `17`, `33`, `49`, `81`).
+- `video_frames` — number of frames to generate. Wan models use `4k + 1` (e.g. `17`, `33`, `49`, `81`). LTX-2 uses `8k + 1` (e.g. `25`, `121`, `241`). MiniMax-H3 uses `17k + 5` (e.g. `5`, `22`, `39`, `56`, `73`, `90`, `107`, `124`).
 - `fps` — output frame rate.
 - `cfg_scale` — classifier-free guidance strength. Higher values follow the prompt more closely.
 - `flow_shift` — flow-matching shift. For Wan 2.1 T2V, use `3.0`; higher values can produce near-static frames.
@@ -80,19 +80,21 @@ Size and frame constraints:
 - On **LTX-2** and **Wan 2.2 TI2V-5B**, `width` and `height` must be multiples of **32**.
 - On **LTX-2**, `video_frames` must satisfy `8*k + 1` (e.g. `25`, `121`, `241`), with a maximum of **257**.
 - On **LTX-2** with `reference_images`, the minimum `video_frames` rises to **121**.
+- On **MiniMax-H3**, `width` and `height` must be multiples of **32**, `video_frames` must satisfy `17*k + 5`, and `fps` must be **24**. H3 produces synchronized audio at **32 kHz**.
 </Callout>
 
 The returned `stats` includes `hasAudio` (`true` when the output AVI carries a muxed audio track) and `audioSampleRate` (Hz of that track, `0` when there is no audio).
 
 ## Models
 
-Three model families are supported — **WAN 2.1**, **Wan 2.2**, and **LTX-2** — and the file layout is auto-selected at load time from the model sources you provide:
+Four model families are supported — **WAN 2.1**, **Wan 2.2**, **LTX-2**, and **MiniMax-H3** — and the file layout is auto-selected at load time from the model sources you provide:
 
 - **WAN 2.1 T2V** (txt2vid): split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + VAE (via `vaeModelSrc`). Available constants: `WAN2_1_T2V_1_3B_FP16`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
 - **WAN 2.1 I2V** (img2vid): same split layout as T2V, plus an OpenCLIP ViT-H/14 vision encoder (via `clipVisionModelSrc`). Available constants: `WAN2_1_I2V_14B_Q4_K_M`, `CLIP_VISION_H`, `UMT5_XXL_FP16`, `WAN_2_1_COMFYUI_REPACKAGED_VAE`.
 - **Wan 2.2 TI2V-5B** (txt2vid, single-expert): split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + Wan 2.2 VAE (via `vaeModelSrc`). The Wan 2.2 VAE's 16× spatial compression is what gives TI2V its 32-pixel grid; the Wan 2.1 VAE is not interchangeable. The UMT5-XXL text encoder is byte-identical to the Wan 2.1 repackage, so both generations share the one registry entry. Available constants: `WAN2_2_TI2V_5B_Q5_K_S`, `UMT5_XXL_FP16`, `WAN_2_2_COMFYUI_REPACKAGED_VAE`.
 - **Wan 2.2 A14B** (txt2vid, dual-expert / mixture-of-experts): split layout — low-noise diffusion model + high-noise diffusion model (via `highNoiseDiffusionModelSrc`, whose presence selects this layout) + UMT5-XXL text encoder + Wan 2.2 VAE. The A14B-only `high_noise_*` and `moe_boundary` request fields route to the high-noise expert and are rejected on single-expert layouts.
 - **LTX-2** (txt2vid and img2vid): split layout — diffusion model + Gemma text encoder (via `llmModelSrc`) + video VAE (via `vaeModelSrc`) + text-embedding connectors (via `embeddingsConnectorsModelSrc`, whose presence selects this layout), plus an optional audio VAE (via `audioVaeModelSrc`) for the synchronized 48 kHz audio track. Its img2vid path needs no CLIP-vision encoder.
+- **MiniMax-H3** (txt2vid): split layout — diffusion model + Qwen3-VL text encoder (via `llmModelSrc`) + video VAE (via `vaeModelSrc`) + audio VAE (via `audioVaeModelSrc`). H3 uses a 32-pixel spatial grid, `17*k + 5` frames at 24 FPS, and produces synchronized 32 kHz audio. It does not support `img2vid`, Wan's T5 encoder, or CLIP vision encoders.
 
 <Callout type="warn">
 LTX-2 is large (~21B) — budget at least **20 GB** of video / unified memory.
@@ -229,6 +231,28 @@ The following script conditions LTX-2 on a composite reference sheet so the gene
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-ic-lora-ltx.ts title="diffusion-ic-lora-ltx.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Text-to-video with audio (MiniMax-H3)
+
+The following script loads MiniMax-H3 with its split layout (diffusion model + Qwen3-VL text encoder + video VAE + audio VAE) and generates a clip with a synchronized 32 kHz audio track. It uses the H3 constraints (dimensions in multiples of 32, `17*k + 5` frames, 24 FPS) and leaves `offload_to_cpu` on so the run fits on a single GPU:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid-minimax-h3.js title="diffusion-txt2vid-minimax-h3.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid-minimax-h3.ts title="diffusion-txt2vid-minimax-h3.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>

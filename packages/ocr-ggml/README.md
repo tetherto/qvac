@@ -1,6 +1,8 @@
 # @qvac/ocr-ggml
 
 GGML-backed OCR addon for [QVAC](https://github.com/tetherto/qvac).
+
+EasyOCR model loading rejects detector output shapes, recognizer class counts, malformed prediction bias vectors, and convolution bias sizes that do not match the expected tensors.
 Provides two inference pipelines on **`ggml` / `.gguf`** — no Python, no
 PyTorch, and no ONNX Runtime at runtime:
 
@@ -147,8 +149,9 @@ bare examples/backend-device.js --backend metal
 | `params.lowConfidenceThreshold` | `number` | | `0.4` | retry threshold (`easyocr` only) |
 | `params.recognizerBatchSize` | `number` | | `32` | recognizer batch size (`easyocr` only) |
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
-| `params.backendsDir` | `string` | | `<package>/prebuilds` | directory holding `libggml-*.so` backend shared libs |
+| `params.backendsDir` | `string` | | fabric backends root | directory holding `libqvac-ggml-*.so` backend shared libs. On desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/` |
 | `params.backendDevice` | `'cpu'` \| `'vulkan'` \| `'metal'` \| `'opencl'` | | `'cpu'` | ggml backend device. `'vulkan'` (Linux/Windows/Android), `'metal'` (Apple) and `'opencl'` (Android/Adreno) opt in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan--metal--opencl) |
+| `params.main-gpu` / `params.main_gpu` | `number` \| `string` | | _prefer dedicated_ | Raw ggml registry index or strict GPU class; requires GPU `backendDevice`. See below. |
 | `params.gpuDevice` | `number` | | _prefer discrete_ | 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`/`'opencl'`; out-of-range → CPU fallback — see [Selecting a specific GPU](#selecting-a-specific-gpu-gpudevice) |
 | `opts.stats` | `boolean` | | `false` | emit timing stats on `finish` |
 | `logger` | `Object` | | `null` | optional `{ info, warn, error, debug }` — receives C++ log lines |
@@ -231,7 +234,7 @@ Behaviour and expectations:
   `backendIsGpu` stat). It never silently does the wrong thing.
 - **Required backend libs.** Vulkan execution needs the `libggml-vulkan`
   backend shared library (`libggml-vulkan.so` / `.dll` / `.dylib`) present in
-  `backendsDir` (default `<package>/prebuilds/<target>/`), plus a working
+  `backendsDir` (on desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/<target>/`), plus a working
   Vulkan driver/ICD and a Vulkan-capable GPU on the host. **OpenCL** likewise
   needs the `libggml-opencl` backend shared library plus a working OpenCL
   runtime (`libOpenCL.so`); it is built primarily for **Android** (the `opencl`
@@ -277,6 +280,26 @@ Behaviour and expectations:
   the `clinical_chemistry` page drops from ~11.9 s to ~2.7 s warm GPU end-to-end
   with identical output. Other GPUs (Adreno OpenCL, Apple Metal, NVIDIA/Intel
   Vulkan) keep full-GPU detection.
+
+### Shared GPU selection (`main-gpu`)
+
+With a GPU `backendDevice`, set `'main-gpu': N` (or `main_gpu: N`) to select
+that **raw ggml registry index before backend filtering**. For example, with
+`[ROCm0, Vulkan0]`, `'main-gpu': 0` and `backendDevice: 'vulkan'` falls back to
+CPU; it never renumbers Vulkan0 to index 0. An in-range CPU, unsupported,
+or safety-excluded target also falls back to CPU. An out-of-range integer
+(including negative values) emits a warning and uses normal selection.
+
+`'dedicated'` selects only a dedicated GPU; `'integrated'` selects only an
+integrated GPU. If that class is unavailable, selection falls back to CPU.
+Without a selector, GPU selection prefers dedicated devices. Adreno Vulkan
+and required OCR-op safety checks apply to all `main-gpu` requests.
+`backendDevice: 'cpu'` (the default) remains CPU, regardless of this selector.
+
+Use only one of `main-gpu`, `main_gpu`, or legacy `gpuDevice`. The new selector
+accepts signed 32-bit integer numbers or integer strings, and case-insensitive
+class strings. Null, booleans, fractions, overflow, and other strings are rejected.
+`gpuDevice` retains its existing index into the filtered backend list.
 
 ### Selecting a specific GPU (`gpuDevice`)
 
@@ -644,7 +667,7 @@ omission for v1: `--debug-png` (annotated overlay) — print boxes via
 
 | Script | Purpose |
 |---|---|
-| [`scripts/check_ggml_backends.sh`](./scripts/check_ggml_backends.sh) | Probe shipped ggml backends + BLAS/Vulkan/OpenCL paths in `prebuilds/` |
+| [`scripts/check_ggml_backends.sh`](./scripts/check_ggml_backends.sh) | Probe shipped ggml backends + BLAS/Vulkan/OpenCL paths in the installed `@qvac/fabric` runtime |
 | [`scripts/pth_to_gguf.py`](./scripts/pth_to_gguf.py) | Weight converter: EasyOCR PyTorch `.pth` → `.gguf` (optionally `Q8_0` / `Q4_K` quantized) |
 | [`scripts/convert-model.sh`](./scripts/convert-model.sh) | Wrapper around the converter (`npm run convert-model`) — venv discovery, sanity checks |
 | [`scripts/setup-venv.sh`](./scripts/setup-venv.sh) | One-time provisioning of the converter venv (`npm run setup:venv`) |

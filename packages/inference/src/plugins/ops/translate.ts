@@ -13,7 +13,7 @@ import { getLangName, detectOne } from '@qvac/langdetect-text'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/utils/addon-responses'
-import { buildNmtTranslationStats } from '@/plugins/ops/translate-stats'
+import { buildNmtTranslationStats, markNmtCountersStale } from '@/plugins/ops/translate-stats'
 import { ModelNotFoundError, ModelTypeMismatchError, TranslationFailedError } from '@/errors/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { isAddonContextOverflowError } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
@@ -197,7 +197,14 @@ export async function* translate(
     }
     // Use runBatch for batch processing
     const modelStart = nowMs()
-    const translations = await (model as unknown as TranslationNmtcpp).runBatch(text)
+    let translations: string[]
+    try {
+      translations = await (model as unknown as TranslationNmtcpp).runBatch(text)
+    } finally {
+      // The batch advanced the addon's counters and reported no stats, so the
+      // next single request has no baseline to difference against.
+      markNmtCountersStale(model)
+    }
     const modelExecutionMs = nowMs() - modelStart
 
     // Soft-cancel boundary: if `cancel({ requestId })` landed while
@@ -303,13 +310,24 @@ export async function* translate(
   }
 
   const nmtResponse = response as unknown as NmtResponse
+  // Difference the counters the moment the job ends rather than after the
+  // consumer has drained the tokens, so a peer request on the same model that
+  // ends in between cannot move the baseline first.
+  const statsAtEnd = nmtResponse.await().then(
+    () => buildNmtTranslationStats(nmtResponse.stats, model, entry.local.config),
+    () => undefined
+  )
   for await (const token of nmtResponse.iterate()) {
     if (ctx.signal.aborted) break
     yield token
   }
   const modelExecutionMs = nowMs() - modelStart
 
-  const stats = buildNmtTranslationStats(nmtResponse.stats)
+  // A soft-cancelled request drops its result; do not hold the generator open
+  // for a job that may still be running.
+  if (ctx.signal.aborted) {
+    return { modelExecutionMs }
+  }
 
-  return buildStreamResult(modelExecutionMs, stats)
+  return buildStreamResult(modelExecutionMs, await statsAtEnd)
 }

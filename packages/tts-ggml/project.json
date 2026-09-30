@@ -730,6 +730,9 @@
               "platform": "darwin",
               "arch": "x64",
               "noGpu": true,
+              "timeoutMinutes": 30,
+              "modelDownloadScript": "download-models:smoke",
+              "testScript": "test:integration:smoke",
               "benchmarkMatrixJson": [
                 {
                   "engine": "chatterbox",
@@ -1023,11 +1026,11 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/tts-ggml",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "tts-ggml",
           "testGateMode": "post-publish-integration",
+          "postIntegrationOnGpr": true,
           "slicePlatformPackages": true
         }
       }

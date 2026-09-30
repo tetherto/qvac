@@ -33,19 +33,41 @@ export interface ParakeetConfig {
      */
     streaming?: boolean;
     /**
-     * Streaming chunk cadence. Defaults to 320 ms for Nemotron and 2000 ms for
-     * existing models. Nemotron supports 80, 160, 320, 560, or 1120 ms.
+     * Streaming chunk cadence. Defaults to 320 ms for Nemotron, 560 ms for the
+     * Unified RNN-T model, and 2000 ms for existing models. Nemotron supports
+     * 80, 160, 320, 560, or 1120 ms; Unified RNN-T supports 80, 160, 560, or
+     * 1040 ms and snaps any other value down to the nearest trained chunk.
      */
     streamingChunkMs?: number;
     /** Sortformer rolling-history window in ms (default: 30000). */
     streamingHistoryMs?: number;
     /** Emit partial segments before chunk boundaries (default: true). */
     streamingEmitPartials?: boolean;
-    /** Optional ASR energy-VAD events (default: false). */
+    /**
+     * Run the energy detector on ASR streaming sessions and emit
+     * `{ type: "vad", source: "energy" }` events on each speech/silence
+     * transition (default: false). CTC, TDT, RNN-T, and Nemotron only.
+     */
     streamingEnergyVad?: boolean;
+    /** Energy-VAD speech threshold in dBFS RMS (default: -35). */
+    streamingEnergyVadThresholdDb?: number;
+    /** Energy-VAD RMS window in ms (default: 30; speech-cpp caps it at 1000). */
+    streamingEnergyVadWindowMs?: number;
+    /** Silence required before leaving the speaking state, in ms (default: 200). */
+    streamingEnergyVadHangoverMs?: number;
+    /**
+     * Sortformer streaming: emit `{ type: "vad", source: "sortformer" }`
+     * events when speech starts or stops, tagged with the dominant speaker
+     * (default: false).
+     */
+    streamingSpeakerVad?: boolean;
     /** ASR encoder left-context window in milliseconds. */
     streamingLeftContextMs?: number;
-    /** ASR encoder right-lookahead window in milliseconds. */
+    /**
+     * ASR encoder right-lookahead window in milliseconds. Unified RNN-T
+     * cache-aware streaming supports 0, 80, 160, 240, 320, 560, or 1040 ms and
+     * snaps any other value down to the nearest trained right context.
+     */
     streamingRightLookaheadMs?: number;
     /** Enable v2.1 Sortformer AOSC speaker-cache streaming (default: true). */
     streamingSpkCacheEnable?: boolean;
@@ -59,6 +81,34 @@ export interface ParakeetConfig {
     streamingChunkRightContextMs?: number;
     /** AOSC FIFO-overflow pop-out count (default: 144). */
     streamingSpkCacheUpdatePeriod?: number;
+    /**
+     * Sortformer speaker-activity threshold, 0..1, for offline and streaming
+     * diarization (default: 0.641).
+     */
+    diarizationThreshold?: number;
+    /** Shortest Sortformer segment reported, in ms (default: 510). */
+    diarizationMinSegmentMs?: number;
+    /**
+     * Run one synthetic encoder pass at load so the first request does not pay
+     * the GPU shader/kernel compile (default: false).
+     */
+    prewarm?: boolean;
+    /**
+     * Length of the prewarm pass in seconds of audio (default: 1); must be
+     * greater than 0 when `prewarm` is on.
+     */
+    prewarmAudioSeconds?: number;
+    /**
+     * Offline long-form encoder window in encoder frames: 0 = auto (default),
+     * > 0 = explicit ceiling, < 0 = always single pass (can run out of memory
+     * on long inputs).
+     */
+    longFormWindowFrames?: number;
+    /**
+     * Context each long-form window shares with its neighbours, in encoder
+     * frames: 0 = auto (default), < 0 = none.
+     */
+    longFormContextFrames?: number;
     /**
      * Directory containing dynamically-loaded ggml backend libraries. Defaults
      * to the package's own `prebuilds/` folder.
@@ -106,7 +156,7 @@ export declare class ParakeetDriver implements AsrDriver {
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;
-    _pumpStreamingAudio(audio: NormalizedAudioStream): Promise<void>;
+    _pumpStreamingAudio(audio: NormalizedAudioStream, markClosing: () => void): Promise<void>;
     _buildConfigurationParams(): ParakeetConfigurationParams;
     _createAddon(configurationParams: ParakeetConfigurationParams): ParakeetInterface;
     private _outputCallback;

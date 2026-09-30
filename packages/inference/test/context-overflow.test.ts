@@ -1,6 +1,5 @@
 import test from 'brittle'
 import {
-  isAddonPreMutationRefusal,
   isAddonContextOverflowError,
   parseContextOverflowMessage
 } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
@@ -115,61 +114,6 @@ test('isAddonContextOverflowError: message fallback is anchored to the emitted s
     isAddonContextOverflowError(Object.assign(new Error(validWording), { code: undefined })),
     true
   )
-})
-
-// Production errors arrive through the async transport as exception.what()
-// alone — no code — so message-only recognition must be exact.
-test('isAddonPreMutationRefusal: recognises the enumerated refusal forms', (t) => {
-  const wordings = [
-    'ContinuousBatchScheduler::submit: prompt of 600 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: prompt of 512 tokens leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: prefill prompt of 600 tokens exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: n_predict 480 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=2)',
-    "invalid generationParams.json_schema: [json.exception.parse_error.101] parse error at line 1, column 2: syntax error while parsing value - invalid literal; last read: 'no'",
-    'failed to initialise sampler with per-request generationParams (invalid grammar or json_schema?)',
-    '[MtmdLlm] Media buffer is empty\n',
-    '[MtmdLlm] Filename is empty\n',
-    '[MtmdLlm] Failed to load media from file: /tmp/attachment.png\n',
-    '[MtmdLlm] preparePrefill: prompt must end with text after the last media item'
-  ]
-  for (const wording of wordings) {
-    t.is(isAddonPreMutationRefusal(new Error(wording)), true, `plain (async shape): ${wording}`)
-  }
-  // A code only exists on the synchronous path: correct one accepted,
-  // any other rejected even with a valid wording.
-  t.is(
-    isAddonPreMutationRefusal(
-      Object.assign(new Error(wordings[0]!), { code: '[ LLM :: InvalidArgument ]' })
-    ),
-    true
-  )
-  t.is(
-    isAddonPreMutationRefusal(
-      Object.assign(new Error(wordings[0]!), { code: '[ LLM :: ContextOverflow ]' })
-    ),
-    false,
-    'a different status code disqualifies the wording'
-  )
-  // Strictness probes: the message is the safety boundary, so near-misses
-  // and impossible or out-of-range variants must all be rejected.
-  const rejected = [
-    'some other InvalidArgument from the scheduler',
-    `wrapped: ${wordings[0]!}`,
-    `${wordings[0]!}\npost-persistence save failed`,
-    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=0)',
-    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=-1)',
-    'ContinuousBatchScheduler::submit: n_predict 0 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: failed to add to batch (MultiRequestBatcher::AddStatus=9)',
-    'ContinuousBatchScheduler::submit: n_predict -1 + prompt 300 KV cells exceeds per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    'ContinuousBatchScheduler::submit: prefill prompt of 5 KV cells leaves no room under per-sequence cap 512 (ctxTotalTokens / n_parallel)',
-    '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4',
-    'wrapped: [MtmdLlm] Failed to load media from file: /tmp/a.png',
-    '[MtmdLlm] Failed to load media from file: /tmp/a.png\nsecond line'
-  ]
-  for (const wording of rejected) {
-    t.is(isAddonPreMutationRefusal(new Error(wording)), false, `rejected: ${wording.slice(0, 60)}`)
-  }
 })
 
 test('parseContextOverflowMessage: extracts from long-form TextLlm message', (t) => {

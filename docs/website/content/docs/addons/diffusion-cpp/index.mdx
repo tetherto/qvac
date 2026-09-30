@@ -235,10 +235,18 @@ Config values are coerced to strings internally. Generation parameters (prompt, 
 | `threads` | number | auto | Number of CPU threads for model loading and CPU ops |
 | `type` | `'f32'` \| `'f16'` \| `'q4_0'` \| `'q8_0'` \| … | auto | Override weight quantisation type |
 | `rng` | `'cpu'` \| `'cuda'` \| `'std_default'` | `'cuda'` | RNG backend (`'cuda'` = philox RNG — not GPU-specific despite the name; recommended) |
-| `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
-| `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
+| `backend` | string | auto | Graph execution backend, globally or per module (for example `cuda0` or `diffusion=vulkan0,te=cpu`) |
+| `params_backend` | string | auto | Parameter residency, including `diffusion=cpu` or `diffusion=disk`. A `disk` value disables eager loading for the whole context — see the note below |
+| `max_vram` | number \| string | `0` | VRAM budget in GiB for graph-cut execution; supports per-device values such as `cuda0=6,vulkan0=4` |
+| `stream_layers` | `true` \| `false` | `false` | Stream diffusion layers from CPU RAM when graph cutting is active and diffusion parameters are CPU-backed |
 | `flash_attn` | `true` \| `false` | `false` | Enable flash attention (reduces memory) |
 | `upscaler_tile_size` | number | `128` | ESRGAN upscaler tile size |
+
+`clip_on_cpu`, `vae_on_cpu` and `control_net_cpu` were removed and now fail the load. If the option was `false`, remove it and change nothing else — it had no effect, and there is no replacement. If it was enabled, keep the previous parameter placement with `params_backend: 'te=cpu'` in place of `clip_on_cpu` and `params_backend: 'vae=cpu'` in place of `vae_on_cpu`. To move graph execution instead, use `backend` with the same module name. `control_net_cpu` has no parameter-residency equivalent — use `backend: 'controlnet=cpu'`.
+
+<Callout type="warn">
+A `disk` value in `params_backend` turns off eager loading for the **entire** context, not just the module you name. The engine releases those weights at each phase boundary and re-reads them from the model file on every job, so the load cost is paid per generation rather than once.
+</Callout>
 
 ### 4. Create a model instance
 

@@ -14,6 +14,7 @@
 
 #include "ggml-backend.h"
 #include "ggml.h"
+#include "nmt_utils.hpp"
 // BEGIN: C-style performance-critical section
 // This unit is intentionally kept close to the original C-style,
 // low-level, performance-critical code used by the model runtime (ggml-based).
@@ -423,6 +424,8 @@ struct nmt_context_params {
   // still acts as an ordinal among matching devices, so
   // {gpu_backend="vulkan", gpu_device=1} picks the second Vulkan adapter.
   std::string gpu_backend;
+  NmtMainGpu main_gpu;
+  bool legacy_gpu_selection = false;
   // Minimum ne[1] (batch size) for Vulkan op offloading. Vulkan's default
   // is 32, which means single-token decoder steps (ne[1]=1) stay on CPU.
   // Set to 1 to force all ops to GPU; set to 0 to offload everything.

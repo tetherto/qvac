@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+import fs = require("bare-fs");
 import path = require("bare-path");
+import fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import type { FinetuneOptions, GenerationParams } from "./index";
 
@@ -222,6 +224,22 @@ export function mapAddonEvent(
   return { type: type as string, data: rawData, error: rawError };
 }
 
+// The ggml compute backends ship next to the @qvac/fabric runtime
+// (<root>/<host>/qvac__fabric). We deliberately do not copy them into this
+// addon to avoid duplicating tens of MB per fabric consumer. On desktop,
+// @qvac/fabric/backends resolves that root in whichever package holds the
+// runtime. On mobile the package tree isn't resolvable at runtime (the worklet
+// runs from a packed bundle), so fall back to this addon's own prebuilds, where
+// the mobile packaging stages the backends. The native side appends
+// BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
+export function resolveBackendsDir(): string {
+  // fabric's resolver only checks that the platform package resolves, not that
+  // its prebuilds are on disk.
+  const fabricRoot = fabricBackends.resolveBackendsDir();
+  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
+  return path.join(__dirname, "prebuilds");
+}
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -241,7 +259,7 @@ export class LlamaInterface {
     }
 
     if (!configurationParams.config.backendsDir) {
-      configurationParams.config.backendsDir = path.join(__dirname, "prebuilds");
+      configurationParams.config.backendsDir = resolveBackendsDir();
     }
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
@@ -351,4 +369,5 @@ export class LlamaInterface {
 module.exports = {
   LlamaInterface,
   mapAddonEvent,
+  resolveBackendsDir,
 };

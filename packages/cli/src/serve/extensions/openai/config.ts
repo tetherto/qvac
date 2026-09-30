@@ -1,4 +1,5 @@
 import type { ServeConfig } from '@/serve/core/config/types'
+import type { OpenAIVoice } from '@/serve/extensions/openai/schemas/audio'
 
 export interface OpenAIServeOptions {
   audio: {
@@ -38,7 +39,7 @@ interface RawOpenAIOptions {
   }
 }
 
-const DEFAULT_SPEECH_VOICE = 'alloy'
+const DEFAULT_SPEECH_VOICE: OpenAIVoice = 'alloy'
 // OpenAI's documented limit for /v1/audio/speech `input`. Keeps memory
 // pressure bounded since we buffer the full WAV before responding.
 const DEFAULT_MAX_INPUT_CHARS = 4096

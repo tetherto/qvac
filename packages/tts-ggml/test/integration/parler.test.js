@@ -7,17 +7,17 @@
 
 const os = require('bare-os')
 const path = require('bare-path')
-const proc = require('bare-process')
 const test = require('brittle')
 
 const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
 const { ensureParlerModel } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, SKIP_PARLER_GPU_ONLY, PARLER_GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isApple = platform === 'darwin' || platform === 'ios'
-const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
 function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -39,7 +39,11 @@ test(
 
     // Deliberately NO description/voice/emotion: the engine renders the
     // models' recommended fallback caption — everything works on defaults.
-    const model = await loadParlerTTS({ parlerModelPath: download.path, seed: 42 })
+    const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
+      parlerModelPath: download.path,
+      seed: 42
+    })
     try {
       const wavPath = isMobile ? undefined : path.join(baseDir, 'test', 'output', 'parler-en.wav')
       const text = 'The parler engine speaks with a voice controlled by a text description.'
@@ -100,7 +104,11 @@ test(
       return
     }
 
-    const model = await loadParlerTTS({ parlerModelPath: download.path, voice: 'Laura' })
+    const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
+      parlerModelPath: download.path,
+      voice: 'Laura'
+    })
     try {
       const response = await model.run({
         type: 'text',
@@ -128,7 +136,7 @@ test(
 
 test(
   'Parler TTS (ggml): description matrix — conflicts throw, per-call wins, defaults work',
-  { timeout: 600000 },
+  { timeout: 600000, skip: SKIP_PARLER_GPU_ONLY },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
@@ -143,6 +151,7 @@ test(
     t.exception(
       () =>
         new TTSGgml({
+          threads: TTS_TEST_THREADS,
           engine: TTSGgml.ENGINE_PARLER,
           files: { parlerModel: download.path },
           description: 'A calm female voice.',
@@ -157,6 +166,7 @@ test(
     t.exception(
       () =>
         new TTSGgml({
+          threads: TTS_TEST_THREADS,
           engine: TTSGgml.ENGINE_SUPERTONIC,
           files: { supertonicModel: download.path },
           emotion: 'happy'
@@ -167,6 +177,7 @@ test(
     t.exception(
       () =>
         new TTSGgml({
+          threads: TTS_TEST_THREADS,
           engine: TTSGgml.ENGINE_SUPERTONIC,
           files: { supertonicModel: download.path },
           pitch: 'high'
@@ -176,9 +187,11 @@ test(
     )
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Laura',
-      seed: 42
+      seed: 42,
+      useGPU: PARLER_GPU_ONLY_USE_GPU
     })
     try {
       // Per-call description conflict (same level) rejects.
@@ -218,9 +231,11 @@ test(
 
     // Constructor-level free-text description + per-call template rejects.
     const descModel = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       description: 'A calm female voice, very clear audio.',
-      seed: 42
+      seed: 42,
+      useGPU: PARLER_GPU_ONLY_USE_GPU
     })
     try {
       await t.exception(
@@ -238,7 +253,7 @@ test(
 
 test(
   'Parler TTS (ggml): emotion flag changes the audio; per-call switch needs no reload',
-  { timeout: 600000 },
+  { timeout: 600000, skip: SKIP_PARLER_GPU_ONLY },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
@@ -248,9 +263,11 @@ test(
     }
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Laura',
-      seed: 42
+      seed: 42,
+      useGPU: PARLER_GPU_ONLY_USE_GPU
     })
     try {
       const text = 'The weather is wonderful today.'
@@ -285,7 +302,7 @@ test(
 
 test(
   'Parler TTS (ggml): fixed seed is deterministic across runs and reload',
-  { timeout: 600000 },
+  { timeout: 600000, skip: SKIP_PARLER_GPU_ONLY },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
@@ -295,10 +312,12 @@ test(
     }
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Laura',
       emotion: 'neutral',
-      seed: 42
+      seed: 42,
+      useGPU: PARLER_GPU_ONLY_USE_GPU
     })
     try {
       const text = 'Deterministic synthesis check.'
@@ -329,7 +348,7 @@ test(
 
 test(
   'Parler TTS (ggml): runStream emits per-sentence chunks with one pinned description',
-  { timeout: 600000 },
+  { timeout: 600000, skip: SKIP_PARLER_GPU_ONLY },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
@@ -340,9 +359,11 @@ test(
 
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: download.path },
       seed: 42,
+      config: { useGPU: PARLER_GPU_ONLY_USE_GPU },
       opts: { stats: true }
     })
     await model.load()
@@ -376,7 +397,7 @@ test(
 
 test(
   'Parler TTS (ggml): native streaming emits monotonic chunks equal to batch',
-  { timeout: 900000 },
+  { timeout: 900000, skip: SKIP_PARLER_GPU_ONLY },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
@@ -392,6 +413,7 @@ test(
 
     async function synth(extra) {
       const model = new TTSGgml({
+        threads: TTS_TEST_THREADS,
         engine: TTSGgml.ENGINE_PARLER,
         files: { parlerModel: download.path },
         seed: 42,
@@ -481,6 +503,7 @@ test(
     }
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Rohit',
       emotion: 'happy',
@@ -507,22 +530,24 @@ test(
 
 // Desktop quant + backend coverage: q8_0 + f16 for indic/mini, q8_0 for large.
 // Runs on the platform's GPU-if-available backend (Metal on Apple GPU runners,
-// CPU otherwise). large self-gates on RAM; any tier that isn't staged skips
-// (t.pass) so a not-yet-registered tier never fails CI. Registered per PR #3372.
-// Desktop-only: the mobile Parler surface is covered by the gpu-smoke legs.
+// CPU otherwise). mini f16 and large are the slowest tiers on CPU (roughly
+// 45-80 s per synthesis), so they run on Metal only. large self-gates on RAM; any tier that isn't
+// staged skips (t.pass) so a not-yet-registered tier never fails CI. Registered
+// per PR #3372. Desktop-only: the mobile Parler surface is covered by the
+// gpu-smoke legs.
 const PARLER_QUANT_MATRIX = [
-  { variant: 'indic', quant: 'q8_0' },
-  { variant: 'indic', quant: 'f16' },
-  { variant: 'mini', quant: 'q8_0' },
-  { variant: 'mini', quant: 'f16' },
-  { variant: 'large', quant: 'q8_0' }
+  { variant: 'indic', quant: 'q8_0', gpuOnly: false },
+  { variant: 'indic', quant: 'f16', gpuOnly: false },
+  { variant: 'mini', quant: 'q8_0', gpuOnly: false },
+  { variant: 'mini', quant: 'f16', gpuOnly: true },
+  { variant: 'large', quant: 'q8_0', gpuOnly: true }
 ]
 const LARGE_MIN_RAM_BYTES = 16 * 1024 ** 3
 
-for (const { variant, quant } of PARLER_QUANT_MATRIX) {
+for (const { variant, quant, gpuOnly } of PARLER_QUANT_MATRIX) {
   test(
     `Parler TTS (ggml): ${variant} ${quant} synthesizes 44.1 kHz audio on the target backend`,
-    { timeout: 900000, skip: isMobile },
+    { timeout: 900000, skip: isMobile || (gpuOnly && SKIP_PARLER_GPU_ONLY) },
     async (t) => {
       if (variant === 'large' && os.totalmem() < LARGE_MIN_RAM_BYTES) {
         t.pass(
@@ -542,7 +567,12 @@ for (const { variant, quant } of PARLER_QUANT_MATRIX) {
       }
 
       const useGPU = isApple && !NO_GPU
-      const model = await loadParlerTTS({ parlerModelPath: download.path, seed: 42, useGPU })
+      const model = await loadParlerTTS({
+        threads: TTS_TEST_THREADS,
+        parlerModelPath: download.path,
+        seed: 42,
+        useGPU
+      })
       try {
         const text =
           variant === 'indic'

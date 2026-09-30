@@ -17680,7 +17680,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_0_6B_F16',
+    name: 'PARAKEET_NEMOTRON_0_6B_F16',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf',
@@ -17699,7 +17699,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_0_6B_Q4_0',
+    name: 'PARAKEET_NEMOTRON_0_6B_Q4_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf',
@@ -17718,7 +17718,7 @@ export const allModels = [
     endpointCategory: 'transcription'
   } as const,
   {
-    name: 'PARAKEET_0_6B_Q8_0',
+    name: 'PARAKEET_NEMOTRON_0_6B_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf`,
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf',
@@ -19960,9 +19960,9 @@ export const PARAKEET_SORTFORMER_4SPK_V1_F16: ModelConstant<'transcription'> = a
 export const PARAKEET_UNIFIED_0_6B_F16: ModelConstant<'transcription'> = allModels[609]
 export const PARAKEET_UNIFIED_0_6B_Q4_0: ModelConstant<'transcription'> = allModels[610]
 export const PARAKEET_UNIFIED_0_6B_Q8_0: ModelConstant<'transcription'> = allModels[611]
-export const PARAKEET_0_6B_F16: ModelConstant<'transcription'> = allModels[612]
-export const PARAKEET_0_6B_Q4_0: ModelConstant<'transcription'> = allModels[613]
-export const PARAKEET_0_6B_Q8_0: ModelConstant<'transcription'> = allModels[614]
+export const PARAKEET_NEMOTRON_0_6B_F16: ModelConstant<'transcription'> = allModels[612]
+export const PARAKEET_NEMOTRON_0_6B_Q4_0: ModelConstant<'transcription'> = allModels[613]
+export const PARAKEET_NEMOTRON_0_6B_Q8_0: ModelConstant<'transcription'> = allModels[614]
 export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<'speech'> = allModels[615]
 export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<'speech'> = allModels[616]
 export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<'speech'> = allModels[617]

@@ -36,6 +36,16 @@ Requirements:
 
 - Ubuntu 22 requires [g++](https://github.com/gcc-mirror/gcc) `>= 13`.
 - Vulkan runtime `>= 1.4`: Vulkan loader + a GPU driver with Vulkan support.
+- `libatomic.so.1`: required by the Linux `rocksdb-native` prebuilds used by the SDK's storage dependencies, including for CPU-only inference. Minimal container images may not include it.
+
+On Debian or Ubuntu, install the atomic runtime with:
+
+```bash
+sudo apt update
+sudo apt install -y libatomic1
+```
+
+In a container build running as root, omit `sudo`. A missing library can prevent the worker from starting before any model loads; see [missing libatomic at startup](/troubleshooting#startup-failure-missing-libatomicso1).
 
 On desktop Linux distributions (e.g., Ubuntu Desktop), these requirements are typically satisfied out of the box.
 

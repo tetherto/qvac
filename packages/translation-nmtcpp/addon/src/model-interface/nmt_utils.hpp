@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <thread>
+#include <variant>
 
 #include <ggml-backend.h>
 
@@ -26,6 +28,10 @@ std::string sanitizePrintableAscii(const std::string& input);
 // in lock-step.
 bool nmtNameContainsCi(const char* name, const std::string& needleLower);
 
+// Empty means automatic selection; numbers address the unfiltered ggml
+// registry.
+using NmtMainGpu = std::variant<std::monostate, int64_t, std::string>;
+
 struct NmtBackendInterface {
   size_t (*deviceCount)();
   ggml_backend_dev_t (*deviceGet)(size_t index);
@@ -42,6 +48,10 @@ struct NmtBackendInterface {
 // agree — repeated drift between the two functions has been a maintenance
 // hazard (see QVAC-17790 round-8 R8-D1). gpuDevice is an ordinal within the
 // eligible family inventory, which lists dedicated GPUs before integrated ones.
+// mainGpu overrides legacy selectors and addresses a raw registry index or GPU
+// class. legacyGpuSelection preserves backend-first ordering for explicitly
+// supplied legacy ordinals; automatic selection prefers dedicated GPUs
+// globally.
 //
 // `logPrefix` is used only for diagnostic WARN/DEBUG messages so each caller
 // can be identified in logcat (e.g. "[nmt_backend_init_gpu]" vs
@@ -54,9 +64,11 @@ struct NmtBackendInterface {
 // do NOT need to re-check the buffer type of a non-null return value.
 ggml_backend_dev_t nmtSelectGpuDevice(
     bool useGpu, const std::string& gpuBackend, int gpuDevice,
-    const char* logPrefix);
+    const char* logPrefix, const NmtMainGpu& mainGpu = {},
+    bool legacyGpuSelection = false);
 
 ggml_backend_dev_t nmtSelectGpuDevice(
     const NmtBackendInterface& backend, bool useGpu,
     const std::string& gpuBackend, int gpuDevice, const char* logPrefix,
-    bool allowDefaultOpenCl = false);
+    bool allowDefaultOpenCl = false, const NmtMainGpu& mainGpu = {},
+    bool legacyGpuSelection = false);

@@ -9,6 +9,12 @@ export interface NativeAddon {
   packageJsonPath: string
   packageRoot: string
   enginesBare?: string
+  /**
+   * Hosts whose bundle graph links this addon, and so the only ones needing a
+   * prebuild; empty means the bundle links it nowhere. Absent when the source
+   * carries no link information, in which case every host is checked.
+   */
+  linkedHosts?: string[]
 }
 
 export interface AddonPackageJson {

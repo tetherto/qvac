@@ -11,6 +11,7 @@ const path = require('bare-path')
 const test = require('brittle')
 const WorldStableDiffusion = require('../../world.js')
 const { toActionMask, KEY_ORDER } = require('../../world.js')
+const { WorldSessionInterface } = require('../../addon.js')
 
 const ABS = path.resolve('/models')
 const FILES = {
@@ -25,6 +26,47 @@ const SCENE_OK = {
   vae: path.join(ABS, 'vae.gguf'),
   output: path.join(ABS, 'out.safetensors')
 }
+
+test('world load forwards layer streaming controls to the addon', async function (t) {
+  for (const [maxVram, streamLayers] of [
+    [1, true],
+    ['cuda0=-1', false]
+  ]) {
+    const config = {
+      paramsBackend: 'diffusion=cpu,vae=cpu',
+      maxVram,
+      streamLayers,
+      kvCache: true,
+      verbosity: 3,
+      nThreads: undefined
+    }
+    const world = new WorldStableDiffusion({ files: FILES, config })
+    let captured
+    const binding = {
+      createWorldInstance(_owner, params) {
+        captured = params
+        return {}
+      },
+      activateWorld() {},
+      cancel() {},
+      destroyInstance() {}
+    }
+    world._createAddon = (params, outputCallback) =>
+      new WorldSessionInterface(binding, params, outputCallback)
+    try {
+      await world.load()
+      t.not(captured.config, config, 'native config is a separate string map')
+      t.is(captured.config.paramsBackend, 'diffusion=cpu,vae=cpu')
+      t.is(captured.config.maxVram, maxVram === 1 ? '1' : 'cuda0=-1')
+      t.is(captured.config.streamLayers, streamLayers ? 'true' : 'false')
+      t.is(captured.config.kvCache, 'true')
+      t.is(captured.config.verbosity, '3')
+      t.absent(captured.config.nThreads, 'undefined controls are omitted')
+    } finally {
+      await world.unload()
+    }
+  }
+})
 
 test('toActionMask: full key matrix, input forms, and rejection', async function (t) {
   // every key maps to its documented bit, case-insensitively, in both forms

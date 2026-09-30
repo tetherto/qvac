@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Tool } from '@qvac/sdk'
+import { TOOL_SEARCH_NAME, type Tool } from '@qvac/sdk'
 
 // ─── Wire-shape zod building blocks ────────────────────────────────────
 
@@ -39,9 +39,13 @@ export const toolDef = z
       .object({
         name: z.string(),
         description: z.string().optional(),
-        parameters: z.record(z.string(), z.unknown()).optional()
+        parameters: z.record(z.string(), z.unknown()).optional(),
+        defer_loading: z.boolean().optional(),
+        group: z.string().optional()
       })
-      .optional()
+      .optional(),
+    defer_loading: z.boolean().optional(),
+    group: z.string().optional()
   })
   .passthrough()
 
@@ -92,6 +96,8 @@ export interface GenerationParams {
   repeat_penalty?: number
   reasoning_budget?: -1 | 0
   remove_thinking_from_context?: boolean
+  /** `auto` | `none` | `required` | a declared tool's name. */
+  tool_choice?: string
 }
 
 export type ResponseFormat =
@@ -111,10 +117,16 @@ export type ResponseFormat =
 
 interface OpenAITool {
   type: string
+  // Accepted beside `function` as well, because clients that build the tool
+  // entry and the function body in different places put it in either.
+  defer_loading?: boolean
+  group?: string
   function?: {
     name: string
     description?: string
     parameters?: Record<string, unknown>
+    defer_loading?: boolean
+    group?: string
   }
 }
 
@@ -150,10 +162,14 @@ export function openaiToolsToSdk(tools: OpenAITool[] | undefined): Tool[] | unde
     .map((t): Tool | null => {
       if (t.type !== 'function' || !t.function) return null
       const fn = t.function
+      const deferLoading = fn.defer_loading ?? t.defer_loading
+      const group = fn.group ?? t.group
       return {
         type: 'function',
         name: fn.name,
         description: fn.description ?? '',
+        ...(deferLoading !== undefined && { deferLoading }),
+        ...(group !== undefined && { group }),
         parameters: normalizeToolParameters(
           fn.parameters ?? { type: 'object', properties: {} }
         ) as Tool['parameters']
@@ -174,6 +190,132 @@ export class UnsupportedImageContentError extends Error {
     super(message)
     this.name = 'UnsupportedImageContentError'
   }
+}
+
+export class InvalidToolChoiceError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidToolChoiceError'
+  }
+}
+
+const TOOL_CHOICE_MODES = new Set(['auto', 'none', 'required'])
+
+/**
+ * OpenAI `tool_choice` accepts either a mode string or an object naming one
+ * function. Chat nests the name under `function`; Responses flattens it onto
+ * the object itself. Both collapse to the bare name the SDK takes.
+ */
+export const toolChoice = z.union([
+  z.string(),
+  z
+    .object({
+      type: z.string(),
+      function: z.object({ name: z.string() }).passthrough().optional(),
+      name: z.string().optional()
+    })
+    .passthrough()
+])
+
+/**
+ * Translate OpenAI `tool_choice` into the SDK's string form, rejecting what
+ * the SDK would reject anyway so the caller gets a 400 instead of a 500 out
+ * of `completion()`.
+ */
+export function extractToolChoice(
+  body: Record<string, unknown>,
+  tools: Tool[] | undefined
+): string | undefined {
+  const raw = body['tool_choice']
+  if (raw === undefined || raw === null) return undefined
+
+  const choice = toolChoiceToSdk(raw)
+
+  if (choice === 'none' || choice === 'auto') return choice
+
+  if (!tools || tools.length === 0) {
+    throw new InvalidToolChoiceError(
+      `"tool_choice" ${JSON.stringify(choice)} requires at least one entry in "tools".`
+    )
+  }
+  if (choice === 'required') return choice
+
+  // `tool_search` is synthesised by the SDK rather than declared, so it is
+  // nameable exactly when the request defers something.
+  if (choice === TOOL_SEARCH_NAME && tools.some((tool) => tool.deferLoading === true)) {
+    return choice
+  }
+  const named = tools.find((tool) => tool.name === choice)
+  if (!named) {
+    throw new InvalidToolChoiceError(
+      `"tool_choice" names ${JSON.stringify(choice)}, which is not one of the declared tools.`
+    )
+  }
+  if (named.deferLoading === true) {
+    throw new InvalidToolChoiceError(
+      `"tool_choice" names ${JSON.stringify(choice)}, which sets "defer_loading". Its schema is ` +
+        `not in the prompt, so the call cannot be forced; use ${JSON.stringify(TOOL_SEARCH_NAME)} instead.`
+    )
+  }
+  return choice
+}
+
+/**
+ * Fold a resolved `tool_choice` into the generation params, which are
+ * `undefined` when the request set none of the other knobs.
+ */
+export function withToolChoice(
+  params: GenerationParams | undefined,
+  choice: string | undefined
+): GenerationParams | undefined {
+  if (choice === undefined) return params
+  return { ...(params ?? {}), tool_choice: choice }
+}
+
+function toolChoiceToSdk(raw: unknown): string {
+  if (typeof raw === 'string') {
+    if (TOOL_CHOICE_MODES.has(raw)) return raw
+    throw new InvalidToolChoiceError(
+      `"tool_choice" must be "auto", "none", "required", or an object naming a function ` +
+        `(got ${JSON.stringify(raw)}).`
+    )
+  }
+
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new InvalidToolChoiceError('"tool_choice" must be a string or an object.')
+  }
+
+  const obj = raw as Record<string, unknown>
+  if (obj['type'] !== 'function') {
+    throw new InvalidToolChoiceError(
+      `"tool_choice.type" must be "function" (got ${JSON.stringify(obj['type'])}).`
+    )
+  }
+
+  // Chat: { type, function: { name } }. Responses: { type, name }.
+  const nested = obj['function']
+  const nestedName =
+    typeof nested === 'object' && nested !== null && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)['name']
+      : undefined
+  const name = typeof nestedName === 'string' ? nestedName : obj['name']
+
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new InvalidToolChoiceError(
+      '"tool_choice" must carry a non-empty function name ("function.name" or "name").'
+    )
+  }
+  // The SDK encodes mode and target in one string, so a tool actually named
+  // `auto`/`none`/`required` would read back as the mode and quietly invert the
+  // request -- targeting `none` would disable tool calling. The object form is
+  // unambiguous here and nowhere downstream, so the collision is caught here.
+  if (TOOL_CHOICE_MODES.has(name)) {
+    throw new InvalidToolChoiceError(
+      `"tool_choice" cannot target a tool named ${JSON.stringify(name)}: the name is reserved ` +
+        `for the "auto" / "none" / "required" modes. Rename the tool to target it.`
+    )
+  }
+  return name
 }
 
 export function extractResponseFormat(body: Record<string, unknown>): ResponseFormat | undefined {

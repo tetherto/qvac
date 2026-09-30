@@ -36,6 +36,7 @@
 #include "addon/AsrErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/WhisperGpuSelection.hpp"
 #include "model-interface/WhisperTypes.hpp"
 
 namespace qvac::asrggml::whisper {
@@ -80,6 +81,52 @@ bool WhisperModel::isCaptionModeEnabled() const {
     return false;
   }
   return std::get<bool>(miscConfigIt->second);
+}
+
+namespace {
+bool readBoolFlag(
+    const std::map<std::string, JSValueVariant>& cfg, const char* key) {
+  const auto it = cfg.find(key);
+  if (it == cfg.end()) {
+    return false;
+  }
+  const bool* value = std::get_if<bool>(&it->second);
+  return value != nullptr && *value;
+}
+
+// Text tokens of one segment with their timing and probability. Ids at or
+// above EOT are special (EOT, SOT, language, task, timestamp) and skipped.
+std::vector<TokenData>
+collectSegmentTokens(whisper_context* ctx, whisper_state* state, int segment) {
+  std::vector<TokenData> tokens;
+  const whisper_token eot = whisper_token_eot(ctx);
+  const int nTokens = whisper_full_n_tokens_from_state(state, segment);
+  tokens.reserve(static_cast<size_t>(std::max(0, nTokens)));
+  for (int j = 0; j < nTokens; ++j) {
+    const whisper_token_data data =
+        whisper_full_get_token_data_from_state(state, segment, j);
+    if (data.id >= eot) {
+      continue;
+    }
+    TokenData token;
+    const char* text =
+        whisper_full_get_token_text_from_state(ctx, state, segment, j);
+    token.text = text != nullptr ? text : "";
+    token.start = static_cast<float>(data.t0) * K_SEGMENT_TIMESTAMP_SCALE;
+    token.end = static_cast<float>(data.t1) * K_SEGMENT_TIMESTAMP_SCALE;
+    token.probability = data.p;
+    tokens.push_back(std::move(token));
+  }
+  return tokens;
+}
+} // namespace
+
+bool WhisperModel::isTokenTimestampsEnabled() const {
+  return readBoolFlag(cfg_.whisperMainCfg, "token_timestamps");
+}
+
+bool WhisperModel::isTdrzEnabled() const {
+  return readBoolFlag(cfg_.whisperMainCfg, "tdrz_enable");
 }
 
 auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
@@ -169,6 +216,8 @@ void loadBackendsFromRoot(const std::filesystem::path& root) {
   ggml_backend_load_all_from_path(variantsDir.string().c_str());
 }
 
+} // namespace
+
 // Android, desktop linux-arm64, and CUDA-enabled linux-x64 / win32-x64
 // builds ship ggml with `GGML_BACKEND_DL=ON`, so no backend is statically
 // registered. Load the per-arch CPU + GPU modules once per process before
@@ -208,7 +257,6 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
     ggml_backend_load_all();
   });
 }
-} // namespace
 #endif // __ANDROID__ || __linux__ || _WIN32
 
 namespace {
@@ -310,6 +358,40 @@ void WhisperModel::load() {
 #endif
 
     whisper_context_params contextParams = toWhisperContextParams(cfg_);
+    bool reportMissingGpuFallback = false;
+
+    // Resolve the raw registry identity before translating to Whisper's
+    // GPU/IGPU ordinal. An excluded explicit target falls back only to CPU.
+    if (contextParams.use_gpu &&
+        !cfg_.whisperContextCfg.contains("gpu_device")) {
+      const auto selected = main_gpu::resolveWhisperLoadSelection(
+          contextParams.use_gpu,
+          contextParams.gpu_device,
+          false,
+          cfg_.whisperContextCfg);
+      if (selected.outOfRange) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "main-gpu registry index is out of range; using normal GPU "
+            "selection");
+      }
+      contextParams.use_gpu = selected.useGpu;
+      if (contextParams.use_gpu) {
+        contextParams.gpu_device = selected.gpuDevice;
+      } else if (!selected.refused.empty()) {
+        std::string message =
+            "GPU execution requested but no eligible device is available; "
+            "falling back to CPU. Refused GPU-type devices:";
+        for (const auto& identity : selected.refused) {
+          message += " [" + identity + "]";
+        }
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            message.c_str());
+      } else {
+        reportMissingGpuFallback = selected.warnMissingGpuFallback;
+      }
+    }
 
     // Adreno guard: when ggml registers an Adreno OpenCL device (Android,
     // where it also registers a Vulkan device for the same GPU and Vulkan is
@@ -317,7 +399,8 @@ void WhisperModel::load() {
     // driver SIGSEGVs in ggml compute (vkCmdBindPipeline), whereas OpenCL is
     // the supported Adreno backend. No-op on Mali / desktop (no Adreno OpenCL
     // device registers there), so the proven Mali->Vulkan path is untouched.
-    if (contextParams.use_gpu) {
+    if (contextParams.use_gpu &&
+        cfg_.whisperContextCfg.contains("gpu_device")) {
       const int adrenoOpenclDeviceIndex = adrenoOpenclGpuDeviceIndex();
       if (adrenoOpenclDeviceIndex >= 0 &&
           adrenoOpenclDeviceIndex != contextParams.gpu_device) {
@@ -360,7 +443,9 @@ void WhisperModel::load() {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Whisper model loaded successfully");
 
-    captureActiveBackendInfo(contextParams.use_gpu, contextParams.gpu_device);
+    captureActiveBackendInfo(
+        contextParams.use_gpu || reportMissingGpuFallback,
+        contextParams.gpu_device);
 
     // Warm up the model on first load to avoid first-segment delay
     if (!is_warmed_up_) {
@@ -587,8 +672,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() const {
 }
 
 static void onNewSegment(
-    [[maybe_unused]] whisper_context* ctx, whisper_state* state, int nNew,
-    void* userData) {
+    whisper_context* ctx, whisper_state* state, int nNew, void* userData) {
 
   auto* whisper = static_cast<WhisperModel*>(userData);
   if (whisper == nullptr || state == nullptr) {
@@ -600,6 +684,10 @@ static void onNewSegment(
     return;
   }
   const int startIndex = std::max(0, nSegments - nNew);
+  const int langId = whisper_full_lang_id_from_state(state);
+  const char* language = langId >= 0 ? whisper_lang_str(langId) : nullptr;
+  const bool withTokens = whisper->isTokenTimestampsEnabled();
+  const bool withSpeakerTurns = whisper->isTdrzEnabled();
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -616,6 +704,16 @@ static void onNewSegment(
         static_cast<float>(whisper_full_get_segment_t1_from_state(state, i)) *
         K_SEGMENT_TIMESTAMP_SCALE;
     transcript.id = i;
+    transcript.language = language != nullptr ? language : "";
+    transcript.noSpeechProb =
+        whisper_full_get_segment_no_speech_prob_from_state(state, i);
+    if (withSpeakerTurns) {
+      transcript.speakerTurnNext =
+          whisper_full_get_segment_speaker_turn_next_from_state(state, i);
+    }
+    if (withTokens) {
+      transcript.tokens = collectSegmentTokens(ctx, state, i);
+    }
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -822,9 +920,9 @@ void WhisperModel::cancel() const {
 bool WhisperModel::configContextIsChanged(
     const WhisperConfig& oldCfg, const WhisperConfig& newCfg) {
   // Context parameters that require reload: model, use_gpu, flash_attn,
-  // gpu_device
+  // gpu_device, main-gpu, main_gpu
   const std::vector<std::string> contextKeys = {
-      "model", "use_gpu", "flash_attn", "gpu_device"};
+      "model", "use_gpu", "flash_attn", "gpu_device", "main-gpu", "main_gpu"};
 
   return std::ranges::any_of(contextKeys, [&](const std::string& key) {
     const auto oldIt = oldCfg.whisperContextCfg.find(key);

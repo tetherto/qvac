@@ -477,6 +477,8 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
   let variant = ''
   if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
     variant = 'SORTFORMER'
+  } else if (lower.includes('nemotron') || lowerPath.includes('nemotron')) {
+    variant = 'NEMOTRON'
   } else if (lower.includes('ctc') || lowerPath.includes('parakeet-ctc')) {
     variant = 'CTC'
   } else if (lower.includes('eou') || lowerPath.includes('parakeet-rs')) {

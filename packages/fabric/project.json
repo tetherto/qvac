@@ -26,7 +26,8 @@
           "includeCuda": true,
           "includeCudaWin32": true,
           "includeCudaArm64": true,
-          "includeCudaArm64Jetson": true
+          "includeCudaArm64Jetson": true,
+          "linuxExtraPackages": "libibverbs-dev"
         }
       },
       "inputs": [
@@ -57,11 +58,11 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/fabric",
         "ci": {
-          "buildStep": "none",
           "nameTransform": "none",
           "repoName": "fabric",
           "testGateMode": "none",
-          "prebuildExtraDirs": ["include", "share"]
+          "prebuildExtraDirs": ["include", "share"],
+          "slicePlatformPackages": true
         }
       }
     }

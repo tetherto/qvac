@@ -29,11 +29,7 @@
         "cwd": "packages/llm-llamacpp",
         "ci": {
           "artifactNamePrefix": "llama-cpp-",
-          "includeVulkanSdk": true,
-          "includeCuda": true,
-          "includeCudaWin32": true,
-          "includeCudaArm64": true,
-          "includeCudaArm64Jetson": true
+          "includeVulkanSdk": true
         }
       },
       "inputs": [
@@ -109,7 +105,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/llm-llamacpp",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "scope-rewrite",
           "repoName": "llamacpp-llm",
@@ -120,6 +115,7 @@
   },
   "implicitDependencies": [
     "inference-addon-cpp",
-    "lint-cpp"
+    "lint-cpp",
+    "qvac-addon-cmake"
   ]
 }
