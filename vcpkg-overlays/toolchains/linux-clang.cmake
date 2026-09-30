@@ -22,11 +22,25 @@ else()
   endif()
   file(REAL_PATH "${_qvac_bare_make_bin}" _qvac_bare_make_real)
   get_filename_component(_qvac_bare_make_root "${_qvac_bare_make_real}" DIRECTORY)
-  if(NOT EXISTS "${_qvac_bare_make_root}/node_modules/cmake-toolchains/${_qvac_bare_make_toolchain_name}")
-    get_filename_component(_qvac_bare_make_root "${_qvac_bare_make_root}" DIRECTORY)
+  # npm nests cmake-toolchains under a global bare-make
+  # (`<prefix>/node_modules/bare-make/node_modules/cmake-toolchains`).
+  # A local `npm install` hoists it next to the package
+  # (`<project>/node_modules/cmake-toolchains`). The bin is bin.js in the
+  # package root, or a .bin shim whose real path stays in node_modules/.bin.
+  foreach(_qvac_bare_make_candidate IN ITEMS
+      "${_qvac_bare_make_root}/node_modules/cmake-toolchains/${_qvac_bare_make_toolchain_name}"
+      "${_qvac_bare_make_root}/../node_modules/cmake-toolchains/${_qvac_bare_make_toolchain_name}"
+      "${_qvac_bare_make_root}/../cmake-toolchains/${_qvac_bare_make_toolchain_name}"
+      "${_qvac_bare_make_root}/../../cmake-toolchains/${_qvac_bare_make_toolchain_name}")
+    if(EXISTS "${_qvac_bare_make_candidate}")
+      file(REAL_PATH "${_qvac_bare_make_candidate}" _qvac_bare_make_toolchain)
+      break()
+    endif()
+  endforeach()
+  if(NOT _qvac_bare_make_toolchain)
+    set(_qvac_bare_make_toolchain
+      "${_qvac_bare_make_root}/node_modules/cmake-toolchains/${_qvac_bare_make_toolchain_name}")
   endif()
-  set(_qvac_bare_make_toolchain
-    "${_qvac_bare_make_root}/node_modules/cmake-toolchains/${_qvac_bare_make_toolchain_name}")
 endif()
 
 if(NOT EXISTS "${_qvac_bare_make_toolchain}")
@@ -81,3 +95,4 @@ unset(_qvac_bare_make_toolchain)
 unset(_qvac_bare_make_bin)
 unset(_qvac_bare_make_real)
 unset(_qvac_bare_make_root)
+unset(_qvac_bare_make_candidate)
