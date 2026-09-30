@@ -344,11 +344,20 @@ TEST_F(
     SdWanValidationTest, MiniMaxH3RejectsUnsupportedControlsAndPinnedSettings) {
   configureMiniMaxH3();
 
-  SdModel::GenerationJob imageConditioning;
-  imageConditioning.paramsJson = R"({
-    "mode": "img2vid", "prompt": "test", "video_frames": 124
+  SdModel::GenerationJob missingKeyframe;
+  missingKeyframe.paramsJson = R"({
+    "mode": "img2vid", "prompt": "test", "video_frames": 22
   })";
-  expectThrowContains(std::move(imageConditioning), "text-to-audio-video only");
+  expectThrowContains(
+      std::move(missingKeyframe), "img2vid: init_image is required");
+
+  SdModel::GenerationJob corruptKeyframe;
+  corruptKeyframe.paramsJson = R"({
+    "mode": "img2vid", "prompt": "test", "video_frames": 22
+  })";
+  corruptKeyframe.initImageBytes = {0x00, 0xFF, 0xAA, 0x01};
+  expectThrowContains(
+      std::move(corruptKeyframe), "processVideo: failed to decode init_image");
 
   SdModel::GenerationJob wanMoe;
   wanMoe.paramsJson = R"({
