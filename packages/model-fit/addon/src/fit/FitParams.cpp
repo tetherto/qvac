@@ -609,8 +609,20 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
               std::to_string(trainedCtx) + ")");
         }
 
+        // A lambda, not the function itself: parameters fabric appends with a
+        // default value change its type, but not a call through the invoker's
+        // arguments.
         execution = invokeLlamaFit(
-            req.modelPath, params, req.marginMiB, nCtxMin, common_fit_params);
+            req.modelPath, params, req.marginMiB, nCtxMin,
+            [](const char* path, llama_model_params* modelParams,
+               llama_context_params* contextParams, float* split,
+               llama_model_tensor_buft_override* overrides, size_t* marginsOut,
+               uint32_t ctxMin, bool prefetchWeightsAuto,
+               ggml_log_level logLevel) {
+              return common_fit_params(
+                  path, modelParams, contextParams, split, overrides,
+                  marginsOut, ctxMin, prefetchWeightsAuto, logLevel);
+            });
       });
   if (!supported) {
     out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
