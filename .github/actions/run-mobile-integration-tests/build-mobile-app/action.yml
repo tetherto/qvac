@@ -80,6 +80,20 @@ inputs:
     required: false
     default: ""
 
+  fabric-prebuild-run-id:
+    description: |
+      A run id whose `prebuild-fabric-<host>` artifacts replace the published
+      @qvac/fabric-<platform> runtime in the app, so a fabric-stack change is
+      tested on the fabric it builds. Usually the PR's `On PR Trigger (Fabric)`
+      run. Empty (default) keeps the published runtime. Needs `actions: read`
+      on the calling job, carried by `github-token`.
+    required: false
+    default: ""
+  github-token:
+    description: "Token for downloading `fabric-prebuild-run-id`'s artifacts"
+    required: false
+    default: ""
+
 outputs:
   app-path:
     description: "Absolute path to the built APK or IPA"
@@ -177,12 +191,39 @@ runs:
     # (e.g. @qvac/fabric) would reach the app without its runtime. Must run
     # after the framework installs the addon and before `npm run bundle` and
     # the native project build.
+    # A leftover tree from an earlier job on the same self-hosted runner must
+    # not stand in for the requested run.
+    - name: Clear PR fabric prebuilds dir
+      if: inputs.fabric-prebuild-run-id != ''
+      shell: bash
+      run: rm -rf "$RUNNER_TEMP/pr-fabric-prebuilds"
+
+    # No continue-on-error: the run id is an explicit instruction, and the
+    # overlay below fails when the download left no tree for this platform.
+    - name: Download PR fabric prebuilds
+      if: inputs.fabric-prebuild-run-id != ''
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        pattern: ${{ inputs.platform == 'iOS' && 'prebuild-fabric-ios-*' || 'prebuild-fabric-android-arm64' }}
+        merge-multiple: true
+        run-id: ${{ inputs.fabric-prebuild-run-id }}
+        github-token: ${{ inputs.github-token }}
+        path: ${{ runner.temp }}/pr-fabric-prebuilds
+
     - name: Overlay mobile platform prebuilds
       shell: bash
       working-directory: ./test-framework
       env:
         PLATFORM: ${{ inputs.platform }}
-      run: node "$GITHUB_ACTION_PATH/overlay-platform-prebuilds.mjs" --platform "$PLATFORM"
+        FABRIC_RUN_ID: ${{ inputs.fabric-prebuild-run-id }}
+      run: |
+        if [ -n "$FABRIC_RUN_ID" ]; then
+          echo "Using PR fabric prebuilds from run $FABRIC_RUN_ID"
+          node "$GITHUB_ACTION_PATH/overlay-platform-prebuilds.mjs" --platform "$PLATFORM" \
+            --fabric-prebuilds "$RUNNER_TEMP/pr-fabric-prebuilds"
+        else
+          node "$GITHUB_ACTION_PATH/overlay-platform-prebuilds.mjs" --platform "$PLATFORM"
+        fi
 
     # Patches the freshly generated e2e/tests/app.test.js to bump the
     # per-test Mocha ceiling. Two ways to opt in:
