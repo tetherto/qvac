@@ -1259,15 +1259,18 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
             "' (expected txt2vid or img2vid)");
 
   if (isMiniMaxH3) {
-    // H3 currently supports text-to-audio-video only. Keep this native check
-    // authoritative so renamed GGUFs and bindings that bypass video.ts cannot
-    // enter unsupported image/reference/control paths.
-    if (vid.mode != "txt2vid" || !job.initImageBytes.empty() ||
-        !job.initImagesBytes.empty())
+    // H3's public generate_video() consumes init_image as a first-frame
+    // keyframe. The generic mode/input checks below require it for img2vid.
+    if (!job.initImagesBytes.empty())
       throw StatusError(
           general_error::InvalidArgument,
-          "MiniMax-H3 supports text-to-audio-video only; image conditioning "
-          "(img2vid/init_image) is not supported");
+          "MiniMax-H3 does not accept init_images; use one init_image for "
+          "img2vid");
+    if (vid.mode == "img2vid" && config_.vaeDecodeOnly)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 img2vid requires VAE encoder weights; "
+          "vae_decode_only must be false");
     if (!config_.highNoiseDiffusionModelPath.empty())
       throw StatusError(
           general_error::InvalidArgument,

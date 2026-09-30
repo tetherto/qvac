@@ -40,9 +40,7 @@ export interface VideoStableDiffusionArgs {
   opts?: { stats?: boolean }
 }
 
-export interface VideoGenerationParams {
-  /** Required. Selects the generation branch. */
-  mode: VideoMode
+export interface VideoGenerationBaseParams {
   prompt: string
   negative_prompt?: string
   /** LTX IC-LoRA adapter path. Unsupported by Wan video models. */
@@ -56,7 +54,7 @@ export interface VideoGenerationParams {
   /**
    * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V, LTX-2, and
    * MiniMax-H3 use a 32-pixel spatial grid; native validation derives the
-   * actual requirement from the loaded GGUF instead of the filename.
+   * actual requirement from the loaded model metadata instead of the filename.
    */
   width?: number
   height?: number
@@ -78,7 +76,6 @@ export interface VideoGenerationParams {
   moe_boundary?: number
   strength?: number
   vace_strength?: number
-  init_image?: Uint8Array
   control_frames?: Uint8Array[]
   /** LTX IC-LoRA reference images as encoded PNG/JPEG bytes. */
   reference_images?: Uint8Array[]
@@ -96,6 +93,10 @@ export interface VideoGenerationParams {
   cache_preset?: string
   cache_threshold?: number
 }
+
+export type VideoGenerationParams = VideoGenerationBaseParams &
+  (| { mode: 'txt2vid'; init_image?: never }
+    | { mode: 'img2vid'; init_image: Uint8Array })
 
 export interface VideoRuntimeStats {
   modelLoadMs: number
@@ -123,8 +124,10 @@ export interface VideoRuntimeStats {
 }
 
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>
-type RuntimeVideoParams = VideoGenerationParams & {
+type RuntimeVideoParams = VideoGenerationBaseParams & {
   [key: string]: unknown
+  mode: VideoMode
+  init_image?: Uint8Array
   init_images?: unknown
 }
 
@@ -288,7 +291,7 @@ export default class VideoStableDiffusion {
   }
 
   private async _load(): Promise<void> {
-    this.logger.info('Starting Wan video model load')
+    this.logger.info('Starting video model load')
 
     const configurationParams: SdConfigurationParams = {
       path: '',
@@ -317,7 +320,7 @@ export default class VideoStableDiffusion {
       this.logger.info('Activating stable-diffusion addon (video mode)')
       await this.addon.activate()
     } catch (loadError) {
-      this.logger.error('Error during Wan video model load:', loadError)
+      this.logger.error('Error during video model load:', loadError)
       try {
         await this.addon?.unload?.()
       } catch {}
@@ -325,7 +328,7 @@ export default class VideoStableDiffusion {
       throw loadError
     }
 
-    this.logger.info('Wan video model load completed successfully')
+    this.logger.info('Video model load completed successfully')
   }
 
   private _createAddon(configurationParams: SdConfigurationParams): SdInterface {
@@ -385,8 +388,11 @@ export default class VideoStableDiffusion {
     const { mode } = params
     const dimensionsImplicit = params.width == null && params.height == null
     const isLtx = this._isLtx()
+    // H3 uses an LLM and audio VAE companion. Native validation inspects the
+    // loaded checkpoint, including renamed safetensors.
+    const isH3Files = !!this._files.llm && !!this._files.audioVae && !isLtx
 
-    const alignTo = isLtx ? 32 : 16
+    const alignTo = isLtx || isH3Files ? 32 : 16
     const width = params.width
     const height = params.height
     const widthBad =
@@ -585,7 +591,7 @@ export default class VideoStableDiffusion {
       )
     }
 
-    if (mode === 'img2vid' && !isLtx && !this._files.clipVision) {
+    if (mode === 'img2vid' && !isLtx && !isH3Files && !this._files.clipVision) {
       throw new TypeError(
         `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
           'Download clip_vision_h.safetensors from ' +
