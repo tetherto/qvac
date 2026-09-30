@@ -4,7 +4,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-test('integration: automatic NVIDIA backend selection', { timeout: 1800000 }, async (t) => {
+test('integration: NVIDIA backend selection', { timeout: 1800000 }, async (t) => {
   const expectedBackend = process.env.QVAC_VLA_EXPECTED_BACKEND
   if (process.env.QVAC_VLA_BACKEND_SELECTION_SMOKE !== 'true') {
     t.comment('skipping dedicated backend selection workflow test')
@@ -23,9 +23,11 @@ test('integration: automatic NVIDIA backend selection', { timeout: 1800000 }, as
 
   const model = new VlaModel({ files: { model: [path.resolve(modelPath)] } })
   try {
-    await model.load({ backend: 'auto' })
+    await model.load({ backend: process.env.QVAC_VLA_REQUESTED_BACKEND || 'auto' })
     t.ok(model.backendName, 'backend name resolved')
     t.ok(model.backendName.toLowerCase().includes(expectedBackend), `${expectedBackend} selected`)
+
+    if (process.env.QVAC_VLA_BACKEND_LOAD_ONLY === 'true') return
 
     const hp = model.hparams
     const size = hp.visionImageSize

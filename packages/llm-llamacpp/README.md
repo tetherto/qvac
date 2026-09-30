@@ -39,8 +39,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 
 **Note on CUDA (Linux and Windows, NVIDIA):**
 The CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred over
-Vulkan when an NVIDIA device is present. On Windows, CUDA 13 runtime DLLs must be available on
-`PATH`: `cudart64_13.dll`, `cublas64_13.dll`, and `cublasLt64_13.dll`.
+Vulkan when an NVIDIA device is present. On Windows, the fabric prebuild stages
+`cudart64_13.dll`, `cublas64_13.dll`, and `cublasLt64_13.dll` next to the CUDA backend module.
 
 - If the CUDA module, driver, or required runtime DLL is missing, the device never registers and selection
   falls through to Vulkan, then CPU. Nothing needs configuring for that.

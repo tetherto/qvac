@@ -1734,11 +1734,10 @@ TEST_F(BackendSelectionTest, UnsupportedCudaCanFallThroughToVulkanCpuKv) {
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).name, "vulkan0");
 }
 
-TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissErrors) {
+TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissFallsBackToCpu) {
   mockBackend.addDevice(
       withoutTurboQuant(createGPUDevice("Intel Arc A770", OPENCL_BACK)));
-  EXPECT_THROW(
-      chooseWithKvTypes(mockBackend, {"tbq4_0"}), qvac_errors::StatusError);
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).type, BackendType::CPU);
 }
 
 // ...but a deliberate CPU load must not throw. No devices are enumerated, so
