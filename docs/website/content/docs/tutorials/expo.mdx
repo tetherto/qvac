@@ -159,6 +159,20 @@ Speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) ship Android and iOS bin
 ```
 
 iOS uses `@qvac/tts-ggml-ios` instead of `@qvac/tts-ggml-android-arm64`. Llama does not need an extra package. `npx expo prebuild` names the missing pin if you forget.
+
+To have `npx expo prebuild` add the missing packages for you, pass `installMissingPrebuilds` to the plugin. It adds them to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the exact addon version, for the platform being prebuilt:
+
+```json title="app.json"
+{
+  "expo": {
+    "plugins": [
+      ["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }]
+    ]
+  }
+}
+```
+
+The option is off by default because it changes `package.json` and needs network access during `expo prebuild`.
 </Step>
 
 <Step>

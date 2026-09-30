@@ -63,11 +63,10 @@ const LIBRARY_PUBLISHERS = new Set([
 ])
 
 // Guards against discovery returning an empty set and passing vacuously.
-// QVAC-19792 folded the 13 per-package on-merge-<pkg> pipelines into
-// on-merge-nx; model-fit kept its own. Add a pipeline here when one appears.
+// Native addons, including model-fit, publish through on-merge-nx.
+// Add a pipeline here when one appears.
 const KNOWN = [
   'on-merge-ggml-rpc-server.yml',
-  'on-merge-model-fit.yml',
   'on-merge-nx.yml',
 ]
 
@@ -179,6 +178,14 @@ test('every exemption names a file that exists', () => {
         'reusing it',
     )
   }
+})
+
+test('model-fit publishing is covered by the consolidated workflow', () => {
+  const source = read('on-merge-nx.yml')
+  assert.match(pushBody(source).join('\n'), /^ {6}- "packages\/model-fit\/\*\*"$/m)
+  assert.match(source, /^ {10}- model-fit$/m)
+  assert.match(source, /^ {12}model-fit: packages\/model-fit\/\*\*$/m)
+  assert.equal(existsSync(join(WORKFLOW_DIR, 'on-merge-model-fit.yml')), false)
 })
 
 test('no unenumerated workflow is exempt by name pattern', () => {

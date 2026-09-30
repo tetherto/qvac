@@ -223,6 +223,15 @@ function buildTextToSpeechStreamRequest(
  *   metadata with the audio. Multiple consumers can iterate the response
  *   independently via the underlying `TtsMulticast`.
  *
+ * MOSS models stream natively rather than by sentence: under `stream: true`
+ * the whole text is one synthesis whose audio arrives every
+ * `streamChunkTokens` codec frames (in one piece when that is unset), so
+ * `durationTokens` and a MOSS-TTSD dialogue's reference transcripts apply to
+ * the text as a whole. `sentenceStream: true` still splits a single-speaker
+ * text; a dialogue rejects it. `sentenceStreamLocale` and
+ * `sentenceStreamMaxChunkScalars` configure that splitting, so a MOSS request
+ * rejects them unless it sets `sentenceStream: true`.
+ *
  * `result.done` resolves to `true` when synthesis completes cleanly, `false`
  * if the consumer breaks out before the terminal frame, or rejects on a
  * pipeline error. Awaiting `done` is safe even when no stream is iterated.
