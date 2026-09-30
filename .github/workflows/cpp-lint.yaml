@@ -137,8 +137,11 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+      # Local install, not `npm install -g`. The runner image's global pin is
+      # bare-make 1.8.0, whose cmake-toolchains selects system clang-22.
+      # This job must use the current bare-make (llvm-runtime clang 23).
+      # node_modules/.bin is prepended so the vcpkg toolchain's
+      # find_program(bare-make) resolves the same binary.
 
       # - if: ${{ inputs.include-vulkan-sdk }}
       #   name: Setup Vulkan SDK
@@ -161,6 +164,14 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: npm install
+
+      - name: Install current bare-make locally
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm install --no-save bare-make
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          ./node_modules/.bin/bare-make --version
 
       # Must sit between npm install and bare-make generate: the overlay
       # rewrites node_modules/@qvac/fabric/prebuilds in place, and generate is
