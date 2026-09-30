@@ -212,16 +212,17 @@ void closeStopTask(uv_handle_t* handle) {
 }
 
 void rejectStopTask(StopTask* task, const char* message) {
+  js_value_t* errorCode = nullptr;
   js_value_t* errorMessage = nullptr;
   js_value_t* error = nullptr;
-  if (js_create_string_utf8(
-          task->env,
-          // utf8_t is the JS ABI's byte type.
-          // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-          reinterpret_cast<const utf8_t*>(message),
-          -1,
-          &errorMessage) == 0 &&
-      js_create_error(task->env, nullptr, errorMessage, &error) == 0) {
+  // utf8_t is the JS ABI's byte type.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  const auto* codeBytes = reinterpret_cast<const utf8_t*>("RpcServerStopError");
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  const auto* messageBytes = reinterpret_cast<const utf8_t*>(message);
+  if (js_create_string_utf8(task->env, codeBytes, -1, &errorCode) == 0 &&
+      js_create_string_utf8(task->env, messageBytes, -1, &errorMessage) == 0 &&
+      js_create_error(task->env, errorCode, errorMessage, &error) == 0) {
     js_reject_deferred(task->env, task->deferred, error);
   }
 }
