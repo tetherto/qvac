@@ -67,7 +67,12 @@ export const ocrConfigSchema = z.object({
       "0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`."
     ),
   mainGpu: z
-    .union([z.number().int().min(0).max(2147483647), z.enum(['integrated', 'dedicated'])])
+    .union([
+      // Titled so the generated Python model gets a stable name instead of
+      // taking the next positional `MainGpuN` from an existing schema.
+      z.number().int().min(0).max(2147483647).meta({ title: 'OcrMainGpuIndex' }),
+      z.enum(['integrated', 'dedicated'])
+    ])
     .optional()
     .describe(
       "GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile."
