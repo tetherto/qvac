@@ -171,6 +171,7 @@ export async function extractTarStream(
     }
 
     readStream = fs.createReadStream(archivePath)
+    readStream.on('error', reject)
 
     // tar-stream's extract is a streamx Writable at runtime; cast past the
     // nominal private brand its shim can't carry (see types/tar-stream).
