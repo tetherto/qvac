@@ -1937,6 +1937,10 @@ TEST_F(BackendSelectionTest, MainGpuBusIdNotMisparsedAsZero) {
   ASSERT_TRUE(shortForm.has_value());
   ASSERT_TRUE(std::holds_alternative<MainGpuBusId>(shortForm.value()));
   EXPECT_EQ(std::get<MainGpuBusId>(shortForm.value()).id, "0000:65:00.0");
+  const auto nvidiaForm = parseMainGpu("00000000:65:00.0");
+  ASSERT_TRUE(nvidiaForm.has_value());
+  ASSERT_TRUE(std::holds_alternative<MainGpuBusId>(nvidiaForm.value()));
+  EXPECT_EQ(std::get<MainGpuBusId>(nvidiaForm.value()).id, "0000:65:00.0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuQualifiedParsing) {
@@ -2013,6 +2017,20 @@ TEST_F(BackendSelectionTest, MainGpuBusIdKeepsBackendRepresentations) {
   request.backendOverride = {"cuda"};
   EXPECT_EQ(
       chooseBackend(request, mockBackend.toBackendInterface()).name, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, MainGpuEightDigitBusIdSelectsVirtualCuda) {
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0-v0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice(TESLA_DESC, CUDA1_BACK), "00000000:66:00.0-v1"));
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, parseMainGpu("00000000:65:00.0").value())
+          .name,
+      "cuda0");
+  EXPECT_EQ(
+      chooseWithMainGpu(mockBackend, parseMainGpu("0000:66:00.0").value()).name,
+      "cuda1");
 }
 
 TEST_F(BackendSelectionTest, MainGpuShortBusIdSelectsMatchingDevice) {
@@ -2238,13 +2256,13 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyOnSingleRegistry) {
   EXPECT_TRUE(splitDevicesFor(mockBackend, "vulkan0").empty());
 }
 
-TEST_F(BackendSelectionTest, ExactMainGpuForcesSingleRegistryDeviceList) {
+TEST_F(BackendSelectionTest, StrictBackendKeepsSingleRegistryDeviceList) {
   mockBackend.addDevice(
       createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
   mockBackend.addDevice(
       createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
   LoadConstraints constraints;
-  constraints.requireExplicitDeviceList = true;
+  constraints.requiredBackendFamilies = {"vulkan"};
   EXPECT_EQ(
       splitDevicesFor(mockBackend, "vulkan1", constraints),
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
