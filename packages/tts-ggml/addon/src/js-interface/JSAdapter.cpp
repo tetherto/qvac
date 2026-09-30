@@ -1,6 +1,7 @@
 #include "js-interface/JSAdapter.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -145,6 +146,84 @@ readStringElements(js::Array array, js_env_t* env, const char* key) {
   return values;
 }
 
+constexpr float INT16_PCM_SCALE = 32768.0f;
+
+std::vector<float> int16PcmToFloat(const std::vector<int16_t>& pcm) {
+  std::vector<float> samples;
+  samples.reserve(pcm.size());
+  for (const int16_t sample : pcm) {
+    samples.push_back(static_cast<float>(sample) / INT16_PCM_SCALE);
+  }
+  return samples;
+}
+
+std::vector<float> readPcm(js_value_t* raw, js_env_t* env, const char* key) {
+  if (js::is<js::TypedArray<float>>(env, raw)) {
+    return js::TypedArray<float>::fromValue(raw).as<std::vector<float>>(env);
+  }
+  if (js::is<js::TypedArray<int16_t>>(env, raw)) {
+    return int16PcmToFloat(
+        js::TypedArray<int16_t>::fromValue(raw).as<std::vector<int16_t>>(env));
+  }
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key +
+          "' must be an Int16Array or a Float32Array of mono PCM");
+}
+
+moss::MossSpeechAudio readOptionalSpeechAudio(
+    js::Object obj, js_env_t* env, const char* pcmKey, const char* rateKey) {
+  js_value_t* raw = obj.getProperty(env, pcmKey);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return {};
+  }
+  moss::MossSpeechAudio audio;
+  audio.pcm = readPcm(raw, env, pcmKey);
+  audio.sampleRate = readOptionalInt(obj, env, rateKey).value_or(0);
+  return audio;
+}
+
+moss::MossSpeechTurn readSpeechTurn(js_value_t* raw, js_env_t* env) {
+  if (!js::is<js::Object>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "Property 'messages' must contain only message objects");
+  }
+  auto obj = js::Object::fromValue(raw);
+  moss::MossSpeechTurn turn;
+  turn.role = readOptionalString(obj, env, "role");
+  turn.text = readOptionalString(obj, env, "text");
+  turn.audio = readOptionalSpeechAudio(obj, env, "audio", "sampleRate");
+  return turn;
+}
+
+std::vector<moss::MossSpeechTurn>
+readSpeechTurns(js::Array array, js_env_t* env) {
+  const uint32_t count = array.size(env);
+  std::vector<moss::MossSpeechTurn> turns;
+  turns.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    js_value_t* raw = nullptr;
+    if (js_get_element(env, array, i, &raw) != 0) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument, "cannot read a 'messages' entry");
+    }
+    turns.push_back(readSpeechTurn(raw, env));
+  }
+  return turns;
+}
+
+std::vector<moss::MossSpeechTurn>
+readRequiredSpeechTurns(js::Object job, js_env_t* env) {
+  js_value_t* raw = job.getProperty(env, "messages");
+  if (!js::is<js::Array>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "moss-speech jobs need a 'messages' array");
+  }
+  return readSpeechTurns(js::Array::fromValue(raw), env);
+}
+
 std::vector<std::string>
 readOptionalStringArray(js::Object obj, js_env_t* env, const char* key) {
   js_value_t* raw = obj.getProperty(env, key);
@@ -178,11 +257,14 @@ EngineType JSAdapter::readEngineType(
     return EngineType::Moss;
   if (explicitType == "moss-sfx")
     return EngineType::MossSoundEffect;
+  if (explicitType == "moss-speech")
+    return EngineType::MossSpeech;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
         "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', "
-        "'parler', 'audio8', 'moss', 'moss-sfx' or 'pocket' (got '" +
+        "'parler', 'audio8', 'moss', 'moss-sfx', 'moss-speech' or 'pocket' "
+        "(got '" +
             explicitType + "')");
   }
 
@@ -219,6 +301,11 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "mossSoundEffectPath");
   if (!mossSoundEffectPath.empty())
     return EngineType::MossSoundEffect;
+
+  const std::string mossSpeechPath =
+      readOptionalString(configurationParams, env, "mossSpeechModelPath");
+  if (!mossSpeechPath.empty())
+    return EngineType::MossSpeech;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -435,6 +522,37 @@ JSAdapter::readMossSoundEffectCall(js::Object job, js_env_t* env) {
   call.guidance = readOptionalFloat(job, env, "guidance");
   call.shift = readOptionalFloat(job, env, "shift");
   call.negativePrompt = readOptionalString(job, env, "negativePrompt");
+  return call;
+}
+
+moss::MossSpeechConfig JSAdapter::buildMossSpeechConfig(
+    js::Object configurationParams, js_env_t* env) {
+  moss::MossSpeechConfig cfg;
+  cfg.modelPath =
+      readOptionalString(configurationParams, env, "mossSpeechModelPath");
+  cfg.codecPath =
+      readOptionalString(configurationParams, env, "mossSpeechCodecPath");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  return cfg;
+}
+
+moss::MossSpeechCall
+JSAdapter::readMossSpeechCall(js::Object job, js_env_t* env) {
+  moss::MossSpeechCall call;
+  call.messages = readRequiredSpeechTurns(job, env);
+  call.voice =
+      readOptionalSpeechAudio(job, env, "replyVoice", "replyVoiceSampleRate");
+  call.textReply = readOptionalBool(job, env, "textReply").value_or(false);
+  call.greedy = readOptionalBool(job, env, "greedy").value_or(false);
+  call.maxReplySeconds = readOptionalFloat(job, env, "maxReplySeconds");
+  call.maxNewTokens = readOptionalInt(job, env, "maxNewTokens");
+  call.temperature = readOptionalFloat(job, env, "temperature");
+  call.topP = readOptionalFloat(job, env, "topP");
+  call.topK = readOptionalInt(job, env, "topK");
   return call;
 }
 

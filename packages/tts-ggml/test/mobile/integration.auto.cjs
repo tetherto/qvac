@@ -54,6 +54,10 @@ async function runMossSfxTest (options = {}) { // eslint-disable-line no-unused-
   return runIntegrationModule('../integration/moss-sfx.test.js', options)
 }
 
+async function runMossSpeechTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/moss-speech.test.js', options)
+}
+
 async function runMossTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/moss.test.js', options)
 }
@@ -111,6 +115,7 @@ module.exports = {
   runGpuSmokeTest,
   runLavasrEnhancerTest,
   runMossSfxTest,
+  runMossSpeechTest,
   runMossTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,

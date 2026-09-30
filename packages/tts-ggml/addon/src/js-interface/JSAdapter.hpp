@@ -12,6 +12,7 @@
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 #include "model-interface/moss/MossConfig.hpp"
 #include "model-interface/moss/MossSoundEffectConfig.hpp"
+#include "model-interface/moss/MossSpeechConfig.hpp"
 #include "model-interface/parler/ParlerConfig.hpp"
 #include "model-interface/pocket/PocketConfig.hpp"
 #include "model-interface/supertonic/SupertonicConfig.hpp"
@@ -26,6 +27,7 @@ enum class EngineType {
   Audio8,
   Moss,
   MossSoundEffect,
+  MossSpeech,
   Pocket,
 };
 
@@ -69,6 +71,13 @@ public:
       js_env_t* env);
 
   moss::MossSoundEffectCall readMossSoundEffectCall(
+      qvac_lib_inference_addon_cpp::js::Object job, js_env_t* env);
+
+  moss::MossSpeechConfig buildMossSpeechConfig(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
+
+  moss::MossSpeechCall readMossSpeechCall(
       qvac_lib_inference_addon_cpp::js::Object job, js_env_t* env);
 
   // Shared by buildParlerConfig and the per-call runJob path (the same

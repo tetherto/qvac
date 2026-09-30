@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
   takes per-call `seconds`, `negativePrompt`, `steps`, `guidance` and `shift`;
   there is no streaming. Desktop, with a GPU recommended.
+- MOSS-Speech engine (`engine: 'moss-speech'`, fnlp MOSS-Speech): answers a
+  spoken question (`run({ audio, sampleRate })`, or a typed `input`) with a
+  24 kHz spoken reply and its text (`data.text`), from a language-model GGUF
+  plus a codec GGUF (`files.mossSpeechModel` / `files.mossSpeechCodec`, or
+  `moss-speech-*.gguf` in `modelDir`). Per call: earlier turns in `messages`,
+  `systemPrompt`, a reply voice (`replyVoice`), `maxReplySeconds`,
+  `maxNewTokens`, `textReply` and sampling controls; there is no streaming.
+  Desktop, with a GPU.
 
 ### Changed
 
