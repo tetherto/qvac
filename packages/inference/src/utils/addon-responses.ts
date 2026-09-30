@@ -36,7 +36,7 @@ export interface TtsStats {
   realTimeFactor?: number
   tokensPerSecond?: number
   totalSamples?: number
-  /** Audio8 only: codec frames generated, on a fixed 46 ms grid. */
+  /** Audio8 and MOSS only: codec frames generated (Audio8 on a 46 ms grid, MOSS at 12.5/s). */
   generatedFrames?: number
   backendDevice?: number
   backendId?: number
