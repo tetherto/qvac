@@ -651,6 +651,35 @@ TEST_F(LoadFitNormalizationTest, StrictBackendRejectsExplicitOtherFamily) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, ExplicitMixedBackendsStillWarn) {
+  using qvac_lib_inference_addon_cpp::logger::Priority;
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["devices"] = "CUDA0,Vulkan1";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"}, {});
+  auto selection = splitSelection({"CUDA0", "Vulkan1"});
+  selection.devices[0].registry = "CUDA";
+  selection.devices[1].registry = "Vulkan";
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  auto& verbosity = qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
+  const Priority previous = verbosity;
+  verbosity = Priority::WARNING;
+  ::testing::internal::CaptureStdout();
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  const std::string output = ::testing::internal::GetCapturedStdout();
+  verbosity = previous;
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_THAT(
+      output,
+      ::testing::HasSubstr(
+          "split mode spans different backends: CUDA0 (CUDA), Vulkan1 "
+          "(Vulkan)"));
+}
+
 TEST_F(LoadFitNormalizationTest, StrictBackendRejectsEmptySplit) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -735,6 +764,66 @@ TEST_F(LoadFitNormalizationTest, SplitModeFallsBackToRpcPrimaryWhenAllRpc) {
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
 
   EXPECT_EQ(result.params.mmproj_backend, "rpc0");
+  EXPECT_EQ(
+      result.runtimeBackendFamily,
+      static_cast<int64_t>(backend_selection::BackendFamilyCode::Rpc));
+}
+
+TEST_F(LoadFitNormalizationTest, RpcOnlyStatsIgnoreLocalProjectorFallback) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["devices"] = "rpc0,rpc1";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"}, {});
+  auto selection = splitSelection({"rpc0", "rpc1", "cuda0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[1].isRpc = true;
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "cuda0");
+  EXPECT_EQ(
+      result.runtimeBackendFamily,
+      static_cast<int64_t>(backend_selection::BackendFamilyCode::Rpc));
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitSingleDeviceStatsUsePlacedBackend) {
+  auto config = baseConfig();
+  config["devices"] = "Vulkan0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"}, {});
+  const auto selection = splitSelection({"CUDA0", "Vulkan0"});
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(
+      result.runtimeBackendFamily,
+      static_cast<int64_t>(backend_selection::BackendFamilyCode::Vulkan));
+}
+
+TEST_F(LoadFitNormalizationTest, MixedRpcAndLocalStatsReportOther) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "cuda0"});
+  selection.devices[0].isRpc = true;
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(
+      result.runtimeBackendFamily,
+      static_cast<int64_t>(backend_selection::BackendFamilyCode::Other));
 }
 
 // A KV-cache trait held by any participant governs the whole load, while the

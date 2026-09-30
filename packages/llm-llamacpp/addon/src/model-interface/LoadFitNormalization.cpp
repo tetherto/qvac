@@ -377,7 +377,43 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
     }
     selected.devices.push_back(*match);
   }
+  std::optional<std::string_view> localRegistry;
+  for (const backend_selection::SplitDevice& device : selected.devices) {
+    if (device.isRpc) {
+      continue;
+    }
+    if (!localRegistry.has_value()) {
+      localRegistry = device.registry;
+    } else if (device.registry != localRegistry.value()) {
+      selected.heterogeneous = true;
+      break;
+    }
+  }
   return selected;
+}
+
+backend_selection::BackendFamilyCode familyForPlacement(
+    backend_selection::BackendType type, const std::string& selectedName,
+    llama_split_mode splitMode, bool hasExplicitDevices,
+    const backend_selection::SplitDeviceSelection& selection) {
+  using backend_selection::BackendFamilyCode;
+  if (type != backend_selection::BackendType::GPU ||
+      (splitMode == LLAMA_SPLIT_MODE_NONE && !hasExplicitDevices) ||
+      selection.devices.empty()) {
+    return backend_selection::backendFamilyCodeOf(type, selectedName);
+  }
+  std::optional<BackendFamilyCode> family;
+  for (const backend_selection::SplitDevice& device : selection.devices) {
+    const BackendFamilyCode current =
+        device.isRpc
+            ? BackendFamilyCode::Rpc
+            : backend_selection::backendFamilyCodeOf(type, device.name);
+    if (family.has_value() && family.value() != current) {
+      return BackendFamilyCode::Other;
+    }
+    family = current;
+  }
+  return family.value();
 }
 
 std::string
@@ -1617,8 +1653,12 @@ NormalizedLoad normalizeLoadForFit(
       }
     }
     result.adrenoVersion = selected.adrenoVersion;
-    result.runtimeBackendFamily =
-        static_cast<int64_t>(backendFamilyCodeOf(selected.type, selected.name));
+    result.runtimeBackendFamily = static_cast<int64_t>(::familyForPlacement(
+        selected.type,
+        selected.name,
+        splitMode,
+        !explicitDevices.empty(),
+        splitSelection));
     result.runtimeBackendSkipReason = static_cast<int64_t>(selectionSkipReason);
 
     // QVAC-21257: optional runtime override for the multimodal projector
@@ -1784,27 +1824,6 @@ NormalizedLoad normalizeLoadForFit(
         params.devices.push_back(device.handle);
       }
       params.devices.push_back(nullptr);
-      if (splitSelection.heterogeneous) {
-        std::string perDevice;
-        for (const backend_selection::SplitDevice& device :
-             splitSelection.devices) {
-          if (device.isRpc) {
-            continue;
-          }
-          if (!perDevice.empty()) {
-            perDevice += ", ";
-          }
-          perDevice += device.name + " (" + device.registry + ")";
-        }
-        QLOG_IF(
-            Priority::WARNING,
-            string_format(
-                "[LlamaModel] split mode spans different backends: %s. An "
-                "even tensor-split will pace the model to the slowest card; "
-                "set backend with backend-required to use one backend, or "
-                "set tensor-split to weight it.\n",
-                perDevice.c_str()));
-      }
       QLOG_IF(
           Priority::INFO,
           string_format(
@@ -1812,6 +1831,27 @@ NormalizedLoad normalizeLoadForFit(
               "%s\n",
               splitSelection.devices.size(),
               deviceList.c_str()));
+    }
+    if (splitSelection.heterogeneous) {
+      std::string perDevice;
+      for (const backend_selection::SplitDevice& device :
+           splitSelection.devices) {
+        if (device.isRpc) {
+          continue;
+        }
+        if (!perDevice.empty()) {
+          perDevice += ", ";
+        }
+        perDevice += device.name + " (" + device.registry + ")";
+      }
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[LlamaModel] split mode spans different backends: %s. An "
+              "even tensor-split will pace the model to the slowest card; "
+              "set backend with backend-required to use one backend, or "
+              "set tensor-split to weight it.\n",
+              perDevice.c_str()));
     }
     configFilemap.erase("device");
 

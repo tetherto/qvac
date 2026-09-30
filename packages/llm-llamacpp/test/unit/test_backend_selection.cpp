@@ -2546,6 +2546,8 @@ TEST_F(BackendSelectionTest, BackendFamilyCodeOfClassifiesEachFamily) {
   // some builds report "mtl..." rather than "Metal"
   EXPECT_EQ(
       backendFamilyCodeOf(BackendType::GPU, "mtl0"), BackendFamilyCode::Metal);
+  EXPECT_EQ(
+      backendFamilyCodeOf(BackendType::GPU, "rpc0"), BackendFamilyCode::Rpc);
 }
 
 TEST_F(BackendSelectionTest, BackendFamilyCodeOfHandlesCpuAndUnknown) {

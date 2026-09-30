@@ -177,6 +177,7 @@ enum class BackendFamilyCode : std::uint8_t {
   Rocm = 6,
   Sycl = 7,
   Other = 8,
+  Rpc = 9,
 };
 
 /// @brief Classify a chosen backend into a @c BackendFamilyCode.

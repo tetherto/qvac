@@ -31,6 +31,7 @@ const BACKEND_FAMILIES = [
   "rocm",
   "sycl",
   "other",
+  "rpc",
 ] as const;
 
 export type BackendFamily = (typeof BACKEND_FAMILIES)[number];

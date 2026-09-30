@@ -30,6 +30,7 @@ const BACKEND_FAMILIES = [
     "rocm",
     "sycl",
     "other",
+    "rpc",
 ];
 // Index-matched to the C++ ExclusionReason enum. Why a higher-priority backend
 // was passed over, or "none" when nothing was.

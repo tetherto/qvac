@@ -1125,6 +1125,9 @@ backend_selection::BackendFamilyCode backend_selection::backendFamilyCodeOf(
   if (deviceName.empty() || deviceName == "none") {
     return BackendFamilyCode::None;
   }
+  if (::backendNameMatchesFamily(deviceName, "rpc")) {
+    return BackendFamilyCode::Rpc;
+  }
   // Same substring matching the `backend` override uses, so a device that an
   // override can name is reported under the family that named it. Order
   // matters only for rocm/hip, which are the same family under two spellings.

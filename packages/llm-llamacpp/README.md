@@ -307,7 +307,7 @@ Two further fields say *which* backend, since `backendDevice` cannot distinguish
 
 | Field | Values | Meaning |
 |---|---|---|
-| `backendFamily` | `cuda`, `vulkan`, `metal`, `opencl`, `rocm`, `sycl`, `cpu`, `other`, `none` | Which backend family the load actually ran on. A load that silently fell back from CUDA to Vulkan is otherwise indistinguishable from one that got what it asked for. |
+| `backendFamily` | `cuda`, `vulkan`, `metal`, `opencl`, `rocm`, `sycl`, `rpc`, `cpu`, `other`, `none` | Which backend family holds model layers. `rpc` means all participating devices are remote; `other` also covers a mixed-family split. |
 | `backendSkipReason` | `none`, `kv-cache-type-unsupported`, `bitnet-on-adreno-below-800`, `bitnet-on-adreno-800-plus`, `finetuning-on-adreno-below-800`, `finetuning-on-adreno-800-plus` | Why a higher-priority backend was passed over, or `none` if nothing was. |
 
 The selected device's *name* (`cuda0`, `vulkan1`) is not in the stats. It appears in the `[backend-selection]` log line at `verbosity: "2"`, which also records the selection path (`cascade`, `override`, `cpu`).
