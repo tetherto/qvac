@@ -113,7 +113,7 @@ Every metric reports `supported`, `unavailable`, `unverified`, or `failed`. Supp
 import { close, unloadModel } from '@qvac/inference'
 
 await unloadModel({ modelId })
-await close() // release the swarm, registry client, storage-root lock, and registered plugins
+await close() // release the swarm, registry client, storage-root lock, and registered plugins. Stop owned RPC servers.
 ```
 
 `close()` also clears the plugin registry, so if you keep using the API afterward you must `registerPlugin` / `plugins([...])` again first — otherwise the next call throws `PluginsNotRegisteredError`.

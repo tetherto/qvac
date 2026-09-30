@@ -75,15 +75,14 @@ async function runCleanup(): Promise<void> {
     destroyResourceCollector()
     clearRegistries()
     disposeAllVectorIndexes()
-    const results = await Promise.allSettled([
-      closeRpcResources(),
+    await Promise.allSettled([
       closeAllRagInstances(),
       cleanupDownloads(),
       unloadAllModels(),
       closeRegistryClient()
     ])
-    const rpcCleanup = results[0]!
-    if (rpcCleanup.status === 'rejected') throw rpcCleanup.reason
+    // Models may own buffers on our RPC servers. Release them before closing their sockets.
+    await closeRpcResources()
     cleanupRan = true
   })()
   try {
