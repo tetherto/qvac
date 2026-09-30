@@ -285,6 +285,21 @@ void tryEmplaceDevice(
   }
 }
 
+std::string normalizePciBusId(std::string id) {
+  const size_t domainEnd = id.find(':');
+  if (domainEnd == 2) {
+    return "0000:" + id;
+  }
+  if (domainEnd > 4 && domainEnd <= 8) {
+    size_t leadingZeros = 0;
+    while (domainEnd - leadingZeros > 4 && id[leadingZeros] == '0') {
+      ++leadingZeros;
+    }
+    id.erase(0, leadingZeros);
+  }
+  return id;
+}
+
 /// Resolve a backend-qualified or bus-id `main-gpu` to device indices.
 ///
 /// Scans rather than indexes: that is what makes these forms stable against
@@ -333,6 +348,7 @@ resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
         "main-gpu was given a PCI bus id, but this build cannot read device "
         "bus ids");
   }
+  const std::string wantedId = ::normalizePciBusId(want.id);
   std::vector<size_t> matches;
   for (size_t i = 0; i < deviceCount; ++i) {
     const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
@@ -343,15 +359,16 @@ resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
     std::ranges::transform(id, id.begin(), [](unsigned char c) {
       return static_cast<char>(std::tolower(c));
     });
-    const size_t virtualSuffix = id.find("-v", want.id.size());
+    id = ::normalizePciBusId(std::move(id));
+    const size_t virtualSuffix = id.find("-v", wantedId.size());
     const bool samePhysicalId =
-        virtualSuffix == want.id.size() &&
-        id.compare(0, virtualSuffix, want.id) == 0 &&
+        virtualSuffix == wantedId.size() &&
+        id.compare(0, virtualSuffix, wantedId) == 0 &&
         virtualSuffix + 2 < id.size() &&
         std::ranges::all_of(id.substr(virtualSuffix + 2), [](unsigned char c) {
           return std::isdigit(c) != 0;
         });
-    if (id == want.id || samePhysicalId) {
+    if (id == wantedId || samePhysicalId) {
       matches.push_back(i);
     }
   }
@@ -667,13 +684,11 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
     return MainGpu(MainGpuQualified{family, index});
   }
 
-  // A PCI bus id as ggml publishes it in props.device_id, with the domain
-  // optional: "0000:65:00.0" or "65:00.0".
+  // Accept both ggml's four-digit domain and nvidia-smi's eight-digit domain.
   static const std::regex busIdRe(
-      R"(^([0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]$)");
+      R"(^([0-9a-f]{4,8}:)?[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]$)");
   if (std::regex_match(lowerStr, busIdRe)) {
-    return MainGpu(
-        MainGpuBusId{lowerStr.size() == 7 ? "0000:" + lowerStr : lowerStr});
+    return MainGpu(MainGpuBusId{::normalizePciBusId(lowerStr)});
   }
 
   throw qvac_errors::StatusError(
@@ -1349,7 +1364,6 @@ backend_selection::splitModeDeviceNamesDetailed(
   }
 
   if ((registries.size() < 2 && !excludedByConstraints &&
-       !constraints.requireExplicitDeviceList &&
        constraints.requiredBackendFamilies.empty()) ||
       selectedRegistry.empty()) {
     return {};

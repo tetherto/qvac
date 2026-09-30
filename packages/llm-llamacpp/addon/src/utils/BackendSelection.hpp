@@ -151,7 +151,6 @@ struct LoadConstraints {
   std::vector<std::string> requiredBackendFamilies;
   /// Exact main-GPU selectors need an explicit device list so they can be
   /// translated to an index in that final list.
-  bool requireExplicitDeviceList = false;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };

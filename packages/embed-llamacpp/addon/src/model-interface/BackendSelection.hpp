@@ -132,7 +132,6 @@ ExclusionKind kindOf(ExclusionReason reason);
 struct LoadConstraints {
   std::vector<enum ggml_type> kvCacheTypes;
   std::vector<std::string> requiredBackendFamilies;
-  bool requireExplicitDeviceList = false;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
