@@ -18,7 +18,19 @@
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/WhisperTypes.hpp"
 
+#ifdef QVAC_ASR_GGML_TESTING
+#include "model-interface/WhisperGpuSelection.hpp"
+#endif
+
 namespace qvac::asrggml::whisper {
+
+#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
+/**
+ * Registers the ggml backends shipped as separate modules. Static builds have
+ * nothing to load and do not declare this.
+ */
+void ensureBackendsLoaded(const std::string& backendsDir);
+#endif
 
 class WhisperModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
@@ -106,6 +118,9 @@ public:
   bool isStreamEnded() const { return stream_ended_; }
   bool isLoaded() const { return is_loaded_; }
   bool isCaptionModeEnabled() const;
+  // Read from whisperConfig; gate the optional per-segment output fields.
+  bool isTokenTimestampsEnabled() const;
+  bool isTdrzEnabled() const;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
 
   // Active backend identity captured by captureActiveBackendInfo() at load();
@@ -145,6 +160,25 @@ public:
       !std::is_same<typename std::decay<T>::type, WhisperConfig>::value,
       void>::type
   saveLoadParams(T&&, Args&&...) {}
+
+#ifdef QVAC_ASR_GGML_TESTING
+  template <typename Registry>
+  main_gpu::WhisperLoadSelection resolveMainGpuSelectionForTesting(
+      bool useGpu, int gpuDevice, bool hasLegacyGpuDevice,
+      const Registry& registry) const {
+    return main_gpu::resolveWhisperLoadSelection(
+        useGpu,
+        gpuDevice,
+        hasLegacyGpuDevice,
+        cfg_.whisperContextCfg,
+        registry);
+  }
+
+  static bool configContextIsChangedForTesting(
+      const WhisperConfig& oldCfg, const WhisperConfig& newCfg) {
+    return configContextIsChanged(oldCfg, newCfg);
+  }
+#endif
 
 private:
   static bool configContextIsChanged(

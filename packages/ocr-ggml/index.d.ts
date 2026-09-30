@@ -59,8 +59,8 @@ export interface OcrGgmlParams {
      */
     nThreads?: number;
     /**
-     * Directory holding ggml backend shared libraries. Default: `@qvac/fabric`'s
-     * `prebuilds/` (desktop), falling back to this package's `prebuilds/` on
+     * Directory holding ggml backend shared libraries. Default: the root
+     * `@qvac/fabric/backends` resolves (desktop), falling back to this package's `prebuilds/` on
      * mobile where the package tree isn't resolvable from the packed worklet.
      */
     backendsDir?: string;
@@ -97,6 +97,16 @@ export interface OcrGgmlParams {
      * the README).
      */
     gpuDevice?: number;
+    /**
+     * Raw ggml registry index (integer number/string), or a GPU class (case-insensitive).
+     * An unavailable/excluded in-range device or absent class falls back to CPU.
+     * Out-of-range indices warn and use the default dedicated-first selection.
+     * Requires a GPU backendDevice; CPU remains the default. Cannot be combined
+     * with gpuDevice or main_gpu. Adreno Vulkan safety checks still apply.
+     */
+    "main-gpu"?: number | string;
+    /** Alias for main-gpu; provide only one spelling. */
+    main_gpu?: number | string;
 }
 export type { BackendInfo, OcrGgmlRunOptions };
 export interface OcrGgmlArgs {

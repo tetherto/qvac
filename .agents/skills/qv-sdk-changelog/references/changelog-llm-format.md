@@ -29,9 +29,9 @@ Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelin
 
 ### Format Requirements
 
-1. **Title**: `# QVAC SDK v{VERSION} Release Notes`
+1. **Title**: `# QVAC <Package> v{VERSION} Release Notes` — this package, not always SDK.
 
-2. **NPM Link**: Add `📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{VERSION}` right after the title. This is the **only** place an emoji is allowed in the document (see the no-emoji rule below).
+2. **NPM Link**: `📦 **NPM:** https://www.npmjs.com/package/@qvac/<pkg>/v/{VERSION}` right after the title. This is the **only** place an emoji is allowed in the document (see the no-emoji rule below).
 
 3. **Introduction**: Write a brief 2-3 sentence summary of what this release brings
 

@@ -7,8 +7,12 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
+    # cmake/qvac-addon/** is native input for every consuming addon (link line,
+    # exported symbols, build-time assertions). Keep this list contiguous:
+    # ts-check-names.test.mjs stops at the first non-entry line.
     paths:
       - "packages/**"
+      - "cmake/qvac-addon/**"
   workflow_dispatch:
     inputs:
       repository:
@@ -111,7 +115,9 @@ jobs:
       perfcomposite: ${{ steps.filter.outputs.perfcomposite }}
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
+      cpptests: ${{ steps.filter.outputs.cpptests }}
       packages: ${{ steps.filter.outputs.packages }}
+      cppbaseline: ${{ steps.filter.outputs.cppbaseline }}
       linking: ${{ steps.filter.outputs.linking }}
       fabricconsumers: ${{ steps.filter.outputs.fabricconsumers }}
     steps:
@@ -154,6 +160,7 @@ jobs:
                 "classification-ggml": "classification-ggml-pr-head-ts-checks / ts-checks",
                 "diffusion-cpp":       "diffusion-pr-head-ts-checks",
                 "embed-llamacpp":      "embed-pr-head-ts-checks / ts-checks",
+                "ggml-rpc-server":     "ggml-rpc-server-pr-head-ts-checks / ts-checks",
                 "llm-llamacpp":        "llm-pr-head-ts-checks / ts-checks",
                 "model-fit":           "model-fit-pr-head-ts-checks / ts-checks",
                 "ocr-ggml":            "ocr-ggml-pr-head-ts-checks / ts-checks",
@@ -167,9 +174,15 @@ jobs:
             # One qvac/prebuild-<key> status per affected prebuild package. statusKey
             # maps the vla-ggml nx project -> "vla" (Merge Guard's key); unique_by dedupes rows.
             echo "prebuilds=$(echo "$M" | jq -c '[.[] | select(.hasPrebuilds == true) | {package, statusKey: (if .package == "vla-ggml" then "vla" else .package end)}] | unique_by(.package)')"
+            echo "cpptests=$(echo "$M" | jq -c '[.[] | select(.hasCppTests == true) | {package, statusKey: (if .package == "vla-ggml" then "vla" else .package end)}] | unique_by(.package)')"
             # Passed to the leaves as their explicit `packages:`; each would otherwise
             # self-affect against its own target and miss the on-pr carveOut.
             echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
+            # Packages whose C++ tests run on every PR without the
+            # run-cpp-addon-tests label (on-pr options.ci cppTestsBaseline).
+            # cpp-tests below hands this list to cpp-tests-nx when the label is
+            # absent, so a baseline package never merges with its suite skipped.
+            echo "cppbaseline=$(echo "$M" | jq -c '[.[] | select(.cppTestsBaseline == true) | .package] | unique')"
             echo "linking=$(echo "$M" | jq -c '[.[] | select(.prebuildLinkingScript != null) | {package, workdir, prebuildLinkingScript}] | unique_by(.package)')"
             # Not duplicated into project.json: the one list on-pr-fabric fans out over.
             echo "fabricconsumers=$(jq -c '.npm_runtime' .fabric-consumers-head/.github/fabric-consumers.json)"
@@ -266,10 +279,16 @@ jobs:
 
   cpp-tests:
     needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds]
+    # The run-cpp-addon-tests label opts every affected package in. Without it
+    # only the packages declaring cppTestsBaseline on their on-pr target run;
+    # `packages:` below picks the matching list. A skipped or failed matrix
+    # exposes cppbaseline as '', which `!= '[]'` would read as a non-empty
+    # list, hence the explicit result check.
     if: |
       always() && !cancelled() &&
       needs.authorize.outputs.allowed == 'true' &&
-      needs.ci-router.outputs.run_cpp_tests == 'true' &&
+      needs.matrix.result == 'success' &&
+      (needs.ci-router.outputs.run_cpp_tests == 'true' || needs.matrix.outputs.cppbaseline != '[]') &&
       needs.matrix.outputs.packages != '[]' &&
       needs.detect-fabric-stack.result == 'success' &&
       needs.sanity-checks.result != 'failure' && needs.sanity-checks.result != 'cancelled' &&
@@ -286,7 +305,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
-      packages: ${{ needs.matrix.outputs.packages }}
+      packages: ${{ needs.ci-router.outputs.run_cpp_tests == 'true' && needs.matrix.outputs.packages || needs.matrix.outputs.cppbaseline }}
       fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
@@ -367,7 +386,8 @@ jobs:
       include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
       include-cuda-sdk: ${{ matrix.includeCudaSdk == true }}
       # Without this the lint lane compiles against the released @qvac/fabric.
-      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
+      # Only npm fabric consumers have node_modules/@qvac/fabric to overlay.
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && contains(fromJSON(needs.matrix.outputs.fabricconsumers), matrix.package) && 'fabric-prebuilds' || '' }}
 
   # main #4396 moved TS checks out of the privileged workflow: on-pr-<pkg>-ts.yml
   # runs them on pull_request against PR head, and this only awaits the result.
@@ -534,7 +554,14 @@ jobs:
   # once per affected package. PREBUILD_RESULT is the aggregate result: fail-closed.
   publish-prebuild-status:
     needs: [prebuild, ci-router, matrix, verify-prebuild-linking]
-    if: always() && !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.matrix.outputs.prebuilds != '[]'
+    # A skipped matrix exposes its outputs as '' not '[]', so always() plus
+    # `!= '[]'` expands the strategy to an empty list and errors the run.
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      needs.matrix.result == 'success' &&
+      needs.matrix.outputs.prebuilds != '' &&
+      needs.matrix.outputs.prebuilds != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -566,14 +593,57 @@ jobs:
           CONTEXT: qvac/prebuild-${{ matrix.statusKey }}
         run: node .github/scripts/prebuild-status/publish.mjs
 
+  # Posts the qvac/cpp-tests-<key> statuses Merge Guard's verify-cpp-tests reads,
+  # once per affected C++-test package. CPP_TEST_RESULT is the aggregate result,
+  # so one failing package reds every row: fail-closed, but not per-package.
+  publish-cpp-test-status:
+    needs: [cpp-tests, ci-router, matrix]
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      needs.matrix.result == 'success' &&
+      needs.matrix.outputs.cpptests != '' &&
+      needs.matrix.outputs.cpptests != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.cpptests || '[]') }}
+    steps:
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish C++ test status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
+          REUSE_HIT: ''
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          # A cppTestsBaseline package runs without the label, so a skip of its
+          # suite is never a legitimate no-label skip.
+          RUN_CPP_TESTS: ${{ contains(fromJSON(needs.matrix.outputs.cppbaseline || '[]'), matrix.package) && 'true' || needs.ci-router.outputs.run_cpp_tests }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/cpp-tests-${{ matrix.statusKey }}
+          KIND: cpp-tests
+        run: node .github/scripts/prebuild-status/publish.mjs
+
   merge-guard:
     needs: [fork-approval, authorize, ci-router, matrix, detect-fabric-stack, resolve-fabric-prebuilds, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, verify-prebuild-linking, cpp-tests, run-integration-tests]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      # Every status leads with the fabric guard: a failed detection leaves
-      # needs_fabric_artifact empty, which would otherwise satisfy != 'true'
-      # and let a stack PR built against released fabric read as a pass.
-      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
-      build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
-      integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
+      # These accept `skipped` as a pass, so authorize + a successful matrix must
+      # gate them; a failed fabric detection leaves needs_fabric_artifact empty.
+      sanity-checks-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      build-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
+      integration-tests-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}

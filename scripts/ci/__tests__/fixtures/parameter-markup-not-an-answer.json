@@ -1,0 +1,117 @@
+{
+  "payloads": [
+    {
+      "text": "<parameter=acknowledgment>\nqvac-ok\n</parameter>",
+      "mediaUrl": null
+    }
+  ],
+  "meta": {
+    "durationMs": 154939,
+    "agentMeta": {
+      "sessionId": "qvac-openclaw-upstream-compat-1",
+      "sessionFile": "agent:main:explicit:qvac-openclaw-upstream-compat-1",
+      "provider": "qvac",
+      "model": "qwen3.5-0.8b",
+      "contextTokens": 32768,
+      "contextTokensSource": "resolved",
+      "agentHarnessId": "openclaw",
+      "credentialSource": {
+        "kind": "direct",
+        "evidence": "provider-config",
+        "authorization": "declared"
+      },
+      "usage": {
+        "output": 21,
+        "cacheRead": 11399,
+        "cacheWrite": 0,
+        "total": 11420,
+        "cost": {
+          "total": 0
+        }
+      },
+      "lastCallUsage": {
+        "input": 0,
+        "output": 21,
+        "cacheRead": 11399,
+        "cacheWrite": 0,
+        "cost": {
+          "total": 0
+        },
+        "total": 11420
+      },
+      "promptTokens": 11399,
+      "contextBudgetStatus": {
+        "schemaVersion": 1,
+        "source": "pre-prompt-estimate",
+        "updatedAt": 1788939522256,
+        "provider": "qvac",
+        "model": "qwen3.5-0.8b",
+        "route": "fits",
+        "shouldCompact": false,
+        "estimatedPromptTokens": 11274,
+        "contextTokenBudget": 32768,
+        "promptBudgetBeforeReserve": 24576,
+        "reserveTokens": 8192,
+        "effectiveReserveTokens": 8192,
+        "remainingPromptBudgetTokens": 13302,
+        "overflowTokens": 0,
+        "toolResultReducibleChars": 0,
+        "messageCount": 0,
+        "unwindowedMessageCount": 0,
+        "sessionId": "qvac-openclaw-upstream-compat-1"
+      },
+      "codeModeEngaged": false,
+      "assistantTurns": 1,
+      "bridgeCalls": {
+        "search": 0,
+        "describe": 0,
+        "call": 0
+      },
+      "costUsd": 0,
+      "terminalReceipt": {
+        "runId": "47a838f6-e903-4750-b61b-9be3e85fe536",
+        "sessionId": "qvac-openclaw-upstream-compat-1",
+        "turnId": "47a838f6-e903-4750-b61b-9be3e85fe536",
+        "requested": {
+          "provider": "qvac",
+          "model": "qwen3.5-0.8b"
+        },
+        "effective": {
+          "provider": "qvac",
+          "model": "qwen3.5-0.8b",
+          "responseModel": "qwen3.5-0.8b"
+        },
+        "successfulToolNames": [],
+        "rerouted": false
+      }
+    },
+    "aborted": false,
+    "finalPromptText": "Reply with exactly this text and nothing else: qvac-ok",
+    "finalAssistantVisibleText": "<parameter=acknowledgment>\nqvac-ok\n</parameter>",
+    "finalAssistantRawText": "<parameter=acknowledgment>\nqvac-ok\n</parameter>\n</function>\n</tool_call>",
+    "replayInvalid": false,
+    "livenessState": "working",
+    "stopReason": "stop",
+    "executionTrace": {
+      "winnerProvider": "qvac",
+      "winnerModel": "qwen3.5-0.8b",
+      "attempts": [
+        {
+          "provider": "qvac",
+          "model": "qwen3.5-0.8b",
+          "result": "success",
+          "stage": "assistant"
+        }
+      ],
+      "fallbackUsed": false,
+      "runner": "embedded"
+    },
+    "requestShaping": {
+      "thinking": "off"
+    },
+    "completion": {
+      "stopReason": "stop",
+      "finishReason": "stop"
+    }
+  }
+}

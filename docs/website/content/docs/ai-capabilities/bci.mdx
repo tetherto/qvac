@@ -26,6 +26,14 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 </Callout>
 
 <Callout type="info">
+**Placing streamed segments on the timeline:** with `metadata: true` and the default `emit: 'delta'`, each streamed segment also carries `windowStartTimestep`, the absolute index of the 20 ms timestep where its decode window began. A segment's own `startMs` / `endMs` are window-local, so compute the stream position as `startMs + windowStartTimestep * 20` (and the same for `endMs`). Batch segments do not carry the field: their timings are already absolute.
+</Callout>
+
+<Callout type="info">
+**Where run stats live:** `stats` and backend `diagnostics` ride the terminal frame of a batch `bciTranscribe` call, so RPC consumers (such as the Python client, which yields raw frames) can read them. The JavaScript `bciTranscribe()` resolves to text or segments only, and the streaming sessions expose neither, because the addon reports no stats for a stream.
+</Callout>
+
+<Callout type="info">
 **On the day index:** sessions recorded on different days use different day-specific projections. Set `modelConfig.bciConfig.day_idx` in `loadModel()` to match the recording session of the input signal — otherwise the decoded text will be misleading.
 </Callout>
 

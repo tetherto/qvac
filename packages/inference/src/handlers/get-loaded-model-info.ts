@@ -30,6 +30,9 @@ export function handleGetLoadedModelInfo(
 
   const handlers = plugin ? Object.keys(plugin.handlers) : []
 
+  const fitProbe = entry.local.fitProbe
+  const probeRan = fitProbe !== undefined && fitProbe.reason !== 'disabled'
+
   const info: LoadedModelInfo = {
     modelId: entry.id,
     modelType: entry.local.modelType,
@@ -42,7 +45,8 @@ export function handleGetLoadedModelInfo(
     // Same detection the completion normalizer uses, so callers see the dialect it parses.
     ...(handlers.includes('completionStream') && {
       toolDialect: detectToolDialectFromName(entry.local.name, entry.local.path)
-    })
+    }),
+    ...(probeRan && { fitProbe })
   }
 
   return { type: 'getLoadedModelInfo', info }

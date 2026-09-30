@@ -483,3 +483,96 @@ test('Chatterbox: cfgRate forwards to ttsParams; omitted when unset', (t) => {
     "cfgRate omitted when unset so the engine keeps the model's baked rate"
   )
 })
+
+test('Chatterbox: fabric length / split / CFM / sampling knobs forward to ttsParams', (t) => {
+  const files = {
+    t3Model: './models/chatterbox-t3-turbo.gguf',
+    s3genModel: './models/chatterbox-s3gen.gguf'
+  }
+  const knobs = {
+    nPredict: 2500,
+    maxSentenceChars: 180,
+    crossfadeMs: 0,
+    batchCfmSteps: 7,
+    streamLeftContextTokens: 50,
+    temperature: 0,
+    topK: 0,
+    topP: 0.9,
+    repeatPenalty: 1,
+    exaggeration: 0.8,
+    cfgWeight: 0,
+    minP: 0.05
+  }
+  const params = new TTSGgml({ files, config: { language: 'en' }, ...knobs })._buildTtsParams()
+  for (const [knob, value] of Object.entries(knobs)) {
+    t.is(params[knob], value, `${knob} forwarded as-is (zero is not treated as unset)`)
+  }
+
+  const defaults = new TTSGgml({ files, config: { language: 'en' } })._buildTtsParams()
+  for (const knob of Object.keys(knobs)) {
+    t.absent(defaults[knob], `${knob} omitted when unset (engine default)`)
+  }
+})
+
+test('Chatterbox: cfmSteps stays the streaming count; batchCfmSteps is separate', (t) => {
+  const files = {
+    t3Model: './models/chatterbox-t3-turbo.gguf',
+    s3genModel: './models/chatterbox-s3gen.gguf'
+  }
+  const params = new TTSGgml({
+    files,
+    config: { language: 'en' },
+    streamChunkTokens: 25,
+    cfmSteps: 1
+  })._buildTtsParams()
+  t.is(params.cfmSteps, 1)
+  t.absent(params.batchCfmSteps, 'cfmSteps does not leak into the batch count')
+})
+
+test('Chatterbox: maxFrames is still rejected (its length cap is nPredict)', (t) => {
+  t.exception(
+    () =>
+      new TTSGgml({
+        files: {
+          t3Model: './models/chatterbox-t3-turbo.gguf',
+          s3genModel: './models/chatterbox-s3gen.gguf'
+        },
+        maxFrames: 100
+      }),
+    /maxFrames are parler\/audio8-only/
+  )
+})
+
+test('Chatterbox: chatterbox-only knobs are rejected on other engines', (t) => {
+  for (const [knob, value] of [
+    ['nPredict', 100],
+    ['maxSentenceChars', 180],
+    ['crossfadeMs', 30],
+    ['batchCfmSteps', 2],
+    ['repeatPenalty', 1.2],
+    ['exaggeration', 0.5],
+    ['cfgWeight', 0.5],
+    ['minP', 0.05]
+  ]) {
+    t.exception(
+      () =>
+        new TTSGgml({
+          engine: TTSGgml.ENGINE_SUPERTONIC,
+          files: { supertonicModel: './models/supertonic.gguf' },
+          [knob]: value
+        }),
+      /chatterbox-only/,
+      `${knob} on supertonic throws`
+    )
+  }
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_SUPERTONIC,
+        files: { supertonicModel: './models/supertonic.gguf' },
+        temperature: 0.5
+      }),
+    /parler\/audio8-only/,
+    'temperature is still rejected on engines that do not sample'
+  )
+})

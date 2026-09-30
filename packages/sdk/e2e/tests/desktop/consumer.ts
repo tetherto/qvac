@@ -66,6 +66,7 @@ import { BatchCompletionExecutor } from '../shared/executors/batch-completion-ex
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
+import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { TranslationBergamotCacheExecutor } from '../shared/executors/translation-bergamot-cache-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
@@ -75,6 +76,7 @@ import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { TranscriptionExecutor } from '../shared/executors/node/transcription-executor.js'
 import { TranscribeStreamEventsExecutor } from '../shared/executors/node/transcribe-stream-events-executor.js'
 import { RagExecutor } from '../shared/executors/node/rag-executor.js'
+import { VectorIndexExecutor } from '../shared/executors/vector-index-executor.js'
 import { OcrExecutor } from '../shared/executors/node/ocr-executor.js'
 import { VlaExecutor } from '../shared/executors/vla-executor.js'
 import { ClassificationExecutor } from '../shared/executors/node/classification-executor.js'
@@ -99,6 +101,7 @@ import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
+import { KvCacheRestartExecutor } from '../shared/executors/node/kv-cache-restart-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
@@ -602,7 +605,7 @@ resources.define('diffusion-esrgan', {
     device: 'gpu',
     threads: 4,
     prediction: 'v',
-    vae_on_cpu: true,
+    params_backend: 'vae=cpu',
     upscaler: {
       type: 'esrgan',
       model_src: REALESRGAN_X4PLUS_ANIME_6B,
@@ -699,10 +702,12 @@ export const executor = createExecutor({
     new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
+    new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
+    new DeferredToolsExecutor(resources),
 
     // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
     new TranslationBergamotCacheExecutor(),
@@ -735,6 +740,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
+    new KvCacheRestartExecutor(resources),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
     new PluginExecutor(resources)

@@ -10,7 +10,28 @@
 
 const test = require('brittle')
 const zlib = require('bare-zlib')
-const { pngLuminanceStddev, readScenePackPromptRows } = require('../integration/abot-guards.js')
+const {
+  waitForLogEvidence,
+  pngLuminanceStddev,
+  pngMeanAbsoluteError,
+  readScenePackPromptRows
+} = require('../integration/abot-guards.js')
+
+test('streaming evidence waits for every asynchronous marker', async (t) => {
+  const evidence = ['params=disk']
+  const timer = setTimeout(() => evidence.push('releasing params backend buffer'), 75)
+  try {
+    await waitForLogEvidence(evidence, ['params=disk', 'releasing params backend buffer'])
+    t.is(evidence.length, 2, 'waits for the later disk-release message')
+    await waitForLogEvidence(evidence, ['missing marker'], 50)
+    t.absent(
+      evidence.includes('missing marker'),
+      'timeout leaves missing evidence available for failure assertions'
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+})
 
 function crc32(buf) {
   let c = ~0
@@ -124,6 +145,34 @@ function makeScenePack(rows, emb, fillRow) {
   len.writeBigUInt64LE(BigInt(header.length))
   return Buffer.concat([len, header, data])
 }
+
+test('pngMeanAbsoluteError: compares decoded pixels across PNG filters', function (t) {
+  const pixel = (x, y) => [x, y, x + y]
+  const original = makePng(32, 32, pixel)
+  t.is(
+    pngMeanAbsoluteError(
+      original,
+      makePngFiltered(32, 32, pixel, (y) => y % 5)
+    ),
+    0
+  )
+  t.is(
+    pngMeanAbsoluteError(
+      original,
+      makePng(32, 32, (x, y) => [x + 3, y + 3, x + y + 3])
+    ),
+    3
+  )
+  t.is(pngMeanAbsoluteError(original, Buffer.alloc(64)), Infinity)
+  t.is(
+    pngMeanAbsoluteError(
+      makePng(32, 32, () => [1, 2, 3]),
+      makePng(16, 64, () => [1, 2, 3])
+    ),
+    Infinity,
+    'equal pixel counts do not hide a dimension mismatch'
+  )
+})
 
 test('pngLuminanceStddev: separates collapsed frames from real ones', function (t) {
   // A conditioning collapse renders as near-uniform low-contrast mush. Real

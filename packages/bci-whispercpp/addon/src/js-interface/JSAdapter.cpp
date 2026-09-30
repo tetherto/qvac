@@ -46,7 +46,16 @@ void JSAdapter::loadMap(
   for (auto i = 0; i < namesSize; ++i) {
     auto key = names.get<String>(env, i);
     auto value = jsObject.getProperty(env, key);
-    switch (getValueType(env, value)) {
+    const auto valueType = getValueType(env, value);
+    const auto keyName = key.as<std::string>(env);
+    if ((keyName == "main-gpu" || keyName == "main_gpu") &&
+        valueType != js_number && valueType != js_string) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+          "'integrated'");
+    }
+    switch (valueType) {
     case js_boolean:
       addConfigParam(
           output,
@@ -93,14 +102,12 @@ BCIConfig JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env) {
     loadContextParams(contextParamsObj.value(), env, config);
   }
 
-  auto miscConfigObj =
-      jsObject.getOptionalProperty<Object>(env, "miscConfig");
+  auto miscConfigObj = jsObject.getOptionalProperty<Object>(env, "miscConfig");
   if (miscConfigObj.has_value()) {
     loadMiscParams(miscConfigObj.value(), env, config);
   }
 
-  auto bciConfigObj =
-      jsObject.getOptionalProperty<Object>(env, "bciConfig");
+  auto bciConfigObj = jsObject.getOptionalProperty<Object>(env, "bciConfig");
   if (bciConfigObj.has_value()) {
     loadBCIParams(bciConfigObj.value(), env, config);
   }

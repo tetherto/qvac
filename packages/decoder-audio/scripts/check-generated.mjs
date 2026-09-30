@@ -3,13 +3,10 @@ import path from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { isHandwritten } from './generated-paths.mjs'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sourceRoot = path.join(packageRoot, 'src')
-// Directories holding hand-written JavaScript. Everything else that is tracked
-// and ends in .js/.d.ts is generated from src/ — note that `utils/` is
-// deliberately absent, since utils/*.js is build output.
-const handwrittenPaths = ['example/', 'node_modules/', 'scripts/', 'src/', 'test/']
 
 function run (command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -26,13 +23,6 @@ function walk (directory) {
     const entryPath = path.join(directory, entry.name)
     return entry.isDirectory() ? walk(entryPath) : [entryPath]
   })
-}
-
-function isHandwritten (filePath) {
-  return handwrittenPaths.some(
-    (handwrittenPath) =>
-      filePath === handwrittenPath || filePath.startsWith(handwrittenPath)
-  )
 }
 
 const expectedOutputs = walk(sourceRoot)

@@ -269,3 +269,43 @@ test('buildFinalFromEvents: stopReason absent when not emitted', (t) => {
   const { final } = buildFinalFromEvents(events, new Map())
   t.is(final.stopReason, undefined)
 })
+
+// --- toolError aggregation ---
+
+test('aggregateEvents: collects toolError events', (t) => {
+  const events: CompletionEvent[] = [
+    { type: 'toolError', seq: 0, error: { code: 'PARSE_ERROR', message: 'bad json', raw: '{' } },
+    { type: 'completionDone', seq: 1 }
+  ]
+  const result = aggregateEvents(events)
+  t.alike(result.toolErrors, [{ code: 'PARSE_ERROR', message: 'bad json', raw: '{' }])
+  t.is(result.toolCalls.length, 0)
+})
+
+test('buildFinalFromEvents: carries toolErrors, omits the field when there are none', (t) => {
+  const handlers: ToolHandlerMap = new Map()
+  const failed = buildFinalFromEvents(
+    [
+      {
+        type: 'toolError',
+        seq: 0,
+        error: { code: 'VALIDATION_ERROR', message: 'height must be an integer' }
+      },
+      { type: 'completionDone', seq: 1 }
+    ],
+    handlers
+  )
+  t.alike(failed.final.toolErrors, [
+    { code: 'VALIDATION_ERROR', message: 'height must be an integer' }
+  ])
+  t.is(failed.final.toolCalls.length, 0)
+
+  const clean = buildFinalFromEvents(
+    [
+      { type: 'contentDelta', seq: 0, text: 'hi' },
+      { type: 'completionDone', seq: 1 }
+    ],
+    handlers
+  )
+  t.absent('toolErrors' in clean.final)
+})

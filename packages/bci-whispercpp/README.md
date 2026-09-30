@@ -14,6 +14,7 @@ Transcribes multi-channel neural signals (e.g., 512-channel microelectrode array
 - [Model Conversion](#model-conversion)
 - [Usage](#usage)
 - [Configuration](#configuration)
+- [Assessing fit](#assessing-fit)
 - [Tests](#tests)
 - [Error Range](#error-range)
 - [whisper.cpp Patches](#whispercpp-patches)
@@ -205,6 +206,24 @@ const bci = new BCIWhispercpp({
 > })
 > ```
 
+### GPU selection
+
+For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
+`contextParams.main_gpu`) to a raw ggml registry index, an integer string,
+`'dedicated'`, or `'integrated'` (class names are case-insensitive). With GPU
+enabled and no explicit selector, dedicated GPUs are preferred. A class
+selector is strict: if that class is unavailable, execution falls back to CPU.
+An in-range numeric selector preserves its registry identity before backend
+filtering; a CPU, excluded backend, or refused Adreno Vulkan slot falls back to
+CPU without selecting another GPU. An out-of-range index logs a warning and
+uses normal selection. The supported local families are Metal, CUDA, Vulkan,
+and OpenCL; the existing Adreno OpenCL guard still applies.
+
+`main-gpu` does not enable GPU execution by itself. `use_gpu: false` always
+selects CPU. The legacy `contextParams.gpu_device` retains its existing
+Whisper GPU/IGPU-ordinal meaning and Adreno guard. Combining it with either
+new selector spelling, or supplying both new spellings, is rejected.
+
 ### 2. Load the model
 
 ```js
@@ -294,15 +313,61 @@ const wer = computeWER('how does it keep the cost down', 'how does it keep the c
 
 In streaming `delta` mode each segment is annotated with `windowStartTimestep`. In `full` mode the array contains a single `{ text }` entry.
 
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The model ships as `.bin`, which the registry has no weightless form for, so the projection needs the file on disk. It is a module export, not an instance method — nothing is loaded to call it.
+
+```js
+const { assessFit } = require('@qvac/bci-whispercpp')
+
+const fit = assessFit({
+  modelPath: '/models/bci-whisper.bin',
+  embedderPath: '/models/embedder.gguf',
+  audioSeconds: 300,
+  decoders: 5
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // whisper's own wording, e.g. 'model-unreadable', 'no-backend-device'
+fit.modelType // 'tiny' … 'large v3'
+fit.deviceName
+fit.deviceBytes
+fit.weightsBytes
+fit.kvBytes
+fit.computeBytes
+fit.hostBytes
+fit.report
+```
+
+This covers the whisper half of the load. `embedderFileBytes` reports the embedder's size on disk, 0 when no path was given. The embedder has no fitter, so that figure is a size on disk. It is counted in neither `deviceBytes` nor `hostBytes`.
+
+| Option | Description |
+| --- | --- |
+| `modelPath` | **Required.** Absolute path to the BCI model. |
+| `embedderPath` | Sized alongside the projection; reported as `embedderFileBytes`. |
+| `audioSeconds` | Longest single transcribe the projection must cover. |
+| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, the projection runs on the GPU, matching what the load does. |
+| `gpuDevice` | As the load takes it. |
+| `decoders` | Worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
+| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to whisper's own headroom. |
+| `backendsDir` | Where the dynamically-loaded ggml backends live. Defaults to the directory a real load uses, since the native side registers backends once per process. |
+
+A model the fitter cannot read is `status: "error"`; a broken request, or a host with no native binding, throws.
+
 ## Tests
 
 | Script | Purpose |
 |--------|---------|
 | `npm run test:unit` | JS unit tests (`brittle-bare test/unit/*.test.js`) — no model required |
 | `npm run test:integration` | JS integration tests against the native addon — requires `WHISPER_MODEL_PATH` |
+| `npm run test:integration:smoke` | Only the addon suite (`test/integration/addon.test.js`); the darwin-x64 CI leg runs this instead of the full suite |
 | `npm run test:cpp` | C++ unit tests (GoogleTest); `bare-make` rebuilds the addon with `BUILD_TESTING=ON` |
 | `npm run test:dts` | Type-checks the published `index.d.ts` |
 | `npm test` | Runs `test:unit` + `test:integration` |
+
+On CPU the integration suite runs only brief inference, one decode per test.
+The WER sweep, the multi-window streaming tests and the accuracy regression
+run on the GPU and are skipped when `NO_GPU=true`.
 
 ```bash
 # JS unit tests
@@ -362,7 +427,8 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | `model` | string | Optional override; usually set via `args.files.model`. |
 | `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA on `build:cuda` builds, preferred when an NVIDIA device and the CUDA runtime are present), OpenCL/Vulkan on Android. |
 | `flash_attn` | boolean | Enable flash attention. |
-| `gpu_device` | number | Select a non-default GPU device. |
+| `gpu_device` | number | Legacy index in Whisper’s GPU/IGPU-only list; cannot be combined with `main-gpu` or `main_gpu`. |
+| `main-gpu` / `main_gpu` | number or string | Raw registry index (integer number/string), or strict `dedicated` / `integrated` class. See [GPU selection](#gpu-selection). |
 
 ### config.miscConfig
 

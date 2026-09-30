@@ -1,0 +1,39 @@
+# 📦 Model Changes v0.20.0
+
+## Added Models
+
+```
+ABOT_WORLD_0_5B_LF_TAEHV_VAE
+ABOT_WORLD_0_5B_LF_WAN_VAE
+LTX_2_3_AUDIO_VAE
+LTX_2_3_VIDEO_VAE
+PARAKEET_0_6B_F16
+PARAKEET_0_6B_Q4_0
+PARAKEET_0_6B_Q8_0
+PARAKEET_NEMOTRON_0_6B_F16
+PARAKEET_NEMOTRON_0_6B_Q4_0
+PARAKEET_NEMOTRON_0_6B_Q8_0
+TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q4_K_M
+TRANSLATEPSY_AFRISLM_0_8B_TRANSLATION_Q8_0
+TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q4_K_M
+TRANSLATEPSY_AFRISLM_2B_TRANSLATION_Q8_0
+TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q4_K_M
+TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0
+```
+
+## Removed Models
+
+```
+ABOT_WORLD_0_5B_LF_VAE
+ABOT_WORLD_0_5B_LF_VAE_F16
+LTX_2_3_VAE
+LTX_2_3_VAE_1
+```
+
+---
+
+### Related PRs
+
+- [#4234](https://github.com/tetherto/qvac/pull/4234) - Derive diffusion VAE export names from the type tag
+- [#4357](https://github.com/tetherto/qvac/pull/4357) - Add Nemotron SDK support
+- [#4384](https://github.com/tetherto/qvac/pull/4384) - Regenerate SDK and AI SDK provider model catalogs

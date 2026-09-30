@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 // NOLINTBEGIN(readability-identifier-naming)
@@ -35,6 +36,9 @@ enum class PipelineMode : std::uint8_t {
 // preferred GPU path on Qualcomm Adreno, whose Vulkan compute path is
 // numerically broken and therefore guarded off on the auto Vulkan path.
 enum class BackendDevice : std::uint8_t { CPU, VULKAN, METAL, OPENCL };
+
+enum class MainGpuClass : std::uint8_t { DEDICATED, INTEGRATED };
+using MainGpu = std::variant<int, MainGpuClass>;
 
 // Mirrors @qvac/ocr-onnx's PipelineInput so the JS side can interchangeably
 // drive both addons. Either pass an encoded JPEG/PNG byte buffer (set
@@ -93,6 +97,8 @@ struct OcrConfig {
   // the pipeline falls back to CPU (see `OcrBackendSelection`). Ignored for the
   // CPU backend.
   std::optional<int> gpuDevice;
+  // Raw registry index or strict class; mutually exclusive with gpuDevice.
+  std::optional<MainGpu> mainGpu;
   // Optional per-stage backend override for the DocTR detector (mapped from
   // `params.detectionBackendDevice`). When set, detection runs on this backend
   // while recognition uses `backendDevice`. Motivation: on Mali-G715 the DBNet

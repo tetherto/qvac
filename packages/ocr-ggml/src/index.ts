@@ -2,6 +2,7 @@
 import path = require("bare-path");
 import fs = require("bare-fs");
 import QvacLogger = require("@qvac/logging");
+import fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   createJobHandler,
@@ -18,6 +19,7 @@ import {
   type OcrGgmlRunOptions,
 } from "./ocr-ggml";
 import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
+import { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } from "./lib/main-gpu";
 
 /**
  * OCR pipeline backing the addon.
@@ -40,22 +42,19 @@ const DOCTR_INTERNAL_LANG_LIST = ["en"];
  */
 const NATIVE_LANGUAGE_ERROR = /unsupported languages|only compatible with english/i;
 
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, in the
-// @qvac/fabric dependency (prebuilds/<host>/qvac__fabric). We deliberately do
-// not copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, resolve the single @qvac/fabric install and load the
-// backends from there. On mobile the package tree isn't resolvable at runtime
-// (the worklet runs from a packed bundle), so fall back to this addon's own
-// prebuilds, where the mobile packaging stages the backends. The native side
+// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
+// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
+// copy them into this addon to avoid duplicating tens of MB per fabric
+// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
+// package holds the runtime. On mobile the package tree isn't resolvable at
+// runtime (the worklet runs from a packed bundle), so fall back to this addon's
+// own prebuilds, where the mobile packaging stages the backends. The native side
 // appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir(): string {
-  try {
-    const fabricPkg = require.resolve("@qvac/fabric/package");
-    const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
-    if (fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
-  } catch {
-    // Mobile worklets cannot resolve the @qvac/fabric package tree.
-  }
+  // fabric's resolver only checks that the platform package resolves, not that
+  // its prebuilds are on disk.
+  const fabricRoot = fabricBackends.resolveBackendsDir();
+  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
   return path.join(__dirname, "prebuilds");
 }
 
@@ -107,8 +106,8 @@ export interface OcrGgmlParams {
    */
   nThreads?: number;
   /**
-   * Directory holding ggml backend shared libraries. Default: `@qvac/fabric`'s
-   * `prebuilds/` (desktop), falling back to this package's `prebuilds/` on
+   * Directory holding ggml backend shared libraries. Default: the root
+   * `@qvac/fabric/backends` resolves (desktop), falling back to this package's `prebuilds/` on
    * mobile where the package tree isn't resolvable from the packed worklet.
    */
   backendsDir?: string;
@@ -145,6 +144,16 @@ export interface OcrGgmlParams {
    * the README).
    */
   gpuDevice?: number;
+  /**
+   * Raw ggml registry index (integer number/string), or a GPU class (case-insensitive).
+   * An unavailable/excluded in-range device or absent class falls back to CPU.
+   * Out-of-range indices warn and use the default dedicated-first selection.
+   * Requires a GPU backendDevice; CPU remains the default. Cannot be combined
+   * with gpuDevice or main_gpu. Adreno Vulkan safety checks still apply.
+   */
+  "main-gpu"?: number | string;
+  /** Alias for main-gpu; provide only one spelling. */
+  main_gpu?: number | string;
 }
 
 export type { BackendInfo, OcrGgmlRunOptions };
@@ -323,6 +332,23 @@ export class OcrGgml {
       });
     }
 
+    const selectors = ["main-gpu", "main_gpu", "gpuDevice"] as const;
+    if (selectors.filter((key) => this.params[key] !== undefined).length > 1) {
+      throw new TypeError("Use only one of main-gpu, main_gpu, or gpuDevice");
+    }
+    const rawMainGpu = this.params["main-gpu"] !== undefined
+      ? this.params["main-gpu"] : this.params.main_gpu;
+    const mainGpu = typeof rawMainGpu === "string"
+      ? (/^[+-]?\d+$/.test(rawMainGpu) ? Number(rawMainGpu) : rawMainGpu.toLowerCase())
+      : rawMainGpu;
+    if (
+      mainGpu !== undefined && mainGpu !== "dedicated" && mainGpu !== "integrated" &&
+      !(typeof mainGpu === "number" && Number.isInteger(mainGpu) &&
+        mainGpu >= MIN_MAIN_GPU_INDEX && mainGpu <= MAX_MAIN_GPU_INDEX)
+    ) {
+      throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
+    }
+
     const configurationParams: OcrGgmlConfigurationParams = {
       pathDetector: this.params.pathDetector,
       pathRecognizer: this.params.pathRecognizer,
@@ -342,6 +368,8 @@ export class OcrGgml {
       "pipelineType",
       "backendDevice",
       "gpuDevice",
+      "main-gpu",
+      "main_gpu",
     ];
     for (const field of optionalFields) {
       if (this.params[field] !== undefined) {

@@ -36,12 +36,18 @@ var __importStar = (this && this.__importStar) || (function () {
 const bareOs = require("bare-os");
 const path = require("bare-path");
 const fs = require("bare-fs");
-const QvacLogger = require("@qvac/logging");
+const loggingModule = require("@qvac/logging");
+// Published logging releases expose a CJS constructor; the workspace exposes
+// an ESM default. Bare require(ESM) returns a namespace without __esModule.
+const loggingExport = loggingModule;
+const QvacLogger = typeof loggingExport === "function" ? loggingExport : loggingExport.default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const tts_1 = require("./tts");
 const errorModule = __importStar(require("./lib/error"));
+const pocketConfig_1 = require("./lib/pocketConfig");
 const backends_1 = require("./lib/backends");
+const fit_1 = require("./lib/fit");
 const textChunker_1 = require("./lib/textChunker");
 const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const { platform } = bareOs;
@@ -55,6 +61,8 @@ const ENGINE_SUPERTONIC = "supertonic";
 const ENGINE_COSYVOICE3 = "cosyvoice3";
 const ENGINE_PARLER = "parler";
 const ENGINE_AUDIO8 = "audio8";
+const ENGINE_MOSS = "moss";
+const ENGINE_POCKET = "pocket";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
 const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
@@ -237,6 +245,17 @@ const AUDIO8_DECODER_RE = /^audio8-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
 const AUDIO8_ENCODER_RE = /^audio8-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
 const AUDIO8_QUANT_ORDER = ["q8_0", "f16", "q4_0", "f32"];
 const AUDIO8_VOICE_KEYS = ["referenceAudio", "referenceText"];
+const MOSS_BACKBONE_RE = /^moss-tts-delay(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_DIALOGUE_BACKBONE_RE = /^moss-ttsd(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_DECODER_RE = /^moss-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_NATIVE_SAMPLE_RATE = 24000;
+const MOSS_FRAMES_PER_SECOND = 12.5;
+const MOSS_MAX_NEW_TOKENS = 2048;
+const MOSS_MAX_CHANNELS = 32;
+const MOSS_TERMINATION_ROWS = 2;
+const MOSS_MAX_DURATION_TOKENS = MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
+const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"];
 /** Engines that draw tokens, and so accept temperature / topK / topP / maxFrames. */
 const SAMPLING_ENGINES = [ENGINE_PARLER, ENGINE_AUDIO8];
 // Per-engine supported subsets, mirroring controls::supported_emotions() /
@@ -248,24 +267,35 @@ const ENGINE_EMOTIONS = {
     [ENGINE_COSYVOICE3]: ["anger", "happy", "neutral", "sad"],
     [ENGINE_SUPERTONIC]: [],
     [ENGINE_CHATTERBOX]: [],
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [],
+    [ENGINE_MOSS]: [],
 };
 const ENGINE_PACES = {
     [ENGINE_PARLER]: PACES, // rendered into the training caption
     [ENGINE_COSYVOICE3]: PACES, // slow/fast -> instruct; moderate -> none
     [ENGINE_SUPERTONIC]: PACES, // mapped onto the duration multiplier
     [ENGINE_CHATTERBOX]: [], // time-stretch only; use `speed`
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [], // no rate control at all
+    [ENGINE_MOSS]: [],
 };
 // Which channels an engine can change per call. Supertonic takes its pace
 // through EngineOptions when the engine is built, and tts-cpp exposes no
 // per-call surface for it, so it only moves at construction or reload().
+// tts-cpp engine names (tts-cpp/voice_controls.h engine_name) that differ from
+// this package's engine types.
+const FABRIC_ENGINE_TYPES = {
+    cosyvoice: ENGINE_COSYVOICE3,
+};
 const ENGINE_PER_CALL_CONDITIONING = {
     [ENGINE_PARLER]: CONDITIONING_KEYS,
     [ENGINE_COSYVOICE3]: CONDITIONING_KEYS,
     [ENGINE_SUPERTONIC]: [],
     [ENGINE_CHATTERBOX]: [],
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [],
+    [ENGINE_MOSS]: [],
 };
 function normalizeError(error) {
     return typeof error === "string"
@@ -384,7 +414,7 @@ function readDirSafe(modelDir) {
         return [];
     }
 }
-function audio8QuantRank(name, pattern) {
+function ggufQuantRank(name, pattern) {
     const match = name.match(pattern);
     if (!match)
         return Number.MAX_SAFE_INTEGER;
@@ -394,16 +424,16 @@ function audio8QuantRank(name, pattern) {
     return index === -1 ? AUDIO8_QUANT_ORDER.length + 1 : index + 1;
 }
 /**
- * Find one Audio8 GGUF in `modelDir`, preferring the quant tier that reads
- * best for its size (q8_0 > f16 > q4_0 > f32).
+ * Find one Audio8 or MOSS GGUF in `modelDir`, preferring the quant tier that
+ * reads best for its size (q8_0 > f16 > q4_0 > f32).
  */
-function findAudio8InDir(modelDir, pattern) {
+function findQuantRankedGguf(modelDir, pattern) {
     if (!modelDir)
         return undefined;
     const matches = readDirSafe(modelDir).filter((name) => pattern.test(name));
     if (matches.length === 0)
         return undefined;
-    matches.sort((left, right) => audio8QuantRank(left, pattern) - audio8QuantRank(right, pattern));
+    matches.sort((left, right) => ggufQuantRank(left, pattern) - ggufQuantRank(right, pattern));
     return path.join(modelDir, matches[0]);
 }
 /**
@@ -566,6 +596,10 @@ function normalizeGgmlFiles(files) {
         return {};
     return {
         modelDir: firstNonEmpty(files.modelDir),
+        pocketFlowModel: firstNonEmpty(files.pocketFlowModel),
+        pocketMimiModel: firstNonEmpty(files.pocketMimiModel),
+        pocketFrontend: firstNonEmpty(files.pocketFrontend),
+        pocketVoice: firstNonEmpty(files.pocketVoice),
         t3Model: firstNonEmpty(files.t3Model, files.t3ModelPath, files.t3),
         s3genModel: firstNonEmpty(files.s3genModel, files.s3genModelPath, files.s3gen),
         supertonicModel: firstNonEmpty(files.supertonicModel, files.supertonicModelPath, files.supertonic),
@@ -577,10 +611,16 @@ function normalizeGgmlFiles(files) {
         cosyvoiceHiftModel: firstNonEmpty(files.cosyvoiceHiftModel, files.cosyvoiceHiftModelPath),
         cosyvoiceS3tokModel: firstNonEmpty(files.cosyvoiceS3tokModel, files.cosyvoiceS3tokModelPath),
         cosyvoiceCampplusModel: firstNonEmpty(files.cosyvoiceCampplusModel, files.cosyvoiceCampplusModelPath),
+        cosyvoiceVocab: firstNonEmpty(files.cosyvoiceVocab, files.cosyvoiceVocabPath),
+        cosyvoiceMerges: firstNonEmpty(files.cosyvoiceMerges, files.cosyvoiceMergesPath),
+        cosyvoiceVoiceModel: firstNonEmpty(files.cosyvoiceVoiceModel, files.cosyvoiceVoiceModelPath),
         parlerModel: firstNonEmpty(files.parlerModel, files.parlerModelPath, files.parler),
         audio8Lm: firstNonEmpty(files.audio8Lm, files.audio8LmPath),
         audio8CodecDecoder: firstNonEmpty(files.audio8CodecDecoder, files.audio8CodecDecoderPath),
         audio8CodecEncoder: firstNonEmpty(files.audio8CodecEncoder, files.audio8CodecEncoderPath),
+        mossBackbone: firstNonEmpty(files.mossBackbone, files.mossBackbonePath),
+        mossCodecDecoder: firstNonEmpty(files.mossCodecDecoder, files.mossCodecDecoderPath),
+        mossCodecEncoder: firstNonEmpty(files.mossCodecEncoder, files.mossCodecEncoderPath),
         voicesDir: firstNonEmpty(files.voicesDir),
         lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
         lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
@@ -593,13 +633,17 @@ function detectEngineType(engine, files) {
         engine === ENGINE_SUPERTONIC ||
         engine === ENGINE_COSYVOICE3 ||
         engine === ENGINE_PARLER ||
-        engine === ENGINE_AUDIO8) {
+        engine === ENGINE_AUDIO8 ||
+        engine === ENGINE_MOSS ||
+        engine === ENGINE_POCKET) {
         return engine;
     }
     if (engine != null && engine !== "") {
         throw new Error("tts-ggml: 'engine' option must be 'chatterbox', 'supertonic', " +
-            `'cosyvoice3', 'parler' or 'audio8' (got '${String(engine)}')`);
+            `'cosyvoice3', 'parler', 'audio8', 'moss' or 'pocket' (got '${String(engine)}')`);
     }
+    if (files.pocketFlowModel || files.pocketMimiModel)
+        return ENGINE_POCKET;
     // Explicit CosyVoice3 files/dir take precedence over shared-modelDir sniffing.
     if (files.cosyvoiceModelDir || files.cosyvoiceLlmModel) {
         return ENGINE_COSYVOICE3;
@@ -612,6 +656,8 @@ function detectEngineType(engine, files) {
         return ENGINE_PARLER;
     if (files.audio8Lm || files.audio8CodecDecoder)
         return ENGINE_AUDIO8;
+    if (files.mossBackbone || files.mossCodecDecoder)
+        return ENGINE_MOSS;
     if (files.modelDir) {
         if (dirHasCosyvoice3(files.modelDir))
             return ENGINE_COSYVOICE3;
@@ -626,8 +672,15 @@ function detectEngineType(engine, files) {
             return ENGINE_SUPERTONIC;
         if (findParlerInDir(files.modelDir))
             return ENGINE_PARLER;
-        if (findAudio8InDir(files.modelDir, AUDIO8_LM_RE))
+        if (findQuantRankedGguf(files.modelDir, AUDIO8_LM_RE))
             return ENGINE_AUDIO8;
+        if (findQuantRankedGguf(files.modelDir, MOSS_BACKBONE_RE))
+            return ENGINE_MOSS;
+        if (findQuantRankedGguf(files.modelDir, MOSS_DIALOGUE_BACKBONE_RE)) {
+            return ENGINE_MOSS;
+        }
+        if (fileExistsSafe(path.join(files.modelDir, "flow-lm.gguf")))
+            return ENGINE_POCKET;
     }
     return ENGINE_CHATTERBOX;
 }
@@ -751,6 +804,34 @@ function assertAudio8SamplingFinite(sampling, where) {
         throw new Error(`tts-ggml: ${where}: ${field} must be a finite number`);
     }
 }
+function isValidDurationTokens(value) {
+    return Number.isInteger(value) && value >= 0 && value <= MOSS_MAX_DURATION_TOKENS;
+}
+function assertMossDurationTokens(value, where) {
+    if (value == null || isValidDurationTokens(value))
+        return;
+    throw new Error(`tts-ggml: ${where}: durationTokens must be an integer from 0 to ` +
+        `${MOSS_MAX_DURATION_TOKENS} (0 = free length)`);
+}
+function copyDialogueReferences(references) {
+    if (references == null)
+        return undefined;
+    return Array.isArray(references)
+        ? [...references]
+        : references;
+}
+function isNonEmptyString(value) {
+    return typeof value === "string" && value !== "";
+}
+function assertDialogueReferenceList(references) {
+    if (Array.isArray(references) &&
+        references.length > 0 &&
+        references.every(isNonEmptyString)) {
+        return;
+    }
+    throw new Error("tts-ggml: dialogueReferences must be a non-empty array of WAV paths, " +
+        "one per speaker");
+}
 function assertNotNegative(value, name, zeroMeans, where) {
     if (value === undefined || value >= 0)
         return;
@@ -823,7 +904,7 @@ function computeSentenceStreamStats(chunks, accumulator, countsFrames) {
 }
 /**
  * GGML-backed TTS via the `tts-cpp` library. Wraps the chatterbox,
- * supertonic, parler, cosyvoice3 and audio8 engines behind a single
+ * supertonic, parler, cosyvoice3, audio8 and moss engines behind a single
  * engine-agnostic JavaScript surface. Engine type is auto-detected from
  * `files` or selected explicitly with `engine`.
  *
@@ -840,6 +921,8 @@ class TTSGgml {
     static ENGINE_COSYVOICE3 = ENGINE_COSYVOICE3;
     static ENGINE_PARLER = ENGINE_PARLER;
     static ENGINE_AUDIO8 = ENGINE_AUDIO8;
+    static ENGINE_MOSS = ENGINE_MOSS;
+    static ENGINE_POCKET = ENGINE_POCKET;
     opts;
     exclusiveRun;
     logger;
@@ -850,6 +933,12 @@ class TTSGgml {
     _ttsInferenceQueueWaiter;
     _sentenceStreamCtx;
     _config;
+    _pocketJobPending = null;
+    _pocketCancelPromise = null;
+    _pocketLifecycleInProgress = false;
+    _pocketParams = null;
+    _pocketOptions = {};
+    _pocketFiles = {};
     _lazySessionLoading;
     _outputSampleRate;
     _engineType;
@@ -877,6 +966,23 @@ class TTSGgml {
     _streamLeftContextTokens;
     _cfmSteps;
     _cfgRate;
+    _batchCfmSteps;
+    _nPredict;
+    _maxSentenceChars;
+    _crossfadeMs;
+    _repeatPenalty;
+    _exaggeration;
+    _cfgWeight;
+    _minP;
+    _streamChunkTolerancePct;
+    _streamMinChunkTokens;
+    _voiceJsonPath;
+    _prewarmText;
+    _vulkanDevice;
+    _flowCutPrompt;
+    _cosyvoiceVocabPath;
+    _cosyvoiceMergesPath;
+    _cosyvoiceVoiceModelPath;
     _promptText;
     _instruct;
     _voice;
@@ -892,6 +998,11 @@ class TTSGgml {
     _audio8LmPath;
     _audio8CodecDecoderPath;
     _audio8CodecEncoderPath;
+    _mossBackbonePath;
+    _mossCodecDecoderPath;
+    _mossCodecEncoderPath;
+    _dialogueReferences;
+    _durationTokens;
     _referenceText;
     _greedy;
     _description;
@@ -921,7 +1032,7 @@ class TTSGgml {
         this._sentenceStreamCtx = null;
         this._ttsInferenceQueueWaiter = Promise.resolve();
         this._job = (0, infer_base_1.createJobHandler)({
-            cancel: () => this._optionalAddon()?.cancel(),
+            cancel: () => this._engineType === ENGINE_POCKET ? this.cancel() : this._optionalAddon()?.cancel(),
         });
         this._runExclusive = this.exclusiveRun
             ? (0, infer_base_1.exclusiveRunQueue)()
@@ -933,6 +1044,15 @@ class TTSGgml {
         this._lazySessionLoading = resolveDefaultLazySessionLoading(options.lazySessionLoading);
         this._outputSampleRate = validateOutputSampleRate(this._config.outputSampleRate);
         this._engineType = detectEngineType(options.engine, normalizedFiles);
+        this._assignMossVoiceOptions(options);
+        if (this._engineType === ENGINE_POCKET) {
+            if (normalizedFiles.lavasrEnhancer || normalizedFiles.lavasrDenoiser) {
+                throw new Error("Pocket does not support LavaSR enhancement or denoising");
+            }
+            this._pocketFiles = normalizedFiles;
+            this._pocketOptions = { ...options };
+            this._pocketParams = (0, pocketConfig_1.buildPocketParams)(normalizedFiles, options, this._config);
+        }
         this._resolveEngineAndModelPaths(normalizedFiles);
         this._mecabDictPath = firstNonEmpty(options.mecabDictPath, options.mecabDictDir, normalizedFiles.mecabDictDir);
         this._cangjieTsvPath = firstNonEmpty(options.cangjieTsvPath, normalizedFiles.cangjieTsvPath);
@@ -951,6 +1071,8 @@ class TTSGgml {
     }
     _resolveEngineAndModelPaths(files) {
         this._voicesDir = files.voicesDir;
+        if (this._engineType === ENGINE_POCKET)
+            return;
         if (this._engineType === ENGINE_COSYVOICE3) {
             // CosyVoice3 discovers its sub-model GGUFs from a model directory; the
             // native engine resolves the individual components. Explicit
@@ -961,6 +1083,9 @@ class TTSGgml {
             this._cosyvoiceHiftModelPath = files.cosyvoiceHiftModel;
             this._cosyvoiceS3tokModelPath = files.cosyvoiceS3tokModel;
             this._cosyvoiceCampplusModelPath = files.cosyvoiceCampplusModel;
+            this._cosyvoiceVocabPath = files.cosyvoiceVocab;
+            this._cosyvoiceMergesPath = files.cosyvoiceMerges;
+            this._cosyvoiceVoiceModelPath = files.cosyvoiceVoiceModel;
             return;
         }
         if (this._engineType === ENGINE_SUPERTONIC) {
@@ -977,6 +1102,10 @@ class TTSGgml {
             this._resolveAudio8ModelPaths(files);
             return;
         }
+        if (this._engineType === ENGINE_MOSS) {
+            this._resolveMossModelPaths(files);
+            return;
+        }
         if (files.modelDir) {
             const resolved = resolveChatterboxModelDirPaths(files.modelDir);
             this._t3ModelPath = firstNonEmpty(files.t3Model, resolved.t3);
@@ -988,9 +1117,26 @@ class TTSGgml {
         }
     }
     _resolveAudio8ModelPaths(files) {
-        this._audio8LmPath = firstNonEmpty(files.audio8Lm, findAudio8InDir(files.modelDir, AUDIO8_LM_RE));
-        this._audio8CodecDecoderPath = firstNonEmpty(files.audio8CodecDecoder, findAudio8InDir(files.modelDir, AUDIO8_DECODER_RE));
-        this._audio8CodecEncoderPath = firstNonEmpty(files.audio8CodecEncoder, findAudio8InDir(files.modelDir, AUDIO8_ENCODER_RE));
+        this._audio8LmPath = firstNonEmpty(files.audio8Lm, findQuantRankedGguf(files.modelDir, AUDIO8_LM_RE));
+        this._audio8CodecDecoderPath = firstNonEmpty(files.audio8CodecDecoder, findQuantRankedGguf(files.modelDir, AUDIO8_DECODER_RE));
+        this._audio8CodecEncoderPath = firstNonEmpty(files.audio8CodecEncoder, findQuantRankedGguf(files.modelDir, AUDIO8_ENCODER_RE));
+    }
+    _mossBackbonePatterns() {
+        return this._dialogueReferences
+            ? [MOSS_DIALOGUE_BACKBONE_RE]
+            : [MOSS_BACKBONE_RE, MOSS_DIALOGUE_BACKBONE_RE];
+    }
+    _findMossBackbone(modelDir) {
+        return firstNonEmpty(...this._mossBackbonePatterns().map((pattern) => findQuantRankedGguf(modelDir, pattern)));
+    }
+    _resolveMossModelPaths(files) {
+        this._mossBackbonePath = firstNonEmpty(files.mossBackbone, this._findMossBackbone(files.modelDir));
+        this._mossCodecDecoderPath = firstNonEmpty(files.mossCodecDecoder, findQuantRankedGguf(files.modelDir, MOSS_DECODER_RE));
+        this._mossCodecEncoderPath = firstNonEmpty(files.mossCodecEncoder, findQuantRankedGguf(files.modelDir, MOSS_ENCODER_RE));
+    }
+    _assignMossVoiceOptions(options) {
+        this._dialogueReferences = copyDialogueReferences(options.dialogueReferences);
+        this._durationTokens = options.durationTokens ?? undefined;
     }
     _assignSynthesisOptions(options) {
         this._referenceAudio = options.referenceAudio;
@@ -1004,10 +1150,23 @@ class TTSGgml {
         this._threads = options.threads;
         this._streamChunkTokens = options.streamChunkTokens;
         this._streamFirstChunkTokens = options.streamFirstChunkTokens;
-        // CosyVoice3-only: left-context speech tokens carried into each streaming chunk.
+        this._streamChunkTolerancePct = options.streamChunkTolerancePct;
+        this._streamMinChunkTokens = options.streamMinChunkTokens;
         this._streamLeftContextTokens = options.streamLeftContextTokens;
         this._cfmSteps = options.cfmSteps;
         this._cfgRate = options.cfgRate;
+        this._batchCfmSteps = options.batchCfmSteps;
+        this._nPredict = options.nPredict;
+        this._maxSentenceChars = options.maxSentenceChars;
+        this._crossfadeMs = options.crossfadeMs;
+        this._repeatPenalty = options.repeatPenalty;
+        this._exaggeration = options.exaggeration;
+        this._cfgWeight = options.cfgWeight;
+        this._minP = options.minP;
+        this._voiceJsonPath = options.voiceJsonPath;
+        this._prewarmText = options.prewarmText;
+        this._vulkanDevice = options.vulkanDevice;
+        this._flowCutPrompt = options.flowCutPrompt;
         // CosyVoice3-only: transcript of the reference audio for zero-shot cloning.
         this._promptText = options.promptText;
         // CosyVoice3-only: render the structured/raw instruct2 control to its string.
@@ -1034,15 +1193,17 @@ class TTSGgml {
         this._normalizeNumbers = options.normalizeNumbers;
     }
     _assertEngineStreamingSupport() {
+        // Checked ahead of the shared denoiser guard below: Supertonic rejects both
+        // LavaSR stages for one reason (tts-cpp has only one-shot enhance /
+        // denoise, and the engine reports no native rate before synthesis).
         if (this._engineType === ENGINE_SUPERTONIC &&
-            (this._streamChunkTokens != null ||
-                this._streamFirstChunkTokens != null)) {
-            throw new Error("tts-ggml: streamChunkTokens / streamFirstChunkTokens are " +
-                "Chatterbox-only options (sub-sentence native streaming via " +
-                "the chatterbox::Engine streaming chunked S3Gen+HiFT loop). " +
-                "Supertonic does not support sub-sentence native streaming; " +
-                "use sentence-level streaming via the engine-agnostic " +
-                "runStream() / runStreaming() / run({ streamOutput: true }) APIs.");
+            (this._enhancerGgufPath || this._denoiserGgufPath) &&
+            this._requestsChunkStreaming()) {
+            throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+                "supertonic native chunk streaming (streamChunkTokens > 0). Use " +
+                "batch synthesis or sentence-level streaming via runStream() / " +
+                "runStreaming() / run({ streamOutput: true }) for enhanced or " +
+                "denoised output.");
         }
         if (this._engineType === ENGINE_AUDIO8 &&
             (this._streamChunkTokens != null ||
@@ -1052,12 +1213,20 @@ class TTSGgml {
                 "utterance at a time. Use sentence-level streaming via " +
                 "runStream() / runStreaming() / run({ streamOutput: true }).");
         }
+        if (this._engineType === ENGINE_MOSS &&
+            this._streamFirstChunkTokens != null) {
+            throw new Error("tts-ggml: streamFirstChunkTokens is not supported by the moss " +
+                "engine, which streams fixed-size chunks; set streamChunkTokens " +
+                `(codec frames per chunk, ${MOSS_FRAMES_PER_SECOND} per second) only.`);
+        }
         // Runs before the denoiser guard so a Parler description/template conflict
         // is reported ahead of the engine-agnostic streaming constraints.
         this._assertParlerOptionConsistency();
+        this._assertEngineScopedOptions();
         this._assertCosyvoiceOptionConsistency();
         this._assertCosyvoiceCloneConsistent();
         this._assertAudio8OptionConsistency();
+        this._assertMossOptionConsistency();
         this._assertConditioningConsistency("constructor");
         if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
             throw new Error("tts-ggml: the LavaSR denoiser is not yet supported with " +
@@ -1111,18 +1280,72 @@ class TTSGgml {
         this._assertSamplerOptionSupport();
     }
     _assertSamplerOptionSupport() {
-        if (SAMPLING_ENGINES.includes(this._engineType))
+        if (this._engineType === ENGINE_POCKET || SAMPLING_ENGINES.includes(this._engineType))
             return;
+        // Chatterbox's T3 samples too, but its length cap is nPredict, not maxFrames.
+        const tokenSampling = this._engineType === ENGINE_CHATTERBOX
+            ? {}
+            : {
+                temperature: this._temperature,
+                topK: this._topK,
+                topP: this._topP,
+            };
         const sampling = setOptionNames({
-            temperature: this._temperature,
-            topK: this._topK,
-            topP: this._topP,
+            ...tokenSampling,
             maxFrames: this._maxFrames,
         });
         if (sampling.length === 0)
             return;
         throw new Error(`tts-ggml: ${sampling.join(", ")} are parler/audio8-only options ` +
             `(engine is ${this._engineType})`);
+    }
+    /**
+     * Options only some engines read. Set on any other engine they would be
+     * dropped without effect, so they are rejected by name instead.
+     */
+    _assertEngineScopedOptions() {
+        const scoped = [
+            [
+                [ENGINE_CHATTERBOX],
+                {
+                    batchCfmSteps: this._batchCfmSteps,
+                    nPredict: this._nPredict,
+                    maxSentenceChars: this._maxSentenceChars,
+                    crossfadeMs: this._crossfadeMs,
+                    repeatPenalty: this._repeatPenalty,
+                    exaggeration: this._exaggeration,
+                    cfgWeight: this._cfgWeight,
+                    minP: this._minP,
+                },
+            ],
+            [
+                [ENGINE_CHATTERBOX, ENGINE_COSYVOICE3],
+                { streamLeftContextTokens: this._streamLeftContextTokens },
+            ],
+            [
+                [ENGINE_SUPERTONIC],
+                {
+                    voiceJsonPath: this._voiceJsonPath,
+                    prewarmText: this._prewarmText,
+                    streamChunkTolerancePct: this._streamChunkTolerancePct,
+                    streamMinChunkTokens: this._streamMinChunkTokens,
+                },
+            ],
+            [
+                [ENGINE_SUPERTONIC, ENGINE_COSYVOICE3],
+                { vulkanDevice: this._vulkanDevice },
+            ],
+            [[ENGINE_COSYVOICE3], { flowCutPrompt: this._flowCutPrompt }],
+        ];
+        for (const [engines, fields] of scoped) {
+            if (engines.includes(this._engineType))
+                continue;
+            const names = setOptionNames(fields);
+            if (names.length === 0)
+                continue;
+            throw new Error(`tts-ggml: ${names.join(", ")} are ${engines.join("/")}-only ` +
+                `options (engine is ${this._engineType})`);
+        }
     }
     _assertAudio8OptionConsistency() {
         if (this._engineType === ENGINE_AUDIO8) {
@@ -1145,6 +1368,68 @@ class TTSGgml {
             throw new Error(`tts-ggml: ${audio8Only.join(", ")} are audio8-only options ` +
                 `(engine is ${this._engineType})`);
         }
+    }
+    _assertMossOptionConsistency() {
+        if (this._engineType !== ENGINE_MOSS) {
+            this._assertNoMossOnlyOptions();
+            return;
+        }
+        if (this._enhancerGgufPath || this._denoiserGgufPath) {
+            throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+                "the moss engine. Drop lavasrEnhancer / lavasrDenoiser.");
+        }
+        this._assertMossOutputRate();
+        this._assertMossVoiceConsistent();
+        assertMossDurationTokens(this._durationTokens, "constructor");
+        this._assertMossDialogueReferences();
+    }
+    _assertNoMossOnlyOptions() {
+        const mossOnly = setOptionNames({
+            durationTokens: this._durationTokens,
+            dialogueReferences: this._dialogueReferences !== undefined || undefined,
+        });
+        if (mossOnly.length === 0)
+            return;
+        throw new Error(`tts-ggml: ${mossOnly.join(", ")} are moss-only options ` +
+            `(engine is ${this._engineType})`);
+    }
+    _assertMossDialogueReferences() {
+        if (this._dialogueReferences === undefined)
+            return;
+        assertDialogueReferenceList(this._dialogueReferences);
+        if (this._referenceAudio) {
+            throw new Error("tts-ggml: referenceAudio and dialogueReferences are exclusive; " +
+                "pass one recording per speaker in dialogueReferences");
+        }
+        if (!this._mossCodecEncoderPath) {
+            throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the codec " +
+                "encoder GGUF (files.mossCodecEncoder)");
+        }
+        if (!this._mossBackbonePath) {
+            throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the MOSS-TTSD " +
+                "backbone: stage moss-ttsd-*.gguf in modelDir or set files.mossBackbone");
+        }
+    }
+    _assertSentenceStreamingAllowed(where) {
+        if (this._dialogueReferences === undefined)
+            return;
+        throw new Error(`tts-ggml: ${where}: MOSS dialogue cannot be split into sentences, ` +
+            "because every job must open with the reference transcripts; use " +
+            "run() or native streaming (streamChunkTokens)");
+    }
+    _assertMossOutputRate() {
+        if (this._outputSampleRate == null ||
+            this._outputSampleRate === MOSS_NATIVE_SAMPLE_RATE) {
+            return;
+        }
+        throw new Error(`tts-ggml: the moss engine emits ${MOSS_NATIVE_SAMPLE_RATE} Hz only; ` +
+            `drop outputSampleRate (got ${this._outputSampleRate}).`);
+    }
+    _assertMossVoiceConsistent() {
+        if (!this._referenceAudio || this._mossCodecEncoderPath)
+            return;
+        throw new Error("tts-ggml: voice cloning with the moss engine needs the codec " +
+            "encoder GGUF (files.mossCodecEncoder)");
     }
     /**
      * A recording without its transcript is accepted by the model but degrades
@@ -1193,7 +1478,6 @@ class TTSGgml {
         const cosyvoiceOnlyFields = {
             instruct: this._instruct,
             promptText: this._promptText,
-            streamLeftContextTokens: this._streamLeftContextTokens,
         };
         for (const [key, value] of Object.entries(cosyvoiceOnlyFields)) {
             if (value != null)
@@ -1222,7 +1506,7 @@ class TTSGgml {
      * The per-call surface of a non-Parler engine: only the cross-engine
      * emotion/pace it declares support for, never Parler's template fields.
      */
-    _resolveConditioningJobFields(source, where) {
+    _resolveConditioningJobFields(source, where, instruct) {
         const parlerOnly = keysPresent(source, PARLER_ONLY_KEYS);
         if (parlerOnly.length > 0) {
             throw new Error(`tts-ggml: ${where}: per-call description/voice-template options ` +
@@ -1237,9 +1521,23 @@ class TTSGgml {
         if (this._engineType === ENGINE_COSYVOICE3) {
             // A per-call control replaces the constructor's, so only the per-call
             // fields participate in the one-instruction count.
-            assertSingleCosyvoiceControl(fields, undefined, where);
+            assertSingleCosyvoiceControl(fields, instruct, where);
         }
         return fields;
+    }
+    /**
+     * CosyVoice3's per-call instruction, rendered like the constructor's. The
+     * native layer reads it next to emotion/pace, and any of the three replaces
+     * the configured conditioning for that synthesis.
+     */
+    _resolveJobInstruct(source, where) {
+        if (source?.instruct === undefined)
+            return undefined;
+        if (this._engineType !== ENGINE_COSYVOICE3) {
+            throw new Error(`tts-ggml: ${where}: per-call instruct is cosyvoice3-only ` +
+                `(engine is ${this._engineType})`);
+        }
+        return renderCosyvoiceInstruct(source.instruct) || undefined;
     }
     /**
      * Parler's per-call surface: description/template fields, where a per-call
@@ -1300,13 +1598,18 @@ class TTSGgml {
      * and every engine the cross-engine conditioning it supports.
      */
     _resolveJobFields(source, where) {
+        const instruct = this._resolveJobInstruct(source, where);
         const engineFields = this._engineType === ENGINE_PARLER
             ? this._resolveParlerJobFields(source, where)
-            : this._resolveConditioningJobFields(source, where);
+            : this._resolveConditioningJobFields(source, where, instruct);
         const audio8 = this._resolveAudio8JobFields(source, where);
-        if (!engineFields && !audio8)
+        if (!engineFields && !audio8 && instruct === undefined)
             return undefined;
-        return { ...(engineFields ?? {}), ...(audio8 ?? {}) };
+        return {
+            ...(engineFields ?? {}),
+            ...(audio8 ?? {}),
+            ...(instruct === undefined ? {} : { instruct }),
+        };
     }
     getEngineType() {
         return this._engineType;
@@ -1321,6 +1624,9 @@ class TTSGgml {
     }
     async load(..._args) {
         void _args;
+        return this._withPocketLifecycle(() => this._loadModel());
+    }
+    async _loadModel() {
         if (this.state.destroyed) {
             throw new QvacErrorAddonTTSGgml({
                 code: ERR_CODES.FAILED_TO_LOAD,
@@ -1329,14 +1635,17 @@ class TTSGgml {
         }
         if (this.state.configLoaded || this.state.weightsLoaded) {
             this._getLogger().info("Reload requested - unloading existing model first");
-            await this.unload();
+            await this._unloadModel();
         }
         await this._load();
         this.state.configLoaded = true;
         this.state.weightsLoaded = true;
     }
     async run(input) {
-        if (input?.streamOutput === true) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        if (input?.streamOutput === true && this._engineType !== ENGINE_POCKET) {
+            this._assertSentenceStreamingAllowed("run with streamOutput");
             if (typeof input.input !== "string" ||
                 input.input.trim().length === 0) {
                 throw new QvacErrorAddonTTSGgml({
@@ -1360,7 +1669,13 @@ class TTSGgml {
      * `run({ input: text, streamOutput: true, ...options })`.
      */
     async runStream(text, options = {}) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
         const normalized = options == null || typeof options !== "object" ? {} : options;
+        if (this._engineType === ENGINE_POCKET) {
+            const run = () => this._runStreamOrchestrator(text, normalized, this._resolveJobFields(normalized, "runStream"));
+            return this.exclusiveRun ? this._enqueueExclusiveTtsResponse(run) : run();
+        }
         return this.run({
             input: text,
             streamOutput: true,
@@ -1368,6 +1683,9 @@ class TTSGgml {
             maxChunkScalars: normalized.maxChunkScalars,
             ...(pickParlerDescFields(normalized) ?? {}),
             ...(pickAudio8VoiceFields(normalized) ?? {}),
+            ...(normalized.instruct === undefined
+                ? {}
+                : { instruct: normalized.instruct }),
         });
     }
     /**
@@ -1378,6 +1696,9 @@ class TTSGgml {
      * small streamed fragments are coalesced.
      */
     async runStreaming(textStream, options = {}) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        this._assertSentenceStreamingAllowed("runStreaming");
         const jobFields = this._resolveJobFields(options, "runStreaming");
         const streamOptions = this._resolveRunStreamingOptions(textStream, options);
         let normalized = this._normalizeTextStream(textStream);
@@ -1468,6 +1789,7 @@ class TTSGgml {
         });
     }
     _runTextStreamOrchestrator(source, jobFields) {
+        this._checkPocketRequest();
         const response = this._job.start();
         this._sentenceStreamCtx = {
             textStreamMode: true,
@@ -1478,7 +1800,10 @@ class TTSGgml {
             chunkResolver: null,
             jobFields,
         };
+        const context = this._sentenceStreamCtx;
         void this._sentenceStreamTextIterableDrive().catch((error) => {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
@@ -1494,6 +1819,8 @@ class TTSGgml {
         }
         try {
             for await (const piece of context.asyncTextSource) {
+                if (context !== this._sentenceStreamCtx)
+                    return;
                 const text = String(piece).trim();
                 if (text.length === 0)
                     continue;
@@ -1502,7 +1829,9 @@ class TTSGgml {
                 const done = new Promise((resolve, reject) => {
                     context.chunkResolver = { resolve, reject };
                 });
-                await this._requireAddon().runJob({
+                // Dispatch may fail before the completion promise is awaited.
+                void done.catch(() => { });
+                await this._dispatchJob({
                     type: "text",
                     input: text,
                     ...(context.jobFields ?? {}),
@@ -1511,11 +1840,15 @@ class TTSGgml {
             }
         }
         catch (error) {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
             return;
         }
+        if (context !== this._sentenceStreamCtx)
+            return;
         const current = this._sentenceStreamCtx;
         const chunks = current?.chunks || [];
         const accumulator = current?.acc || emptyStreamAccumulator();
@@ -1531,13 +1864,14 @@ class TTSGgml {
             : computeSentenceStreamStats(chunks, accumulator, this._pacesOnFrames()));
     }
     /**
-     * Audio8 reports `tokensPerSecond` as codec frames per second, so the
-     * streaming aggregate has to count frames too rather than characters.
+     * Audio8 and MOSS report `tokensPerSecond` as codec frames per second, so
+     * the streaming aggregate has to count frames too rather than characters.
      */
     _pacesOnFrames() {
-        return this._engineType === ENGINE_AUDIO8;
+        return (this._engineType === ENGINE_AUDIO8 || this._engineType === ENGINE_MOSS);
     }
     _runStreamOrchestrator(text, options, jobFields) {
+        this._checkPocketRequest();
         const chunks = (0, textChunker_1.splitTtsText)(String(text), {
             language: this._config.language,
             locale: options.locale,
@@ -1549,6 +1883,7 @@ class TTSGgml {
                 adds: "chunked synthesis: text produced no chunks after split",
             });
         }
+        this._checkPocketRequest();
         const response = this._job.start();
         this._sentenceStreamCtx = {
             chunks,
@@ -1557,7 +1892,10 @@ class TTSGgml {
             chunkResolver: null,
             jobFields,
         };
+        const context = this._sentenceStreamCtx;
         void this._sentenceStreamDriveBody().catch((error) => {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
@@ -1569,17 +1907,23 @@ class TTSGgml {
         if (!context || context.textStreamMode)
             return;
         for (let index = 0; index < context.chunks.length; index++) {
+            if (context !== this._sentenceStreamCtx)
+                return;
             context.chunkIdx = index;
             const done = new Promise((resolve, reject) => {
                 context.chunkResolver = { resolve, reject };
             });
-            await this._requireAddon().runJob({
+            // Dispatch may fail before the completion promise is awaited.
+            void done.catch(() => { });
+            await this._dispatchJob({
                 type: "text",
                 input: context.chunks[index],
                 ...(context.jobFields ?? {}),
             });
             await done;
         }
+        if (context !== this._sentenceStreamCtx)
+            return;
         this._sentenceStreamCtx = null;
     }
     async _load() {
@@ -1600,6 +1944,8 @@ class TTSGgml {
         }
     }
     _buildTtsParams() {
+        if (this._pocketParams)
+            return { ...this._pocketParams };
         if (this._engineType === ENGINE_SUPERTONIC) {
             return this._buildSupertonicParams();
         }
@@ -1611,6 +1957,9 @@ class TTSGgml {
         }
         if (this._engineType === ENGINE_AUDIO8) {
             return this._buildAudio8Params();
+        }
+        if (this._engineType === ENGINE_MOSS) {
+            return this._buildMossParams();
         }
         return this._buildChatterboxParams();
     }
@@ -1634,6 +1983,21 @@ class TTSGgml {
         }
         if (this._cosyvoiceCampplusModelPath) {
             parameters.cosyvoiceCampplusModelPath = this._cosyvoiceCampplusModelPath;
+        }
+        if (this._cosyvoiceVocabPath) {
+            parameters.cosyvoiceVocabPath = this._cosyvoiceVocabPath;
+        }
+        if (this._cosyvoiceMergesPath) {
+            parameters.cosyvoiceMergesPath = this._cosyvoiceMergesPath;
+        }
+        if (this._cosyvoiceVoiceModelPath) {
+            parameters.cosyvoiceVoiceModelPath = this._cosyvoiceVoiceModelPath;
+        }
+        if (this._vulkanDevice != null) {
+            parameters.vulkanDevice = this._vulkanDevice | 0;
+        }
+        if (this._flowCutPrompt != null) {
+            parameters.flowCutPrompt = !!this._flowCutPrompt;
         }
         if (this._referenceAudio != null) {
             parameters.referenceAudio = this._referenceAudio;
@@ -1692,9 +2056,35 @@ class TTSGgml {
         if (this._cfmSteps != null) {
             parameters.cfmSteps = this._cfmSteps | 0;
         }
+        if (this._streamLeftContextTokens != null) {
+            parameters.streamLeftContextTokens = this._streamLeftContextTokens | 0;
+        }
+        if (this._batchCfmSteps != null) {
+            parameters.batchCfmSteps = this._batchCfmSteps | 0;
+        }
         if (this._cfgRate != null) {
             parameters.cfgRate = Number(this._cfgRate);
         }
+        if (this._nPredict != null)
+            parameters.nPredict = this._nPredict | 0;
+        if (this._maxSentenceChars != null) {
+            parameters.maxSentenceChars = this._maxSentenceChars | 0;
+        }
+        if (this._crossfadeMs != null) {
+            parameters.crossfadeMs = this._crossfadeMs | 0;
+        }
+        this._assignSamplingParams(parameters);
+        if (this._repeatPenalty != null) {
+            parameters.repeatPenalty = Number(this._repeatPenalty);
+        }
+        if (this._exaggeration != null) {
+            parameters.exaggeration = Number(this._exaggeration);
+        }
+        if (this._cfgWeight != null) {
+            parameters.cfgWeight = Number(this._cfgWeight);
+        }
+        if (this._minP != null)
+            parameters.minP = Number(this._minP);
         if (this._speed != null)
             parameters.speed = Number(this._speed);
         if (this._mecabDictPath) {
@@ -1727,6 +2117,25 @@ class TTSGgml {
         }
         if (this._vulkanCacheDir) {
             parameters.vulkanCacheDir = this._vulkanCacheDir;
+        }
+        if (this._voiceJsonPath)
+            parameters.voiceJsonPath = this._voiceJsonPath;
+        if (this._prewarmText)
+            parameters.prewarmText = this._prewarmText;
+        if (this._vulkanDevice != null) {
+            parameters.vulkanDevice = this._vulkanDevice | 0;
+        }
+        if (this._streamChunkTokens != null) {
+            parameters.streamChunkTokens = this._streamChunkTokens | 0;
+        }
+        if (this._streamFirstChunkTokens != null) {
+            parameters.streamFirstChunkTokens = this._streamFirstChunkTokens | 0;
+        }
+        if (this._streamChunkTolerancePct != null) {
+            parameters.streamChunkTolerancePct = this._streamChunkTolerancePct | 0;
+        }
+        if (this._streamMinChunkTokens != null) {
+            parameters.streamMinChunkTokens = this._streamMinChunkTokens | 0;
         }
         return parameters;
     }
@@ -1819,6 +2228,32 @@ class TTSGgml {
         this._assignBackendParams(parameters);
         return parameters;
     }
+    _buildMossParams() {
+        this._assertMossOutputRate();
+        const parameters = {
+            engineType: ENGINE_MOSS,
+            mossBackbonePath: this._mossBackbonePath || "",
+            mossCodecDecoderPath: this._mossCodecDecoderPath || "",
+            language: this._config.language || "en",
+        };
+        if (this._mossCodecEncoderPath) {
+            parameters.mossCodecEncoderPath = this._mossCodecEncoderPath;
+        }
+        if (this._referenceAudio != null) {
+            parameters.referenceAudio = this._referenceAudio;
+        }
+        if (this._dialogueReferences) {
+            parameters.dialogueReferences = [...this._dialogueReferences];
+        }
+        if (this._durationTokens != null) {
+            parameters.durationTokens = this._durationTokens | 0;
+        }
+        if (this._streamChunkTokens != null) {
+            parameters.streamChunkTokens = this._streamChunkTokens | 0;
+        }
+        this._assignBackendParams(parameters);
+        return parameters;
+    }
     /** The knobs every engine in SAMPLING_ENGINES reads. */
     _assignSamplingParams(parameters) {
         if (this._temperature != null) {
@@ -1892,27 +2327,62 @@ class TTSGgml {
         return new tts_1.TTSInterface(binding, configuration, outputCallback);
     }
     async unload() {
+        return this._withPocketLifecycle(() => this._unloadModel());
+    }
+    async _unloadModel() {
         await this.cancel();
         this._failAndClearActiveResponse("Model was unloaded");
         const addon = this._optionalAddon();
-        if (addon)
-            await addon.destroyInstance();
-        this.state.configLoaded = false;
-        this.state.weightsLoaded = false;
+        try {
+            if (addon)
+                await addon.destroyInstance();
+        }
+        finally {
+            if (this.addon === addon) {
+                this.addon = null;
+                this.state.configLoaded = false;
+                this.state.weightsLoaded = false;
+            }
+        }
     }
     async destroy() {
-        await this.unload();
-        this.state.destroyed = true;
+        return this._withPocketLifecycle(async () => {
+            await this._unloadModel();
+            this.state.destroyed = true;
+        });
     }
     async _runInternal(input) {
+        await this._waitPocketCancel();
+        this._checkPocketRequest();
         const jobFields = this._resolveJobFields(input, "run");
+        const signal = input?.signal;
+        const pocketSignal = this._engineType === ENGINE_POCKET && signal && !signal.aborted ? signal : undefined;
         const response = this._job.start({
-            signal: input?.signal,
+            signal: pocketSignal ? undefined : signal,
         });
-        if (input?.signal?.aborted)
+        if (signal?.aborted)
             return response;
+        if (pocketSignal) {
+            const onAbort = () => {
+                if (this._job.active !== response)
+                    return;
+                const reason = pocketSignal.reason;
+                const error = reason instanceof Error ? reason : new Error(typeof reason === "string" ? `Aborted: ${reason}` : "Aborted");
+                // Preserve the caller's reason while stopping native work. Cancellation
+                // retains the completion barrier until its terminal callback arrives.
+                try {
+                    response.failed(error);
+                }
+                finally {
+                    void this.cancel().catch((error) => this._getLogger().error("Pocket abort cancellation failed", error));
+                }
+            };
+            pocketSignal.addEventListener("abort", onAbort, { once: true });
+            const detach = () => pocketSignal.removeEventListener("abort", onAbort);
+            void response.await().then(detach, detach);
+        }
         try {
-            await this._requireAddon().runJob({
+            await this._dispatchJob({
                 type: input.type || "text",
                 input: input.input,
                 ...(jobFields ?? {}),
@@ -1925,6 +2395,12 @@ class TTSGgml {
         return response;
     }
     _mergeSentenceStreamStats(accumulator, data) {
+        if (accumulator.firstAudioMs === undefined &&
+            typeof data.firstAudioMs === "number" &&
+            Number.isFinite(data.firstAudioMs) &&
+            data.firstAudioMs >= 0) {
+            accumulator.firstAudioMs = data.firstAudioMs;
+        }
         accumulator.totalTime +=
             typeof data.totalTime === "number" ? data.totalTime : 0;
         accumulator.audioDurationMs +=
@@ -1935,6 +2411,12 @@ class TTSGgml {
             typeof data.totalSamples === "number" ? data.totalSamples : 0;
         accumulator.generatedFrames +=
             typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
+        if (typeof data.codecSidecarLoaded === "number") {
+            accumulator.codecSidecarLoaded = data.codecSidecarLoaded;
+        }
+        if (typeof data.codecOnCoreml === "number") {
+            accumulator.codecOnCoreml = data.codecOnCoreml;
+        }
     }
     _rejectActiveChunk(error) {
         const resolver = this._sentenceStreamCtx?.chunkResolver;
@@ -1950,6 +2432,11 @@ class TTSGgml {
             this._job.end();
     }
     _addonOutputCallback(_addon, event, data, error) {
+        if (this._pocketJobPending && ((typeof error === "string" && error.length > 0) || isStatsEvent(data))) {
+            const pending = this._pocketJobPending;
+            this._pocketJobPending = null;
+            pending.resolve();
+        }
         if (typeof error === "string" && error.length > 0) {
             this._handleAddonError(error);
         }
@@ -1999,7 +2486,7 @@ class TTSGgml {
             enriched.sampleRate = data.sampleRate;
         }
         if (!context.textStreamMode) {
-            enriched.isLast = index >= context.chunks.length - 1;
+            enriched.isLast = index >= context.chunks.length - 1 && data.isLast !== false;
         }
         return enriched;
     }
@@ -2020,10 +2507,83 @@ class TTSGgml {
             this._endJobWithStats(computeSentenceStreamStats(context.chunks, context.acc, this._pacesOnFrames()));
         }
     }
+    async _waitPocketCancel() {
+        if (this._engineType === ENGINE_POCKET && this._pocketCancelPromise)
+            await this._pocketCancelPromise;
+    }
+    async _withPocketLifecycle(action) {
+        if (this._engineType !== ENGINE_POCKET)
+            return action();
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        this._pocketLifecycleInProgress = true;
+        try {
+            await action();
+        }
+        finally {
+            this._pocketLifecycleInProgress = false;
+        }
+    }
+    _checkPocketReload() {
+        if (this._pocketLifecycleInProgress)
+            throw new Error("Pocket lifecycle operation is already in progress");
+    }
+    _checkPocketRequest() {
+        if (this._engineType === ENGINE_POCKET) {
+            if (this.state.destroyed)
+                throw new Error("Pocket instance was destroyed");
+            if (!this.state.weightsLoaded || !this._optionalAddon())
+                throw new Error("Pocket model is not loaded");
+        }
+        if (this._engineType === ENGINE_POCKET && (this._job.active || this._pocketJobPending)) {
+            throw new Error("Pocket synthesis is already in progress");
+        }
+        this._checkPocketReload();
+    }
+    async _dispatchJob(input) {
+        const addon = this._requireAddon();
+        if (this._engineType !== ENGINE_POCKET)
+            return addon.runJob(input);
+        if (this._pocketJobPending)
+            throw new Error("Pocket native job is already in progress");
+        let resolve = () => { };
+        const promise = new Promise((done) => { resolve = done; });
+        const pending = { promise, resolve };
+        this._pocketJobPending = pending;
+        try {
+            await addon.runJob(input);
+        }
+        catch (error) {
+            if (this._pocketJobPending === pending)
+                this._pocketJobPending = null;
+            resolve();
+            throw error;
+        }
+    }
     async cancel() {
         const addon = this._optionalAddon();
-        if (addon?.cancel)
-            await addon.cancel();
+        if (this._engineType !== ENGINE_POCKET) {
+            if (addon?.cancel)
+                await addon.cancel();
+            return;
+        }
+        if (this._pocketCancelPromise)
+            return this._pocketCancelPromise;
+        const pending = this._pocketJobPending;
+        this._pocketCancelPromise = (async () => {
+            this._failAndClearActiveResponse("Synthesis cancelled");
+            if (addon?.cancel)
+                await addon.cancel();
+            // Joining the worker can precede delivery of its terminal callback.
+            if (pending)
+                await pending.promise;
+        })();
+        try {
+            await this._pocketCancelPromise;
+        }
+        finally {
+            this._pocketCancelPromise = null;
+        }
     }
     _failAndClearActiveResponse(reason) {
         this._rejectActiveChunk(reason instanceof Error ? reason : new Error(reason));
@@ -2052,6 +2612,7 @@ class TTSGgml {
             minNewTokens: this._minNewTokens,
             normalizeNumbers: this._normalizeNumbers,
             seed: this._seed,
+            durationTokens: this._durationTokens,
         };
     }
     _restoreReloadableState(state) {
@@ -2074,8 +2635,10 @@ class TTSGgml {
         this._minNewTokens = state.minNewTokens;
         this._normalizeNumbers = state.normalizeNumbers;
         this._seed = state.seed;
+        this._durationTokens = state.durationTokens;
     }
     _applyReloadableRuntimeConfig(newConfig) {
+        this._assertMossReloadKeepsVoice(newConfig);
         const runtimeConfig = newConfig;
         if (runtimeConfig.language !== undefined) {
             this._config.language = runtimeConfig.language;
@@ -2087,6 +2650,26 @@ class TTSGgml {
             this._outputSampleRate = validateOutputSampleRate(runtimeConfig.outputSampleRate);
         }
         this._applyAudio8Reload(newConfig);
+        this._applyMossReload(newConfig);
+    }
+    _assertMossReloadKeepsVoice(newConfig) {
+        if (this._engineType !== ENGINE_MOSS)
+            return;
+        const voiceKeys = MOSS_INSTANCE_VOICE_KEYS.filter((key) => newConfig[key] !== undefined);
+        if (voiceKeys.length === 0)
+            return;
+        throw new Error(`tts-ggml: reload: the moss engine encodes ${voiceKeys.join(", ")} ` +
+            "once per instance; create a new instance to clone different recordings");
+    }
+    _applyMossReload(newConfig) {
+        if (this._engineType !== ENGINE_MOSS)
+            return;
+        const durationTokens = newConfig
+            .durationTokens;
+        if (durationTokens === undefined)
+            return;
+        assertMossDurationTokens(durationTokens, "reload");
+        this._durationTokens = durationTokens ?? undefined;
     }
     // Cross-engine conditioning is reloadable on every engine that supports it,
     // so both families change emotion the same way.
@@ -2173,8 +2756,47 @@ class TTSGgml {
             throw error;
         }
     }
+    async _reloadPocket(newConfig) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        if (this.state.destroyed)
+            throw new Error("Pocket instance was destroyed");
+        const options = { ...this._pocketOptions, ...newConfig };
+        const config = { ...this._config, ...newConfig };
+        const params = (0, pocketConfig_1.buildPocketParams)(this._pocketFiles, options, config);
+        this._pocketLifecycleInProgress = true;
+        let replacement = null;
+        try {
+            // Drain native work and release its model before allocating another one.
+            // Failed activation leaves the instance unloaded with its last good config.
+            await this._unloadModel();
+            replacement = this._createAddon(params, this._addonOutputCallback.bind(this));
+            await replacement.activate();
+            this.addon = replacement;
+            replacement = null;
+            this._pocketParams = params;
+            this._pocketOptions = options;
+            this._config.language = "en";
+            this._config.useGPU = false;
+            this._outputSampleRate = typeof params.outputSampleRate === "number" ? params.outputSampleRate : null;
+            this._config.outputSampleRate = this._outputSampleRate ?? undefined;
+            this.state.configLoaded = true;
+            this.state.weightsLoaded = true;
+        }
+        finally {
+            try {
+                if (replacement)
+                    await replacement.destroyInstance();
+            }
+            finally {
+                this._pocketLifecycleInProgress = false;
+            }
+        }
+    }
     async reload(newConfig = {}) {
         this._getLogger().debug("Reloading addon with new configuration", newConfig);
+        if (this._engineType === ENGINE_POCKET)
+            return this._reloadPocket(newConfig);
         const parameters = this._applyReloadableConfig(newConfig);
         await this.cancel();
         this._failAndClearActiveResponse("Model was reloaded");
@@ -2260,6 +2882,29 @@ class TTSGgml {
         void _params;
         return "tts-ggml";
     }
+    /**
+     * tts-cpp's canonical emotion / pace vocabulary and each engine's supported
+     * subset, read from the native library without loading a model. Engines are
+     * keyed by engine type, so tts-cpp's `cosyvoice` appears as `cosyvoice3`;
+     * an engine this package does not wrap keeps its tts-cpp name.
+     */
+    static getVoiceControls() {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+        const binding = require("./binding");
+        const native = binding.getVoiceControls();
+        const engines = {};
+        for (const [name, controls] of Object.entries(native.engines)) {
+            engines[FABRIC_ENGINE_TYPES[name] ?? name] = {
+                emotions: [...controls.emotions],
+                paces: [...controls.paces],
+            };
+        }
+        return {
+            emotions: [...native.emotions],
+            paces: [...native.paces],
+            engines,
+        };
+    }
     _requireAddon() {
         const addon = this._optionalAddon();
         if (!addon)
@@ -2278,6 +2923,7 @@ class TTSGgml {
     TTSGgml.QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
     TTSGgml.ERR_CODES = errorModule.ERR_CODES;
     TTSGgml.resolveBackendsDir = backends_1.resolveBackendsDir;
+    TTSGgml.assessFit = fit_1.assessFit;
 })(TTSGgml || (TTSGgml = {}));
 module.exports.QvacErrorAddonTTSGgml =
     errorModule.QvacErrorAddonTTSGgml;

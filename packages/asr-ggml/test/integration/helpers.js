@@ -12,6 +12,10 @@ const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 
+const WHISPER_TEST_THREADS = 4
+const NO_GPU = process.env && process.env.NO_GPU === 'true'
+const WHISPER_GPU_CONTEXT_PARAMS = { use_gpu: true, gpu_device: 0 }
+
 const HF_WHISPER_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 const HF_VAD_BASE = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main'
 
@@ -816,12 +820,13 @@ async function runTranscription(params, expectation = {}) {
     engine: 'whisper',
     path: modelPath,
     vadModelPath,
+    ...(params.contextParams ? { contextParams: params.contextParams } : {}),
     whisperConfig: {
       language: whisperConfig.language || 'en',
       audio_format: whisperConfig.audio_format || 's16le',
       temperature: whisperConfig.temperature ?? 0.0,
       suppress_nst: whisperConfig.suppress_nst ?? true,
-      n_threads: whisperConfig.n_threads || 0,
+      n_threads: whisperConfig.n_threads || WHISPER_TEST_THREADS,
       vad_params: whisperConfig.vadParams || whisperConfig.vad_params,
       ...whisperConfig
     }
@@ -1064,6 +1069,9 @@ module.exports = {
   isMobile,
   platform,
   arch,
+  WHISPER_TEST_THREADS,
+  NO_GPU,
+  WHISPER_GPU_CONTEXT_PARAMS,
   recordWhisperStats,
   flushWhisperPerfReport: _flushPerfReport
 }

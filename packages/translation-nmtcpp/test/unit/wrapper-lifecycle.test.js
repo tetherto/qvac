@@ -14,11 +14,11 @@ function tick(ms = 10) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function makeModel({ params, opts, addonOverrides } = {}) {
+function makeModel({ params, opts, config, addonOverrides } = {}) {
   const model = new TranslationNmtcpp({
     files: { model: '/tmp/model.bin' },
     params: params || { srcLang: 'en', dstLang: 'it' },
-    config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot },
+    config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot, ...config },
     opts: opts || {}
   })
 
@@ -240,4 +240,81 @@ test('package can be imported and errors are exposed without the native binding'
   for (const [name, code] of Object.entries(ERR_CODES)) {
     t.ok(code >= 8001 && code <= 9000, `${name} (${code}) is inside the allocated range`)
   }
+})
+
+test('main-gpu forwards registry indices and GPU classes to the native configuration', async (t) => {
+  for (const key of ['main-gpu', 'main_gpu']) {
+    for (const [value, expected] of [
+      [0, 0],
+      [2, 2],
+      ['dedicated', 'dedicated'],
+      ['integrated', 'integrated'],
+      [-1, -1],
+      ['2', 2],
+      ['-1', -1],
+      ['+1', 1],
+      ['DEDICATED', 'dedicated']
+    ]) {
+      const { model } = makeModel({ config: { [key]: value, useGPU: true } })
+      let received
+      model._createAddon = ({ config }) => {
+        received = config
+        return { activate: async () => {}, destroy: async () => {} }
+      }
+      await model.load()
+      t.is(received['main-gpu'], expected)
+      t.is(received.main_gpu, undefined)
+      t.is(received.use_gpu, true)
+      await model.unload()
+    }
+  }
+})
+
+test('main-gpu rejects invalid and ambiguous selectors before native creation', async (t) => {
+  const invalid = [
+    null,
+    true,
+    false,
+    -2147483649,
+    0.5,
+    NaN,
+    Infinity,
+    2147483648,
+    '',
+    '1.5',
+    '2junk',
+    '2147483648',
+    'vulkan',
+    {},
+    []
+  ].map((value) => ({ 'main-gpu': value }))
+  invalid.push({ 'main-gpu': 0, main_gpu: 0 })
+  for (const key of ['gpu_backend', 'gpuBackend', 'gpu_device', 'gpuDevice']) {
+    invalid.push({ 'main-gpu': 0, [key]: key.includes('evice') ? 0 : 'vulkan' })
+  }
+  for (const config of invalid) {
+    const { model } = makeModel({ config })
+    model._createAddon = () => t.fail('invalid config must never reach native creation')
+    let error
+    try {
+      await model.load()
+    } catch (err) {
+      error = err
+    }
+    t.ok(error instanceof TypeError)
+    t.ok(/main-gpu/.test(error && error.message))
+  }
+})
+
+test('legacy GPU aliases retain their original values without main-gpu', async (t) => {
+  const { model } = makeModel({ config: { gpuBackend: 'vulkan', gpuDevice: 1 } })
+  let received
+  model._createAddon = ({ config }) => {
+    received = config
+    return { activate: async () => {}, destroy: async () => {} }
+  }
+  await model.load()
+  t.is(received.gpu_backend, 'vulkan')
+  t.is(received.gpu_device, 1)
+  await model.unload()
 })

@@ -1,19 +1,35 @@
-// Verifies addon prebuilds for Merge Guard WITHOUT triggering them. Run by
-// pr-gate-merge.yml `verify-prebuilds`. Reads each qvac/prebuild-<pkg> commit
-// status on the PR head SHA, binds it to the on-pr-<pkg> run that produced it
-// (via the status target_url), and trusts it only when that run was triggered
-// at/after this PR event. Waits (fail-closed) until every required prebuild has
-// a fresh terminal status or the timeout elapses.
+// Verifies addon prebuilds or C++ tests for Merge Guard WITHOUT triggering them.
+// Run by pr-gate-merge.yml `verify-prebuilds` / `verify-cpp-tests`. Reads each
+// qvac/prebuild-<pkg> or qvac/cpp-tests-<pkg> commit status on the PR head SHA,
+// binds it to the on-pr run that produced it (via the status target_url), and
+// trusts it only when that run was triggered at/after this PR event. Waits
+// (fail-closed) until every required package has a fresh terminal status or the
+// timeout elapses.
 //
-// Env: GH_TOKEN, REPO, HEAD_SHA, CHANGED_PACKAGES, PR_UPDATED_AT
+// Env: GH_TOKEN, REPO, HEAD_SHA, CHANGED_PACKAGES, PR_UPDATED_AT,
+//      KIND ('prebuild' when unset, or 'cpp-tests')
 import { execFileSync } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { expectedPrebuilds, flattenPages, pollPrebuilds } from './lib.mjs'
+import {
+  LOOKUP_FAILED,
+  expectedCppTests,
+  expectedPrebuilds,
+  flattenPages,
+  pollCppTests,
+  pollPrebuilds,
+} from './lib.mjs'
+
+const KINDS = {
+  prebuild: { noun: 'prebuild', expected: expectedPrebuilds, poll: pollPrebuilds },
+  'cpp-tests': { noun: 'C++ test', expected: expectedCppTests, poll: pollCppTests },
+}
 
 // Prebuilds take tens of minutes (median 9-32 min, worst ~32 min observed);
 // nothing resolves inside 2 minutes, so a longer interval costs no meaningful
 // release latency while cutting the request count 4x over the full timeout.
 const POLL_INTERVAL_MS = 120_000
+// Keep below the calling job's timeout-minutes so a timeout is reported by the
+// script (with the pending contexts), not as a bare runner cancellation.
 const TIMEOUT_MS = 180 * 60 * 1000
 
 function ghJson(args) {
@@ -32,14 +48,33 @@ function fetchStatuses(repo, sha) {
 }
 
 function fetchRun(repo, runId) {
+  // No run id in the status target_url: there is nothing to look up and nothing
+  // transient about it, so this is "untrusted", not "retry".
+  if (runId === null || runId === undefined || runId === '') return null
+
   try {
     return ghJson([`repos/${repo}/actions/runs/${runId}`])
-  } catch {
-    return null
+  } catch (err) {
+    // A 404 is a definite answer: that run does not exist, so the status is not
+    // from a trusted producer. Only a transient failure (5xx, network, truncated
+    // JSON) becomes LOOKUP_FAILED, which evaluatePackage turns into pending so
+    // the poll retries rather than letting an older success outrank a newer
+    // failure. Returning LOOKUP_FAILED for a 404 would hold the package pending
+    // to the deadline even with a valid newer status sitting there.
+    const text = `${err?.stderr ?? ''}${err?.message ?? ''}`
+    if (/\b404\b|Not Found/i.test(text)) return null
+    return LOOKUP_FAILED
   }
 }
 
 async function main() {
+  const kindName = process.env.KIND || 'prebuild'
+  const kind = KINDS[kindName]
+  if (!kind) {
+    console.log(`::error title=Unknown KIND::KIND=${JSON.stringify(kindName)} is not one of ${Object.keys(KINDS).join(', ')}.`)
+    return 1
+  }
+
   const repo = process.env.REPO ?? ''
   const sha = process.env.HEAD_SHA ?? ''
   const prUpdatedAt = process.env.PR_UPDATED_AT ?? ''
@@ -50,14 +85,15 @@ async function main() {
     changed = []
   }
 
-  const expected = expectedPrebuilds(changed)
+  const expected = kind.expected(changed)
   console.log(`Head SHA:            ${sha}`)
   console.log(`Changed packages:    ${JSON.stringify(changed)}`)
-  console.log(`Prebuilds to check:  ${JSON.stringify(expected)}`)
+  console.log(`Kind:                ${kindName}`)
+  console.log(`Packages to check:   ${JSON.stringify(expected)}`)
   console.log(`Freshness threshold: ${prUpdatedAt}`)
 
   if (expected.length === 0) {
-    console.log('No prebuild-bearing package changed - build not applicable, passing.')
+    console.log(`No ${kind.noun}-bearing package changed - not applicable, passing.`)
     return 0
   }
 
@@ -66,7 +102,7 @@ async function main() {
   const prUpdatedMs = Date.parse(prUpdatedAt)
   if (!prUpdatedAt || Number.isNaN(prUpdatedMs)) {
     console.log(
-      `::error title=Missing PR timestamp::pull_request.updated_at is missing or unparseable (${JSON.stringify(prUpdatedAt)}); cannot correlate prebuild status freshness.`,
+      `::error title=Missing PR timestamp::pull_request.updated_at is missing or unparseable (${JSON.stringify(prUpdatedAt)}); cannot correlate ${kind.noun} status freshness.`,
     )
     return 1
   }
@@ -80,11 +116,11 @@ async function main() {
   const lookupRun = (runId) => {
     if (runCache.has(runId)) return runCache.get(runId)
     const run = fetchRun(repo, runId)
-    if (run) runCache.set(runId, run)
+    if (run && run !== LOOKUP_FAILED) runCache.set(runId, run)
     return run
   }
 
-  return pollPrebuilds({
+  return kind.poll({
     expected,
     prUpdatedEpoch,
     fetchStatuses: () => fetchStatuses(repo, sha),

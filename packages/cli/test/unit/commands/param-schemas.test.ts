@@ -10,6 +10,24 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('exposes and validates World memory controls in the nested editor', () => {
+    const schema = configSchemaForAddon('diffusion')
+    assert.ok(schema)
+    const world = paramFields(schema).find((field) => field.name === 'world')
+    assert.ok(world?.objectFields)
+    for (const name of ['paramsBackend', 'maxVram', 'streamLayers', 'verbosity']) {
+      const field = world.objectFields.find((field) => field.name === name)
+      assert.ok(field, `${name} is editable`)
+      assert.ok(field.description)
+    }
+    const budget = world.objectFields.find((field) => field.name === 'maxVram')!
+    assert.equal(validateParam(budget, '-1'), true)
+    assert.equal(validateParam(budget, 'cuda0=2'), true)
+    const streaming = world.objectFields.find((field) => field.name === 'streamLayers')!
+    assert.equal(validateParam(streaming, 'true'), true)
+    assert.notEqual(validateParam(streaming, 'yes'), true)
+  })
+
   it('exposes and validates H3 backend and memory controls from the SDK', () => {
     const schema = configSchemaForAddon('diffusion')
     assert.ok(schema)
@@ -59,6 +77,20 @@ describe('configure: param-schemas', () => {
     assert.ok(model)
     assert.equal(model.kind, 'object')
     if (model.kind === 'object') assert.ok(model.fields.length > 10)
+  })
+
+  it('hides removed diffusion fields from configure while the schema still rejects them', () => {
+    const schema = configSchemaForAddon('diffusion')
+    assert.ok(schema)
+    const model = configParamModel(schema)
+    assert.ok(model)
+    assert.equal(model.kind, 'object')
+    if (model.kind !== 'object') return
+
+    for (const field of ['control_net_cpu', 'clip_on_cpu', 'vae_on_cpu']) {
+      assert.ok(!model.fields.some((candidate) => candidate.name === field))
+    }
+    assert.equal(schema.safeParse({ clip_on_cpu: true }).success, false)
   })
 
   it('models a discriminated-union addon as variants with described fields', () => {

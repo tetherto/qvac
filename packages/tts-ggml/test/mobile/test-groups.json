@@ -10,7 +10,8 @@
       "runChatterboxMtlTest"
     ],
     "supertonic": [
-      "runSupertonicTest"
+      "runSupertonicTest",
+      "runFitTest"
     ],
     "supertonic-mtl": [
       "runSupertonicMtlTest"
@@ -31,7 +32,8 @@
     "cross-model-compatibility": [
       "runMultipleRunsTest",
       "runGpuSmokeTest",
-      "runOutputSampleRateTest"
+      "runOutputSampleRateTest",
+      "runVoiceControlsTest"
     ]
   },
   "android": {
@@ -44,7 +46,8 @@
       "runChatterboxMtlTest"
     ],
     "supertonic": [
-      "runSupertonicTest"
+      "runSupertonicTest",
+      "runFitTest"
     ],
     "supertonic-mtl": [
       "runSupertonicMtlTest"
@@ -65,7 +68,8 @@
     "cross-model-compatibility": [
       "runMultipleRunsTest",
       "runGpuSmokeTest",
-      "runOutputSampleRateTest"
+      "runOutputSampleRateTest",
+      "runVoiceControlsTest"
     ]
   }
 }

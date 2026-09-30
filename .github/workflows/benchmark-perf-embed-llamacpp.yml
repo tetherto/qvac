@@ -158,13 +158,15 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
     # Bounded: prebuild needs the GPR/signing secrets; no repository input, and the
     # release environment + fork-approval keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      packages: '["embed-llamacpp"]'
 
   desktop-benchmark:
     needs:
@@ -290,6 +292,7 @@ jobs:
       - verify-shards
     if: inputs.run_mobile && !inputs.summarize_only
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write

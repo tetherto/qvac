@@ -18,11 +18,8 @@
 
 const zlib = require('bare-zlib')
 
-// Mean-subtracted luminance spread of an 8-bit RGB PNG frame. Healthy ABot
-// walk frames measure 30+ (photo and synthetic scenes alike, idle or moving,
-// on CPU/CUDA/Vulkan); frames from a conditioning collapse measure 8-12.
-// Returns -1 for anything that is not an 8-bit truecolour PNG.
-function pngLuminanceStddev(png) {
+// Decode an 8-bit truecolour PNG, or return null for unsupported pixel formats.
+function pngRgb(png) {
   // Frames arrive as Uint8Array from the addon's live stream but as Buffer
   // from a disk read; normalize to Buffer (zero-copy view) so the readUInt32BE
   // / toString helpers below work on both.
@@ -47,13 +44,12 @@ function pngLuminanceStddev(png) {
     }
     pos += 12 + len
   }
-  if (bitDepth !== 8 || colorType !== 2) return -1
+  if (bitDepth !== 8 || colorType !== 2) return null
 
   const raw = zlib.inflateSync(Buffer.concat(idat))
   const stride = width * 3
   let prev = Buffer.alloc(stride)
-  let sum = 0
-  let sumSq = 0
+  const pixels = Buffer.alloc(width * height * 3)
   let p = 0
   for (let y = 0; y < height; y++) {
     const filter = raw[p++]
@@ -74,16 +70,41 @@ function pngLuminanceStddev(png) {
         line[i] = (line[i] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255
       }
     }
-    for (let i = 0; i < stride; i += 3) {
-      const yv = 0.299 * line[i] + 0.587 * line[i + 1] + 0.114 * line[i + 2]
-      sum += yv
-      sumSq += yv * yv
-    }
+    pixels.set(line, y * stride)
     prev = line
   }
-  const n = width * height
+  return { pixels, width, height }
+}
+
+// Mean-subtracted luminance spread. Healthy ABot walk frames measure 30+;
+// conditioning collapses measure 8-12. Returns -1 for unsupported formats.
+function pngLuminanceStddev(png) {
+  const decoded = pngRgb(png)
+  if (!decoded) return -1
+  const { pixels } = decoded
+  let sum = 0
+  let sumSq = 0
+  for (let i = 0; i < pixels.length; i += 3) {
+    const yv = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]
+    sum += yv
+    sumSq += yv * yv
+  }
+  const n = pixels.length / 3
   const mean = sum / n
   return Math.sqrt(Math.max(0, sumSq / n - mean * mean))
+}
+
+function pngMeanAbsoluteError(a, b) {
+  const left = pngRgb(a)
+  const right = pngRgb(b)
+  if (!left || !right || left.width !== right.width || left.height !== right.height) {
+    return Infinity
+  }
+  let total = 0
+  for (let i = 0; i < left.pixels.length; i++) {
+    total += Math.abs(left.pixels[i] - right.pixels[i])
+  }
+  return total / left.pixels.length
 }
 
 // Prompt-row census of a scene pack (safetensors), read from its bytes.
@@ -148,4 +169,17 @@ function readScenePackPromptRows(buf) {
   }
 }
 
-module.exports = { pngLuminanceStddev, readScenePackPromptRows }
+async function waitForLogEvidence(evidence, markers, timeout = 5000) {
+  const deadline = Date.now() + timeout
+  while (!markers.every((marker) => evidence.some((line) => line.includes(marker)))) {
+    if (Date.now() >= deadline) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+module.exports = {
+  pngLuminanceStddev,
+  pngMeanAbsoluteError,
+  readScenePackPromptRows,
+  waitForLogEvidence
+}

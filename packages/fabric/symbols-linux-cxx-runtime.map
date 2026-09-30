@@ -1,0 +1,80 @@
+# Linux-only additions to symbols.map's `global` list: the Itanium C++ ABI and
+# the standard library that fabric embeds. Spliced into symbols.map at the
+# QVAC_FABRIC_LINUX_CXX_RUNTIME marker by the version-script block in
+# CMakeLists.txt, so this file is a fragment rather than a version script of its
+# own.
+#
+# Fabric owns the one C++ runtime in the process on Linux, and exports it here so
+# consumer addons can import it. They must, because RTTI compares typeinfo by
+# *address*: when fabric and an addon each statically linked their own libc++,
+# each carried its own copy of every std:: typeinfo, so an exception thrown by
+# libcommon inside fabric matched no `catch (const std::exception&)` in the
+# addon. Argument-validation errors fell through to JSCATCH's catch-all and
+# reached JS as "Unknown error" instead of llama's message. Addon modules now
+# link with -nostdlib++ and resolve all of this from here — see
+# qvac_addon_import_fabric_cxx_runtime in cmake/qvac-addon/qvac-addon.cmake and
+# arch/qips/linux-fabric-libcxx-ownership.md.
+#
+# Exporting the set is necessary but not sufficient, so this file is only half
+# the mechanism. bare's executable links GNU libstdc++.so.6, which puts a second
+# complete C++ runtime in the process' global lookup scope — searched ahead of a
+# dlopen'd module's own DT_NEEDED chain — so an addon linked with -nostdlib++
+# resolved these names from libstdc++ and never reached this module at all. What
+# binds them here is the named version node in symbols.map, which records a
+# DT_VERNEED in each consumer that libstdc++ cannot satisfy. Keep the two
+# together: this export set is inert without that node.
+#
+# This is only spliced in when the module actually embeds libc++. The other ELF
+# configurations get their uniqueness from a libc++ shared library instead, and
+# define none of these symbols themselves: Android links libc++_shared.so, and
+# the QVAC_FABRIC_ASAN build links libc++.so.1 so that ASan owns operator
+# new/delete. Applying this file there would be a hard error rather than a no-op,
+# because lld defaults to --no-undefined-version and rejects a version script
+# that assigns a version to an undefined symbol (the entries below without a
+# wildcard). The wildcards would not be harmless either: they would export
+# llama/ggml's own typeinfo, vtables and std:: template instantiations that
+# `local: *;` is there to hide.
+#
+# Every pattern here is matched against the MANGLED name, and so must stay
+# outside symbols.map's extern "C++" block. That is deliberate and load-bearing:
+# demangled matching cannot express this set. "typeinfo for std::exception" and
+# "operator new(unsigned long)" have no usable prefix, and a demangled function
+# template carries its return type first, so `std::*` silently misses
+# `void std::__1::__sort<...>(...)` and every other out-of-line template
+# instantiation an addon needs. libc++ mangles all of it under `St` (std) because
+# every entity lives in the inline ABI namespace std::__1, which is what makes
+# the prefixes below both complete and tight.
+
+    # Exception allocation / throw / catch / rethrow, static-init guards,
+    # thread-local destructor registration and the demangler.
+    __cxa_*;
+    # dynamic_cast's runtime helper.
+    __dynamic_cast;
+    # The personality routine the unwinder calls into, plus the unwinder API
+    # itself (libc++abi links one in; if the toolchain uses libgcc_s instead,
+    # fabric defines none of these and the pattern matches nothing).
+    _Unwind_*;
+    __gxx_personality_v0;
+    # typeinfo (_ZTI), typeinfo names (_ZTS), vtables (_ZTV) and the VTT /
+    # covariant-thunk variants, for the std:: hierarchy and every other type
+    # fabric defines. Exporting the typeinfo objects is what makes a
+    # cross-module `catch` match at all.
+    _ZT*;
+    # operator new / operator delete, including the sized, aligned and nothrow
+    # overloads. One definition per process keeps an allocation made inside
+    # fabric matched with the delete that frees it in the addon.
+    _Znw*;
+    _Zna*;
+    _Zdl*;
+    _Zda*;
+    # The standard library itself: out-of-line members and template
+    # instantiations (_ZNSt / _ZNKSt for const members, _ZNVSt / _ZNRSt for the
+    # volatile and ref-qualified ones), free functions in std (_ZSt, which
+    # covers the iostream globals and the std::__throw_* helpers), and the guard
+    # variables for function-local statics inside them.
+    _ZNSt*;
+    _ZNKSt*;
+    _ZNVSt*;
+    _ZNRSt*;
+    _ZSt*;
+    _ZGVNSt*;
