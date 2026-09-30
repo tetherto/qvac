@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Fail if installing a package together with all of its @qvac peers resolves
- * @qvac/infer-base, @qvac/logging, or @qvac/error to more than one version.
+ * @qvac/infer-base, @qvac/logging, @qvac/error, or @qvac/fabric to more than
+ * one version.
  *
  * Only the dependency tree is resolved (npm --package-lock-only against a
  * tarball holding just package.json), so no build or prebuild download is
@@ -13,9 +14,11 @@
  *   package-dir defaults to packages/inference. Each --local package replaces
  *   its npm release in the tree, for a dependency that is ahead of npm.
  */
-import { dirname, resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readPackageJson, resolveConsumerLockfile } from './lib/consumer-lockfile.mjs'
 import {
   buildConsumerManifest,
   collectResolvedVersions,
@@ -41,16 +44,43 @@ function parseArgs(argv) {
   return args
 }
 
+function run(command, args, cwd) {
+  const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(' ')} failed:\n${result.stderr || result.stdout}`)
+  }
+}
+
+function readPackageJson(packageDir) {
+  return JSON.parse(readFileSync(join(resolve(repoRoot, packageDir), 'package.json'), 'utf8'))
+}
+
+// Packs package.json alone into <workDir>/<name>.tgz and returns its file: spec.
+function packManifestOnly(packageDir, workDir, name) {
+  const stageDir = join(workDir, `${name}-stage`)
+  mkdirSync(join(stageDir, 'package'), { recursive: true })
+  copyFileSync(join(resolve(repoRoot, packageDir), 'package.json'), join(stageDir, 'package', 'package.json'))
+  run('tar', ['-czf', join(workDir, `${name}.tgz`), 'package'], stageDir)
+  return `file:./${name}.tgz`
+}
+
 function resolveLockfile({ packageDir, local }) {
-  const pkg = readPackageJson(repoRoot, packageDir)
-  const { manifest, lockfile } = resolveConsumerLockfile(repoRoot, 'shared-runtime-libs', (pack) => {
+  const pkg = readPackageJson(packageDir)
+  const workDir = mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'shared-runtime-libs-'))
+  try {
     const overrides = {}
     local.forEach((dir, index) => {
-      overrides[readPackageJson(repoRoot, dir).name] = pack(dir, `local-${index}`)
+      overrides[readPackageJson(dir).name] = packManifestOnly(dir, workDir, `local-${index}`)
     })
-    return buildConsumerManifest(pkg, pack(packageDir, 'package'), overrides)
-  })
-  return { pkg, manifest, lockfile }
+    const manifest = buildConsumerManifest(pkg, packManifestOnly(packageDir, workDir, 'package'), overrides)
+    writeFileSync(join(workDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+    run('npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'], workDir)
+
+    return { pkg, manifest, lockfile: JSON.parse(readFileSync(join(workDir, 'package-lock.json'), 'utf8')) }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true })
+  }
 }
 
 function main() {

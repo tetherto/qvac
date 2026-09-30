@@ -663,27 +663,6 @@ jobs:
       - name: Check @qvac/sdk
         run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk
 
-  # Resolves the committed addon ranges from npm, like a consumer install.
-  # Same check as on-pr-sdk-fabric-agreement.yml.
-  sdk-fabric-agreement:
-    name: SDK addons agree on @qvac/fabric
-    needs: [publish-logic]
-    if: needs.publish-logic.outputs.publish_release == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Check @qvac/sdk
-        run: node .github/scripts/check-sdk-fabric-agreement.mjs packages/sdk
-
   publish-npm:
     name: Publish to NPM
     needs:
@@ -692,11 +671,9 @@ jobs:
       - publish-logic
       - release-merge-guard
       - shared-runtime-libs
-      - sdk-fabric-agreement
     if: >-
       needs.publish-logic.outputs.publish_release == 'true' &&
       needs.shared-runtime-libs.result == 'success' &&
-      needs.sdk-fabric-agreement.result == 'success' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
