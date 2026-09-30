@@ -587,6 +587,10 @@ export const executor = createExecutor({
       'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route'
     ),
     new SkipExecutor(
+      /^ocr-main-gpu-/,
+      'OCR mainGpu disabled on mobile: the plugin strips main-gpu on single-GPU devices'
+    ),
+    new SkipExecutor(
       /^multi-gpu-/,
       'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)'
     ),
