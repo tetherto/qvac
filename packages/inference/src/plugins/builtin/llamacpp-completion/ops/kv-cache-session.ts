@@ -983,15 +983,11 @@ export async function deleteKvCacheState(
 // ----- private helpers -----
 
 /**
- * Verify the addon actually persisted the cache file before recording
- * its message count. The addon currently swallows write errors
- * silently, so a missing file means the next turn must resend the full
- * history rather than slicing against a stale `savedCount`.
- *
- * TODO: once the addon surfaces save failures (e.g. throws
- * `UnableToSaveSessionFile` when `llama_state_save_file` returns
- * false), drop the `access()` probe and wrap the `model.run()` call in
- * a real try/catch that forwards the error.
+ * Verify a cache file exists before recording its message count, so a
+ * first save that never landed makes the next turn resend the full
+ * history. A failed save over an existing file leaves the older file in
+ * place, which this probe cannot tell apart; the addon reports that case
+ * as `cacheSaveFailed` and the caller skips the commit instead.
  */
 async function verifySaveAndRecord(cachePath: string, prefix: CachedPrefix): Promise<boolean> {
   try {

@@ -22,6 +22,8 @@ export const completionStatsSchema = z.object({
   // Prompt renders that provably left the request's tool definitions out.
   // Non-zero means the model never saw them; 0 is not proof it saw them all.
   toolDefinitionsDropped: z.number().optional(),
+  // Non-zero when the KV cache could not be saved; the answer is still complete.
+  cacheSaveFailed: z.number().optional(),
   backendDevice: z.enum(['cpu', 'gpu']).optional()
 })
 

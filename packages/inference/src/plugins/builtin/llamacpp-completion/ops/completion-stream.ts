@@ -589,19 +589,22 @@ export async function* completion(
     preserveCacheOnUnwind = !addonRunSettled
     throw error
   }
+  const cacheSaveFailed = (result.stats?.cacheSaveFailed ?? 0) > 0
   const shouldCommitTurn = shouldCommitCachedTurn({
     aborted: signal.aborted,
     producedTokens: result.producedTokens,
     generatedTokens: result.stats?.generatedTokens,
     predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict,
-    stoppedAtContextBoundary: result.stoppedAtContextBoundary
+    stoppedAtContextBoundary: result.stoppedAtContextBoundary,
+    cacheSaveFailed
   })
   // A cancelled run is rewound by the addon to the pre-request state before the
-  // file is re-saved, so the committed cache is intact. Every other non-commit
-  // finish (zero tokens, budget or context stop) was saved as-is and must go.
-  // An abort that landed after the addon reported a stop reason is the latter.
+  // file is re-saved, and a failed save leaves the previous file in place, so in
+  // both cases the committed cache is intact. Every other non-commit finish
+  // (zero tokens, budget or context stop) was saved as-is and must go. An abort
+  // that landed after the addon reported a stop reason is the latter.
   if (!shouldCommitTurn) {
-    preserveCacheOnUnwind = signal.aborted && !result.generationFinished
+    preserveCacheOnUnwind = cacheSaveFailed || (signal.aborted && !result.generationFinished)
   }
 
   if (typeof kvCache === 'string') {
