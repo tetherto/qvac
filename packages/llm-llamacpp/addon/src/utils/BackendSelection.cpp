@@ -1208,7 +1208,7 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     }
   }
 
-  // No safe GPU placement remains. Make the full CPU fallback visible.
+  // Do not silently move the whole model to CPU for a KV capability miss.
   if (request.preferred == BackendType::GPU) {
     std::string incapable;
     for (const Candidate& c : enumeration.candidates) {
@@ -1237,12 +1237,13 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
         }
         kvTypes += ggml_type_name(kvType);
       }
-      const std::string warning = string_format(
-          "No available GPU can run KV-cache type %s. Passed over: %s; "
-          "falling back to CPU\n",
-          kvTypes.c_str(),
-          incapable.c_str());
-      bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, warning.c_str(), nullptr);
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "No safe GPU placement for KV-cache type %s. Passed over: %s. "
+              "Choose a supported KV type or GPU backend.\n",
+              kvTypes.c_str(),
+              incapable.c_str()));
     }
     if (enumeration.candidates.empty() &&
         !enumeration.rejectedDevices.empty() &&
