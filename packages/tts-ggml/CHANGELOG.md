@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   takes per-call `seconds`, `negativePrompt`, `steps`, `guidance` and `shift`;
   there is no streaming. Desktop, with a GPU recommended.
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships the
+  MOSS-SoundEffect and MOSS-Speech engines.
+
 ## [0.10.1] - 2026-09-29
 
 ### Fixed
