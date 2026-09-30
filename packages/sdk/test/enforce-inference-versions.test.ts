@@ -156,17 +156,17 @@ describe('collectVersionFailures', () => {
 })
 
 describe('Bare runtime compatibility', () => {
-  const inference = { ...inferenceManifest(), engines: { bare: '^1.30.3' } }
+  const inference = { ...inferenceManifest(), engines: { bare: '>=1.30.3' } }
   const sdkWithRuntime = (range: string) =>
     sdkManifest('0.19.1', '^0.19.1', { 'bare-runtime': range })
 
-  for (const range of ['^1.30.3', '~1.30.3', '1.30.3', '^1.31.0']) {
+  for (const range of ['^1.30.3', '~1.30.3', '1.30.3', '^1.31.0', '>=1.30.3', '^2.0.0']) {
     it(`accepts a compatible SDK runtime range: ${range}`, () => {
       assert.deepEqual(collectVersionFailures(inference, sdkWithRuntime(range)), [])
     })
   }
 
-  for (const range of ['^1.24.2', '1.28.6', '*', '^1.30.3 || 1.28.6', '^2.0.0', '>=1.30.3']) {
+  for (const range of ['^1.24.2', '1.28.6', '*', '^1.30.3 || 1.28.6']) {
     it(`rejects an SDK runtime range that admits unsupported engines: ${range}`, () => {
       const [failure] = collectVersionFailures(inference, sdkWithRuntime(range))
       assert.match(failure, /bare-runtime.*inference/)
@@ -194,7 +194,9 @@ describe('Bare runtime compatibility', () => {
     const sdkPkg = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8')
     ) as Manifest
-    assert.ok(inferencePkg.engines?.['bare'], 'inference must declare its Bare engine requirement')
+    assert.equal(inferencePkg.engines?.['bare'], '>=1.30.3')
+    assert.equal(inferencePkg.dependencies?.['bare-runtime'], '^1.30.3')
+    assert.equal(sdkPkg.dependencies?.['bare-runtime'], '^1.30.3')
     assert.deepEqual(collectVersionFailures(inferencePkg, sdkPkg), [])
   })
 })
