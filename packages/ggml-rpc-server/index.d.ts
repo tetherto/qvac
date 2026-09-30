@@ -9,8 +9,36 @@ export declare class RpcServerInvalidHostError extends Error {
     constructor(host: string);
 }
 export declare class RpcServerRdmaUnavailableError extends Error {
-    readonly output: string;
-    constructor(output: string);
+    constructor();
+}
+/**
+ * A failure reported by the native server. The addon raises plain errors with a
+ * `code`; these classes let callers branch on `name` or `instanceof` as they do
+ * for the errors above. `code` equals `name`, and `cause` is the native error.
+ */
+export declare abstract class RpcServerNativeError extends Error {
+    readonly code: string;
+    constructor(name: string, message: string, cause: unknown);
+}
+/** No requested device exists, or no device is available. */
+export declare class RpcServerDeviceError extends RpcServerNativeError {
+    constructor(message: string, cause: unknown);
+}
+/** The RPC cache directory could not be resolved or created. */
+export declare class RpcServerCacheError extends RpcServerNativeError {
+    constructor(message: string, cause: unknown);
+}
+/** The server could not be created or bound, or the RPC backend is missing. */
+export declare class RpcServerStartError extends RpcServerNativeError {
+    constructor(message: string, cause: unknown);
+}
+/** The Fabric backends directory is invalid or could not be inspected. */
+export declare class RpcServerBackendError extends RpcServerNativeError {
+    constructor(message: string, cause: unknown);
+}
+/** The server did not stop cleanly. */
+export declare class RpcServerStopError extends RpcServerNativeError {
+    constructor(message: string, cause: unknown);
 }
 export interface StartRpcServerOptions {
     readonly device?: string | readonly string[];
@@ -21,8 +49,7 @@ export interface StartRpcServerOptions {
     readonly expectRdma?: boolean;
     readonly allowNonLoopbackHost?: boolean;
 }
-export interface RpcServerProcess {
-    readonly runtime: 'in-process';
+export interface RpcServer {
     readonly host: string;
     readonly port: number;
     readonly url: string;
@@ -32,11 +59,10 @@ export interface RpcServerProcess {
      * negotiates RDMA with each RDMA-capable client and falls back to TCP otherwise.
      */
     readonly rdmaCapable: boolean;
-    logs(): string;
     stop(): Promise<void>;
 }
 export interface AllocateFreePortOptions {
     readonly allowNonLoopbackHost?: boolean;
 }
 export declare function allocateFreePort(host?: string, options?: AllocateFreePortOptions): Promise<number>;
-export declare function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServerProcess>;
+export declare function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServer>;
