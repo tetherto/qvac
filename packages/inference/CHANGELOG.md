@@ -1,10 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-- Add managed RPC server lifecycle, discovery, and per-load device mapping. RPC serving uses the optional `@qvac/ggml-rpc-server@0.1.0` provider.
-- Require `@qvac/llm-llamacpp@0.55.0` for RPC client configuration; `0.54.x` is no longer accepted. Align the native dependencies with Fabric `0.18.1`.
-
 ## [0.20.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.20.1

@@ -1,10 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-- Expose managed RPC server lifecycle, discovery, and per-load device mapping in SDK workers, with generated Python methods and setup examples.
-- Require `@qvac/llm-llamacpp@0.55.0` for RPC client configuration; `0.54.x` is no longer accepted. Serving applications explicitly install the optional `@qvac/ggml-rpc-server@0.1.0` provider.
-
 ## [0.20.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.20.1

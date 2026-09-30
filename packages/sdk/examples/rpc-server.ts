@@ -1,4 +1,5 @@
-// Run with a worker configured as described in ../docs/rpc.md.
+// Install @qvac/ggml-rpc-server and rebuild the worker with
+// rpcServerProvider: '@qvac/sdk/ggml-rpc-server/provider' in qvac.config.json.
 // npx tsx rpc-server.ts 10.0.0.2 my-private-rpc-group
 import { createInterface } from 'node:readline/promises'
 import { startRpcServer, stopRpcServer, close } from '@qvac/sdk'

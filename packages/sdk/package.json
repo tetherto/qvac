@@ -188,8 +188,7 @@
     "!**/bun.lock",
     "LICENSE",
     "NOTICE",
-    "docs/system-resources-support-matrix.md",
-    "docs/rpc.md"
+    "docs/system-resources-support-matrix.md"
   ],
   "scripts": {
     "test:unit": "bun run scripts/run-unit-tests.ts",

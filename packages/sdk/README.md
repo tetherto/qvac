@@ -75,11 +75,6 @@ try {
 node quickstart.js
 ```
 
-## Managed RPC servers
-
-For distributed LLM inference, see [managed RPC servers](docs/rpc.md) for server
-installation, worker configuration, discovery, device selection, and examples.
-
 ## System resource diagnostics
 
 Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and

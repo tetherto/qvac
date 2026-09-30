@@ -1,4 +1,7 @@
-"""Serve or discover RPC endpoints with a worker configured per sdk/docs/rpc.md.
+"""Serve or discover RPC endpoints.
+
+Serving requires @qvac/ggml-rpc-server and a worker rebuilt with
+rpcServerProvider: "@qvac/sdk/ggml-rpc-server/provider" in qvac.config.json.
 
 python examples/rpc_servers.py serve 10.0.0.2 my-private-rpc-group
 python examples/rpc_servers.py discover my-private-rpc-group
