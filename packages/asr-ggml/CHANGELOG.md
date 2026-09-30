@@ -14,6 +14,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships
+  MOSS-Transcribe-Diarize with hotwords.
+
 ## [0.7.0] - 2026-09-29
 
 ### Added
