@@ -409,6 +409,40 @@ TEST_F(StbImageSecurityTest, EnforcesRemainingJobPixelBudget) {
   EXPECT_NE(decoded.data, nullptr);
 }
 
+TEST_F(StbImageSecurityTest, UsesConfiguredImagePixelLimit) {
+  std::vector<uint8_t> pixels(2 * 2 * 3, 0);
+  sd_image_t image{2, 2, 3, pixels.data()};
+  auto png = image_codec::encodeToPng(image);
+  ASSERT_FALSE(png.empty());
+
+  image_codec::DecodeFailure failure;
+  auto rejected = image_codec::decodeImage(png, 4, &failure, 3);
+  EXPECT_EQ(rejected.data, nullptr);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::PixelLimit);
+
+  auto accepted = image_codec::decodeImage(png, 4, &failure, 4);
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> owned(accepted.data);
+  EXPECT_NE(accepted.data, nullptr);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::None);
+}
+
+TEST_F(StbImageSecurityTest, RaisedLimitPassesHeaderBudgetCheck) {
+  auto png = createValidPngHeader();
+  png[18] = 0x20;
+  png[19] = 0;
+  png[22] = 0x20;
+  png[23] = 1;
+  image_codec::DecodeFailure failure;
+  auto rejected = image_codec::decodeImage(png, 128ULL * 1024 * 1024, &failure);
+  EXPECT_EQ(rejected.data, nullptr);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::PixelLimit);
+
+  auto inspected = image_codec::decodeImage(
+      png, 128ULL * 1024 * 1024, &failure, 128ULL * 1024 * 1024);
+  EXPECT_EQ(inspected.data, nullptr);
+  EXPECT_NE(failure, image_codec::DecodeFailure::PixelLimit);
+}
+
 TEST_F(StbImageSecurityTest, EnforcesDimensionBoundary) {
   for (const int width : {16384, 16385}) {
     std::vector<uint8_t> pixels(static_cast<size_t>(width) * 3, 0);
@@ -459,6 +493,24 @@ TEST_F(StbImageSecurityTest, RejectsHighMemoryPngSource) {
   EXPECT_EQ(failure, image_codec::DecodeFailure::HighMemoryInputLimit);
 }
 
+TEST_F(StbImageSecurityTest, RejectsHighMemoryGrayscalePngSource) {
+  std::vector<uint8_t> pixel(4, 0);
+  sd_image_t image{1, 1, 4, pixel.data()};
+  auto png = image_codec::encodeToPng(image);
+  ASSERT_FALSE(png.empty());
+  png[18] = 0x20;
+  png[19] = 0;
+  png[22] = 0x20;
+  png[23] = 0;
+  png[24] = 16;
+  png[25] = 0;
+
+  image_codec::DecodeFailure failure;
+  auto decoded = image_codec::decodeImage(png, 64ULL * 1024 * 1024, &failure);
+  EXPECT_EQ(decoded.data, nullptr);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::HighMemoryInputLimit);
+}
+
 TEST_F(StbImageSecurityTest, RejectsHighMemoryFourComponentJpeg) {
   const std::vector<uint8_t> jpeg = {0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x14, 0x08,
                                      0x20, 0x00, 0x20, 0x00, 0x04, 0x01, 0x11,
@@ -502,4 +554,7 @@ TEST_F(StbImageSecurityTest, BoundsProjectedEsrganOutput) {
   EXPECT_TRUE(esrganOutputFitsLimits(2048, 2048, 4, 1));
   EXPECT_FALSE(esrganOutputFitsLimits(2048, 2048, 4, 2));
   EXPECT_FALSE(esrganOutputFitsLimits(16384, 1, 2, 1));
+  EXPECT_FALSE(esrganOutputFitsLimits(1024, 1024, 4, 2));
+  EXPECT_TRUE(esrganOutputFitsLimits(
+      1024, 1024, 4, 2, image_codec::MAX_CONFIGURED_IMAGE_PIXELS));
 }

@@ -788,6 +788,36 @@ test('run | rejects input images above the decoded job budget before dispatch', 
   t.is(dispatches(), 0)
 })
 
+test('run | uses the configured decoded job budget', async (t) => {
+  const m = makeWanModel({ config: { max_job_pixels: 192 * 1024 * 1024 } })
+  const dispatches = recordNativeDispatch(m)
+  const largeHeader = Uint8Array.from(FAKE_PNG)
+  largeHeader[18] = 0x20
+  largeHeader[19] = 0
+  largeHeader[22] = 0x20
+  largeHeader[23] = 0
+
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      control_frames: [largeHeader, largeHeader, largeHeader]
+    }),
+    /native dispatch reached/
+  )
+  t.is(dispatches(), 1)
+
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      control_frames: [largeHeader, largeHeader, largeHeader, largeHeader]
+    }),
+    /192 Mi pixel decoded job limit/
+  )
+  t.is(dispatches(), 1)
+})
+
 test('run | rejects non-Uint8Array entry in control_frames (with index)', async (t) => {
   const m = makeWanModel()
   await t.exception.all(

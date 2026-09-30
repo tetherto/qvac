@@ -123,13 +123,17 @@ std::any WorldSessionModel::processSceneCreate(const SceneCreateJob& job) {
 
   image_codec::DecodeFailure decodeFailure;
   sd_image_t decoded = image_codec::decodeImage(
-      job.imageBytes, image_codec::MAX_DECODED_PIXELS, &decodeFailure);
+      job.imageBytes,
+      config_.maxImagePixels,
+      &decodeFailure,
+      config_.maxImagePixels);
   std::unique_ptr<uint8_t, image_codec::FreeDeleter> decodedData(decoded.data);
   if (decoded.data == nullptr) {
     throw StatusError(
         general_error::InvalidArgument,
         "scene image could not be decoded: " +
-            std::string(image_codec::decodeFailureMessage(decodeFailure)));
+            image_codec::decodeFailureMessage(
+                decodeFailure, config_.maxImagePixels));
   }
 
   qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);

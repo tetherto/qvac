@@ -242,6 +242,8 @@ argument.
 | `backendsDir`           | string                                    | package prebuilds | Custom ggml backend directory                                             |
 | `lora_apply_mode`       | string                                    | auto              | LoRA application mode                                                     |
 | `upscaler_tile_size`    | number                                    | `128`             | ESRGAN tile size                                                          |
+| `max_image_pixels`      | positive integer                          | `67108864`        | Maximum decoded input or ESRGAN output pixels per image                  |
+| `max_job_pixels`        | positive integer                          | `134217728`       | Maximum decoded input pixels retained by a multi-image or video job     |
 
 `main-gpu` is resolved against the addon's own ggml device enumeration and then
 pinned through `sd_ctx_params_t.backend`. If an explicit request cannot be
@@ -474,9 +476,12 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 | `cache_mode`, `cache_preset`, `cache_threshold`              | Step-cache controls                                                |
 
 Decoded `init_image`, `control_frames`, and `reference_images` together are
-limited to 128 Mi pixels per job; each image is limited to 64 Mi pixels. At
+limited to 128 Mi pixels per job by default; each image is limited to 64 Mi pixels by default. At
 1920×1080, up to 64 control frames fit when there are no other input images.
 An initial or reference image reduces the available control-frame budget.
+Set `config.max_job_pixels` and `config.max_image_pixels` to positive pixel
+counts when the target device can support a different budget. The fixed
+16,384-pixel edge and compressed-source safeguards still apply.
 
 Video output is a single MJPG AVI `Uint8Array`. For LTX-2 models loaded with
 `audioVae`, the AVI also contains a second IEEE-float PCM stream at 48 kHz.

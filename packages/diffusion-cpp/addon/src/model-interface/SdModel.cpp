@@ -907,13 +907,18 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         image_codec::DecodeFailure decodeFailure;
         sd_image_t decoded = image_codec::decodeImage(
             job.initImagesBytes[i],
-            image_codec::MAX_JOB_DECODED_PIXELS - decodedPixels,
-            &decodeFailure);
+            config_.maxJobPixels - decodedPixels,
+            &decodeFailure,
+            config_.maxImagePixels);
         if (decoded.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
               "img2img: failed to decode init_images[" + std::to_string(i) +
-                  "]: " + image_codec::decodeFailureMessage(decodeFailure));
+                  "]: " +
+                  image_codec::decodeFailureMessage(
+                      decodeFailure,
+                      config_.maxImagePixels,
+                      config_.maxJobPixels));
         }
         std::unique_ptr<uint8_t, image_codec::FreeDeleter> owned(decoded.data);
         refImgs->push_back(decoded);
@@ -976,13 +981,18 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       if (!initPng.empty()) {
         image_codec::DecodeFailure decodeFailure;
         initImg = image_codec::decodeImage(
-            initPng, image_codec::MAX_DECODED_PIXELS, &decodeFailure);
+            initPng,
+            config_.maxImagePixels,
+            &decodeFailure,
+            config_.maxImagePixels);
         if (initImg.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
               "img2img: failed to decode init_image: " +
-                  std::string(
-                      image_codec::decodeFailureMessage(decodeFailure)));
+                  image_codec::decodeFailureMessage(
+                      decodeFailure,
+                      config_.maxImagePixels,
+                      config_.maxJobPixels));
         }
         initData.reset(initImg.data);
       }
@@ -1109,6 +1119,13 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
     if (tEnc >= gen.steps)
       tEnc = gen.steps - 1;
     g_progressCtx.denoiseTotals.push_back(tEnc + 1);
+  }
+  if (gen.upscale &&
+      !upscaler_.outputFitsLimits(
+          genParams.width, genParams.height, gen.upscaleRepeats)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ESRGAN output exceeds configured pixel or 16,384 pixel edge limit");
   }
   const auto t0 = std::chrono::steady_clock::now();
 
@@ -1487,13 +1504,15 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     image_codec::DecodeFailure decodeFailure;
     initImg = image_codec::decodeImage(
         job.initImageBytes,
-        image_codec::MAX_JOB_DECODED_PIXELS,
-        &decodeFailure);
+        config_.maxJobPixels,
+        &decodeFailure,
+        config_.maxImagePixels);
     if (!initImg.data)
       throw StatusError(
           general_error::InvalidArgument,
           "processVideo: failed to decode init_image: " +
-              std::string(image_codec::decodeFailureMessage(decodeFailure)));
+              image_codec::decodeFailureMessage(
+                  decodeFailure, config_.maxImagePixels, config_.maxJobPixels));
     // Take ownership *before* the dimension check so a mismatch can't leak
     // the freshly-decoded pixel buffer (mirrors the control_frames path).
     initData.reset(initImg.data);
@@ -1516,14 +1535,18 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       image_codec::DecodeFailure decodeFailure;
       sd_image_t decoded = image_codec::decodeImage(
           job.controlFramesBytes[i],
-          image_codec::MAX_JOB_DECODED_PIXELS - decodedPixels,
-          &decodeFailure);
+          config_.maxJobPixels - decodedPixels,
+          &decodeFailure,
+          config_.maxImagePixels);
       if (!decoded.data)
         throw StatusError(
             general_error::InvalidArgument,
             "processVideo: failed to decode control_frames[" +
-                std::to_string(i) +
-                "]: " + image_codec::decodeFailureMessage(decodeFailure));
+                std::to_string(i) + "]: " +
+                image_codec::decodeFailureMessage(
+                    decodeFailure,
+                    config_.maxImagePixels,
+                    config_.maxJobPixels));
       // Take ownership *before* the dimension check so a mismatch can't leak.
       PixelBuffer owned(decoded.data);
       if (static_cast<int>(decoded.width) != vid.width ||
@@ -1548,14 +1571,18 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       image_codec::DecodeFailure decodeFailure;
       sd_image_t decoded = image_codec::decodeImage(
           job.referenceImagesBytes[i],
-          image_codec::MAX_JOB_DECODED_PIXELS - decodedPixels,
-          &decodeFailure);
+          config_.maxJobPixels - decodedPixels,
+          &decodeFailure,
+          config_.maxImagePixels);
       if (!decoded.data)
         throw StatusError(
             general_error::InvalidArgument,
             "processVideo: failed to decode reference_images[" +
-                std::to_string(i) +
-                "]: " + image_codec::decodeFailureMessage(decodeFailure));
+                std::to_string(i) + "]: " +
+                image_codec::decodeFailureMessage(
+                    decodeFailure,
+                    config_.maxImagePixels,
+                    config_.maxJobPixels));
       referenceData.emplace_back(decoded.data);
       referenceImages.push_back(decoded);
       decodedPixels += static_cast<uint64_t>(decoded.width) * decoded.height;

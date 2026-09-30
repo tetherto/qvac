@@ -32,7 +32,7 @@ namespace image_codec {
 
 namespace {
 
-constexpr uint64_t MAX_HIGH_MEMORY_SOURCE_BYTES = 128ULL * 1024 * 1024;
+constexpr uint64_t MAX_HIGH_MEMORY_SOURCE_BYTES = 64ULL * 1024 * 1024;
 constexpr int MAX_JPEG_SCANS = 32;
 
 uint32_t readBigEndian32(const uint8_t* bytes) {
@@ -266,7 +266,13 @@ void writePngBytes(void* context, void* payload, int payloadSize) {
 
 } // namespace
 
-const char* decodeFailureMessage(DecodeFailure failure) noexcept {
+std::string decodeFailureMessage(
+    DecodeFailure failure, uint64_t imagePixelLimit, uint64_t jobPixelLimit) {
+  const auto describePixels = [](uint64_t pixels) {
+    constexpr uint64_t mib = 1024 * 1024;
+    return pixels % mib == 0 ? std::to_string(pixels / mib) + " Mi"
+                             : std::to_string(pixels);
+  };
   switch (failure) {
   case DecodeFailure::None:
     return "";
@@ -279,11 +285,13 @@ const char* decodeFailureMessage(DecodeFailure failure) noexcept {
   case DecodeFailure::DimensionLimit:
     return "image exceeds 16,384 pixel edge limit";
   case DecodeFailure::PixelLimit:
-    return "image exceeds 64 Mi pixel limit";
+    return "image exceeds " + describePixels(imagePixelLimit) +
+           " pixel limit";
   case DecodeFailure::JobPixelLimit:
-    return "image exceeds remaining 128 Mi job pixel budget";
+    return "image exceeds remaining " + describePixels(jobPixelLimit) +
+           " job pixel budget";
   case DecodeFailure::HighMemoryInputLimit:
-    return "high-bit-depth PNG or CMYK JPEG exceeds 128 MiB source budget";
+    return "high-bit-depth PNG or CMYK JPEG exceeds 64 MiB source budget";
   case DecodeFailure::PngInflateLimit:
     return "PNG inflated data exceeds declared image size or is invalid";
   case DecodeFailure::JpegScanLimit:
@@ -360,7 +368,7 @@ std::vector<uint8_t> encodeToJpeg(const sd_image_t& image, int quality) {
 
 sd_image_t decodeImage(
     const std::vector<uint8_t>& imageBytes, uint64_t pixelLimit,
-    DecodeFailure* failure) {
+    DecodeFailure* failure, uint64_t imagePixelLimit) {
   if (failure != nullptr) {
     *failure = DecodeFailure::None;
   }
@@ -409,7 +417,7 @@ sd_image_t decodeImage(
     return reject(DecodeFailure::DimensionLimit);
   }
   const uint64_t pixels = static_cast<uint64_t>(decodedWidth) * decodedHeight;
-  if (pixels > MAX_DECODED_PIXELS) {
+  if (pixels > imagePixelLimit) {
     return reject(DecodeFailure::PixelLimit);
   }
   if (pixels > pixelLimit) {

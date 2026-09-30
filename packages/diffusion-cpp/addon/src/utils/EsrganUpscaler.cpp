@@ -18,7 +18,8 @@ using namespace qvac_errors;
 namespace qvac_lib_inference_addon_sd {
 
 bool esrganOutputFitsLimits(
-    uint32_t width, uint32_t height, uint32_t factor, int repeats) noexcept {
+    uint32_t width, uint32_t height, uint32_t factor, int repeats,
+    uint64_t pixelLimit) noexcept {
   if (width == 0 || height == 0 || factor == 0 || repeats <= 0) {
     return false;
   }
@@ -26,8 +27,7 @@ bool esrganOutputFitsLimits(
   uint64_t projectedHeight = height;
   for (int repeat = 0; repeat < repeats; ++repeat) {
     if (projectedWidth > 16384 / factor || projectedHeight > 16384 / factor ||
-        projectedWidth * factor >
-            image_codec::MAX_DECODED_PIXELS / (projectedHeight * factor)) {
+        projectedWidth * factor > pixelLimit / (projectedHeight * factor)) {
       return false;
     }
     projectedWidth *= factor;
@@ -85,7 +85,8 @@ EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config) {
       .upscalerThreads = config.upscalerThreads,
       .upscalerTileSize = config.upscalerTileSize,
       .upscalerDirect = config.upscalerDirect,
-      .upscalerOffloadParamsToCpu = config.upscalerOffloadParamsToCpu};
+      .upscalerOffloadParamsToCpu = config.upscalerOffloadParamsToCpu,
+      .maxImagePixels = config.maxImagePixels};
 }
 
 void sdLogCallback(sd_log_level_t level, const char* text, void* /*userData*/) {
@@ -133,6 +134,33 @@ int EsrganUpscaler::actualBackendDevice() const {
     return -1;
   }
   return get_upscaler_backend_device(ctx_.get());
+}
+
+bool EsrganUpscaler::outputFitsLimits(int width, int height, int repeats) {
+  if (width <= 0 || height <= 0 || repeats <= 0) {
+    return false;
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (cachedFactor_ == 0) {
+    const bool wasUnloaded = ctx_ == nullptr;
+    cachedFactor_ = get_upscale_factor(ensureContextLocked());
+    if (wasUnloaded) {
+      // Keep ESRGAN weights out of memory during diffusion generation.
+      ctx_.reset();
+    }
+  }
+  const int scale = cachedFactor_;
+  if (scale <= 0) {
+    throw StatusError(
+        general_error::InternalError,
+        "ESRGAN upscaler reported an invalid scale factor");
+  }
+  return esrganOutputFitsLimits(
+      static_cast<uint32_t>(width),
+      static_cast<uint32_t>(height),
+      static_cast<uint32_t>(scale),
+      repeats,
+      config_.maxImagePixels);
 }
 
 int EsrganUpscaler::resolveThreads() const {
@@ -212,10 +240,14 @@ sd_image_t EsrganUpscaler::upscaleImage(
   }
   const auto factor = static_cast<uint32_t>(scale);
   if (!esrganOutputFitsLimits(
-          inputImage.width, inputImage.height, factor, repeats)) {
+          inputImage.width,
+          inputImage.height,
+          factor,
+          repeats,
+          config_.maxImagePixels)) {
     throw StatusError(
         general_error::InvalidArgument,
-        "ESRGAN output exceeds 64 Mi pixel or 16,384 pixel edge limit");
+        "ESRGAN output exceeds configured pixel or 16,384 pixel edge limit");
   }
 
   sd_image_t current = inputImage;
@@ -255,7 +287,7 @@ sd_image_t EsrganUpscaler::upscaleImage(
     if (next.width == 0 || next.height == 0 || next.channel == 0 ||
         next.channel > 4 || next.width > 16384 || next.height > 16384 ||
         static_cast<uint64_t>(next.width) * next.height >
-            image_codec::MAX_DECODED_PIXELS) {
+            config_.maxImagePixels) {
       free_sd_images(outImages, outCount);
       if (currentOwned) {
         freeSdImageData(current);
