@@ -480,8 +480,7 @@ the prebuilds and publishes
 BRANCH=tmp-QVAC-1234
 PKG=llm-llamacpp   # package directory name; `package` is a required input
 git push origin HEAD:refs/heads/$BRANCH
-# The 13 native addons publish from on-merge-nx.yml. model-fit keeps its own:
-# gh workflow run on-merge-model-fit.yml --repo tetherto/qvac --ref $BRANCH
+# Native addons, including model-fit, publish from on-merge-nx.yml.
 # ggml-rpc-server likewise: on-merge-ggml-rpc-server.yml, no package input.
 gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref $BRANCH -f package=$PKG
 ```
@@ -499,8 +498,8 @@ your back — every non-release build is a deliberate dispatch.
 
 The version string is unaffected — it is built from the run id, so it is the
 same whether the run came from a push or a dispatch. The GPR dist-tag follows
-the branch (`temp` or `feature`) unless you set the dispatch `tag` input;
-`on-merge-model-fit.yml` defaults that input to `dev`. Step 2 pins the exact
+the branch (`temp` or `feature`) unless you override the dispatch `tag` input.
+The default `auto` keeps the branch-derived tag. Step 2 pins the exact
 version, so the tag does not matter here.
 
 Wait for that run to finish — the mobile dispatch needs the package to exist.
@@ -525,9 +524,8 @@ PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
 echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
 ```
 
-The 13 native addons publish from the single `on-merge-nx.yml`, so the run is
-found by branch rather than by a per-addon workflow name. `model-fit` still has
-its own `on-merge-model-fit.yml`.
+The native addons, including `model-fit`, publish from `on-merge-nx.yml`, so the run is
+found by branch rather than by a per-addon workflow name.
 
 For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
 exception:** its mobile workflow is `integration-mobile-test-vla.yml`, but the

@@ -87,12 +87,6 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
-// model-fit has generated wrappers and its own on-merge-model-fit.yml, but that
-// workflow has never called the verify reusable. Pre-existing and outside the
-// consolidation; listed here so the gap is stated rather than hidden by whichever
-// definition of "gated" happens to exclude it.
-const KNOWN_UNGATED = new Set(['model-fit'])
-
 // The packages the consolidated pipeline publishes, read from its own push paths
 // so the list cannot drift from the workflow.
 function consolidatedPackages() {
@@ -165,7 +159,6 @@ test('every package that opts into the gate is covered by a pipeline', () => {
   // flag, so this cannot collapse to an empty filter.
   const published = new Set(consolidatedPackages())
   const offenders = gated.filter((pkg) => {
-    if (KNOWN_UNGATED.has(pkg)) return false
     if (consolidated && published.has(pkg)) return false
     return !pipelines.includes(`.github/workflows/on-merge-${pkg}.yml`)
   })
