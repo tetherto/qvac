@@ -1,6 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RpcServerRdmaUnavailableError =
+exports.RpcServerStopError =
+  exports.RpcServerBackendError =
+  exports.RpcServerStartError =
+  exports.RpcServerCacheError =
+  exports.RpcServerDeviceError =
+  exports.RpcServerNativeError =
+  exports.RpcServerRdmaUnavailableError =
   exports.RpcServerInvalidHostError =
   exports.RpcServerNonLoopbackHostError =
   exports.RpcServerPortAllocationError =
@@ -32,7 +38,7 @@ exports.RpcServerPortAllocationError = RpcServerPortAllocationError;
 class RpcServerNonLoopbackHostError extends Error {
   constructor(host) {
     super(
-      `ggml-rpc-server only supports loopback hosts in this package: ${host}`,
+      `${host} is not a loopback host; pass allowNonLoopbackHost: true to bind it on a trusted network`,
     );
     this.name = "RpcServerNonLoopbackHostError";
   }
@@ -46,14 +52,84 @@ class RpcServerInvalidHostError extends Error {
 }
 exports.RpcServerInvalidHostError = RpcServerInvalidHostError;
 class RpcServerRdmaUnavailableError extends Error {
-  output;
-  constructor(output) {
+  constructor() {
     super("RDMA is not available in the installed @qvac/fabric RPC backend");
     this.name = "RpcServerRdmaUnavailableError";
-    this.output = output;
   }
 }
 exports.RpcServerRdmaUnavailableError = RpcServerRdmaUnavailableError;
+/**
+ * A failure reported by the native server. The addon raises plain errors with a
+ * `code`; these classes let callers branch on `name` or `instanceof` as they do
+ * for the errors above. `code` equals `name`, and `cause` is the native error.
+ */
+class RpcServerNativeError extends Error {
+  code;
+  // Names are literals, not new.target.name, so they survive minification.
+  constructor(name, message, cause) {
+    super(message, { cause });
+    this.name = name;
+    this.code = name;
+  }
+}
+exports.RpcServerNativeError = RpcServerNativeError;
+/** No requested device exists, or no device is available. */
+class RpcServerDeviceError extends RpcServerNativeError {
+  constructor(message, cause) {
+    super("RpcServerDeviceError", message, cause);
+  }
+}
+exports.RpcServerDeviceError = RpcServerDeviceError;
+/** The RPC cache directory could not be resolved or created. */
+class RpcServerCacheError extends RpcServerNativeError {
+  constructor(message, cause) {
+    super("RpcServerCacheError", message, cause);
+  }
+}
+exports.RpcServerCacheError = RpcServerCacheError;
+/** The server could not be created or bound, or the RPC backend is missing. */
+class RpcServerStartError extends RpcServerNativeError {
+  constructor(message, cause) {
+    super("RpcServerStartError", message, cause);
+  }
+}
+exports.RpcServerStartError = RpcServerStartError;
+/** The Fabric backends directory is invalid or could not be inspected. */
+class RpcServerBackendError extends RpcServerNativeError {
+  constructor(message, cause) {
+    super("RpcServerBackendError", message, cause);
+  }
+}
+exports.RpcServerBackendError = RpcServerBackendError;
+/** The server did not stop cleanly. */
+class RpcServerStopError extends RpcServerNativeError {
+  constructor(message, cause) {
+    super("RpcServerStopError", message, cause);
+  }
+}
+exports.RpcServerStopError = RpcServerStopError;
+const nativeErrorClasses = new Map([
+  ["RpcServerDeviceError", RpcServerDeviceError],
+  ["RpcServerCacheError", RpcServerCacheError],
+  ["RpcServerStartError", RpcServerStartError],
+  ["RpcServerBackendError", RpcServerBackendError],
+  ["RpcServerStopError", RpcServerStopError],
+]);
+function toTypedError(error) {
+  const code = error?.code;
+  const ErrorClass =
+    typeof code === "string" ? nativeErrorClasses.get(code) : undefined;
+  return ErrorClass === undefined
+    ? error
+    : new ErrorClass(error.message, error);
+}
+async function callNative(call) {
+  try {
+    return await call();
+  } catch (error) {
+    throw toTypedError(error);
+  }
+}
 function isLoopbackHost(host) {
   const parts = host.split(".");
   return (
@@ -90,8 +166,20 @@ function warnForTrustedLanHost(host, allowNonLoopbackHost = false) {
   );
 }
 function normalizeDevice(device) {
-  if (typeof device === "string" || device === undefined) return device;
-  return device.join(",");
+  if (device === undefined) return undefined;
+  // The native side splits on ',' or '/' and matches names exactly, so trim
+  // each name: 'Vulkan0, CPU' would otherwise look up ' CPU'.
+  const names = typeof device === "string" ? device.split(/[,/]/) : device;
+  const trimmed = names.map((name) => name.trim());
+  // A blank-only value must not collapse to '', which means "default devices".
+  // Pass it through untouched so the native side rejects it as unknown.
+  if (
+    trimmed.every((name) => name === "") &&
+    names.some((name) => name !== "")
+  ) {
+    return names.join(",");
+  }
+  return trimmed.join(",");
 }
 function validatePort(port) {
   if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) {
@@ -109,7 +197,11 @@ function validateThreads(threads) {
 function rpcBackendSupportsRdma(backendsDir) {
   let supported = rdmaSupportByBackendsDir.get(backendsDir);
   if (supported === undefined) {
-    supported = binding.rpcBackendSupportsRdma({ backendsDir });
+    try {
+      supported = binding.rpcBackendSupportsRdma({ backendsDir });
+    } catch (error) {
+      throw toTypedError(error);
+    }
     rdmaSupportByBackendsDir.set(backendsDir, supported);
   }
   return supported;
@@ -148,7 +240,7 @@ async function startRpcServer(options = {}) {
     fabricBackends.resolveBackendsDir() ?? path.join(__dirname, "prebuilds");
   const rdmaCapable = rpcBackendSupportsRdma(backendsDir);
   if (options.expectRdma === true && !rdmaCapable) {
-    throw new RpcServerRdmaUnavailableError("");
+    throw new RpcServerRdmaUnavailableError();
   }
   const port =
     options.port ??
@@ -157,25 +249,25 @@ async function startRpcServer(options = {}) {
     }));
   validatePort(port);
   const device = normalizeDevice(options.device);
-  const handle = await binding.startServer({
-    endpoint: `${host}:${port}`,
-    device,
-    cache: options.cache ?? false,
-    threads: options.threads,
-    backendsDir,
-  });
+  const handle = await callNative(() =>
+    binding.startServer({
+      endpoint: `${host}:${port}`,
+      device,
+      cache: options.cache ?? false,
+      threads: options.threads,
+      backendsDir,
+    }),
+  );
   activeServerHandles.add(handle);
   let stopPromise;
   return {
-    runtime: "in-process",
     host,
     port,
     url: `${host}:${port}`,
     device,
     rdmaCapable,
-    logs: () => "",
     stop: () => {
-      stopPromise ??= binding.stopServer(handle).then(
+      stopPromise ??= callNative(() => binding.stopServer(handle)).then(
         () => {
           activeServerHandles.delete(handle);
         },

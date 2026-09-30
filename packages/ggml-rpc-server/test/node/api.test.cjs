@@ -167,3 +167,145 @@ test("allocateFreePort returns a loopback port and rejects other hosts", async (
     name: "RpcServerNonLoopbackHostError",
   });
 });
+
+test("the server handle exposes only live fields", async () => {
+  const server = await loadAddon(recordingBinding().binding).startRpcServer({
+    port: 50052,
+  });
+  assert.deepEqual(Object.keys(server).sort(), [
+    "device",
+    "host",
+    "port",
+    "rdmaCapable",
+    "stop",
+    "url",
+  ]);
+  await server.stop();
+});
+
+test("the non-loopback error names the opt-in", async () => {
+  const addon = loadAddon(recordingBinding().binding);
+  await assert.rejects(
+    addon.startRpcServer({ host: "10.0.0.2", port: 50052 }),
+    {
+      name: "RpcServerNonLoopbackHostError",
+      message: /allowNonLoopbackHost: true/,
+    },
+  );
+});
+
+function nativeError(code, message = `native ${code}`) {
+  return Object.assign(new Error(message), { code });
+}
+
+test("native start failures become typed errors", async () => {
+  for (const code of [
+    "RpcServerDeviceError",
+    "RpcServerCacheError",
+    "RpcServerStartError",
+  ]) {
+    const native = nativeError(code);
+    const addon = loadAddon(
+      recordingBinding({ startServer: () => Promise.reject(native) }).binding,
+    );
+    const error = await addon.startRpcServer({ port: 50052 }).then(
+      () => assert.fail("expected a rejection"),
+      (caught) => caught,
+    );
+    assert.ok(error instanceof addon[code], code);
+    assert.ok(error instanceof addon.RpcServerNativeError, code);
+    assert.equal(error.name, code);
+    assert.equal(error.code, code);
+    assert.equal(error.message, native.message);
+    assert.equal(error.cause, native);
+  }
+});
+
+test("synchronous native failures become typed errors", async () => {
+  const addon = loadAddon(
+    recordingBinding({
+      startServer: () => {
+        throw nativeError("RpcServerBackendError");
+      },
+    }).binding,
+  );
+  await assert.rejects(addon.startRpcServer({ port: 50052 }), {
+    name: "RpcServerBackendError",
+    code: "RpcServerBackendError",
+  });
+
+  const rdmaFailure = loadAddon(
+    recordingBinding({
+      rpcBackendSupportsRdma: () => {
+        throw nativeError("RpcServerBackendError");
+      },
+    }).binding,
+  );
+  await assert.rejects(rdmaFailure.startRpcServer({ port: 50052 }), {
+    name: "RpcServerBackendError",
+  });
+});
+
+test("native stop failures become typed errors", async () => {
+  let failStop = true;
+  const addon = loadAddon(
+    recordingBinding({
+      stopServer: () =>
+        failStop
+          ? Promise.reject(nativeError("RpcServerStopError"))
+          : Promise.resolve(),
+    }).binding,
+  );
+  const server = await addon.startRpcServer({ port: 50052 });
+  await assert.rejects(server.stop(), (error) => {
+    assert.ok(error instanceof addon.RpcServerStopError);
+    return true;
+  });
+  failStop = false;
+  await server.stop();
+});
+
+test("errors without a known native code pass through unchanged", async () => {
+  const native = nativeError("InvalidArgument");
+  const addon = loadAddon(
+    recordingBinding({ startServer: () => Promise.reject(native) }).binding,
+  );
+  await assert.rejects(addon.startRpcServer({ port: 50052 }), (error) => {
+    assert.equal(error, native);
+    return true;
+  });
+});
+
+test("device names are trimmed before reaching the native server", async () => {
+  for (const [device, expected] of [
+    ["Vulkan0, CPU", "Vulkan0,CPU"],
+    [" Vulkan0 / CPU ", "Vulkan0,CPU"],
+    [[" Vulkan0 ", "CPU "], "Vulkan0,CPU"],
+  ]) {
+    const { binding, calls } = recordingBinding();
+    const server = await loadAddon(binding).startRpcServer({
+      port: 50052,
+      device,
+    });
+    assert.equal(calls[0].device, expected, JSON.stringify(device));
+    assert.equal(server.device, expected);
+    await server.stop();
+  }
+});
+
+test("blank device values are not turned into the default device", async () => {
+  for (const [device, expected] of [
+    ["  ", "  "],
+    [[" "], " "],
+    ["", ""],
+    [[], ""],
+  ]) {
+    const { binding, calls } = recordingBinding();
+    const server = await loadAddon(binding).startRpcServer({
+      port: 50052,
+      device,
+    });
+    assert.equal(calls[0].device, expected, JSON.stringify(device));
+    await server.stop();
+  }
+});

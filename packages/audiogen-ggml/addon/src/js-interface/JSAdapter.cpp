@@ -14,6 +14,9 @@ namespace general_error = qvac_errors::general_error;
 
 namespace {
 
+// Same bound as the per-run inferenceSteps (AddonJs.hpp).
+constexpr int K_MAXIMUM_INFERENCE_STEPS = 1000;
+
 [[noreturn]] void throwInvalidNumber(const char* key, const char* typeName) {
   throw qvac_errors::StatusError(
       general_error::InvalidArgument,
@@ -176,7 +179,18 @@ JSAdapter::buildAcestepConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "vaeModelPath");
   cfg.inferenceSteps =
       readRequiredInt(configurationParams, env, "inferenceSteps");
+  if (cfg.inferenceSteps < 0 ||
+      cfg.inferenceSteps > K_MAXIMUM_INFERENCE_STEPS) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "Property 'inferenceSteps' must be between 0 and 1000");
+  }
   cfg.shift = readRequiredFloat(configurationParams, env, "shift");
+  if (cfg.shift < 0.0F) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "Property 'shift' must be non-negative");
+  }
   cfg.threads = readRequiredNonNegativeInt(configurationParams, env, "threads");
   cfg.useGpu = readRequiredBool(configurationParams, env, "useGPU");
   cfg.nGpuLayers = readRequiredInt(configurationParams, env, "nGpuLayers");
@@ -196,6 +210,13 @@ JSAdapter::buildMinimaxConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "synthModelPath");
   cfg.threads = readRequiredNonNegativeInt(configurationParams, env, "threads");
   cfg.useGpu = readRequiredBool(configurationParams, env, "useGPU");
+  cfg.device = readOptionalString(configurationParams, env, "device");
+  if (!cfg.device.empty() && cfg.device != "cpu" && cfg.device != "gpu" &&
+      cfg.device != "auto") {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "device must be 'cpu', 'gpu' or 'auto' (got '" + cfg.device + "')");
+  }
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
