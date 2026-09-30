@@ -9,7 +9,11 @@
 // the app with no native runtime unless its prebuilds are overlaid here. The
 // loaders already prefer a runtime in the package's own prebuilds/.
 //
-// Usage: node overlay-platform-prebuilds.mjs --platform Android|iOS [--modules-dir node_modules]
+// `--fabric-prebuilds <dir>` supplies @qvac/fabric from a fabric-stack run's
+// `prebuild-fabric-<host>` artifacts (<dir>/<host>/...) instead of the
+// published slice, so the device runs the fabric under test.
+//
+// Usage: node overlay-platform-prebuilds.mjs --platform Android|iOS [--modules-dir node_modules] [--fabric-prebuilds <dir>]
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -18,6 +22,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HOST_ADDON_IMPORT = '#host-addon';
+export const FABRIC_PACKAGE = '@qvac/fabric';
 
 export const TARGET_HOSTS = {
   android: ['android-arm64'],
@@ -137,12 +142,31 @@ function hasLocalPrebuild(packageRoot, platform) {
   );
 }
 
+function presentHosts(prebuildsDir, platform) {
+  return TARGET_HOSTS[platform].filter((host) => fs.existsSync(path.join(prebuildsDir, host)));
+}
+
+// Replaces each target host's tree wholesale, so no backend from an earlier
+// install survives next to the fabric under test.
+export function applyFabricPrebuilds(packageRoot, fabricPrebuildsDir, platform) {
+  const hosts = presentHosts(fabricPrebuildsDir, platform);
+  if (hosts.length === 0) {
+    throw new Error(
+      `fabric prebuilds at ${fabricPrebuildsDir} hold none of ${TARGET_HOSTS[platform].join(', ')}`,
+    );
+  }
+  for (const host of hosts) {
+    const dest = path.join(packageRoot, 'prebuilds', host);
+    fs.rmSync(dest, { recursive: true, force: true });
+    fs.cpSync(path.join(fabricPrebuildsDir, host), dest, { recursive: true });
+  }
+  return hosts;
+}
+
 // Copies the slice's addon/prebuilds/<host> for every target host it ships.
 export function applyOverlay(entry, sliceRoot, platform) {
   const slicePrebuilds = path.join(sliceRoot, 'addon', 'prebuilds');
-  const hosts = TARGET_HOSTS[platform].filter((host) =>
-    fs.existsSync(path.join(slicePrebuilds, host)),
-  );
+  const hosts = presentHosts(slicePrebuilds, platform);
   if (hosts.length === 0) {
     throw new Error(
       `${entry.platformPackage}@${entry.version} ships none of ${TARGET_HOSTS[platform].join(', ')} ` +
@@ -178,32 +202,51 @@ export function overlayPlatformPrebuilds({
   modulesDir,
   platform,
   fetchSlice = fetchSliceWithNpm,
+  fabricPrebuildsDir = null,
   log = console.log,
 }) {
-  const plan = planOverlays(findHostAddonPackages(modulesDir), platform);
+  let packages = findHostAddonPackages(modulesDir);
+  const results = [];
+
+  if (fabricPrebuildsDir !== null) {
+    const fabrics = packages.filter((pkg) => pkg.name === FABRIC_PACKAGE);
+    if (fabrics.length === 0) {
+      throw new Error(`fabric prebuilds were given, but no ${FABRIC_PACKAGE} is installed under ${modulesDir}`);
+    }
+    for (const pkg of fabrics) {
+      const hosts = applyFabricPrebuilds(pkg.packageRoot, fabricPrebuildsDir, platform);
+      log(`Overlaid PR fabric from ${fabricPrebuildsDir} (${hosts.join(', ')}) into ${pkg.packageRoot}/prebuilds`);
+      results.push({ ...pkg, hosts });
+    }
+    packages = packages.filter((pkg) => pkg.name !== FABRIC_PACKAGE);
+  }
+
+  const plan = planOverlays(packages, platform);
   if (plan.length === 0) {
-    log(`No split addon needs a ${platform} platform package overlay.`);
-    return [];
+    if (results.length === 0) log(`No split addon needs a ${platform} platform package overlay.`);
+    return results;
   }
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-platform-overlay-'));
   try {
-    return plan.map((entry) => {
+    for (const entry of plan) {
       const spec = `${entry.platformPackage}@${entry.version}`;
       const sliceRoot = fetchSlice(spec, { cwd: path.dirname(modulesDir), workDir });
       const hosts = applyOverlay(entry, sliceRoot, platform);
       log(`Overlaid ${spec} (${hosts.join(', ')}) into ${entry.packageRoot}/prebuilds`);
-      return { ...entry, hosts };
-    });
+      results.push({ ...entry, hosts });
+    }
+    return results;
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
   }
 }
 
 function parseArgs(argv) {
-  const args = { modulesDir: 'node_modules' };
+  const args = { modulesDir: 'node_modules', fabricPrebuilds: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--platform') args.platform = argv[++i];
     else if (argv[i] === '--modules-dir') args.modulesDir = argv[++i];
+    else if (argv[i] === '--fabric-prebuilds') args.fabricPrebuilds = argv[++i];
     else throw new Error(`unknown argument ${argv[i]}`);
   }
   return args;
@@ -214,5 +257,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   overlayPlatformPrebuilds({
     modulesDir: path.resolve(args.modulesDir),
     platform: normalisePlatform(args.platform),
+    fabricPrebuildsDir: args.fabricPrebuilds ? path.resolve(args.fabricPrebuilds) : null,
   });
 }
