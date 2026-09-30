@@ -142,7 +142,7 @@ const minimaxRuntimeConfigShape = {
     .min(0)
     .max(MINIMAX_MAX_INFERENCE_STEPS)
     .optional()
-    .describe('MiniMax flow sampling steps; `0` uses the model default.'),
+    .describe('MiniMax flow sampling steps; `0` uses the engine default (20).'),
   cfgScale: minimaxCfgScaleSchema.optional()
 }
 
@@ -334,7 +334,7 @@ const audioGenGenerationShape = {
     .max(MINIMAX_MAX_INFERENCE_STEPS)
     .optional()
     .describe(
-      'MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.'
+      'MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.'
     ),
   cfgScale: minimaxCfgScaleSchema
     .optional()

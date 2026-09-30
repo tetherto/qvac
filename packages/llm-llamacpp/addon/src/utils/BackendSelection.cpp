@@ -210,6 +210,14 @@ void emplaceIfValidDevice(
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu, const bool isOpenCl,
     const bool isRpc, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
+  // RPC devices are intentionally excluded from automatic single-backend
+  // selection. They remain eligible for split modes through
+  // getSplitDeviceSelection(), and callers can name them explicitly with
+  // LoadFitNormalization's devices/device-list option.
+  if (isRpc) {
+    return;
+  }
+
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
     std::string text =

@@ -119,6 +119,14 @@ function concatInt16(chunks) {
   return pcm
 }
 
+function samePcm(a, b) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 function floatToPreservedInt16(sample) {
   const scale = sample < 0 ? 32768 : 32767
   let value = Math.round(sample * scale)
@@ -272,7 +280,7 @@ async function runRepaintThenFlow(t, gen, source) {
 
 test(
   'AudioGen (ggml): instrumental music generation end-to-end',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -286,7 +294,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -318,7 +326,7 @@ test(
 
 test(
   'AudioGen (ggml): generateLrc reports synchronized lyrics',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -329,7 +337,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -358,7 +366,7 @@ test(
 
 test(
   'AudioGen (ggml): computeQualityScore reports stats.qualityScore',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -369,7 +377,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -402,7 +410,7 @@ test(
 
 test(
   'AudioGen (ggml): rewriteQuery formats the request through the LM',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -413,7 +421,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -433,7 +441,7 @@ test(
 
 test(
   'AudioGen (ggml): understand describes generated audio',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -444,7 +452,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -477,6 +485,7 @@ test(
       'streamed understand progress'
     )
     t.is(stats.understand.caption, understood.understand.caption, 'stats repeat the description')
+    t.is(understood.understand.seed, 42, 'the LM decode reports the seed it used')
 
     const hinted = await gen.understand(pcm, { seed: 42, vocalLanguage: 'es' })
     const hintedStats = await hinted.await()
@@ -486,7 +495,7 @@ test(
 
 test(
   'AudioGen (ggml): immediate ACE-Step cancellation is terminal',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -497,7 +506,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -527,7 +536,7 @@ test(
 
 test(
   'AudioGen (ggml): song with lyrics + musical hints, and PCM encodes to WAV',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -540,7 +549,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -588,7 +597,7 @@ test(
 
 test(
   'AudioGen (ggml): frozen semantic codes bypass LM length generation',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -601,7 +610,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -669,7 +678,7 @@ test(
 
 test(
   'AudioGen (ggml): Repaint and FlowEdit variants cross the native bridge in order',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -682,7 +691,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU,
+      useGPU: true,
       inferenceSteps: COVER_STEPS,
       shift: COVER_SHIFT
     })
@@ -693,5 +702,132 @@ test(
     await runFlowEditVariants(t, gen, source)
     await runFlowThenRepaint(t, gen, source)
     await runRepaintThenFlow(t, gen, source)
+  }
+)
+
+test(
+  'AudioGen (ggml): generation metadata reports the resolved seed under a per-run schedule',
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: true
+    })
+    t.teardown(() => gen.destroy())
+
+    const caption = 'dreamy synthwave, arpeggiated bass, gated drums'
+    const opts = {
+      lyrics: '[Instrumental]',
+      duration: 4,
+      bpm: 110,
+      keyscale: 'F minor',
+      timesignature: '4/4',
+      inferenceSteps: COVER_STEPS,
+      shift: COVER_SHIFT
+    }
+    const unseeded = await runAudioGen(gen, { caption, opts })
+    const metadata = unseeded.data.stats.metadata
+    t.ok(metadata, 'stats carry the generation metadata')
+    t.is(unseeded.data.stageTotals.dit, COVER_STEPS, 'the per-run step count drives the DiT')
+    t.ok(
+      Number.isInteger(metadata.seed) && metadata.seed >= 0 && metadata.seed <= 0xffffffff,
+      `an unseeded run reports the uint32 seed it drew (${metadata.seed})`
+    )
+    t.is(metadata.caption, caption, 'the caller caption is echoed')
+    t.is(metadata.bpm, 110, 'the requested bpm is echoed')
+    t.is(metadata.keyscale, 'F minor', 'the requested key is echoed')
+    t.is(metadata.beatsPerBar, 4, 'the time-signature numerator is reported')
+    t.ok(metadata.codeFrames > 0, `the LM produced ${metadata.codeFrames} code frames`)
+    t.is(metadata.qualityReport, undefined, 'no quality report unless requested')
+
+    const reseeded = await runAudioGen(gen, {
+      caption,
+      opts: { ...opts, seed: metadata.seed, computeQualityScore: true }
+    })
+    const replay = reseeded.data.stats.metadata
+    t.is(replay.seed, metadata.seed, 'an explicit seed is echoed')
+    t.is(replay.codeFrames, metadata.codeFrames, 'the reported seed replays the LM codes')
+    t.is(reseeded.data.sampleCount, unseeded.data.sampleCount, 'the replay has the same length')
+    t.ok(
+      typeof replay.qualityReport === 'string' && replay.qualityReport.length > 0,
+      'computeQualityScore adds the quality breakdown'
+    )
+    t.ok(typeof reseeded.data.stats.qualityScore === 'number', 'the quality score is reported')
+  }
+)
+
+test(
+  'AudioGen (ggml): edit run options reach the native edit plan',
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: true
+    })
+    t.teardown(() => gen.destroy())
+
+    const source = makeCoverPcm(EDIT_SECONDS)
+    const schedule = { inferenceSteps: COVER_STEPS, shift: COVER_SHIFT }
+    const repaint = async (options) => {
+      const response = await gen
+        .edit({ pcm: source, sampleRate: COVER_SAMPLE_RATE, channels: COVER_CHANNELS })
+        .repaint({ caption: 'bright brass stab', start: 0.5, end: 1.5 })
+        .run(options)
+      return (await collectAudioGenResponse(response)).data
+    }
+
+    const baseline = await repaint({ seed: COVER_SEED, ...schedule })
+    t.is(baseline.stageTotals.repaint, COVER_STEPS, 'the per-run step count drives the repaint')
+    t.is(baseline.sampleCount, source.length, 'the edit returns the source length')
+    t.is(baseline.stats.metadata.seed, COVER_SEED, 'the edit reports its base seed')
+    t.is(baseline.stats.metadata.codeFrames, 0, 'an edit skips the LM')
+
+    const conditioned = await repaint({
+      seed: COVER_SEED,
+      ...schedule,
+      referenceAudio: makeCoverPcm(),
+      vocalLanguage: 'en',
+      bpm: 120,
+      keyscale: 'C major',
+      timesignature: '4/4',
+      augmentCaptionWithMetadata: true
+    })
+    t.ok(conditioned.stages.includes('reference'), 'the reference audio was encoded')
+    const echoed = conditioned.stats.metadata
+    t.is(echoed.vocalLanguage, 'en', 'the edit prompt carries the language')
+    t.is(echoed.bpm, 120, 'the edit prompt carries the bpm')
+    t.is(echoed.keyscale, 'C major', 'the edit prompt carries the key')
+    t.is(echoed.beatsPerBar, 4, 'the edit prompt carries the time signature')
+    t.absent(
+      samePcm(concatInt16(conditioned.chunks), concatInt16(baseline.chunks)),
+      'the prompt metadata changes the repaint'
+    )
+
+    const noDcw = await repaint({ seed: COVER_SEED, ...schedule, dcwEnabled: false })
+    t.absent(
+      samePcm(concatInt16(noDcw.chunks), concatInt16(baseline.chunks)),
+      'dcwEnabled reaches the repaint sampler'
+    )
+
+    const unseeded = await repaint(schedule)
+    const drawn = unseeded.stats.metadata.seed
+    t.ok(
+      Number.isInteger(drawn) && drawn >= 0 && drawn <= 0xffffffff,
+      `an unseeded edit reports the uint32 seed it drew (${drawn})`
+    )
   }
 )

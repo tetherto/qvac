@@ -17,7 +17,7 @@ test(
     const gen = new AudioGen({
       engine: ENGINE_MINIMAX,
       files: { modelDir },
-      config: { threads: 4 }
+      config: { threads: 4, device: 'cpu' }
     })
     await gen.load()
     t.teardown(() => gen.destroy())
@@ -38,8 +38,13 @@ test(
     t.is(data.sampleRate, 44100, 'MiniMax produced 44.1 kHz output')
     t.ok(data.stages.includes('ar'), 'MiniMax reported autoregressive progress')
     t.ok(data.stages.includes('flow'), 'MiniMax reported flow progress')
-    t.is(data.stats.backendDevice, 0, 'MiniMax used the CPU')
+    t.is(data.stats.backendDevice, 0, "device: 'cpu' kept MiniMax on the CPU")
     t.is(data.stats.backendId, 0, 'MiniMax reported the CPU backend')
+    t.is(data.stats.emittedFrames, 1, 'the AR stage emitted the one capped frame')
+    for (const stage of ['arMs', 'conditionMs', 'flowMs', 'vocoderMs']) {
+      t.ok(data.stats[stage] >= 0, `stats.${stage} reports the engine stage time`)
+    }
+    t.ok(data.stats.flowMs > 0, 'the flow stage took measurable time')
 
     const cancelledResponse = await gen.run('A longer orchestral build.', {
       maxFrames: 32,

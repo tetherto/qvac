@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Engine options and results that the speech fabric's audiogen engines already
+  provided but the addon did not expose:
+  - ACE-Step generation metadata: a run reports what it rendered on the PCM
+    item and as `stats.metadata` — the caption and lyrics (LM-composed
+    under Simple Mode / Query Rewriting), `bpm`, `keyscale`, `beatsPerBar` (the
+    time-signature numerator), `vocalLanguage`, `codeFrames`, the `seed` it
+    used (so an unseeded take or edit can be replayed), and `qualityReport`
+    with `computeQualityScore`.
+  - ACE-Step per-run `inferenceSteps` and `shift` on `run()` and on an edit
+    session's `run()`; both used to be fixed at load time.
+  - Edit sessions: `run()` takes a timbre `referenceAudio`, the `vocalLanguage`
+    / `bpm` / `keyscale` / `timesignature` / `augmentCaptionWithMetadata`
+    prompt metadata, and the Repaint DCW controls (`dcwEnabled`, `dcwScaler`,
+    `dcwHighScaler`). The engine read all of them; only the seed reached it.
+  - `understand()` reports the `seed` the LM decode used.
+  - MiniMax-Music3: the engine's stage timings (`arMs`, `conditionMs`,
+    `flowMs`, `vocoderMs`) and `emittedFrames` in the stats, and
+    `config.device: 'gpu'` to fail `load()` instead of falling back to the CPU
+    when no GPU is usable.
+
+### Changed
+
+- ACE-Step `config.inferenceSteps` must be an integer from 0 to 1000 and
+  `config.shift` must be non-negative, the same rules as the new per-run
+  values; out-of-range values used to load. The engine already read 0 and
+  below as "auto".
+- The ACE-Step options `run()` shares with edit runs are validated the same way
+  on both: `seed` must be a safe integer, `bpm` a non-negative int32,
+  `vocalLanguage` / `keyscale` / `timesignature` strings and the DCW scalers
+  within the float32 range. The native parser range-checks `seed`, `bpm` and
+  the DCW scalers before casting them.
+- A positive `shift` too small for a float32 is rejected instead of rounding to
+  0 and silently selecting the automatic shift.
+
+### Fixed
+
+- `understand()` no longer repeats the previous run's `lyricsScore` in its
+  stats after a `generateLrc` generation.
+- Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
+  reports more free device memory than total once the process has allocated
+  past the GPU's recommended working set, which made a model that does not fit
+  report `fits`. Generation is unchanged.
+
+## [0.5.1] - 2026-09-29
+
+### Fixed
+
+- `assessFit` now resolves the backends directory the same way a load does
+  (`prebuilds/<platform>-<arch>/<module>`), so a fit projection finds the ggml
+  backend modules on the split-backend layouts (Linux, macOS, Android) instead
+  of reporting `no-backend-device`.
+
+### Changed
+
+- Raise the `ggml-speech` floor to `2026-09-28` and the `speech-cpp` floor to
+  `2026-09-25#1`. The OpenCL backend no longer crashes on Adreno GPUs when a
+  buffer type is queried before the backend is initialized. Same models, same
+  backends, no API change.
+
 ## [0.5.0] - 2026-09-25
 
 ### Changed

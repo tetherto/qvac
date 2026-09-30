@@ -177,7 +177,7 @@ jobs:
           arch: ${{ matrix.arch || 'x64' }}
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare bare-make@1.8.0
 
       - name: Cache C++ test models
         id: model-cache

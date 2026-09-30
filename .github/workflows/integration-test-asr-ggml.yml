@@ -173,9 +173,10 @@ jobs:
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Job-wide GPU gate. Governs the parakeet suites (parakeet-gpu-smoke,
-      # parakeet-multiple-transcriptions). The whisper-only GPU step overrides
-      # it with matrix.no_gpu_whisper where the two parents differed.
+      # Job-wide GPU gate. NO_GPU=true skips the tests that run longer
+      # inference on the GPU only, leaving brief CPU inference. The whisper-only
+      # GPU step overrides it with matrix.no_gpu_whisper where the two parents
+      # differed.
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
 
     permissions:
@@ -288,7 +289,7 @@ jobs:
           npm install
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare bare-make@1.8.0
 
       # Shared placement action: handles the Windows path hazard where Git Bash
       # mangles runner.temp ("C:\a\_temp") and the copy silently no-ops.

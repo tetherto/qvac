@@ -46,6 +46,7 @@ import {
 import { stoppedByLength } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
+import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
 
 function createLlmModel(
   modelId: string,
@@ -156,7 +157,14 @@ export const llmPlugin = definePlugin({
         const dialect = request.toolDialect ?? detectToolDialect(request.modelId)
         const modelCfg = getModelConfig(request.modelId)
         const toolsActive = (modelCfg as { tools?: boolean }).tools === true
-        const toolsByPosition = request.prompts.map((prompt) => prompt.tools ?? [])
+        // Parse against what each prompt can call: with deferred tools that is
+        // the rendered set plus whatever an earlier `tool_search` loaded.
+        const toolsByPosition = request.prompts.map(
+          (prompt) =>
+            resolveDeferredTools(prompt.tools, prompt.history)?.callableTools ??
+            prompt.tools?.map(toWireTool) ??
+            []
+        )
         const toolsById = new Map<string, Tool[]>()
         const normalizers = new Map<string, ReturnType<typeof createCompletionNormalizer>>()
         const bufferedEvents: BatchCompletionEvent[] = []
