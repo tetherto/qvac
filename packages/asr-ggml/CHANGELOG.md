@@ -23,14 +23,19 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   per-request `hotwords` (names and terms spelled as given), a custom
   `prompt` and `maxNewTokens`; the other engines reject run options. There is
   no streaming or reload for this engine.
+- Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and
+  streaming speaker segments with up to eight speakers.
 
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships
-  MOSS-Transcribe-Diarize with hotwords.
+  Nemotron 3 Diarization and MOSS-Transcribe-Diarize with hotwords.
 
 ### Fixed
 
+- Nemotron 3 Diarization streaming preserves first-chunk predictions with left
+  context, applies the same peak gain as offline inference, and retains an
+  explicitly requested 80 ms left context.
 - Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
   reports more free device memory than total once the process has allocated
   past the GPU's recommended working set, which made a model that does not fit

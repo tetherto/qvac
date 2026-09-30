@@ -117,7 +117,8 @@ export interface BackendInfo {
   encoderOnCoreml: boolean;
   /**
    * Loaded model family: `"whisper"`, or parakeet's detected type
-   * (`"ctc"`, `"tdt"`, `"rnnt"`, `"eou"`, `"nemotron"`, `"sortformer"`).
+   * (`"ctc"`, `"tdt"`, `"rnnt"`, `"eou"`, `"nemotron"`, `"sortformer"`,
+   * `"nemotron-diarization"`).
    */
   modelType?: string;
   gpuMemTotalMb?: number;
