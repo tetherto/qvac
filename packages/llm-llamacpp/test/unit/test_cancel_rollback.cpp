@@ -368,15 +368,15 @@ TEST_F(
   llama_memory_seq_rm(mem, 0, -1, -1);
 }
 
-// Two checkpoints when the config does not say; an explicit
+// One checkpoint when the config does not say; an explicit
 // `cache_checkpoints` wins.
-TEST_F(CancelRollbackPrimitiveTest, HybridDefaultsToTwoCheckpoints) {
+TEST_F(CancelRollbackPrimitiveTest, HybridDefaultsToOneCheckpoint) {
   const std::string path = qwen35HybridModelPath();
   if (!modelFileExists(path)) {
     GTEST_SKIP() << "Qwen3.5 hybrid model not found";
   }
   for (const auto& [configured, expected] :
-       std::vector<std::pair<const char*, size_t>>{{nullptr, 2}, {"5", 5}}) {
+       std::vector<std::pair<const char*, size_t>>{{nullptr, 1}, {"5", 5}}) {
     std::unordered_map<std::string, std::string> config;
     config["device"] = test_common::getTestDevice();
     config["ctx_size"] = "2048";
@@ -703,6 +703,36 @@ TEST_F(TextLlmContextCancelTest, OnCancelAfterPrefillKeepsPromptOnHybrid) {
          "the pre-request cursor";
   EXPECT_EQ(seqPosMax(*model), posAfterPrefill - 1)
       << "live memory must still hold exactly the prefilled prompt";
+}
+
+// The prefill stops at the end of the history only when a checkpoint will be
+// kept: with `cache_checkpoints: 0` there is no stop and no capture.
+TEST_F(TextLlmContextCancelTest, NoHistoryCheckpointStopWithZeroCheckpoints) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  LlmModelContext shared = makeShared(*model);
+  common_params params = model->getCommonParams();
+  for (const size_t count : {size_t{1}, size_t{0}}) {
+    llama_memory_seq_rm(llama_get_memory(shared.lctx), 0, -1, -1);
+    TextLlmContext driver(params, shared, /*seqId=*/0);
+    driver.setCacheReconciliationEnabled(true);
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy policy;
+    policy.maxCount = count;
+    driver.setCacheCheckpointPolicy(policy);
+    const PrefillPlan plan = driver.preparePrefill(
+        {makeMsg("user", "Name three colours of the rainbow.")},
+        /*tools=*/{},
+        /*media=*/{},
+        /*mediaPlan=*/{},
+        /*isCacheLoaded=*/false,
+        /*isPrefillOnlyRequest=*/false);
+    ASSERT_FALSE(plan.tokens.empty());
+    EXPECT_EQ(plan.checkpointAtTextTokens.has_value(), count > 0)
+        << "cache_checkpoints=" << count;
+    driver.onFailure([](const std::string&) {});
+  }
 }
 
 // The scheduler decodes a sample only on the step after `onLogitsReady`

@@ -1546,8 +1546,9 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
 
   pendingReuseEntries_ = reuse;
   // Only the generation prompt follows the history; a history end inside the
-  // reused prefix has nothing left to capture.
-  if (generationPromptTokens_ > 0 &&
+  // reused prefix has nothing left to capture, and with `cache_checkpoints:
+  // 0` nothing would keep it.
+  if (generationPromptTokens_ > 0 && cacheCheckpointPolicy_.maxCount > 0 &&
       fullLedger.entries.size() > generationPromptTokens_ &&
       fullLedger.entries.size() - generationPromptTokens_ > reuse) {
     historyCheckpointEntries_ =

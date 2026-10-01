@@ -1610,8 +1610,8 @@ runNextEditRegenerate(LlamaModel& model, const fs::path& key) {
   return result;
 }
 
-// Checks a model against `runNextEditRegenerate` with the default two
-// checkpoints and with one. The last end-of-history checkpoint serves the
+// Checks a model against `runNextEditRegenerate` with two checkpoints and
+// with the default one. The last end-of-history checkpoint serves the
 // next turn and the regenerate; the one before it serves the edit, which with
 // a single checkpoint is a cold prefill. The previous answer's rewrite (both
 // models drop the reasoning) is why the turn-old checkpoint, not the
@@ -1641,11 +1641,11 @@ TEST(
   const fs::path cacheFile = "hybrid_edit_checkpoint_cache.bin";
   NextEditRegenerateRun two;
   NextEditRegenerateRun one;
-  for (const char* checkpoints : {static_cast<const char*>(nullptr), "1"}) {
+  for (const char* checkpoints : {"2", static_cast<const char*>(nullptr)}) {
     fs::remove(cacheFile);
     auto model = loadHybridChatModel(modelPath, nullptr, checkpoints);
     ASSERT_TRUE(model->isLoaded());
-    (checkpoints == nullptr ? two : one) =
+    (checkpoints != nullptr ? two : one) =
         runNextEditRegenerate(*model, cacheFile);
   }
   fs::remove(cacheFile);
@@ -1667,7 +1667,7 @@ TEST(CacheHistoryCheckpointTest, HybridCheckpointsStayInMemoryByDefault) {
     const uint64_t filesBefore = qvac_lib_inference_addon_llama::utils::
         sequenceStateSnapshotFilesWritten();
     const NextEditRegenerateRun run = runNextEditRegenerate(*model, cacheFile);
-    ASSERT_GT(run.reuse[1], 0u) << "the chat never restored a checkpoint";
+    ASSERT_GT(run.reuse[0], 0u) << "the chat never restored a checkpoint";
     const uint64_t written = qvac_lib_inference_addon_llama::utils::
                                  sequenceStateSnapshotFilesWritten() -
                              filesBefore;
@@ -1682,7 +1682,7 @@ TEST(CacheHistoryCheckpointTest, HybridCheckpointsStayInMemoryByDefault) {
 
 // The same on DeepSeek V4, whose partial checkpoints hold the sliding window
 // and the compressor states.
-TEST(CacheHistoryCheckpointTest, DeepSeekV4KeepsTwoPartialCheckpoints) {
+TEST(CacheHistoryCheckpointTest, DeepSeekV4SecondCheckpointServesTheEdit) {
   const test_common::TestModelPath modelPath = deepSeekV4ModelPath();
   if (!modelPath.found()) {
     GTEST_SKIP() << modelPath.missingMessage();
@@ -1692,17 +1692,17 @@ TEST(CacheHistoryCheckpointTest, DeepSeekV4KeepsTwoPartialCheckpoints) {
 
   NextEditRegenerateRun two;
   {
-    auto model = loadDeepSeekV4ChatModel(modelPath, nullptr);
+    auto model = loadDeepSeekV4ChatModel(modelPath, "2");
     ASSERT_TRUE(model->isLoaded());
     ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr);
-    EXPECT_EQ(LlamaModelTestPeer::checkpointPolicy(*model).maxCount, 2u);
     two = runNextEditRegenerate(*model, cacheFile);
   }
   fs::remove(cacheFile);
   NextEditRegenerateRun one;
   {
-    auto model = loadDeepSeekV4ChatModel(modelPath, "1");
+    auto model = loadDeepSeekV4ChatModel(modelPath, nullptr);
     ASSERT_TRUE(model->isLoaded());
+    EXPECT_EQ(LlamaModelTestPeer::checkpointPolicy(*model).maxCount, 1u);
     one = runNextEditRegenerate(*model, cacheFile);
   }
   fs::remove(cacheFile);

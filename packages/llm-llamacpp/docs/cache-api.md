@@ -92,9 +92,9 @@ back on a cancel or failure; it is dropped when the request commits.
 
 Templates that drop a previous answer's reasoning change the prompt right
 after that answer's header, so the history before it is the longest part the
-next turn shares. With the default two checkpoints, the newest serves an
-ordinary next turn and a regenerate, and the one a turn older serves an edit
-of the last user message. A diverging history restores the longest checkpoint
+next turn shares. The default single checkpoint serves an ordinary next turn
+and a regenerate; with `cache_checkpoints: 2` the one a turn older also serves
+an edit of the last user message. A diverging history restores the longest checkpoint
 that is still a prefix of the new prompt and re-prefills from there. See
 [When checkpoints are taken](./cache-lifecycle.md#when-checkpoints-are-taken)
 for the exact points in the pipeline. Checkpoints are pruned as soon as they stop
@@ -109,15 +109,17 @@ on DeepSeek V4. Its size is therefore fixed by the model, not the context
 (about 20 MB on Qwen3.5-0.8B). Three load-config fields bound the footprint.
 None of them has any effect on pure-attention models.
 
-- `cache_checkpoints`: how many to keep per sequence (default 2, maximum
+- `cache_checkpoints`: how many to keep per sequence (default 1, maximum
   1024). Each committed request adds one, at the end of its history, before
-  the generation prompt. The default keeps the last two: the last one serves
-  an ordinary next turn and a regenerate, the one before it an edit of the
-  last user message. Both stop before an answer, so they still match when the
-  template rewrites earlier answers (thinking models drop the reasoning).
+  the generation prompt. The default keeps the last one, which serves an
+  ordinary next turn and a regenerate. `2` also keeps the one before it, which
+  serves an edit of the last user message; both stop before an answer, so they
+  still match when the template rewrites earlier answers (thinking models drop
+  the reasoning).
 
-  Raise it to also serve edits further back, at one checkpoint per turn.
-  `0` keeps none, which makes every divergent turn a cold prefill.
+  Raise it further to serve edits further back, at one checkpoint per turn.
+  `0` keeps none and takes none, which makes every divergent turn a cold
+  prefill.
 - `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
   before the count: the oldest checkpoints are dropped until the total fits.
   `0` (default) is unlimited. When set, the load fails with `InvalidArgument`

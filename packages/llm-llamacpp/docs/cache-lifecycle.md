@@ -74,7 +74,7 @@ graph TB
 The decision is `needsFullStateSnapshot` in `ModelMemoryPolicy.hpp`, by
 architecture: recurrent or hybrid per llama.cpp, or DeepSeek V4. All of them
 snapshot only what a tail trim cannot rebuild (`untrimmableSnapshotScope`),
-and all of them keep 2 checkpoints by default (`cache_checkpoints`).
+and all of them keep 1 checkpoint by default (`cache_checkpoints`).
 
 ## A cached request
 
@@ -146,8 +146,10 @@ of the rendered prompt; a template without one takes no such checkpoint.
 The same rewrite is why the pre-request snapshot is not kept as a checkpoint:
 it holds the previous answer as generated, so no later prompt would match it.
 The checkpoint one turn older does match an edit of the last user message,
-because it also stops before an answer; with the default two, an edit decodes
-the previous answer and the edited message again and nothing before them.
+because it also stops before an answer; with `cache_checkpoints: 2`, an edit
+decodes the previous answer and the edited message again and nothing before
+them. The default keeps one, so an edit of the last user message is a cold
+prefill.
 
 Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) keep only the
 last `n_swa` positions in their window layers. A trim back to the shared prefix
@@ -247,13 +249,19 @@ With `parallel >= 2` the points are the same:
    on disk. The next request on the key takes them at admission
    (`adoptCheckpoints`). See [continuous-batching.md](./continuous-batching.md).
 
-What is kept after a few turns, with the default `cache_checkpoints: 2`:
+What is kept after a few turns:
 
-| After turn | Kept checkpoints | They serve |
+| After turn | Default (`cache_checkpoints: 1`) | `cache_checkpoints: 2` |
 |---|---|---|
-| 1 | end of `[user 1]` | the next turn, a regenerate |
-| 2 | end of `[user 1]`, end of `[user 2]` | the newest: the next turn and a regenerate; the older: an edit of `[user 2]` |
-| 3 | end of `[user 2]`, end of `[user 3]` | the same, one turn later |
+| 1 | end of `[user 1]` | end of `[user 1]` |
+| 2 | end of `[user 2]` | end of `[user 1]`, end of `[user 2]` |
+| 3 | end of `[user 3]` | end of `[user 2]`, end of `[user 3]` |
+
+The newest serves the next turn and a regenerate. With 2, the older one
+serves an edit of the last user message, which the default turns into a cold
+prefill. During a request up to two more states exist besides the kept ones:
+the pre-request snapshot and the pending end-of-history checkpoint. Neither
+counts toward `cache_checkpoints` or `cache_checkpoints_max_bytes`.
 
 The pre-request snapshot is not kept because it holds the previous answer as
 generated, and a template that rewrites earlier answers (thinking models drop
@@ -265,7 +273,9 @@ No end-of-history checkpoint is taken for:
 - a prefill-only request (no generation prompt to stop in front of);
 - a template without a generation prompt, or an encoder model;
 - a request whose history ends inside the reused prefix: a regenerate, for
-  example, already has a checkpoint at that point.
+  example, already has a checkpoint at that point;
+- `cache_checkpoints: 0`: nothing would keep it, so the prefill does not stop
+  for it either.
 
 ### Restoring a checkpoint
 
@@ -356,7 +366,7 @@ stateDiagram-v2
 | `cacheKey` | `runOptions` | Turns the cache on for this sequence and names the durable file. |
 | `saveCacheToDisk` | `runOptions` | Write the file when this request commits. |
 | `prefill` | `runOptions` | Warm the cache without generating; commits as soon as prefill completes. Needs `saveCacheToDisk` on `parallel >= 2`. |
-| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 2: the last two requests' end-of-history checkpoints; 0 disables). Full-state models only. |
+| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 1: the last request's end-of-history checkpoint; 2 also serves an edit of the last user message; 0 disables them and their capture). Full-state models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `memory` (host RAM, default) or `disk` (temp files) for snapshots and checkpoints. |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |

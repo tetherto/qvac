@@ -718,8 +718,9 @@ PrefillPlan TextLlmContext::preparePrefill(
     inputTokens = reconcilePrompt(inputTokens, isPrefillOnlyRequest);
     // Only the generation prompt follows the history, so the history ends
     // `generationPromptTokens_` tokens before the end of the suffix too. A
-    // history end inside the reused prefix has nothing left to capture.
-    if (generationPromptTokens_ > 0 &&
+    // history end inside the reused prefix has nothing left to capture, and
+    // with `cache_checkpoints: 0` nothing would keep it.
+    if (generationPromptTokens_ > 0 && cacheCheckpointPolicy_.maxCount > 0 &&
         inputTokens.size() > generationPromptTokens_) {
       checkpointAt = inputTokens.size() - generationPromptTokens_;
       historyCheckpointEntries_ = fullSize - generationPromptTokens_;
@@ -1464,8 +1465,8 @@ void TextLlmContext::commitCacheRequest() {
   // would hold the previous answer as generated, which a template that
   // rewrites earlier answers (thinking models drop the reasoning) never
   // renders again, so no later prompt could restore it. The end-of-history
-  // checkpoints stop before each answer, so the last two also serve an edit
-  // of the last user message.
+  // checkpoints stop before each answer, so with two kept the older one also
+  // serves an edit of the last user message.
   preRequestCacheSnapshot_.clear();
   if (pendingHistoryCheckpoint_.has_value()) {
     cache::appendProcessCheckpoint(
