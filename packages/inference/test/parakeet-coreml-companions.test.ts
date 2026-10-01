@@ -121,11 +121,7 @@ test('Core ML companions: incomplete bundles and non-Apple platforms keep GGUF-o
 
   t.absent(await findCoremlCompanionSet(client(incomplete), model, 'darwin'))
   t.absent(
-    await findCoremlCompanionSet(
-      client(bundle('parakeet-tdt-0.6b-v3-encoder')),
-      model,
-      'linux'
-    )
+    await findCoremlCompanionSet(client(bundle('parakeet-tdt-0.6b-v3-encoder')), model, 'linux')
   )
   t.absent(getCoremlSidecarSpec(model.registryPath, 's3', 'android'))
   t.absent(getCoremlSidecarSpec('other/parakeet-tdt-0.6b-v3.q8_0.gguf', 's3', 'ios'))
