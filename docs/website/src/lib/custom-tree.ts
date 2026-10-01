@@ -60,7 +60,7 @@ function inventoryChildren(): Node[] {
 }
 
 /**
- * The inventory's place in the Platform navigation.
+ * The inventory's place in the Ecosystem navigation.
  *
  * Named only when the manifest lists a package. The inventory is built but
  * unpublished, so the manifest lists none and this entry is left out of
@@ -80,7 +80,7 @@ const inventoryFolder: Node = {
 };
 
 /**
- * A root folder per inventory version page, holding the Platform navigation.
+ * A root folder per inventory version page, holding the Ecosystem navigation.
  *
  * The sidebar beside a page is the last root folder on the path Fumadocs
  * finds by matching the pathname against the tree, page URL for page URL. A
@@ -88,13 +88,13 @@ const inventoryFolder: Node = {
  * to listing the roots themselves — the reader lands on a README and is shown
  * a list of collections. Since a version page is deliberately absent from the
  * inventory's entries, it is named here instead, as the index of a root of
- * its own, which the sidebar renders as the Platform tree it would have
+ * its own, which the sidebar renders as the Ecosystem tree it would have
  * rendered anyway. A root's index is not itself an entry, so naming it here
  * puts nothing back in the sidebar.
  *
  * The inventory folder is opened, because a folder opens itself only for a
  * page it lists and it lists no version. Left shut, a reader who followed a
- * package into a README would be shown a Platform tree with no sign of where
+ * package into a README would be shown an Ecosystem tree with no sign of where
  * they had gone.
  */
 function inventoryVersionRoots(): Node[] {

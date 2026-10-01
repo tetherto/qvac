@@ -111,7 +111,7 @@ export function documentedSoftwareOfKind(
 /**
  * The software documented at the given pathname, or `null` when the pathname
  * documents none. The longest matching path wins, so an inventory package
- * inside Platform resolves to the package rather than to Platform.
+ * inside Ecosystem resolves to the package rather than to Ecosystem.
  */
 export function getDocumentedSoftware(
   pathname: string,

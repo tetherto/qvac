@@ -16,7 +16,7 @@
  *     release of the CLI;
  *   - every collection that publishes no lines.
  *
- * Outside any line — Platform, Resources, the site root — the reader has no
+ * Outside any line — Ecosystem, Resources, the site root — the reader has no
  * line of their own, so every versioned collection contributes its current
  * one. An older line is then not merely ranked lower; it is not retrieved,
  * which is what "unscoped queries favour the current line" comes to in a

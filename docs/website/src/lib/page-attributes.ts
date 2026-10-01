@@ -49,7 +49,7 @@ export function pageAttributes(url: string): PageAttributes {
   const attributes: PageAttributes = { collection: collectionOf(url) };
 
   // Only a collection published as documentation lines has one. An inventory
-  // package under Platform carries versions of its own, but those are
+  // package under Ecosystem carries versions of its own, but those are
   // releases catalogued page by page, not lines of documentation, and
   // retrieval must not scope a reader to one of them.
   const versioned = getVersionForPath(url);

@@ -105,7 +105,7 @@ export function contentPathsOfLink(
  * Resolve an internal link path against the pre-built file index.
  *
  * A link to `/sdk/quickstart` from a page in `v0.16` resolves to
- * `sdk/v0.16/quickstart.mdx`; the same link from a Platform page resolves to
+ * `sdk/v0.16/quickstart.mdx`; the same link from an Ecosystem page resolves to
  * the current line's copy.
  */
 function resolveLink(

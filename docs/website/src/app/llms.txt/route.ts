@@ -84,7 +84,7 @@ function titleOf(path: string): string {
 
 /**
  * Groups by collection and then by the section within it, so a heading reads
- * `Platform / Addons`. Grouping by the first slug alone would put every page
+ * `Ecosystem / Addons`. Grouping by the first slug alone would put every page
  * of a collection under one heading, since the collection occupies the slot
  * the section used to.
  */
