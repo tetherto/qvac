@@ -349,6 +349,14 @@ addon — it installs a **prebuilt** one. Sources are tried in this order:
 on the phone", so setting **both is an error** — the run fails and tells you to
 clear one, rather than picking for you.
 
+Some addons publish their `@qvac` release as a JS-only meta package plus
+per-platform packages (`@qvac/<addon>-ios`, `@qvac/<addon>-android-arm64`). For
+those you will see the setup step resolve twice — the meta package, then the
+platform package its `#host-addon` map names, at the same version — and the second
+`Verified:` line names the package the binaries actually came from. Nothing
+changes about what you pass; the `@tetherto` dev builds are published unsliced
+and always resolve in one step.
+
 ### Testing unmerged / unpublished native code
 
 For the shared addon workflows, `--ref <branch>` gives you the branch's JS
@@ -451,8 +459,8 @@ Three things to know:
   only honours `prebuild_run_id` once that support is on the default branch.
   Until then the run fails with an explicit message rather than quietly
   installing `@latest` — use `-f package_spec=@tetherto/audiogen-ggml-mono@<dev>`
-  in the meantime. Note that `@qvac/audiogen-ggml` publishes **no prebuilds**, so
-  an empty input cannot work for this addon at all.
+  in the meantime. An empty input installs the published release's
+  per-platform package, as for the other split addons below.
 - **Check which repository built it.** This repo is fork-first, so a PR's
   `on-pr` run is usually `pull_request_target` on a *fork* — it appears in this
   repo's run list while its head repository is the contributor's fork. That is
@@ -594,12 +602,13 @@ the same run from `ref`, and `decoder-audio` has no native prebuild of its own
 tested) — for both, plain `--ref <branch>` is enough, which is why neither
 exposes `prebuild_run_id`.
 
-> **Two addons publish no mobile prebuilds to npm.** `@qvac/asr-ggml` and
-> `@qvac/audiogen-ggml` ship none, so an **empty** input cannot work for them —
-> the run fails with "No prebuilds directory found in package". Their
-> `@tetherto/<addon>-mono` dev builds *do* carry prebuilds, so Route B works; so
-> does Route A. (`@qvac/decoder-audio` also ships none, but it needs no prebuilds
-> of its own — see below.)
+> **Three addons publish their mobile binaries as separate packages.**
+> `@qvac/asr-ggml`, `@qvac/tts-ggml` and `@qvac/audiogen-ggml` ship a JS-only
+> meta package; the setup step fetches `@qvac/<addon>-android-arm64` or
+> `@qvac/<addon>-ios` at the same version, so an **empty** input or a `@qvac`
+> pin works as for any other addon. Their `@tetherto/<addon>-mono` dev builds
+> carry prebuilds inline, so Routes A and B work too. (`@qvac/decoder-audio`
+> ships none, but it needs no prebuilds of its own — see above.)
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass
