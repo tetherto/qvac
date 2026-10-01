@@ -142,6 +142,10 @@ void tuneLoadConfigMap(
 void validateMobileMultiDeviceConfig(
     const ConfigMap& configFilemap, llama_split_mode splitMode);
 
+void canonicalizeCpuTensorBufferOverrides(
+    std::vector<llama_model_tensor_buft_override>& overrides,
+    ggml_backend_buffer_type_t parsedCpuBuft);
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,

@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The addon no longer fails to compile against `qvac-fabric` 10549.5.0, which
+  appends `moe_cache_auto_explicit` (defaulted) to `common_fit_params`. The fit
+  is now invoked through a lambda that calls it with the existing nine
+  arguments, so it builds against both 10549.4.0 and 10549.5.0. No API change.
+
 ## [0.14.0] - 2026-09-28
 
 ### Changed
