@@ -5,6 +5,11 @@ on:
     branches:
       - main
       - release-*
+      # The release train versions all six chained packages at once and
+      # publishes them from release-train.yml. This workflow's merge guard
+      # compares one package.json against one branch version, so it cannot
+      # describe that branch.
+      - "!release-train-*"
       - feature-*
       - tmp-*
     paths:

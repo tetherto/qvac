@@ -38,6 +38,15 @@ allowBuilds:
   esbuild: true
   nx: true
   unrs-resolver: true
+  # Reached through plugins/openclaw's `openclaw` dev dependency and left
+  # unbuilt, as before; an install that runs scripts fails with
+  # ERR_PNPM_IGNORED_BUILDS until each one is decided.
+  "@google/genai": false
+  koffi: false
+  msgpackr-extract: false
+  openclaw: false
+  protobufjs: false
+  tree-sitter-bash: false
 
 minimumReleaseAgeExclude:
   - '@qvac/model-fit@0.11.1'

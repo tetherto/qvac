@@ -1,0 +1,74 @@
+#!/usr/bin/env node
+/**
+ * The only way release-train.yml publishes to npm. See
+ * .github/scripts/lib/release-train-publish.mjs for why it publishes one
+ * package per nx call.
+ *
+ * Usage:
+ *   node .github/scripts/release-train-publish.mjs <train> [--tag <dist-tag>] [--dry-run]
+ */
+import { appendFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { parseArgs } from 'node:util'
+import { publishTrain, SERVE_WAIT } from './lib/release-train-publish.mjs'
+import { readRepoFile, repoRoot } from './lib/release-trains.mjs'
+
+function run (command, args, options = {}) {
+  const result = spawnSync(command, args, { cwd: repoRoot, encoding: 'utf8', ...options })
+  if (result.error) throw result.error
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
+}
+
+function main () {
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: {
+      tag: { type: 'string', default: '' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  })
+
+  const [train] = positionals
+  if (!train || positionals.length > 1) {
+    console.error('usage: release-train-publish.mjs <train> [--tag <dist-tag>] [--dry-run]')
+    process.exit(2)
+  }
+
+  const result = publishTrain({
+    train,
+    requestedTag: values.tag,
+    dryRun: values['dry-run'],
+    readManifest: readRepoFile,
+    run,
+  })
+
+  const dryRun = values['dry-run']
+  for (const entry of result.completed) {
+    const verb = entry.alreadyPublished
+      ? (dryRun ? 'would skip, already on npm:' : 'skipped, already on npm:')
+      : (dryRun ? 'would publish' : 'published')
+    console.log(`${verb} ${entry.name}@${entry.version} (${entry.tag})`)
+  }
+
+  // Everything downstream — PyPI, the GitHub release, the fat wheels — is for
+  // a release that happened. A re-run of a finished train publishes nothing,
+  // and re-running those would fail on artefacts that already exist.
+  const published = result.completed.some((entry) => !entry.alreadyPublished)
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `published=${published}\n`)
+  }
+  if (result.failed) {
+    const { name, version, reason } = result.failed
+    const waited = (SERVE_WAIT.attempts - 1) * SERVE_WAIT.intervalMs / 1000
+    console.error(reason === 'not-served'
+      ? `::error::${name}@${version} was published, but npm did not serve it within ${waited}s`
+      : `::error::${name}@${version} failed to publish`)
+    for (const entry of result.notAttempted) {
+      console.error(`::error::${entry.name}@${entry.version} was not attempted`)
+    }
+    console.error('Re-run the workflow to publish the rest; versions already on npm are skipped.')
+    process.exit(1)
+  }
+}
+
+main()

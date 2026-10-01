@@ -11,6 +11,7 @@ const LEDGER_END = '<!-- branch-cleanup:ledger:end -->'
 // Only acks from users with write-ish association to the repo are honoured.
 const TRUSTED_ASSOCIATION = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
 
+const RELEASE_TRAIN_RE = /^release-train-([a-z0-9][a-z0-9-]*)-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/
 const RELEASE_MONO_RE = /^release-(.+)-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/
 const RELEASE_SINGLE_RE = /^release-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/
 const TAG_MONO_RE = /^(.+)-v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/
@@ -35,7 +36,8 @@ function readConfig (env) {
     tmpInactivityDays: toInt(env.TMP_INACTIVITY_DAYS, 60),
     adhocInactivityDays: toInt(env.ADHOC_INACTIVITY_DAYS, 30),
     maxDeletionsPerRun: toInt(env.MAX_DELETIONS_PER_RUN, 10),
-    timestampsFile: env.BRANCH_TIMESTAMPS_FILE || ''
+    timestampsFile: env.BRANCH_TIMESTAMPS_FILE || '',
+    releaseTrainsFile: env.RELEASE_TRAINS_FILE || '.github/release-trains.json'
   }
 }
 
@@ -56,13 +58,20 @@ function descNumbers (a, b) {
 }
 
 // Classify a branch by its name into one of the gitflow types.
-function classifyBranch (name, cfg) {
+export function classifyBranch (name, cfg) {
   if (cfg.singlePackage) {
     const single = RELEASE_SINGLE_RE.exec(name)
     if (single) {
       return { type: 'release', package: SINGLE_PACKAGE_KEY, version: parseSemver(single[1]) }
     }
   } else {
+    // A train branch carries its anchor group's version, not one package's, so
+    // train branches keep their own retention window. `:` cannot occur in a
+    // package slug, so the key never collides with one.
+    const train = RELEASE_TRAIN_RE.exec(name)
+    if (train) {
+      return { type: 'release', package: `train:${train[1]}`, version: parseSemver(train[2]) }
+    }
     const mono = RELEASE_MONO_RE.exec(name)
     if (mono) {
       return { type: 'release', package: mono[1], version: parseSemver(mono[2]) }
@@ -74,7 +83,7 @@ function classifyBranch (name, cfg) {
 }
 
 // Map each package to its highest *stable* released version, from git tags.
-function latestPublishedByPackage (tags, cfg) {
+export function latestPublishedByPackage (tags, cfg) {
   const latest = new Map()
   for (const tag of tags) {
     let pkg
@@ -113,8 +122,34 @@ function latestReleaseBranchName (pkg, version, cfg) {
   return `release-${pkg}-${version.raw}`
 }
 
+// Only the qvac repo has a train catalog; other repos calling this action have
+// no trains.
+function loadReleaseTrains (file) {
+  if (!file || !existsSync(file)) return null
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+// A train branch is named after its anchor group's version, and each anchor
+// package is tagged <slug>-v<version> when it publishes, so the latest
+// published anchor version names the train branch to keep.
+export function latestTrainBranchNames (catalog, latestPublished) {
+  const names = new Set()
+  for (const [train, definition] of Object.entries(catalog?.trains ?? {})) {
+    const anchor = definition.groups?.[definition.anchorGroup]
+    for (const project of anchor?.projects ?? []) {
+      const version = latestPublished.get(project.slug)
+      if (version) names.add(`release-train-${train}-${version.raw}`)
+    }
+  }
+  return names
+}
+
 // Apply the nested-semver window per package; return the set of eligible branches.
-function eligibleReleaseBranches (releases, cfg) {
+export function eligibleReleaseBranches (releases, cfg) {
   const eligible = new Set()
   const byPackage = new Map()
   for (const release of releases) {
@@ -374,6 +409,11 @@ export async function processBranchCleanup ({ github, context, core, env = proce
   const latestReleaseBranches = new Set()
   for (const [pkg, version] of latestPublished) {
     latestReleaseBranches.add(latestReleaseBranchName(pkg, version, cfg))
+  }
+  if (!cfg.singlePackage) {
+    for (const name of latestTrainBranchNames(loadReleaseTrains(cfg.releaseTrainsFile), latestPublished)) {
+      latestReleaseBranches.add(name)
+    }
   }
 
   const timestamps = loadBranchTimestamps(cfg.timestampsFile)

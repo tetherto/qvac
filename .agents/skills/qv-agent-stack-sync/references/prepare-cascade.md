@@ -2,6 +2,12 @@
 
 Only after `/qv-agent-stack-sync --plan` and confirmed versions.
 
+**Stop if the plan says every package in the chain needs a release.** That is a
+release train: one branch, one release PR, one backmerge, two approvals. Use
+`qv-release-train` instead of the per-package loop below, which exists to work
+around each package waiting for the one under it to reach npm. The loop stays
+correct for a partial cascade.
+
 For each `needs_release` package (dependency order):
 
 ### 1. Release line
