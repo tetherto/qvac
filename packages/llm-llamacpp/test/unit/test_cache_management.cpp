@@ -1539,7 +1539,7 @@ namespace {
 // `DSV4_MODEL_PATH` at a (first-shard) GGUF to run its checkpoint tests.
 test_common::TestModelPath deepSeekV4ModelPath() {
   return test_common::TestModelPath(
-      "DeepSeek-V4-Flash-0731-UD-IQ4_XS-00001-of-00004.gguf",
+      "DeepSeek-V4-Flash-0731-UD-IQ1_M-00001-of-00003.gguf",
       "DSV4_MODEL_PATH",
       test_common::TestModelPath::OnMissing::Skip,
       "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF");
