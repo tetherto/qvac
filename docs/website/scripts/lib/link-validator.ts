@@ -17,6 +17,7 @@ import {
   getCurrentLine,
   getDocumentedSoftware,
 } from "../../src/lib/versions.js";
+import { stripMdxComments } from "../../src/lib/mdx-comments.js";
 
 const INTERNAL_LINK_PATTERNS = [
   /href="(\/[^"]*?)"/g,
@@ -34,10 +35,11 @@ export interface BrokenLink {
  */
 export function extractInternalLinks(content: string): string[] {
   const links = new Set<string>();
+  const visible = stripMdxComments(content);
   for (const pattern of INTERNAL_LINK_PATTERNS) {
     const re = new RegExp(pattern.source, pattern.flags);
     let match;
-    while ((match = re.exec(content)) !== null) {
+    while ((match = re.exec(visible)) !== null) {
       let linkPath = match[1];
       const hashIdx = linkPath.indexOf("#");
       if (hashIdx !== -1) linkPath = linkPath.slice(0, hashIdx);

@@ -38,6 +38,25 @@ describe('extractInternalLinks', () => {
       .toEqual([])
   })
 
+  it('ignores links inside an MDX comment', () => {
+    const content = [
+      '[live](/sdk/quickstart)',
+      '{/* <Card href="/sdk/kotlin-sdk" /> and [parked](/sdk/kotlin-sdk) */}',
+    ].join('\n')
+    expect(extractInternalLinks(content)).toEqual(['/sdk/quickstart'])
+  })
+
+  it('ignores links inside a multi-line MDX comment', () => {
+    const content = [
+      '{/*',
+      '  Waiting on a release.',
+      '  <Card href="/sdk/kotlin-sdk" title="Kotlin SDK" />',
+      '*/}',
+      '[live](/sdk/quickstart)',
+    ].join('\n')
+    expect(extractInternalLinks(content)).toEqual(['/sdk/quickstart'])
+  })
+
   it('deduplicates links', () => {
     const content = '[a](/foo) and [b](/foo) and [c](/bar)'
     const links = extractInternalLinks(content)

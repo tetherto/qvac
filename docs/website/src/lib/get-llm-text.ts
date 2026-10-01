@@ -1,6 +1,7 @@
 import { source } from '@/lib/source';
 import { buildCanonicalDocsUrl } from '@/lib/docs-open-graph';
 import { pageAttributes } from '@/lib/page-attributes';
+import { stripMdxComments } from '@/lib/mdx-comments';
 import type { InferPageType } from 'fumadocs-core/source';
 
 /**
@@ -14,7 +15,7 @@ import type { InferPageType } from 'fumadocs-core/source';
  * "this applies to v0.16".
  */
 export async function getLLMText(page: InferPageType<typeof source>) {
-  const processed = await page.data.getText('processed');
+  const processed = stripMdxComments(await page.data.getText('processed'));
   const front = frontMatter(page);
 
   return `---

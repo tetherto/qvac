@@ -137,11 +137,14 @@ manifest entry. The `:version` rules then already cover the new folder.
 
 The Kotlin SDK is documented but not published, because the package is not
 released yet. Its page waits under `content/_unpublished/sdk/kotlin-sdk.mdx`,
-and the SDK line's own pages name only the JS/TS and Python clients. Publishing
-it is moving that page to `content/docs/sdk/(v0.20)/`, listing it in that
-folder's `meta.json`, prefixing its internal links with the line scope, and
-restoring the third client wherever the other two are named — the SDK line's
-index and the Ecosystem overview both enumerate them.
+and the pages that enumerate the clients name only JS/TS and Python.
+Publishing it is moving that page to `content/docs/sdk/(v0.20)/`, listing it in
+that folder's `meta.json`, prefixing its internal links with the line scope,
+and restoring the third client where the clients are counted. The Ecosystem
+overview holds its share of that already, commented beside what it replaces —
+the three-client paragraph and the Kotlin card, both line-scoped, so they go
+live by uncommenting. The SDK line's index was left at two clients and needs
+its five Kotlin passages written back by hand.
 
 ## CDN configuration (Sevalla)
 
