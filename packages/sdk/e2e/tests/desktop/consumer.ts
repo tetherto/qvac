@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/test-suite'
 import {
   profiler,
@@ -31,7 +32,7 @@ import {
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
   PARAKEET_UNIFIED_0_6B_Q4_0,
-  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
@@ -472,7 +473,7 @@ resources.define('parakeet-unified', {
 })
 
 resources.define('parakeet-indic-conformer', {
-  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  constant: PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   type: 'parakeet-transcription',
   config: { language: 'hi' }
 })
@@ -737,6 +738,7 @@ export const executor = createExecutor({
     }),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
