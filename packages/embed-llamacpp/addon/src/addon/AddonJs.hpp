@@ -76,7 +76,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  // `BertModel::init` takes both out of the map before parsing.
+  // `LlamaModelLoader::init` takes both out of the map before parsing.
   const auto takeConfig = [&configFilemap](const char* key) {
     std::string value;
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
@@ -146,8 +146,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     return errorResult("unsupported-config");
   }
 
-  // `BertModel::init` applies both to every embedding load: a non-causal model
-  // decodes one ubatch at a time, and a single sequence needs no split cache.
+  // `BertModel::configureParams` applies both to every embedding load: a
+  // non-causal model decodes one ubatch at a time, and a single sequence needs
+  // no split cache.
   loadParams.n_ubatch = loadParams.n_batch;
   if (loadParams.n_parallel == 1) {
     loadParams.kv_unified = true;
@@ -155,9 +156,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 
   // The fitter reduces the context only when it is 0, so an embedding load
   // left unset would be projected at a reduced context it never runs at.
-  // `BertModel::init` pins it to the trained context, or caps it there.
-  // A file the metadata reader rejects is reported by the fit below, which
-  // owns the unreadable-model verdict.
+  // `BertModel::configureParams` pins it to the trained context, or caps it
+  // there. A file the metadata reader rejects is reported by the fit below,
+  // which owns the unreadable-model verdict.
   try {
     ModelMetaData metadata;
     metadata.parse(

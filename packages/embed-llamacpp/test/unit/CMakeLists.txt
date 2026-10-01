@@ -19,6 +19,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cpp
