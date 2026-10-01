@@ -30,6 +30,8 @@ suspend fun QvacClient.`deleteCache`(request: io.tether.qvac.sdk.generated.schem
 
 fun QvacClient.`diffusionStream`(request: io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.DiffusionStreamResponse> = streamTyped(request)
 
+suspend fun QvacClient.`discoverRpcServers`(request: io.tether.qvac.sdk.generated.schema.DiscoverRpcServersRequest): io.tether.qvac.sdk.generated.schema.DiscoverRpcServersResponse = callTyped(request)
+
 suspend fun QvacClient.`downloadAsset`(request: io.tether.qvac.sdk.generated.schema.DownloadAssetRequest): io.tether.qvac.sdk.generated.schema.DownloadAssetResponse = callTyped(request)
 fun QvacClient.downloadAssetWithProgress(request: io.tether.qvac.sdk.generated.schema.DownloadAssetRequest): Flow<QvacProgressEvent<io.tether.qvac.sdk.generated.schema.ModelProgressResponse, io.tether.qvac.sdk.generated.schema.DownloadAssetResponse>> = progressTyped(request, progressType = "modelProgress")
 
@@ -68,7 +70,11 @@ fun QvacClient.ragWithProgress(request: io.tether.qvac.sdk.generated.schema.RagR
 
 suspend fun QvacClient.`resume`(request: io.tether.qvac.sdk.generated.schema.ResumeRequest): io.tether.qvac.sdk.generated.schema.ResumeResponse = callTyped(request)
 
+suspend fun QvacClient.`startRpcServer`(request: io.tether.qvac.sdk.generated.schema.StartRpcServerRequest): io.tether.qvac.sdk.generated.schema.StartRpcServerResponse = callTyped(request)
+
 suspend fun QvacClient.`state`(request: io.tether.qvac.sdk.generated.schema.StateRequest): io.tether.qvac.sdk.generated.schema.StateResponse = callTyped(request)
+
+suspend fun QvacClient.`stopRpcServer`(request: io.tether.qvac.sdk.generated.schema.StopRpcServerRequest): io.tether.qvac.sdk.generated.schema.StopRpcServerResponse = callTyped(request)
 
 suspend fun QvacClient.`suspend`(request: io.tether.qvac.sdk.generated.schema.SuspendRequest): io.tether.qvac.sdk.generated.schema.SuspendResponse = callTyped(request)
 

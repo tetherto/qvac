@@ -172,6 +172,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("RESPONSE_BODY_NOT_READABLE", reportedCode, message, payload)
     class ServerRpcNoDataReceived(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("RPC_NO_DATA_RECEIVED", reportedCode, message, payload)
+    class ServerRpcServerOperationFailed(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("RPC_SERVER_OPERATION_FAILED", reportedCode, message, payload)
     class ServerRpcUnknownRequestType(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("RPC_UNKNOWN_REQUEST_TYPE", reportedCode, message, payload)
     class ServerSeedingNotSupported(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -220,6 +222,10 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("CONFIG_FILE_PARSE_FAILED", reportedCode, message, payload)
     class ClientConfigValidationFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("CONFIG_VALIDATION_FAILED", reportedCode, message, payload)
+    class ClientHostPrebuildsInstallFailed(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("HOST_PREBUILDS_INSTALL_FAILED", reportedCode, message, payload)
+    class ClientHostPrebuildsInstallRefused(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("HOST_PREBUILDS_INSTALL_REFUSED", reportedCode, message, payload)
     class ClientInvalidAudioChunkType(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("INVALID_AUDIO_CHUNK_TYPE", reportedCode, message, payload)
     class ClientInvalidOperationInResponse(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -362,6 +368,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "REQUEST_REJECTED_BY_POLICY" && (code == null || code == 52420) -> QvacKnownException.ServerRequestRejectedByPolicy(message, payload, code)
     name == "RESPONSE_BODY_NOT_READABLE" && (code == null || code == 53005) -> QvacKnownException.ServerResponseBodyNotReadable(message, payload, code)
     name == "RPC_NO_DATA_RECEIVED" && (code == null || code == 53703) -> QvacKnownException.ServerRpcNoDataReceived(message, payload, code)
+    name == "RPC_SERVER_OPERATION_FAILED" && (code == null || code == 52423) -> QvacKnownException.ServerRpcServerOperationFailed(message, payload, code)
     name == "RPC_UNKNOWN_REQUEST_TYPE" && (code == null || code == 53704) -> QvacKnownException.ServerRpcUnknownRequestType(message, payload, code)
     name == "SEEDING_NOT_SUPPORTED" && (code == null || code == 53008) -> QvacKnownException.ServerSeedingNotSupported(message, payload, code)
     name == "SET_CONFIG_FAILED" && (code == null || code == 53350) -> QvacKnownException.ServerSetConfigFailed(message, payload, code)
@@ -386,6 +393,8 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "CONFIG_FILE_NOT_FOUND" && (code == null || code == 50602) -> QvacKnownException.ClientConfigFileNotFound(message, payload, code)
     name == "CONFIG_FILE_PARSE_FAILED" && (code == null || code == 50604) -> QvacKnownException.ClientConfigFileParseFailed(message, payload, code)
     name == "CONFIG_VALIDATION_FAILED" && (code == null || code == 50605) -> QvacKnownException.ClientConfigValidationFailed(message, payload, code)
+    name == "HOST_PREBUILDS_INSTALL_FAILED" && (code == null || code == 50616) -> QvacKnownException.ClientHostPrebuildsInstallFailed(message, payload, code)
+    name == "HOST_PREBUILDS_INSTALL_REFUSED" && (code == null || code == 50615) -> QvacKnownException.ClientHostPrebuildsInstallRefused(message, payload, code)
     name == "INVALID_AUDIO_CHUNK_TYPE" && code == 50004 -> QvacKnownException.ClientInvalidAudioChunkType(message, payload, code)
     name == "INVALID_OPERATION_IN_RESPONSE" && (code == null || code == 50002) -> QvacKnownException.ClientInvalidOperationInResponse(message, payload, code)
     name == "INVALID_PLUGIN_SPECIFIER" && (code == null || code == 50612) -> QvacKnownException.ClientInvalidPluginSpecifier(message, payload, code)

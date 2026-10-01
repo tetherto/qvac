@@ -121,6 +121,14 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val discoverRpcServers = QvacMethodDescriptor(
+        name = "discoverRpcServers",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "DiscoverRpcServersRequest",
+        responseType = "DiscoverRpcServersResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val downloadAsset = QvacMethodDescriptor(
         name = "downloadAsset",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -257,11 +265,27 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val startRpcServer = QvacMethodDescriptor(
+        name = "startRpcServer",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "StartRpcServerRequest",
+        responseType = "StartRpcServerResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val state = QvacMethodDescriptor(
         name = "state",
         callShape = QvacCallShape.REQUEST_REPLY,
         requestType = "StateRequest",
         responseType = "StateResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
+    val stopRpcServer = QvacMethodDescriptor(
+        name = "stopRpcServer",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "StopRpcServerRequest",
+        responseType = "StopRpcServerResponse",
         progressResponseType = null,
         progressCondition = null,
     )
@@ -376,6 +400,7 @@ object QvacMethods {
         completionStream,
         deleteCache,
         diffusionStream,
+        discoverRpcServers,
         downloadAsset,
         embed,
         finetune,
@@ -393,7 +418,9 @@ object QvacMethods {
         pluginInvokeStream,
         rag,
         resume,
+        startRpcServer,
         state,
+        stopRpcServer,
         `suspend`,
         textToSpeech,
         textToSpeechStream,

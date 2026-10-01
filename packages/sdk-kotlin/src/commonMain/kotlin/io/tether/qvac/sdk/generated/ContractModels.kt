@@ -543,6 +543,8 @@ enum class TtsEngine {
     COSYVOICE3,
     @SerialName("audio8")
     AUDIO8,
+    @SerialName("moss")
+    MOSS,
 }
 
 @Serializable
@@ -728,6 +730,20 @@ data class DiffusionStreamResponse(
     val stats: JsonObject? = null,
     val step: Double? = null,
     val totalSteps: Double? = null,
+    val type: String,
+)
+
+@Serializable
+data class DiscoverRpcServersRequest(
+    val requestId: String? = null,
+    val timeoutMs: Long? = null,
+    val topic: String,
+    val type: String,
+)
+
+@Serializable
+data class DiscoverRpcServersResponse(
+    val servers: List<JsonObject>,
     val type: String,
 )
 
@@ -1065,6 +1081,28 @@ data class ResumeResponse(
 )
 
 @Serializable
+data class StartRpcServerRequest(
+    val allowNonLoopbackHost: Boolean? = null,
+    val cache: Boolean? = null,
+    val device: JsonElement? = null,
+    val discoveryTopic: String? = null,
+    val expectRdma: Boolean? = null,
+    val host: String? = null,
+    val port: Long? = null,
+    val requestId: String? = null,
+    val threads: Long? = null,
+    val type: String,
+)
+
+@Serializable
+data class StartRpcServerResponse(
+    val rdmaCapable: Boolean,
+    val serverId: String,
+    val type: String,
+    val url: String,
+)
+
+@Serializable
 data class StateRequest(
     val type: String,
 )
@@ -1072,6 +1110,17 @@ data class StateRequest(
 @Serializable
 data class StateResponse(
     val state: String,
+    val type: String,
+)
+
+@Serializable
+data class StopRpcServerRequest(
+    val serverId: String,
+    val type: String,
+)
+
+@Serializable
+data class StopRpcServerResponse(
     val type: String,
 )
 

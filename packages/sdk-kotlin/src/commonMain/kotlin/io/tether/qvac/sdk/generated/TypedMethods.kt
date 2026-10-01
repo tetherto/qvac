@@ -48,6 +48,9 @@ suspend fun QvacClient.deleteCache(request: DeleteCacheRequest): DeleteCacheResp
 fun QvacClient.diffusionStream(request: DiffusionStreamRequest): Flow<DiffusionStreamResponse> =
     streamTyped(request)
 
+suspend fun QvacClient.discoverRpcServers(request: DiscoverRpcServersRequest): DiscoverRpcServersResponse =
+    callTyped(request)
+
 suspend fun QvacClient.downloadAsset(request: DownloadAssetRequest): DownloadAssetResponse =
     callTyped(request)
 
@@ -111,7 +114,13 @@ fun QvacClient.ragWithProgress(request: RagRequest): Flow<QvacProgressEvent<RagP
 suspend fun QvacClient.resume(request: ResumeRequest): ResumeResponse =
     callTyped(request)
 
+suspend fun QvacClient.startRpcServer(request: StartRpcServerRequest): StartRpcServerResponse =
+    callTyped(request)
+
 suspend fun QvacClient.state(request: StateRequest): StateResponse =
+    callTyped(request)
+
+suspend fun QvacClient.stopRpcServer(request: StopRpcServerRequest): StopRpcServerResponse =
     callTyped(request)
 
 suspend fun QvacClient.`suspend`(request: SuspendRequest): SuspendResponse =

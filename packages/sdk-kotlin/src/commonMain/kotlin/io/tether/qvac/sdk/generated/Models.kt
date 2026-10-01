@@ -5654,6 +5654,24 @@ object Models {
         params = "0.6B",
     )
 
+    val TTS_CODEC_DECODER_MOSS_TTS_F16 = ModelConstant(
+        name = "TTS_CODEC_DECODER_MOSS_TTS_F16",
+        src = "registry://s3/qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-decoder-f16.gguf",
+        registryPath = "qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-decoder-f16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 0,
+        blobBlockLength = 27096,
+        blobByteOffset = 0,
+        modelId = "moss-codec-decoder-f16.gguf",
+        expectedSize = 1775741696,
+        sha256Checksum = "ad07149bc5cdc58c54ea656a14ae1fd881fde924bc6a6d53bca24c949e98c425",
+        addon = "tts",
+        engine = "tts-ggml",
+        quantization = "f16",
+        params = "",
+    )
+
     val TTS_CODEC_ENCODER_AUDIO8_FP16 = ModelConstant(
         name = "TTS_CODEC_ENCODER_AUDIO8_FP16",
         src = "registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
@@ -5688,6 +5706,24 @@ object Models {
         engine = "tts-ggml",
         quantization = "q8_0",
         params = "0.6B",
+    )
+
+    val TTS_CODEC_ENCODER_MOSS_TTS_F16 = ModelConstant(
+        name = "TTS_CODEC_ENCODER_MOSS_TTS_F16",
+        src = "registry://s3/qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-encoder-f16.gguf",
+        registryPath = "qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-encoder-f16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 27097,
+        blobBlockLength = 27100,
+        blobByteOffset = 1775798816,
+        modelId = "moss-codec-encoder-f16.gguf",
+        expectedSize = 1776008736,
+        sha256Checksum = "ad5e9af512cd65642f1a21d32db371d6fb242fff18f23970cdf122166d663ab9",
+        addon = "tts",
+        engine = "tts-ggml",
+        quantization = "f16",
+        params = "",
     )
 
     val TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32 = ModelConstant(
@@ -5904,6 +5940,24 @@ object Models {
         engine = "tts-ggml",
         quantization = "",
         params = "",
+    )
+
+    val TTS_DELAY_LLM_MOSS_TTS_F16 = ModelConstant(
+        name = "TTS_DELAY_LLM_MOSS_TTS_F16",
+        src = "registry://s3/qvac_models_compiled/ggml/openmoss/2026-09-25/moss-tts-delay-f16.gguf",
+        registryPath = "qvac_models_compiled/ggml/openmoss/2026-09-25/moss-tts-delay-f16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 54198,
+        blobBlockLength = 259181,
+        blobByteOffset = 3551869568,
+        modelId = "moss-tts-delay-f16.gguf",
+        expectedSize = 16985643392,
+        sha256Checksum = "a71d83078764dc86445e310cd7a4aa0aea841047f6ee03ab2cb73917405df858",
+        addon = "tts",
+        engine = "tts-ggml",
+        quantization = "f16",
+        params = "8B",
     )
 
     val TTS_DENOISER_LAVASR_FP16 = ModelConstant(
@@ -7948,8 +8002,10 @@ object Models {
         TTS_CANGJIE_ZH_CHATTERBOX,
         TTS_CODEC_DECODER_AUDIO8_FP16,
         TTS_CODEC_DECODER_AUDIO8_Q8_0,
+        TTS_CODEC_DECODER_MOSS_TTS_F16,
         TTS_CODEC_ENCODER_AUDIO8_FP16,
         TTS_CODEC_ENCODER_AUDIO8_Q8_0,
+        TTS_CODEC_ENCODER_MOSS_TTS_F16,
         TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32,
         TTS_COSYVOICE3_FLOW_COSYVOICE_FP32,
         TTS_COSYVOICE3_HIFT_COSYVOICE_FP32,
@@ -7962,6 +8018,7 @@ object Models {
         TTS_COSYVOICE3_VOICE_COSYVOICE,
         TTS_COSYVOICE3_VOICE_COSYVOICE_1,
         TTS_COSYVOICE3_VOICE_COSYVOICE_2,
+        TTS_DELAY_LLM_MOSS_TTS_F16,
         TTS_DENOISER_LAVASR_FP16,
         TTS_DENOISER_LAVASR_FP32,
         TTS_ENHANCER_LAVASR_FP16,
