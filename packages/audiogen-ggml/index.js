@@ -31,10 +31,11 @@ const SUPPORTED_ENGINES = [exports.ENGINE_ACESTEP, exports.ENGINE_MINIMAX];
 exports.MINIMAX_FRAMES_PER_SECOND = 25;
 exports.MINIMAX_DEFAULT_MAX_FRAMES = 300;
 const MINIMAX_MIN_FRAMES = 1;
-const MINIMAX_MAX_INFERENCE_STEPS = 1000;
+const MAX_INFERENCE_STEPS = 1000;
 const INT32_MAX = 2147483647;
 const FLOAT32_MAX = 3.4028234663852886e38;
 const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45;
+const MINIMAX_DEVICES = ['cpu', 'gpu', 'auto'];
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
 exports.AUDIOGEN_BACKEND_NAMES = {
     0: 'cpu',
@@ -96,12 +97,42 @@ function requireSafeInteger(value, name) {
     }
     return value;
 }
-function requireMinimaxInferenceSteps(value) {
-    const steps = requireSafeInteger(value, 'inferenceSteps');
-    if (steps < 0 || steps > MINIMAX_MAX_INFERENCE_STEPS) {
-        throw invalidInput(`inferenceSteps must be between 0 and ${MINIMAX_MAX_INFERENCE_STEPS}`);
+function optionalFloat32(value, name) {
+    if (value === undefined)
+        return undefined;
+    requireFiniteNumber(value, name);
+    if (Math.abs(value) > FLOAT32_MAX) {
+        throw invalidInput(`${name} must be within the float32 range, got ${value}`);
+    }
+    return value;
+}
+function optionalBoolean(value, name) {
+    if (value !== undefined && typeof value !== 'boolean') {
+        throw invalidInput(`${name} must be a boolean`);
+    }
+    return value;
+}
+function optionalString(value, name) {
+    if (value !== undefined && typeof value !== 'string') {
+        throw invalidInput(`${name} must be a string`);
+    }
+    return value;
+}
+function requireInferenceSteps(value, name = 'inferenceSteps') {
+    const steps = requireSafeInteger(value, name);
+    if (steps < 0 || steps > MAX_INFERENCE_STEPS) {
+        throw invalidInput(`${name} must be between 0 and ${MAX_INFERENCE_STEPS}`);
     }
     return steps;
+}
+// ACE-Step DiT timestep shift; 0 = auto (turbo 3.0, base/sft 1.0). A positive
+// value that rounds to a float32 zero would silently select auto instead.
+function requireAcestepShift(value, name = 'shift') {
+    const shift = requireFiniteNumber(value, name);
+    if (shift < 0 || shift > FLOAT32_MAX || (shift > 0 && shift < FLOAT32_MIN_POSITIVE)) {
+        throw invalidInput(`${name} must be 0 or a positive float32 value`);
+    }
+    return shift;
 }
 function requireNonNegativeInt32(value, name) {
     const integer = requireSafeInteger(value, name);
@@ -281,7 +312,8 @@ const ACESTEP_GENERATE_KEYS = [
     'coverNoiseStrength',
     'generateLrc',
     'computeQualityScore',
-    'rewriteQuery'
+    'rewriteQuery',
+    'shift'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -325,6 +357,9 @@ function validateAcestepOptions(files, config) {
     if (config.cfgScale !== undefined) {
         throw invalidInput('ACE-Step does not accept cfgScale');
     }
+    if (config.device !== undefined) {
+        throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)');
+    }
 }
 function validateMinimaxConfig(config) {
     if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
@@ -332,6 +367,14 @@ function validateMinimaxConfig(config) {
     }
     if (config.shift !== undefined || config.nGpuLayers !== undefined) {
         throw invalidInput('MiniMax does not accept shift or nGpuLayers');
+    }
+    if (config.device !== undefined) {
+        if (typeof config.device !== 'string' || !MINIMAX_DEVICES.includes(config.device)) {
+            throw invalidInput("device must be 'cpu', 'gpu' or 'auto'");
+        }
+        if (config.useGPU !== undefined) {
+            throw invalidInput('MiniMax accepts either useGPU or device, not both');
+        }
     }
 }
 function assertNoAcestepGenerateOptions(options) {
@@ -342,10 +385,8 @@ function assertNoAcestepGenerateOptions(options) {
     }
 }
 function assertNoMinimaxGenerateOptions(options) {
-    if (options.maxFrames !== undefined ||
-        options.inferenceSteps !== undefined ||
-        options.cfgScale !== undefined) {
-        throw invalidInput('ACE-Step does not accept maxFrames, inferenceSteps, or cfgScale per run');
+    if (options.maxFrames !== undefined || options.cfgScale !== undefined) {
+        throw invalidInput('ACE-Step does not accept maxFrames or cfgScale per run');
     }
 }
 function resolveMinimaxMaxFrames(options) {
@@ -370,6 +411,31 @@ function resolveMinimaxMaxFrames(options) {
 function isMobilePlatform() {
     const platform = os.platform();
     return platform === 'android' || platform === 'ios';
+}
+/** One validation for the options both paths hand the engine; `prefix` names the path. */
+function requireAcestepSharedOptions(options, prefix = '') {
+    const key = (name) => `${prefix}${name}`;
+    return {
+        seed: options.seed === undefined ? undefined : requireSafeInteger(options.seed, key('seed')),
+        vocalLanguage: optionalString(options.vocalLanguage, key('vocalLanguage')),
+        bpm: options.bpm === undefined ? undefined : requireNonNegativeInt32(options.bpm, key('bpm')),
+        keyscale: optionalString(options.keyscale, key('keyscale')),
+        timesignature: optionalString(options.timesignature, key('timesignature')),
+        augmentCaptionWithMetadata: optionalBoolean(options.augmentCaptionWithMetadata, key('augmentCaptionWithMetadata')),
+        dcwEnabled: optionalBoolean(options.dcwEnabled, key('dcwEnabled')),
+        dcwScaler: optionalFloat32(options.dcwScaler, key('dcwScaler')),
+        dcwHighScaler: optionalFloat32(options.dcwHighScaler, key('dcwHighScaler')),
+        inferenceSteps: options.inferenceSteps === undefined
+            ? undefined
+            : requireInferenceSteps(options.inferenceSteps, key('inferenceSteps')),
+        shift: options.shift === undefined ? undefined : requireAcestepShift(options.shift, key('shift'))
+    };
+}
+function requireEditRunOptions(options) {
+    return {
+        ...requireAcestepSharedOptions(options, 'edit.'),
+        referenceAudio: optionalStereoPcm(options.referenceAudio, 'edit.referenceAudio')
+    };
 }
 /**
  * Fluent, ordered edit pipeline. Every call appends one operation; operations
@@ -463,9 +529,9 @@ class AudioEditSession {
         if (typeof options !== 'object' || options === null) {
             throw invalidInput('edit session run options must be an object');
         }
-        const seed = optionalFiniteNumber(options.seed, 'edit.seed', true);
+        const runOptions = requireEditRunOptions(options);
         this._started = true;
-        return this._runner(this._source, this._operations, { seed });
+        return this._runner(this._source, this._operations, runOptions);
     }
 }
 exports.AudioEditSession = AudioEditSession;
@@ -496,6 +562,7 @@ class AudioGen {
     _lastLrc;
     _cancelTerminalResolve;
     _lastUnderstand;
+    _lastMetadata;
     constructor(options = {}) {
         this._logger = new QvacLogger(options.logger);
         const files = options.files ?? {};
@@ -510,7 +577,7 @@ class AudioGen {
             }
             validateMinimaxFiles(files);
             validateMinimaxConfig(config);
-            this._defaultInferenceSteps = requireMinimaxInferenceSteps(config.inferenceSteps ?? 0);
+            this._defaultInferenceSteps = requireInferenceSteps(config.inferenceSteps ?? 0);
             this._defaultCfgScale = requireMinimaxCfgScale(config.cfgScale ?? 0);
             this._configuration = {
                 engineType: exports.ENGINE_MINIMAX,
@@ -519,12 +586,13 @@ class AudioGen {
                 synthModelPath: files.synthModel,
                 threads,
                 useGPU: config.useGPU ?? false,
+                device: config.device,
                 backendsDir
             };
         }
         else {
             validateAcestepOptions(files, config);
-            this._defaultInferenceSteps = requireFiniteNumber(config.inferenceSteps ?? 0, 'inferenceSteps', true);
+            this._defaultInferenceSteps = requireInferenceSteps(config.inferenceSteps ?? 0);
             this._defaultCfgScale = 0;
             const ditModelPath = (0, models_1.resolveDitModelPath)({
                 modelDir: files.modelDir,
@@ -539,7 +607,7 @@ class AudioGen {
                 ditModelPath,
                 vaeModelPath: files.vaeModel,
                 inferenceSteps: this._defaultInferenceSteps,
-                shift: requireFiniteNumber(config.shift ?? 0, 'shift'),
+                shift: requireAcestepShift(config.shift ?? 0),
                 useGPU: config.useGPU ?? false,
                 nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
                 threads,
@@ -666,7 +734,18 @@ class AudioGen {
             input: '',
             sourceAudio,
             editOperations: [...operations],
-            seed: options.seed
+            seed: options.seed,
+            referenceAudio: options.referenceAudio,
+            vocalLanguage: options.vocalLanguage,
+            bpm: options.bpm,
+            keyscale: options.keyscale,
+            timesignature: options.timesignature,
+            augmentCaptionWithMetadata: options.augmentCaptionWithMetadata,
+            dcwEnabled: options.dcwEnabled,
+            dcwScaler: options.dcwScaler,
+            dcwHighScaler: options.dcwHighScaler,
+            inferenceSteps: options.inferenceSteps,
+            shift: options.shift
         };
         const revision = this._lifecycleRevision;
         return new Promise((resolve, reject) => {
@@ -681,6 +760,7 @@ class AudioGen {
         const addon = this._requireAddon();
         this._lastLrc = undefined;
         this._lastUnderstand = undefined;
+        this._lastMetadata = undefined;
         const response = this._job.start();
         let accepted;
         try {
@@ -728,7 +808,7 @@ class AudioGen {
             maxFrames: resolveMinimaxMaxFrames(opts),
             inferenceSteps: opts.inferenceSteps === undefined
                 ? this._defaultInferenceSteps
-                : requireMinimaxInferenceSteps(opts.inferenceSteps),
+                : requireInferenceSteps(opts.inferenceSteps),
             cfgScale: opts.cfgScale === undefined ? this._defaultCfgScale : requireMinimaxCfgScale(opts.cfgScale)
         };
     }
@@ -737,13 +817,7 @@ class AudioGen {
         if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
             throw invalidInput('lmPhase1 must be a boolean');
         }
-        if (opts.augmentCaptionWithMetadata !== undefined &&
-            typeof opts.augmentCaptionWithMetadata !== 'boolean') {
-            throw invalidInput('augmentCaptionWithMetadata must be a boolean');
-        }
-        if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
-            throw invalidInput('dcwEnabled must be a boolean');
-        }
+        const shared = requireAcestepSharedOptions(opts);
         if (opts.audioCodes !== undefined && !(opts.audioCodes instanceof Int32Array)) {
             throw invalidInput('audioCodes must be an Int32Array');
         }
@@ -833,21 +907,21 @@ class AudioGen {
             normalizeLoudness: opts.normalizeLoudness,
             generateLrc: opts.generateLrc,
             computeQualityScore: opts.computeQualityScore,
-            seed: optionalFiniteNumber(opts.seed, 'seed', true),
-            vocalLanguage: opts.vocalLanguage,
-            bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
-            keyscale: opts.keyscale,
-            timesignature: opts.timesignature,
-            augmentCaptionWithMetadata: opts.augmentCaptionWithMetadata,
+            seed: shared.seed,
+            vocalLanguage: shared.vocalLanguage,
+            bpm: shared.bpm,
+            keyscale: shared.keyscale,
+            timesignature: shared.timesignature,
+            augmentCaptionWithMetadata: shared.augmentCaptionWithMetadata,
             duration: optionalFiniteNumber(opts.duration, 'duration'),
             lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
             lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
             lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true),
             lmCfgScale: optionalFiniteNumber(opts.lmCfgScale, 'lmCfgScale'),
             lmPhase1: opts.lmPhase1,
-            dcwEnabled: opts.dcwEnabled,
-            dcwScaler: optionalFiniteNumber(opts.dcwScaler, 'dcwScaler'),
-            dcwHighScaler: optionalFiniteNumber(opts.dcwHighScaler, 'dcwHighScaler'),
+            dcwEnabled: shared.dcwEnabled,
+            dcwScaler: shared.dcwScaler,
+            dcwHighScaler: shared.dcwHighScaler,
             audioCodes: opts.audioCodes,
             referenceAudio,
             sourceAudio,
@@ -855,7 +929,9 @@ class AudioGen {
             track: opts.track,
             guidanceScale,
             audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
-            coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
+            coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength'),
+            inferenceSteps: shared.inferenceSteps,
+            shift: shared.shift
         };
     }
     async cancel() {
@@ -1000,11 +1076,14 @@ class AudioGen {
         }
         if (d.outputArray) {
             this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined;
+            this._lastMetadata =
+                typeof d.metadata === 'object' && d.metadata !== null ? d.metadata : undefined;
             this._job.output({
                 outputArray: d.outputArray,
                 sampleRate: d.sampleRate ?? 0,
                 channels: d.channels ?? 0,
-                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
+                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
+                ...(this._lastMetadata !== undefined ? { metadata: this._lastMetadata } : {})
             });
             return;
         }
@@ -1016,7 +1095,8 @@ class AudioGen {
                 keyscale: d.keyscale ?? '',
                 timesignature: d.timesignature ?? '',
                 vocalLanguage: d.vocalLanguage ?? '',
-                audioCodes: d.audioCodes
+                audioCodes: d.audioCodes,
+                seed: d.seed ?? 0
             };
             this._lastUnderstand = understood;
             this._job.output({ understand: understood });
@@ -1032,10 +1112,16 @@ class AudioGen {
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
                     : {}),
+                ...(typeof d.emittedFrames === 'number' ? { emittedFrames: d.emittedFrames } : {}),
+                ...(typeof d.arMs === 'number' ? { arMs: d.arMs } : {}),
+                ...(typeof d.conditionMs === 'number' ? { conditionMs: d.conditionMs } : {}),
+                ...(typeof d.flowMs === 'number' ? { flowMs: d.flowMs } : {}),
+                ...(typeof d.vocoderMs === 'number' ? { vocoderMs: d.vocoderMs } : {}),
                 ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
                 ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
                 ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
-                ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
+                ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {}),
+                ...(this._lastMetadata !== undefined ? { metadata: this._lastMetadata } : {})
             };
             this._job.end(stats, stats);
         }

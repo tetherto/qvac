@@ -696,8 +696,44 @@ jobs:
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
+  # Mobile device runs are the expensive place to find a second copy of a
+  # shared runtime lib, so this fails first. A branch-built @qvac/inference
+  # replaces the published one, as prepare-inference does for the device runs.
+  shared-runtime-libs:
+    name: Shared runtime libs resolve once
+    needs: [resolve, prepare-inference]
+    if: needs.resolve.outputs.run-android == 'true' || needs.resolve.outputs.run-ios == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.prepare-inference.outputs.checkout-sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/inference/package.json
+            .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Check @qvac/sdk
+        env:
+          INFERENCE_SOURCE: ${{ needs.prepare-inference.outputs.source }}
+        run: |
+          if [ "$INFERENCE_SOURCE" = "branch" ]; then
+            node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
+          else
+            node .github/scripts/check-shared-runtime-libs.mjs packages/sdk
+          fi
+
   android-tests:
-    needs: [resolve, prepare-inference, prepare-test-suite]
+    needs: [resolve, prepare-inference, prepare-test-suite, shared-runtime-libs]
     permissions:
       actions: read
       id-token: write
@@ -731,7 +767,7 @@ jobs:
     secrets: inherit
 
   ios-tests:
-    needs: [resolve, prepare-inference, prepare-test-suite]
+    needs: [resolve, prepare-inference, prepare-test-suite, shared-runtime-libs]
     permissions:
       actions: read
       id-token: write

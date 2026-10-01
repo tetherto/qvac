@@ -75,18 +75,18 @@ export interface ParakeetConfig {
     streamingSpkCacheLen?: number;
     /** AOSC FIFO warmup buffer rows (default: 188). */
     streamingFifoLen?: number;
-    /** AOSC encoder left-context window in ms (default: 80). */
+    /** AOSC encoder left-context window in ms (default: 80 for Sortformer, 0 for Nemotron 3 Diarization). */
     streamingChunkLeftContextMs?: number;
     /** AOSC encoder right-context window in ms (default: 560). */
     streamingChunkRightContextMs?: number;
     /** AOSC FIFO-overflow pop-out count (default: 144). */
     streamingSpkCacheUpdatePeriod?: number;
     /**
-     * Sortformer speaker-activity threshold, 0..1, for offline and streaming
-     * diarization (default: 0.641).
+     * Speaker-activity threshold, 0..1, for offline and streaming diarization
+     * (default: 0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).
      */
     diarizationThreshold?: number;
-    /** Shortest Sortformer segment reported, in ms (default: 510). */
+    /** Shortest diarization segment reported, in ms (default: 510 for Sortformer, 200 for Nemotron 3 Diarization). */
     diarizationMinSegmentMs?: number;
     /**
      * Run one synthetic encoder pass at load so the first request does not pay

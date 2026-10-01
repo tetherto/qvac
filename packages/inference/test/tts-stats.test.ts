@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
+import { appendPcm, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
 
 test('collectTtsStats: maps LavaSR enhancer backend stats', (t) => {
   const stats = collectTtsStats({
@@ -83,4 +83,12 @@ test('chunkMetadata: omits absent fields and empty sentence text', (t) => {
     { chunkIndex: 0 },
     'chunkIndex 0 is real; an empty sentenceChunk is not'
   )
+})
+
+test('appendPcm: appends each chunk in place, in order', (t) => {
+  const buffer: number[] = []
+  appendPcm(buffer, new Int16Array([1, -2, 3]))
+  appendPcm(buffer, [])
+  appendPcm(buffer, new Int16Array([32767, -32768]))
+  t.alike(buffer, [1, -2, 3, 32767, -32768])
 })
