@@ -31,6 +31,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29#1, preserving the
+  QVAC seed, BCI windowed-attention and streaming/VAD patches.
 - Raise the `speech-cpp` minimum to `2026-09-29#1` for Nemotron 3
   Diarization support.
 

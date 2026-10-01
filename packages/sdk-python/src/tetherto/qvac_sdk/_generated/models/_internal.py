@@ -20300,6 +20300,20 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    codec_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="codecSidecarLoaded",
+            description="Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+        ),
+    ] = None
+    codec_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="codecOnCoreml",
+            description="Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+        ),
+    ] = None
 
 
 class TextToSpeechResponseStopReason(Enum):
@@ -20480,6 +20494,20 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    codec_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="codecSidecarLoaded",
+            description="Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+        ),
+    ] = None
+    codec_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="codecOnCoreml",
+            description="Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+        ),
+    ] = None
 
 
 class TextToSpeechStreamResponseStopReason(Enum):

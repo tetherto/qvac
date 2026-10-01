@@ -582,6 +582,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 2862696
   },
+  '1c9c1c141869c802148f9d0efd239ef00ee8d917c149dfdd99b7fae6a9bae48b': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 1887
+  },
   '1d41f1f6b67a8c29fa3aabbc7758b766bdd9acdbeec7d1277ab60c8e492c8b7a': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2112,6 +2117,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'parakeet-transcription',
     artifactBytes: 243
   },
+  '6939e6f4240dcf3e692d6eeb6d4df598267503a129e68dffae86d88fdaa04823': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 243
+  },
   '6961ce07f38e6c113a70855706aa7cad4cc828f986d1751c33f14699f885a2e8': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2737,6 +2747,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'sdcpp-generation',
     artifactBytes: 22844832
+  },
+  '8496e6044ece35f61abc37d2b9b53f01e165884b6d37649b98aac41985f3c2d5': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 150244416
   },
   '84f636e1a9a11df6236e0e742db95065d4924af049f677e1ac3ffd6d1f0c98af': {
     schemaVersion: 1,
@@ -4245,6 +4260,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 3860080
   },
+  ca0a6780db9de26eb4c95fabe8ddb233270f1836b3fd0a682a28194936656622: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 129095
+  },
   ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910: {
     schemaVersion: 1,
     engine: 'tts-ggml',
@@ -4412,6 +4432,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 3515428
+  },
+  d41a7e7213730c5c1aad603e3176f2fe00a5844c04754d83c9a55657b2990795: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 369
   },
   d453e776dac188abb702146b70e105ef5306212785f1b1f31c40831044b31ffc: {
     schemaVersion: 1,
