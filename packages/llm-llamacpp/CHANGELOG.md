@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.55.1] - 2026-09-30
+
+### Fixed
+
+- CPU tensor overrides now use the buffer type recognized by the shared model
+  loader. With GPU offload, pinned MoE expert weights use the backend's host
+  buffer instead of an ordinary CPU model buffer. No public API changes
+  ([#4762](https://github.com/tetherto/qvac/pull/4762)).
+
 ## [0.55.0] - 2026-09-28
 
 ### Added

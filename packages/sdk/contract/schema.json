@@ -1127,7 +1127,7 @@
           "maximum": 9007199254740991
         },
         "inferenceSteps": {
-          "description": "MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.",
+          "description": "MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.",
           "type": "integer",
           "minimum": 0,
           "maximum": 1000
@@ -4615,8 +4615,8 @@
     "constants.TtsEngine": {
       "title": "TtsEngine",
       "type": "string",
-      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8"],
-      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8"]
+      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8", "moss"],
+      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8", "MOSS"]
     },
     "constants.TtsPace": {
       "title": "TtsPace",
@@ -14710,6 +14710,448 @@
                       "required": ["ttsEngine", "audio8CodecDecoderModelSrc"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "moss",
+                          "description": "TTS engine: MOSS (OpenMOSS MOSS-TTS v1.5 / MOSS-TTSD Delay; 24 kHz, 8B backbone, desktop only)."
+                        },
+                        "language": {
+                          "description": "Language hint written into the model prompt, e.g. `en` or `zh`. Default `en`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "durationTokens": {
+                          "description": "Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), 0–2015; 0 or unset keeps the length free.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2015
+                        },
+                        "streamChunkTokens": {
+                          "description": "Codec frames per native streaming chunk (12.5 per second, so 25 ≈ 2 s); 0 or unset synthesizes the whole text before emitting.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "description": "Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "mossCodecDecoderModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc"
+                            }
+                          ],
+                          "description": "MOSS codec decoder model source (codes to 24 kHz waveform)."
+                        },
+                        "mossCodecEncoderModelSrc": {
+                          "description": "MOSS codec encoder model source (waveform to codes); required only with `referenceAudioSrc` or `dialogueReferenceSrcs`.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc"
+                            }
+                          ]
+                        },
+                        "referenceAudioSrc": {
+                          "description": "MOSS voice-cloning reference recording source: a 24 kHz WAV (no resampling; multichannel is downmixed, at most 60 s). No transcript needed. Fixed for the loaded model.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc"
+                            }
+                          ]
+                        },
+                        "dialogueReferenceSrcs": {
+                          "description": "MOSS-TTSD dialogue: one 24 kHz WAV per speaker (one to five, at most 60 s combined), in the order the text tags them (`[S1]`, `[S2]`, …). The text must open with each recording’s transcript under its tag, followed by the lines to generate. Needs a MOSS-TTSD backbone as `modelSrc`; fixed for the loaded model.",
+                          "minItems": 1,
+                          "maxItems": 5,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "src": {
+                                    "type": "string",
+                                    "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                  },
+                                  "name": {
+                                    "description": "Display name for this model instance; overrides the name derived from the source.",
+                                    "type": "string"
+                                  },
+                                  "modelId": {
+                                    "description": "Unique identifier used to reference the model in QVAC calls.",
+                                    "type": "string"
+                                  },
+                                  "registryPath": {
+                                    "description": "Registry-relative path to the model (set for registry-backed models).",
+                                    "type": "string"
+                                  },
+                                  "registrySource": {
+                                    "description": "Registry source identifier, e.g. `huggingface`.",
+                                    "type": "string"
+                                  },
+                                  "blobCoreKey": {
+                                    "description": "Hyperdrive blob core key for the model file.",
+                                    "type": "string"
+                                  },
+                                  "blobIndex": {
+                                    "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                    "type": "number"
+                                  },
+                                  "engine": {
+                                    "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                    "type": "string"
+                                  },
+                                  "expectedSize": {
+                                    "description": "Expected total size of the model file in bytes.",
+                                    "type": "number"
+                                  },
+                                  "sha256Checksum": {
+                                    "description": "Expected SHA-256 checksum of the model file.",
+                                    "type": "string"
+                                  },
+                                  "addon": {
+                                    "description": "Inference addon / capability category this model belongs to.",
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "llamacpp-completion",
+                                          "whispercpp-transcription",
+                                          "bci-whispercpp-transcription",
+                                          "llamacpp-embedding",
+                                          "nmtcpp-translation",
+                                          "onnx-tts",
+                                          "tts-ggml",
+                                          "parakeet-transcription",
+                                          "ggml-ocr",
+                                          "sdcpp-generation",
+                                          "audiogen-ggml",
+                                          "ggml-vla",
+                                          "ggml-classification",
+                                          "llm",
+                                          "whisper",
+                                          "bci",
+                                          "embeddings",
+                                          "nmt",
+                                          "parakeet",
+                                          "tts",
+                                          "ocr",
+                                          "diffusion",
+                                          "audiogen",
+                                          "vla",
+                                          "classification"
+                                        ],
+                                        "title": "LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon"
+                                      },
+                                      {
+                                        "type": "string",
+                                        "const": "vad"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": ["src"],
+                                "title": "LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": ["ttsEngine", "mossCodecDecoderModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMoss"
                     }
                   ]
                 }
@@ -16976,7 +17418,7 @@
                           "minLength": 1
                         },
                         "inferenceSteps": {
-                          "description": "MiniMax flow sampling steps; `0` uses the model default.",
+                          "description": "MiniMax flow sampling steps; `0` uses the engine default (20).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 1000

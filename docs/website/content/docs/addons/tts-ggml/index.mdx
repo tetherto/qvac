@@ -13,9 +13,9 @@ It runs in-process with a persistent native engine — the GGUFs, the S3Gen prel
 
 ## Models
 
-Five engine families are wrapped — **Chatterbox**, **Supertonic**,
-**Parler-TTS**, **CosyVoice3**, and **Audio8** — each with its own model
-layout under `models/`:
+Six engine families are wrapped — **Chatterbox**, **Supertonic**,
+**Parler-TTS**, **CosyVoice3**, **Audio8**, and **MOSS** — each with its own
+model layout under `models/`:
 
 | Model                   | GGUF files                                            | Languages / notes                                                           |
 | ----------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -27,12 +27,14 @@ layout under `models/`:
 | Parler-TTS Mini v1      | `parler-tts-mini-v1.gguf`                             | English; description-conditioned voices                                     |
 | CosyVoice3              | `cosyvoice3/` dir (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + tokenizer files) | Instruct-conditioned; strong on Chinese + 17 dialects; native 24 kHz        |
 | Audio8                  | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Multilingual (language inferred from the text); voice cloning; native 44.1 kHz |
+| MOSS-TTS v1.5           | `moss-tts-delay-f16.gguf` + `moss-codec-decoder-f16.gguf` (+ `moss-codec-encoder-f16.gguf` to clone) | Multilingual (`language` hint); directable pauses, duration and pronunciation; voice cloning; native chunk streaming; native 24 kHz; 8B, desktop only |
+| MOSS-TTSD               | `moss-ttsd-f16.gguf` + `moss-codec-decoder-f16.gguf` + `moss-codec-encoder-f16.gguf` | Multi-speaker dialogue, one reference recording per speaker; native 24 kHz; 8B, desktop only |
 
 **Chatterbox multilingual (23 languages):** Arabic (`ar`), Danish (`da`), German (`de`), Greek (`el`), English (`en`), Spanish (`es`), Finnish (`fi`), French (`fr`), Hebrew (`he`), Hindi (`hi`), Italian (`it`), Japanese (`ja`), Korean (`ko`), Malay (`ms`), Dutch (`nl`), Norwegian (`no`), Polish (`pl`), Portuguese (`pt`), Russian (`ru`), Swedish (`sv`), Swahili (`sw`), Turkish (`tr`), Chinese (`zh`).
 
 **Supertonic 3 (31 languages + `na`):** `ar`, `bg`, `hr`, `cs`, `da`, `nl`, `en`, `et`, `fi`, `fr`, `de`, `el`, `hi`, `hu`, `id`, `it`, `ja`, `ko`, `lv`, `lt`, `pl`, `pt`, `ro`, `ru`, `sk`, `sl`, `es`, `sv`, `tr`, `uk`, `vi`. Pass `language: 'na'` when the input language is unknown.
 
-Point the addon at a custom location via `files.modelDir` (engine auto-detected from the GGUF filenames present), or pass explicit `files.t3Model` + `files.s3genModel` (Chatterbox), `files.supertonicModel` (Supertonic), `files.parlerModel` (Parler-TTS), `files.cosyvoiceModelDir` (CosyVoice3), or `files.audio8Lm` + `files.audio8CodecDecoder` (+ `files.audio8CodecEncoder` for voice cloning) (Audio8). Use `npm run download-models:registry` to acquire registry-published Chatterbox, Supertonic, Parler, and Audio8 models. CosyVoice3 must currently be staged from local converted artifacts.
+Point the addon at a custom location via `files.modelDir` (engine auto-detected from the GGUF filenames present), or pass explicit `files.t3Model` + `files.s3genModel` (Chatterbox), `files.supertonicModel` (Supertonic), `files.parlerModel` (Parler-TTS), `files.cosyvoiceModelDir` (CosyVoice3), `files.audio8Lm` + `files.audio8CodecDecoder` (+ `files.audio8CodecEncoder` for voice cloning) (Audio8), or `files.mossBackbone` + `files.mossCodecDecoder` (+ `files.mossCodecEncoder` for voice cloning and dialogue) (MOSS). Use `npm run download-models:registry` to acquire registry-published Chatterbox, Supertonic, Parler, and Audio8 models. CosyVoice3 and MOSS must currently be staged from local converted artifacts.
 
 ## Requirement
 
@@ -235,7 +237,11 @@ The most common constructor options:
 | `files.cosyvoiceModelDir`            | string  | —       | CosyVoice3 model directory (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + tokenizer files) |
 | `files.audio8Lm` / `files.audio8CodecDecoder` | string | — | Audio8 LM / codec decoder GGUFs (override `modelDir`)             |
 | `files.audio8CodecEncoder`           | string  | —       | Audio8 codec encoder — only needed to clone a voice                     |
-| `referenceAudio`                     | string  | —       | Mono WAV for voice cloning (Chatterbox: ≥ 5 s; Audio8: also needs `referenceText`) |
+| `files.mossBackbone` / `files.mossCodecDecoder` | string | — | MOSS backbone (`moss-tts-delay-*` or `moss-ttsd-*`) / codec decoder GGUFs (override `modelDir`) |
+| `files.mossCodecEncoder`             | string  | —       | MOSS codec encoder — only needed to clone a voice or for `dialogueReferences` |
+| `referenceAudio`                     | string  | —       | Mono WAV for voice cloning (Chatterbox: ≥ 5 s; Audio8: also needs `referenceText`; MOSS: 24 kHz) |
+| `dialogueReferences`                 | string[] | —      | MOSS-TTSD: one 24 kHz WAV per speaker (`[S1]`, `[S2]`, …); the text opens with their transcripts |
+| `durationTokens`                     | number  | 0       | MOSS: target length in codec frames (12.5 per second); `0` keeps it free |
 | `referenceText`                      | string  | —       | Audio8-only: what `referenceAudio` says, verbatim; required with a reference |
 | `voiceDir`                           | string  | —       | Pre-baked voice profile directory                                       |
 | `emotion` / `pace`                   | string  | —       | Cross-engine conditioning — Parler + CosyVoice3 emotions; Parler / CosyVoice3 / Supertonic pace |
@@ -457,9 +463,9 @@ response.stats.enhancerBackendId;
 
 **Audio Format Specifications:**
 
-- **Sample Rate:** engine-native by default (24 kHz for Chatterbox/CosyVoice3,
+- **Sample Rate:** engine-native by default (24 kHz for Chatterbox/CosyVoice3/MOSS,
   44.1 kHz for Supertonic/Parler/Audio8, 48 kHz with the enhancer), configurable
-  via `config.outputSampleRate`
+  via `config.outputSampleRate` (MOSS emits 24 kHz only)
 - **Format:** 16-bit signed PCM, mono channel
 - **Data Type:** Int16Array containing raw audio samples
 
