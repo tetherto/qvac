@@ -1,7 +1,10 @@
 #pragma once
 
+#include <optional>
 #include <string>
+#include <vector>
 
+#include "common/chat.h"
 #include "common/common.h"
 
 // Forward declarations from llama.h
@@ -41,6 +44,28 @@ struct ReasoningState {
 // Returns false only when the context or markers are unavailable.
 [[nodiscard]] bool initializeReasoningState(
     ::llama_context* lctx, ReasoningState& state, ReasoningTags tags);
+
+// An assistant turn's text cut into its reasoning and its answer.
+struct SplitReasoning {
+  std::string reasoning;
+  std::string content;
+};
+
+// Cuts a reasoning block out of `content` the way thinking templates (Qwen3,
+// Qwen3.5) cut it out of an assistant message: the reasoning is the text
+// before the first `tags.close`, after the last `tags.open` in it, trimmed;
+// the answer is the text after the last `tags.close`, without its leading
+// newlines. `std::nullopt` when `content` has no `tags.close`.
+[[nodiscard]] std::optional<SplitReasoning> splitReasoningFromContent(
+    const std::string& content, const ReasoningTags& tags);
+
+// Moves the reasoning block of every assistant message's `content` into its
+// `reasoning_content`, so a template that only reads `reasoning_content`
+// (DeepSeek V4, Gemma 4) can drop or place it, instead of printing it as part
+// of the answer. Messages that already carry `reasoning_content` are left
+// alone, like the templates do.
+void moveReasoningOutOfContent(
+    std::vector<common_chat_msg>& messages, const ReasoningTags& tags);
 
 // Append `tokenStr` to the rolling buffer and flip
 // `state.inside_reasoning` when the buffer first contains the

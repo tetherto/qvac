@@ -1240,6 +1240,14 @@ namespace LlmLlamacpp {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- the literals document the known roles; any string is accepted.
     role: "system" | "assistant" | "user" | "tool" | "session" | string;
     content: string;
+    /**
+     * An assistant turn's reasoning, separate from its answer in `content`, as
+     * in OpenAI-compatible APIs. Optional: an answer sent back with its
+     * reasoning inline (`<think>…</think>` first, as the model streamed it) is
+     * split into the two on models with a known reasoning channel, so the chat
+     * template can drop or place it. Ignored on other roles.
+     */
+    reasoning_content?: string;
     type?: undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary caller-supplied fields ride along to the chat template.
     [key: string]: any;

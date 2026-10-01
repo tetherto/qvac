@@ -79,6 +79,16 @@ matching prefix before prefilling again. Legacy cache files without a ledger
 are treated as cold misses. A current-format file with a corrupt ledger fails
 to load.
 
+An earlier answer can go back exactly as it was streamed, reasoning included
+(`<think>…</think>` first). On a model with a known reasoning channel (the
+Qwen3 family, DeepSeek V4, Gemma 4) the addon moves that block into the
+message's `reasoning_content` before rendering, and a message can carry
+`reasoning_content` itself instead, as in OpenAI-compatible APIs. The chat
+template then decides: most drop the reasoning of turns before the last user
+message, so the next prompt holds only the answers. Without the split, a
+template that reads only `reasoning_content` (DeepSeek V4, Gemma 4) would print
+the reasoning as part of the answer.
+
 ### Checkpoints on hybrid and recurrent models
 
 Pure-attention models restore a matching prefix by trimming the KV tail.

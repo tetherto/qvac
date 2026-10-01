@@ -1081,3 +1081,38 @@ TEST(RequireToolChoiceHonouredTest, AutoAndNoneNeverThrow) {
 // `forLogMessage` and `toLowerAscii` are declared in `utils/LogSafeString.hpp`,
 // so their tests live in `test_log_safe_string.cpp` — one test file per header,
 // as elsewhere in this directory.
+
+// A template that reads an earlier answer's reasoning only from
+// `reasoning_content` (DeepSeek V4, Gemma 4) prints inline reasoning as part
+// of the answer. Moved out of `content`, it is the template's to drop.
+TEST_F(ChatTemplateUtilsTest, ReasoningMovedOutOfContentIsTheTemplatesToDrop) {
+  constexpr const char* REASONING_FIELD_TEMPLATE =
+      "{%- for m in messages -%}"
+      "<{{ m.role }}>{{ m.content }}"
+      "{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<assistant>{%- endif -%}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, REASONING_FIELD_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+  common_chat_templates_inputs inputs;
+  inputs.use_jinja = true;
+  inputs.add_generation_prompt = true;
+  inputs.messages.resize(3);
+  inputs.messages[0].role = "user";
+  inputs.messages[0].content = "Name three colours.";
+  inputs.messages[1].role = "assistant";
+  inputs.messages[1].content =
+      "<think>\nI reason here.\n</think>\n\nRed, green, blue.";
+  inputs.messages[2].role = "user";
+  inputs.messages[2].content = "Which is warmest?";
+
+  const std::string inline_ = getPrompt(tmpls.get(), inputs).prompt;
+  EXPECT_NE(inline_.find("I reason here."), std::string::npos);
+
+  moveReasoningOutOfContent(
+      inputs.messages, ReasoningTags{.open = "<think>", .close = "</think>"});
+  const std::string split = getPrompt(tmpls.get(), inputs).prompt;
+  EXPECT_EQ(split.find("I reason here."), std::string::npos) << split;
+  EXPECT_NE(split.find("<assistant>Red, green, blue."), std::string::npos)
+      << split;
+}

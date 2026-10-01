@@ -1717,6 +1717,13 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
               ADDON_ID, toString(UserMessageNotProvided), errorMsg);
         }
         newMsg.content = content;
+        if (newMsg.role == "assistant") {
+          const auto reasoning = jsonObj.find("reasoning_content");
+          if (reasoning != jsonObj.end() &&
+              reasoning->second.is<std::string>()) {
+            newMsg.reasoning_content = reasoning->second.get<std::string>();
+          }
+        }
         chatMsgs.push_back(newMsg);
       }
     }
@@ -1735,6 +1742,17 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
         string_format("%s: Invalid input format: %s\n", __func__, err.c_str());
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
+  }
+  // An earlier answer comes back with its reasoning inline, as the addon
+  // streamed it. Qwen's templates cut it out of `content` themselves; others
+  // (DeepSeek V4, Gemma 4) read it only from `reasoning_content` and would
+  // print it as part of the answer. Hand every template the split form, the
+  // shape llama-server's OpenAI-compatible input has.
+  if (const auto tags =
+          qvac_lib_inference_addon_llama::utils::selectReasoningTagsForModel(
+              state_->llmContext_->getModel())) {
+    qvac_lib_inference_addon_llama::utils::moveReasoningOutOfContent(
+        chatMsgs, *tags);
   }
   return parsed;
 }

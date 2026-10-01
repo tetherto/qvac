@@ -32,8 +32,7 @@ public:
     return model.state_ ? model.state_->batchScheduler_.get() : nullptr;
   }
 
-  /// The checkpoint policy the load resolved (count filled in by
-  /// architecture when the config did not set it).
+  /// The checkpoint policy the load resolved.
   static qvac_lib_inference_addon_llama::cache::CheckpointPolicy
   checkpointPolicy(LlamaModel& model) {
     std::shared_lock lock(model.stateMtx_);
@@ -47,6 +46,13 @@ public:
   ramTier(LlamaModel& model) {
     std::shared_lock lock(model.stateMtx_);
     return model.state_ ? model.state_->ramTier_.get() : nullptr;
+  }
+
+  /// `formatPrompt`: the JSON prompt parser both request paths share.
+  static ParsedPromptPayload
+  formatPrompt(LlamaModel& model, const std::string& input) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.formatPrompt(input);
   }
 
   /// The loaded single-prompt context, for driver-level accounting tests.

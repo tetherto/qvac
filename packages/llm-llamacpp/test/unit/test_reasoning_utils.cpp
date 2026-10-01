@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
@@ -224,4 +225,55 @@ TEST_F(
   EXPECT_FALSE(state.inside_reasoning)
       << "flip fires only on the LAST padding token, so the sampled `tokenId` "
          "at the flip site is a padding newline — not the canonical close";
+}
+
+// An answer sent back with its reasoning inline splits the way Qwen's
+// templates split it.
+TEST(ReasoningSplit, CutsTheReasoningBlockOutOfContent) {
+  const ReasoningTags think{.open = "<think>", .close = "</think>"};
+  const auto split = splitReasoningFromContent(
+      "<think>\nI reason here.\n</think>\n\nRed, green, blue.", think);
+  ASSERT_TRUE(split.has_value());
+  EXPECT_EQ(split->reasoning, "I reason here.");
+  EXPECT_EQ(split->content, "Red, green, blue.");
+
+  // Opened by the template rather than the model: only the close is present.
+  const auto forcedOpen =
+      splitReasoningFromContent("I reason.\n</think>\n\nBlue.", think);
+  ASSERT_TRUE(forcedOpen.has_value());
+  EXPECT_EQ(forcedOpen->reasoning, "I reason.");
+  EXPECT_EQ(forcedOpen->content, "Blue.");
+
+  const ReasoningTags gemma{.open = "<|channel>thought", .close = "<channel|>"};
+  const auto channel = splitReasoningFromContent(
+      "<|channel>thought\nHmm.<channel|>Green.", gemma);
+  ASSERT_TRUE(channel.has_value());
+  EXPECT_EQ(channel->reasoning, "Hmm.");
+  EXPECT_EQ(channel->content, "Green.");
+
+  EXPECT_FALSE(splitReasoningFromContent("Just an answer.", think).has_value());
+  EXPECT_FALSE(
+      splitReasoningFromContent("a</think>b", ReasoningTags{}).has_value());
+}
+
+// Only assistant turns without their own `reasoning_content` are split.
+TEST(ReasoningSplit, MovesReasoningOnlyOutOfAssistantContent) {
+  const ReasoningTags think{.open = "<think>", .close = "</think>"};
+  std::vector<common_chat_msg> messages(3);
+  messages[0].role = "user";
+  messages[0].content = "<think>not mine</think>Hi";
+  messages[1].role = "assistant";
+  messages[1].content = "<think>\nPlan.\n</think>\n\nAnswer.";
+  messages[2].role = "assistant";
+  messages[2].content = "<think>inline</think>Kept.";
+  messages[2].reasoning_content = "given";
+
+  moveReasoningOutOfContent(messages, think);
+
+  EXPECT_EQ(messages[0].content, "<think>not mine</think>Hi");
+  EXPECT_TRUE(messages[0].reasoning_content.empty());
+  EXPECT_EQ(messages[1].reasoning_content, "Plan.");
+  EXPECT_EQ(messages[1].content, "Answer.");
+  EXPECT_EQ(messages[2].reasoning_content, "given");
+  EXPECT_EQ(messages[2].content, "<think>inline</think>Kept.");
 }

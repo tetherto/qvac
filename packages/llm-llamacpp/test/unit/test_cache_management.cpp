@@ -1755,6 +1755,56 @@ TEST(CacheHistoryCheckpointTest, DeepSeekV4SecondCheckpointServesTheEdit) {
   expectSecondCheckpointServesTheEdit(two, one);
 }
 
+// The JSON parser hands the template an assistant turn's reasoning in
+// `reasoning_content`: split out of an inline `content` on a model with a
+// reasoning channel, or taken from the message's own field.
+TEST(PromptParsingTest, AssistantReasoningMovesOutOfContent) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"role":"user","content":"<think>mine</think>Hi"},)"
+      R"({"role":"assistant","content":"<think>\nPlan.\n</think>\n\nHello."},)"
+      R"({"role":"assistant","content":"Bye.","reasoning_content":"Given."},)"
+      R"({"role":"user","content":"Again"}])");
+  ASSERT_EQ(parsed.chatMsgs.size(), 4u);
+  EXPECT_EQ(parsed.chatMsgs[0].content, "<think>mine</think>Hi");
+  EXPECT_EQ(parsed.chatMsgs[1].reasoning_content, "Plan.");
+  EXPECT_EQ(parsed.chatMsgs[1].content, "Hello.");
+  EXPECT_EQ(parsed.chatMsgs[2].reasoning_content, "Given.");
+  EXPECT_EQ(parsed.chatMsgs[2].content, "Bye.");
+}
+
+// A model without a reasoning channel keeps assistant text as it came.
+TEST(PromptParsingTest, ModelWithoutReasoningChannelKeepsContent) {
+  const std::string path =
+      test_common::BaseTestModelPath::get("Llama-3.2-1B-Instruct-Q4_0.gguf");
+  if (!fs::exists(path)) {
+    GTEST_SKIP() << "Llama-3.2-1B-Instruct-Q4_0.gguf not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string modelPath = path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"role":"user","content":"Hi"},)"
+      R"({"role":"assistant","content":"<think>x</think>Hello."}])");
+  ASSERT_EQ(parsed.chatMsgs.size(), 2u);
+  EXPECT_EQ(parsed.chatMsgs[1].content, "<think>x</think>Hello.");
+  EXPECT_TRUE(parsed.chatMsgs[1].reasoning_content.empty());
+}
+
 // Batch mode gives every request a fresh slot driver, so the checkpoints
 // must outlive it in the scheduler to reach the next turn on the same
 // cacheKey. The prefill stops at the end of the history for the capture.

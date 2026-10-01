@@ -324,6 +324,14 @@ declare namespace LlmLlamacpp {
     interface UserTextMessage {
         role: "system" | "assistant" | "user" | "tool" | "session" | string;
         content: string;
+        /**
+         * An assistant turn's reasoning, separate from its answer in `content`, as
+         * in OpenAI-compatible APIs. Optional: an answer sent back with its
+         * reasoning inline (`<think>…</think>` first, as the model streamed it) is
+         * split into the two on models with a known reasoning channel, so the chat
+         * template can drop or place it. Ignored on other roles.
+         */
+        reasoning_content?: string;
         type?: undefined;
         [key: string]: any;
     }
