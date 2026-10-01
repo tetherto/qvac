@@ -182,8 +182,7 @@ enum class BackendFamilyCode : std::uint8_t {
 };
 
 /// @brief Classify a chosen backend into a @c BackendFamilyCode.
-/// @p deviceName is the lowercased ggml device name, as @c BackendChoice::name
-/// carries it.
+/// @p deviceName is a ggml device name, in any case.
 BackendFamilyCode
 backendFamilyCodeOf(BackendType type, const std::string& deviceName);
 
@@ -370,6 +369,23 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
+/// @brief `splitModeDeviceNames()` plus each device's registry.
+///
+/// QVAC-23763: records whether the split spans more than one registry. No
+/// production caller reads it; the user-facing warning comes from
+/// @c SplitDeviceSelection::heterogeneous.
+struct SplitDeviceList {
+  std::vector<std::string> names;
+  /// Parallel to @c names.
+  std::vector<std::string> registries;
+  /// True when @c names spans more than one registry.
+  bool heterogeneous = false;
+};
+
+SplitDeviceList splitModeDeviceNamesDetailed(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
+
 /// @brief The device names to pass as `--device` in multi-GPU split mode: every
 /// discrete GPU, deduplicated by `props.device_id` so a card registered under
 /// two backends is named once, preferring @p selectedDeviceName's registry.
@@ -384,24 +400,6 @@ bool gpuBackendSupportsRowSplit();
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
-/// @brief `splitModeDeviceNames()` plus each device's registry.
-///
-/// QVAC-23763: the caller needs the registries to tell a homogeneous split from
-/// one spanning two backends, and the production `splitModeDeviceNames()`
-/// overload passes a null log callback, so this cannot warn from inside. It
-/// returns the fact instead and lets the caller log it.
-struct SplitDeviceList {
-  std::vector<std::string> names;
-  /// Parallel to @c names.
-  std::vector<std::string> registries;
-  /// True when @c names spans more than one registry.
-  bool heterogeneous = false;
-};
-
-SplitDeviceList splitModeDeviceNamesDetailed(
-    const BackendInterface& bckI, const std::string& selectedDeviceName,
-    const LoadConstraints& constraints = {});
-
 /// Empty when every usable GPU/iGPU device comes from one registry and no
 /// device was excluded by @p constraints, or when @p selectedDeviceName
 /// matches nothing. The caller then keeps omitting `--device`.

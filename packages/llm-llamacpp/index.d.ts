@@ -602,7 +602,8 @@ declare namespace LlmLlamacpp {
         /**
          * Why a higher-priority backend was passed over, or `"none"` when nothing
          * was. `"kv-cache-type-unsupported"` means the device could not run the
-         * requested KV-cache type and selection stepped down to one that could.
+         * requested KV-cache type and selection moved to a lower-priority device,
+         * which may itself use fabric's CPU KV fallback.
          * QVAC-23763.
          */
         backendSkipReason: AddonModule.BackendSkipReason;

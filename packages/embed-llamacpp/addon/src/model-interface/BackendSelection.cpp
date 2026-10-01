@@ -1482,7 +1482,8 @@ backend_selection::splitModeDeviceNamesDetailed(
 
   // QVAC-23763: a split spanning more than one registry. Membership is
   // deliberately unchanged - #4126 keeps a card only another backend
-  // registers - so this only makes the situation visible.
+  // registers. Recorded for callers; the user-facing warning comes from
+  // SplitDeviceSelection::heterogeneous.
   for (const std::string& registry : out.registries) {
     if (registry != out.registries.front()) {
       out.heterogeneous = true;

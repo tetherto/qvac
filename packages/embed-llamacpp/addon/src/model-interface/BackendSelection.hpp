@@ -264,11 +264,9 @@ std::vector<std::string> splitModeDeviceNames(
 
 /// @brief `splitModeDeviceNames()` plus each device's registry.
 ///
-/// QVAC-23763: the caller needs the registries to tell a homogeneous split from
-/// one spanning two backends, and the production `splitModeDeviceNames()`
-/// overload passes a null log callback, so this cannot warn from inside. It
-/// returns the fact instead and lets the caller log it. Same shape as
-/// llm-llamacpp's.
+/// QVAC-23763: records whether the split spans more than one registry. No
+/// production caller reads it; the user-facing warning comes from
+/// @c SplitDeviceSelection::heterogeneous. Same shape as llm-llamacpp's.
 struct SplitDeviceList {
   std::vector<std::string> names;
   /// Parallel to @c names.

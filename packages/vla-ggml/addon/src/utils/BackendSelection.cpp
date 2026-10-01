@@ -332,7 +332,8 @@ ggml_backend_dev_t pickBestGpuDevice(
   // No skipped_reason field here: this picker has no per-candidate exclusion
   // reasons. Its one filter is the Adreno gate, which logs each rejection as it
   // makes it, and the override-missed case is warned about above with the full
-  // accepted list.
+  // accepted list. So skipped=none here means "not tracked", not "nothing
+  // skipped".
   auto nameOf = [&accepted](ggml_backend_dev_t dev) -> std::string {
     for (const auto& [backendLower, candidate] : accepted) {
       if (candidate == dev) {

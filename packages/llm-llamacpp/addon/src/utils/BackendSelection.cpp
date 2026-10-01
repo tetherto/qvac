@@ -712,8 +712,8 @@ const char* selectionPathName(backend_selection::SelectionPath path) {
 /// %s Backend (backend override)", …). Three integration suites matched that
 /// prose, which coupled them to log wording and could only ever prove that an
 /// override bound - not which backend actually won, nor why a higher-priority
-/// one did not. Named fields make both assertable, and the addon exposes no API
-/// that reports the selected backend, so the log is the only channel.
+/// one did not. Named fields make both assertable. The stats now carry the
+/// family and skip reason, but the device name is only in this log.
 void emitSelectionLog(
     const BackendInterface& bckI, const backend_selection::SelectionTrace& t) {
   std::string text = string_format(
@@ -2090,9 +2090,8 @@ backend_selection::splitModeDeviceNamesDetailed(
   //
   // Membership is deliberately unchanged: dropping the foreign-registry card
   // was considered and rejected, because #4126 chose to keep a second physical
-  // card that only another backend registers. This only makes the situation
-  // visible, since an even tensor-split will pace the model to the slower card
-  // and nothing else says so.
+  // card that only another backend registers. Recorded for callers; the
+  // user-facing warning comes from SplitDeviceSelection::heterogeneous.
   for (const std::string& registry : out.registries) {
     if (registry != out.registries.front()) {
       out.heterogeneous = true;
