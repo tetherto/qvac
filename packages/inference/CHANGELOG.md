@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Accept `includeAudioDecoder` in QVAC configuration for SDK bundles that omit FFmpeg when using only raw PCM audio.
+
 ## [0.20.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.20.1

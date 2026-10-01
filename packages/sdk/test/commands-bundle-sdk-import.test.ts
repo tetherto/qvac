@@ -6,7 +6,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
-import { bundleSdk } from '@/commands/bundle'
+import { bundleSdk, checkAudioDecoderCapability } from '@/commands/bundle'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
@@ -322,6 +322,138 @@ describe('inference native dependency boundary', () => {
 })
 
 describe('bundleSdk worker entries', () => {
+  it('omits bare-ffmpeg from the addon manifest when audio decoding is disabled', async (t) => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-audio-manifest-'))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+    const addonRoot = path.join(projectRoot, 'node_modules', 'bare-ffmpeg')
+    fs.mkdirSync(addonRoot, { recursive: true })
+    fs.writeFileSync(path.join(addonRoot, 'package.json'), JSON.stringify({ addon: true }))
+    const bundlePath = path.join(projectRoot, 'worker.bundle.js')
+    const packed =
+      'bundle\n' +
+      JSON.stringify({
+        id: 'audio-manifest',
+        resolutions: { '/node_modules/bare-ffmpeg/index.js': {} }
+      })
+    fs.writeFileSync(bundlePath, `module.exports = ${JSON.stringify(packed)};`)
+    const logger = getClientLogger({ enableConsole: false })
+    const enabled = await generateAddonsManifest({
+      bundlePath,
+      outputDir: projectRoot,
+      projectRoot,
+      logger
+    })
+    assert.deepEqual(enabled.addons, ['bare-ffmpeg'])
+    const disabled = await generateAddonsManifest({
+      bundlePath,
+      outputDir: projectRoot,
+      projectRoot,
+      logger,
+      includeAudioDecoder: false
+    })
+    assert.deepEqual(disabled.addons, [])
+    assert.deepEqual(JSON.parse(fs.readFileSync(disabled.manifestPath, 'utf8')).addons, [])
+  })
+
+  it('requires the audio decoder addon for audio plugins when enabled, including deferred bundles', () => {
+    const plugins = ['@qvac/sdk/whispercpp-transcription/plugin']
+    assert.throws(
+      () => checkAudioDecoderCapability(['bare-ffmpeg'], plugins, '@qvac/sdk', true),
+      /Remove bare-ffmpeg from --defer/
+    )
+    assert.doesNotThrow(() =>
+      checkAudioDecoderCapability(['bare-ffmpeg'], plugins, '@qvac/sdk', false)
+    )
+    assert.doesNotThrow(() => checkAudioDecoderCapability([], plugins, '@qvac/sdk', true))
+    assert.doesNotThrow(() =>
+      checkAudioDecoderCapability(
+        ['bare-ffmpeg'],
+        ['@qvac/sdk/nmtcpp-translation/plugin'],
+        '@qvac/sdk',
+        true
+      )
+    )
+    assert.throws(
+      () =>
+        checkAudioDecoderCapability(
+          ['bare-ffmpeg'],
+          ['@qvac/sdk/audiogen-ggml/plugin'],
+          '@qvac/sdk',
+          false
+        ),
+      /audiogen-ggml plugin requires bare-ffmpeg/
+    )
+  })
+
+  it('bundles a PCM-only audio plugin without linking bare-ffmpeg', async (t) => {
+    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
+    const addonPath = path.join(sdkPath, 'node_modules', 'bare-ffmpeg')
+    fs.writeFileSync(
+      path.join(sdkPath, 'dist', 'plugins.js'),
+      'export function registerPlugin(plugin) { globalThis.plugin = plugin }'
+    )
+    fs.mkdirSync(addonPath, { recursive: true })
+    fs.writeFileSync(
+      path.join(addonPath, 'package.json'),
+      JSON.stringify({
+        name: 'bare-ffmpeg',
+        version: '1.0.0',
+        main: 'index.js',
+        addon: true
+      })
+    )
+    fs.writeFileSync(path.join(addonPath, 'index.js'), 'module.exports = {}')
+    const sdkManifestPath = path.join(sdkPath, 'package.json')
+    const sdkManifest = JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8'))
+    sdkManifest.exports['./whispercpp-transcription/plugin'] = './dist/whisper-plugin.js'
+    fs.writeFileSync(sdkManifestPath, JSON.stringify(sdkManifest))
+    fs.writeFileSync(
+      path.join(sdkPath, 'dist', 'whisper-plugin.js'),
+      "export const whisperPlugin = { decode: () => require('bare-ffmpeg') };"
+    )
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        plugins: ['@qvac/sdk/whispercpp-transcription/plugin'],
+        includeAudioDecoder: false
+      })
+    )
+
+    const result = await bundleSdk({
+      projectRoot,
+      sdkPath,
+      configPath,
+      hosts: [`${process.platform}-${process.arch}`],
+      quiet: true,
+      checkEngines: false
+    })
+
+    assert.ok(!result.addons.includes('bare-ffmpeg'))
+    assert.ok(
+      !JSON.stringify(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8'))).includes(
+        'bare-ffmpeg'
+      )
+    )
+    assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
+
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ plugins: ['@qvac/sdk/whispercpp-transcription/plugin'] })
+    )
+    await assert.rejects(
+      bundleSdk({
+        projectRoot,
+        sdkPath,
+        configPath,
+        hosts: [`${process.platform}-${process.arch}`],
+        defer: ['bare-ffmpeg'],
+        quiet: true,
+        checkEngines: false
+      }),
+      /Remove bare-ffmpeg from --defer/
+    )
+  })
+
   it('uses resolved imports for bare-pack but writes a relocatable runtime entry', async (t) => {
     const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
 

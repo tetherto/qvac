@@ -14,7 +14,7 @@ import {
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
-import { generateAddonsManifest } from '@/commands/bundle/manifest'
+import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import {
   installMissingHostPrebuilds,
@@ -118,6 +118,44 @@ interface CheckBundleEnginesOptions {
 }
 
 const ENGINES_ISSUE_CODES = new Set(['abi-mismatch', 'engines-mismatch'])
+const AUDIO_PLUGINS = new Set([
+  'whispercpp-transcription',
+  'bci-whispercpp-transcription',
+  'parakeet-transcription',
+  'audiogen-ggml'
+])
+
+function usesAudioDecoder(pluginSpecifiers: string[], sdkName: string): boolean {
+  return pluginSpecifiers.some((specifier) => {
+    const builtin = parseBuiltinSpecifier(specifier, sdkName)
+    return builtin !== null && AUDIO_PLUGINS.has(builtin.suffix)
+  })
+}
+
+export function checkAudioDecoderCapability(
+  deferModules: string[],
+  pluginSpecifiers: string[],
+  sdkName: string,
+  includeAudioDecoder: boolean
+): void {
+  if (
+    !includeAudioDecoder &&
+    pluginSpecifiers.some((specifier) => specifier === `${sdkName}/audiogen-ggml/plugin`)
+  ) {
+    throw new Error(
+      'The audiogen-ggml plugin requires bare-ffmpeg. Remove the plugin or enable includeAudioDecoder in qvac.config.*.'
+    )
+  }
+  if (
+    includeAudioDecoder &&
+    usesAudioDecoder(pluginSpecifiers, sdkName) &&
+    deferModules.includes(AUDIO_DECODER_ADDON)
+  ) {
+    throw new Error(
+      'Audio plugins need bare-ffmpeg for file decoding. Remove bare-ffmpeg from --defer or set includeAudioDecoder: false in qvac.config.* for PCM-only use.'
+    )
+  }
+}
 
 async function checkBundleEngines(options: CheckBundleEnginesOptions) {
   const { projectRoot, bundlePath, hosts, configPath, network, logger } = options
@@ -205,7 +243,17 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
 
-  const deferModules = options.defer ?? []
+  const deferModules =
+    config.includeAudioDecoder === false
+      ? [...new Set([...(options.defer ?? []), AUDIO_DECODER_ADDON])]
+      : (options.defer ?? [])
+
+  checkAudioDecoderCapability(
+    deferModules,
+    pluginSpecifiers,
+    sdkName,
+    config.includeAudioDecoder !== false
+  )
 
   await fsp.mkdir(outputDir, { recursive: true })
 
@@ -247,7 +295,9 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         const { installed } = await installMissingHostPrebuilds({
           projectRoot,
           hosts,
-          addons: await collectAddonsFromBundle({ bundlePath, projectRoot, hosts }),
+          addons: (await collectAddonsFromBundle({ bundlePath, projectRoot, hosts })).filter(
+            (addon) => config.includeAudioDecoder !== false || addon.name !== AUDIO_DECODER_ADDON
+          ),
           quiet: options.quiet === true,
           logger
         })
@@ -279,7 +329,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     bundlePath,
     outputDir,
     projectRoot,
-    logger
+    logger,
+    includeAudioDecoder: config.includeAudioDecoder !== false
   })
 
   if (options.checkEngines !== false) {

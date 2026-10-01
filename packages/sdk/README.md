@@ -20,6 +20,8 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 ## Supported environments and installation
 
+For mobile apps that use only raw PCM streaming transcription, set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. This leaves `bare-ffmpeg` out of the native addon manifest. Keep the default setting when the app decodes compressed audio files.
+
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
 On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
