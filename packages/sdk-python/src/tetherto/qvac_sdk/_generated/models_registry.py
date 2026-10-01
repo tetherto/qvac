@@ -4529,6 +4529,24 @@ PARAKEET_CTC_METADATA = ModelConstant(
     params="0.6B",
 )
 
+PARAKEET_CTC_MODEL = ModelConstant(
+    name="PARAKEET_CTC_MODEL",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/model.mil",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/model.mil",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=342557,
+    blob_block_length=10,
+    blob_byte_offset=22448397700,
+    model_id="model.mil",
+    expected_size=626247,
+    sha256_checksum="796fc5a6e14c682551454702cab64e053f293a5814a5589a7b63de1545db298b",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="",
+    params="0.6B",
+)
+
 PARAKEET_CTC_WEIGHT = ModelConstant(
     name="PARAKEET_CTC_WEIGHT",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/weights/weight.bin",
@@ -5441,6 +5459,24 @@ PARAKEET_UNIFIED_COREMLDATA = ModelConstant(
     model_id="coremldata.bin",
     expected_size=243,
     sha256_checksum="c0ac48cf5b18403301d9e19f2983c715ac789c522720dda9acccd87e447481e1",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="",
+    params="0.6B",
+)
+
+PARAKEET_UNIFIED_COREMLDATA_1 = ModelConstant(
+    name="PARAKEET_UNIFIED_COREMLDATA_1",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/coremldata.bin",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/coremldata.bin",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=368898,
+    blob_block_length=1,
+    blob_byte_offset=24174044378,
+    model_id="coremldata.bin",
+    expected_size=375,
+    sha256_checksum="c0260cac05d04740b004c07d96b7171470740c597ba642d9ac7fed341acb486b",
     addon="parakeet",
     engine="parakeet-transcription",
     quantization="",
@@ -8975,6 +9011,7 @@ __all__ = [
     "PARAKEET_CTC_COREMLDATA",
     "PARAKEET_CTC_COREMLDATA_1",
     "PARAKEET_CTC_METADATA",
+    "PARAKEET_CTC_MODEL",
     "PARAKEET_CTC_WEIGHT",
     "PARAKEET_EOU_120M_V1_F16",
     "PARAKEET_EOU_120M_V1_Q4_0",
@@ -9026,6 +9063,7 @@ __all__ = [
     "PARAKEET_UNIFIED_0_6B_Q4_0",
     "PARAKEET_UNIFIED_0_6B_Q8_0",
     "PARAKEET_UNIFIED_COREMLDATA",
+    "PARAKEET_UNIFIED_COREMLDATA_1",
     "PARAKEET_UNIFIED_METADATA",
     "PARAKEET_UNIFIED_MODEL",
     "PARAKEET_UNIFIED_WEIGHT",

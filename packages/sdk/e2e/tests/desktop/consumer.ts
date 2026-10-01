@@ -690,6 +690,7 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML cache test requires iOS'),
     new SkipExecutor(
       /^snap-storage-/,
       'Snap storage tests require the strict-confined Snap consumer'

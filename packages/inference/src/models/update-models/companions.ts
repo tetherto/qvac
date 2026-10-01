@@ -50,6 +50,17 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   groupMecabCompanions(models, bySourcePath, companionKeys)
   groupCosyvoiceCompanions(models, bySourcePath)
 
+  // Compiled Core ML bundles are fetched as optional files for an existing
+  // Parakeet GGUF. Their individual components are not public model constants.
+  for (const model of models) {
+    if (
+      model.registrySource === 's3' &&
+      /\/ggml\/parakeet\/\d{4}-\d{2}-\d{2}\/[^/]+\.mlmodelc\//.test(model.registryPath)
+    ) {
+      companionKeys.add(sourceKey(model.registrySource, model.registryPath))
+    }
+  }
+
   return models.map((model) => {
     const key = sourceKey(model.registrySource, model.registryPath)
     if (companionKeys.has(key)) {

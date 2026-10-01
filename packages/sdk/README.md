@@ -194,6 +194,33 @@ console.log(stats?.audioDuration, stats?.realTimeFactor)
 `session.stats` resolves to `undefined` when the engine does not report
 statistics.
 
+Batch `transcribe()` calls also expose terminal statistics:
+
+```ts
+const call = transcribe({ modelId, audioChunk })
+const text = await call
+const stats = await call.stats
+console.log(text, stats?.encoderUsedCoreml)
+```
+
+`call.stats` resolves to `undefined` when the engine reports no statistics and
+rejects if transcription fails.
+
+## Parakeet Core ML encoders on Apple devices
+
+Load a supported Parakeet registry constant as usual. On macOS and iOS, the SDK
+downloads any complete, published Core ML encoder bundle with its GGUF and
+places the `.mlmodelc` directory where the native addon discovers it. This is
+available for TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming
+Sortformer v2.1. The download includes the sidecar weights, so first load takes
+more time and disk space. Other platforms download only the GGUF. If the
+sidecar is unavailable or cannot load, inference uses the GGUF encoder.
+Sortformer v2.1 also needs a GGUF with the
+`parakeet.model_variant=sortformer-streaming-v2.1-aosc` metadata. Caching both
+sidecars alone does not activate Core ML. See
+[`examples/asr/parakeet-unified-coreml.ts`](examples/asr/parakeet-unified-coreml.ts)
+for a local check of a Unified GGUF and its encoder bundle.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
