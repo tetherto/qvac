@@ -97,9 +97,9 @@ struct BackendInterface {
       ggml_backend_dev_t device);
   void* (*ggml_backend_reg_get_proc_address)(
       ggml_backend_reg_t reg, const char* name);
-  // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
-  // physical card registered under two backends from two distinct cards. May
-  // be null; that path then falls back to scoping by registry.
+  // QVAC-23763: props.device_id tells one physical card registered under two
+  // backends from two distinct cards. Required: getSplitDeviceSelection() and
+  // getTensorSplitDeviceNames() call it unconditionally.
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
@@ -144,10 +144,11 @@ enum class ExclusionReason : std::uint8_t {
 /// caller.
 struct LoadConstraints {
   /// KV-cache types the device must be able to write with SET_ROWS from F32.
-  /// Empty when the caller set no cache-type, or set one that is not quantized.
+  /// Empty when the caller set no cache-type. Non-TBQ/PQ types are present but
+  /// always pass the production probe.
   std::vector<enum ggml_type> kvCacheTypes;
-  /// When non-empty, every device used by a split load must belong to one of
-  /// these backend families.
+  /// When non-empty, every local device used by a split load must belong to
+  /// one of these backend families. RPC devices are exempt.
   std::vector<std::string> requiredBackendFamilies;
   /// Set when selection kept a KV-incapable GPU for fabric's per-layer CPU KV
   /// placement. Such devices then also qualify for the split set.
@@ -309,14 +310,13 @@ std::pair<BackendType, std::string> chooseBackend(
     bool* outIsMaliGpu = nullptr,
     const std::vector<std::string>& backendOverride = {});
 
-/// @brief Count GPU devices available for multi-GPU split mode.
-/// Returns the number of discrete GPUs when any are present; otherwise
-/// falls back to the iGPU count. This mirrors backends like Vulkan which
-/// exclude iGPUs by default when discrete GPUs exist.
+/// @brief Count devices in the final Fabric-compatible split set, that is
+/// `getSplitDeviceSelection(bckI).devices.size()`.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief The ordered device names to hand to `--device` for
-/// LLAMA_SPLIT_MODE_TENSOR.
+/// @brief The ordered, constraint-filtered device names that
+/// getSplitDeviceSelection(selectedDeviceName, constraints) keeps, for every
+/// split mode.
 ///
 /// QVAC-24253. Tensor mode is the one split mode qvac-fabric selects devices
 /// for with no type filter and no deduplication: its branch in `src/llama.cpp`
@@ -342,8 +342,7 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 ///   - Devices that cannot meet @p constraints are excluded, and duplicate
 ///     representations prefer @p selectedDeviceName's registry.
 ///
-/// Returns an empty vector when no GPU device is present; callers must then
-/// leave `--device` alone rather than emitting an empty list.
+/// Returns an empty vector when no GPU device is present.
 std::vector<std::string> getTensorSplitDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName = {},
     const LoadConstraints& constraints = {});
@@ -353,16 +352,16 @@ std::vector<std::string> getTensorSplitDeviceNames(
     const std::string& selectedDeviceName = {},
     const LoadConstraints& constraints = {});
 
-/// @brief Current-main compatibility name for the filtered tensor split list.
+/// @brief The names of getSplitDeviceSelection()'s devices, in order.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one GPU device is present AND every available
 /// GPU/iGPU device's backend provides split buffers, because qvac-fabric
 /// requires split buffers from each device it distributes over and throws on
-/// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
-/// this is false in every shipped configuration.
+/// the first one that lacks them. No production caller: split-mode 'row' is
+/// rejected at config time. As of qvac-fabric v10549 only SYCL provides split
+/// buffers, so this is false in every shipped configuration.
 bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
 /// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
@@ -386,23 +385,22 @@ SplitDeviceList splitModeDeviceNamesDetailed(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});
 
-/// @brief The device names to pass as `--device` in multi-GPU split mode: every
+/// @brief The local device names a multi-GPU split load pins: every
 /// discrete GPU, deduplicated by `props.device_id` so a card registered under
 /// two backends is named once, preferring @p selectedDeviceName's registry.
 ///
 /// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
-/// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
-/// `--device` would spread a single card across two backends. Deduping rather
-/// than scoping to one registry keeps a second physical card on a mixed-vendor
-/// host, and preferring the selected registry keeps a `backend` override
-/// binding, which omitting `--device` would not.
+/// registers twice, as CUDA0 and Vulkan0, so an unfiltered device list would
+/// spread a single card across two backends. Deduping rather than scoping to
+/// one registry keeps a second physical card on a mixed-vendor host, and
+/// preferring the selected registry keeps a `backend` override binding.
 ///
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
-/// Empty when every usable GPU/iGPU device comes from one registry and no
-/// device was excluded by @p constraints, or when @p selectedDeviceName
-/// matches nothing. The caller then keeps omitting `--device`.
+/// Empty when every usable GPU/iGPU device comes from one registry, no device
+/// was excluded by @p constraints and no backend family is required, or when
+/// @p selectedDeviceName matches nothing.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});
@@ -430,10 +428,10 @@ struct JitCacheEnv {
 ///
 /// QVAC-24470: a device with no `-real` cubin in the build reaches the kernels
 /// by JITting the `-virtual` PTX, and the driver caches the result under
-/// `$HOME/.nv/ComputeCache`. Measured on a DGX Spark at sm_121: 27.3 s to first
-/// token cold against 143.9 ms warm. Where that cache cannot persist, a
-/// container with no writable `$HOME` being the usual case, the full cost is
-/// paid on every process start.
+/// `$HOME/.nv/ComputeCache`. Measured on a DGX Spark at sm_121, before the
+/// build shipped a 121a-real cubin: 27.3 s to first token cold against 143.9 ms
+/// warm. Where that cache cannot persist, a container with no writable `$HOME`
+/// being the usual case, the full cost is paid on every process start.
 ///
 /// It is not a crash, so no backend guard catches it, and to a user it is
 /// indistinguishable from a hang. Warning is all this can do; removing the cost
@@ -441,6 +439,6 @@ struct JitCacheEnv {
 bool shouldWarnAboutJitCache(const JitCacheEnv& env);
 
 /// @brief `shouldWarnAboutJitCache()` against the real environment. Always
-/// false off linux, where this module is not built as a loadable CUDA backend.
+/// false off Linux; the Windows cache check is not implemented.
 bool shouldWarnAboutJitCache();
 } // namespace backend_selection

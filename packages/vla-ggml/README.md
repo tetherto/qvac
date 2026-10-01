@@ -175,7 +175,7 @@ tokenising (see [Models](#models)). Check `hparams.numCameras` /
 
 | Export | What |
 |---|---|
-| `VlaModel` | Async model wrapper. Constructor takes `{ files, config?, logger?, opts? }`. `config.embodiment` (GR00T only) selects a row from a multi-embodiment GGUF and takes the full `VlaEmbodimentSelector`: a tag string, a numeric `cat_id` (`0..31`), or `{ tag \| catId, numCameras }` where `numCameras` overrides the stored view count (`''` / omitted = GGUF default). Call `await model.load({ backend? })` then `await (await model.run(input)).await()`. `await model.setEmbodiment(selector)` takes the same shape, switches embodiment on a loaded GR00T model and returns the refreshed hparams. |
+| `VlaModel` | Async model wrapper. Constructor takes `{ files, config?, logger?, opts? }`. `config.embodiment` (GR00T only) selects a row from a multi-embodiment GGUF and takes the full `VlaEmbodimentSelector`: a tag string, a numeric `cat_id` (`0..31`), or `{ tag \| catId, numCameras }` where `numCameras` overrides the stored view count (`''` / omitted = GGUF default). Call `await model.load({ backend?, backendRequired? })` then `await (await model.run(input)).await()`. `await model.setEmbodiment(selector)` takes the same shape, switches embodiment on a loaded GR00T model and returns the refreshed hparams. |
 | `preprocessImage(pixels, w, h, { size, layout, scale })` | Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32 in `[-1, 1]`. `scale` accepts `1` (already 0..1), `1/255` (input is 0..255), or `'auto'` (default heuristic). |
 | `padState(state, targetDim)` | Zero-pad a robot-state vector to the model's `maxStateDim`. |
 Full TypeScript types in [`index.d.ts`](./index.d.ts).
@@ -202,8 +202,9 @@ regardless, pass `backend: 'cpu'` to `load()`.
 Among accepted devices the order is CUDA, then HIP/ROCm, then anything else
 (Vulkan or Metal). CUDA ships as a dynamically loaded module alongside Vulkan
 on Linux x64, Linux arm64, and Windows x64. Linux arm64 includes separate CUDA
-13 and CUDA 12 modules for DGX Spark and Jetson. Windows needs the CUDA 13
-runtime DLLs on `PATH`. If the CUDA module, driver, or runtime is missing, the
+13 and CUDA 12 modules for DGX Spark and Jetson. On Windows the fabric prebuild
+stages `cudart64_13.dll`, `cublas64_13.dll` and `cublasLt64_13.dll` next to the
+CUDA module. If the CUDA module, driver, or runtime is missing, the
 device never registers and selection simply continues down that order.
 
 `backend` also takes a comma-separated GPU priority list, so

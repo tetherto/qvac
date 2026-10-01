@@ -1089,8 +1089,9 @@ namespace LlmLlamacpp {
      * - a PCI bus id, e.g. `'0000:65:00.0'`, stable against backend order,
      *   driver order and adding a card
      *
-     * Prefer one of the last two. A qualified index or PCI bus id that matches
-     * no device fails instead of selecting a different GPU.
+     * Prefer one of the last two. In split-mode `'none'`, a qualified index or
+     * PCI bus id that matches no device fails instead of selecting a different
+     * GPU.
      */
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `NumericLike` documents the expected form; any string is accepted.
     "main-gpu"?: NumericLike | string;

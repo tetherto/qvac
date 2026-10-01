@@ -25,7 +25,7 @@ struct MockDevice {
   enum ggml_backend_dev_type type;
   /// Whether this device's backend registry exposes
   /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
-  /// SYCL does as of qvac-fabric v10069, so this defaults to false.
+  /// SYCL does as of qvac-fabric v10549, so this defaults to false.
   bool hasSplitBuffers = false;
   /// `ggml_backend_dev_props::device_id` is the PCI bus id published by both
   /// CUDA and Vulkan and unique per physical card. Empty means ggml reported
@@ -1574,10 +1574,8 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
 }
 
 // The two guards above have a second arm each, and neither was pinned. Both
-// matter for QVAC-23763: the override block sits after the guards today, so the
-// invariant holds by block ordering alone. Anything that reorders them, or that
-// replaces bucket mutation with per-candidate filtering, has to keep all four
-// arms working.
+// matter for QVAC-23763: the override loop skips any candidate a guard marked
+// excluded, and all four arms have to keep working.
 
 // BitNet TQ on Adreno <800 is CPU only (TQ kernels run faster there), so no
 // override may reach a GPU. The 800+ arm of this guard is pinned above.
@@ -1600,9 +1598,9 @@ TEST_F(
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
-// Finetuning on Adreno 800+ prefers Vulkan by clearing OpenCL, so an explicit
-// opencl override must land on Vulkan rather than resurrecting it. The <800 arm
-// of this guard is pinned above.
+// Finetuning on Adreno 800+ prefers Vulkan by excluding Adreno OpenCL, so an
+// explicit opencl override must land on Vulkan rather than resurrecting it. The
+// <800 arm of this guard is pinned above.
 TEST_F(
     BackendSelectionTest,
     OverrideCannotResurrectOpenClClearedByFinetuneGuard800Plus) {
@@ -1622,10 +1620,9 @@ TEST_F(
   expectChosen(result, BackendType::GPU, "vulkan0");
 }
 
-// clearAllGpuBackends() grew a cudaBackends.clear() for QVAC-23763. Nothing
-// pinned it, so a CUDA device could be resurrected out of a cleared bucket by
-// an override. Contrived host - CUDA beside an Adreno - but the mechanism is
-// the point, and it is the arm a per-candidate filter is most likely to miss.
+// excludeAll() also marks CUDA candidates excluded, so an override must not
+// resurrect a CUDA device after a guard ruled it out. Contrived host, CUDA
+// beside an Adreno, but the mechanism is the point.
 TEST_F(
     BackendSelectionTest, OverrideCannotResurrectCudaClearedByFinetuneGuard) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
@@ -2259,8 +2256,8 @@ static std::vector<std::string> splitDevicesFor(
   return splitModeDeviceNames(bckI, selected, constraints);
 }
 
-// Every pre-CUDA host: one registry, so --device keeps being omitted and
-// qvac-fabric enumerates the GPUs itself exactly as before.
+// Every pre-CUDA host: one registry, so there is no duplicate to drop and the
+// list is empty.
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyOnSingleRegistry) {
   mockBackend.addDevice(
       createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
@@ -2392,9 +2389,9 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesFollowsTheChosenBackend) {
 
 // An iGPU must NOT join a split that already has a discrete GPU.
 // llama_prepare_model_devices() drops iGPUs whenever it found any discrete GPU,
-// but only on the path where --device is absent; with --device set it takes
-// every name verbatim. Keeping the iGPU here would put layers on an Intel UHD
-// beside a 3090, which qvac-fabric would never have done on its own.
+// but only when no device list is given; an explicit list is taken verbatim.
+// Keeping the iGPU here would put layers on an Intel UHD beside a 3090, which
+// qvac-fabric would never have done on its own.
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesDropsIgpuBesideDiscreteGpu) {
   MockDevice igpu(
       "intel arc", "Vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan");
@@ -2439,8 +2436,7 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesScopesToADeliberateIgpu) {
       (std::vector<std::string>{"vulkan1"}));
 }
 
-// A name that matches nothing degrades to the old omit-everything behaviour
-// rather than to an empty device list, which would strand the load on no GPU.
+// A name that matches nothing yields an empty list.
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWhenSelectionUnmatched) {
   mockBackend.addDevice(
       createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG));
@@ -2455,7 +2451,7 @@ constexpr const char* BUS_B = "0000:02:00.0";
 constexpr const char* BUS_C = "0000:03:00.0";
 
 // One physical card publishing the same bus id under both backends is named
-// once, which is the whole reason --device is passed in split mode.
+// once, which is the whole reason this list exists.
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupesOneCardAcrossRegistry) {
   mockBackend.addDevice(withDeviceId(
       createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
@@ -2500,7 +2496,7 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupesAcrossMixedVendorHost) {
 }
 
 // A `backend` override selecting Vulkan must keep the Vulkan entry for the
-// shared card, not the CUDA one. Omitting --device could not express this:
+// shared card, not the CUDA one. An unfiltered list could not express this:
 // qvac-fabric's own dedupe keeps whichever backend registered first, and CUDA
 // loads before Vulkan.
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupeFollowsChosenBackend) {

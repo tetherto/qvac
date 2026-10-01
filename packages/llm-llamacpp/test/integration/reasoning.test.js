@@ -62,7 +62,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
   // chooseBackend() reports `path=override` only when a `backend` list actually
   // bound; a list matching no device falls through to the default cascade with a
   // warning, and the override block is skipped outright for a CPU load. Without
-  // this the pin is advisory, and the four Qwen3.5 tests that depend on it would
+  // this the pin is advisory, and the two Qwen3.5 tests that call this would
   // fall back to CUDA and report their old flakiness as a genuine failure.
   //
   // QVAC-23763: matches the structured line rather than chooseBackend's prose,

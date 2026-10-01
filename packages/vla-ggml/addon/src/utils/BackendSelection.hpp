@@ -63,11 +63,11 @@ void loadBackendsOnce(const std::string& backendsDir);
 //                                Apple)
 //
 // Among accepted devices the order is CUDA, then HIP/ROCm, then anything else.
-// QVAC-23763 puts CUDA ahead of HIP deliberately: the HIP preference below
-// assumes a single AMD-GPU target and its own comment flags the mixed-vendor
-// host as where it picks the wrong device. CUDA only appears on a discrete
-// NVIDIA GPU, so preferring it resolves that case. AMD-only hosts still get
-// HIP, since no CUDA device is present.
+// QVAC-23763 puts CUDA ahead of HIP deliberately: the HIP preference in
+// BackendSelection.cpp assumes a single AMD-GPU target, and its ASSUMPTION
+// comment flags the mixed-vendor host as where it picks the wrong device. CUDA
+// only appears on NVIDIA hardware, so preferring it resolves that case.
+// AMD-only hosts still get HIP, since no CUDA device is present.
 //
 // `backendOverride`, when non-empty, restricts the choice to those families in
 // priority order, then falls through to the normal order if none match. The

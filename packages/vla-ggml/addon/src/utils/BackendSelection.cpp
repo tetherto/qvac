@@ -27,7 +27,8 @@ constexpr std::array<std::string_view, 7> KNOWN_GPU_BACKEND_FAMILIES = {
 
 // Trimmed from each family. \r matters: a value from a CRLF config file would
 // otherwise throw "unknown backend 'cuda\r'", which renders identically to the
-// accepted spelling. index.js trims the whole value but not each entry.
+// accepted spelling. normaliseBackendSelector in AddonJs.hpp trims the whole
+// value but not each entry.
 constexpr std::string_view K_BACKEND_TRIM = " \t\r\n\v\f";
 
 } // namespace
@@ -351,9 +352,9 @@ ggml_backend_dev_t pickBestGpuDevice(
     return adrenoOpenClDev;
   }
 
-  // CUDA ahead of HIP: see the header. A CUDA device only ever appears on a
-  // discrete NVIDIA GPU, which is the mixed-vendor case the HIP comment above
-  // flags as picking the wrong device. AMD-only hosts are unaffected.
+  // CUDA ahead of HIP: see the header. A CUDA device only appears on NVIDIA
+  // hardware, which covers the mixed-vendor case the HIP comment above flags as
+  // picking the wrong device. AMD-only hosts are unaffected.
   if (cudaDev != nullptr) {
     QLOG_IF(
         Priority::INFO,

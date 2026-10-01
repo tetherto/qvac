@@ -75,7 +75,7 @@ This matters most for `tensor`. qvac-fabric's tensor path does no filtering of i
 
 **`'tensor'` is not selectable through the SDK.** `@qvac/inference`'s `llamacppCompletionConfigSchema` does not yet include `'tensor'`, so an SDK `loadModel` call with `'tensor'` fails Zod validation before it reaches the addon. For now the mode is reachable only through direct addon `loadModel`. Widening the SDK schema is separate SDK-pod work.
 
-qvac-fabric documents `LLAMA_SPLIT_MODE_TENSOR` as **EXPERIMENTAL** and expects good performance primarily on multi-GPU CUDA. No backend qvac-fabric currently builds provides a tuned all-reduce, so they use the meta backend's generic fallback reduction. It is correct, but do not assume it is faster than `layer` without measuring.
+qvac-fabric documents `LLAMA_SPLIT_MODE_TENSOR` as **EXPERIMENTAL** and expects good performance primarily on multi-GPU CUDA. CUDA is the only backend here with its own all-reduce. The shipped CUDA build has no NCCL, so it uses fabric's internal CUDA all-reduce for two GPUs and the meta backend's generic reduction for any other count. Every other backend always takes the generic reduction. It is correct, but do not assume it is faster than `layer` without measuring.
 
 The second column is the backend allowlist: whether this package will run on a device from that family at all, independent of whether qvac-fabric builds it today.
 
@@ -84,14 +84,14 @@ The second column is the backend allowlist: whether this package will run on a d
 | Vulkan  | Yes | Meta device, generic all-reduce |
 | Metal / MTL | Yes | Meta device, generic all-reduce |
 | OpenCL  | Yes, the Adreno path | Meta device, generic all-reduce |
-| CUDA    | Yes | Backend-specific all-reduce, the tuned path upstream vouches for |
+| CUDA    | Yes | Backend-specific all-reduce for two GPUs, generic otherwise. No NCCL in the shipped build |
 | RPC     | Yes, but qvac-fabric does not build it yet | Meta device, generic all-reduce |
 | HIP / ROCm | **No**, rejected by the allowlist | n/a |
 | SYCL    | **No**, rejected by the allowlist | n/a |
 | MUSA    | **No**, rejected by the allowlist | n/a |
 | anything unrecognised | **No**, rejected by the allowlist | n/a |
 
-"Generic all-reduce" means the meta backend reduces with ordinary ggml graph ops rather than a backend-native collective. Every backend currently reachable here takes that path.
+"Generic all-reduce" means the meta backend reduces with ordinary ggml graph ops rather than a backend-native collective. Every backend reachable here takes that path except CUDA with two GPUs.
 
 CUDA is built by qvac-fabric on supported Linux and Windows targets. RPC is admitted ahead of a qvac-fabric build that ships it, so it simply does not appear in the registry today. HIP/ROCm is rejected deliberately: `vla-ggml` prefers ROCm on purpose for its own reasons, but this package has never been validated on it, and qvac-fabric can now ship it.
 
@@ -139,8 +139,8 @@ Selects which GPU to use. The behavior depends on the split mode:
 | Value | Behavior in `'none'` mode |
 |-------|----------|
 | integer (e.g. `'0'`, `'1'`) | Selects a GPU by its index in the raw ggml device registry, matching qvac-fabric's own indexing. The whole value must be an integer, so `'1abc'` is rejected. If that device is not in the backend allowlist, the load falls back to CPU rather than silently sliding onto a different GPU. |
-| `'cuda:0'`, `'vulkan:1'`, etc. | Selects the nth device of a backend family. Resolution scans devices, so it is independent of backend load order. Family names are the same set `backend` accepts, and `hip` is canonicalised to `rocm`. |
-| `'0000:65:00.0'` | Selects by PCI bus id, as ggml reports it in `props.device_id`. The domain is optional, so `'65:00.0'` also works. Only meaningful on backends that publish a bus id. |
+| `'cuda:0'`, `'vulkan:1'`, etc. | Selects the nth device of a backend family. Resolution scans devices, so it is independent of backend load order. Family names are the GPU families `backend` accepts, not `auto`, and `hip` is canonicalised to `rocm`. |
+| `'0000:65:00.0'` | Selects by physical PCI bus id. The domain is optional and may have 4 or 8 digits, so `'65:00.0'` and nvidia-smi's `'00000000:65:00.0'` also work. The id matches every backend registration of that card, and every virtual CUDA device on it, so `backend` picks among them. A virtual `-v<N>` id is rejected. Only meaningful on backends that publish a bus id. |
 | `'integrated'` | Filters to integrated GPUs only during backend selection. Falls back to CPU if none is eligible. |
 | `'dedicated'`  | Filters to dedicated GPUs only during backend selection. Falls back to CPU if none is eligible. |
 
@@ -302,7 +302,7 @@ The path taken depends on the split mode, and the two are genuinely different co
 
 In both cases, only devices whose backend family is in the allowlist are considered. If nothing survives, a load without `rpc-servers` falls back to CPU with `split-mode` reset to `'none'` and `tensor-split` erased; a load that requested RPC fails instead. A warning names rejected device and registry identities when applicable.
 
-- **`devices` set** (any split-mode): the addon resolves RPC aliases, validates the named devices against the eligible set, and passes that selection as `--device`. This is the most predictable way to constrain which RPC devices take part; under `'none'`, only one name is allowed.
+- **`devices` set** (any split-mode): the addon resolves RPC aliases, validates the named devices against the eligible set, and pins the resolved handles through `params.devices`. This is the most predictable way to constrain which RPC devices take part; under `'none'`, only one name is allowed. Combining it with `backend` needs `backend-required`, and every named local device must then match the required family.
 
 ### Why the device list is pinned in split modes
 
