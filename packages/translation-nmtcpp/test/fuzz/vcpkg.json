@@ -1,0 +1,37 @@
+{
+  "name": "translation-nmtcpp-fuzz",
+  "features": {
+    "fuzz": {
+      "description": "Google FuzzTest stack, isolated from NMT production Abseil",
+      "dependencies": [
+        {
+          "name": "abseil",
+          "version>=": "20260526.0",
+          "features": [
+            "asan"
+          ]
+        },
+        "antlr4",
+        {
+          "name": "fuzztest",
+          "version>=": "2026-06-29",
+          "features": [
+            "asan"
+          ]
+        },
+        "gtest",
+        {
+          "name": "qvac-lint-cpp",
+          "version>=": "1.4.4#3"
+        },
+        {
+          "name": "re2",
+          "version>=": "2025-11-05",
+          "features": [
+            "asan"
+          ]
+        }
+      ]
+    }
+  }
+}

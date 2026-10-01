@@ -19,6 +19,7 @@ set(TEST_SOURCES
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_state_backend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_loader.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_loader_parse.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_graph_decoder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_graph_encoder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_beam_search.cpp
