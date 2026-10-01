@@ -1569,7 +1569,8 @@ int main() {
                                      uint32_t,
                                      const common_fit_extra_model*,
                                      bool,
-                                     ggml_log_level) {
+                                     ggml_log_level,
+                                     bool) {
                                    ++completionFitCalls;
                                    return COMMON_PARAMS_FIT_STATUS_SUCCESS;
                                  })
@@ -1610,7 +1611,8 @@ int main() {
                                     uint32_t,
                                     const common_fit_extra_model*,
                                     bool,
-                                    ggml_log_level) {
+                                    ggml_log_level,
+                                    bool) {
                                   ++embeddingFitCalls;
                                   return COMMON_PARAMS_FIT_STATUS_SUCCESS;
                                 })
@@ -1644,7 +1646,8 @@ int main() {
                   uint32_t,
                   const common_fit_extra_model*,
                   bool,
-                  ggml_log_level) {
+                  ggml_log_level,
+                  bool) {
                 ++unsupportedFitCalls;
                 return COMMON_PARAMS_FIT_STATUS_SUCCESS;
               });
