@@ -84,7 +84,11 @@ export const transcribeStatsSchema = z.object({
   encoderOnCoreml: z
     .number()
     .optional()
-    .describe('Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.')
+    .describe('Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.'),
+  encoderUsedCoreml: z
+    .number()
+    .optional()
+    .describe('Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.')
 })
 
 /**
@@ -139,10 +143,10 @@ export const vadStateEventSchema = z.object({
   speaking: z.boolean(),
   probability: z.number(),
   source: z
-    .enum(['silero', 'energy'])
+    .enum(['silero', 'energy', 'sortformer'])
     .optional()
     .describe(
-      "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events."
+      "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity."
     )
 })
 

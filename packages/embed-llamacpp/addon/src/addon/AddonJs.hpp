@@ -337,7 +337,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         margins.data(),
         minCtx,
         false,
-        GGML_LOG_LEVEL_INFO);
+        GGML_LOG_LEVEL_INFO,
+        // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
+        // same expert cache in the projection as in the load.
+        loadParams.moe_cache_auto_explicit);
   } catch (const std::exception&) {
     // `common_fit_params` answers its own failures with a status, so a throw
     // escaping it came from the setup around the probe.

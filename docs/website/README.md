@@ -135,6 +135,14 @@ line cut: add `content/docs/ecosystem/inventory/<pkg>/v<major>.<minor>/index.md`
 with the README as released, add the row to that package's index, add the
 manifest entry. The `:version` rules then already cover the new folder.
 
+The Kotlin SDK is documented but not published, because the package is not
+released yet. Its page waits under `content/_unpublished/sdk/kotlin-sdk.mdx`,
+and the SDK line's own pages name only the JS/TS and Python clients. Publishing
+it is moving that page to `content/docs/sdk/(v0.20)/`, listing it in that
+folder's `meta.json`, prefixing its internal links with the line scope, and
+restoring the third client wherever the other two are named — the SDK line's
+index and the Ecosystem overview both enumerate them.
+
 ## CDN configuration (Sevalla)
 
 Next.js static export emits per-segment React Server Component prefetch

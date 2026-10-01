@@ -108,6 +108,52 @@ One such example queries the model registry:
 ```
 </WrapCode>
 
+### RPC servers
+
+Serving requires `@qvac/ggml-rpc-server` and a custom worker. In your examples workspace, install the JavaScript SDK and native server package. Replace `<version>` with the version of your installed `tetherto-qvac-sdk` package so the client and worker use the same contract:
+
+```bash
+npm install "@qvac/sdk@<version>" @qvac/ggml-rpc-server
+```
+
+Create `qvac.config.json` with the server provider:
+
+```json
+{
+  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider"
+}
+```
+
+Build the worker:
+
+```bash
+npx qvac bundle sdk
+```
+
+Python's `Client()` does not automatically select the generated `qvac/worker.entry.mjs`. Set `QVAC_WORKER_PATH` when running the serving example, or pass that path as `worker_path=` to `Client()`:
+
+```bash
+QVAC_WORKER_PATH=./qvac/worker.entry.mjs python rpc_servers.py serve <private-ipv4> <topic>
+```
+
+Replace `<private-ipv4>` and `<topic>` with your server's private IPv4 address and shared discovery topic. Discovery uses the default worker and does not require the server provider:
+
+```bash
+python rpc_servers.py discover <topic>
+```
+
+Save the following script as `rpc_servers.py`. It serves an RPC endpoint or discovers endpoints on a shared topic and prints their device aliases and server RDMA availability:
+
+<Tabs>
+<Tab value="python" label="Python" default>
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rpc_servers.py title="rpc_servers.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 ## Configuration
 
 Pass the config to `Client()`:
@@ -149,6 +195,7 @@ Everything you normally need is imported flat from `tetherto.qvac_sdk`; model co
 | Ergonomic wrappers | `load_model`, `unload_model`, `completion`, `translate`, `cancel`, `delete_cache`, `invoke_plugin`, `invoke_plugin_stream`, `model_registry_list` / `_search` / `_get_model` |
 | Result types | `CompletionRun` (`.events`, `.final`), `CompletionFinal`, `ToolCall`, `TranslateRun` |
 | Generated methods | `embed`, `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, … (each takes a typed request model) |
+| RPC server methods | `start_rpc_server`, `stop_rpc_server`, `discover_rpc_servers` from `tetherto.qvac_sdk.methods`, with typed requests from `tetherto.qvac_sdk.schemas`; discovery returns a response with `.servers` |
 | Models & enums | `LoadModelRequest`, `ModelType`, … (also in `tetherto.qvac_sdk.schemas`) |
 | Errors | `QvacError`, `RPCError`, `InferenceCancelledError`, `ContextOverflowError`, … |
 | Logging / VLA | `logging_stream`, `subscribe_server_logs`, `SDK_LOG_ID`; `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state` |

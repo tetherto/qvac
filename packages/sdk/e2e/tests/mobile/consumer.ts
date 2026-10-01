@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { Platform } from 'react-native'
 import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
 import type { TestDefinition } from '@qvac/test-suite'
@@ -619,6 +620,9 @@ export const executor = createExecutor({
       /^parakeet-indic-conformer-/,
       'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
     ),
+    ...(Platform.OS === 'android'
+      ? [new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML requires iOS')]
+      : []),
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
@@ -642,7 +646,8 @@ export const executor = createExecutor({
           skipTests(
             ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
             'Parakeet streaming EOU/iterator recovery is flaky on Android'
-          )
+          ),
+          skipTests(['tts-audio8-coreml'], 'Core ML runs on macOS and iOS only')
         ]
       : []),
     ...(Platform.OS === 'ios'
@@ -704,6 +709,7 @@ export const executor = createExecutor({
     new MobileDownloadResilienceExecutor(resolveBakedMqttHost()),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(Platform.OS),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),

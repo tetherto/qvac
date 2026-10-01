@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-01` and the `ggml-speech` floor to
+  `2026-09-30#1`. MiniMax-Music3 generates faster on CUDA and Vulkan: a
+  2-minute f16 song on an RTX 5090 takes about 74 s on CUDA (was 102 s) and
+  84 s on Vulkan (was 105 s). CUDA decoding now keeps f32 activations, matching
+  the CPU on 99.7% of tokens.
 - ACE-Step `config.inferenceSteps` must be an integer from 0 to 1000 and
   `config.shift` must be non-negative, the same rules as the new per-run
   values; out-of-range values used to load. The engine already read 0 and
@@ -47,6 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `understand()` no longer repeats the previous run's `lyricsScore` in its
   stats after a `generateLrc` generation.
+- Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
+  reports more free device memory than total once the process has allocated
+  past the GPU's recommended working set, which made a model that does not fit
+  report `fits`. Generation is unchanged.
 
 ## [0.5.1] - 2026-09-29
 

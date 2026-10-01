@@ -86,7 +86,8 @@ statistics from the final frame (`undefined` if the run reported none).
   `enhancerBackendDevice`, `enhancerBackendId`) are reported by batch
   synthesis (`stream: false`) only. The chunked paths — `stream: true` (the
   default), `sentenceStream: true`, and `textToSpeechStream()` — run one
-  native job per sentence and aggregate only the timing and sample counts.
+  native job per sentence and aggregate only the timing and sample counts,
+  plus Audio8's two Core ML fields, which keep the last sentence's value.
   MOSS is the exception for `stream: true`: it runs the whole text as one
   native job, so it reports them there too.
 </Callout>
@@ -104,6 +105,8 @@ statistics from the final frame (`undefined` if the run reported none).
 | `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. |
 | `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU. |
 | `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. |
+| `codecSidecarLoaded` | Audio8 on macOS/iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired. |
+| `codecOnCoreml` | Audio8: `1` when the synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` names. |
 
 ```ts
 const stats = await result.stats;
@@ -418,6 +421,16 @@ and ignores all three, and `maxFrames` caps generation in codec frames
 on macOS/iOS, Vulkan on desktop Linux/Windows, and OpenCL on Android/Adreno —
 elsewhere it falls back to CPU and sets `stats.gpuUnsupported` in the
 response.
+
+On macOS and iOS, loading the codec decoder from its registry constant also
+downloads its Apple Core ML bundle (`audio8-codec-decoder.mlmodelc`, about
+150 MB, the same bundle for every decoder tier) and places it beside the
+decoder GGUF.
+The codec's synthesis stack — the upsampling stages and the DAC decoder — then
+runs on Core ML, while the language model stays on `useGPU`'s backend. Other
+platforms download only the GGUF. If the bundle is unavailable at load, or a
+synthesis fails on it, Audio8 runs the codec on ggml instead; the
+`codecSidecarLoaded` and `codecOnCoreml` stats report which path ran.
 
 <Callout type="warn">
   Audio8 has no `emotion`, `pace`, or description fields (at load or per

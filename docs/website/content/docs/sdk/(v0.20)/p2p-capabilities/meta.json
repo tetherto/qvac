@@ -1,4 +1,4 @@
 {
   "title": "P2P capabilities",
-  "pages": ["blind-relays"]
+  "pages": ["blind-relays", "rpc-servers"]
 }

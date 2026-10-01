@@ -1,3 +1,4 @@
+import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
@@ -350,6 +351,7 @@ export const tests = [
   ...finetuneTests,
 
   // Lifecycle tests (suspend/resume)
+  ...rpcServerTests,
   ...lifecycleTests,
 
   // Registry-download config tests (retries + stream timeout)

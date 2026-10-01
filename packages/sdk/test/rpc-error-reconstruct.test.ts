@@ -7,6 +7,8 @@ import { reconstructError, RPCError } from '@/client/rpc/rpc-error'
 // Constructing the originals from @qvac/inference's classes exercises that real
 // cross-process path.
 import {
+  RpcServerOperationError,
+  InferenceCancelledError as EngineCancelledError,
   createErrorResponse,
   ContextOverflowError as InferenceContextOverflowError,
   RequestIdConflictError as InferenceRequestIdConflictError,
@@ -16,11 +18,22 @@ import {
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
+  InferenceCancelledError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   TranslationFailedError
 } from '@/utils/errors-server'
+
+test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
+  const envelope = createErrorResponse(new EngineCancelledError('rpc-request', { text: 'partial' }))
+  const result = reconstructError(envelope)
+  t.ok(result instanceof InferenceCancelledError)
+  const error = result as InferenceCancelledError
+  t.is(error.requestId, 'rpc-request')
+  t.alike(error.partial, { text: 'partial' })
+  t.is(error.code, 52419)
+})
 
 test('reconstructError: RequestRejectedByPolicyError round-trips via name + typedFields', (t) => {
   const original = new InferenceRequestRejectedByPolicyError(
@@ -228,4 +241,20 @@ test('reconstructError: TranslationFailedError round-trips', (t) => {
     reconstructed.message.includes('could not detect source language'),
     'message survives the envelope'
   )
+})
+
+test('reconstructError: native RPC errors preserve details and cause', (t) => {
+  const original = new RpcServerOperationError(
+    'stopRpcServer',
+    'native stop failed',
+    new Error('native cause')
+  )
+  const result = reconstructError(JSON.parse(JSON.stringify(createErrorResponse(original))))
+  t.ok(result instanceof RpcServerOperationError)
+  const rpcError = result as RpcServerOperationError
+  t.is(rpcError.operation, 'stopRpcServer')
+  t.is(rpcError.details, 'native stop failed')
+  t.is(rpcError.code, 52423)
+  t.ok(rpcError.cause)
+  t.ok(rpcError.cause?.message.includes('native cause'))
 })

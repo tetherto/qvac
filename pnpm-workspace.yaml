@@ -1,5 +1,10 @@
 packages:
   - "packages/*"
+  # sdk-kotlin is a Gradle package; its package.json only declares the Android
+  # BareKit npm deps, installed locally by Gradle. Keeping it out of the pnpm
+  # workspace avoids an importer the root lockfile has no entry for, which would
+  # fail every --frozen-lockfile install.
+  - "!packages/sdk-kotlin"
   - "packages/registry-server/client"
   - "packages/registry-server/shared"
   - "plugins/*"
@@ -7,6 +12,9 @@ packages:
 # Plain semver everywhere, no workspace:. Falls back to registry when local
 # version doesn't satisfy the range.
 linkWorkspacePackages: true
+
+# Keep root-only repository tooling from supplying peers to product packages.
+resolvePeersFromWorkspaceRoot: false
 
 # Large binary tarballs (e.g. react-native-bare-kit) need more than pnpm's
 # default 60s fetch timeout.
@@ -43,3 +51,5 @@ minimumReleaseAgeExclude:
   - '@qvac/fabric-ios@0.18.0'
   - '@qvac/fabric-android-arm64@0.18.1'
   - '@qvac/fabric-ios@0.18.1'
+  - '@qvac/fabric-android-arm64@0.19.0'
+  - '@qvac/fabric-ios@0.19.0'

@@ -11,7 +11,7 @@ Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://gith
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
-`transcribe()` returns the full transcription as a single `string`. If you need partial results as they become available, use `transcribeStream()` to receive text chunks in real-time. Both whisper and parakeet expose duplex `transcribeStream()` sessions; see "Streaming with `transcribeStream()`" below.
+`transcribe()` returns the full transcription as a single `string`. Its returned promise also exposes `stats`: await it after transcription to read terminal engine statistics. For Parakeet offline ASR, `encoderOnCoreml` reports whether a Core ML sidecar loaded, while `encoderUsedCoreml` reports whether this run encoded on Core ML. The stats promise resolves to `undefined` when the engine does not report statistics. If you need partial results as they become available, use `transcribeStream()` to receive text chunks in real-time. Both whisper and parakeet expose duplex `transcribeStream()` sessions; see "Streaming with `transcribeStream()`" below.
 
 ## Functions
 
@@ -32,7 +32,7 @@ You should load two models:
 
 ### Parakeet
 
-As of `@qvac/transcription-parakeet` 0.6.0, Parakeet ships as a **single GGUF** per variant — the addon auto-detects TDT / CTC / Unified / Sortformer / EOU from `parakeet.model.type` GGUF metadata. There is no `modelConfig.modelType` discriminator, no per-variant `parakeet*Src` artifact fields, and no `ParakeetArtifactsRequiredError`. Just supply the GGUF via the top-level `modelSrc`:
+Parakeet uses a GGUF checkpoint per variant, and the addon detects TDT / CTC / Unified / Sortformer / EOU from its GGUF metadata. Supply the GGUF via the top-level `modelSrc`:
 
 ```ts
 await loadModel({
@@ -51,7 +51,7 @@ await loadModel({
 });
 
 await loadModel({
-  modelSrc: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,  // 4-speaker diarization
+  modelSrc: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,  // 4-speaker diarization
   modelType: "parakeet-transcription",
 });
 
@@ -61,11 +61,13 @@ await loadModel({
 });
 
 await loadModel({
-  modelSrc: PARAKEET_INDIC_CONFORMER_CTC_Q8_0,  // Indic languages
-  modelType: "parakeet",
+  modelSrc: PARAKEET_INDIC_CONFORMER_600M_Q8_0,  // Indic languages
+  modelType: "parakeet-transcription",
   modelConfig: { language: "hi" },              // required; e.g. "hi", "ta"
 });
 ```
+
+On macOS and iOS, loading a supported Parakeet registry constant also downloads its complete Core ML encoder bundle and stages the `.mlmodelc` directory beside the GGUF. This applies to TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming Sortformer v2.1. The sidecar weights increase the first download and disk use. Other platforms download the GGUF alone; if a sidecar is unavailable or cannot load, the GGUF encoder is used.
 
 For model artifacts available as constants, see [SDK — Models](/sdk#models).
 
@@ -229,6 +231,28 @@ The following script shows an example of English transcription using the Parakee
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-unified-filesystem.ts title="parakeet-unified-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet Unified with Core ML
+
+The following macOS script loads a regenerated Unified GGUF from disk, downloads its five Core ML encoder files through the registry, and transcribes a WAV file:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-unified-coreml.js title="parakeet-unified-coreml.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-unified-coreml.ts title="parakeet-unified-coreml.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
