@@ -1,13 +1,13 @@
 {
   "name": "@qvac/model-fit",
-  "version": "0.13.0",
+  "version": "0.14.1",
   "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
   "addon": true,
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js index.d.ts process.js process.d.ts process-internal.js process-internal.d.ts process-runner.js process-runner.d.ts",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js index.d.ts process.js process.d.ts process-internal.js process-internal.d.ts process-runner.js process-runner.d.ts) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "lint": "npm run lint:js && npm run lint:ts",
@@ -59,6 +59,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/model-fit#readme",
   "devDependencies": {
+    "@qvac/fabric-android-arm64": "^0.19.0",
+    "@qvac/fabric-ios": "^0.19.0",
     "@types/node": "^24.2.1",
     "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
@@ -75,7 +77,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.17.0",
+    "@qvac/fabric": "^0.19.0",
     "bare-fs": "^4.5.1",
     "bare-https": "^3.0.0",
     "bare-path": "^3.0.0",

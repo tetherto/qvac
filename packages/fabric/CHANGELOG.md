@@ -1,6 +1,40 @@
 # Changelog
 
-## [0.18.0] - Unreleased
+## [0.19.0] - 2026-09-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.4.0` -> `10549.5.0`:
+  - Fixed CUDA fusion when cached weights overlap its inputs.
+  - Fixed Metal matmul GLU fusion when its output overlaps its inputs.
+  - Automatic MoE expert caching is now on by default only for CUDA. Other
+    backends except OpenCL opt in with `moe-cache-mib: auto`, so MoE fit
+    projections and loads on Metal and Vulkan no longer include an expert
+    cache by default.
+  - `common_fit_params` gains a defaulted `moe_cache_auto_explicit`
+    parameter. Direct calls still compile; code that takes the function's
+    address as a fixed-signature callable must adapt.
+  - Idle RPC RDMA and tensor-dispatch threads now sleep instead of spinning.
+  - Added GLM-5.3-Flash support and tensor-parallel execution for GLM-5
+    Next, which now also keeps its k-pool history across sequence edits and
+    rejects invalid metadata at load.
+
+## [0.18.1] - 2026-09-29
+
+### Added
+
+- Linux platform packages now ship the RPC backend with RDMA auto-negotiation
+  and TCP fallback. Building requires `libibverbs-dev`, and RDMA use requires
+  the provider package for the host's hardware.
+
+### Changed
+
+- The Linux RPC backend now links `libibverbs.so.1` (`libibverbs1` on
+  Debian/Ubuntu), so hosts that use RPC must provide it even when connections
+  fall back to TCP. Without it the RPC backend is skipped at load time and
+  consumers report no RPC backend. Other backends are unaffected.
+
+## [0.18.0] - 2026-09-28
 
 ### Breaking
 

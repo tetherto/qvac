@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/test-suite'
 import {
   profiler,
@@ -66,6 +67,7 @@ import { BatchCompletionExecutor } from '../shared/executors/batch-completion-ex
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
+import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { TranslationBergamotCacheExecutor } from '../shared/executors/translation-bergamot-cache-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
@@ -706,6 +708,7 @@ export const executor = createExecutor({
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
+    new DeferredToolsExecutor(resources),
 
     // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
     new TranslationBergamotCacheExecutor(),
@@ -735,6 +738,7 @@ export const executor = createExecutor({
     }),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),

@@ -155,8 +155,9 @@ endmacro()
 #
 # With neither, configure fails naming the package to install. Cross-built
 # targets (android, ios) are never selected by os/cpu filters, so an addon that
-# builds them needs the platform package as an exact-pinned devDependency: the
-# app supplies the runtime at run time through its own direct dependency.
+# builds them needs the platform package as a devDependency with the same range
+# as @qvac/fabric, so both resolve to the same release: the app supplies the
+# runtime at run time through its own direct dependency.
 # ---------------------------------------------------------------------------
 function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir out_prebuilds)
   resolve_node_module("@qvac/fabric" _meta_dir WORKING_DIRECTORY "${base_dir}")
@@ -192,7 +193,7 @@ function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir ou
   if(host MATCHES "^(android|ios)-")
     string(CONCAT _remedy
       "Cross-built targets are never selected by os/cpu filters; add "
-      "\"${_platform_package}\": \"${_meta_version}\" to devDependencies.")
+      "\"${_platform_package}\": \"^${_meta_version}\" to devDependencies.")
   else()
     string(CONCAT _remedy
       "It is an optional dependency of @qvac/fabric: reinstall without --omit=optional "

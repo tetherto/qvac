@@ -21,7 +21,7 @@ import {
   InvalidImageStrengthError,
   UnsupportedImageOutputError
 } from '@/serve/extensions/openai/schemas/images'
-import type { EphemeralFilesStore } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
+import type { EphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import type { QvacContext } from '@/serve/core/context'
 import { openaiState } from '@/serve/extensions/openai/state'
 

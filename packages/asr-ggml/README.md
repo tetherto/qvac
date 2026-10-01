@@ -7,7 +7,7 @@ ggml-based ASR engines behind a single class, `ASRGgml`:
 | Engine | Native library | Good for |
 | --- | --- | --- |
 | **Whisper** | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Multilingual offline transcription, translation, Silero-VAD-segmented live capture |
-| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer) | Low-latency streaming ASR, native end-of-turn detection, 4-speaker diarization |
+| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer / Nemotron) | Low-latency streaming ASR, native end-of-turn detection, up to 8-speaker diarization |
 
 This package replaces `@qvac/transcription-whispercpp` and
 `@qvac/transcription-parakeet`. See [CHANGELOG.md](CHANGELOG.md) for the
@@ -80,6 +80,7 @@ GGUF metadata** — there is no `modelType` to pass.
 | **Indic Conformer CTC** (`indic-conformer-ctc`) | Indic aggregate | argmax CTC + language mask | ~701 MiB | Multilingual Indic; set `parakeetConfig.language` (e.g. `"hi"`) |
 | **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Diarization head (sliding history) | ~141 MiB | 4-speaker. Default for **offline** diarization |
 | **Sortformer v2.1 + AOSC** (`diar_streaming_sortformer_4spk-v2.1`) | n/a | Diarization head + speaker cache | ~141 MiB | 4-speaker. Default for **streaming** diarization; AOSC anchors speaker slots across silence, auto-detected from GGUF metadata |
+| **Nemotron 3 Diarization** (`Nemotron-3-Diarization`) | n/a | Diarization head + speaker cache | ~102 MiB | Up to 8 speakers, 10 ms probabilities, offline and AOSC streaming; official q8_0 GGUF |
 
 On macOS and iOS, TDT, Unified, EOU, and Sortformer v2.1 can also run their
 encoder on an optional Core ML sidecar; CTC and Indic Conformer CTC cannot
@@ -107,6 +108,7 @@ language coverage, translation, and diarization.
 | Indic-language ASR (Hindi and other Indic ids) | `indic-conformer-ctc` | Pass `parakeetConfig.language` (e.g. `"hi"`). Same Parakeet engine; GGUF lives under `indic_conformer/` in the registry. |
 | Offline 4-speaker diarization | `sortformer-4spk-v1` | Default offline diarization head. |
 | Streaming 4-speaker diarization | `diar_streaming_sortformer_4spk-v2.1` | AOSC keeps speaker slots across silence; prefer over v1 for live streams. |
+| Offline or streaming diarization with up to 8 speakers | `Nemotron-3-Diarization.q8_0.gguf` | Use the official GGUF with the Parakeet engine; the model type is detected automatically. |
 | Broadest language set + translate-to-English | `ggml-large-v3-turbo.bin` (or `ggml-small.bin` on edge) | Whisper: ~99 languages, translation, Silero-VAD live capture. Turbo is the accuracy/speed sweet spot; use `tiny`/`base` only when size dominates. |
 | Live capture with VAD segmentation (Whisper path) | Whisper ASR model + `ggml-silero-v5.1.2.bin` | Silero VAD is required for Whisper `runStreaming()`. |
 
@@ -447,7 +449,7 @@ const fit = ASRGgml.assessFit({
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
 fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
-fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer'
+fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer' | 'nemotron-diarization'
 fit.deviceName
 fit.deviceBytes
 fit.weightsBytes
@@ -564,16 +566,17 @@ key is documented inline there, and any key outside it throws
 | Output | `captionEnabled`, `timestampsEnabled` |
 | Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on monolingual CTC |
 | Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, `streamingEnergyVadHangoverMs`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
-| Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
-| Diarization (Sortformer, offline and streaming) | `diarizationThreshold` (0.641), `diarizationMinSegmentMs` (510) |
+| Streaming diarization | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
+| Diarization, offline and streaming | `diarizationThreshold`, `diarizationMinSegmentMs` (defaults: Sortformer 0.641 / 510 ms; Nemotron 3 0.5 / 200 ms) |
 | Engine | `prewarm`, `prewarmAudioSeconds`, `longFormWindowFrames`, `longFormContextFrames` |
 | Backends | `backendsDir`, `openclCacheDir` |
 
 The `streamingSpkCache*` / `streamingFifoLen` /
-`streamingChunk{Left,Right}ContextMs` defaults are the NeMo-port tuning
-parakeet-cpp ships — keep them unless you are A/B comparing AOSC against the
-v1 sliding-window path. There is no `modelType`: CTC / TDT / EOU / Sortformer,
-and Sortformer v1 vs v2.1+AOSC, are all detected from the GGUF metadata.
+`streamingChunk{Left,Right}ContextMs` defaults follow the loaded model's
+NeMo-port tuning. Omitted left context resolves to 80 ms for Sortformer and
+0 ms for Nemotron 3 Diarization; explicitly setting 80 ms retains one
+Nemotron encoder frame. There is no `modelType`: the ASR and diarization
+families, including Nemotron 3 Diarization, are detected from GGUF metadata.
 
 Parakeet `runStreaming(audio, opts)` options are per-call overrides of the same
 knobs without the `streaming` prefix: `chunkMs`, `historyMs`, `leftContextMs`,
@@ -588,7 +591,8 @@ the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron sessions
 (EOU models signal turns through `<EOU>` instead); the threshold is in dBFS
 (default -35) and the hangover is how long the audio must stay below it
 before the state returns to silence (default 200 ms).
-`streamingSpeakerVad` / `emitSpeakerVad` reports Sortformer speaker activity.
+`streamingSpeakerVad` / `emitSpeakerVad` reports speaker activity from either
+diarization model.
 
 `prewarm` runs one synthetic encoder pass while loading so the first request
 does not pay the GPU shader or kernel compile. `longFormWindowFrames` bounds
@@ -596,11 +600,9 @@ the offline encoder window (0 picks it from the model, a negative value
 always runs one pass), which keeps memory flat on long `run()` inputs;
 `cancel()` also takes effect between those windows.
 
-For streaming diarization, use the Sortformer v2.1 GGUF. Its metadata enables
-AOSC automatically; keep the speaker-cache defaults unless you are comparing
-against the v1 sliding-window path. Sortformer v1 remains the offline
-diarization default. The conversion scripts support both variants and read
-NVIDIA `.nemo` archives directly.
+For four-speaker streaming diarization, use the Sortformer v2.1 GGUF. For up to
+eight speakers, use Nemotron 3 Diarization. Both enable their speaker cache
+from GGUF metadata. Sortformer v1 remains the four-speaker offline default.
 
 ## Audio Input
 
@@ -699,7 +701,8 @@ This selector currently applies to the Whisper engine.
 encoder sidecar loaded; see
 [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)), and
 `modelType` (`'whisper'`, or the Parakeet family detected from the GGUF:
-`'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`, `'nemotron'`, `'sortformer'`). Whisper
+`'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`, `'nemotron'`, `'sortformer'`,
+`'nemotron-diarization'`). Whisper
 additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
@@ -803,6 +806,20 @@ package, but it does need `sentencepiece` to decode the tokenizer (without it
 transcripts come out as raw token IDs). Full requirements:
 `scripts/requirements.txt`.
 
+**Nemotron 3 Diarization**, using the official GGUF:
+
+```bash
+python -m pip install huggingface_hub
+python <path-to-qvac-fabric-speech.cpp>/engines/parakeet/scripts/download_nemotron_diarization.py --model-dir models
+npm run example:parakeet:nemotron-diarize -- --model models/Nemotron-3-Diarization.q8_0.gguf --audio examples/parakeet-samples/diarization-sample-16k.wav
+```
+
+The source repository also provides `convert_nemotron_diarization.py` if you
+need to convert the original `.nemo` checkpoint. The native addon detects
+`nemotron-diarization` from GGUF metadata and returns `speakerSegments` with
+speaker IDs from 0 through 7. The default threshold is 0.5 and the minimum
+segment duration is 200 ms; both can be overridden through `parakeetConfig`.
+
 ## Error Codes
 
 Thrown errors are `QvacErrorAddonASRGgml` instances (extending
@@ -883,6 +900,9 @@ specialized models, hardware, timing conditions, or toolchains:
 `test:integration:parakeet:gpu`, and `test:cpp`.
 The Parakeet GPU command is manual; ASR CI keeps
 `test:integration:gpu` Whisper-only.
+On CPU the standard suites run only brief inference, one short transcription
+per test. Multi-run, long-audio and paced streaming tests run on the GPU and
+are skipped when `NO_GPU=true`, as on the CPU-only CI rows.
 `test:integration:live-stream-simulation` runs only the long-lived Whisper
 stream test; the misspelled `test:integration:live-stream-simultion` remains
 as a temporary alias.
@@ -1011,6 +1031,7 @@ Parakeet:
 - [`examples/parakeet-unified-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-unified-transcribe.js) — batch transcription with `parakeet-unified-en-0.6b`
 - [`examples/parakeet-indic-conformer-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
 - [`examples/parakeet-diarized-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
+- [`examples/nemotron-diarization.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/nemotron-diarization.js) — Nemotron 3 offline 8-speaker diarization
 - [`examples/parakeet-live-mic.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic.js) — live mic via the duplex streaming session
 - [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
 - [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
@@ -1031,6 +1052,7 @@ npm run example:parakeet
 npm run example:parakeet:unified
 npm run example:parakeet:indic-conformer
 npm run example:parakeet:diarize
+npm run example:parakeet:nemotron-diarize
 npm run example:parakeet:mic
 npm run example:parakeet:mic-diarize
 npm run example:parakeet:mic-diarize-aosc

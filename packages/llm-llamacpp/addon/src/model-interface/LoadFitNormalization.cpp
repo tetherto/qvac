@@ -151,14 +151,28 @@ std::vector<std::string> registerRpcDevices(const std::string& servers) {
             K_LEGACY_PARSER_NAME.data()));
   }
 
+  // A missing registry does not mean the build lacks RPC: release builds load
+  // backend modules silently, so an RPC module whose shared-library
+  // dependencies cannot be resolved is skipped without any log line. On Linux
+  // the RDMA-enabled module needs libibverbs.so.1 even for TCP connections.
   ggml_backend_reg_t rpcReg = ggml_backend_reg_by_name("RPC");
   if (rpcReg == nullptr) {
+#if defined(__linux__) && !defined(__ANDROID__)
+    constexpr std::string_view rpcLoadHint =
+        " On Linux the RPC backend requires libibverbs.so.1 (libibverbs1 on "
+        "Debian/Ubuntu); install it if the RPC module is present but failed "
+        "to load.";
+#else
+    constexpr std::string_view rpcLoadHint = "";
+#endif
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         string_format(
-            "%s: 'rpc-servers' was given but this build has no RPC backend "
-            "(GGML_RPC was not enabled in qvac-fabric).\n",
-            K_LEGACY_PARSER_NAME.data()));
+            "%s: 'rpc-servers' was given but no RPC backend is registered. "
+            "Either qvac-fabric was built without GGML_RPC or the RPC backend "
+            "module failed to load.%s\n",
+            K_LEGACY_PARSER_NAME.data(),
+            rpcLoadHint.data()));
   }
 
   using AddServerFn = ggml_backend_reg_t (*)(const char* endpoint);
@@ -1091,6 +1105,20 @@ void validateMobileMultiDeviceConfig(
   }
 }
 
+void canonicalizeCpuTensorBufferOverrides(
+    std::vector<llama_model_tensor_buft_override>& overrides,
+    ggml_backend_buffer_type_t parsedCpuBuft) {
+  if (parsedCpuBuft == nullptr) {
+    return;
+  }
+  for (auto& override : overrides) {
+    if (override.buft == parsedCpuBuft) {
+      // The loader compares against its own ggml-base CPU buffer object.
+      override.buft = ggml_backend_cpu_buffer_type();
+    }
+  }
+}
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
@@ -1980,6 +2008,12 @@ NormalizedLoad normalizeLoadForFit(
   }
 
   if (!params.tensor_buft_overrides.empty()) {
+    if (auto* cpuDevice =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      canonicalizeCpuTensorBufferOverrides(
+          params.tensor_buft_overrides,
+          ggml_backend_dev_buffer_type(cpuDevice));
+    }
     params.tensor_buft_overrides.push_back({nullptr, nullptr});
   }
   params.tensor_buft_overrides.resize(

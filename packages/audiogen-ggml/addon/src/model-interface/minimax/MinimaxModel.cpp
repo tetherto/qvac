@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "audiogen-cpp/minimax/engine.h"
+#include "model-interface/BackendUtils.hpp"
 
 namespace qvac::audiogenggml::minimax {
 
@@ -103,16 +104,6 @@ MinimaxModel::Output convertPcm(const std::vector<float>& pcm) {
   return output;
 }
 
-std::string resolveBackendsDir(const std::string& root) {
-  if (root.empty())
-    return {};
-  std::filesystem::path path(root);
-#ifdef BACKENDS_SUBDIR
-  path = (path / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-  return path.string();
-}
-
 } // namespace
 
 MinimaxModel::MinimaxModel(MinimaxConfig config) : config_(std::move(config)) {
@@ -152,10 +143,14 @@ void MinimaxModel::loadLocked() {
   options.lm_model_path = config_.lmModelPath;
   options.synth_model_path = config_.synthModelPath;
   options.n_threads = config_.threads;
-  // "auto" keeps the addon's useGPU contract: take a GPU when one is usable,
-  // otherwise fall back to CPU (the engine's "gpu" would fail creation
-  // instead). runtimeStats reports the backend actually in use.
-  options.device = config_.useGpu ? "auto" : "cpu";
+  // Without an explicit device, "auto" keeps the addon's useGPU contract: take
+  // a GPU when one is usable, otherwise fall back to CPU. An explicit "gpu"
+  // makes creation fail instead. runtimeStats reports the backend in use.
+  if (!config_.device.empty()) {
+    options.device = config_.device;
+  } else {
+    options.device = config_.useGpu ? "auto" : "cpu";
+  }
   options.backends_dir = resolveBackendsDir(config_.backendsDir);
   engine_ = tts_cpp::minimax::Engine::create(options);
   if (!engine_) {
@@ -242,6 +237,11 @@ MinimaxModel::Output MinimaxModel::generate(const AnyInput& input) {
                          : 0.0;
   realTimeFactor_ =
       audioDurationMs_ > 0.0 ? totalTimeMs_ / audioDurationMs_ : 0.0;
+  emittedFrames_ = result.emitted_frames;
+  arMs_ = result.ar_ms;
+  conditionMs_ = result.condition_ms;
+  flowMs_ = result.flow_ms;
+  vocoderMs_ = result.vocoder_ms;
   return pcm;
 }
 
@@ -254,6 +254,13 @@ qvac_lib_inference_addon_cpp::RuntimeStats MinimaxModel::runtimeStats() const {
   stats.emplace_back("backendId", backendIdFromName(backendName_));
   stats.emplace_back(
       "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  // Engine-side stage split of the last run; totalTimeMs above is the addon's
+  // own wall clock (it also covers a lazy load and the PCM conversion).
+  stats.emplace_back("emittedFrames", emittedFrames_);
+  stats.emplace_back("arMs", arMs_);
+  stats.emplace_back("conditionMs", conditionMs_);
+  stats.emplace_back("flowMs", flowMs_);
+  stats.emplace_back("vocoderMs", vocoderMs_);
   return stats;
 }
 

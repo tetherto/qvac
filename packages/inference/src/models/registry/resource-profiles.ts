@@ -3183,6 +3183,21 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 584815722
   },
+  a71d83078764dc86445e310cd7a4aa0aea841047f6ee03ab2cb73917405df858: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 16985643392,
+    ggufFacts: {
+      architecture: 'moss-tts-delay',
+      blockCount: 36,
+      headCount: 32,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 128,
+      embeddingLength: 4096,
+      contextLength: 40960
+    }
+  },
   a807dd5f0362ab6f450e195244db2e51110e1c985591ab282362dfdb412fff4b: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3299,6 +3314,16 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'tts-ggml',
     artifactBytes: 1402109
+  },
+  ad07149bc5cdc58c54ea656a14ae1fd881fde924bc6a6d53bca24c949e98c425: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 1775741696
+  },
+  ad5e9af512cd65642f1a21d32db371d6fb242fff18f23970cdf122166d663ab9: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 1776008736
   },
   ad7bec88566f377ddc317682c0df0d6a187977c7713c3f4e75dc328a3967b28a: {
     schemaVersion: 1,

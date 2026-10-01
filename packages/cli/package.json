@@ -51,7 +51,7 @@
     "test:e2e:js:coverage": "tsx --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-exclude='**/test/**' 'test/e2e/**/*.test.ts'",
     "dev:link": "npm install ../sdk",
     "dev:unlink": "node scripts/dev-unlink.cjs",
-    "sdk-source:workspace": "node scripts/preinstall-build-local-sdk.cjs && npm install ../sdk"
+    "sdk-source:workspace": "node scripts/preinstall-build-local-sdk.cjs && npm install --ignore-scripts ../sdk"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",

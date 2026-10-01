@@ -349,6 +349,14 @@ addon — it installs a **prebuilt** one. Sources are tried in this order:
 on the phone", so setting **both is an error** — the run fails and tells you to
 clear one, rather than picking for you.
 
+Some addons publish their `@qvac` release as a JS-only meta package plus
+per-platform packages (`@qvac/<addon>-ios`, `@qvac/<addon>-android-arm64`). For
+those you will see the setup step resolve twice — the meta package, then the
+platform package its `#host-addon` map names, at the same version — and the second
+`Verified:` line names the package the binaries actually came from. Nothing
+changes about what you pass; the `@tetherto` dev builds are published unsliced
+and always resolve in one step.
+
 ### Testing unmerged / unpublished native code
 
 For the shared addon workflows, `--ref <branch>` gives you the branch's JS
@@ -451,8 +459,8 @@ Three things to know:
   only honours `prebuild_run_id` once that support is on the default branch.
   Until then the run fails with an explicit message rather than quietly
   installing `@latest` — use `-f package_spec=@tetherto/audiogen-ggml-mono@<dev>`
-  in the meantime. Note that `@qvac/audiogen-ggml` publishes **no prebuilds**, so
-  an empty input cannot work for this addon at all.
+  in the meantime. An empty input installs the published release's
+  per-platform package, as for the other split addons below.
 - **Check which repository built it.** This repo is fork-first, so a PR's
   `on-pr` run is usually `pull_request_target` on a *fork* — it appears in this
   repo's run list while its head repository is the contributor's fork. That is
@@ -471,14 +479,36 @@ Route A needs a run you can point at. When you need someone *else's* branch, an
 older commit whose artifact has expired, or a specific published version, pin a
 package instead.
 
-**Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`; the
-addon's *On Merge Trigger* workflow builds the prebuilds and publishes
+**Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`, then
+dispatch the addon's *On Merge Trigger* workflow against that branch. It builds
+the prebuilds and publishes
 `@tetherto/<addon>-mono@<pkg-version>-tmp.runid-<run id>` to GitHub Packages.
 
 ```bash
 BRANCH=tmp-QVAC-1234
+PKG=llm-llamacpp   # package directory name; `package` is a required input
 git push origin HEAD:refs/heads/$BRANCH
+# Native addons, including model-fit, publish from on-merge-nx.yml.
+# ggml-rpc-server likewise: on-merge-ggml-rpc-server.yml, no package input.
+gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref $BRANCH -f package=$PKG
 ```
+
+The push alone builds nothing. These pipelines push-trigger on `release-*` only,
+so pushing to an open PR's branch no longer starts a 9-platform matrix behind
+your back — every non-release build is a deliberate dispatch.
+
+> **Dispatch from a `tmp-*` or `feature-*` branch, never a `release-*` one.**
+> `npm-publish-logic` reads the branch name, and on a `release-*` ref a dispatch
+> sets `publish_release`, which runs `publish-npm` and ships a real release to
+> the **public npm registry**. From `main` it publishes a GPR `dev` build. Only
+> `tmp-*`/`feature-*` give you the throwaway build this page is about; a branch
+> name outside those four publishes nothing at all.
+
+The version string is unaffected — it is built from the run id, so it is the
+same whether the run came from a push or a dispatch. The GPR dist-tag follows
+the branch (`temp` or `feature`) unless you override the dispatch `tag` input.
+The default `auto` keeps the branch-derived tag. Step 2 pins the exact
+version, so the tag does not matter here.
 
 Wait for that run to finish — the mobile dispatch needs the package to exist.
 
@@ -502,9 +532,8 @@ PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
 echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
 ```
 
-The 13 native addons publish from the single `on-merge-nx.yml`, so the run is
-found by branch rather than by a per-addon workflow name. `model-fit` still has
-its own `on-merge-model-fit.yml`.
+The native addons, including `model-fit`, publish from `on-merge-nx.yml`, so the run is
+found by branch rather than by a per-addon workflow name.
 
 For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
 exception:** its mobile workflow is `integration-mobile-test-vla.yml`, but the
@@ -512,9 +541,10 @@ package is `@qvac/vla-ggml`, so `WF=vla` and `GPR_NAME=vla-ggml-mono`. If
 unsure, read `addon-npm-name` from the mobile workflow and append `-mono` to the
 part after the slash.
 
-An empty `$PKG` means either that run published nothing — usually because the
-push touched nothing under `packages/<addon>/`, so the path-scoped workflow
-skipped — or that `GPR_NAME` is wrong. Check the name first:
+An empty `$PKG` means either that run published nothing — usually because you
+dispatched from a branch outside `tmp-*`/`feature-*`, since `workflow_dispatch`
+ignores the `paths:` filter but not the branch name — or that `GPR_NAME` is
+wrong. Check the name first:
 
 ```bash
 gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=1" --jq '.[0].name'
@@ -572,12 +602,13 @@ the same run from `ref`, and `decoder-audio` has no native prebuild of its own
 tested) — for both, plain `--ref <branch>` is enough, which is why neither
 exposes `prebuild_run_id`.
 
-> **Two addons publish no mobile prebuilds to npm.** `@qvac/asr-ggml` and
-> `@qvac/audiogen-ggml` ship none, so an **empty** input cannot work for them —
-> the run fails with "No prebuilds directory found in package". Their
-> `@tetherto/<addon>-mono` dev builds *do* carry prebuilds, so Route B works; so
-> does Route A. (`@qvac/decoder-audio` also ships none, but it needs no prebuilds
-> of its own — see below.)
+> **Three addons publish their mobile binaries as separate packages.**
+> `@qvac/asr-ggml`, `@qvac/tts-ggml` and `@qvac/audiogen-ggml` ship a JS-only
+> meta package; the setup step fetches `@qvac/<addon>-android-arm64` or
+> `@qvac/<addon>-ios` at the same version, so an **empty** input or a `@qvac`
+> pin works as for any other addon. Their `@tetherto/<addon>-mono` dev builds
+> carry prebuilds inline, so Routes A and B work too. (`@qvac/decoder-audio`
+> ships none, but it needs no prebuilds of its own — see above.)
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass

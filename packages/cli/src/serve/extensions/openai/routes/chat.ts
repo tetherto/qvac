@@ -4,11 +4,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
+import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
 import {
-  accumulateUsage,
   drainCompletion,
-  formatToolErrors,
-  type DrainedCompletion,
+  type DrainedOpenAICompletion,
   type OpenAiFinishReason
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { requireModel } from '@/serve/core/plugins/require-model'
@@ -234,7 +233,7 @@ async function runBlocking(
     // declare no deferred tools leave the loop on the first pass.
     let turnHistory = history
     let drained
-    let total: DrainedCompletion | undefined
+    let total: DrainedOpenAICompletion | undefined
     for (let round = 0; ; round++) {
       const result = completionFn({
         modelId: p.sdkModelId,
@@ -325,7 +324,7 @@ async function runStreaming(
     // is fine to show. Only the SSE stream is held open across a search round.
     let turnHistory = history
     let drained
-    let total: DrainedCompletion | undefined
+    let total: DrainedOpenAICompletion | undefined
     for (let round = 0; ; round++) {
       const emit = (delta: ChatCompletionDelta) => sendSSE(raw, chunk(delta, null))
 

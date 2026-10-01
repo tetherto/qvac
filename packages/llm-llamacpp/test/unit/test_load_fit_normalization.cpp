@@ -445,6 +445,66 @@ TEST_F(
   }
 }
 
+TEST(CpuTensorBufferOverrideTest, RewritesOnlyTheParsedCpuBufferIdentity) {
+  std::uint64_t parsedCpuMarker = 0;
+  std::uint64_t otherMarker = 0;
+  const auto parsedCpuBuft =
+      reinterpret_cast<ggml_backend_buffer_type_t>(&parsedCpuMarker);
+  const auto otherBuft =
+      reinterpret_cast<ggml_backend_buffer_type_t>(&otherMarker);
+  std::vector<llama_model_tensor_buft_override> overrides{
+      {"blk.0", parsedCpuBuft},
+      {"output", otherBuft},
+      {"blk.1", parsedCpuBuft},
+      {nullptr, nullptr}};
+
+  lfn::canonicalizeCpuTensorBufferOverrides(overrides, parsedCpuBuft);
+
+  EXPECT_EQ(overrides[0].buft, ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(overrides[1].buft, otherBuft);
+  EXPECT_EQ(overrides[2].buft, ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(overrides[3].buft, nullptr);
+  EXPECT_STREQ(overrides[0].pattern, "blk.0");
+  EXPECT_STREQ(overrides[1].pattern, "output");
+  EXPECT_STREQ(overrides[2].pattern, "blk.1");
+  EXPECT_EQ(overrides[3].pattern, nullptr);
+
+  overrides[0].buft = parsedCpuBuft;
+  lfn::canonicalizeCpuTensorBufferOverrides(overrides, nullptr);
+  EXPECT_EQ(overrides[0].buft, parsedCpuBuft);
+}
+
+TEST_F(LoadFitNormalizationTest, CanonicalizesParsedCpuTensorBufferOverrides) {
+  auto config = baseConfig();
+  config["override-tensor"] = "blk\\.0\\.ffn_(up|down|gate)_exps=CPU,"
+                              "blk\\.1\\.ffn_(up|down|gate)_exps=CPU";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  ASSERT_EQ(
+      result.params.tensor_buft_overrides.size(),
+      llama_max_tensor_buft_overrides());
+  EXPECT_STREQ(
+      result.params.tensor_buft_overrides[0].pattern,
+      "blk\\.0\\.ffn_(up|down|gate)_exps");
+  EXPECT_STREQ(
+      result.params.tensor_buft_overrides[1].pattern,
+      "blk\\.1\\.ffn_(up|down|gate)_exps");
+  EXPECT_EQ(
+      result.params.tensor_buft_overrides[0].buft,
+      ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(
+      result.params.tensor_buft_overrides[1].buft,
+      ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(result.params.tensor_buft_overrides[2].pattern, nullptr);
+  EXPECT_EQ(result.params.tensor_buft_overrides[2].buft, nullptr);
+}
+
 TEST_F(LoadFitNormalizationTest, ExplicitContextAndMinimumClampAreCanonical) {
   auto config = baseConfig();
   config["ctx-size"] = "4";

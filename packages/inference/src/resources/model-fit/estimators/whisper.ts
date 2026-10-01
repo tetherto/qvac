@@ -61,23 +61,22 @@ export function estimateWhisper(input: EstimatorInput): EstimatorResult {
   }
 
   const windows = workload.windowMs / CALIBRATION_WINDOW_MS
-  const batch = workload.batch ?? 1
   const streamingLower = workload.streaming ? calibration.audioStreamingBytes.lower : 0
   const streamingUpper = workload.streaming ? calibration.audioStreamingBytes.upper : 0
 
   const working: ByteRange = {
     lower:
       calibration.fixedOverheadBytes.lower +
-      calibration.audioWindowBytes.lower * windows * batch +
+      calibration.audioWindowBytes.lower * windows +
       streamingLower,
     upper:
       calibration.fixedOverheadBytes.upper +
-      calibration.audioWindowBytes.upper * windows * batch +
+      calibration.audioWindowBytes.upper * windows +
       streamingUpper
   }
 
   reasons.push(
-    `working memory scaled from the calibrated 30 s window to ${Math.round(workload.windowMs)} ms${batch > 1 ? ` × ${batch} concurrent windows` : ''}`
+    `working memory scaled from the calibrated 30 s window to ${Math.round(workload.windowMs)} ms`
   )
   assumptions.push(
     'the audio window scales working memory linearly from the engine’s 30 s default; longer windows are chunked by the engine rather than held whole'
