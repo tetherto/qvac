@@ -26,7 +26,7 @@ public:
 
 private:
   SequenceStateSnapshot snapshot_;
-  SnapshotStorage storage_ = SnapshotStorage::Disk;
+  SnapshotStorage storage_ = SnapshotStorage::Memory;
   SnapshotScope scope_ = SnapshotScope::Full;
 };
 

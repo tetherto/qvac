@@ -292,11 +292,10 @@ declare namespace LlmLlamacpp {
         cache_checkpoints_max_bytes?: NumericLike;
         /**
          * Where checkpoints and the per-request rollback snapshot live:
-         * `'disk'` (default) writes them to the OS temp directory, `'memory'`
-         * keeps them in host RAM so a cached chat never touches the disk. Each
-         * live snapshot costs one full copy of the sequence state, so pair
-         * `'memory'` with a small `cache_checkpoints` or a
-         * `cache_checkpoints_max_bytes` budget. Also accepted as
+         * `'memory'` (default) keeps them in host RAM so a cached chat never
+         * touches the disk, `'disk'` writes them to the OS temp directory. Each
+         * snapshot holds only the state a tail trim cannot rebuild, a size fixed
+         * by the model (about 20 MB on Qwen3.5-0.8B). Also accepted as
          * `cache-checkpoint-storage`.
          */
         cache_checkpoint_storage?: "disk" | "memory";

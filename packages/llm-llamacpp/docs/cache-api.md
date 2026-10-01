@@ -122,10 +122,11 @@ None of them has any effect on pure-attention models.
   if the budget cannot hold `cache_checkpoints` checkpoints of the largest size
   the context allows. The addon measures that size on the loaded model, so
   the error names the exact numbers and the count that would fit.
-- `cache_checkpoint_storage`: `disk` (default) writes checkpoints and the
-  per-request rollback snapshot to the OS temp directory; `memory` keeps them
-  in host RAM, so a cached chat never touches the disk. Each live snapshot
-  costs its size in RAM.
+- `cache_checkpoint_storage`: `memory` (default) keeps checkpoints and the
+  per-request rollback snapshot in host RAM, so a cached chat never touches
+  the disk; each live snapshot costs its size in RAM (about 20 MB on
+  Qwen3.5-0.8B, 18 MB on DeepSeek V4). `disk` writes them to the OS temp
+  directory instead.
 
 The storage setting is independent of the `cacheKey` file. In both modes that
 file is written only by the saves described in [Save the cache to
@@ -145,7 +146,7 @@ const model = new LlmLlamacpp({
     ctx_size: '8192',
     cache_checkpoints: '4',
     cache_checkpoints_max_bytes: String(2 * 1024 * 1024 * 1024),
-    cache_checkpoint_storage: 'memory'
+    cache_checkpoint_storage: 'disk'
   }
 })
 ```
@@ -344,7 +345,8 @@ completes.
 A chat on a pure-attention model with one `cacheKey` and no `saveCacheToDisk`
 therefore never touches the disk: the conversation lives in the KV cache, and
 no snapshot or checkpoint is ever written for these models. On hybrid and
-recurrent models the same holds with `cache_checkpoint_storage: 'memory'`.
+recurrent models the same holds by default; `cache_checkpoint_storage:
+'disk'` moves their snapshots and checkpoints to temp files.
 
 The same rule applies to requests without `cacheKey`. Nothing reuses their
 state, so the only visible difference is `CacheTokens`, which reports the

@@ -16,6 +16,7 @@
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
 #include "test_prompt_helpers.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 
 namespace fs = std::filesystem;
 
@@ -1440,7 +1441,7 @@ test_common::TestModelPath hybridModelPath() {
 
 std::unique_ptr<LlamaModel> loadHybridChatModel(
     const test_common::TestModelPath& modelPath, const char* parallel,
-    const char* checkpoints = nullptr) {
+    const char* checkpoints = nullptr, const char* storage = nullptr) {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
@@ -1453,6 +1454,9 @@ std::unique_ptr<LlamaModel> loadHybridChatModel(
   }
   if (checkpoints != nullptr) {
     config["cache_checkpoints"] = checkpoints;
+  }
+  if (storage != nullptr) {
+    config["cache_checkpoint_storage"] = storage;
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = modelPath.path;
@@ -1646,6 +1650,34 @@ TEST(
   }
   fs::remove(cacheFile);
   expectSecondCheckpointServesTheEdit(two, one);
+}
+
+// Snapshots and checkpoints live in host RAM unless the config asks for temp
+// files: the same chat writes none by default and some with `disk`.
+TEST(CacheHistoryCheckpointTest, HybridCheckpointsStayInMemoryByDefault) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "hybrid_checkpoint_storage_cache.bin";
+  for (const char* storage : {static_cast<const char*>(nullptr), "disk"}) {
+    fs::remove(cacheFile);
+    auto model = loadHybridChatModel(modelPath, nullptr, nullptr, storage);
+    ASSERT_TRUE(model->isLoaded());
+    const uint64_t filesBefore = qvac_lib_inference_addon_llama::utils::
+        sequenceStateSnapshotFilesWritten();
+    const NextEditRegenerateRun run = runNextEditRegenerate(*model, cacheFile);
+    ASSERT_GT(run.reuse[1], 0u) << "the chat never restored a checkpoint";
+    const uint64_t written = qvac_lib_inference_addon_llama::utils::
+                                 sequenceStateSnapshotFilesWritten() -
+                             filesBefore;
+    if (storage == nullptr) {
+      EXPECT_EQ(written, 0u) << "the default must keep snapshots in RAM";
+    } else {
+      EXPECT_GT(written, 0u) << "`disk` must write snapshots to temp files";
+    }
+  }
+  fs::remove(cacheFile);
 }
 
 // The same on DeepSeek V4, whose partial checkpoints hold the sliding window

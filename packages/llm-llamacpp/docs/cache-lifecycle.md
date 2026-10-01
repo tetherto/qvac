@@ -22,7 +22,7 @@ graph TB
     end
 
     subgraph "Storage chosen by cache_checkpoint_storage"
-        TMPD["OS temp directory<br/>(disk, default)"]
+        TMPD["OS temp directory<br/>(disk)"]
         HRAM["Host RAM<br/>(memory)"]
     end
 
@@ -66,7 +66,7 @@ graph TB
 | Pre-request snapshot | never | at the start of every cached request |
 | Checkpoints | never | one per committed cached request, at the end of its history (the pre-request snapshot only serves rollback) |
 | Rollback target | shared prefix with the request's prompt | state before the prompt was sent (the snapshot) |
-| Disk writes for a chat with one `cacheKey` and no `saveCacheToDisk` | none | none with `cache_checkpoint_storage: memory`, temp files otherwise |
+| Disk writes for a chat with one `cacheKey` and no `saveCacheToDisk` | none | none by default; temp files with `cache_checkpoint_storage: disk` |
 
 The decision is `needsFullStateSnapshot` in `ModelMemoryPolicy.hpp`, by
 architecture: recurrent or hybrid per llama.cpp, or DeepSeek V4. All of them
@@ -248,13 +248,13 @@ stateDiagram-v2
 | `prefill` | `runOptions` | Warm the cache without generating; commits as soon as prefill completes. Needs `saveCacheToDisk` on `parallel >= 2`. |
 | `cache_checkpoints` | load config | Checkpoints kept per sequence (default 2: the last two requests' end-of-history checkpoints; 0 disables). Full-state models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
-| `cache_checkpoint_storage` | load config | `disk` (temp files) or `memory` (host RAM) for snapshots and checkpoints. |
+| `cache_checkpoint_storage` | load config | `memory` (host RAM, default) or `disk` (temp files) for snapshots and checkpoints. |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |
 | `cache_ram_mib` | load config | Host-RAM budget for conversations that are not running: switched away on the single-prompt path, or evicted from their batch slot. Write-back: files are written on budget eviction, `saveCacheToDisk`, reload or unload (default 0, off). |
 
 ## Where each thing lives, at a glance
 
-| | Pure attention | Full-state, `disk` | Full-state, `memory` |
+| | Pure attention | Full-state, `disk` | Full-state, `memory` (default) |
 |---|---|---|---|
 | Conversation state | sequence memory | sequence memory | sequence memory |
 | Ledger | RAM | RAM | RAM |

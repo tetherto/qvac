@@ -164,7 +164,7 @@ TEST(CacheLedger, ParseCheckpointPolicyDefaultsWhenAbsent) {
   const cache::CheckpointPolicy policy = cache::parseCheckpointPolicy(config);
   EXPECT_EQ(policy.maxCount, cache::DEFAULT_PROCESS_CHECKPOINTS);
   EXPECT_EQ(policy.maxBytes, 0u);
-  EXPECT_EQ(policy.storage, SnapshotStorage::Disk);
+  EXPECT_EQ(policy.storage, SnapshotStorage::Memory);
   EXPECT_EQ(config.size(), 1u) << "unrelated keys must be left alone";
 }
 

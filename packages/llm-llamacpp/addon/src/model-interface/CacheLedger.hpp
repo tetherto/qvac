@@ -39,7 +39,8 @@ inline constexpr size_t LEDGER_ENTRY_WORDS = 5;
 //     unlimited. It is enforced before the count, and the model load fails
 //     early when it cannot hold `cache_checkpoints` checkpoints of the
 //     largest size the context allows.
-//   * `cache_checkpoint_storage`: `disk` (temp files, default) or `memory`.
+//   * `cache_checkpoint_storage`: `memory` (host RAM, default) or `disk`
+//     (temp files).
 inline constexpr size_t DEFAULT_PROCESS_CHECKPOINTS = 2;
 inline constexpr size_t MAX_CONFIGURABLE_PROCESS_CHECKPOINTS = 1024;
 inline constexpr const char* CACHE_CHECKPOINTS_KEY = "cache_checkpoints";
@@ -63,7 +64,7 @@ struct CheckpointPolicy {
   size_t maxCount = DEFAULT_PROCESS_CHECKPOINTS;
   uint64_t maxBytes = 0; // 0 = unlimited
   qvac_lib_inference_addon_llama::utils::SnapshotStorage storage =
-      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Disk;
+      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Memory;
 };
 
 enum class EntryKind : int32_t { Token = 1, Media = 2 };

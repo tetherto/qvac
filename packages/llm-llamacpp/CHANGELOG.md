@@ -35,9 +35,10 @@
   It is write-back: a conversation's unsaved turns reach its `cacheKey` file
   on `saveCacheToDisk`, when the budget evicts it, or at unload. Default `0`
   (off).
-- `cache_checkpoint_storage`: `disk` (default) or `memory`. With `memory` the
+- `cache_checkpoint_storage`: `memory` (default) or `disk`. With `memory` the
   checkpoints and the per-request rollback snapshot stay in host RAM, so a
-  cached chat on a hybrid / recurrent model never touches the disk.
+  cached chat on a hybrid / recurrent model never touches the disk; `disk`
+  writes them to the OS temp directory.
 
 ### Changed
 
