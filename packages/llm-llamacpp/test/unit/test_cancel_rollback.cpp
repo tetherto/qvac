@@ -368,8 +368,8 @@ TEST_F(
   llama_memory_seq_rm(mem, 0, -1, -1);
 }
 
-// A hybrid model keeps two checkpoints when the config does not say;
-// an explicit `cache_checkpoints` wins.
+// Two checkpoints when the config does not say; an explicit
+// `cache_checkpoints` wins.
 TEST_F(CancelRollbackPrimitiveTest, HybridDefaultsToTwoCheckpoints) {
   const std::string path = qwen35HybridModelPath();
   if (!modelFileExists(path)) {

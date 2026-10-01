@@ -1439,7 +1439,8 @@ test_common::TestModelPath hybridModelPath() {
 }
 
 std::unique_ptr<LlamaModel> loadHybridChatModel(
-    const test_common::TestModelPath& modelPath, const char* parallel) {
+    const test_common::TestModelPath& modelPath, const char* parallel,
+    const char* checkpoints = nullptr) {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
@@ -1449,6 +1450,9 @@ std::unique_ptr<LlamaModel> loadHybridChatModel(
   config["seed"] = "11";
   if (parallel != nullptr) {
     config["parallel"] = parallel;
+  }
+  if (checkpoints != nullptr) {
+    config["cache_checkpoints"] = checkpoints;
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = modelPath.path;
@@ -1471,7 +1475,7 @@ chatInput(const std::vector<std::pair<std::string, std::string>>& messages) {
 
 // Qwen3.5's template drops a previous answer's thinking from history, so the
 // next turn diverges right after that answer's assistant header. Neither the
-// pre-request checkpoint (it holds the raw answer) nor one at the end of the
+// pre-request state (it holds the raw answer) nor one at the end of the
 // prompt (it holds the generation prompt) is a prefix of that turn; only the
 // end-of-history checkpoint is. Without it every turn re-prefills the whole
 // conversation on a hybrid model.
@@ -1527,6 +1531,150 @@ TEST(CacheHistoryCheckpointTest, HybridThinkingChatReusesTheHistory) {
   EXPECT_EQ(last, cold->processPrompt(fresh));
 
   fs::remove(cacheFile);
+}
+
+namespace {
+
+// DeepSeek V4 is too large for the unit-test model set; point
+// `DSV4_MODEL_PATH` at a (first-shard) GGUF to run its checkpoint tests.
+test_common::TestModelPath deepSeekV4ModelPath() {
+  return test_common::TestModelPath(
+      "DeepSeek-V4-Flash-0731-UD-IQ4_XS-00001-of-00004.gguf",
+      "DSV4_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF");
+}
+
+std::unique_ptr<LlamaModel> loadDeepSeekV4ChatModel(
+    const test_common::TestModelPath& modelPath, const char* checkpoints) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "32";
+  config["temp"] = "0";
+  config["seed"] = "11";
+  // Bigger than one GPU: spread the layers over every visible device.
+  config["split_mode"] = "layer";
+  if (checkpoints != nullptr) {
+    config["cache_checkpoints"] = checkpoints;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+struct NextEditRegenerateRun {
+  std::vector<size_t> reuse; ///< Per turn: next turn, edit, regenerate.
+  std::string next;          ///< The ordinary next turn's answer.
+};
+
+// Turn 1, an ordinary next turn, an edit of that turn's user message, then a
+// regenerate of the edited turn. Records each turn's prefix reuse.
+NextEditRegenerateRun
+runNextEditRegenerate(LlamaModel& model, const fs::path& key) {
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(model));
+  EXPECT_NE(text, nullptr);
+  const auto run = [&](const std::string& input) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = key.string();
+    return model.processPrompt(prompt);
+  };
+  NextEditRegenerateRun result;
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const std::string first = run(chatInput(chat));
+  EXPECT_FALSE(first.empty());
+  EXPECT_EQ(text->lastCacheReuseForTesting(), 0u);
+  chat.emplace_back("assistant", first);
+  chat.emplace_back("user", "Which of them is warmest?");
+  result.next = run(chatInput(chat));
+  result.reuse.push_back(text->lastCacheReuseForTesting());
+  chat.back().second = "Which of them is coolest?";
+  run(chatInput(chat));
+  result.reuse.push_back(text->lastCacheReuseForTesting());
+  run(chatInput(chat));
+  result.reuse.push_back(text->lastCacheReuseForTesting());
+  std::cerr << "[checkpoints] reuse next=" << result.reuse[0]
+            << " edit=" << result.reuse[1] << " regenerate=" << result.reuse[2]
+            << "\n";
+  return result;
+}
+
+// Checks a model against `runNextEditRegenerate` with the default two
+// checkpoints and with one. The last end-of-history checkpoint serves the
+// next turn and the regenerate; the one before it serves the edit, which with
+// a single checkpoint is a cold prefill. The previous answer's rewrite (both
+// models drop the reasoning) is why the turn-old checkpoint, not the
+// pre-request state, is the one an edit can restore.
+void expectSecondCheckpointServesTheEdit(
+    const NextEditRegenerateRun& two, const NextEditRegenerateRun& one) {
+  ASSERT_EQ(two.reuse.size(), 3u);
+  ASSERT_EQ(one.reuse.size(), 3u);
+  EXPECT_GT(two.reuse[0], 0u) << "next turn restored no checkpoint";
+  EXPECT_GT(two.reuse[1], 0u) << "edit restored no checkpoint";
+  EXPECT_GT(two.reuse[2], 0u) << "regenerate restored no checkpoint";
+  EXPECT_EQ(two.reuse[0], one.reuse[0]);
+  EXPECT_EQ(two.next, one.next);
+  EXPECT_EQ(one.reuse[1], 0u)
+      << "one checkpoint: the edit diverges before the last one";
+}
+
+} // namespace
+
+TEST(
+    CacheHistoryCheckpointTest,
+    HybridEditOfLastUserMessageRestoresTheTurnBefore) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "hybrid_edit_checkpoint_cache.bin";
+  NextEditRegenerateRun two;
+  NextEditRegenerateRun one;
+  for (const char* checkpoints : {static_cast<const char*>(nullptr), "1"}) {
+    fs::remove(cacheFile);
+    auto model = loadHybridChatModel(modelPath, nullptr, checkpoints);
+    ASSERT_TRUE(model->isLoaded());
+    (checkpoints == nullptr ? two : one) =
+        runNextEditRegenerate(*model, cacheFile);
+  }
+  fs::remove(cacheFile);
+  expectSecondCheckpointServesTheEdit(two, one);
+}
+
+// The same on DeepSeek V4, whose partial checkpoints hold the sliding window
+// and the compressor states.
+TEST(CacheHistoryCheckpointTest, DeepSeekV4KeepsTwoPartialCheckpoints) {
+  const test_common::TestModelPath modelPath = deepSeekV4ModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "dsv4_history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+
+  NextEditRegenerateRun two;
+  {
+    auto model = loadDeepSeekV4ChatModel(modelPath, nullptr);
+    ASSERT_TRUE(model->isLoaded());
+    ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr);
+    EXPECT_EQ(LlamaModelTestPeer::checkpointPolicy(*model).maxCount, 2u);
+    two = runNextEditRegenerate(*model, cacheFile);
+  }
+  fs::remove(cacheFile);
+  NextEditRegenerateRun one;
+  {
+    auto model = loadDeepSeekV4ChatModel(modelPath, "1");
+    ASSERT_TRUE(model->isLoaded());
+    one = runNextEditRegenerate(*model, cacheFile);
+  }
+  fs::remove(cacheFile);
+  expectSecondCheckpointServesTheEdit(two, one);
 }
 
 // Batch mode gives every request a fresh slot driver, so the checkpoints

@@ -1596,18 +1596,9 @@ void MtmdLlmContext::commitCacheRequest() {
   if (!cacheRequestActive_) {
     return;
   }
-  if (needsFullStateSnapshot_ && !preRequestCacheSnapshot_.empty()) {
-    cache::appendProcessCheckpoint(
-        cacheCheckpoints_,
-        CacheCheckpoint{
-            .state = std::move(preRequestCacheSnapshot_),
-            .ledger = preRequestLedger_,
-            .cacheTokens = preRequestCacheUsage_.cacheTokens},
-        cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
-  } else {
-    preRequestCacheSnapshot_.clear();
-  }
+  // Only this request's rollback uses the pre-request snapshot; see
+  // `TextLlmContext::commitCacheRequest`.
+  preRequestCacheSnapshot_.clear();
   if (pendingHistoryCheckpoint_.has_value()) {
     cache::appendProcessCheckpoint(
         cacheCheckpoints_,

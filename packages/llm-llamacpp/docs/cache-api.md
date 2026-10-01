@@ -107,14 +107,14 @@ on DeepSeek V4. Its size is therefore fixed by the model, not the context
 (about 20 MB on Qwen3.5-0.8B). Three load-config fields bound the footprint.
 None of them has any effect on pure-attention models.
 
-- `cache_checkpoints`: how many to keep per sequence (maximum 1024). Without
-  it the default follows the architecture:
-  - **2 on recurrent and hybrid models**: the last request's pair, its
-    end-of-history checkpoint (an ordinary next turn and a regenerate restore
-    it) and its pre-request snapshot (an edit of the last message);
-  - **1 on other untrimmable models** (DeepSeek V4): the end-of-history one.
+- `cache_checkpoints`: how many to keep per sequence (default 2, maximum
+  1024). Each committed request adds one, at the end of its history, before
+  the generation prompt. The default keeps the last two: the last one serves
+  an ordinary next turn and a regenerate, the one before it an edit of the
+  last user message. Both stop before an answer, so they still match when the
+  template rewrites earlier answers (thinking models drop the reasoning).
 
-  Raise it to also serve edits further back, at two checkpoints per turn.
+  Raise it to also serve edits further back, at one checkpoint per turn.
   `0` keeps none, which makes every divergent turn a cold prefill.
 - `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
   before the count: the oldest checkpoints are dropped until the total fits.

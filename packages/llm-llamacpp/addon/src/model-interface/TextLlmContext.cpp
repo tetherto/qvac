@@ -1460,18 +1460,13 @@ void TextLlmContext::commitCacheRequest() {
   if (!cacheRequestActive_) {
     return;
   }
-  if (needsFullStateSnapshot_ && !preRequestCacheSnapshot_.empty()) {
-    cache::appendProcessCheckpoint(
-        cacheCheckpoints_,
-        CacheCheckpoint{
-            .state = std::move(preRequestCacheSnapshot_),
-            .ledger = preRequestLedger_},
-        cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
-  } else {
-    preRequestCacheSnapshot_.clear();
-  }
-  // Newest, so the next divergent turn finds it first.
+  // The pre-request snapshot only serves this request's rollback. Kept, it
+  // would hold the previous answer as generated, which a template that
+  // rewrites earlier answers (thinking models drop the reasoning) never
+  // renders again, so no later prompt could restore it. The end-of-history
+  // checkpoints stop before each answer, so the last two also serve an edit
+  // of the last user message.
+  preRequestCacheSnapshot_.clear();
   if (pendingHistoryCheckpoint_.has_value()) {
     cache::appendProcessCheckpoint(
         cacheCheckpoints_,

@@ -34,7 +34,6 @@ graph TB
     LEDGER <-->|describes| KV
     KV -->|begin of cached request| SNAP
     KV -->|end of history, during prefill| CKPT
-    SNAP -->|commit| CKPT
     SNAP -->|rollback: restore| KV
     CKPT -->|divergent history: restore longest prefix| KV
     SNAP -.-> TMPD
@@ -65,15 +64,14 @@ graph TB
 | Can drop a memory tail at a position | yes, `llama_memory_seq_rm` | no |
 | Reuse of a diverging history | trim to the shared prefix, decode the rest | restore the longest checkpoint that is a prefix, decode the rest; cold prefill if none |
 | Pre-request snapshot | never | at the start of every cached request |
-| Checkpoints | never | two per committed cached request: its pre-request snapshot and one at the end of its history |
+| Checkpoints | never | one per committed cached request, at the end of its history (the pre-request snapshot only serves rollback) |
 | Rollback target | shared prefix with the request's prompt | state before the prompt was sent (the snapshot) |
 | Disk writes for a chat with one `cacheKey` and no `saveCacheToDisk` | none | none with `cache_checkpoint_storage: memory`, temp files otherwise |
 
 The decision is `needsFullStateSnapshot` in `ModelMemoryPolicy.hpp`, by
 architecture: recurrent or hybrid per llama.cpp, or DeepSeek V4. All of them
 snapshot only what a tail trim cannot rebuild (`untrimmableSnapshotScope`),
-and the default `cache_checkpoints` is 2 on recurrent and hybrid models, 1 on
-the others (`defaultCacheCheckpoints`).
+and all of them keep 2 checkpoints by default (`cache_checkpoints`).
 
 ## A cached request
 
@@ -96,7 +94,7 @@ stateDiagram-v2
         [*] --> KeepTokens
         KeepTokens: prompt + generated tokens stay resident
         KeepTokens --> PushCheckpoint: full-state model
-        PushCheckpoint: snapshot and end-of-history<br/>state become checkpoints
+        PushCheckpoint: end-of-history state becomes<br/>a checkpoint, the snapshot is dropped
     }
     state RolledBack {
         [*] --> Drop
@@ -141,6 +139,12 @@ answer's assistant header. Only a checkpoint at or before that point can be
 restored, and the end of the previous history is the latest such point. The
 addon finds it by matching the template's generation prompt against the end
 of the rendered prompt; a template without one takes no such checkpoint.
+
+The same rewrite is why the pre-request snapshot is not kept as a checkpoint:
+it holds the previous answer as generated, so no later prompt would match it.
+The checkpoint one turn older does match an edit of the last user message,
+because it also stops before an answer; with the default two, an edit decodes
+the previous answer and the edited message again and nothing before them.
 
 Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) keep only the
 last `n_swa` positions in their window layers. A trim back to the shared prefix
@@ -242,7 +246,7 @@ stateDiagram-v2
 | `cacheKey` | `runOptions` | Turns the cache on for this sequence and names the durable file. |
 | `saveCacheToDisk` | `runOptions` | Write the file when this request commits. |
 | `prefill` | `runOptions` | Warm the cache without generating; commits as soon as prefill completes. Needs `saveCacheToDisk` on `parallel >= 2`. |
-| `cache_checkpoints` | load config | Checkpoints kept per sequence (default by architecture: 2 on recurrent and hybrid models, the last request's pre-request and end-of-history pair; 1 on other untrimmable models such as DeepSeek V4; 0 disables). Full-state models only. |
+| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 2: the last two requests' end-of-history checkpoints; 0 disables). Full-state models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `disk` (temp files) or `memory` (host RAM) for snapshots and checkpoints. |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |

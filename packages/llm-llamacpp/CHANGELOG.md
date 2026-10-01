@@ -19,12 +19,10 @@
 
 - `cache_checkpoints` load-config field (also `cache-checkpoints`): per-sequence
   cap on the process-local full-state checkpoints kept for cached requests on
-  hybrid / recurrent models. Without it the default follows the
-  architecture: 2 on recurrent and hybrid models (the last request's
-  end-of-history checkpoint, which serves an ordinary next turn and a
-  regenerate, and its pre-request snapshot, which serves an edit of the last
-  message), 1 on other untrimmable models such as DeepSeek V4. `0` disables
-  them, maximum 1024.
+  hybrid / recurrent models and DeepSeek V4, one per committed request at the
+  end of its history. The default, 2, keeps the last two: the last serves an
+  ordinary next turn and a regenerate, the one before it an edit of the last
+  user message. `0` disables them, maximum 1024.
 - `cache_checkpoints_max_bytes`: byte budget for those checkpoints, enforced
   before the count. The load fails early with `InvalidArgument` when the budget
   cannot hold `cache_checkpoints` checkpoints of the largest size the context

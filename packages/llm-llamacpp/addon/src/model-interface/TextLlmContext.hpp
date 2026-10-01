@@ -445,7 +445,7 @@ private:
       preRequestCacheSnapshot_;
   qvac_lib_inference_addon_llama::cache::Checkpoints cacheCheckpoints_;
   // End-of-history checkpoint of the request in flight (see
-  // `captureHistoryCheckpoint`), pushed after the pre-request one on commit.
+  // `captureHistoryCheckpoint`), pushed onto the checkpoints on commit.
   std::optional<CacheCheckpoint> pendingHistoryCheckpoint_;
   // Tokens the template's generation prompt occupies at the end of the last
   // rendered prompt; 0 when there is no end-of-history checkpoint to take.
