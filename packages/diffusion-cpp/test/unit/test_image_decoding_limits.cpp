@@ -1,6 +1,7 @@
 // Image decoding limits and format tests.
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <stb_image.h>
 #include <stb_image_write.h>
 
 #include "utils/EsrganUpscaler.hpp"
@@ -345,6 +347,94 @@ TEST_F(StbImageSecurityTest, AcceptsSmall16BitPng) {
   EXPECT_EQ(decoded.height, 2u);
 }
 
+TEST_F(StbImageSecurityTest, AcceptsPngWithTrailingInflatedData) {
+  const auto png = decodeBase64(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z4ABABMBAQAW"
+      "sGOsAAAAAElFTkSuQmCC");
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  auto* stbDecoded = stbi_load_from_memory(
+      png.data(), static_cast<int>(png.size()), &width, &height, &channels, 0);
+  ASSERT_NE(stbDecoded, nullptr);
+  stbi_image_free(stbDecoded);
+  ASSERT_EQ(width, 1);
+  ASSERT_EQ(height, 1);
+
+  image_codec::DecodeFailure failure;
+  auto decoded =
+      image_codec::decodeImage(png, image_codec::MAX_DECODED_PIXELS, &failure);
+  std::unique_ptr<uint8_t, image_codec::FreeDeleter> owned(decoded.data);
+  ASSERT_NE(decoded.data, nullptr)
+      << image_codec::decodeFailureMessage(failure);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::None);
+}
+
+TEST_F(StbImageSecurityTest, AcceptsJpegWithPaddingBeforeFrame) {
+  std::vector<uint8_t> pixels(3, 128);
+  sd_image_t image{1, 1, 3, pixels.data()};
+  const auto original = image_codec::encodeToJpeg(image, 90);
+  ASSERT_FALSE(original.empty());
+  for (const uint8_t markerCode : std::array<uint8_t, 2>{0xE0, 0xDB}) {
+    auto jpeg = original;
+    const std::array<uint8_t, 2> marker = {0xFF, markerCode};
+    const auto found =
+        std::search(jpeg.begin(), jpeg.end(), marker.begin(), marker.end());
+    ASSERT_NE(found, jpeg.end());
+    const size_t pos = static_cast<size_t>(found - jpeg.begin());
+    ASSERT_LT(pos + 3, jpeg.size());
+    const size_t length =
+        (static_cast<size_t>(jpeg[pos + 2]) << 8) | jpeg[pos + 3];
+    const size_t afterSegment = pos + 2 + length;
+    ASSERT_LT(afterSegment, jpeg.size());
+    jpeg.insert(jpeg.begin() + afterSegment, 0x42);
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    auto* stbDecoded = stbi_load_from_memory(
+        jpeg.data(),
+        static_cast<int>(jpeg.size()),
+        &width,
+        &height,
+        &channels,
+        0);
+    ASSERT_NE(stbDecoded, nullptr);
+    stbi_image_free(stbDecoded);
+
+    image_codec::DecodeFailure failure;
+    auto decoded = image_codec::decodeImage(
+        jpeg, image_codec::MAX_DECODED_PIXELS, &failure);
+    std::unique_ptr<uint8_t, image_codec::FreeDeleter> owned(decoded.data);
+    ASSERT_NE(decoded.data, nullptr)
+        << image_codec::decodeFailureMessage(failure);
+    EXPECT_EQ(failure, image_codec::DecodeFailure::None);
+  }
+}
+
+TEST_F(StbImageSecurityTest, RejectsJpegPaddingAfterFrame) {
+  std::vector<uint8_t> pixels(3, 128);
+  sd_image_t image{1, 1, 3, pixels.data()};
+  auto jpeg = image_codec::encodeToJpeg(image, 90);
+  const std::array<uint8_t, 2> marker = {0xFF, 0xC0};
+  const auto found =
+      std::search(jpeg.begin(), jpeg.end(), marker.begin(), marker.end());
+  ASSERT_NE(found, jpeg.end());
+  const size_t pos = static_cast<size_t>(found - jpeg.begin());
+  ASSERT_LT(pos + 3, jpeg.size());
+  const size_t length =
+      (static_cast<size_t>(jpeg[pos + 2]) << 8) | jpeg[pos + 3];
+  const size_t afterFrame = pos + 2 + length;
+  ASSERT_LT(afterFrame, jpeg.size());
+  jpeg.insert(jpeg.begin() + afterFrame, 0x42);
+
+  image_codec::DecodeFailure failure;
+  auto decoded =
+      image_codec::decodeImage(jpeg, image_codec::MAX_DECODED_PIXELS, &failure);
+  EXPECT_EQ(decoded.data, nullptr);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::InvalidData);
+}
+
 TEST_F(StbImageSecurityTest, RejectsUnsupportedFormats) {
   const std::vector<std::vector<uint8_t>> unsupported = {
       {'G', 'I', 'F', '8', '9', 'a'},
@@ -472,6 +562,37 @@ TEST_F(StbImageSecurityTest, RejectsPngInflateBeyondHeader) {
   EXPECT_EQ(failure, image_codec::DecodeFailure::PngInflateLimit);
 }
 
+TEST_F(StbImageSecurityTest, RejectsPngInflateBeyondSlack) {
+  const auto png = decodeBase64(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAV0lEQVR4nO3BAQ0AAAzDoPo3"
+      "/SfTAXQBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      "AAAAAAAAAAAAAAAAAAAAAABA8xMBAQDSE9ioAAAAAElFTkSuQmCC");
+  int width = 0;
+  int height = 0;
+  int channels = 0;
+  auto* stbDecoded = stbi_load_from_memory(
+      png.data(), static_cast<int>(png.size()), &width, &height, &channels, 0);
+  ASSERT_NE(stbDecoded, nullptr);
+  stbi_image_free(stbDecoded);
+
+  image_codec::DecodeFailure failure;
+  auto decoded =
+      image_codec::decodeImage(png, image_codec::MAX_DECODED_PIXELS, &failure);
+  EXPECT_EQ(decoded.data, nullptr);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::PngInflateLimit);
+}
+
+TEST_F(StbImageSecurityTest, RejectsShortPngInflate) {
+  const auto png = decodeBase64(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAC0lEQVR4nGP4zwAAAgEB"
+      "ADK6K5IAAAAASUVORK5CYII=");
+  image_codec::DecodeFailure failure;
+  auto decoded =
+      image_codec::decodeImage(png, image_codec::MAX_DECODED_PIXELS, &failure);
+  EXPECT_EQ(decoded.data, nullptr);
+  EXPECT_EQ(failure, image_codec::DecodeFailure::PngInflateLimit);
+}
+
 TEST_F(StbImageSecurityTest, RejectsHighMemoryPngSource) {
   std::vector<uint8_t> pixels(4, 0);
   sd_image_t image{1, 1, 4, pixels.data()};
@@ -538,6 +659,8 @@ TEST_F(StbImageSecurityTest, RejectsExcessiveJpegScans) {
   sd_image_t image{1, 1, 3, pixels.data()};
   auto jpeg = image_codec::encodeToJpeg(image, 90);
   ASSERT_FALSE(jpeg.empty());
+  const size_t app0Length = (static_cast<size_t>(jpeg[4]) << 8) | jpeg[5];
+  jpeg.insert(jpeg.begin() + 4 + app0Length, 0x42);
   const std::vector<uint8_t> marker = {0xFF, 0xDA};
   const auto firstScan =
       std::search(jpeg.begin(), jpeg.end(), marker.begin(), marker.end());

@@ -153,12 +153,15 @@ bool validatePngInflate(
     failure = DecodeFailure::InvalidHeader;
     return false;
   }
+  constexpr uint64_t INFLATE_SLACK_BYTES = 64ULL * 1024;
   if (inflatedBytes == 0 ||
-      inflatedBytes > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
+      inflatedBytes > static_cast<uint64_t>(std::numeric_limits<int>::max()) -
+                          INFLATE_SLACK_BYTES) {
     failure = DecodeFailure::PngInflateLimit;
     return false;
   }
-  std::vector<char> inflated(static_cast<size_t>(inflatedBytes));
+  std::vector<char> inflated(
+      static_cast<size_t>(inflatedBytes + INFLATE_SLACK_BYTES));
   const int actual = rawDeflate
                          ? stbi_zlib_decode_noheader_buffer(
                                inflated.data(),
@@ -170,7 +173,7 @@ bool validatePngInflate(
                                static_cast<int>(inflated.size()),
                                reinterpret_cast<const char*>(compressed.data()),
                                static_cast<int>(compressed.size()));
-  if (actual < 0 || static_cast<uint64_t>(actual) != inflatedBytes) {
+  if (actual < 0 || static_cast<uint64_t>(actual) < inflatedBytes) {
     failure = DecodeFailure::PngInflateLimit;
     return false;
   }
@@ -182,11 +185,17 @@ bool validateJpegScans(
     DecodeFailure& failure) {
   size_t pos = 2;
   int scans = 0;
+  bool seenFrame = false;
   while (pos < bytes.size()) {
-    if (bytes[pos++] != 0xFF) {
-      failure = DecodeFailure::InvalidData;
-      return false;
+    if (bytes[pos] != 0xFF) {
+      if (seenFrame) {
+        failure = DecodeFailure::InvalidData;
+        return false;
+      }
+      ++pos;
+      continue;
     }
+    ++pos;
     while (pos < bytes.size() && bytes[pos] == 0xFF) {
       ++pos;
     }
@@ -214,6 +223,9 @@ bool validateJpegScans(
         pixels * 4 > MAX_FOUR_COMPONENT_JPEG_SOURCE_BYTES) {
       failure = DecodeFailure::HighMemoryInputLimit;
       return false;
+    }
+    if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) {
+      seenFrame = true;
     }
     pos += length;
     if (marker != 0xDA) {
