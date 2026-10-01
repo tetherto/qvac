@@ -63,6 +63,24 @@ test('deduplicateModels: preserves companion-only files with shared checksums', 
   )
 })
 
+test('deduplicateModels: preserves Core ML bundle components with shared checksums', (t) => {
+  const first = makeModel({
+    registryPath: 'parakeet/first.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha'
+  })
+  const second = makeModel({
+    registryPath: 'parakeet/second.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha'
+  })
+
+  const result = deduplicateModels([first, second], false)
+
+  t.alike(
+    result.map((model) => model.registryPath),
+    [first.registryPath, second.registryPath]
+  )
+})
+
 // ---------------------------------------------------------------------------
 // Regression: QVAC-18420 — Bergamot shared vocabs
 // ---------------------------------------------------------------------------

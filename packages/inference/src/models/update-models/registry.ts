@@ -71,9 +71,13 @@ export function deduplicateModels(
 
     if (seenChecksums.has(model.sha256Checksum)) {
       const pathKey = `${model.registrySource}:${model.registryPath}`
-      // Companion-only files still need their own registry paths in the
-      // generated catalog, even when small bundle components share a hash.
-      if (model.isCompanionOnly || companionReferencedPaths.has(pathKey)) {
+      // Core ML sidecars are assembled from exact registry paths at load time.
+      // Keep every component even when small files in separate bundles share a hash.
+      if (
+        model.isCompanionOnly ||
+        companionReferencedPaths.has(pathKey) ||
+        model.registryPath.includes('.mlmodelc/')
+      ) {
         dedupedModels.push(model)
         continue
       }
