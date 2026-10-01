@@ -1797,9 +1797,7 @@ NormalizedLoad normalizeLoadForFit(
       }
       params.devices.push_back(nullptr);
     } else if (splitMode == LLAMA_SPLIT_MODE_NONE) {
-      // In multi-GPU split mode we intentionally omit --device so llama.cpp
-      // distributes layers/rows across all available GPUs rather than pinning
-      // to the single backend that chooseBackend selected.
+      // Single-device mode: pin the backend chosen above via --device.
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
     } else {

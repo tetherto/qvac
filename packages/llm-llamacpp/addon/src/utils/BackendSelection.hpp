@@ -146,8 +146,8 @@ struct LoadConstraints {
   /// KV-cache types the device must be able to write with SET_ROWS from F32.
   /// Empty when the caller set no cache-type, or set one that is not quantized.
   std::vector<enum ggml_type> kvCacheTypes;
-  /// When non-empty, every device used by a split load must belong to one of
-  /// these backend families.
+  /// When non-empty, every local device used by a split load must belong to
+  /// one of these backend families. RPC devices are exempt.
   std::vector<std::string> requiredBackendFamilies;
   /// Set when selection kept a KV-incapable GPU for fabric's per-layer CPU KV
   /// placement. Such devices then also qualify for the split set.
@@ -337,7 +337,7 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
-/// @brief The device names to pass as `--device` in multi-GPU split mode: every
+/// @brief The local device names a multi-GPU split load pins: every
 /// discrete GPU, deduplicated by `props.device_id` so a card registered under
 /// two backends is named once, preferring @p selectedDeviceName's registry.
 ///
@@ -351,9 +351,9 @@ bool gpuBackendSupportsRowSplit();
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
-/// Empty when every usable GPU/iGPU device comes from one registry and no
-/// device was excluded by @p constraints, or when @p selectedDeviceName
-/// matches nothing. The caller then keeps omitting `--device`.
+/// Empty when every usable GPU/iGPU device comes from one registry, no device
+/// was excluded by @p constraints and no backend family is required, or when
+/// @p selectedDeviceName matches nothing.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});

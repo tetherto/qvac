@@ -131,6 +131,8 @@ ExclusionKind kindOf(ExclusionReason reason);
 /// @brief What the load requires of a device beyond its being a GPU.
 struct LoadConstraints {
   std::vector<enum ggml_type> kvCacheTypes;
+  /// When non-empty, every device used by a split load must belong to one of
+  /// these backend families. RPC devices are dropped from the split set.
   std::vector<std::string> requiredBackendFamilies;
 };
 
@@ -239,7 +241,7 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
-/// @brief The device names to pass as `--device` in multi-GPU split mode: every
+/// @brief The local device names a multi-GPU split load pins: every
 /// discrete GPU, deduplicated by `props.device_id` so a card registered under
 /// two backends is named once, preferring @p selectedDeviceName's registry.
 ///
@@ -253,9 +255,8 @@ bool gpuBackendSupportsRowSplit();
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
-/// Empty when every GPU/iGPU device comes from one registry, which is every
-/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
-/// caller then keeps omitting `--device`.
+/// Empty when every GPU/iGPU device comes from one registry and no backend
+/// family is required, or when @p selectedDeviceName matches nothing.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});
