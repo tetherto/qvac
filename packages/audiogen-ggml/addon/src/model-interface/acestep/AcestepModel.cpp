@@ -224,6 +224,7 @@ AcestepModel::understandAudio(const AnyInput& in) {
           : 0.0;
   realTimeFactor_ =
       audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
+  hasLyricsScore_ = false;
   hasQualityScore_ = false;
 
   UnderstandOutput out;
@@ -234,6 +235,7 @@ AcestepModel::understandAudio(const AnyInput& in) {
   out.timesignature = std::move(result.timesignature);
   out.vocalLanguage = std::move(result.vocal_language);
   out.audioCodes = std::move(result.audio_codes);
+  out.seed = result.seed;
   return out;
 }
 
@@ -316,8 +318,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
-  params.inference_steps = cfg_.inferenceSteps;
-  params.shift = cfg_.shift;
+  params.inference_steps = in.inferenceSteps.value_or(cfg_.inferenceSteps);
+  params.shift = in.shift.value_or(cfg_.shift);
 
   auto progress =
       [this](const std::string& stage, int step, int total) -> bool {
@@ -332,9 +334,29 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   }
   hasLyricsScore_ = in.generateLrc;
   lyricsScore_ = result.metadata.lyrics_score;
-  lrc_ = result.metadata.lrc;
   hasQualityScore_ = in.computeQualityScore;
   qualityScore_ = result.metadata.quality_score;
+
+  Output out;
+  out.lrc = result.metadata.lrc;
+  // Text generations and edit plans both fill GenerateMetadata; an empty
+  // result (an engine-side cancel) carries only defaults, so report none.
+  if (!result.pcm.empty()) {
+    const auto& meta = result.metadata;
+    GenerationMetadata metadata;
+    metadata.caption = meta.caption;
+    metadata.lyrics = meta.lyrics;
+    metadata.keyscale = meta.keyscale;
+    metadata.vocalLanguage = meta.vocal_language;
+    metadata.bpm = meta.bpm;
+    metadata.beatsPerBar = meta.timesignature;
+    metadata.seed = meta.seed;
+    metadata.codeFrames = meta.n_codes;
+    if (in.computeQualityScore) {
+      metadata.qualityReport = meta.quality_report;
+    }
+    out.metadata = std::move(metadata);
+  }
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
   // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
@@ -359,14 +381,15 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   const float gain =
       in.editOperations.empty() && peak > kMinNormPeak ? 0.9F / peak : 1.0F;
 
-  Output pcm;
-  pcm.reserve(result.pcm.size());
+  out.pcm.reserve(result.pcm.size());
   for (float s : result.pcm)
-    pcm.push_back(f32ToI16(s * gain, !in.editOperations.empty()));
+    out.pcm.push_back(f32ToI16(s * gain, !in.editOperations.empty()));
+  out.sampleRate = result.sample_rate;
+  out.channels = result.channels;
 
   const auto t1 = std::chrono::steady_clock::now();
   totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
-  totalSamples_ = static_cast<int64_t>(pcm.size());
+  totalSamples_ = static_cast<int64_t>(out.pcm.size());
   sampleRate_ = result.sample_rate;
   channels_ = result.channels;
   audioDurationMs_ =
@@ -377,7 +400,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   realTimeFactor_ =
       audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
 
-  return pcm;
+  return out;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
