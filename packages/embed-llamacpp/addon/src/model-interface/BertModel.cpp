@@ -535,6 +535,16 @@ BertModelSetup setupParams(
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
+    // The split path below does not apply the override, so reject the
+    // combination rather than silently run on another backend.
+    if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
+        splitMode != LLAMA_SPLIT_MODE_NONE) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          "'backend' cannot be combined with 'split-mode'.");
+    }
     std::pair<BackendType, std::string> chosenBackend{BackendType::CPU, "none"};
     SplitDeviceSelection splitSelection;
     bool isOpenCl = false;
