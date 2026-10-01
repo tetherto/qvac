@@ -13,7 +13,7 @@ Installs now resolve:
 - `@qvac/ai-sdk-provider@^0.9.0` for the shared model catalog
 - `@qvac/cli@^0.15.0` for `qvac serve --openai --no-default`
 
-A 0.x caret range does not cross a minor. Publish after provider 0.9.0 and CLI 0.15.0 are on npm.
+A 0.x caret range does not cross a minor.
 
 Plugin behavior is unchanged.
 
