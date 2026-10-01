@@ -3,9 +3,22 @@ import {
   loadModelOptionsToRequestSchema,
   downloadAssetOptionsToRequestSchema,
   bciTranscribeStreamRequestSchema,
-  ragRequestSchema
+  ragRequestSchema,
+  startRpcServerRequestSchema,
+  discoverRpcServersRequestSchema
 } from '@qvac/inference/surface'
 import { ModelType } from '@qvac/sdk'
+
+test('RPC control requests preserve caller IDs and allow legacy requests without them', (t) => {
+  for (const [schema, request] of [
+    [startRpcServerRequestSchema, { type: 'startRpcServer' }],
+    [discoverRpcServersRequestSchema, { type: 'discoverRpcServers', topic: 'cancel-test' }]
+  ] as const) {
+    t.is(schema.parse({ ...request, requestId: 'client-rpc-id' }).requestId, 'client-rpc-id')
+    t.is(schema.parse(request).requestId, undefined)
+    t.absent(schema.safeParse({ ...request, requestId: '' }).success)
+  }
+})
 
 // -----------------------------------------------------------------------------
 // requestId wire-shape round-trip — schema half.
