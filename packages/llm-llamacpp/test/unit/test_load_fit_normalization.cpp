@@ -518,6 +518,27 @@ TEST_F(LoadFitNormalizationTest, RuntimeStatsDescribeTheFinalSplitBackend) {
           backend_selection::ExclusionReason::KvCacheTypeUnsupported));
 }
 
+TEST_F(
+    LoadFitNormalizationTest, RuntimeStatsExplicitDevicesReportNoSkipReason) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["devices"] = "none";
+  lfn::SelectedBackend selected{
+      .type = backend_selection::GPU, .name = "cuda0"};
+  selected.trace.skippedReason =
+      backend_selection::ExclusionReason::KvCacheTypeUnsupported;
+  auto dependencies = backend(selected, {});
+  const auto selection = splitSelection({"none"});
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(
+      result.runtimeBackendSkipReason,
+      static_cast<int64_t>(backend_selection::ExclusionReason::None));
+}
+
 TEST_F(LoadFitNormalizationTest, EmptySplitReportsCpuWithoutStaleSkipReason) {
   auto config = baseConfig();
   config["split-mode"] = "layer";

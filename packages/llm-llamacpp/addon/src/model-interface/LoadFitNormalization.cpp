@@ -1626,7 +1626,11 @@ NormalizedLoad normalizeLoadForFit(
         }
         selected.name = primary.name;
         selected.type = BackendType::GPU;
-        selectionSkipReason = ExclusionReason::None;
+        // A caller-chosen list passed nothing over. A cascade-chosen split
+        // keeps the cascade's reason.
+        if (!explicitDevices.empty()) {
+          selectionSkipReason = ExclusionReason::None;
+        }
         selected.adrenoVersion = maxAdrenoVersion;
         selected.isOpenCl =
             anyDevice(&backend_selection::SplitDevice::isOpenCl);
@@ -1809,8 +1813,15 @@ NormalizedLoad normalizeLoadForFit(
     }
 
     if (!explicitDevices.empty()) {
-      configVector.emplace_back("--device");
-      configVector.emplace_back(explicitDevices);
+      // Pin the handles selection already resolved, as the split branch below
+      // does, rather than resolving the names a second time through --device.
+      params.devices.clear();
+      params.devices.reserve(splitSelection.devices.size() + 1);
+      for (const backend_selection::SplitDevice& device :
+           splitSelection.devices) {
+        params.devices.push_back(device.handle);
+      }
+      params.devices.push_back(nullptr);
     } else if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       // In multi-GPU split mode we intentionally omit --device so llama.cpp
       // distributes layers/rows across all available GPUs rather than pinning
