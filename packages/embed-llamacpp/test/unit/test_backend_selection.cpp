@@ -1194,6 +1194,29 @@ TEST_F(BackendSelectionTest, StrictBackendWithNoMatchHasEmptySplit) {
                   .devices.empty());
 }
 
+// A required family filters local GPUs only. RPC devices stay, with or without
+// a matching local device.
+TEST_F(BackendSelectionTest, StrictBackendKeepsRpcDevices) {
+  mockBackend.addDevice(
+      MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  const BackendInterface bckI = mockBackend.toBackendInterface();
+
+  LoadConstraints constraints;
+  constraints.requiredBackendFamilies = {"vulkan"};
+  SplitDeviceSelection selection =
+      getSplitDeviceSelection(bckI, "vulkan0", constraints);
+  ASSERT_EQ(selection.devices.size(), 2U);
+  EXPECT_EQ(selection.devices[0].name, "RPC0");
+  EXPECT_EQ(selection.devices[1].name, VULKAN0_BACK);
+
+  constraints.requiredBackendFamilies = {"cuda"};
+  selection = getSplitDeviceSelection(bckI, "cuda0", constraints);
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, "RPC0");
+}
+
 TEST_F(BackendSelectionTest, StrictBackendKeepsSingleRegistrySplit) {
   mockBackend.addDevice(
       createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));

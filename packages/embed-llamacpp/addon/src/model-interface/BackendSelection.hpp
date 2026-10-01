@@ -131,8 +131,8 @@ ExclusionKind kindOf(ExclusionReason reason);
 /// @brief What the load requires of a device beyond its being a GPU.
 struct LoadConstraints {
   std::vector<enum ggml_type> kvCacheTypes;
-  /// When non-empty, every device used by a split load must belong to one of
-  /// these backend families. RPC devices are dropped from the split set.
+  /// When non-empty, every local device used by a split load must belong to one
+  /// of these backend families. RPC devices are exempt, as in llm-llamacpp.
   std::vector<std::string> requiredBackendFamilies;
 };
 

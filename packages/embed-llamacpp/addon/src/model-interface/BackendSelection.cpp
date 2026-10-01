@@ -1127,8 +1127,12 @@ backend_selection::getSplitDeviceSelection(
       splitModeDeviceNames(bckI, selectedDeviceName, constraints);
   if (selectedNames.empty()) {
     SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+    // A required family constrains local GPUs only. RPC devices stay, as in
+    // llm-llamacpp.
     if (!constraints.requiredBackendFamilies.empty()) {
-      selection.devices.clear();
+      std::erase_if(selection.devices, [](const SplitDevice& device) {
+        return !device.isRpc;
+      });
     }
     return selection;
   }
@@ -1169,9 +1173,7 @@ backend_selection::getSplitDeviceSelection(
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
         .isRpc = hasBackendFamily(deviceName, registryName, "rpc")};
     if (device.isRpc) {
-      if (constraints.requiredBackendFamilies.empty()) {
-        rpc.emplace_back(std::move(device));
-      }
+      rpc.emplace_back(std::move(device));
       continue;
     }
     if (std::ranges::find(selectedNames, deviceName) != selectedNames.end()) {
