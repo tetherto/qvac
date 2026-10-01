@@ -29,6 +29,7 @@ target_sources(
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/VectorIndex.cpp
 )
 target_include_directories(
