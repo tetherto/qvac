@@ -16,12 +16,13 @@ interface TurnResult {
 }
 
 /**
- * A named cache's saved-message boundary has to outlive the worker process.
+ * A named cache's prefix has to be reused by a fresh worker process, from the
+ * cache file alone.
  *
  * The restart is staged by unloading every model: off-Bare the last unload
  * closes the worker, and the next call spawns a new one. Both halves are
  * asserted against the process table rather than assumed, because if the
- * worker ever stopped closing, the boundary would still be in memory and the
+ * worker ever stopped closing, the cache would still be in memory and the
  * token comparison below would pass without testing anything.
  */
 export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCacheRestartTests> {
@@ -90,7 +91,7 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
           passed: false,
           output:
             `Unloading every model left the worker running (pid ${during.join(', ')}), so the ` +
-            `cache state was never lost and this test cannot prove the boundary was restored`
+            `cache state was never lost and this test cannot prove the cache was restored`
         }
       }
 
@@ -134,10 +135,10 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
       if (warm.promptTokens * 2 >= cold.promptTokens) {
         return {
           passed: false,
-          output: `The saved-message boundary did not survive the restart: the next turn re-sent the history. ${summary}`
+          output: `The cached prefix was not reused after the restart: the next turn re-decoded the history. ${summary}`
         }
       }
-      return { passed: true, output: `Boundary restored on a fresh worker. ${summary}` }
+      return { passed: true, output: `Cached prefix reused on a fresh worker. ${summary}` }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `Worker-restart cache test failed: ${errorMsg}` }
