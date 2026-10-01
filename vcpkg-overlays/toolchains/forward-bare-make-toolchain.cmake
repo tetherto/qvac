@@ -23,5 +23,13 @@ function(ExternalProject_Add name)
 
   string(APPEND args " CMAKE_CACHE_DEFAULT_ARGS [==[-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${QVAC_BARE_MAKE_TOOLCHAIN_FILE}]==]")
 
+  # Windows port builds run without the user's PATH, so a nested Ninja
+  # project cannot find vcpkg's ninja on its own. vcpkg passes the path with
+  # backslashes, which the generated initial cache would read as escapes.
+  if(CMAKE_GENERATOR MATCHES "Ninja" AND CMAKE_MAKE_PROGRAM)
+    file(TO_CMAKE_PATH "${CMAKE_MAKE_PROGRAM}" _qvac_make_program)
+    string(APPEND args " [==[-DCMAKE_MAKE_PROGRAM:FILEPATH=${_qvac_make_program}]==]")
+  endif()
+
   cmake_language(EVAL CODE "_ExternalProject_Add(${args})")
 endfunction()
