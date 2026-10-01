@@ -553,8 +553,11 @@ jobs:
             exit 1
           fi
           module_dir=$(dirname "${cuda_modules[0]}")
+          # setup-cuda's MSVC PATH puts System32 first, so a bare `find` is
+          # Windows find.exe, and CUDA_PATH is a Windows path.
+          cuda_root=$(cygpath -u "$CUDA_PATH")
           for dll in cudart64_13.dll cublas64_13.dll cublasLt64_13.dll; do
-            mapfile -d '' -t matches < <(find "$CUDA_PATH" -type f -iname "$dll" -print0)
+            mapfile -d '' -t matches < <(/usr/bin/find "$cuda_root" -type f -iname "$dll" -print0)
             if [ "${#matches[@]}" -ne 1 ]; then
               echo "::error::expected one $dll in CUDA_PATH, found ${#matches[@]}"
               exit 1
