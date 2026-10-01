@@ -498,6 +498,10 @@ export class InferenceCancelledError extends QvacErrorBase {
     this.requestId = requestId
     this.partial = partial
   }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { requestId: this.requestId, partial: this.partial }
+  }
 }
 
 export class AsyncDisposeUnavailableError extends QvacErrorBase {
@@ -1042,5 +1046,18 @@ export class ModelRegistryQueryFailedError extends QvacErrorBase {
         cause
       )
     )
+  }
+}
+
+export class RpcServerOperationError extends QvacErrorBase {
+  readonly operation: string
+  readonly details: string
+  constructor(operation: string, details: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.RPC_SERVER_OPERATION_FAILED, [operation, details], cause))
+    this.operation = operation
+    this.details = details
+  }
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, details: this.details }
   }
 }
