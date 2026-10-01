@@ -1470,11 +1470,11 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/embed-llamacpp':
-        specifier: ^0.41.1
-        version: 0.41.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.43.0
+        version: link:../embed-llamacpp
       '@qvac/llm-llamacpp':
-        specifier: ^0.53.0
-        version: 0.53.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.55.0
+        version: link:../llm-llamacpp
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -4322,10 +4322,6 @@ packages:
     resolution: {integrity: sha512-jTrtxgjSr43uHHs5UoIMQZ4ztaH92d4xVwWSB/GC/FgD424S6BK0C0NUo3TJ5p07kjdYXvnYzu1HazxQ0IJa5Q==}
     deprecated: 'Deprecated: no longer maintained; removed from the QVAC monorepo.'
 
-  '@qvac/embed-llamacpp@0.41.3':
-    resolution: {integrity: sha512-Akafa58cTB9oqoWCv+O8KSuQGfIGcnR6xx65lyCvHFlnlqsDv3VeJab4a0kNpgFBnIUmUZdsPkhua+rwqZ8B5g==}
-    engines: {bare: '>=1.24.0'}
-
   '@qvac/embed-llamacpp@0.43.0':
     resolution: {integrity: sha512-98hVXu4IugHsRBpsQ4Riyfa3bl7iUVLixdyJtWk85lZgzvD8TpDrw0+WOEdYP2vTDYitBcwPHaecuFMgcaPRrw==}
     engines: {bare: '>=1.24.0'}
@@ -4373,10 +4369,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@qvac/fabric@0.16.1':
-    resolution: {integrity: sha512-sw/PNip8N/vioJ6tJaJ2BNFCB7e6kqv9wMFbMvEvhU/mmK4yCPNpim7jGDmzCfsrmNlp2/rwe1NFDx5e4m0PlA==}
-    engines: {bare: '>=1.24.0'}
-
   '@qvac/fabric@0.18.1':
     resolution: {integrity: sha512-PbrHPb3KYddzrmLcyp6paVeQ1Pmh/+bteI0tc8cYeKtjVeIMvmK94YFC7S3p1VK8n+UWAJcaOcWooHFdSk6QjQ==}
     engines: {bare: '>=1.24.0'}
@@ -4395,10 +4387,6 @@ packages:
 
   '@qvac/infer-base@0.6.2':
     resolution: {integrity: sha512-soUTI8227F0l2XYSeMHPEfwlZV1Cohe2rhZGiSYFMkm3Ak2N+JV4fufD5SBeNMFq0byrqgt8BWWlcbLSFCVqCw==}
-
-  '@qvac/llm-llamacpp@0.53.2':
-    resolution: {integrity: sha512-OoONPDflcPM6otrnHJcQYQkQT5mnqIBJ7fN34lCew7JC42F6G5mwRsoqqTrL56BGltSZ/nBO4MOLWYtropNNHw==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/llm-llamacpp@0.55.0':
     resolution: {integrity: sha512-Zd1xxnSDJuF4qKo1mnh4oabO8rH9FRKHJTY4svewic7VkAN0pKGmj3Lcz0Cslbvi88DQeCkwuabGBRahHuJ5Sg==}
@@ -13583,18 +13571,6 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
-  '@qvac/embed-llamacpp@0.41.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.16.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/embed-llamacpp@0.43.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/fabric': 0.18.1
@@ -13627,8 +13603,6 @@ snapshots:
 
   '@qvac/fabric-win32-x64@0.18.1':
     optional: true
-
-  '@qvac/fabric@0.16.1': {}
 
   '@qvac/fabric@0.18.1':
     optionalDependencies:
@@ -13675,18 +13649,6 @@ snapshots:
       bare-os: 3.9.3
     transitivePeerDependencies:
       - bare-abort-controller
-
-  '@qvac/llm-llamacpp@0.53.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.16.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@qvac/llm-llamacpp@0.55.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:

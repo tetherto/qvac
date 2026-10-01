@@ -48,6 +48,10 @@ jobs:
           java-version: '17'
           distribution: temurin
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+        with:
+          # Drops `tools` from the action's default: the obsolete SDK Tools
+          # package is gone from Google's repository and fails provisioning.
+          packages: platform-tools
       - name: Build the same workspace worker as Python
         run: python3 ../sdk-python/scripts/build_worker.py --force
       - name: Run shared cross-client corpus

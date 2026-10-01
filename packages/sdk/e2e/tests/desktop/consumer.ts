@@ -695,6 +695,9 @@ export const executor = createExecutor({
       /^snap-storage-/,
       'Snap storage tests require the strict-confined Snap consumer'
     ),
+    ...(process.platform === 'darwin'
+      ? []
+      : [new SkipExecutor(/^tts-audio8-coreml$/, 'Core ML runs on macOS and iOS only')]),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
