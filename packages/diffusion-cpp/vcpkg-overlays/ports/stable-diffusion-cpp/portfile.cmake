@@ -32,6 +32,7 @@ vcpkg_from_github(
     REPO tetherto/qvac-ext-stable-diffusion.cpp
     REF 107121df3ee9664cd47f80b19add495002d0232f
     SHA512 f0e4b70f8005b45169c17cb9f097450d00a9f3d9acee046a31c085f1745ae9a8ebb6f5308f5cf260f7b4905932f5ea4fce2f0ccc73e23bbd67e3c1966888bd31
+    PATCHES comfy-nvfp4-awq.patch
 )
 
 # Even under SD_USE_SYSTEM_GGML the sources reach into one ggml *internal*
