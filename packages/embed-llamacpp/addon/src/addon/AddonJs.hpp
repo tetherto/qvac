@@ -22,6 +22,7 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/BertModel.hpp"
+#include "model-interface/LayaModel.hpp"
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
 
 namespace qvac_lib_inference_addon_embed {
@@ -497,6 +498,44 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(
       make_shared<out_handl::Js2DArrayOutputHandler<BertEmbeddings, float>>());
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+
+  return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+/// Delivers laya's response JSON as a JS string; the JS side parses it.
+struct JsLayaDecisionOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          LayaDecisionResult> {
+  JsLayaDecisionOutputHandler()
+      : JsBaseOutputHandler<LayaDecisionResult>(
+            [this](const LayaDecisionResult& out) -> js_value_t* {
+              return qvac_lib_inference_addon_cpp::js::String::create(
+                  this->env_, out.json);
+            }) {}
+};
+
+inline js_value_t*
+createLayaInstance(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  auto model = make_unique<LayaModel>(
+      args.getMapEntry(1, "path"),
+      args.getSubmap(1, "config"),
+      args.getMapEntry(1, "backendsDir"));
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(make_shared<JsLayaDecisionOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),

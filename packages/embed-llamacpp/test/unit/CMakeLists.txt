@@ -11,6 +11,7 @@ add_executable(
   test_backend_selection.cpp
   test_cancel_stale_flag.cpp
   test_bert_model.cpp
+  test_laya_model.cpp
   test_llama_lazy_init_backend.cpp
   test_logging.cpp
   test_model_metadata.cpp
@@ -20,6 +21,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cpp

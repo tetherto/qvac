@@ -56,8 +56,10 @@ splitBackendTraits(const backend_selection::SplitDeviceSelection& selection);
 ///
 /// The hooks run inside the deferred initialization, which InitLoader triggers
 /// from waitForLoadInitialization() or a background thread once the owning
-/// model is fully constructed. Declare the loader after every member its hooks
-/// write, so it is destroyed (joining a background load) before them.
+/// model is fully constructed. Declare the loader after the members its hooks
+/// write, so the llama context it owns is freed before them. InitLoader does
+/// not join a background load when destroyed: destroy the owner only once the
+/// load has finished or failed.
 class LlamaModelLoader {
 public:
   struct Hooks {
