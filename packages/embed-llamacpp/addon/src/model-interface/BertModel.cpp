@@ -809,9 +809,22 @@ void BertModel::init(BertModelSetup& setup) {
         toString(UnableToLoadModel),
         "model initialization returned a null model/context");
   }
+  pooling_type = llama_pooling_type(ctx_);
+  // RANK pooling returns n_cls_out classifier scores per sequence, not an
+  // n_embd vector. Rejected for both an explicit `pooling: rank` and a GGUF
+  // that defaults to it (rerankers), since batchDecode copies n_embd floats.
+  if (pooling_type == LLAMA_POOLING_TYPE_RANK) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnsupportedEmbeddings),
+        string_format(
+            "%s: rank pooling returns classifier scores (n_cls_out = %u per "
+            "sequence), not embeddings, and is not supported",
+            __func__,
+            llama_model_n_cls_out(model_)));
+  }
   vocab_ = llama_model_get_vocab(model_);
   batch_ = llama_batch_init(init_.params.n_batch, 0, 1);
-  pooling_type = llama_pooling_type(ctx_);
   n_embd = llama_model_n_embd(model_);
 
   // Set up abort callback for cancellation support during llama_decode

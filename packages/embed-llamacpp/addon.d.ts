@@ -4,7 +4,8 @@ export interface GGMLConfig {
     gpu_layers?: NumericLike;
     batch_size?: NumericLike;
     ctx_size?: NumericLike;
-    pooling?: "none" | "mean" | "cls" | "last" | "rank";
+    /** 'rank' (classifier scores, used by rerankers) is rejected at load; the model must produce embeddings. */
+    pooling?: "none" | "mean" | "cls" | "last";
     attention?: "causal" | "non-causal";
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";

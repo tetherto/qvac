@@ -137,7 +137,7 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `gpu_layers`     | string of integer                             | `"0"`         | Number of model layers to offload to GPU                                                 |
 | `batch_size`     | string of integer                             | `"2048"`      | Tokens processed per batch (input throughput)                                            |
 | `ctx_size`       | string of integer                             | model's trained context size (`n_ctx_train`) | Runtime context window in tokens (llama.cpp `n_ctx`); oversized values are capped to the model's trained context |
-| `pooling`        | `"none"` \| `"mean"` \| `"cls"` \| `"last"` \| `"rank"` | model default | Pooling strategy used to collapse token embeddings into a single sequence vector        |
+| `pooling`        | `"none"` \| `"mean"` \| `"cls"` \| `"last"`   | model default | Pooling strategy used to collapse token embeddings into a single sequence vector. `"rank"`, and models that default to it (rerankers), are rejected at load with `UnsupportedEmbeddings` |
 | `attention`      | `"causal"` \| `"non-causal"`                  | model default | Attention type                                                                            |
 | `embd_normalize` | string of integer                             | `"2"`         | Embedding normalization (`-1` = none, `0` = max abs int16, `1` = taxicab, `2` = euclidean, `>2` = p-norm) |
 | `flash_attn`     | `"on"` \| `"off"` \| `"auto"`                 | `"auto"`      | Enable / disable flash attention                                                         |

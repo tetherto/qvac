@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.44.0] - 2026-10-01
+
+### Breaking
+
+- `pooling: 'rank'` is rejected at load with `UnsupportedEmbeddings`, and so is a GGUF whose default pooling is rank (rerankers). The declared type is now `'none' | 'mean' | 'cls' | 'last'`. Rank pooling returns classifier scores rather than an embedding, so the addon never produced usable output for it; see Fixed.
+
+### Fixed
+
+- Rank pooling no longer reads past the end of llama.cpp's output. It returns `n_cls_out` floats per sequence (1 when the model has no classifier labels), but the addon copied and normalized `n_embd` of them, so every vector beyond the first value came from unrelated memory: on `embeddinggemma-300M-Q8_0` two identical runs returned different vectors of 768 floats.
+
 ## [0.43.1] - 2026-09-30
 
 ### Changed

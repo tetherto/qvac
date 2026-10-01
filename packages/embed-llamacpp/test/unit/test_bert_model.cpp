@@ -985,6 +985,30 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRowRejected) {
   }
 }
 
+TEST_F(BertModelTest, RankPoolingRejected) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["pooling"] = "rank";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  try {
+    model.waitForLoadInitialization();
+    FAIL() << "pooling 'rank' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(error.codeString(), "[ GTE :: UnsupportedEmbeddings ]");
+    EXPECT_NE(
+        std::string(error.what()).find("rank pooling returns classifier scores"),
+        std::string::npos)
+        << error.what();
+  }
+  EXPECT_FALSE(model.isLoaded());
+}
+
 TEST_F(BertModelTest, SplitDeviceSelectionPinsEligibleConsumerList) {
   common_params params;
   std::unordered_map<std::string, std::string> config;
