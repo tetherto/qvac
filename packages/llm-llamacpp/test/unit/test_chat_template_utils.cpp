@@ -1116,3 +1116,54 @@ TEST_F(ChatTemplateUtilsTest, ReasoningMovedOutOfContentIsTheTemplatesToDrop) {
   EXPECT_NE(split.find("<assistant>Red, green, blue."), std::string::npos)
       << split;
 }
+
+// The markers for cutting an earlier answer's reasoning come from the
+// template itself, as llama-server reads them, so a template outside the
+// family table gets its own; the table is only the fallback.
+TEST_F(ChatTemplateUtilsTest, HistoryReasoningTagsComeFromTheTemplate) {
+  common_chat_templates_ptr qwen = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
+  const auto qwenTags = historyReasoningTags(qwen.get(), nullptr, true);
+  ASSERT_TRUE(qwenTags.has_value());
+  EXPECT_EQ(qwenTags->open, "<think>");
+  EXPECT_EQ(qwenTags->close, "</think>");
+
+  constexpr const char* CUSTOM_REASONING_TEMPLATE =
+      "{%- for m in messages -%}"
+      "{%- if m.role == 'assistant' -%}<|assistant|>"
+      "{%- if m.reasoning_content -%}"
+      "<reason>{{ m.reasoning_content }}</reason>"
+      "{%- endif -%}{{ m.content }}<|end|>"
+      "{%- else -%}<|{{ m.role }}|>{{ m.content }}<|end|>{%- endif -%}"
+      "{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<|assistant|>{%- endif -%}";
+  common_chat_templates_ptr custom =
+      common_chat_templates_init(nullptr, CUSTOM_REASONING_TEMPLATE);
+  const auto customTags = historyReasoningTags(custom.get(), nullptr, true);
+  ASSERT_TRUE(customTags.has_value());
+  EXPECT_EQ(customTags->open, "<reason>");
+  EXPECT_EQ(customTags->close, "</reason>");
+
+  // No reasoning in the template and no family entry: nothing to cut.
+  constexpr const char* PLAIN_TEMPLATE =
+      "{%- for m in messages -%}<|{{ m.role }}|>{{ m.content }}<|end|>"
+      "{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<|assistant|>{%- endif -%}";
+  common_chat_templates_ptr plain =
+      common_chat_templates_init(nullptr, PLAIN_TEMPLATE);
+  EXPECT_FALSE(historyReasoningTags(plain.get(), nullptr, true).has_value());
+  // Without Jinja the template reports nothing; only the table applies.
+  EXPECT_FALSE(historyReasoningTags(qwen.get(), nullptr, false).has_value());
+
+  // Harmony channels are not a block followed by the answer; left whole.
+  constexpr const char* HARMONY_STYLE_TEMPLATE =
+      "{%- for m in messages -%}<|start|>{{ m.role }}"
+      "{%- if m.role == 'assistant' and m.reasoning_content -%}"
+      "<|channel|>analysis<|message|>{{ m.reasoning_content }}<|end|>"
+      "<|start|>assistant{%- endif -%}"
+      "<|channel|>final<|message|>{{ m.content }}<|end|>{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<|start|>assistant{%- endif -%}";
+  common_chat_templates_ptr harmony =
+      common_chat_templates_init(nullptr, HARMONY_STYLE_TEMPLATE);
+  EXPECT_FALSE(historyReasoningTags(harmony.get(), nullptr, true).has_value());
+}

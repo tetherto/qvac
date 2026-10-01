@@ -995,5 +995,46 @@ std::string getThinkingForcedOpenText(
   return generationPrompt.substr(start);
 }
 
+std::optional<ReasoningTags> historyReasoningTags(
+    const common_chat_templates* tmpls, const ::llama_model* model,
+    bool useJinja) {
+  const std::optional<ReasoningTags> fallback =
+      selectReasoningTagsForModel(model);
+  if (tmpls == nullptr || !useJinja) {
+    return fallback;
+  }
+  common_chat_templates_inputs probe;
+  probe.use_jinja = true;
+  probe.add_generation_prompt = true;
+  probe.enable_thinking = true;
+  common_chat_msg user;
+  user.role = "user";
+  user.content = "Hi";
+  probe.messages = {user};
+  PromptRenderResult rendered;
+  try {
+    rendered = getPrompt(tmpls, probe);
+  } catch (const std::exception&) {
+    return fallback;
+  }
+  const auto trim = [](const std::string& text) {
+    constexpr const char* WHITESPACE = " \t\r\n";
+    const size_t first = text.find_first_not_of(WHITESPACE);
+    return first == std::string::npos
+               ? std::string()
+               : text.substr(
+                     first, text.find_last_not_of(WHITESPACE) - first + 1);
+  };
+  const std::string open = trim(rendered.thinkingStartTag);
+  // Harmony (gpt-oss) answers are channels, not a block then the answer:
+  // cutting the analysis channel would leave the final channel's header
+  // in front of the answer. Left whole until it has a Harmony parser.
+  if (isHarmonyModel(model) || open.starts_with("<|channel|>")) {
+    return std::nullopt;
+  }
+  return selectReasoningTagSource(
+      open, trim(rendered.thinkingEndTag), fallback);
+}
+
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

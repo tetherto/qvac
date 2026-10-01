@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "../utils/ReasoningUtils.hpp"
 #include "CacheLedger.hpp"
 #include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
@@ -320,6 +321,15 @@ public:
   virtual void setCacheCheckpointPolicy(
       const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy) {
     (void)policy;
+  }
+
+  /// The reasoning markers of an earlier assistant turn, read from the chat
+  /// template once at load (`utils::historyReasoningTags`); `std::nullopt`
+  /// when the model has no known reasoning channel.
+  [[nodiscard]] virtual std::optional<
+      qvac_lib_inference_addon_llama::utils::ReasoningTags>
+  historyReasoningTags() const {
+    return std::nullopt;
   }
 
   /**

@@ -1747,10 +1747,9 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   // streamed it. Qwen's templates cut it out of `content` themselves; others
   // (DeepSeek V4, Gemma 4) read it only from `reasoning_content` and would
   // print it as part of the answer. Hand every template the split form, the
-  // shape llama-server's OpenAI-compatible input has.
-  if (const auto tags =
-          qvac_lib_inference_addon_llama::utils::selectReasoningTagsForModel(
-              state_->llmContext_->getModel())) {
+  // shape llama-server's OpenAI-compatible input has, cut with the markers
+  // the template itself reports.
+  if (const auto tags = state_->llmContext_->historyReasoningTags()) {
     qvac_lib_inference_addon_llama::utils::moveReasoningOutOfContent(
         chatMsgs, *tags);
   }

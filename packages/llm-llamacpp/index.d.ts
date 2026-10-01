@@ -328,8 +328,8 @@ declare namespace LlmLlamacpp {
          * An assistant turn's reasoning, separate from its answer in `content`, as
          * in OpenAI-compatible APIs. Optional: an answer sent back with its
          * reasoning inline (`<think>…</think>` first, as the model streamed it) is
-         * split into the two on models with a known reasoning channel, so the chat
-         * template can drop or place it. Ignored on other roles.
+         * split into the two, using the reasoning markers the chat template
+         * reports, so the template can drop or place it. Ignored on other roles.
          */
         reasoning_content?: string;
         type?: undefined;

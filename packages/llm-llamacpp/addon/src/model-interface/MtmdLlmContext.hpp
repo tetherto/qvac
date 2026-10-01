@@ -158,6 +158,11 @@ public:
   releaseCheckpoints() override {
     return std::exchange(cacheCheckpoints_, {});
   }
+  [[nodiscard]] std::optional<
+      qvac_lib_inference_addon_llama::utils::ReasoningTags>
+  historyReasoningTags() const override {
+    return historyReasoningTags_;
+  }
 
   /// Entries the last prompt reconciliation kept resident (0 = cold).
   [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
@@ -452,6 +457,10 @@ private:
   // tags when the active model has no recognised channel.
   qvac_lib_inference_addon_llama::utils::ReasoningState reasoningState_;
   bool reasoningEnabled_ = false;
+  // Reasoning markers of an earlier assistant turn, read from the template at
+  // load; see `historyReasoningTags`.
+  std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>
+      historyReasoningTags_;
 
   // True when this model requires full-state snapshots for request rollback
   // and divergent-history checkpoints. Decided once by

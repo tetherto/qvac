@@ -188,6 +188,11 @@ public:
   releaseCheckpoints() override {
     return std::exchange(cacheCheckpoints_, {});
   }
+  [[nodiscard]] std::optional<
+      qvac_lib_inference_addon_llama::utils::ReasoningTags>
+  historyReasoningTags() const override {
+    return historyReasoningTags_;
+  }
 
   SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
@@ -362,6 +367,10 @@ private:
   // tags when the active model has no recognised channel.
   qvac_lib_inference_addon_llama::utils::ReasoningState reasoningState_;
   bool reasoningEnabled_ = false;
+  // Reasoning markers of an earlier assistant turn, read from the template at
+  // load; see `historyReasoningTags`.
+  std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>
+      historyReasoningTags_;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

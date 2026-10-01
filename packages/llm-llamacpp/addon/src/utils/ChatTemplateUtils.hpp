@@ -188,6 +188,22 @@ PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs);
 
+/**
+ * @brief The reasoning markers an earlier assistant turn carries, for cutting
+ * its reasoning out of `content` before a render.
+ *
+ * Read the way llama-server reads them: from what the chat template reports
+ * (`thinking_start_tag` / `thinking_end_tags`, found by fabric's template
+ * handlers or its differential autoparser) on one probe render, trimmed of
+ * surrounding whitespace. Falls back to `selectReasoningTagsForModel` when the
+ * template reports none, the order the reasoning detector uses. A template
+ * that cannot render the probe falls back too. Harmony (gpt-oss) returns
+ * `std::nullopt`: its answers are channels, which this split cannot cut.
+ */
+std::optional<ReasoningTags> historyReasoningTags(
+    const struct common_chat_templates* tmpls, const ::llama_model* model,
+    bool useJinja);
+
 /// Tokenizes one string the way the sampler expects (`common_tokenize(lctx,
 /// text, false, true)`). Injected so the conversion below is testable
 /// without a model.

@@ -88,6 +88,9 @@ void MtmdLlmContext::initializeCommonState() {
 
   // An empty `chat_template` uses the template embedded in the GGUF.
   tmpls_ = common_chat_templates_init(modelCtx_.model, params_.chat_template);
+  historyReasoningTags_ =
+      qvac_lib_inference_addon_llama::utils::historyReasoningTags(
+          tmpls_.get(), modelCtx_.model, params_.use_jinja);
 
   smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
   if (!smpl_) {

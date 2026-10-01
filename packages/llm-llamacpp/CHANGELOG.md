@@ -57,12 +57,13 @@
   nothing, as before.
 - A single-prompt key switch no longer rewrites the old session's file when
   nothing ran since it was last written or loaded.
-- Assistant messages may carry `reasoning_content`. On a model with a known
-  reasoning channel (Qwen3 family, DeepSeek V4, Gemma 4), an answer sent back
-  with its reasoning inline is split into `content` and `reasoning_content`
-  before rendering, like llama-server's OpenAI-compatible input, so templates
-  that read only `reasoning_content` (DeepSeek V4, Gemma 4) drop it from
-  earlier turns instead of printing it as part of the answer.
+- Assistant messages may carry `reasoning_content`. An answer sent back with
+  its reasoning inline is split into `content` and `reasoning_content` before
+  rendering, like llama-server's OpenAI-compatible input, using the reasoning
+  markers the chat template reports (family table as fallback; gpt-oss is
+  left whole). Templates that read only `reasoning_content` (DeepSeek V4,
+  Gemma 4) therefore drop it from earlier turns instead of printing it as
+  part of the answer.
 
 ### Removed
 
