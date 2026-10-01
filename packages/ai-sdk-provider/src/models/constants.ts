@@ -19496,7 +19496,7 @@ export const allModels = [
     endpointCategory: 'speech'
   } as const,
   {
-    name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1',
+    name: 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0',
     src: `registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf`,
     registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
     registrySource: 's3',
@@ -21151,7 +21151,7 @@ export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0: ModelConstant<'speech'> = allMo
 export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0: ModelConstant<'speech'> = allModels[707]
 export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP16: ModelConstant<'speech'> = allModels[708]
 export const TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0: ModelConstant<'speech'> = allModels[709]
-export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1: ModelConstant<'speech'> = allModels[710]
+export const TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0: ModelConstant<'speech'> = allModels[710]
 export const TTS_ENHANCER_LAVASR_FP16: ModelConstant<'speech'> = allModels[711]
 export const TTS_ENHANCER_LAVASR_FP32: ModelConstant<'speech'> = allModels[712]
 export const TTS_DENOISER_LAVASR_FP16: ModelConstant<'speech'> = allModels[713]

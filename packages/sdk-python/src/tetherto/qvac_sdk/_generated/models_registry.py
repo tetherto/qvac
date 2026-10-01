@@ -6779,6 +6779,24 @@ TTS_COSYVOICE3_HIFT_COSYVOICE_FP32 = ModelConstant(
     params="0.5B",
 )
 
+TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0 = ModelConstant(
+    name="TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
+    registry_path="qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3651915,
+    blob_block_length=14855,
+    blob_byte_offset=239311482118,
+    model_id="cosyvoice3-llm-q8_0-fused.gguf",
+    expected_size=973490560,
+    sha256_checksum="a1a4b925359719fae8e3ff021014dc917b999ba6a1b4b1376caef6be959e8b02",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="q8_0",
+    params="0.5B",
+)
+
 TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0 = ModelConstant(
     name="TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0",
     src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q4_0.gguf",
@@ -6809,24 +6827,6 @@ TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0 = ModelConstant(
     model_id="cosyvoice3-llm-q8_0.gguf",
     expected_size=973496000,
     sha256_checksum="1baeea863cc7796d56fe409dbb0b9ddd4cb50b82336054c0df419e3ec96a852e",
-    addon="tts",
-    engine="tts-ggml",
-    quantization="q8_0",
-    params="0.5B",
-)
-
-TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1 = ModelConstant(
-    name="TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1",
-    src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
-    registry_path="qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
-    registry_source="s3",
-    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blob_block_offset=3651915,
-    blob_block_length=14855,
-    blob_byte_offset=239311482118,
-    model_id="cosyvoice3-llm-q8_0-fused.gguf",
-    expected_size=973490560,
-    sha256_checksum="a1a4b925359719fae8e3ff021014dc917b999ba6a1b4b1376caef6be959e8b02",
     addon="tts",
     engine="tts-ggml",
     quantization="q8_0",
@@ -9100,9 +9100,9 @@ __all__ = [
     "TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0",
     "TTS_COSYVOICE3_HIFT_COSYVOICE_FP16",
     "TTS_COSYVOICE3_HIFT_COSYVOICE_FP32",
+    "TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0",
     "TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0",
     "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0",
-    "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1",
     "TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16",
     "TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32",
     "TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0",

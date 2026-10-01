@@ -18488,7 +18488,7 @@ export const models = [
     params: '0.5B'
   },
   {
-    name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1',
+    name: 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0',
     registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
     registrySource: 's3',
     blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
@@ -26993,8 +26993,8 @@ export const TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0 = {
   params: models[719].params
 } as const
 
-export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1 = {
-  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1',
+export const TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0 = {
+  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0',
   src: `registry://${models[720].registrySource}/${models[720].registryPath}`,
   registryPath: models[720].registryPath,
   registrySource: models[720].registrySource,
