@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "1afa7470f75c475e6da271909132b08016ac2d6a",
+    "baseline": "6399e77a9a2a2023e88889d7e97d293d86d1affe",
     "repository": "https://github.com/mexxik/qvac-registry-vcpkg.git"
   },
   "registries": [
