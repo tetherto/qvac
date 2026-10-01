@@ -226,9 +226,11 @@ TEST(CacheLedger, ParseCheckpointPolicyRejectsBadValues) {
 // state a tail trim cannot rebuild.
 TEST(ModelMemoryPolicy, CheckpointDefaultsFollowTheArchitecture) {
   namespace utils = qvac_lib_inference_addon_llama::utils;
-  EXPECT_EQ(utils::defaultCacheCheckpoints(true, false), 2u);
-  EXPECT_EQ(utils::defaultCacheCheckpoints(false, true), 2u);
-  EXPECT_EQ(utils::defaultCacheCheckpoints(false, false), 1u);
+  EXPECT_EQ(utils::defaultCacheCheckpoints(true, false, false), 2u);
+  EXPECT_EQ(utils::defaultCacheCheckpoints(false, true, false), 2u);
+  EXPECT_EQ(utils::defaultCacheCheckpoints(false, false, false), 1u);
+  // Fabric reports DeepSeek V4 as hybrid; it still keeps one.
+  EXPECT_EQ(utils::defaultCacheCheckpoints(false, true, true), 1u);
   EXPECT_TRUE(utils::needsFullStateSnapshot(false, false, true));
   EXPECT_FALSE(utils::needsFullStateSnapshot(false, false, false));
   EXPECT_EQ(utils::untrimmableSnapshotScope(), utils::SnapshotScope::Partial);

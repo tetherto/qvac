@@ -38,9 +38,14 @@ namespace qvac_lib_inference_addon_llama::utils {
 // checkpoint. Recurrent and hybrid models keep that pair (2): the
 // end-of-history one serves an ordinary next turn and a regenerate, the
 // pre-request one an edit of the last message. Other untrimmable models
-// (DeepSeek V4) keep only the newest, the end-of-history one (1).
-[[nodiscard]] inline size_t
-defaultCacheCheckpoints(bool isRecurrent, bool isHybrid) noexcept {
+// (DeepSeek V4) keep only the newest, the end-of-history one (1). Fabric
+// lists DeepSeek V4 as hybrid (`llm_arch_is_hybrid`), so its check comes
+// first.
+[[nodiscard]] inline size_t defaultCacheCheckpoints(
+    bool isRecurrent, bool isHybrid, bool isDeepSeekV4) noexcept {
+  if (isDeepSeekV4) {
+    return 1;
+  }
   return isRecurrent || isHybrid ? 2 : 1;
 }
 

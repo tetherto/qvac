@@ -315,10 +315,14 @@ void LlamaModel::init(bool acquireLock) {
     // architecture; see `defaultCacheCheckpoints`.
     if (!snap->cacheCheckpointPolicy_.maxCountExplicit) {
       const llama_model* mdl = snap->llmContext_->getModel();
-      snap->cacheCheckpointPolicy_.maxCount =
-          qvac_lib_inference_addon_llama::utils::defaultCacheCheckpoints(
-              mdl != nullptr && llama_model_is_recurrent(mdl),
-              mdl != nullptr && llama_model_is_hybrid(mdl));
+      namespace utils = qvac_lib_inference_addon_llama::utils;
+      const std::optional<std::string> architecture =
+          mdl != nullptr ? utils::getModelArchitecture(mdl) : std::nullopt;
+      snap->cacheCheckpointPolicy_.maxCount = utils::defaultCacheCheckpoints(
+          mdl != nullptr && llama_model_is_recurrent(mdl),
+          mdl != nullptr && llama_model_is_hybrid(mdl),
+          architecture.has_value() &&
+              utils::isDeepSeekV4Architecture(*architecture));
     }
     snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
     validateCheckpointBudget(*snap);
