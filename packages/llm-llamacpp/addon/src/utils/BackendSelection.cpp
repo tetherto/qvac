@@ -784,16 +784,28 @@ bool productionSupportsKvCacheType(ggml_backend_dev_t dev, ggml_type kvType) {
   return ok;
 }
 
+// CUDA, OpenCL and Metal have addon guards for the quantized KV types, so they
+// cannot rely on fabric's per-layer CPU KV placement.
+bool allowsCpuKvFallback(const std::string& lowercasedName) {
+  return lowercasedName.find("cuda") == std::string::npos &&
+         lowercasedName.find("opencl") == std::string::npos &&
+         lowercasedName.find("metal") == std::string::npos &&
+         lowercasedName.rfind("mtl", 0) != 0;
+}
+
 bool deviceMeetsConstraints(
     const BackendInterface& bckI, ggml_backend_dev_t dev,
     const backend_selection::LoadConstraints& constraints) {
   if (bckI.deviceSupportsKvCacheType == nullptr) {
     return true;
   }
-  return std::ranges::all_of(
+  const bool supportsAll = std::ranges::all_of(
       constraints.kvCacheTypes, [&](const enum ggml_type kvType) {
         return bckI.deviceSupportsKvCacheType(dev, kvType);
       });
+  return supportsAll ||
+         (constraints.allowCpuKvFallback &&
+          allowsCpuKvFallback(lowerCopy(bckI.ggml_backend_dev_name(dev))));
 }
 
 /// First surviving candidate of @p family. Callers iterate family-major and
@@ -1314,9 +1326,12 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
   // use this fallback path.
   const auto canUseCpuKvFallback = [](const Candidate& c) {
     return c.excluded == ExclusionReason::KvCacheTypeUnsupported &&
-           !backendNameMatchesFamily(c.name, "cuda") &&
-           !backendNameMatchesFamily(c.name, "opencl") &&
-           !backendNameMatchesFamily(c.name, "metal");
+           ::allowsCpuKvFallback(c.name);
+  };
+  const auto settleCpuKvFallback = [&](const Candidate& c, SelectionPath path) {
+    BackendChoice fallback = settle(c, path);
+    fallback.cpuKvFallback = true;
+    return fallback;
   };
   if (request.preferred == BackendType::GPU) {
     for (const std::string& wanted : request.backendOverride) {
@@ -1327,7 +1342,7 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
               GGML_LOG_LEVEL_WARN,
               "GPU KV-cache type unsupported; using fabric CPU KV fallback",
               nullptr);
-          return settle(c, SelectionPath::Override);
+          return settleCpuKvFallback(c, SelectionPath::Override);
         }
       }
     }
@@ -1338,7 +1353,7 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
               GGML_LOG_LEVEL_WARN,
               "GPU KV-cache type unsupported; using fabric CPU KV fallback",
               nullptr);
-          return settle(c, SelectionPath::Cascade);
+          return settleCpuKvFallback(c, SelectionPath::Cascade);
         }
       }
     }
@@ -1416,7 +1431,25 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
       ggml_backend_dev_get_props,
       llamaLogcallback,
       ::productionSupportsKvCacheType};
-  return chooseBackend(request, bckI);
+  BackendChoice choice = chooseBackend(request, bckI);
+
+  // Only on the real path, and only once a CUDA device actually won: the inner
+  // overload is what the unit tests drive, and it must not touch the
+  // filesystem. The device name is checked rather than the bucket, because a
+  // unified-memory card such as the GB10 registers CUDA as an iGPU and is
+  // selected through the iGPU branch.
+  if (choice.type == BackendType::GPU &&
+      choice.name.find("cuda") != std::string::npos &&
+      shouldWarnAboutJitCache()) {
+    llamaLogcallback(
+        GGML_LOG_LEVEL_WARN,
+        "CUDA PTX JIT cache is unwritable or disabled; if this GPU has no "
+        "precompiled kernels in this build, every process start pays the full "
+        "JIT cost (measured at 27s on sm_121) instead of only the first. Set "
+        "CUDA_CACHE_PATH to a writable path that survives restarts.",
+        nullptr);
+  }
+  return choice;
 }
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
@@ -1525,22 +1558,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           outIsMaliGpu,
           backendOverride);
 
-  // Only on the real path, and only once a CUDA device actually won: the inner
-  // overload is what the unit tests drive, and it must not touch the
-  // filesystem. The device name is checked rather than the bucket, because a
-  // unified-memory card such as the GB10 registers CUDA as an iGPU and is
-  // selected through the iGPU branch.
-  if (selected.first == BackendType::GPU &&
-      selected.second.find("cuda") != std::string::npos &&
-      shouldWarnAboutJitCache()) {
-    llamaLogcallback(
-        GGML_LOG_LEVEL_WARN,
-        "CUDA PTX JIT cache is unwritable or disabled; if this GPU has no "
-        "precompiled kernels in this build, every process start pays the full "
-        "JIT cost (measured at 27s on sm_121) instead of only the first. Set "
-        "CUDA_CACHE_PATH to a writable path that survives restarts.",
-        nullptr);
-  }
   return selected;
 }
 

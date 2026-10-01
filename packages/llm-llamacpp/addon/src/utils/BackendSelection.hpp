@@ -149,8 +149,9 @@ struct LoadConstraints {
   /// When non-empty, every device used by a split load must belong to one of
   /// these backend families.
   std::vector<std::string> requiredBackendFamilies;
-  /// Exact main-GPU selectors need an explicit device list so they can be
-  /// translated to an index in that final list.
+  /// Set when selection kept a KV-incapable GPU for fabric's per-layer CPU KV
+  /// placement. Such devices then also qualify for the split set.
+  bool allowCpuKvFallback = false;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
@@ -217,6 +218,9 @@ struct BackendChoice {
   std::string name = "none";
   std::optional<int> adrenoVersion;
   bool isMaliGpu = false;
+  /// The chosen GPU cannot run the requested KV type and relies on fabric's
+  /// per-layer CPU KV placement.
+  bool cpuKvFallback = false;
   SelectionTrace trace;
 };
 

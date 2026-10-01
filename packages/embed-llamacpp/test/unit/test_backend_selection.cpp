@@ -1205,6 +1205,30 @@ TEST_F(BackendSelectionTest, StrictBackendKeepsSingleRegistrySplit) {
   EXPECT_EQ(selection.devices[0].name, VULKAN0_BACK);
 }
 
+// One card registered by both CUDA and Vulkan, Vulkan selected. The split must
+// keep the Vulkan registration, with and without a strict backend.
+TEST_F(BackendSelectionTest, SelectedRegistryKeepsCardRegisteredTwice) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:01:00.0"));
+  const BackendInterface bckI = mockBackend.toBackendInterface();
+
+  LoadConstraints constraints;
+  SplitDeviceSelection selection =
+      getSplitDeviceSelection(bckI, "vulkan0", constraints);
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, VULKAN0_BACK);
+  EXPECT_EQ(selection.sourceGpuCount, 2U);
+
+  constraints.requiredBackendFamilies = {"vulkan"};
+  selection = getSplitDeviceSelection(bckI, "vulkan0", constraints);
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, VULKAN0_BACK);
+}
+
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWithNoGpuAtAll) {
   mockBackend.addDevice(createCPUDevice("host", "CPU"));
   EXPECT_TRUE(splitDevicesFor(mockBackend, "cuda0").empty());

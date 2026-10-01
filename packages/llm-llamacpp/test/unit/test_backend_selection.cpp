@@ -1728,6 +1728,17 @@ TEST_F(BackendSelectionTest, VulkanKeepsGpuForFabricCpuKvFallback) {
   EXPECT_EQ(choice.name, "vulkan0");
 }
 
+TEST_F(BackendSelectionTest, CpuKvFallbackIsReportedOnTheChoice) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  EXPECT_TRUE(chooseWithKvTypes(mockBackend, {"tbq4_0"}).cpuKvFallback);
+}
+
+TEST_F(BackendSelectionTest, CapableDeviceIsNotACpuKvFallback) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_FALSE(chooseWithKvTypes(mockBackend, {"tbq4_0"}).cpuKvFallback);
+}
+
 TEST_F(BackendSelectionTest, UnsupportedCudaCanFallThroughToVulkanCpuKv) {
   mockBackend.addDevice(
       withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
@@ -2843,6 +2854,32 @@ TEST_F(
   LoadConstraints constraints;
   constraints.kvCacheTypes = {GGML_TYPE_PQ3_0};
 
+  const SplitDeviceSelection selection =
+      getSplitDeviceSelection(bckI, "vulkan0", constraints);
+
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, "Vulkan0");
+}
+
+// The CPU KV fallback keeps a KV-incapable Vulkan device in the split set, but
+// still not a guarded CUDA one.
+TEST_F(BackendSelectionTest, CpuKvFallbackSplitKeepsOnlyUnguardedDevices) {
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA")),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(MockDevice(
+          "Mali-G720", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan")),
+      "0000:02:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  LoadConstraints constraints;
+  constraints.kvCacheTypes = {GGML_TYPE_PQ3_0};
+
+  EXPECT_TRUE(
+      getSplitDeviceSelection(bckI, "vulkan0", constraints).devices.empty());
+
+  constraints.allowCpuKvFallback = true;
   const SplitDeviceSelection selection =
       getSplitDeviceSelection(bckI, "vulkan0", constraints);
 
