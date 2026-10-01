@@ -323,6 +323,7 @@ runs:
       shell: bash
       env:
         CUDA_TARGET: ${{ inputs.cuda-target }}
+        CUDA_VERSION: ${{ inputs.cuda-version }}
       run: |
         if [ "$RUNNER_OS" = "Windows" ]; then
           nvcc="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit/bin/nvcc.exe"
@@ -334,11 +335,14 @@ runs:
         echo "CUDA prefix: $cuda_prefix"
         echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
         echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
+        # Matches the port's QVAC_FABRIC_CUDA_TOOLKIT. The qvac triplets hash it
+        # into qvac-fabric's ABI and the port requires the pinned nvcc when set.
+        echo "QVAC_CUDA_TOOLKIT=$CUDA_VERSION-$CUDA_TARGET" >> "$GITHUB_ENV"
         echo "$cuda_prefix/bin" >> "$GITHUB_PATH"
         # vcpkg scrubs the environment, so the port's enable_language(CUDA)
         # only sees the toolkit through an explicit keep-list. Append rather
         # than assign so a sibling setup action's keep-list survives.
-        cuda_keep_vars="CUDA_PATH;CUDACXX"
+        cuda_keep_vars="CUDA_PATH;CUDACXX;QVAC_CUDA_TOOLKIT"
         if [ "$RUNNER_OS" = "Windows" ]; then
           cuda_keep_vars="$cuda_keep_vars;CUDAHOSTCXX;INCLUDE;LIB;LIBPATH;PATH;QVAC_MSVC_INSTALLATION;QVAC_MSVC_VERSION;UCRTVersion;UniversalCRTSdkDir;VCINSTALLDIR;VCToolsInstallDir;VCToolsVersion;VSINSTALLDIR;VisualStudioVersion;WindowsSdkDir;WindowsSDKVersion"
         fi
