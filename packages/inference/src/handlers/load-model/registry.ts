@@ -26,11 +26,11 @@ import {
 } from '@/handlers/load-model/registry-download-utils'
 import { downloadCompanionSetFromRegistry } from '@/handlers/load-model/registry-companion-set'
 import {
-  findParakeetCoremlCompanionSet,
-  findLocallyCachedParakeetCoremlCompanionSet,
-  getParakeetCoremlBundleSpecs,
-  writeCachedParakeetCoremlCompanionSet
-} from '@/handlers/load-model/parakeet-coreml'
+  findCoremlCompanionSet,
+  findLocallyCachedCoremlCompanionSet,
+  getCoremlSidecarSpec,
+  writeCachedCoremlCompanionSet
+} from '@/handlers/load-model/coreml-sidecars'
 import {
   DownloadCancelledError,
   ModelNotFoundError,
@@ -361,13 +361,11 @@ export async function downloadModelFromRegistry(
         }
       }
 
-      // Apple Parakeet encoder sidecars are optional registry assets. Discover
-      // them before the ordinary single-file path so the GGUF and complete
+      // Apple Core ML sidecars are optional registry assets. Discover them
+      // before the ordinary single-file path so the GGUF and its complete
       // .mlmodelc directories share the companion-set cache layout.
-      if (
-        modelMetadata &&
-        getParakeetCoremlBundleSpecs(registryPath, registrySource, getRuntimeContext().platform)
-      ) {
+      const platform = getRuntimeContext().platform
+      if (modelMetadata && getCoremlSidecarSpec(registryPath, registrySource, platform)) {
         const companionHooks: DownloadHooks = {
           ...hooks,
           markCacheHit: () => {
@@ -380,10 +378,7 @@ export async function downloadModelFromRegistry(
           }
         }
         try {
-          const cachedSet = await findLocallyCachedParakeetCoremlCompanionSet(
-            modelMetadata,
-            getRuntimeContext().platform
-          )
+          const cachedSet = await findLocallyCachedCoremlCompanionSet(modelMetadata, platform)
           if (cachedSet) {
             return await downloadCompanionSetFromRegistry({
               companionSet: cachedSet,
@@ -395,11 +390,10 @@ export async function downloadModelFromRegistry(
             })
           }
 
-          const client = await getRegistryClient()
-          const coremlSet = await findParakeetCoremlCompanionSet(
-            client,
+          const coremlSet = await findCoremlCompanionSet(
+            await getRegistryClient(),
             modelMetadata,
-            getRuntimeContext().platform
+            platform
           )
           if (coremlSet) {
             const modelPath = await downloadCompanionSetFromRegistry({
@@ -411,7 +405,7 @@ export async function downloadModelFromRegistry(
               shouldClearCache: ctx.shouldClearCache
             })
             try {
-              await writeCachedParakeetCoremlCompanionSet(modelMetadata, coremlSet)
+              await writeCachedCoremlCompanionSet(coremlSet)
             } catch (error) {
               logger.warn('Unable to save Core ML cache metadata', { registryPath, error })
             }
@@ -421,7 +415,7 @@ export async function downloadModelFromRegistry(
           if (ctx.signal.aborted || error instanceof DownloadCancelledError) {
             throw new DownloadCancelledError()
           }
-          logger.warn('Core ML sidecar unavailable; loading the Parakeet GGUF without it', {
+          logger.warn('Core ML sidecar unavailable; loading the GGUF without it', {
             registryPath,
             error
           })

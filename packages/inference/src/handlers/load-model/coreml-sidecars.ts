@@ -7,7 +7,12 @@ import { validateAndJoinPath } from '@/utils/path-security'
 import { promises as fsPromises } from 'bare-fs'
 import { z } from 'zod'
 
-const COREML_ROOT = 'qvac_models_compiled/ggml/parakeet/2026-09-28/'
+// Apple Core ML sidecars for registry GGUFs. A native addon runs a stage on a
+// compiled `.mlmodelc` bundle when one sits next to the GGUF and falls back to
+// ggml otherwise, so on macOS and iOS the bundle is downloaded with its GGUF
+// into one companion-set directory. The registry publishes a bundle as its
+// individual component files, none of which is a model constant of its own.
+
 const COREML_COMPONENTS = [
   'analytics/coremldata.bin',
   'coremldata.bin',
@@ -17,6 +22,69 @@ const COREML_COMPONENTS = [
 ] as const
 
 type BundleSpec = { sourceName: string; targetSuffix: string }
+
+/**
+ * A model family whose GGUFs the native addon pairs with compiled Core ML
+ * bundles staged beside them. The addon finds a bundle by name next to the
+ * GGUF, as `<modelStem><targetSuffix>.mlmodelc`.
+ */
+type SidecarFamily = {
+  /** Registry directory holding the family's published `.mlmodelc` bundles. */
+  root: string
+  /** Selects the family from a GGUF's registry path. */
+  pathPattern: RegExp
+  /** Captures the model stem (the filename without its quantization tier). */
+  stemPattern: RegExp
+  /** Bundles the pinned addon actually uses, keyed by model stem. */
+  bundlesByStem: Record<string, readonly BundleSpec[]>
+}
+
+export type CoremlSidecarSpec = {
+  root: string
+  modelStem: string
+  bundles: readonly BundleSpec[]
+}
+
+const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
+  {
+    // The pinned ASR addon supports these encoder sidecars. The other bundles
+    // in the registry (CTC, Indic CTC, Nemotron, and TDT 1.1B) must not be
+    // downloaded until the addon can actually use them.
+    root: 'qvac_models_compiled/ggml/parakeet/2026-09-28/',
+    pathPattern: /\/ggml\/parakeet\//,
+    stemPattern: /^(.+)\.(?:f16|q4_0|q8_0)\.gguf$/,
+    bundlesByStem: {
+      'parakeet-tdt-0.6b-v3': [
+        { sourceName: 'parakeet-tdt-0.6b-v3-encoder', targetSuffix: '-encoder' }
+      ],
+      'parakeet-unified-en-0.6b': [
+        { sourceName: 'parakeet-unified-en-0.6b-encoder', targetSuffix: '-encoder' }
+      ],
+      'parakeet-eou-120m-v1': [
+        { sourceName: 'parakeet_realtime_eou_120m-v1-encoder', targetSuffix: '-encoder' }
+      ],
+      'diar_streaming_sortformer_4spk-v2.1': [
+        { sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder', targetSuffix: '-encoder' },
+        {
+          sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode',
+          targetSuffix: '-encoder-bypass-pre-encode'
+        }
+      ]
+    }
+  },
+  {
+    // The TTS addon runs the Audio8 codec's synthesis stack on this bundle when
+    // it sits beside the codec decoder GGUF. Every quantization tier shares the
+    // one bundle, which is why its name drops the tier.
+    root: 'qvac_models_compiled/ggml/audio8/2026-09-30/',
+    pathPattern: /\/ggml\/audio-?8\//,
+    stemPattern: /^(.+)-(?:f16|f32|q8_0)\.gguf$/,
+    bundlesByStem: {
+      'audio8-codec-decoder': [{ sourceName: 'audio8-codec-decoder', targetSuffix: '' }]
+    }
+  }
+]
+
 type CompanionSet = NonNullable<RegistryItem['companionSet']>
 const CACHE_METADATA_NAME = '.coreml-companions.json'
 const checksumSchema = z.string().regex(/^[a-f0-9]{64}$/i)
@@ -39,23 +107,42 @@ const cachedSetSchema = z.object({
   files: z.array(cachedFileSchema)
 })
 
-export function getParakeetCoremlSetKey(model: RegistryItem): string {
-  return generateShortHash(`${model.registrySource}:${model.registryPath}:coreml:${COREML_ROOT}`)
+export function getCoremlSidecarSpec(
+  registryPath: string,
+  registrySource: string,
+  platform: string | undefined
+): CoremlSidecarSpec | undefined {
+  if ((platform !== 'darwin' && platform !== 'ios') || registrySource !== 's3') return undefined
+
+  const filename = registryPath.split('/').pop() || ''
+  for (const family of SIDECAR_FAMILIES) {
+    if (!family.pathPattern.test(registryPath)) continue
+    const modelStem = filename.match(family.stemPattern)?.[1]
+    const bundles = modelStem ? family.bundlesByStem[modelStem] : undefined
+    if (modelStem && bundles) return { root: family.root, modelStem, bundles }
+  }
+  return undefined
 }
 
-function getCachedSetMetadataPath(model: RegistryItem, cacheDir: string): string {
-  return validateAndJoinPath(cacheDir, 'sets', getParakeetCoremlSetKey(model), CACHE_METADATA_NAME)
+export function getCoremlSetKey(model: RegistryItem, spec: CoremlSidecarSpec): string {
+  return generateShortHash(`${model.registrySource}:${model.registryPath}:coreml:${spec.root}`)
 }
 
-function expectedSidecarPaths(
-  spec: NonNullable<ReturnType<typeof getParakeetCoremlBundleSpecs>>
-): Map<string, string> {
+function getCachedSetMetadataPath(
+  model: RegistryItem,
+  spec: CoremlSidecarSpec,
+  cacheDir: string
+): string {
+  return validateAndJoinPath(cacheDir, 'sets', getCoremlSetKey(model, spec), CACHE_METADATA_NAME)
+}
+
+function expectedSidecarPaths(spec: CoremlSidecarSpec): Map<string, string> {
   const paths = new Map<string, string>()
   for (const bundle of spec.bundles) {
     for (const component of COREML_COMPONENTS) {
       paths.set(
         `${spec.modelStem}${bundle.targetSuffix}.mlmodelc/${component}`,
-        `${COREML_ROOT}${bundle.sourceName}.mlmodelc/${component}`
+        `${spec.root}${bundle.sourceName}.mlmodelc/${component}`
       )
     }
   }
@@ -65,10 +152,9 @@ function expectedSidecarPaths(
 function isValidCachedSet(
   set: CompanionSet,
   model: RegistryItem,
-  platform: string | undefined
+  spec: CoremlSidecarSpec
 ): boolean {
-  const spec = getParakeetCoremlBundleSpecs(model.registryPath, model.registrySource, platform)
-  if (!spec || set.setKey !== getParakeetCoremlSetKey(model) || set.primaryKey !== 'modelPath') {
+  if (set.setKey !== getCoremlSetKey(model, spec) || set.primaryKey !== 'modelPath') {
     return false
   }
 
@@ -102,42 +188,44 @@ function isValidCachedSet(
   return true
 }
 
-export async function readCachedParakeetCoremlCompanionSet(
+export async function readCachedCoremlCompanionSet(
   model: RegistryItem,
   platform: string | undefined,
   cacheDir = getModelsCacheDir()
 ): Promise<CompanionSet | undefined> {
+  const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  if (!spec) return undefined
+
   try {
-    const raw = await fsPromises.readFile(getCachedSetMetadataPath(model, cacheDir), 'utf8')
+    const raw = await fsPromises.readFile(getCachedSetMetadataPath(model, spec, cacheDir), 'utf8')
     const parsed = cachedSetSchema.safeParse(JSON.parse(raw))
-    if (!parsed.success || !isValidCachedSet(parsed.data, model, platform)) return undefined
+    if (!parsed.success || !isValidCachedSet(parsed.data, model, spec)) return undefined
     return parsed.data
   } catch {
     return undefined
   }
 }
 
-export async function writeCachedParakeetCoremlCompanionSet(
-  model: RegistryItem,
+export async function writeCachedCoremlCompanionSet(
   set: CompanionSet,
   cacheDir = getModelsCacheDir()
 ): Promise<void> {
-  const path = getCachedSetMetadataPath(model, cacheDir)
-  await fsPromises.mkdir(validateAndJoinPath(cacheDir, 'sets', set.setKey), { recursive: true })
-  await fsPromises.writeFile(path, JSON.stringify(set))
+  const setDir = validateAndJoinPath(cacheDir, 'sets', set.setKey)
+  await fsPromises.mkdir(setDir, { recursive: true })
+  await fsPromises.writeFile(validateAndJoinPath(setDir, CACHE_METADATA_NAME), JSON.stringify(set))
 }
 
-export function findCatalogParakeetCoremlCompanionSet(
+export function findCatalogCoremlCompanionSet(
   model: RegistryItem,
   platform: string | undefined
 ): CompanionSet | undefined {
-  const spec = getParakeetCoremlBundleSpecs(model.registryPath, model.registrySource, platform)
+  const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (!spec) return undefined
 
   const sidecarFiles: CompanionSet['files'][number][] = []
   for (const bundle of spec.bundles) {
     const targetPrefix = `${spec.modelStem}${bundle.targetSuffix}.mlmodelc/`
-    const registryPrefix = `${COREML_ROOT}${bundle.sourceName}.mlmodelc/`
+    const registryPrefix = `${spec.root}${bundle.sourceName}.mlmodelc/`
     const entries = COREML_COMPONENTS.map((component) =>
       models.find(
         (entry) =>
@@ -161,17 +249,17 @@ export function findCatalogParakeetCoremlCompanionSet(
       })
     }
   }
-  return createCompanionSet(model, sidecarFiles)
+  return createCompanionSet(model, spec, sidecarFiles)
 }
 
-export async function findLocallyCachedParakeetCoremlCompanionSet(
+export async function findLocallyCachedCoremlCompanionSet(
   model: RegistryItem,
   platform: string | undefined,
   cacheDir = getModelsCacheDir()
 ): Promise<CompanionSet | undefined> {
   const set =
-    (await readCachedParakeetCoremlCompanionSet(model, platform, cacheDir)) ??
-    findCatalogParakeetCoremlCompanionSet(model, platform)
+    (await readCachedCoremlCompanionSet(model, platform, cacheDir)) ??
+    findCatalogCoremlCompanionSet(model, platform)
   if (!set) return undefined
 
   for (const file of set.files) {
@@ -188,12 +276,13 @@ export async function findLocallyCachedParakeetCoremlCompanionSet(
 
 function createCompanionSet(
   model: RegistryItem,
+  spec: CoremlSidecarSpec,
   sidecarFiles: CompanionSet['files'][number][]
 ): CompanionSet | undefined {
   if (sidecarFiles.length === 0) return undefined
   const filename = model.registryPath.split('/').pop() || model.registryPath
   return {
-    setKey: getParakeetCoremlSetKey(model),
+    setKey: getCoremlSetKey(model, spec),
     primaryKey: 'modelPath',
     files: [
       {
@@ -214,63 +303,25 @@ function createCompanionSet(
   }
 }
 
-// The pinned ASR addon supports these encoder sidecars. The other bundles in
-// the registry (CTC, Indic CTC, Nemotron, and TDT 1.1B) must not be downloaded
-// until the addon can actually use them.
-const SIDECARS_BY_MODEL: Record<string, readonly BundleSpec[]> = {
-  'parakeet-tdt-0.6b-v3': [
-    { sourceName: 'parakeet-tdt-0.6b-v3-encoder', targetSuffix: '-encoder' }
-  ],
-  'parakeet-unified-en-0.6b': [
-    { sourceName: 'parakeet-unified-en-0.6b-encoder', targetSuffix: '-encoder' }
-  ],
-  'parakeet-eou-120m-v1': [
-    { sourceName: 'parakeet_realtime_eou_120m-v1-encoder', targetSuffix: '-encoder' }
-  ],
-  'diar_streaming_sortformer_4spk-v2.1': [
-    { sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder', targetSuffix: '-encoder' },
-    {
-      sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode',
-      targetSuffix: '-encoder-bypass-pre-encode'
-    }
-  ]
-}
-
-export function getParakeetCoremlBundleSpecs(
-  registryPath: string,
-  registrySource: string,
-  platform: string | undefined
-): { modelStem: string; bundles: readonly BundleSpec[] } | undefined {
-  if ((platform !== 'darwin' && platform !== 'ios') || registrySource !== 's3') return undefined
-  if (!registryPath.includes('/ggml/parakeet/')) return undefined
-
-  const filename = registryPath.split('/').pop() || ''
-  const match = filename.match(/^(.+)\.(?:f16|q4_0|q8_0)\.gguf$/)
-  if (!match?.[1]) return undefined
-
-  const bundles = SIDECARS_BY_MODEL[match[1]]
-  return bundles ? { modelStem: match[1], bundles } : undefined
-}
-
 /**
  * Build the existing companion-set shape from live registry metadata. The
  * sidecars are optional and are not part of the generated GGUF constants;
  * this lets the SDK use them as soon as the registry has ingested the files.
  */
-export async function findParakeetCoremlCompanionSet(
+export async function findCoremlCompanionSet(
   client: Pick<QVACRegistryClient, 'findModels'>,
   model: RegistryItem,
   platform: string | undefined
 ): Promise<CompanionSet | undefined> {
-  const spec = getParakeetCoremlBundleSpecs(model.registryPath, model.registrySource, platform)
+  const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
   if (!spec) return undefined
 
   const sidecarFiles: CompanionSet['files'][number][] = []
   for (const bundle of spec.bundles) {
-    const sourcePrefix = `${COREML_ROOT}${bundle.sourceName}.mlmodelc/`
+    const sourcePrefix = `${spec.root}${bundle.sourceName}.mlmodelc/`
     const registryEntries = await client.findModels({
       gte: { path: sourcePrefix },
-      lte: { path: `${sourcePrefix}\uffff` }
+      lte: { path: `${sourcePrefix}￿` }
     })
     const byPath = new Map<string, QVACModelEntry>()
     for (const entry of registryEntries) {
@@ -304,5 +355,5 @@ export async function findParakeetCoremlCompanionSet(
     }
   }
 
-  return createCompanionSet(model, sidecarFiles)
+  return createCompanionSet(model, spec, sidecarFiles)
 }

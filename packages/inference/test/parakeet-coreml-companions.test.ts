@@ -5,12 +5,12 @@ import fs from 'bare-fs'
 import path from 'bare-path'
 import os from 'bare-os'
 import {
-  findParakeetCoremlCompanionSet,
-  findCatalogParakeetCoremlCompanionSet,
-  findLocallyCachedParakeetCoremlCompanionSet,
-  getParakeetCoremlBundleSpecs,
-  writeCachedParakeetCoremlCompanionSet
-} from '@/handlers/load-model/parakeet-coreml'
+  findCoremlCompanionSet,
+  findCatalogCoremlCompanionSet,
+  findLocallyCachedCoremlCompanionSet,
+  getCoremlSidecarSpec,
+  writeCachedCoremlCompanionSet
+} from '@/handlers/load-model/coreml-sidecars'
 
 const ROOT = 'qvac_models_compiled/ggml/parakeet/2026-09-28/'
 const COMPONENTS = [
@@ -71,7 +71,7 @@ function client(entries: QVACModelEntry[]): Pick<QVACRegistryClient, 'findModels
 
 test('Core ML companions: Apple TDT uses one GGUF constant and a colocated encoder bundle', async (t) => {
   const model = primary('parakeet-tdt-0.6b-v3.q8_0.gguf')
-  const set = await findParakeetCoremlCompanionSet(
+  const set = await findCoremlCompanionSet(
     client(bundle('parakeet-tdt-0.6b-v3-encoder')),
     model,
     'darwin'
@@ -88,7 +88,7 @@ test('Core ML companions: Apple TDT uses one GGUF constant and a colocated encod
 })
 
 test('Core ML companions: EOU source name is mapped to the GGUF-derived name', async (t) => {
-  const set = await findParakeetCoremlCompanionSet(
+  const set = await findCoremlCompanionSet(
     client(bundle('parakeet_realtime_eou_120m-v1-encoder')),
     primary('parakeet-eou-120m-v1.q8_0.gguf'),
     'ios'
@@ -100,7 +100,7 @@ test('Core ML companions: EOU source name is mapped to the GGUF-derived name', a
 
 test('Core ML companions: Sortformer stages both batch and AOSC bundles', async (t) => {
   const source = 'diar_streaming_sortformer_4spk-v2.1'
-  const set = await findParakeetCoremlCompanionSet(
+  const set = await findCoremlCompanionSet(
     client([...bundle(`${source}-encoder`), ...bundle(`${source}-encoder-bypass-pre-encode`)]),
     primary(`${source}.f16.gguf`),
     'darwin'
@@ -119,21 +119,21 @@ test('Core ML companions: incomplete bundles and non-Apple platforms keep GGUF-o
   const model = primary('parakeet-tdt-0.6b-v3.q8_0.gguf')
   const incomplete = bundle('parakeet-tdt-0.6b-v3-encoder').slice(0, 4)
 
-  t.absent(await findParakeetCoremlCompanionSet(client(incomplete), model, 'darwin'))
+  t.absent(await findCoremlCompanionSet(client(incomplete), model, 'darwin'))
   t.absent(
-    await findParakeetCoremlCompanionSet(
+    await findCoremlCompanionSet(
       client(bundle('parakeet-tdt-0.6b-v3-encoder')),
       model,
       'linux'
     )
   )
-  t.absent(getParakeetCoremlBundleSpecs(model.registryPath, 's3', 'android'))
-  t.absent(getParakeetCoremlBundleSpecs('other/parakeet-tdt-0.6b-v3.q8_0.gguf', 's3', 'ios'))
+  t.absent(getCoremlSidecarSpec(model.registryPath, 's3', 'android'))
+  t.absent(getCoremlSidecarSpec('other/parakeet-tdt-0.6b-v3.q8_0.gguf', 's3', 'ios'))
 })
 
 test('Core ML companions: a complete cached set is available without registry discovery', async (t) => {
   const model = primary('parakeet-tdt-0.6b-v3.q8_0.gguf')
-  const set = await findParakeetCoremlCompanionSet(
+  const set = await findCoremlCompanionSet(
     client(bundle('parakeet-tdt-0.6b-v3-encoder')),
     model,
     'darwin'
@@ -147,9 +147,9 @@ test('Core ML companions: a complete cached set is available without registry di
       fs.mkdirSync(path.dirname(filePath), { recursive: true })
       fs.writeFileSync(filePath, Buffer.alloc(file.expectedSize))
     }
-    await writeCachedParakeetCoremlCompanionSet(model, set!, cacheDir)
+    await writeCachedCoremlCompanionSet(set!, cacheDir)
 
-    const cached = await findLocallyCachedParakeetCoremlCompanionSet(model, 'darwin', cacheDir)
+    const cached = await findLocallyCachedCoremlCompanionSet(model, 'darwin', cacheDir)
     t.is(cached?.setKey, set!.setKey)
     t.alike(
       cached?.files.map((file) => file.targetName),
@@ -157,7 +157,7 @@ test('Core ML companions: a complete cached set is available without registry di
     )
 
     fs.rmSync(path.join(cacheDir, 'sets', set!.setKey, set!.files[1]!.targetName))
-    t.absent(await findLocallyCachedParakeetCoremlCompanionSet(model, 'darwin', cacheDir))
+    t.absent(await findLocallyCachedCoremlCompanionSet(model, 'darwin', cacheDir))
   } finally {
     fs.rmSync(cacheDir, { recursive: true, force: true })
   }
@@ -166,7 +166,7 @@ test('Core ML companions: a complete cached set is available without registry di
 test('Core ML companions: generated catalog can describe a previously downloaded set', (t) => {
   const model = models.find((entry) => entry.name === 'PARAKEET_UNIFIED_0_6B_Q4_0')
   t.ok(model)
-  const set = findCatalogParakeetCoremlCompanionSet(model!, 'darwin')
+  const set = findCatalogCoremlCompanionSet(model!, 'darwin')
   t.is(set?.files.length, 6)
   t.is(
     set?.files[1]?.targetName,
