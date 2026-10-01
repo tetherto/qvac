@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.43.1] - 2026-09-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+  `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
+  expert caching defaulting to CUDA only, GLM-5 Next support). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so
+  the range bump is what picks up the new fabric. A caret on a `0.x` version
+  locks the minor, so `^0.18.0` would not have resolved `0.19.0` on its own.
+  No API change.
+- MoE models on Metal and Vulkan no longer get an automatic expert cache.
+  Set `moe-cache-mib: auto` to opt back in on those backends.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.19.0` together.
+
+### Fixed
+
+- `assessFit` now honours `moe-cache-mib: auto` the way the load does. The
+  load's fit received that choice but the projection did not, so on Metal or
+  Vulkan a MoE model's projected `gpuLayers` and `deviceBytes` could differ
+  from the load.
+
 ## [0.43.0] - 2026-09-28
 
 ### Added
