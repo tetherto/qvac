@@ -12,3 +12,11 @@ under `src/models/registry/`. The SDK re-exports the inference model registry.
   and focused tests together when the source contract changes.
 - Use the live registry input and generator as the authority for names and metadata;
   do not maintain a hand-written model inventory in documentation.
+
+On macOS and iOS, a supported Parakeet GGUF registry model may have compiled
+Core ML encoder sidecars published as individual registry files. The resolver
+discovers a complete `.mlmodelc` bundle and downloads it with the GGUF into a
+companion-set cache directory, preserving the directory layout the native addon
+expects. The GGUF constant stays the only public model constant. If no complete
+sidecar is available, loading uses the ordinary GGUF cache path. Non-Apple
+devices never download these sidecars.

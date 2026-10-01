@@ -546,6 +546,7 @@ const snapStorageHandler = isSnapConsumer
 export const executor = createExecutor({
   handlers: [
     snapStorageHandler,
+    new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML cache test requires iOS'),
     // Electron keeps the stable desktop/shared surface enabled, but excludes
     // suites that are resource-heavy or incompatible with the packaged
     // Electron worker lifecycle.

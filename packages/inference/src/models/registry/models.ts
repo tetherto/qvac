@@ -19698,6 +19698,40 @@ export const models = [
     engine: 'whispercpp-transcription',
     quantization: '',
     params: ''
+  },
+  {
+    name: 'PARAKEET_CTC_MODEL',
+    registryPath:
+      'qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/model.mil',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 342557,
+    blobBlockLength: 10,
+    blobByteOffset: 22448397700,
+    modelId: 'model.mil',
+    addon: 'parakeet',
+    expectedSize: 626247,
+    sha256Checksum: '796fc5a6e14c682551454702cab64e053f293a5814a5589a7b63de1545db298b',
+    engine: 'parakeet-transcription',
+    quantization: '',
+    params: '0.6B'
+  },
+  {
+    name: 'PARAKEET_UNIFIED_COREMLDATA_1',
+    registryPath:
+      'qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/coremldata.bin',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 368898,
+    blobBlockLength: 1,
+    blobByteOffset: 24174044378,
+    modelId: 'coremldata.bin',
+    addon: 'parakeet',
+    expectedSize: 375,
+    sha256Checksum: 'c0260cac05d04740b004c07d96b7171470740c597ba642d9ac7fed341acb486b',
+    engine: 'parakeet-transcription',
+    quantization: '',
+    params: '0.6B'
   }
 ] as const satisfies readonly RegistryItem[]
 
@@ -28338,6 +28372,42 @@ export const PARAKEET_0_6B_Q4_0 = {
 export const PARAKEET_0_6B_Q8_0 = {
   ...PARAKEET_NEMOTRON_0_6B_Q8_0,
   name: 'PARAKEET_0_6B_Q8_0'
+} as const
+
+export const PARAKEET_CTC_MODEL = {
+  name: 'PARAKEET_CTC_MODEL',
+  src: `registry://${models[794].registrySource}/${models[794].registryPath}`,
+  registryPath: models[794].registryPath,
+  registrySource: models[794].registrySource,
+  blobCoreKey: models[794].blobCoreKey,
+  blobBlockOffset: models[794].blobBlockOffset,
+  blobBlockLength: models[794].blobBlockLength,
+  blobByteOffset: models[794].blobByteOffset,
+  modelId: models[794].modelId,
+  expectedSize: models[794].expectedSize,
+  sha256Checksum: models[794].sha256Checksum,
+  addon: models[794].addon,
+  engine: models[794].engine,
+  quantization: models[794].quantization,
+  params: models[794].params
+} as const
+
+export const PARAKEET_UNIFIED_COREMLDATA_1 = {
+  name: 'PARAKEET_UNIFIED_COREMLDATA_1',
+  src: `registry://${models[795].registrySource}/${models[795].registryPath}`,
+  registryPath: models[795].registryPath,
+  registrySource: models[795].registrySource,
+  blobCoreKey: models[795].blobCoreKey,
+  blobBlockOffset: models[795].blobBlockOffset,
+  blobBlockLength: models[795].blobBlockLength,
+  blobByteOffset: models[795].blobByteOffset,
+  modelId: models[795].modelId,
+  expectedSize: models[795].expectedSize,
+  sha256Checksum: models[795].sha256Checksum,
+  addon: models[795].addon,
+  engine: models[795].engine,
+  quantization: models[795].quantization,
+  params: models[795].params
 } as const
 
 const modelNameCompatibilityAliases: Readonly<Record<string, RegistryItem>> = {

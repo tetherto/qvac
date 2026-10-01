@@ -376,3 +376,20 @@ test('groupCompanionSets: cosyvoice llm outside /cosy_voice/ is skipped', (t) =>
 
   t.absent(result[0]!.companionSet)
 })
+
+test('groupCompanionSets: Core ML bundle files do not become public model constants', (t) => {
+  const model = makeModel({
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf',
+    registrySource: 's3'
+  })
+  const sidecar = makeModel({
+    registryPath:
+      'qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-0.6b-v3-encoder.mlmodelc/weights/weight.bin',
+    registrySource: 's3'
+  })
+
+  const result = groupCompanionSets([model, sidecar])
+
+  t.absent(result[0]!.isCompanionOnly)
+  t.is(result[1]!.isCompanionOnly, true)
+})
