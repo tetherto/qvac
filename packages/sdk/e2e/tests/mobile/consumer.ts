@@ -620,6 +620,9 @@ export const executor = createExecutor({
       /^parakeet-indic-conformer-/,
       'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
     ),
+    ...(Platform.OS === 'android'
+      ? [new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML requires iOS')]
+      : []),
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
