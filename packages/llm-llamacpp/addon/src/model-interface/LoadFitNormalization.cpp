@@ -1420,6 +1420,15 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
+    // The explicit-device path uses the named devices as given, so the
+    // override would be ignored there. Reject the combination.
+    if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
+        !explicitDevices.empty()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "'backend' cannot be combined with 'devices'. Use 'devices' alone "
+          "to choose the devices.");
+    }
 
     LoadConstraints constraints;
     for (const char* key :

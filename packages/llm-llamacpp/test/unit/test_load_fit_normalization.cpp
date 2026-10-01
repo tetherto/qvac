@@ -579,6 +579,49 @@ TEST_F(LoadFitNormalizationTest, SplitModeKeepsCpuKvFallbackDevice) {
   EXPECT_NE(result.params.devices.front(), nullptr);
 }
 
+TEST_F(LoadFitNormalizationTest, BackendOverrideSteersSplitSelection) {
+  std::vector<std::string> requestedOverride;
+  std::string splitSelectedName;
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+  dependencies.resolveBackend =
+      [&requestedOverride](const backend_selection::BackendRequest& request) {
+        requestedOverride = request.backendOverride;
+        return lfn::SelectedBackend{
+            .type = backend_selection::GPU, .name = "vulkan0"};
+      };
+  const auto selection = splitSelection({"vulkan0"});
+  dependencies.splitDevices =
+      [selection, &splitSelectedName](
+          const std::string& selectedName,
+          const backend_selection::LoadConstraints&) {
+        splitSelectedName = selectedName;
+        return selection;
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "vulkan";
+
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+
+  EXPECT_EQ(requestedOverride, (std::vector<std::string>{"vulkan"}));
+  EXPECT_EQ(splitSelectedName, "vulkan0");
+}
+
+TEST_F(LoadFitNormalizationTest, BackendOverrideWithDevicesIsRejected) {
+  auto config = baseConfig();
+  config["devices"] = "vulkan0";
+  config["backend"] = "vulkan";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
