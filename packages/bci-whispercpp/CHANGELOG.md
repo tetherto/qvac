@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Require `ggml-speech` `2026-09-30` directly, not only through `speech-cpp`.
+  On Metal, `assessFit` no longer reports more free device memory than total
+  once the process has allocated past the GPU's recommended working set, which
+  made a model that does not fit report `fits`. Transcription is unchanged.
+
 ## [0.10.1] - 2026-09-29
 
 ### Changed
