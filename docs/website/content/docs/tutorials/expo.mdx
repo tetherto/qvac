@@ -128,7 +128,7 @@ Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugin
       ["expo-build-properties", { // [!code ++]
         "android": { "minSdkVersion": 29 } // [!code ++]
       }], // [!code ++]
-      "@qvac/sdk/expo-plugin" // [!code ++]
+      ["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }] // [!code ++]
     ]
   }
 }
@@ -147,32 +147,19 @@ Create `qvac.config.json` in the project root and enable only the LLM plugin use
 
 Without a `plugins` selection, QVAC bundles every built-in AI capability. Keeping this tutorial to the LLM plugin avoids linking native engines the app does not use.
 
-Speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) ship Android and iOS binaries in a separate package. If you enable those plugins, add that package as a direct dependency, pinned to the same exact version as the JavaScript package:
+QVAC ships part of its Android and iOS binaries as separate packages, and every app needs at least one of them. The `installMissingPrebuilds` option in the `app.json` step above lets `npx expo prebuild` add them to `package.json`, at the right version, with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry). The option is off by default because it changes `package.json` and needs network access during `expo prebuild`.
 
-```json
+To add the packages yourself instead, use `"@qvac/sdk/expo-plugin"` without the option, add them as dependencies, then run `npm install`. This app needs:
+
+```json title="package.json"
 {
   "dependencies": {
-    "@qvac/tts-ggml": "x.y.z",
-    "@qvac/tts-ggml-android-arm64": "x.y.z"
+    "@qvac/fabric-android-arm64": "x.y.z"
   }
 }
 ```
 
-iOS uses `@qvac/tts-ggml-ios` instead of `@qvac/tts-ggml-android-arm64`. Llama does not need an extra package. `npx expo prebuild` names the missing pin if you forget.
-
-To have `npx expo prebuild` add the missing packages for you, pass `installMissingPrebuilds` to the plugin. It adds them to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the exact addon version, for the platform being prebuilt:
-
-```json title="app.json"
-{
-  "expo": {
-    "plugins": [
-      ["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }]
-    ]
-  }
-}
-```
-
-The option is off by default because it changes `package.json` and needs network access during `expo prebuild`.
+iOS uses `@qvac/fabric-ios` instead. For the version, run `npx expo prebuild` once without these dependencies: it stops and prints each missing package for the platform being prebuilt, with the exact line to add.
 </Step>
 
 <Step>

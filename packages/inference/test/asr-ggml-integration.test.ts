@@ -186,6 +186,14 @@ test('ASR event adapters preserve the public engine event contract', (t) => {
     })
   )
   t.ok(
+    isVadEvent({
+      type: 'vad',
+      speaking: true,
+      score: 0.82,
+      source: 'sortformer'
+    })
+  )
+  t.ok(
     isEndOfTurnEvent({
       type: 'endOfTurn',
       source: 'model-eou'

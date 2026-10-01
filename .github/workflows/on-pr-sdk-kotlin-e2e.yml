@@ -1,0 +1,62 @@
+name: QVAC Tests (sdk-kotlin) - real worker
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+    paths:
+      - 'packages/sdk-kotlin/**'
+      - 'packages/inference/package.json'
+      - 'packages/inference/src/schemas/**'
+      - 'packages/sdk/src/worker/**'
+      - 'packages/sdk/e2e/conformance/**'
+      - 'packages/sdk/contract/**'
+      - 'packages/sdk/package.json'
+      - '.github/workflows/on-pr-sdk-kotlin-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kotlin-conformance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'test-e2e-smoke')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: packages/sdk-kotlin
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+      - name: Build the same workspace worker as Python
+        run: python3 ../sdk-python/scripts/build_worker.py --force
+      - name: Run shared cross-client corpus
+        run: ./gradlew --no-daemon jvmTest --tests '*WorkerConformanceTest' --rerun-tasks
+        env:
+          QVAC_RUN_CONFORMANCE: '1'
+      - name: Upload conformance reports
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: kotlin-worker-conformance
+          path: packages/sdk-kotlin/build/reports/tests/jvmTest
