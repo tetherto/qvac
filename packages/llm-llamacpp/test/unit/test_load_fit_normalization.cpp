@@ -591,13 +591,12 @@ TEST_F(LoadFitNormalizationTest, BackendOverrideSteersSplitSelection) {
             .type = backend_selection::GPU, .name = "vulkan0"};
       };
   const auto selection = splitSelection({"vulkan0"});
-  dependencies.splitDevices =
-      [selection, &splitSelectedName](
-          const std::string& selectedName,
-          const backend_selection::LoadConstraints&) {
-        splitSelectedName = selectedName;
-        return selection;
-      };
+  dependencies.splitDevices = [selection, &splitSelectedName](
+                                  const std::string& selectedName,
+                                  const backend_selection::LoadConstraints&) {
+    splitSelectedName = selectedName;
+    return selection;
+  };
   auto config = baseConfig();
   config["split-mode"] = "layer";
   config["backend"] = "vulkan";
