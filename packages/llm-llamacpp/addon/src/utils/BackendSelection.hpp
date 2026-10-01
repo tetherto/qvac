@@ -109,6 +109,9 @@ struct LoadConstraints {
   /// KV-cache types the device must be able to write with SET_ROWS from F32.
   /// Empty when the caller set no cache-type, or set one that is not quantized.
   std::vector<enum ggml_type> kvCacheTypes;
+  /// Set when selection kept a KV-incapable GPU for fabric's per-layer CPU KV
+  /// placement. Such devices then also qualify for the split set.
+  bool allowCpuKvFallback = false;
 };
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
@@ -141,6 +144,9 @@ struct BackendChoice {
   std::string name = "none";
   std::optional<int> adrenoVersion;
   bool isMaliGpu = false;
+  /// The chosen GPU cannot run the requested KV type and relies on fabric's
+  /// per-layer CPU KV placement.
+  bool cpuKvFallback = false;
   SelectionTrace trace;
 };
 

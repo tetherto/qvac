@@ -77,6 +77,7 @@ struct SelectedBackend {
   bool isMaliGpu = false;
   bool isOpenCl = false;
   bool isMetal = false;
+  bool cpuKvFallback = false;
 };
 
 using BackendResolver =

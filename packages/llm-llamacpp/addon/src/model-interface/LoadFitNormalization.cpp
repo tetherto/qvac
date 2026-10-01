@@ -1053,7 +1053,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .adrenoVersion = choice.adrenoVersion,
                 .isMaliGpu = choice.isMaliGpu,
                 .isOpenCl = isOpenCl,
-                .isMetal = isMetal};
+                .isMetal = isMetal,
+                .cpuKvFallback = choice.cpuKvFallback};
           },
       .splitDevices =
           [](const std::string& selectedDeviceName,
@@ -1449,9 +1450,13 @@ NormalizedLoad normalizeLoadForFit(
     backend_selection::SplitDeviceSelection splitSelection;
     SelectedBackend selected = dependencies.resolveBackend(request);
     std::optional<int> mmprojAdrenoVersion = selected.adrenoVersion;
+    // The split set must accept the device selection kept for fabric's CPU KV
+    // placement, or the constraint filter drops it and the load lands on CPU.
+    constraints.allowCpuKvFallback = selected.cpuKvFallback;
     if (preferredBackend == BackendType::GPU &&
-        (!explicitDevices.empty() || (selected.type == BackendType::GPU &&
-                                      splitMode != LLAMA_SPLIT_MODE_NONE))) {
+        (!explicitDevices.empty() ||
+         ((selected.type == BackendType::GPU || rpcDevicesRegistered) &&
+          splitMode != LLAMA_SPLIT_MODE_NONE))) {
       splitSelection =
           explicitDevices.empty()
               ? dependencies.splitDevices(selected.name, constraints)

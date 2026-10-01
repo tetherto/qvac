@@ -551,6 +551,34 @@ TEST_F(
   EXPECT_EQ(splitTypes, resolverTypes);
 }
 
+TEST_F(LoadFitNormalizationTest, SplitModeKeepsCpuKvFallbackDevice) {
+  bool splitAllowsFallback = false;
+  auto dependencies = backend(
+      {.type = backend_selection::GPU,
+       .name = "vulkan0",
+       .cpuKvFallback = true});
+  const auto selection = splitSelection({"vulkan0"});
+  dependencies.splitDevices =
+      [selection, &splitAllowsFallback](
+          const std::string&,
+          const backend_selection::LoadConstraints& constraints) {
+        splitAllowsFallback = constraints.allowCpuKvFallback;
+        return selection;
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-k"] = "pq3_0";
+  config["cache-type-v"] = "pq3_0";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_TRUE(splitAllowsFallback);
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_NE(result.params.devices.front(), nullptr);
+}
+
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -2364,11 +2392,7 @@ TEST_F(
   selection.devices[0].isRpc = true;
   selection.devices[1].isOpenCl = true;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection](
-                                  const std::string&,
-                                  const backend_selection::LoadConstraints&) {
-    return selection;
-  };
+  dependencies.allSplitDevices = [selection]() { return selection; };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -2393,11 +2417,7 @@ TEST_F(
   auto selection = splitSelection({"none"});
   selection.devices[0].isOpenCl = true;
   selection.devices[0].adrenoVersion = 740;
-  dependencies.splitDevices = [selection](
-                                  const std::string&,
-                                  const backend_selection::LoadConstraints&) {
-    return selection;
-  };
+  dependencies.allSplitDevices = [selection]() { return selection; };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
