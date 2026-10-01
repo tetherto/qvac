@@ -10,6 +10,7 @@ import { isCanonicalModelType, normalizeModelType } from '@/schemas/index'
 import { projectFitFromLoad } from '@/resources/model-fit/fit-stub/project-fit-from-load'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
+import { getConfig } from '@/runtime/state'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
 import { getPlatformCalibration } from '@/resources/model-fit/calibration/index'
 import { detectPlatform } from '@/resources/model-fit/platform'
@@ -169,13 +170,16 @@ async function resolveNativeFit(
   const modelType = normalizeModelType(candidate.modelType)
   if (!isCanonicalModelType(modelType)) return undefined
 
+  const budgetMs = getConfig().fitStubBudgetMs
+
   const outcome = await projectFitFromLoad(
     {
       modelType,
       ...(candidate.modelSrc !== undefined && { modelSrc: candidate.modelSrc }),
       ...(candidate.modelConfig !== undefined && { modelConfig: candidate.modelConfig })
     },
-    estimateTargetFor(candidate).model.name
+    estimateTargetFor(candidate).model.name,
+    budgetMs === undefined ? {} : { stub: { budgetMs } }
   )
 
   return outcome.status === 'projected' ? outcome.fit : undefined
