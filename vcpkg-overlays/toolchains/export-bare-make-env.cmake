@@ -10,6 +10,13 @@ if(NOT CMAKE_HOST_WIN32)
   return()
 endif()
 
+# Without a downloaded cmake, vcpkg takes the first sufficient cmake on PATH.
+# An npm .cmd shim (bare-make's cmake-runtime) passes the version check but
+# then fails in the clean environment with '"node"' is not recognized.
+if(NOT DEFINED ENV{VCPKG_FORCE_DOWNLOADED_BINARIES} AND NOT DEFINED ENV{VCPKG_FORCE_SYSTEM_BINARIES})
+  set(ENV{VCPKG_FORCE_DOWNLOADED_BINARIES} 1)
+endif()
+
 if(NOT DEFINED ENV{QVAC_BARE_MAKE_TOOLCHAIN_FILE} AND VCPKG_CMAKE_TOOLCHAIN_FILE)
   set(ENV{QVAC_BARE_MAKE_TOOLCHAIN_FILE} "${VCPKG_CMAKE_TOOLCHAIN_FILE}")
 endif()
