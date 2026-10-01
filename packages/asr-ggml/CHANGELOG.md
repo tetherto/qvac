@@ -14,6 +14,25 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- MOSS-Transcribe-Diarize engine (`engine: 'moss-transcribe'`, OpenMOSS
+  MOSS-Transcribe-Diarize): one pass over a whole recording returns
+  timestamped segments with the speaker label (`speaker: 'S01'`) and a 0-based
+  `speakerId`, validated for Spanish and Chinese. `run(audio, options)` takes
+  per-request `hotwords` (names and terms spelled as given), a custom
+  `prompt` and `maxNewTokens`; the other engines reject run options. There is
+  no streaming or reload for this engine.
+- Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and
+  streaming speaker segments with up to eight speakers.
+
+### Changed
+
+- Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29#1, preserving the
+  QVAC seed, BCI windowed-attention and streaming/VAD patches.
+- Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships
+  Nemotron 3 Diarization and MOSS-Transcribe-Diarize with hotwords.
+
 ### Fixed
 
 - Nemotron 3 Diarization streaming preserves first-chunk predictions with left
@@ -23,16 +42,6 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   reports more free device memory than total once the process has allocated
   past the GPU's recommended working set, which made a model that does not fit
   report `fits`. Transcription is unchanged.
-
-### Added
-
-- Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and
-  streaming speaker segments with up to eight speakers.
-
-### Changed
-
-- Raise the `speech-cpp` minimum to `2026-09-29#1` for Nemotron 3
-  Diarization support.
 
 ## [0.7.0] - 2026-09-29
 

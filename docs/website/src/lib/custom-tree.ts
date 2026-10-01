@@ -1,7 +1,7 @@
 import type { Node } from 'fumadocs-core/page-tree';
 import { resolveIcon } from '@/lib/resolveIcon';
 import React from 'react';
-import { SiExpo, SiElectron, SiPython, SiTypescript } from '@icons-pack/react-simple-icons';
+import { SiExpo, SiElectron, SiKotlin, SiPython, SiTypescript } from '@icons-pack/react-simple-icons';
 
 /**
  * Only the API summary and release notes are versioned (one MDX per
@@ -44,6 +44,12 @@ export const customTree: Node[] = [
     url: '/python-sdk',
     type: 'page',
     icon: React.createElement(SiPython, { className: 'h-4 w-4' }),
+  },
+  {
+    name: 'Kotlin SDK',
+    url: '/kotlin-sdk',
+    type: 'page',
+    icon: React.createElement(SiKotlin, { className: 'h-4 w-4' }),
   },
   {
     name: 'Configuration',

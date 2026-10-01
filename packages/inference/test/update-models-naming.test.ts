@@ -865,6 +865,43 @@ test('tts: Piper config file — _CONFIG suffix', (t) => {
 })
 
 // ---------------------------------------------------------------------------
+// TTS: registry variant tag distinguishes fused CosyVoice3 weights
+// ---------------------------------------------------------------------------
+
+test('tts: CosyVoice3 fused Q8 model uses its registry tag in the export name', (t) => {
+  const usedNames = new Set<string>()
+  const common = {
+    engine: 'tts-ggml' as const,
+    name: 'ggml',
+    quantization: 'q8_0',
+    params: '0.5B'
+  }
+
+  const original = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'multilingual', 'gguf'],
+    usedNames
+  })
+  const fused = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'fused', 'multilingual', 'gguf'],
+    usedNames
+  })
+  const filenameWithoutTag = generateExportName({
+    ...common,
+    path: 'qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf',
+    tags: ['tts', 'cosyvoice', 'cosyvoice3', 'llm', 'multilingual', 'gguf'],
+    usedNames: new Set<string>()
+  })
+
+  t.is(original, 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0')
+  t.is(fused, 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0')
+  t.is(filenameWithoutTag, original, 'the registry tag, rather than the filename, selects FUSED')
+})
+
+// ---------------------------------------------------------------------------
 // OCR: Recognizer English
 // ---------------------------------------------------------------------------
 

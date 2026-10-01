@@ -2368,7 +2368,14 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="encoderOnCoreml",
-            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+            description="Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+        ),
+    ] = None
+    encoder_used_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderUsedCoreml",
+            description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
 
@@ -2676,7 +2683,14 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="encoderOnCoreml",
-            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+            description="Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+        ),
+    ] = None
+    encoder_used_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderUsedCoreml",
+            description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
 
@@ -20286,6 +20300,20 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    codec_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="codecSidecarLoaded",
+            description="Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+        ),
+    ] = None
+    codec_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="codecOnCoreml",
+            description="Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+        ),
+    ] = None
 
 
 class TextToSpeechResponseStopReason(Enum):
@@ -20466,6 +20494,20 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    codec_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="codecSidecarLoaded",
+            description="Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+        ),
+    ] = None
+    codec_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="codecOnCoreml",
+            description="Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+        ),
+    ] = None
 
 
 class TextToSpeechStreamResponseStopReason(Enum):
@@ -20628,7 +20670,14 @@ class TranscribeResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="encoderOnCoreml",
-            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+            description="Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+        ),
+    ] = None
+    encoder_used_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderUsedCoreml",
+            description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
 
@@ -20661,6 +20710,7 @@ class TranscribeResponseSegment(GeneratedBaseModel):
 class TranscribeResponseVadSource(Enum):
     silero = "silero"
     energy = "energy"
+    sortformer = "sortformer"
 
 
 class TranscribeResponseVad(GeneratedBaseModel):
@@ -20672,7 +20722,7 @@ class TranscribeResponseVad(GeneratedBaseModel):
     source: Annotated[
         TranscribeResponseVadSource | None,
         Field(
-            description="Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+            description="Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
             title="TranscribeResponseVadSource",
         ),
     ] = None
@@ -20983,7 +21033,14 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="encoderOnCoreml",
-            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+            description="Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+        ),
+    ] = None
+    encoder_used_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderUsedCoreml",
+            description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
 
@@ -21016,6 +21073,7 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
 class TranscribeStreamResponseVadSource(Enum):
     silero = "silero"
     energy = "energy"
+    sortformer = "sortformer"
 
 
 class TranscribeStreamResponseVad(GeneratedBaseModel):
@@ -21027,7 +21085,7 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     source: Annotated[
         TranscribeStreamResponseVadSource | None,
         Field(
-            description="Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+            description="Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
             title="TranscribeStreamResponseVadSource",
         ),
     ] = None
