@@ -13,7 +13,7 @@ struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_HISTORY_MS = 30000;
   static constexpr int DEFAULT_STREAMING_SPK_CACHE_LEN = 188;
   static constexpr int DEFAULT_STREAMING_FIFO_LEN = 188;
-  static constexpr int DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS = 80;
+  static constexpr int DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS = -1;
   static constexpr int DEFAULT_STREAMING_CHUNK_RIGHT_CONTEXT_MS = 560;
   static constexpr int DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD = 144;
   // speech-cpp's StreamingOptions energy-VAD defaults.
@@ -24,6 +24,8 @@ struct ParakeetConfig {
   // tuning: onset 0.641, minimum 0.511 s, which truncates to 510 ms).
   static constexpr float DEFAULT_DIARIZATION_THRESHOLD = 0.641F;
   static constexpr int DEFAULT_DIARIZATION_MIN_SEGMENT_MS = 510;
+  static constexpr float DEFAULT_NEMOTRON_DIARIZATION_THRESHOLD = 0.5F;
+  static constexpr int DEFAULT_NEMOTRON_DIARIZATION_MIN_SEGMENT_MS = 200;
   // speech-cpp's EngineOptions prewarm default.
   static constexpr float DEFAULT_PREWARM_AUDIO_SECONDS = 1.0F;
 
