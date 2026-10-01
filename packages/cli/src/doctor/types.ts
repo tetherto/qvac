@@ -33,4 +33,6 @@ export interface RunDoctorOptions {
   json?: boolean | undefined
   quiet?: boolean | undefined
   verbose?: boolean | undefined
+  /** Skip GitHub and npm registry lookups in the engines.bare check. */
+  offline?: boolean | undefined
 }

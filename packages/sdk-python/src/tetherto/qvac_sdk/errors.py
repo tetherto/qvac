@@ -481,7 +481,22 @@ def _reconstruct_translation_failed(response: dict[str, Any]) -> QvacError:
     )
 
 
+def _reconstruct_inference_cancelled(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    partial = fields.get("partial")
+    if not isinstance(partial, dict):
+        partial = {}
+    return InferenceCancelledError(
+        _str_field(fields, "requestId"),
+        partial_text=_opt_str(partial, "text"),
+        partial_tool_calls=partial.get("toolCalls"),
+        partial_stats=partial.get("stats"),
+        cause=response.get("cause"),
+    )
+
+
 _RECONSTRUCTORS: dict[str, Callable[[dict[str, Any]], QvacError]] = {
+    "INFERENCE_CANCELLED": _reconstruct_inference_cancelled,
     "REQUEST_ID_CONFLICT": _reconstruct_request_id_conflict,
     "REQUEST_NOT_FOUND": _reconstruct_request_not_found,
     "REQUEST_REJECTED_BY_POLICY": _reconstruct_request_rejected,

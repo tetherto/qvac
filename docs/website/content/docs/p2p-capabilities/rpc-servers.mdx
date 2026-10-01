@@ -1,0 +1,109 @@
+---
+title: RPC servers
+description: Start and discover native RPC servers, then use their devices for model inference.
+schemaType: HowTo
+---
+
+## Overview
+
+Use `startRpcServer()` to serve native devices from a QVAC worker and `discoverRpcServers()` to find endpoints on a shared discovery topic. Load a model with the selected endpoints to run inference across their devices.
+
+<Callout type="warn">
+Use RPC endpoints only on a trusted private network. Native RPC traffic is unencrypted and unauthenticated. A discovery topic does not authenticate peers.
+</Callout>
+
+## Enable serving
+
+Serving requires `@qvac/ggml-rpc-server` and a worker rebuilt with this setting in `qvac.config.json`:
+
+```json
+{
+  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider"
+}
+```
+
+Rebuild the worker with `qvac bundle sdk`. See [Configuration](/configuration) for the config file format.
+
+Python callers must select the generated worker with `QVAC_WORKER_PATH` or `Client(worker_path=...)`. See [Python SDK RPC server setup](/python-sdk#rpc-servers) for installation, bundling, and run commands.
+
+## Start and stop a server
+
+`startRpcServer()` defaults to `127.0.0.1` and allocates a free TCP port when `port` is omitted. It returns `serverId`, `url`, and `rdmaCapable`.
+
+To serve another machine, set `host` to your private IPv4 address and explicitly set `allowNonLoopbackHost: true`. Set `discoveryTopic` to advertise the ready endpoint under a shared topic.
+
+Unload models using the endpoint before calling `stopRpcServer({ serverId })`. This withdraws the announcement and waits for the native server to stop. Native stop under Bare has no deadline.
+
+## Discover and select devices
+
+`discoverRpcServers({ topic, timeoutMs })` returns candidates with a `url`, `rdmaAvailable`, and `devices`. Each device has an endpoint-local `index`, `freeMemory`, and `totalMemory`, with memory values in bytes. The search budget defaults to 5000 milliseconds, includes TCP probes, and is capped at 30000 milliseconds.
+
+`rdmaAvailable` describes the server's advertised RDMA availability. Actual transport depends on client support and negotiation.
+
+Choose and order the endpoints before calling `getRpcDeviceMap(selected)`. Pass those same endpoints, in the same order, as the comma-separated `modelConfig["rpc-servers"]` value to [`loadModel()`](/reference/api#loadmodel). The map assigns `RPC0`, `RPC1`, and subsequent aliases across every device in endpoint order. Aliases start at `RPC0` for each model load, including when you reuse a worker.
+
+Use the chosen aliases in `modelConfig.devices`. Set `"split-mode": "layer"` to split layers across devices, and order `"tensor-split"` weights to match the selected devices. See [Text generation](/ai-capabilities/text-generation) for the inference API.
+
+## Cancellation
+
+Pending server starts and discovery calls expose a synchronous `requestId` on their returned promise. Pass it to [`cancel()`](/reference/api#cancel) to cancel that call. See [Cancellation](/runtime/cancellation). After startup completes, stop the server with `stopRpcServer()`.
+
+## Examples
+
+### Serve and discover endpoints
+
+The following script starts an RPC server on a private IPv4 address and shared topic, then waits for you to stop it after clients unload their models:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rpc-server.js title="rpc-server.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rpc-server.ts title="rpc-server.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rpc_servers.py title="rpc_servers.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+The Python script has separate `serve` and `discover` modes. See [Python SDK](/python-sdk#rpc-servers) for its worker requirement and typed methods.
+
+### Inference across two servers
+
+The following script discovers two idle RPC servers, maps their device aliases, and streams a completion with layer splitting and equal device weights:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rpc-inference.js title="rpc-inference.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rpc-inference.ts title="rpc-inference.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+All examples are self-contained and runnable. See the [JS/TS quickstart](/js-ts-sdk#quickstart) or [Python quickstart](/python-sdk#quickstart) for instructions.
+</Callout>
