@@ -1053,7 +1053,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .adrenoVersion = choice.adrenoVersion,
                 .isMaliGpu = choice.isMaliGpu,
                 .isOpenCl = isOpenCl,
-                .isMetal = isMetal};
+                .isMetal = isMetal,
+                .cpuKvFallback = choice.cpuKvFallback};
           },
       .splitDevices =
           [](const std::string& selectedDeviceName,
@@ -1422,6 +1423,15 @@ NormalizedLoad normalizeLoadForFit(
 
     const bool backendRequired =
         tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+    // An explicit device list is used as given. Only a required backend checks
+    // it below, so without one the override would be silently ignored.
+    if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
+        !explicitDevices.empty() && !backendRequired) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "'backend' with 'devices' needs 'backend-required'. Otherwise use "
+          "'devices' alone to choose the devices.");
+    }
     const auto matchesRequiredLocal =
         [&backendOverride](const SplitDevice& device) {
           if (device.isRpc) {
@@ -1469,6 +1479,9 @@ NormalizedLoad normalizeLoadForFit(
     backend_selection::SplitDeviceSelection splitSelection;
     SelectedBackend selected = dependencies.resolveBackend(request);
     std::optional<int> mmprojAdrenoVersion = selected.adrenoVersion;
+    // The split set must accept the device selection kept for fabric's CPU KV
+    // placement, or the constraint filter drops it and the load lands on CPU.
+    constraints.allowCpuKvFallback = selected.cpuKvFallback;
     if (preferredBackend == BackendType::GPU &&
         (!explicitDevices.empty() ||
          ((selected.type == BackendType::GPU || rpcDevicesRegistered) &&
