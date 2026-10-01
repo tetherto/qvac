@@ -39,60 +39,6 @@ const kvCompletionSteps = (): Step[] => [
 ]
 
 /**
- * One two-turn conversation over a named cache, with reasoning compaction set one way or the other,
- * leaving the second turn's cached-token count bound.
- */
-const thinkingSession = (cacheKey: string, removeThinking: boolean, as: string): Step[] => [
-  { call: { method: 'deleteCache', params: { kvCacheKey: cacheKey } } },
-  {
-    call: {
-      method: 'completion',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        history: [{ role: 'user', content: '$params.messages[0]' }],
-        stream: false,
-        kvCache: cacheKey,
-        generationParams: {
-          reasoning_budget: '$params.generationParams.reasoning_budget',
-          predict: '$params.generationParams.predict',
-          temp: '$params.generationParams.temp',
-          seed: '$params.generationParams.seed',
-          remove_thinking_from_context: removeThinking
-        }
-      },
-      as: `${as}First`
-    }
-  },
-  { project: { from: `$${as}First`, path: 'text', as: `${as}FirstText` } },
-  {
-    call: {
-      method: 'completion',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        history: [
-          { role: 'user', content: '$params.messages[0]' },
-          { role: 'assistant', content: `$${as}FirstText` },
-          { role: 'user', content: '$params.messages[1]' }
-        ],
-        stream: false,
-        kvCache: cacheKey,
-        generationParams: {
-          reasoning_budget: '$params.generationParams.reasoning_budget',
-          predict: '$params.generationParams.predict',
-          temp: '$params.generationParams.temp',
-          seed: '$params.generationParams.seed',
-          remove_thinking_from_context: removeThinking
-        }
-      },
-      as: `${as}Second`
-    }
-  },
-  { project: { from: `$${as}Second`, path: 'stats.cacheTokens', as: `${as}CacheTokens` } }
-]
-
-/**
  * One tool-calling turn over the named cache, leaving its text, its tool call and its cached-token
  * count bound.
  */
@@ -498,37 +444,6 @@ export const kvCacheStatsVerification: TestDefinition = {
   metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 90000 }
 }
 
-// Reasoning-model dependency ("tools" is the cross-platform Qwen3 build),
-// since the default `llm` resource is Llama and emits no reasoning block.
-/** Two identical two-turn conversations, one with reasoning compaction on. */
-export const kvCacheRemoveThinkingCompaction: TestDefinition = {
-  testId: 'kv-cache-remove-thinking-compaction',
-  params: {
-    cacheKeyOn: 'remove-thinking-on-session',
-    cacheKeyOff: 'remove-thinking-off-session',
-    messages: [
-      'Think step by step, then answer: what is 17 multiplied by 23?',
-      'Now add 100 to that result.'
-    ],
-    // Bounded, not disabled: the assertion needs a reasoning block, and a
-    // positive budget still force-emits the closing think tag.
-    generationParams: { reasoning_budget: 128, predict: 256, temp: 0, seed: 42 }
-  },
-  expectation: { validation: 'type', expectedType: 'string' },
-  suites: ['smoke'],
-  steps: [
-    { useModel: { deps: ['tools'], as: 'model' } },
-    ...thinkingSession('$params.cacheKeyOn', true, 'on'),
-    ...thinkingSession('$params.cacheKeyOff', false, 'off'),
-    { compare: { left: '$offCacheTokens', right: '$onCacheTokens', named: 'greaterThan' } }
-  ],
-  finally: [
-    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKeyOn' } } },
-    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKeyOff' } } }
-  ],
-  metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 180000 }
-}
-
 export const kvCacheNoSystemPrompt: TestDefinition = {
   testId: 'kv-cache-no-system-prompt',
   params: {
@@ -713,7 +628,6 @@ export const kvCacheTests = [
   kvCacheWithTools,
   kvCacheDeleteAndReuse,
   kvCacheStatsVerification,
-  kvCacheRemoveThinkingCompaction,
   kvCacheNoSystemPrompt,
   kvCacheToolsSequentialSave,
   kvCacheCancelThenNewPrompt

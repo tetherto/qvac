@@ -95,7 +95,6 @@ export interface GenerationParams {
   presence_penalty?: number
   repeat_penalty?: number
   reasoning_budget?: -1 | 0
-  remove_thinking_from_context?: boolean
   /** `auto` | `none` | `required` | a declared tool's name. */
   tool_choice?: string
 }
@@ -401,10 +400,6 @@ export function extractGenerationParams(
     params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
   } else if (body['reasoning_budget'] === -1 || body['reasoning_budget'] === 0) {
     params.reasoning_budget = body['reasoning_budget']
-  }
-
-  if (typeof body['remove_thinking_from_context'] === 'boolean') {
-    params.remove_thinking_from_context = body['remove_thinking_from_context']
   }
 
   return Object.keys(params).length > 0 ? params : undefined
