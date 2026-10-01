@@ -40,7 +40,15 @@ test('engine, Parler and language vocabularies are exported from the package roo
   t.is(TTS_CHATTERBOX_LANGUAGES, ttsSchemas.TTS_CHATTERBOX_LANGUAGES)
   t.is(TTS_SUPERTONIC_LANGUAGES, ttsSchemas.TTS_SUPERTONIC_LANGUAGES)
 
-  t.alike([...TTS_ENGINES], ['chatterbox', 'supertonic', 'parler', 'cosyvoice3', 'audio8', 'moss'])
+  t.alike([...TTS_ENGINES], [
+    'chatterbox',
+    'supertonic',
+    'parler',
+    'cosyvoice3',
+    'audio8',
+    'moss',
+    'pocket'
+  ])
   t.is(TTS_PARLER_EMOTIONS.length, 12)
   t.alike([...TTS_SENTENCE_DELIMITER_PRESETS], ['latin', 'cjk', 'multilingual'])
   t.is(TTS_CHATTERBOX_LANGUAGES.length, 23)
