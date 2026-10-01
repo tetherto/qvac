@@ -153,15 +153,15 @@ bool validatePngInflate(
     failure = DecodeFailure::InvalidHeader;
     return false;
   }
-  constexpr uint64_t INFLATE_SLACK_BYTES = 64ULL * 1024;
+  constexpr uint64_t inflateSlackBytes = 64ULL * 1024;
   if (inflatedBytes == 0 ||
       inflatedBytes > static_cast<uint64_t>(std::numeric_limits<int>::max()) -
-                          INFLATE_SLACK_BYTES) {
+                          inflateSlackBytes) {
     failure = DecodeFailure::PngInflateLimit;
     return false;
   }
   std::vector<char> inflated(
-      static_cast<size_t>(inflatedBytes + INFLATE_SLACK_BYTES));
+      static_cast<size_t>(inflatedBytes + inflateSlackBytes));
   const int actual = rawDeflate
                          ? stbi_zlib_decode_noheader_buffer(
                                inflated.data(),
