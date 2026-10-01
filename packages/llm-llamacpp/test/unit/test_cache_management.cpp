@@ -1680,6 +1680,52 @@ TEST(CacheHistoryCheckpointTest, HybridCheckpointsStayInMemoryByDefault) {
   fs::remove(cacheFile);
 }
 
+// Changing the user message k-th from the end needs k + 1 checkpoints: after
+// three turns, an edit of the second user message (k = 2) restores the end of
+// the first one with 3 and is a cold prefill with 2.
+TEST(CacheHistoryCheckpointTest, HybridEditKTurnsBackNeedsKPlusOneCheckpoints) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "hybrid_edit_k_back_cache.bin";
+  size_t reuseWithThree = 0;
+  size_t reuseWithTwo = 0;
+  for (const char* checkpoints : {"3", "2"}) {
+    fs::remove(cacheFile);
+    auto model = loadHybridChatModel(modelPath, nullptr, checkpoints);
+    ASSERT_TRUE(model->isLoaded());
+    auto* text =
+        dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+    ASSERT_NE(text, nullptr);
+    const auto run = [&](const std::string& input) {
+      LlamaModel::Prompt prompt;
+      prompt.input = input;
+      prompt.cacheKey = cacheFile.string();
+      return model->processPrompt(prompt);
+    };
+    std::vector<std::pair<std::string, std::string>> chat;
+    for (const char* user :
+         {"Name three colours of the rainbow.",
+          "Which of them is warmest?",
+          "And which is coolest?"}) {
+      chat.emplace_back("user", user);
+      chat.emplace_back("assistant", run(chatInput(chat)));
+    }
+    // Back to the second user message, changed.
+    chat.resize(3);
+    chat.back().second = "Which of them is the darkest?";
+    run(chatInput(chat));
+    (std::string(checkpoints) == "3" ? reuseWithThree : reuseWithTwo) =
+        text->lastCacheReuseForTesting();
+  }
+  fs::remove(cacheFile);
+  EXPECT_GT(reuseWithThree, 0u)
+      << "3 checkpoints keep the end of the first user message";
+  EXPECT_EQ(reuseWithTwo, 0u)
+      << "2 checkpoints keep only the last two user messages' ends";
+}
+
 // The same on DeepSeek V4, whose partial checkpoints hold the sliding window
 // and the compressor states.
 TEST(CacheHistoryCheckpointTest, DeepSeekV4SecondCheckpointServesTheEdit) {

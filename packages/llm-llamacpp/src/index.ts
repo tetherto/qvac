@@ -1192,9 +1192,11 @@ namespace LlmLlamacpp {
      * adds one, at the end of its history, holding only the state a tail
      * trim cannot rebuild. The default is 1: the last one, which an ordinary
      * next turn and a regenerate restore. `2` also keeps the one before it,
-     * which an edit of the last user message restores; more serve edits
-     * further back. `0` keeps and takes none (every divergent turn is a cold
-     * prefill), the maximum is 1024.
+     * which an edit of the last user message restores. Changing the user
+     * message k-th from the end (1 = the last) without reprocessing the whole
+     * conversation needs at least k + 1; with the default 1, editing the last
+     * user message reprocesses everything. `0` keeps and takes none (every
+     * divergent turn is a cold prefill), the maximum is 1024.
      * Ignored on pure-attention models, which never take checkpoints.
      * Also accepted as `cache-checkpoints`; supplying both is an error.
      */

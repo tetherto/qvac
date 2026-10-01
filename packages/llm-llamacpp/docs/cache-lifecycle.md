@@ -258,8 +258,13 @@ What is kept after a few turns:
 | 3 | end of `[user 3]` | end of `[user 2]`, end of `[user 3]` |
 
 The newest serves the next turn and a regenerate. With 2, the older one
-serves an edit of the last user message, which the default turns into a cold
-prefill. During a request up to two more states exist besides the kept ones:
+serves an edit of the last user message; with the default 1 that edit has no
+checkpoint in front of it and reprocesses the whole conversation. In general,
+changing the user message *k*-th from the end (1 = the last) needs the
+checkpoint at the end of the user message before it, which is the
+(*k* + 1)-th newest, so `cache_checkpoints` must be at least *k* + 1 (see
+[cache-api.md](./cache-api.md#checkpoints-on-hybrid-and-recurrent-models)).
+After the edit, the checkpoints past the change are pruned. During a request up to two more states exist besides the kept ones:
 the pre-request snapshot and the pending end-of-history checkpoint. Neither
 counts toward `cache_checkpoints` or `cache_checkpoints_max_bytes`.
 

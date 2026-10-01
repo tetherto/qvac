@@ -117,9 +117,24 @@ None of them has any effect on pure-attention models.
   still match when the template rewrites earlier answers (thinking models drop
   the reasoning).
 
-  Raise it further to serve edits further back, at one checkpoint per turn.
-  `0` keeps none and takes none, which makes every divergent turn a cold
-  prefill.
+  To change the user message that is *k*-th from the end (`1` = the last
+  one) without reprocessing the whole conversation, keep at least `k + 1`
+  checkpoints:
+
+  | Change | Needs `cache_checkpoints` | Reprocessed |
+  |---|---|---|
+  | next turn, regenerate | 1 (default) | the previous answer, the new message |
+  | edit the last user message | 2 | the answer before it, the edited message |
+  | edit the user message before it | 3 | from that message's previous answer on |
+  | edit the *k*-th from the end | *k* + 1 | from that message's previous answer on |
+
+  With fewer, nothing usable is left and the whole prompt is reprocessed, so
+  with the default 1 an edit of the last user message reprocesses the entire
+  conversation. That holds only while the turns in between each committed a
+  checkpoint and `cache_checkpoints_max_bytes` did not evict it; a restart
+  clears them. An edit also drops the checkpoints after it, which no longer
+  match. `0` keeps none and takes none, which makes every divergent turn a
+  cold prefill.
 - `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
   before the count: the oldest checkpoints are dropped until the total fits.
   `0` (default) is unlimited. When set, the load fails with `InvalidArgument`
