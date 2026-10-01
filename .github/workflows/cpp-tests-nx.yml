@@ -200,10 +200,6 @@ jobs:
             rm -rf "$VCPKG_ROOT/downloads/git-tmp"
           fi
 
-      - name: Setup CUDA toolkit for the ggml CUDA backend
-        if: matrix.mode == 'standard' && matrix.includeCudaSdk && (matrix.platform == 'linux' || matrix.platform == 'win32')
-        uses: ./.github/actions/setup-cuda
-
       # Exports TOOLCHAIN_FINGERPRINT for the cache key below. Must run before
       # both cache steps. See the action for why the key cannot omit it.
       - name: Fingerprint the toolchain
@@ -236,7 +232,6 @@ jobs:
                 format('{0}/vcpkg.json', matrix.workdir),
                 format('{0}/vcpkg-configuration.json', matrix.workdir),
                 format('{0}/vcpkg/ports/**', matrix.workdir),
-                '.github/actions/setup-cuda/action.yml',
                 'vcpkg-overlays/triplets/**',
                 'vcpkg-overlays/toolchains/**'
               )
