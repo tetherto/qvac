@@ -39,7 +39,6 @@
 
 QVAC provides:
 - **SDK** for building local-first AI applications and systems in JavaScript/TypeScript and Python.
-- **Mobile PCM streaming:** set `"includeAudioDecoder": false` in `qvac.config.*` to omit the native FFmpeg addon when compressed audio file decoding is unused.
 - **HTTP server** for using QVAC as a local model provider. Its OpenAI-compatible API lets you connect AI tools such as OpenCode and OpenClaw, or any other compatible tool.
 
 ## Why QVAC

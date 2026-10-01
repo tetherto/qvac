@@ -14,10 +14,7 @@ interface GenerateAddonsManifestOptions {
   outputDir: string
   projectRoot: string
   logger: Logger
-  includeAudioDecoder?: boolean
 }
-
-export const AUDIO_DECODER_ADDON = 'bare-ffmpeg'
 
 interface GenerateAddonsManifestResult {
   manifestPath: string
@@ -189,7 +186,7 @@ export function buildNestedPathIndex(
 export async function generateAddonsManifest(
   options: GenerateAddonsManifestOptions
 ): Promise<GenerateAddonsManifestResult> {
-  const { bundlePath, outputDir, projectRoot, logger, includeAudioDecoder = true } = options
+  const { bundlePath, outputDir, projectRoot, logger } = options
 
   logger.info('\n📦 Generating addons manifest...')
 
@@ -213,7 +210,7 @@ export async function generateAddonsManifest(
         logger.warn(`   Could not read ${candidate}: ${(err as Error).message}`)
       }
     }
-    if (pkgJson?.addon === true && (includeAudioDecoder || pkgName !== AUDIO_DECODER_ADDON)) {
+    if (pkgJson?.addon === true) {
       addons.push(pkgName)
     }
   }

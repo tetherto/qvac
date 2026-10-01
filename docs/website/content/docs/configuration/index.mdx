@@ -61,7 +61,6 @@ The following table lists all supported configuration options for `qvac.config.*
 | Option | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |
 | [`plugins`](/configuration/plugins) | Plugin specifiers to bundle (built-in and/or custom). | `string[]` | No | [All built-in plugins](/configuration/plugins#built-in) |
-| `includeAudioDecoder` | Link `bare-ffmpeg` for compressed audio file inputs and outputs. Set to `false` for PCM-only streaming transcription; the `audiogen-ggml` plugin cannot be bundled then. | `boolean` | No | `true` |
 | `loggerConsoleOutput` | Enable or disable console output for SDK loggers. | `boolean` | No | `true` |
 | `loggerLevel` | Global log level for all SDK loggers. | `"error" \| "warn" \| "info" \| "debug"` | No | `"info"` |
 | `swarmRelays` | Hyperswarm relay public keys (hex strings) for improved P2P connectivity (blind relays). | `string[]` | No | — |
