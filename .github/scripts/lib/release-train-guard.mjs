@@ -22,7 +22,10 @@ function majorMinor (version) {
 
 /**
  * @param {string} ref        branch being pushed
- * @param {string} baseSha    previous tip; empty or all-zero on branch creation
+ * @param {string} baseSha    what the branch is measured against, normally its
+ *   merge base with the default branch. Callers pass that rather than the
+ *   previous tip so a freshly created branch is checked too; empty or all-zero
+ *   when no base could be resolved at all, which skips the changelog check.
  * @param {object} io
  * @param {(path: string) => string} io.readManifest   package.json at head
  * @param {() => string[]} io.changedFiles             paths changed in this push
@@ -87,7 +90,9 @@ export function checkReleaseTrain (ref, baseSha, io, catalog) {
     errors.push(`Group '${train.anchorGroup}' must share a major and minor — ${detail}`)
   }
 
-  // Initial branch push has no diff to inspect.
+  // No base at all, so there is no diff to inspect. Callers resolve a merge
+  // base rather than relying on the previous tip, so this is the unresolvable
+  // case and not an ordinary first push.
   if (!baseSha || baseSha === ZERO_SHA) {
     return errors
   }
@@ -132,7 +137,7 @@ export function movedProjects (ref, baseSha, headSha, readManifestAt, catalog) {
     const base = readManifestAt(baseSha, manifestPath)
     const baseVersion = base === null ? null : JSON.parse(base).version
     if (headVersion !== baseVersion) {
-      moved.push({ name: project.name, slug: project.slug, version: headVersion, changelog: `${project.dir}/CHANGELOG.md` })
+      moved.push({ name: project.name, slug: project.slug, dir: project.dir, version: headVersion, changelog: `${project.dir}/CHANGELOG.md` })
     }
   }
   return moved

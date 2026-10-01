@@ -7,6 +7,7 @@
  * Usage:
  *   node .github/scripts/release-train-publish.mjs <train> [--tag <dist-tag>] [--dry-run]
  */
+import { appendFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { parseArgs } from 'node:util'
 import { publishTrain, SERVE_WAIT } from './lib/release-train-publish.mjs'
@@ -47,6 +48,14 @@ function main () {
       ? (dryRun ? 'would skip, already on npm:' : 'skipped, already on npm:')
       : (dryRun ? 'would publish' : 'published')
     console.log(`${verb} ${entry.name}@${entry.version} (${entry.tag})`)
+  }
+
+  // Everything downstream — PyPI, the GitHub release, the fat wheels — is for
+  // a release that happened. A re-run of a finished train publishes nothing,
+  // and re-running those would fail on artefacts that already exist.
+  const published = result.completed.some((entry) => !entry.alreadyPublished)
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `published=${published}\n`)
   }
   if (result.failed) {
     const { name, version, reason } = result.failed

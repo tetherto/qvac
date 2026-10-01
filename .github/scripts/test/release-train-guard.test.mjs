@@ -133,8 +133,8 @@ test('lists the packages whose version moved, with the version they moved to', (
     head: AT_0_21_0,
   })
   assert.deepEqual(movedProjects('release-train-sdk-0.21.0', 'base', 'head', read, CATALOG), [
-    { name: '@qvac/inference', slug: 'inference', version: '0.21.0', changelog: 'packages/inference/CHANGELOG.md' },
-    { name: '@qvac/sdk', slug: 'sdk', version: '0.21.0', changelog: 'packages/sdk/CHANGELOG.md' },
+    { name: '@qvac/inference', slug: 'inference', dir: 'packages/inference', version: '0.21.0', changelog: 'packages/inference/CHANGELOG.md' },
+    { name: '@qvac/sdk', slug: 'sdk', dir: 'packages/sdk', version: '0.21.0', changelog: 'packages/sdk/CHANGELOG.md' },
   ])
 })
 

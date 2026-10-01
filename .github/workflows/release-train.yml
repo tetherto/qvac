@@ -115,13 +115,21 @@ jobs:
       - name: Check nx.json matches the catalog
         run: node .github/scripts/validate-release-trains.mjs
 
+      # Against the merge base, not the previous tip. On branch creation there
+      # is no previous tip, and pr-release-guard has not run either, so a
+      # versioned branch pushed straight here would otherwise reach the npm
+      # approval with nothing having checked its changelogs.
       - name: Validate the release train branch
         shell: bash
         env:
           REF_NAME: ${{ github.ref_name }}
-          BEFORE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-        run: node .github/scripts/validate-release-train.mjs "$REF_NAME" "$BEFORE_SHA" "$HEAD_SHA"
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          BASE_SHA=$(git merge-base "$HEAD_SHA" "origin/$DEFAULT_BRANCH")
+          node .github/scripts/validate-release-train.mjs "$REF_NAME" "$BASE_SHA" "$HEAD_SHA"
 
       - name: Resolve the train's contents
         id: resolve
@@ -192,6 +200,16 @@ jobs:
       # point of releasing the train in one pass.
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+
+      # The same linking reaches siblings the train does not publish, so the
+      # build can compile against a version only this checkout has while a
+      # consumer resolves the range to an older one on npm. The per-package
+      # workflows install from the registry and fail instead.
+      - name: Check the linked siblings are on npm
+        shell: bash
+        env:
+          TRAIN: ${{ needs.train.outputs.name }}
+        run: node .github/scripts/release-train-linked.mjs "$TRAIN"
 
       - name: Build
         shell: bash
@@ -313,6 +331,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: npm
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     permissions:
       contents: read
       id-token: write
@@ -361,6 +381,7 @@ jobs:
       # Lifecycle scripts stay off so inference's `prepare` does not rebuild
       # over the downloaded dist.
       - name: Publish the train
+        id: publish
         env:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           PNPM_CONFIG_PROVENANCE: "true"
@@ -377,8 +398,10 @@ jobs:
       - train
       - build-sdk-python
       - publish-npm
-    # Publishes after @qvac/sdk reaches npm, at the same version. Escape hatch:
-    # workflow_dispatch with publish_pypi_only=true (npm already shipped).
+    # Publishes after @qvac/sdk reaches npm, at the same version. A re-run of a
+    # finished train publishes nothing to npm and must not re-upload here.
+    # Escape hatch: workflow_dispatch with publish_pypi_only=true (npm already
+    # shipped).
     if: >-
       always() &&
       github.repository == 'tetherto/qvac' &&
@@ -387,7 +410,8 @@ jobs:
       (
         (
           needs.train.result == 'success' &&
-          needs.publish-npm.result == 'success'
+          needs.publish-npm.result == 'success' &&
+          needs.publish-npm.outputs.published == 'true'
         )
         ||
         (
@@ -409,8 +433,12 @@ jobs:
           name: dist-sdk-python
           path: dist
 
+      # skip-existing so a recovery dispatch after a partial upload completes
+      # the set instead of failing on the files already there.
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          skip-existing: true
 
   # Replaces the per-package create-release-tag.yml call: one run published
   # every package, so one job tags every package. Which projects get a tag is
@@ -432,15 +460,23 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
+      # Scoped to what this branch moved, against the merge base. A package the
+      # train left alone still carries its previous tag at the commit that
+      # released it, so tagging it again would read as a conflict and stop the
+      # run before it tagged anything this train did release.
       - name: Tag
         shell: bash
         env:
           TRAIN: ${{ needs.train.outputs.name }}
+          REF_NAME: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          node .github/scripts/tag-release-train.mjs "$TRAIN" --push
+          git fetch --no-tags origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          BASE_SHA=$(git merge-base HEAD "origin/$DEFAULT_BRANCH")
+          node .github/scripts/tag-release-train.mjs "$TRAIN" "$REF_NAME" "$BASE_SHA" --push
 
   # The catalog decides whether a train has a GitHub release and what it is
   # called; `uses:` has to be a literal, so the job exists either way and skips
@@ -452,6 +488,7 @@ jobs:
       - publish-npm
     if: >-
       needs.publish-npm.result == 'success' &&
+      needs.publish-npm.outputs.published == 'true' &&
       needs.train.outputs.release_slug != '' &&
       needs.train.outputs.release_version != ''
     permissions:
@@ -475,6 +512,7 @@ jobs:
       - github-release
     if: >-
       needs.publish-npm.result == 'success' &&
+      needs.publish-npm.outputs.published == 'true' &&
       needs.github-release.result == 'success' &&
       contains(fromJSON(needs.train.outputs.release_assets), 'sdk-python-fat-wheels')
     permissions:

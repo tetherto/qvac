@@ -16,8 +16,11 @@ const TARGETS = [
 ]
 const VERSIONS = { 'packages/inference': '0.21.0', 'packages/sdk': '0.21.0', 'packages/cli': '0.15.0' }
 
-function plan (onOrigin) {
+const ALL_MOVED = new Set(['inference', 'sdk', 'cli'])
+
+function plan (onOrigin, movedSlugs = ALL_MOVED) {
   return planTags(TARGETS, {
+    movedSlugs,
     versionOf: (dir) => VERSIONS[dir],
     remoteCommit: (tag) => onOrigin[tag] ?? null,
     head: HEAD,
@@ -51,4 +54,26 @@ test('leaves a tag alone when origin already has it at this commit', () => {
 test('reports a tag that origin has at a different commit', () => {
   const result = plan({ 'cli-v0.15.0': OTHER })
   assert.deepEqual(result.conflicts, [{ tag: 'cli-v0.15.0', commit: OTHER }])
+})
+
+test('an engine-only train tags the engine and leaves the rest alone', () => {
+  // cli stays at 0.14.0, whose tag is on origin at the commit that released
+  // it. Reading that as a conflict stopped the run before it tagged inference.
+  const result = planTags(TARGETS, {
+    movedSlugs: new Set(['inference', 'sdk']),
+    versionOf: (dir) => ({ ...VERSIONS, 'packages/cli': '0.14.0' })[dir],
+    remoteCommit: (tag) => (tag === 'cli-v0.14.0' ? OTHER : null),
+    head: HEAD,
+  })
+
+  assert.deepEqual(result.create, ['inference-v0.21.0'])
+  assert.deepEqual(result.viaRelease, ['sdk'])
+  assert.deepEqual(result.unchanged, ['cli'])
+  assert.deepEqual(result.conflicts, [])
+})
+
+test('a package the train moved still conflicts on a moved tag', () => {
+  const result = plan({ 'inference-v0.21.0': OTHER }, new Set(['inference']))
+  assert.deepEqual(result.conflicts, [{ tag: 'inference-v0.21.0', commit: OTHER }])
+  assert.deepEqual(result.unchanged, ['sdk', 'cli'])
 })

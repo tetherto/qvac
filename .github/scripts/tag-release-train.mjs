@@ -14,10 +14,11 @@
  * someone is depending on. A tag there at another commit fails the run. See
  * .github/scripts/lib/release-train-tags.mjs.
  *
- * Usage: node .github/scripts/tag-release-train.mjs <train> [--push]
+ * Usage: node .github/scripts/tag-release-train.mjs <train> <ref> <base-sha> [--push]
  */
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
+import { movedProjects } from './lib/release-train-guard.mjs'
 import { planTags, parseLsRemote } from './lib/release-train-tags.mjs'
 import { postPublishPlan, readRepoFile, repoRoot } from './lib/release-trains.mjs'
 
@@ -25,23 +26,34 @@ function git (args) {
   return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf-8' }).trim()
 }
 
+function showAt (sha, path) {
+  try {
+    return execFileSync('git', ['show', `${sha}:${path}`], { cwd: repoRoot, encoding: 'utf-8' })
+  } catch {
+    return null
+  }
+}
+
 function main () {
-  const [name, ...flags] = process.argv.slice(2)
+  const [name, ref, baseSha, ...flags] = process.argv.slice(2)
   const push = flags.includes('--push')
 
-  if (!name) {
-    console.error('usage: tag-release-train.mjs <train> [--push]')
+  if (!name || !ref || !baseSha) {
+    console.error('usage: tag-release-train.mjs <train> <ref> <base-sha> [--push]')
     process.exit(2)
   }
 
   const head = git(['rev-parse', 'HEAD'])
+  const movedSlugs = new Set(movedProjects(ref, baseSha, head, showAt).map((project) => project.slug))
   const plan = planTags(postPublishPlan(name).tags, {
+    movedSlugs,
     versionOf: (dir) => JSON.parse(readRepoFile(join(dir, 'package.json'))).version,
     remoteCommit: (tag) =>
       parseLsRemote(git(['ls-remote', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`]), tag),
     head,
   })
 
+  for (const slug of plan.unchanged) console.log(`${slug}: not moved by this train, skipping`)
   for (const slug of plan.viaRelease) console.log(`${slug}: tagged by its GitHub release, skipping`)
   for (const tag of plan.existing) console.log(`${tag}: already on origin at ${head}, leaving it alone`)
 

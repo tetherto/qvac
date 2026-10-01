@@ -122,9 +122,16 @@ export const SERVE_WAIT = { attempts: 30, intervalMs: 10_000 }
  * dependent published in that window can be installed while its dependency
  * does not resolve.
  */
-export function waitUntilServed (name, version, run, { attempts, intervalMs } = SERVE_WAIT, sleep = sleepSync) {
+export function waitUntilServed (name, version, run, { attempts, intervalMs } = SERVE_WAIT, sleep = sleepSync, log = console.log) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    if (isPublished(name, version, run)) return true
+    try {
+      if (isPublished(name, version, run)) return true
+    } catch (error) {
+      // A 5xx or a timeout is the registry being unavailable, which is what
+      // this loop already waits out. Throwing here would leave the job with no
+      // shipped / not-attempted report.
+      log(`${name}@${version}: ${error.message}; treating as not yet served`)
+    }
     if (attempt < attempts) sleep(intervalMs)
   }
   return false

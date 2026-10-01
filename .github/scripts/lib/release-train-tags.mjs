@@ -24,15 +24,25 @@ export function parseLsRemote (output, tag) {
 }
 
 /**
+ * Only the packages this train moved are tagged. One it left alone still
+ * carries its previous tag, at the commit that released it, so including it
+ * would read every such tag as a conflict and stop the run before it tagged
+ * anything the train did release.
+ *
  * @param {Array<{slug: string, dir: string, viaRelease: boolean}>} targets
  * @param {object} io
+ * @param {Set<string>} io.movedSlugs   slugs whose version this train changed
  * @param {(dir: string) => string} io.versionOf   version in <dir>/package.json
  * @param {(tag: string) => string | null} io.remoteCommit   commit the tag points at on origin
  * @param {string} io.head   commit being tagged
  */
-export function planTags (targets, { versionOf, remoteCommit, head }) {
-  const plan = { create: [], existing: [], viaRelease: [], conflicts: [] }
+export function planTags (targets, { movedSlugs, versionOf, remoteCommit, head }) {
+  const plan = { create: [], existing: [], viaRelease: [], unchanged: [], conflicts: [] }
   for (const target of targets) {
+    if (!movedSlugs.has(target.slug)) {
+      plan.unchanged.push(target.slug)
+      continue
+    }
     if (target.viaRelease) {
       plan.viaRelease.push(target.slug)
       continue
