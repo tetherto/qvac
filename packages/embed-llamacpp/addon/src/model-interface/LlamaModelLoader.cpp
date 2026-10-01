@@ -251,7 +251,7 @@ LlamaModelSetup setupParams(
         isOpenCl = traits.isOpenCl;
       } else if (!splitSelection.rejectedDevices.empty()) {
         std::string message =
-            "[BertModel] no eligible GPU backend found; rejected ";
+            "[LlamaModelLoader] no eligible GPU backend found; rejected ";
         for (size_t index = 0; index < splitSelection.rejectedDevices.size();
              ++index) {
           if (index > 0) {
@@ -278,7 +278,7 @@ LlamaModelSetup setupParams(
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_WARN,
-            "[BertModel] main-gpu is ignored in multi-GPU split-mode\n",
+            "[LlamaModelLoader] main-gpu is ignored in multi-GPU split-mode\n",
             nullptr);
       }
       if (splitMode != LLAMA_SPLIT_MODE_NONE) {
@@ -293,7 +293,8 @@ LlamaModelSetup setupParams(
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_INFO,
             string_format(
-                "[BertModel] split mode: pinning to %zu eligible device(s): "
+                "[LlamaModelLoader] split mode: pinning to %zu eligible "
+                "device(s): "
                 "%s\n",
                 splitSelection.devices.size(),
                 deviceList.c_str())
@@ -307,7 +308,7 @@ LlamaModelSetup setupParams(
       if (splitMode != LLAMA_SPLIT_MODE_NONE) {
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_WARN,
-            "[BertModel] split-mode, tensor-split and main-gpu ignored: "
+            "[LlamaModelLoader] split-mode, tensor-split and main-gpu ignored: "
             "no eligible named GPU device available, falling back to CPU\n",
             nullptr);
         splitMode = LLAMA_SPLIT_MODE_NONE;
@@ -335,7 +336,8 @@ LlamaModelSetup setupParams(
       configFilemap["flash-attn"] = "off";
       qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
           GGML_LOG_LEVEL_INFO,
-          "[BertModel] OpenCL backend selected: disabling flash attention by "
+          "[LlamaModelLoader] OpenCL backend selected: disabling flash "
+          "attention by "
           "default (not reliably supported on OpenCL)\n",
           nullptr);
     }
@@ -377,7 +379,8 @@ LlamaModelSetup setupParams(
       qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
           GGML_LOG_LEVEL_WARN,
           string_format(
-              "[BertModel] '%s' ignored: 'load-mode' is set\n", deprecatedKey)
+              "[LlamaModelLoader] '%s' ignored: 'load-mode' is set\n",
+              deprecatedKey)
               .c_str(),
           nullptr);
     } else {

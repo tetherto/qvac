@@ -208,8 +208,8 @@ private:
   /// Caches the model handles and rejects models that cannot embed.
   void onLoaded(llama_model* model, llama_context* ctx);
 
-  // Last member: destroyed first, joining a background load before the
-  // members its hooks write.
+  // Last member: destroyed first, so the llama context goes before the members
+  // its hooks write.
   LlamaModelLoader loader_;
 };
 // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,
