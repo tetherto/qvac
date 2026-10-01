@@ -10,11 +10,20 @@ qvac_addon_project_setup(VALGRIND_SUPP PRE_COMMIT_HOOK)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
+# Fuzz-only configure: parseMainGpu is header-only and needs no fabric.
+# See docs/architecture/ADDON-FUZZING.md.
+if(BUILD_FUZZING AND NOT BUILD_TESTING)
+  enable_testing()
+  add_subdirectory(test/fuzz)
+  return()
+endif()
+
 # llama / ggml / vector-index runtime is the shared @qvac/fabric prebuild
 # (dynamically linked, loaded once per process); sets qvac_fabric_target +
 # BACKENDS_SUBDIR_VALUE.
 qvac_addon_use_fabric()
 
+if(NOT BUILD_FUZZING)
 add_bare_module(embed-llamacpp EXPORTS)
 
 target_sources(
@@ -40,8 +49,13 @@ target_include_directories(
 
 qvac_addon_link_fabric(${embed-llamacpp} ${qvac_fabric_target})
 qvac_addon_finalize(${embed-llamacpp} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+endif()
 
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(test/unit)
+endif()
+
+if(BUILD_FUZZING)
+  add_subdirectory(test/fuzz)
 endif()

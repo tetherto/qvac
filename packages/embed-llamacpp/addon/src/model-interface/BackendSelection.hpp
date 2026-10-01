@@ -10,17 +10,9 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "BackendConfigParse.hpp"
+
 namespace backend_selection {
-
-enum BackendType : std::uint8_t { CPU, GPU };
-
-enum class MainGpuType : std::uint8_t { Integrated, Dedicated };
-
-using MainGpu = std::variant<int, MainGpuType>;
-
-BackendType preferredBackendTypeFromString(const std::string& device);
-
-std::optional<MainGpu> parseMainGpu(const std::string& mainGpuStr);
 
 std::optional<MainGpu>
 tryMainGpuFromMap(std::unordered_map<std::string, std::string>& configFilemap);
