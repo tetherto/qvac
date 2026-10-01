@@ -128,11 +128,25 @@ Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugin
       ["expo-build-properties", { // [!code ++]
         "android": { "minSdkVersion": 29 } // [!code ++]
       }], // [!code ++]
-      "@qvac/sdk/expo-plugin" // [!code ++]
+      ["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }] // [!code ++]
     ]
   }
 }
 ```
+
+QVAC ships part of its Android and iOS binaries as separate packages, and every app needs at least one of them. `installMissingPrebuilds` lets `npx expo prebuild` add them to `package.json`, at the right version, with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry). The option is off by default because it changes `package.json` and needs network access during `expo prebuild`.
+
+To add the packages yourself instead, use `"@qvac/sdk/expo-plugin"` without the option and add them as dependencies. This app needs:
+
+```json title="package.json"
+{
+  "dependencies": {
+    "@qvac/fabric-android-arm64": "x.y.z"
+  }
+}
+```
+
+iOS uses `@qvac/fabric-ios` instead. For the version, run `npx expo prebuild` once without these dependencies: it stops and prints each missing package with the exact line to add.
 
 </Step>
 
@@ -146,20 +160,6 @@ Create `qvac.config.json` in the project root and enable only the LLM plugin use
 ```
 
 Without a `plugins` selection, QVAC bundles every built-in AI capability. Keeping this tutorial to the LLM plugin avoids linking native engines the app does not use.
-
-QVAC ships part of its Android and iOS binaries as separate packages, and every app needs at least one of them. To have `npx expo prebuild` add them for you, pass `installMissingPrebuilds` to the plugin. It adds each package your plugins need to `package.json`, at the right version, with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), for the platform being prebuilt:
-
-```json title="app.json"
-{
-  "expo": {
-    "plugins": [
-      ["@qvac/sdk/expo-plugin", { "installMissingPrebuilds": true }]
-    ]
-  }
-}
-```
-
-The option is off by default because it changes `package.json` and needs network access during `expo prebuild`. Without it, prebuild stops and prints each missing package with the exact line to add to `package.json`, for example `"@qvac/fabric-android-arm64": "x.y.z"`.
 </Step>
 
 <Step>
