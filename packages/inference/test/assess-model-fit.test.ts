@@ -2153,6 +2153,45 @@ test('assess: an undecided probe leaves the calibrated verdict alone', (t) => {
 
   t.is(result.evidence, 'calibration')
   t.ok(result.estimate, 'the calibrated bound is still published')
+  t.ok(
+    result.reasons.some((reason) => reason.includes('reached no verdict: disabled')),
+    'the refusal is named beside the verdict it fell back to'
+  )
+})
+
+test('assess: a probe that never ran names why, beside the fallback', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile(),
+    nativeFitUnavailable: 'no registry description (timed-out)'
+  })
+
+  t.is(result.evidence, 'calibration')
+  t.ok(
+    result.reasons.includes('no engine fit: no registry description (timed-out)'),
+    'the cause travels with the result'
+  )
+})
+
+test('assess: a native verdict reports no refusal', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile(),
+    nativeFit: NATIVE_FIT
+  })
+
+  t.absent(
+    result.reasons.some((reason) => reason.startsWith('no engine fit')),
+    'nothing is explained away under a verdict that was reached'
+  )
 })
 
 // One probe measures one model against the whole machine. Applying it to a set

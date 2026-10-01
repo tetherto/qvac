@@ -106,6 +106,8 @@ export interface AssessModelFitOptions {
    * a combined budget the way two byte estimates can.
    */
   nativeFit?: NativeProbeFit | undefined
+  /** Why the fitter produced no verdict, when one was sought. */
+  nativeFitUnavailable?: string | undefined
 }
 
 /**
@@ -318,6 +320,11 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     }
   }
 
+  const declined = nativeFitDecline(options.nativeFit, options.nativeFitUnavailable)
+  if (declined !== undefined) {
+    reasons.push(declined)
+  }
+
   return {
     verdict,
     basis,
@@ -332,6 +339,22 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     reasons,
     assumptions
   }
+}
+
+/**
+ * Why no engine verdict backs this assessment, for the cases where one was
+ * sought: the fitter never ran, or it ran and declined. `undefined` where none
+ * was sought, which is every multi-candidate assessment.
+ */
+function nativeFitDecline(
+  nativeFit: NativeProbeFit | undefined,
+  unavailable: string | undefined
+): string | undefined {
+  if (unavailable !== undefined) return `no engine fit: ${unavailable}`
+  if (nativeFit?.verdict !== 'unknown') return undefined
+
+  const detail = nativeFit.message === undefined ? nativeFit.reason : nativeFit.message
+  return `the engine fitter reached no verdict: ${detail}`
 }
 
 /**

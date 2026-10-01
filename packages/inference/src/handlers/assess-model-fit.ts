@@ -29,6 +29,7 @@ export async function handleAssessModelFit(
   request: AssessModelFitRequest
 ): Promise<AssessModelFitResponse> {
   const platform = detectPlatform()
+  const native = await resolveNativeFit(request.models)
 
   const result = assessModelFitFromResources({
     models: request.models.map(estimateTargetFor),
@@ -36,7 +37,8 @@ export async function handleAssessModelFit(
     resources: readResources(),
     platform,
     calibration: platform ? getPlatformCalibration(platform) : undefined,
-    nativeFit: await resolveNativeFit(request.models)
+    nativeFit: native.fit,
+    nativeFitUnavailable: native.unavailable
   })
 
   return { type: 'assessModelFit', ...result }
@@ -161,14 +163,16 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
  */
 async function resolveNativeFit(
   candidates: readonly ModelFitCandidate[]
-): Promise<NativeProbeFit | undefined> {
-  if (candidates.length !== 1) return undefined
+): Promise<{ fit?: NativeProbeFit; unavailable?: string }> {
+  if (candidates.length !== 1) return {}
 
   const candidate = candidates[0]
-  if (!candidate) return undefined
+  if (!candidate) return {}
 
   const modelType = normalizeModelType(candidate.modelType)
-  if (!isCanonicalModelType(modelType)) return undefined
+  if (!isCanonicalModelType(modelType)) {
+    return { unavailable: `no plugin handles model type ${candidate.modelType}` }
+  }
 
   const budgetMs = getConfig().fitStubBudgetMs
 
@@ -182,7 +186,15 @@ async function resolveNativeFit(
     budgetMs === undefined ? {} : { stub: { budgetMs } }
   )
 
-  return outcome.status === 'projected' ? outcome.fit : undefined
+  if (outcome.status === 'projected') return { fit: outcome.fit }
+  if (outcome.status === 'unsupported-load') return { unavailable: outcome.detail }
+
+  return {
+    unavailable:
+      outcome.message === undefined
+        ? `no registry description (${outcome.reason})`
+        : `no registry description (${outcome.reason}): ${outcome.message}`
+  }
 }
 
 function readResources(): SystemResources {
