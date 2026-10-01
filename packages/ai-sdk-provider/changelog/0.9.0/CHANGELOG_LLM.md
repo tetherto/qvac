@@ -4,7 +4,7 @@
 
 QVAC AI SDK Provider 0.9.0 follows `@qvac/cli` 0.15.0. The catalog picks up Ternary Bonsai 2 27B, MOSS TTS, Indic Parakeet 600M GGUFs, and CosyVoice3 quant variants. BitNet instructed TQ2_0 exports are retagged as base, Llama tool-calling 1B moves to `Q4_K_M`, and Indic Parakeet Conformer CTC constants are removed.
 
-Managed mode needs `@qvac/cli@^0.15.0`. Publish after CLI 0.15.0 is on npm. External mode is unchanged.
+Managed mode needs `@qvac/cli@^0.15.0`. External mode is unchanged.
 
 ## Breaking Changes
 
