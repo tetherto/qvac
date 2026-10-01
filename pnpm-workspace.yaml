@@ -1,5 +1,10 @@
 packages:
   - "packages/*"
+  # sdk-kotlin is a Gradle package; its package.json only declares the Android
+  # BareKit npm deps, installed locally by Gradle. Keeping it out of the pnpm
+  # workspace avoids an importer the root lockfile has no entry for, which would
+  # fail every --frozen-lockfile install.
+  - "!packages/sdk-kotlin"
   - "packages/registry-server/client"
   - "packages/registry-server/shared"
   - "plugins/*"

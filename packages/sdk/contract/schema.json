@@ -20265,6 +20265,14 @@
             },
             "enhancerBackendId": {
               "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -20453,6 +20461,14 @@
               "type": "number"
             },
             "enhancerBackendId": {
+              "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
               "type": "number"
             }
           },

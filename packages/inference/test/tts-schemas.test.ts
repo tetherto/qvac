@@ -1418,6 +1418,21 @@ test('ttsStatsSchema: carries the addon RuntimeStats surface', (t) => {
   }
 })
 
+test('ttsStatsSchema: keeps the Audio8 Core ML codec flags', (t) => {
+  // The stats object strips unknown keys, so a flag missing here never reaches a caller.
+  const r = ttsResponseSchema.safeParse({
+    type: 'textToSpeech',
+    buffer: [],
+    done: true,
+    stats: { codecSidecarLoaded: 1, codecOnCoreml: 0 }
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    t.is(r.data.stats?.codecSidecarLoaded, 1)
+    t.is(r.data.stats?.codecOnCoreml, 0)
+  }
+})
+
 test('TTS_ENGINES matches the ttsEngine discriminator of every config arm', (t) => {
   // The exported constant is the machine-readable engine list; it must not
   // drift from the discriminated union it describes — derive the arms from the

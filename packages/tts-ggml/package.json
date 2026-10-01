@@ -108,6 +108,7 @@
     "scripts/download-tts-ggml-models.js",
     "test/integration",
     "test/mobile",
+    "test/pocket-worklet",
     "test/reference-audio",
     "test/utils/runTTS.js",
     "test/utils/runChatterboxTTS.js",

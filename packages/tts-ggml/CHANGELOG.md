@@ -120,6 +120,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     through tts-cpp's `tts_cpp_log_set` instead of stderr. Engine diagnostics
     that tts-cpp still prints straight to stderr are unaffected.
 
+### Fixed
+
+- Include the standalone Pocket BareKit worklet in published packages and
+  guard shared mobile runners against imports that break after concatenation.
+
 ### Changed
 
 - Release the loaded Pocket model before activating its replacement on reload,

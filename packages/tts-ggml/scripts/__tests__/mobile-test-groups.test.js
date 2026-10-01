@@ -46,6 +46,8 @@ const EXCLUDED_RUNNERS = [
   // the checked-in file predated audio8.test.js), MOSS (an 8B backbone),
   // MOSS-SoundEffect (a desktop diffusion model), MOSS-Speech (a 9B model) and
   // CosyVoice3 cloning (the s3tok/campplus add-on GGUFs ship for desktop only).
+  // Pocket uses a standalone worklet and local converted bundles.
+  'runPocketIntegrationTest',
   'runAudio8Test',
   'runMossTest',
   'runMossSfxTest',
@@ -106,4 +108,14 @@ test('excluded and benchmark runners do not enter functional shards', () => {
     functionalRunners.filter((runner) => EXCLUDED_RUNNERS.includes(runner)),
     []
   )
+})
+
+// The mobile harness concatenates these files into backend/backend.cjs.
+// Parent-relative requires would then resolve outside the packaged addon.
+test('mobile runner sources can be relocated into the harness backend', () => {
+  const mobileDir = path.dirname(integrationAutoPath)
+  for (const name of fs.readdirSync(mobileDir).filter((name) => name.endsWith('.cjs'))) {
+    const source = fs.readFileSync(path.join(mobileDir, name), 'utf8')
+    assert.doesNotMatch(source, /require\s*\(\s*['"]\.\.\//, name)
+  }
 })

@@ -393,3 +393,29 @@ test('groupCompanionSets: Core ML bundle files do not become public model consta
   t.absent(result[0]!.isCompanionOnly)
   t.is(result[1]!.isCompanionOnly, true)
 })
+
+test('groupCompanionSets: Audio8 Core ML bundle components are companion-only', (t) => {
+  const decoder = makeModel({
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf',
+    registrySource: 's3'
+  })
+  const weights = makeModel({
+    registryPath:
+      'qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/weights/weight.bin',
+    registrySource: 's3'
+  })
+  const analytics = makeModel({
+    registryPath:
+      'qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/analytics/coremldata.bin',
+    registrySource: 's3'
+  })
+  // A zipped bundle is a single downloadable file, not a bundle component.
+  const zipped = makeModel({ registryPath: 'whisper/ggml-base-encoder.mlmodelc.zip' })
+
+  const result = groupCompanionSets([decoder, weights, analytics, zipped])
+
+  t.absent(result[0]!.isCompanionOnly, 'the GGUF stays a model constant')
+  t.is(result[1]!.isCompanionOnly, true)
+  t.is(result[2]!.isCompanionOnly, true)
+  t.absent(result[3]!.isCompanionOnly)
+})

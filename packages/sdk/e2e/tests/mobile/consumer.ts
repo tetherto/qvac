@@ -646,7 +646,8 @@ export const executor = createExecutor({
           skipTests(
             ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
             'Parakeet streaming EOU/iterator recovery is flaky on Android'
-          )
+          ),
+          skipTests(['tts-audio8-coreml'], 'Core ML runs on macOS and iOS only')
         ]
       : []),
     ...(Platform.OS === 'ios'

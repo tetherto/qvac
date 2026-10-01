@@ -78,6 +78,10 @@ async function runParlerTest (options = {}) { // eslint-disable-line no-unused-v
   return runIntegrationModule('../integration/parler.test.js', options)
 }
 
+async function runPocketIntegrationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/pocket.integration.test.js', options)
+}
+
 async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/rtf-benchmark.test.js', options)
 }
@@ -121,6 +125,7 @@ module.exports = {
   runOutputSampleRateTest,
   runParlerWerTest,
   runParlerTest,
+  runPocketIntegrationTest,
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,
