@@ -32,6 +32,11 @@ type TtsGgmlDebugModel = {
   _audio8LmPath?: string
   _audio8CodecDecoderPath?: string
   _audio8CodecEncoderPath?: string
+  _mossBackbonePath?: string
+  _mossCodecDecoderPath?: string
+  _mossCodecEncoderPath?: string
+  _dialogueReferences?: string[]
+  _durationTokens?: number
   _referenceText?: string
   _greedy?: boolean
   _nCtx?: number
@@ -513,6 +518,153 @@ test('ttsPlugin createModel: wires the Audio8 constructor surface', async (t) =>
   t.is(model._seed, 42)
   t.is(model._outputSampleRate, 44100)
   t.alike(model._config, { useGPU: true, outputSampleRate: 44100 })
+})
+
+function stubResolve(resolved: string[]) {
+  return async (src: unknown) => {
+    const value = typeof src === 'string' ? src : (src as { src: string }).src
+    resolved.push(value)
+    return `/cache/${value.split('/').pop()}`
+  }
+}
+
+test('ttsPlugin resolveConfig: resolves MOSS component GGUFs and strips *Src', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+  const resolved: string[] = []
+
+  const result = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'moss',
+      language: 'en',
+      durationTokens: 38,
+      mossCodecDecoderModelSrc: 'registry://s3/openmoss/moss-codec-decoder-f16.gguf',
+      mossCodecEncoderModelSrc: 'registry://s3/openmoss/moss-codec-encoder-f16.gguf',
+      referenceAudioSrc: '/voices/speaker-24k.wav'
+    },
+    {
+      resolveModelPath: stubResolve(resolved),
+      modelSrc: 'registry://s3/openmoss/moss-tts-delay-f16.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved, [
+    'registry://s3/openmoss/moss-codec-decoder-f16.gguf',
+    'registry://s3/openmoss/moss-codec-encoder-f16.gguf',
+    '/voices/speaker-24k.wav'
+  ])
+  t.alike(result.config, { ttsEngine: 'moss', language: 'en', durationTokens: 38 })
+  t.alike(result.artifacts, {
+    mossCodecDecoderPath: '/cache/moss-codec-decoder-f16.gguf',
+    mossCodecEncoderPath: '/cache/moss-codec-encoder-f16.gguf',
+    referenceAudioPath: '/cache/speaker-24k.wav'
+  })
+})
+
+test('ttsPlugin resolveConfig: resolves MOSS-TTSD dialogue references in speaker order', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+  const resolved: string[] = []
+
+  const result = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'moss',
+      mossCodecDecoderModelSrc: 'registry://s3/openmoss/moss-codec-decoder-f16.gguf',
+      mossCodecEncoderModelSrc: 'registry://s3/openmoss/moss-codec-encoder-f16.gguf',
+      dialogueReferenceSrcs: ['/voices/alice.wav', { src: '/voices/bob.wav' }, '/voices/carol.wav']
+    },
+    {
+      resolveModelPath: stubResolve(resolved),
+      modelSrc: '/models/moss-ttsd-f16.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(result.config, { ttsEngine: 'moss' })
+  t.alike(result.artifacts, {
+    mossCodecDecoderPath: '/cache/moss-codec-decoder-f16.gguf',
+    mossCodecEncoderPath: '/cache/moss-codec-encoder-f16.gguf',
+    mossDialogueReferencePath0: '/cache/alice.wav',
+    mossDialogueReferencePath1: '/cache/bob.wav',
+    mossDialogueReferencePath2: '/cache/carol.wav'
+  })
+})
+
+test('ttsPlugin createModel: wires the MOSS constructor surface', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-moss-test',
+    modelPath: '/tmp/moss-tts-delay-f16.gguf',
+    artifacts: {
+      mossCodecDecoderPath: '/tmp/moss-codec-decoder-f16.gguf',
+      mossCodecEncoderPath: '/tmp/moss-codec-encoder-f16.gguf',
+      referenceAudioPath: '/tmp/speaker-24k.wav'
+    },
+    modelConfig: {
+      ttsEngine: 'moss',
+      language: 'zh',
+      durationTokens: 38,
+      streamChunkTokens: 25,
+      useGPU: true,
+      threads: 8,
+      nGpuLayers: 99,
+      seed: 7,
+      backendsDir: '/opt/backends'
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'moss')
+  t.is(model._mossBackbonePath, '/tmp/moss-tts-delay-f16.gguf')
+  t.is(model._mossCodecDecoderPath, '/tmp/moss-codec-decoder-f16.gguf')
+  t.is(model._mossCodecEncoderPath, '/tmp/moss-codec-encoder-f16.gguf')
+  t.is(model._referenceAudio, '/tmp/speaker-24k.wav')
+  t.is(model._dialogueReferences, undefined)
+  t.is(model._durationTokens, 38)
+  t.is(model._streamChunkTokens, 25)
+  t.is(model._threads, 8)
+  t.is(model._nGpuLayers, 99)
+  t.is(model._seed, 7)
+  t.alike(model._config, { language: 'zh', useGPU: true, backendsDir: '/opt/backends' })
+})
+
+test('ttsPlugin createModel: hands the MOSS-TTSD references to the addon in order', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-moss-dialogue-test',
+    modelPath: '/tmp/moss-ttsd-f16.gguf',
+    artifacts: {
+      mossCodecDecoderPath: '/tmp/moss-codec-decoder-f16.gguf',
+      mossCodecEncoderPath: '/tmp/moss-codec-encoder-f16.gguf',
+      mossDialogueReferencePath0: '/tmp/alice.wav',
+      mossDialogueReferencePath1: '/tmp/bob.wav'
+    },
+    modelConfig: { ttsEngine: 'moss' }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model._mossBackbonePath, '/tmp/moss-ttsd-f16.gguf')
+  t.alike(model._dialogueReferences, ['/tmp/alice.wav', '/tmp/bob.wav'])
+  t.is(model._referenceAudio, undefined)
+  t.is(model._config?.language, 'en', 'the SDK defaults the language hint like Chatterbox')
+})
+
+test('ttsPlugin createModel: MOSS without its codec decoder is an artifacts error', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+  const { TtsArtifactsRequiredError } = await import('@/errors/index')
+
+  try {
+    ttsPlugin.createModel({
+      modelId: 'tts-moss-missing-decoder',
+      modelPath: '/tmp/moss-tts-delay-f16.gguf',
+      artifacts: {},
+      modelConfig: { ttsEngine: 'moss' }
+    })
+    t.fail('expected TtsArtifactsRequiredError')
+  } catch (err) {
+    t.ok(err instanceof TtsArtifactsRequiredError)
+  }
 })
 
 test('ttsPlugin createModel: wires the Chatterbox options the addon gained', async (t) => {
