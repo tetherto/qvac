@@ -221,8 +221,23 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
     RESULT_VARIABLE QVAC_NVCC_RESULT
     OUTPUT_VARIABLE QVAC_NVCC_VERSION_OUT
     ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(NOT QVAC_NVCC_RESULT EQUAL 0 OR NOT QVAC_NVCC_VERSION_OUT MATCHES "${QVAC_FABRIC_CUDA_VERSION_PATTERN}")
-    message(FATAL_ERROR "qvac-fabric: expected ${QVAC_FABRIC_CUDA_TOOLKIT}, got: ${QVAC_NVCC_VERSION_OUT}")
+  # QVAC_CUDA_TOOLKIT names the toolkit setup-cuda provisioned, and the qvac
+  # triplets hash it into this port's ABI. With it set, only the pinned
+  # toolkit may build. Without it, such as a lint job on a host toolkit, the
+  # build lands under a separate cache identity and only warns.
+  set(QVAC_PROVISIONED_CUDA_TOOLKIT "$ENV{QVAC_CUDA_TOOLKIT}")
+  if(NOT QVAC_NVCC_RESULT EQUAL 0)
+    message(FATAL_ERROR "qvac-fabric: could not run ${NVCC_EXECUTABLE} --version")
+  endif()
+  if(QVAC_PROVISIONED_CUDA_TOOLKIT)
+    if(NOT QVAC_PROVISIONED_CUDA_TOOLKIT STREQUAL QVAC_FABRIC_CUDA_TOOLKIT)
+      message(FATAL_ERROR "qvac-fabric: setup-cuda provisioned ${QVAC_PROVISIONED_CUDA_TOOLKIT}, port expects ${QVAC_FABRIC_CUDA_TOOLKIT}")
+    endif()
+    if(NOT QVAC_NVCC_VERSION_OUT MATCHES "${QVAC_FABRIC_CUDA_VERSION_PATTERN}")
+      message(FATAL_ERROR "qvac-fabric: expected ${QVAC_FABRIC_CUDA_TOOLKIT}, got: ${QVAC_NVCC_VERSION_OUT}")
+    endif()
+  elseif(NOT QVAC_NVCC_VERSION_OUT MATCHES "${QVAC_FABRIC_CUDA_VERSION_PATTERN}")
+    message(WARNING "qvac-fabric: building with an unpinned CUDA toolkit, expected ${QVAC_FABRIC_CUDA_TOOLKIT}. Not for release builds.")
   endif()
   string(REGEX MATCH "release [0-9]+\\.[0-9]+, V[0-9.]+" QVAC_NVCC_VERSION "${QVAC_NVCC_VERSION_OUT}")
   message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE} (${QVAC_NVCC_VERSION}, port expects ${QVAC_FABRIC_CUDA_TOOLKIT})")
