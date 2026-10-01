@@ -23,6 +23,7 @@ add_executable(
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
   test_load_config_handlers.cpp
+  test_image_pixel_limit.cpp
   test_finetune_param_defaults.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
@@ -72,6 +73,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -112,6 +114,10 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/addon/src
   ${PICOJSON_INCLUDE_DIRS}
   ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+)
+target_include_directories(
+  addon-test
+  SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/addon/src/vendor
 )
 
 # Set C++20 standard for std::views support (required by inference-addon-cpp)
@@ -177,4 +183,3 @@ add_test(NAME LlamaModelTests COMMAND addon-test)
 set_tests_properties(LlamaModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 900)  # 15 minutes
-
