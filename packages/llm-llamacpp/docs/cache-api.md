@@ -84,18 +84,20 @@ to load.
 Pure-attention models restore a matching prefix by trimming the KV tail.
 Hybrid and recurrent models (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...)
 cannot, so the addon keeps process-local checkpoints per sequence. A cached
-request that commits keeps two:
+request that commits keeps one: the state at the end of the chat history,
+just before the generation prompt (`<|im_start|>assistant\n<think>\n` on
+Qwen3.5). The prefill stops there for a moment to take it. The state from
+before the prompt was sent is also snapshotted, but only to roll the request
+back on a cancel or failure; it is dropped when the request commits.
 
-- the state from before its prompt was sent, and
-- the state at the end of the chat history, just before the generation prompt
-  (`<|im_start|>assistant\n<think>\n` on Qwen3.5). The prefill stops there for
-  a moment to take it.
-
-The second is the one a normal next turn uses: templates that drop a previous
-answer's reasoning change the prompt right after that answer's header, so
-the history before it is the longest part the next turn shares. A diverging
-history restores the longest checkpoint that is still a prefix of the new
-prompt and re-prefills from there. Checkpoints are pruned as soon as they stop
+Templates that drop a previous answer's reasoning change the prompt right
+after that answer's header, so the history before it is the longest part the
+next turn shares. With the default two checkpoints, the newest serves an
+ordinary next turn and a regenerate, and the one a turn older serves an edit
+of the last user message. A diverging history restores the longest checkpoint
+that is still a prefix of the new prompt and re-prefills from there. See
+[When checkpoints are taken](./cache-lifecycle.md#when-checkpoints-are-taken)
+for the exact points in the pipeline. Checkpoints are pruned as soon as they stop
 matching and are lost when the process exits. With `parallel >= 2` the
 scheduler keeps them per `cacheKey` between requests, since each request runs
 on a fresh slot.

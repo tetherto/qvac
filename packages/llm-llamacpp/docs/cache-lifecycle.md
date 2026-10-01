@@ -51,9 +51,12 @@ graph TB
   recurrent models, the recurrent state. It is the conversation.
 - The **pre-request snapshot** and the **checkpoints** exist only on models
   that cannot trim their memory (see below). Pure-attention models never
-  create either, in any storage mode. On hybrid and recurrent models both hold
-  only the recurrent state (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`); restoring
-  one puts that state back and trims the attention KV to its position.
+  create either, in any storage mode. Both hold only the part of the memory a
+  tail trim cannot rebuild (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`): the
+  recurrent state on hybrid and recurrent models, the sliding-window cells and
+  compressor states on DeepSeek V4. Restoring one puts that part back and
+  trims the rest to its position (see [Restoring a
+  checkpoint](#restoring-a-checkpoint)).
 - The **`cacheKey` file** is the only durable artifact. Checkpoints are never
   written into it and do not survive a process restart.
 
@@ -164,9 +167,9 @@ prompt are deleted.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Snapshot: cached request begins<br/>recurrent state<br/>(disk or memory)
+    [*] --> Snapshot: cached request begins<br/>non-trimmable state<br/>(memory or disk)
     [*] --> HistoryState: prefill reaches the<br/>end of the history
-    Snapshot --> Checkpoint: request commits
+    Snapshot --> [*]: request commits<br/>dropped
     HistoryState --> Checkpoint: request commits
     HistoryState --> [*]: request rolls back
     Snapshot --> [*]: request rolls back<br/>restored into memory, then dropped
@@ -174,7 +177,7 @@ stateDiagram-v2
     Restored --> Checkpoint: stays in the list
     Checkpoint --> [*]: pruned, no longer a prefix<br/>of a later prompt
     Checkpoint --> [*]: evicted, oldest first,<br/>when the list exceeds<br/>cache_checkpoints_max_bytes<br/>or cache_checkpoints
-    Checkpoint --> [*]: cacheKey switched, cleared or loaded<br/>(parallel >= 2: kept with the conversation<br/>across requests)
+    Checkpoint --> [*]: cacheKey switched without cache_ram_mib,<br/>cleared, or loaded from its file<br/>(cache_ram_mib, parallel >= 2: kept with<br/>the conversation across requests)
     Checkpoint --> [*]: process exits
 ```
 
@@ -182,6 +185,113 @@ Eviction checks the byte budget first, then the count. A budget that cannot
 hold `cache_checkpoints` checkpoints of the largest size the context allows is
 rejected at model load with `InvalidArgument`; the addon measures that size on
 the loaded model rather than estimating it.
+
+## When checkpoints are taken
+
+Two states are captured per cached request on a full-state model, at fixed
+points of the pipeline. The **pre-request snapshot** serves only that
+request's rollback; the **end-of-history checkpoint** is the only one kept.
+
+Where in the conversation, for turn 2 of a chat:
+
+```
+[sys][user 1][assistant 1 (as re-rendered)][user 2][<assistant header>]
+                                                   ▲                   ▲
+                                     end-of-history checkpoint   generation starts
+```
+
+The checkpoint sits after the last user message and before the template's
+generation prompt (`<｜Assistant｜>`, `<|im_start|>assistant\n<think>\n`):
+the prompt length minus the generation prompt's token count.
+
+When in the pipeline (single-prompt path; the multimodal context is the same,
+with media spans as ledger entries):
+
+```
+run() → render and tokenize the full history
+  ① pre-request snapshot          beginCacheRequest, before reconciliation:
+                                   memory exactly as the previous turn left it
+  reconcile                        longest common prefix with the resident
+                                   ledger; a divergence restores the longest
+                                   checkpoint that is a prefix
+  prefill, in n_batch chunks       the chunk that reaches the end of the
+                                   history ends exactly there
+  ② end-of-history checkpoint     captureHistoryCheckpoint, right after that
+                                   chunk's llama_decode; held as pending
+  prefill continues                decodes the generation prompt
+  generation
+  commit                           EOS, stop string, n_predict, or a cancel
+                                   after prefill: ① is dropped, ② is appended
+                                   to the checkpoints, the oldest dropped past
+                                   cache_checkpoints_max_bytes, then
+                                   cache_checkpoints
+  rollback                         cancel during prefill, decode error, context
+                                   overflow: memory is restored from ①, ② is
+                                   discarded
+```
+
+The next request uses the kept checkpoints in its reconcile step, before it
+decodes anything.
+
+With `parallel >= 2` the points are the same:
+
+1. The prefill plan carries the stop (`PrefillPlan::checkpointAtTextTokens`),
+   and the batcher stops feeding that slot there, as it does at a media
+   barrier.
+2. Between batches, after `advance()` has confirmed the decode,
+   `serviceCheckpointStopsLocked` captures ② for the slot, and its feed
+   resumes with the generation prompt.
+3. When the slot is freed, the checkpoints go with the conversation: into its
+   parked slot state, into the RAM tier (`cache_ram_mib`) when the slot is
+   evicted, or into the scheduler's per-`cacheKey` store when the state is only
+   on disk. The next request on the key takes them at admission
+   (`adoptCheckpoints`). See [continuous-batching.md](./continuous-batching.md).
+
+What is kept after a few turns, with the default `cache_checkpoints: 2`:
+
+| After turn | Kept checkpoints | They serve |
+|---|---|---|
+| 1 | end of `[user 1]` | the next turn, a regenerate |
+| 2 | end of `[user 1]`, end of `[user 2]` | the newest: the next turn and a regenerate; the older: an edit of `[user 2]` |
+| 3 | end of `[user 2]`, end of `[user 3]` | the same, one turn later |
+
+The pre-request snapshot is not kept because it holds the previous answer as
+generated, and a template that rewrites earlier answers (thinking models drop
+the reasoning) never renders those tokens again, so no later prompt would
+match it.
+
+No end-of-history checkpoint is taken for:
+
+- a prefill-only request (no generation prompt to stop in front of);
+- a template without a generation prompt, or an encoder model;
+- a request whose history ends inside the reused prefix: a regenerate, for
+  example, already has a checkpoint at that point.
+
+### Restoring a checkpoint
+
+A restore writes the saved part back
+(`llama_state_seq_set_data_ext(..., LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY)`) and
+then trims the sequence to the checkpoint's position
+(`llama_memory_seq_rm(seq, nPast, -1)`). The trim rebuilds what was not saved:
+
+- Hybrid models: the attention KV past the position is dropped; the cells in
+  front of it are the same ones the checkpoint was taken over.
+- DeepSeek V4: the saved part is the 128-token sliding window and the CSA,
+  HCA and indexer compressor states, which hold each compressor's unfinished
+  block. The compressed rows are not saved and the trim does not clear them:
+  a row sits at `pos / ratio`, a query reads only the rows its own position
+  has completed, and the token that completes a block rewrites its row. Rows
+  from before the checkpoint are reused as they are, and rows past it are
+  overwritten before anything can read them.
+
+Sizes are fixed by the model, whatever the conversation length: about 20 MB
+on Qwen3.5-0.8B and 18 MB on DeepSeek V4-Flash, against ~233 MB for a full
+copy of Qwen3.5-0.8B at 32k tokens. They live in host RAM by default
+(`cache_checkpoint_storage: memory`) or in temp files with `disk`, and are
+never written into the `cacheKey` file. On the single-prompt path a
+conversation loaded from its file starts without checkpoints; with
+`parallel >= 2` the scheduler keeps a key's checkpoints across that file
+round-trip while the process lives. After a restart there are none.
 
 ## The `cacheKey` file
 
