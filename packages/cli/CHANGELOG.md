@@ -6,7 +6,7 @@
 
 QVAC CLI 0.15.0 follows `@qvac/sdk` 0.21.0. `qvac serve` maps `defer_loading` on OpenAI tools and runs `tool_search` itself, `/v1/audio/speech` accepts OpenAI `{ id }` voices and MOSS TTS from `qvac configure`, and `POST /qvac/v1/translate` reports stats for that request alone. `qvac bundle` can install missing mobile addon platform packages; `verify bundle` and `doctor` check `engines.bare` against the Bare runtime each host runs.
 
-Install `@qvac/cli@0.15.0` with `@qvac/sdk@^0.21.0`. Publish this cut after SDK 0.21.0 is on npm.
+Install `@qvac/cli@0.15.0` with `@qvac/sdk@^0.21.0`.
 
 ## New APIs
 
