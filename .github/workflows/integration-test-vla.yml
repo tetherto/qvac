@@ -544,8 +544,7 @@ jobs:
         if: ${{ always() && !cancelled() && matrix.force_vulkan != 'true' }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          # -vulkan matches the job name, or both u24 legs collide and one 409s.
-          name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}
+          name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
           # Glob picks up addon.test.js's `performance-report.json` (smolvla),
           # pi05.test.js's `performance-report-pi05.json`, and groot.test.js's
           # `performance-report-groot.json`.

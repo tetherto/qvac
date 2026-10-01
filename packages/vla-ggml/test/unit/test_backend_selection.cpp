@@ -82,9 +82,6 @@ TEST(VlaBackendSelection, ParseBackendOverrideThrowsOnUnknownName) {
   EXPECT_THROW(parseBackendOverride("cudaa"), qvac_errors::StatusError);
 }
 
-// 'cpu' is stripped by the addon layer into forceCpu before parsing, so it is
-// not a GPU family name here. This differs from llm and embed, where the CPU
-// path is the separate `device` key.
 // ggml's HIP build reports its devices as "ROCm%d", so 'hip' has to arrive at
 // the matcher as "rocm" or it pins nothing.
 TEST(VlaBackendSelection, ParseBackendOverrideCanonicalisesHipToRocm) {
@@ -136,7 +133,8 @@ TEST(VlaBackendSelection, ParseBackendOverrideAcceptsAutoInAList) {
   EXPECT_TRUE(parseBackendOverride(" AUTO ").empty());
 }
 
-// index.js trims the whole value but not each entry, so a CRLF config file
+// normaliseBackendSelector trims the whole value but not each entry, so a CRLF
+// config file
 // would otherwise throw on a value that reads as correct.
 TEST(VlaBackendSelection, ParseBackendOverrideTrimsCarriageReturns) {
   EXPECT_EQ(
