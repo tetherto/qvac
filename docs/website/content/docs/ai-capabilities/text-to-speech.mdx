@@ -44,6 +44,7 @@ For reference, the rate each configuration produces:
 | Parler                  | 44,100 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 44,100 Hz unless the LavaSR enhancer is loaded |
 | CosyVoice3              | 24,000 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 24,000 Hz unless the LavaSR enhancer is loaded |
 | Audio8                  | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
+| MOSS                    | 24,000 Hz only; MOSS takes no `outputSampleRate`                                                                    |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
 
 ## Cancelling a run
@@ -85,6 +86,8 @@ statistics from the final frame (`undefined` if the run reported none).
   synthesis (`stream: false`) only. The chunked paths — `stream: true` (the
   default), `sentenceStream: true`, and `textToSpeechStream()` — run one
   native job per sentence and aggregate only the timing and sample counts.
+  MOSS is the exception for `stream: true`: it runs the whole text as one
+  native job, so it reports them there too.
 </Callout>
 
 | Field | Meaning |
@@ -92,9 +95,9 @@ statistics from the final frame (`undefined` if the run reported none).
 | `audioDuration` | Length of the synthesized audio, in milliseconds. |
 | `totalTime` | Wall-clock synthesis time, in **seconds** (`audioDuration` is milliseconds). |
 | `realTimeFactor` | `totalTime × 1000 / audioDuration`; below 1.0 is faster than real time. |
-| `tokensPerSecond` | Input characters synthesized per second; on Audio8, codec frames per second. |
+| `tokensPerSecond` | Input characters synthesized per second; on Audio8 and MOSS, codec frames per second. |
 | `totalSamples` | PCM sample count. |
-| `generatedFrames` | Audio8 only: codec frames generated, on a fixed 46 ms grid. |
+| `generatedFrames` | Audio8 and MOSS only: codec frames generated (Audio8 on a fixed 46 ms grid, MOSS at 12.5 per second). |
 | `backendDevice` | Compute device chosen at load: `0` CPU, `1` GPU. |
 | `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other GPU. |
 | `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. |
@@ -424,9 +427,128 @@ response.
 
 For model constants, see [SDK — Models](/introduction#models).
 
+### MOSS
+
+MOSS runs OpenMOSS **MOSS-TTS v1.5** (single speaker) and **MOSS-TTSD**
+(multi-speaker dialogue) on the MOSS Delay engine. The top-level `modelSrc` is
+the **backbone GGUF** (`TTS_DELAY_LLM_MOSS_TTS_F16`, or a local
+`moss-ttsd-*.gguf` for dialogue) and a **codec decoder** is required via
+`modelConfig.mossCodecDecoderModelSrc` (`TTS_CODEC_DECODER_MOSS_TTS_F16`).
+Output is native 24 kHz. The backbones have 8B parameters (about 17 GB at
+f16), so MOSS targets desktop hosts; mobile is not supported.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_DELAY_LLM_MOSS_TTS_F16,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "moss",
+    language: "en",
+    mossCodecDecoderModelSrc: TTS_CODEC_DECODER_MOSS_TTS_F16,
+    streamChunkTokens: 25,
+    useGPU: true,
+  },
+});
+
+const result = textToSpeech({
+  modelId,
+  text: "Hold on [pause 1.0s] here it comes.",
+});
+
+for await (const sample of result.bufferStream) {
+  // Chunks of 25 codec frames (2 s) arrive while the backbone is still generating.
+}
+```
+
+The speech is directable from the text itself: `[pause 2.0s]` markers insert
+a silence of roughly that length, and inline Pinyin (`ni3 hao3`) or IPA
+(`/həloʊ/`) steers pronunciation. `durationTokens` asks for a target length in
+codec frames (12.5 per second, so `38` is about 3 s; `0` or unset keeps the
+length free; at most `2015`). `language` is written into the model prompt as a
+hint (default `en`).
+
+MOSS streams natively. With `streamChunkTokens` set, `stream: true` (the
+default) delivers audio every that-many codec frames while generation
+continues; without it the audio arrives in one piece when synthesis ends.
+Either way the text is synthesized as one utterance rather than sentence by
+sentence, so `durationTokens` and the pause markers apply to all of it.
+`sentenceStream: true` and `textToSpeechStream()` still split a single-speaker
+text into sentences; `sentenceStreamLocale` and `sentenceStreamMaxChunkScalars`
+only apply there, and a MOSS request without `sentenceStream: true` rejects
+them.
+
+`seed` (engine default `1234`), `threads` and `backendsDir` work as on the
+other engines. MOSS runs on the CPU by default; `useGPU: true` or a non-zero
+`nGpuLayers` asks for a GPU backend, and when none is usable it falls back to
+the CPU and sets `stats.gpuUnsupported`.
+
+#### MOSS voice cloning
+
+Add the **codec encoder** (`mossCodecEncoderModelSrc`,
+`TTS_CODEC_ENCODER_MOSS_TTS_F16`) and a reference recording
+(`referenceAudioSrc`). Unlike Audio8, MOSS needs no transcript. The
+recording must already be sampled at **24 kHz** (there is no resampling;
+multichannel audio is downmixed, and recordings are capped at 60 s). The voice is
+encoded once at load and fixed for the loaded model, so changing voices means
+loading again.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_DELAY_LLM_MOSS_TTS_F16,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "moss",
+    mossCodecDecoderModelSrc: TTS_CODEC_DECODER_MOSS_TTS_F16,
+    mossCodecEncoderModelSrc: TTS_CODEC_ENCODER_MOSS_TTS_F16,
+    referenceAudioSrc: "/voices/speaker-24k.wav",
+  },
+});
+```
+
+#### MOSS-TTSD dialogue
+
+The MOSS-TTSD backbone is not in the QVAC Registry yet, so pass it as a local
+file; it shares the codec halves with MOSS-TTS. Load it with
+`dialogueReferenceSrcs`: one 24 kHz recording per speaker, in the order the
+text tags them (`[S1]`, `[S2]`, …; one to five speakers, at most 60 s of
+reference audio combined). The model continues the references, so the text
+must open with what each recording says under its tag, followed by the lines
+to generate; only the new lines come out as audio. Dialogue needs the codec
+encoder and excludes `referenceAudioSrc`.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: "/models/moss-ttsd-f16.gguf",
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "moss",
+    mossCodecDecoderModelSrc: TTS_CODEC_DECODER_MOSS_TTS_F16,
+    mossCodecEncoderModelSrc: TTS_CODEC_ENCODER_MOSS_TTS_F16,
+    dialogueReferenceSrcs: ["/voices/alice.wav", "/voices/bob.wav"],
+    streamChunkTokens: 25,
+  },
+});
+
+const result = textToSpeech({
+  modelId,
+  text:
+    "[S1] What alice.wav says. [S2] What bob.wav says. " +
+    "[S1] Did the build finish? [S2] Yes, every test passed.",
+});
+```
+
+<Callout type="warn">
+  A dialogue cannot be split into sentences, because every synthesis has to
+  open with the reference transcripts: `sentenceStream: true` and
+  `textToSpeechStream()` are rejected on a dialogue model. Use
+  `textToSpeech()` with `stream: true` and `streamChunkTokens` for chunked
+  audio. MOSS has no `emotion`, `pace`, or description fields, no LavaSR
+  post-processing, and no `streamFirstChunkTokens`.
+</Callout>
+
 ### LavaSR
 
-With Chatterbox, Supertonic, Parler, or CosyVoice3, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag. (Audio8 is the one engine whose native config does not read them.)
+With Chatterbox, Supertonic, Parler, or CosyVoice3, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag. (Audio8 and MOSS do not support them.)
 
 - `lavasrDenoiserModelSrc` — a denoiser GGUF that cleans the speech (noise reduction). It runs **first** and is rate-preserving. Constants: `TTS_DENOISER_LAVASR_FP16`, `TTS_DENOISER_LAVASR_FP32`.
 - `lavasrEnhancerModelSrc` — an enhancer GGUF that neurally bandwidth-extends the output to **48 kHz**. It runs **after** the denoiser. Constants: `TTS_ENHANCER_LAVASR_FP16`, `TTS_ENHANCER_LAVASR_FP32`.
@@ -593,6 +715,59 @@ saves the PCM output, and plays it:
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/audio8.ts title="tts-audio8.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+### MOSS
+
+The first script loads the registry-hosted MOSS-TTS backbone and codec,
+streams single-speaker speech — optionally in a voice cloned from a 24 kHz
+recording — and reports the time to first audio. The second synthesizes a
+two-speaker MOSS-TTSD dialogue from a local backbone and the registry codec.
+Both save the PCM output with
+[`utils.js` / `utils.ts`](#utils):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/moss.js title="tts-moss.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/moss.ts title="tts-moss.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/moss-dialogue.js title="tts-moss-dialogue.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/moss-dialogue.ts title="tts-moss-dialogue.ts" lineNumbers
 
 ```
 

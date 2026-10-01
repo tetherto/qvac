@@ -223,7 +223,7 @@ MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical co
 | `seed`           | RNG seed for reproducible generation.                                                                                                                                 |
 | `duration`       | Target length in seconds. Internally converted to the model's 25 semantic frames per second. Cannot be combined with `maxFrames`.                                     |
 | `maxFrames`      | Explicit semantic-frame cap when you want direct control over length instead of a seconds-based target. Cannot be combined with `duration`.                           |
-| `inferenceSteps` | Per-run flow sampling steps; leave unset (or `0`) to use the model default. Raise it to trade generation time for higher quality.                                     |
+| `inferenceSteps` | Per-run flow sampling steps; leave unset (or `0`) to use the engine default (20). Raise it to trade generation time for higher quality.                               |
 | `cfgScale`       | Per-run flow classifier-free guidance scale; leave unset (or `0`) to use the model default. Raise it to follow the caption more literally, lower it for more freedom. |
 
 ```ts

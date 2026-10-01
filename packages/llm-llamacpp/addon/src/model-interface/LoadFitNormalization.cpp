@@ -1126,6 +1126,20 @@ void validateMobileMultiDeviceConfig(
   }
 }
 
+void canonicalizeCpuTensorBufferOverrides(
+    std::vector<llama_model_tensor_buft_override>& overrides,
+    ggml_backend_buffer_type_t parsedCpuBuft) {
+  if (parsedCpuBuft == nullptr) {
+    return;
+  }
+  for (auto& override : overrides) {
+    if (override.buft == parsedCpuBuft) {
+      // The loader compares against its own ggml-base CPU buffer object.
+      override.buft = ggml_backend_cpu_buffer_type();
+    }
+  }
+}
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
@@ -2040,6 +2054,12 @@ NormalizedLoad normalizeLoadForFit(
   }
 
   if (!params.tensor_buft_overrides.empty()) {
+    if (auto* cpuDevice =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      canonicalizeCpuTensorBufferOverrides(
+          params.tensor_buft_overrides,
+          ggml_backend_dev_buffer_type(cpuDevice));
+    }
     params.tensor_buft_overrides.push_back({nullptr, nullptr});
   }
   params.tensor_buft_overrides.resize(

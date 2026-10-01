@@ -8,6 +8,9 @@ packages:
 # version doesn't satisfy the range.
 linkWorkspacePackages: true
 
+# Keep root-only repository tooling from supplying peers to product packages.
+resolvePeersFromWorkspaceRoot: false
+
 # Large binary tarballs (e.g. react-native-bare-kit) need more than pnpm's
 # default 60s fetch timeout.
 fetchTimeout: 300000
