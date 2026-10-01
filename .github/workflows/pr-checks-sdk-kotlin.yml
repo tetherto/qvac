@@ -35,9 +35,14 @@ jobs:
   check:
     name: Contract, tests, artifacts, consumer
     runs-on: ubuntu-latest
-    # Non-blocking until QVAC-25125 makes it required.
-    continue-on-error: true
     timeout-minutes: 90
+    permissions:
+      contents: read
+      # Post the qvac/sdk-kotlin commit status that Merge Guard's
+      # verify-sdk-kotlin job reads. A same-repo PR's GITHUB_TOKEN can write it;
+      # a fork PR's read-only token cannot, so the status stays absent and the
+      # gate fails closed — the same trust model as the addon prebuild statuses.
+      statuses: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -90,3 +95,30 @@ jobs:
             packages/sdk-kotlin/consumer-smoke/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
+
+      # Report this run's outcome as the qvac/sdk-kotlin commit status on the PR
+      # head. Merge Guard's verify-sdk-kotlin job reads it instead of executing
+      # this build in its privileged pull_request_target context, which is what
+      # keeps untrusted PR code out of that context (no cache-poisoning vector).
+      # Skipped on cancellation (a superseded run) and on workflow_dispatch (no
+      # PR head to stamp).
+      - name: Publish sdk-kotlin merge-gate status
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        working-directory: .
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          state=failure
+          if [ "$JOB_STATUS" = "success" ]; then state=success; fi
+          gh api -X POST "repos/${REPO}/statuses/${HEAD_SHA}" \
+            -f "state=${state}" \
+            -f "context=qvac/sdk-kotlin" \
+            -f "target_url=${RUN_URL}" \
+            -f "description=sdk-kotlin ${state}"
+          echo "Posted qvac/sdk-kotlin=${state} on ${HEAD_SHA}"

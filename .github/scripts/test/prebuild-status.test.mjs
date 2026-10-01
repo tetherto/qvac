@@ -9,6 +9,7 @@ import {
   resolvePublishState,
   expectedPrebuilds,
   expectedCppTests,
+  expectedSdkKotlin,
   flattenPages,
   parseRunId,
   selectNewestBotStatus,
@@ -18,6 +19,8 @@ import {
   pollPrebuilds,
   LOOKUP_FAILED,
   pollCppTests,
+  pollSdkKotlin,
+  SDK_KOTLIN_PRODUCER,
 } from '../prebuild-status/lib.mjs'
 
 const iso = (s) => new Date(s).toISOString()
@@ -433,4 +436,82 @@ test('pollPrebuilds returns failure immediately when a prebuild status is failed
     log: () => {},
   })
   assert.equal(code, 1)
+})
+
+// --- sdk-kotlin single-context gate ---------------------------------------
+
+test('expectedSdkKotlin expects the kotlin pseudo-package only when it changed', () => {
+  assert.deepEqual(expectedSdkKotlin(['kotlin']), ['kotlin'])
+  assert.deepEqual(expectedSdkKotlin([]), [])
+  assert.deepEqual(expectedSdkKotlin(['tts-ggml']), [])
+})
+
+test('isRunFresh binds the sdk-kotlin gate to its own producer workflow', () => {
+  const at = '2026-08-10T12:00:00Z'
+  assert.equal(
+    isRunFresh({ path: SDK_KOTLIN_PRODUCER, created_at: at }, 'kotlin', THRESHOLD, SDK_KOTLIN_PRODUCER),
+    true,
+  )
+  // A run from the addon producer cannot satisfy the sdk-kotlin gate.
+  assert.equal(
+    isRunFresh({ path: NX_PRODUCER, created_at: at }, 'kotlin', THRESHOLD, SDK_KOTLIN_PRODUCER),
+    false,
+  )
+  // A run older than the PR event is stale.
+  assert.equal(
+    isRunFresh({ path: SDK_KOTLIN_PRODUCER, created_at: '2026-08-10T11:59:00Z' }, 'kotlin', THRESHOLD, SDK_KOTLIN_PRODUCER),
+    false,
+  )
+})
+
+test('evaluatePackage with the sdk-kotlin context and producer accepts only a fresh kotlin-workflow run', () => {
+  const freshKotlin = { path: SDK_KOTLIN_PRODUCER, created_at: '2026-08-10T12:00:00Z' }
+  const success = [
+    status({
+      context: 'qvac/sdk-kotlin',
+      updated_at: iso('2026-08-10T13:00:00Z'),
+      target_url: 'r/actions/runs/7',
+      state: 'success',
+    }),
+  ]
+  assert.equal(
+    evaluatePackage(success, 'kotlin', THRESHOLD, () => freshKotlin, 'qvac/sdk', SDK_KOTLIN_PRODUCER),
+    'success',
+  )
+  // Same status, but the producing run is some other workflow -> not trusted.
+  assert.equal(
+    evaluatePackage(success, 'kotlin', THRESHOLD, () => FRESH_RUN, 'qvac/sdk', SDK_KOTLIN_PRODUCER),
+    'pending',
+  )
+})
+
+test('pollSdkKotlin passes on a fresh success and fails on a failure', async () => {
+  const freshKotlin = { path: SDK_KOTLIN_PRODUCER, created_at: '2026-08-10T12:00:00Z' }
+  const ok = await pollSdkKotlin({
+    expected: ['kotlin'],
+    prUpdatedEpoch: THRESHOLD,
+    fetchStatuses: () => [
+      status({ context: 'qvac/sdk-kotlin', updated_at: iso('2026-08-10T12:05:00Z'), target_url: 'r/actions/runs/7', state: 'success' }),
+    ],
+    lookupRun: () => freshKotlin,
+    ...fakeClock(),
+    pollIntervalMs: 30_000,
+    timeoutMs: 180 * 60 * 1000,
+    log: () => {},
+  })
+  assert.equal(ok, 0)
+
+  const bad = await pollSdkKotlin({
+    expected: ['kotlin'],
+    prUpdatedEpoch: THRESHOLD,
+    fetchStatuses: () => [
+      status({ context: 'qvac/sdk-kotlin', updated_at: iso('2026-08-10T12:05:00Z'), target_url: 'r/actions/runs/7', state: 'failure' }),
+    ],
+    lookupRun: () => freshKotlin,
+    ...fakeClock(),
+    pollIntervalMs: 30_000,
+    timeoutMs: 180 * 60 * 1000,
+    log: () => {},
+  })
+  assert.equal(bad, 1)
 })
