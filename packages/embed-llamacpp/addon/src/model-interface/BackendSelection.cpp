@@ -1123,27 +1123,67 @@ backend_selection::SplitDeviceSelection
 backend_selection::getSplitDeviceSelection(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints) {
-  SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
   const std::vector<std::string> selectedNames =
       splitModeDeviceNames(bckI, selectedDeviceName, constraints);
   if (selectedNames.empty()) {
+    SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
     if (!constraints.requiredBackendFamilies.empty()) {
       selection.devices.clear();
     }
     return selection;
   }
 
-  std::erase_if(selection.devices, [&](const SplitDevice& device) {
-    if (device.isRpc) {
-      return !constraints.requiredBackendFamilies.empty();
+  // A fresh walk rather than filtering the unfiltered selection: that one
+  // keeps the first registration of each card, which is CUDA, while
+  // selectedNames keeps the selected registry's, so filtering one by the other
+  // can drop the card entirely.
+  SplitDeviceSelection result;
+  std::vector<SplitDevice> rpc;
+  std::vector<SplitDevice> local;
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
     }
-    std::string name = device.name;
-    std::ranges::transform(name, name.begin(), [](unsigned char c) {
-      return static_cast<char>(std::tolower(c));
-    });
-    return std::ranges::find(selectedNames, name) == selectedNames.end();
-  });
-  return selection;
+    const size_t sourceGpuIndex = result.sourceGpuCount++;
+    if (!isEligibleGpuDevice(bckI, dev)) {
+      result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+      continue;
+    }
+    const char* name = bckI.ggml_backend_dev_name(dev);
+    if (name == nullptr || *name == '\0') {
+      result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+      continue;
+    }
+    const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+    const std::string registryName =
+        lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
+    const std::string deviceName = lowerCopy(name);
+    SplitDevice device{
+        .name = name,
+        .handle = dev,
+        .sourceGpuIndex = sourceGpuIndex,
+        .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
+        .isRpc = hasBackendFamily(deviceName, registryName, "rpc")};
+    if (device.isRpc) {
+      if (constraints.requiredBackendFamilies.empty()) {
+        rpc.emplace_back(std::move(device));
+      }
+      continue;
+    }
+    if (std::ranges::find(selectedNames, deviceName) != selectedNames.end()) {
+      local.emplace_back(std::move(device));
+    }
+  }
+  result.devices = std::move(rpc);
+  result.devices.insert(
+      result.devices.end(),
+      std::make_move_iterator(local.begin()),
+      std::make_move_iterator(local.end()));
+  return result;
 }
 
 backend_selection::SplitDeviceSelection
