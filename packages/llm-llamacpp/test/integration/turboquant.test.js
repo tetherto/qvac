@@ -181,15 +181,17 @@ for (const kv of KV_COMBOS) {
     const output = await collectResponse(response)
     const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
 
-    // chooseBackend() logs this only on the override path; a `backend` that
-    // matches no device falls through to the default cascade with a warning.
-    // Without this the pin is advisory, and a silent fallback to CUDA would
-    // read as a pass here. Checked after the first run, never straight after
-    // load(): backend selection is lazy, so the log lands a tick later and an
-    // immediate check reads an empty buffer and fails on a pin that did bind.
+    // chooseBackend() logs "Chosen <family> Backend (backend override)" only
+    // when the pin binds. A `backend` that matches no device falls through to
+    // the default cascade with a warning that also says "backend override", so
+    // match the parenthesised suffix. Without this the pin is advisory, and a
+    // silent fallback to CUDA would read as a pass here. Checked after the
+    // first run, never straight after load(): backend selection is lazy, so the
+    // log lands a tick later and an immediate check reads an empty buffer and
+    // fails on a pin that did bind.
     if (pinToVulkan) {
       t.ok(
-        specLogger.logs.some((l) => /backend override/.test(l)),
+        specLogger.logs.some((l) => /\(backend override\)/.test(l)),
         'vulkan backend pin took effect'
       )
     }

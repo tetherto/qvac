@@ -59,11 +59,13 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
 
   await inference.load()
 
-  // chooseBackend() logs this only on the override path; a `backend` that
-  // matches no device falls through to the default cascade with a warning, and
-  // the override block is skipped outright for a CPU load. Without this the
-  // pin is advisory, and the four Qwen3.5 tests that depend on it would fall
-  // back to CUDA and report their old flakiness as a genuine failure.
+  // chooseBackend() logs "Chosen <family> Backend (backend override)" only
+  // when the pin binds. A `backend` that matches no device falls through to the
+  // default cascade with a warning that also says "backend override", so match
+  // the parenthesised suffix. The override block is skipped outright for a CPU
+  // load. Without this the pin is advisory, and the two Qwen3.5 tests that call
+  // this would fall back to CUDA and report their old flakiness as a genuine
+  // failure.
   //
   // Call this AFTER the first completion, never straight after load(): backend
   // selection is lazy, so the log lands a tick later and an immediate check
@@ -73,7 +75,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
       return
     }
     t.ok(
-      specLogger.logs.some((l) => /backend override/.test(l)),
+      specLogger.logs.some((l) => /\(backend override\)/.test(l)),
       `${config.backend} backend pin took effect`
     )
   }

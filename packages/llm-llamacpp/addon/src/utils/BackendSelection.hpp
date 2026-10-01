@@ -145,34 +145,12 @@ void applyAdrenoRestrictions(
     SplitDeviceSelection& selection, const ModelMetaData& metadata,
     bool isFinetuning);
 
-/// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
-///
-/// Selection mirrors qvac-fabric's device ordering while applying this addon's
-/// supported-backend allowlist:
-///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
-///   - RPC devices are prepended and do not suppress a local integrated GPU.
-///   - Local discrete GPUs when any are present, otherwise the first
-///     integrated GPU plus any later one sharing its backend registry handle.
-///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
-///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
-///     the description to the raw device name, which is identical for two
-///     identical cards, so a 2x RTX 4090 host would silently collapse to one.
-///     A device whose `device_id` is null is kept rather than dropped.
-///
-/// Returns an empty vector when no GPU device is present; callers must then
-/// leave `--device` alone rather than emitting an empty list.
-std::vector<std::string>
-getTensorSplitDeviceNames(const BackendInterface& bckI);
-
-/// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
-std::vector<std::string> getTensorSplitDeviceNames();
-
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one GPU device is present AND every available
 /// GPU/iGPU device's backend provides split buffers, because qvac-fabric
 /// requires split buffers from each device it distributes over and throws on
 /// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
+/// returns false. As of qvac-fabric v10549 only SYCL provides split buffers, so
 /// this is false in every shipped configuration.
 bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
@@ -180,23 +158,24 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
-/// @brief The device names to pass as `--device` in multi-GPU split mode: every
-/// discrete GPU, deduplicated by `props.device_id` so a card registered under
-/// two backends is named once, preferring @p selectedDeviceName's registry.
+/// @brief The device names for a multi-GPU split: every discrete GPU,
+/// deduplicated by `props.device_id` so a card registered under two backends is
+/// named once, preferring @p selectedDeviceName's registry.
 ///
 /// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
-/// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
-/// `--device` would spread a single card across two backends. Deduping rather
-/// than scoping to one registry keeps a second physical card on a mixed-vendor
-/// host, and preferring the selected registry keeps a `backend` override
-/// binding, which omitting `--device` would not.
+/// registers twice, as CUDA0 and Vulkan0, so an unfiltered device list would
+/// spread a single card across two backends. Deduping rather than scoping to
+/// one registry keeps a second physical card on a mixed-vendor host, and
+/// preferring the selected registry keeps a `backend` override binding.
 ///
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
 /// Empty when every GPU/iGPU device comes from one registry, which is every
-/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
-/// caller then keeps omitting `--device`.
+/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing.
+///
+/// No production caller in this PR: split loads pin device handles from
+/// `getSplitDeviceSelection()` instead.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName);
 
@@ -217,10 +196,10 @@ struct JitCacheEnv {
 ///
 /// QVAC-24470: a device with no `-real` cubin in the build reaches the kernels
 /// by JITting the `-virtual` PTX, and the driver caches the result under
-/// `$HOME/.nv/ComputeCache`. Measured on a DGX Spark at sm_121: 27.3 s to first
-/// token cold against 143.9 ms warm. Where that cache cannot persist, a
-/// container with no writable `$HOME` being the usual case, the full cost is
-/// paid on every process start.
+/// `$HOME/.nv/ComputeCache`. Measured on a DGX Spark at sm_121, before the
+/// build shipped a 121a-real cubin: 27.3 s to first token cold against 143.9 ms
+/// warm. Where that cache cannot persist, a container with no writable `$HOME`
+/// being the usual case, the full cost is paid on every process start.
 ///
 /// It is not a crash, so no backend guard catches it, and to a user it is
 /// indistinguishable from a hang. Warning is all this can do; removing the cost
@@ -228,9 +207,23 @@ struct JitCacheEnv {
 bool shouldWarnAboutJitCache(const JitCacheEnv& env);
 
 /// @brief `shouldWarnAboutJitCache()` against the real environment. Always
-/// false off linux, where this module is not built as a loadable CUDA backend.
+/// false off Linux; the Windows cache check is not implemented.
 bool shouldWarnAboutJitCache();
 
+/// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
+///
+/// Selection mirrors qvac-fabric's device ordering while applying this addon's
+/// supported-backend allowlist:
+///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
+///   - RPC devices are prepended and do not suppress a local integrated GPU.
+///   - Local discrete GPUs when any are present, otherwise the first
+///     integrated GPU plus any later one sharing its backend registry handle.
+///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
+///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
+///     the description to the raw device name, which is identical for two
+///     identical cards, so a 2x RTX 4090 host would silently collapse to one.
+///     A device whose `device_id` is null is kept rather than dropped.
+///
 /// Returns an empty vector when callers must fall back to CPU.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 } // namespace backend_selection
