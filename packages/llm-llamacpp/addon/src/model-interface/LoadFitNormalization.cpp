@@ -1425,6 +1425,15 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
+    // The split and explicit-device paths below do not apply the override, so
+    // reject the combination rather than silently run on another backend.
+    if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
+        (splitMode != LLAMA_SPLIT_MODE_NONE || !explicitDevices.empty())) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "'backend' cannot be combined with 'split-mode' or 'devices'. "
+          "Use 'devices' alone to choose the devices for a split.");
+    }
     backend_selection::SplitDeviceSelection splitSelection;
     SelectedBackend selected;
     std::optional<int> mmprojAdrenoVersion;

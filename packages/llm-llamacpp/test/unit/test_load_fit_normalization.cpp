@@ -512,6 +512,32 @@ TEST_F(
   EXPECT_EQ(result.params.devices.back(), nullptr);
 }
 
+TEST_F(LoadFitNormalizationTest, BackendOverrideWithSplitModeIsRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "vulkan";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, BackendOverrideWithDevicesIsRejected) {
+  auto config = baseConfig();
+  config["devices"] = "vulkan0";
+  config["backend"] = "vulkan";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
