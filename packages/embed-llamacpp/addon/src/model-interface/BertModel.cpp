@@ -630,8 +630,8 @@ BertModelSetup setupParams(
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
     }
-    // Erase by key, not by deviceIt: the configFilemap["main-gpu"] insert above
-    // can rehash the map, which invalidates every iterator.
+    // Erase by key so this stays correct if a later edit inserts into the map
+    // above, which can rehash it and invalidate deviceIt.
     configFilemap.erase("device");
 
     // Disable flash attention by default when the chosen GPU backend is

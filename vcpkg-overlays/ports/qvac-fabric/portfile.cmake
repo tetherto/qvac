@@ -150,13 +150,14 @@ endif()
 # DETERMINISTIC, same reasoning as hip-backend above: requesting cuda-backend
 # REQUIRES nvcc at build time. A host-dependent skip would produce a no-CUDA
 # package with the SAME vcpkg ABI as a real CUDA build, which the binary cache
-# then conflates. So nvcc present => CUDA; nvcc absent => hard error.
+# then conflates. So nvcc present => CUDA; nvcc absent => hard error. With
+# QVAC_CUDA_TOOLKIT set, a wrong nvcc version is a hard error too.
 #
 # RUNTIME fail-safe: ggml handles a failed CUDA registration itself. An absent
 # or unloadable module, or a host with no NVIDIA driver, never reaches
 # ggml_backend_dev_count(), so device enumeration falls through to Vulkan and
 # then CPU with no addon involvement (verified on a Tesla T4, QVAC-23763).
-# DETERMINISTIC, continued: the block below only runs on linux with
+# DETERMINISTIC, continued: the block below only runs on Linux or Windows with
 # gpu-backends on, so a cuda-backend request that misses either condition would
 # silently install a package with no CUDA in it and the same vcpkg ABI as a real
 # CUDA build, which is the cache conflation this feature exists to avoid. Refuse
@@ -178,7 +179,7 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
 
   set(QVAC_CUDA_JETSON ${BUILD_CUDA_JETSON_BACKEND})
   if(QVAC_CUDA_JETSON AND NOT (VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64"))
-    message(FATAL_ERROR "qvac-fabric: the CUDA 12 Jetson variant is arm64-only.")
+    message(FATAL_ERROR "qvac-fabric: the CUDA 12 Jetson variant is Linux arm64-only.")
   endif()
 
   # ggml's own CUDA CMake calls enable_language(CUDA), which fails with "No
@@ -187,13 +188,12 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
   # pass it explicitly, the same way ports/ggml-speech does.
   # Order matters. An explicitly provisioned toolkit wins over whatever the host
   # happens to have at /usr/local/cuda: CI's setup-cuda assembles a pinned
-  # toolkit and exports CUDACXX and CUDA_PATH, and `120a-real` below needs CUDA
-  # 13, so a GPU runner or dev box carrying an older system toolkit must not
-  # silently shadow the pin. Searching /usr/local/cuda/bin first with
-  # NO_DEFAULT_PATH did exactly that.
+  # toolkit and exports CUDACXX and CUDA_PATH, so a GPU runner or dev box
+  # carrying another system toolkit must not silently shadow the pin. Searching
+  # /usr/local/cuda/bin first with NO_DEFAULT_PATH did exactly that.
   #
-  # QVAC-24470: the toolkit version is not in the vcpkg binary-cache ABI.
-  # Keep this value in the portfile so a toolkit change invalidates the cache.
+  # QVAC-24470: vcpkg does not hash the host nvcc. Keep the expected toolkit
+  # in the portfile so changing the pin changes the port hash.
   if(QVAC_CUDA_JETSON)
     set(QVAC_FABRIC_CUDA_TOOLKIT "12.6.3-jetson")
     set(QVAC_FABRIC_CUDA_VERSION_PATTERN "V12\\.6\\.85([^0-9]|$)")
@@ -245,8 +245,8 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
   # x64 and the CUDA 13 arm64 module ship ggml's own default list for a CUDA 13
   # toolkit, plus 80-real. Virtual entries JIT onto newer GPUs that have no
   # cubin of their own. CUDA 13 cannot build 50, 61 or 70 at all. The fabric
-  # source probes a no-op kernel before registering a CUDA module, so a module
-  # that cannot load code falls through safely.
+  # source probes a no-op kernel on each device and skips devices that cannot
+  # load the shipped code, so a module with no usable device falls through.
   #
   # The semicolons must stay backslash-escaped so vcpkg passes the architecture
   # list to CMake as one argument.
@@ -277,9 +277,9 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
     # CMAKE_CXX_FLAGS, so the .cu compile never sees -stdlib=libc++ and only
     # the link does, where clang++ handles it.
     -DCMAKE_CUDA_HOST_COMPILER=clang++
-    # -allow-unsupported-compiler: CUDA 13.x caps the host at clang < 22 and the
-    # monorepo standardises on clang-22 (.github/actions/setup-llvm). Revisit
-    # when a CUDA release accepts clang 22.
+    # -allow-unsupported-compiler: neither pinned toolkit, CUDA 13.0 or the
+    # Jetson 12.6, accepts clang 22, which the monorepo standardises on
+    # (.github/actions/setup-llvm). Revisit when a CUDA release accepts it.
     "-DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler")
   endif()
 endif()

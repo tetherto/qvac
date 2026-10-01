@@ -187,7 +187,7 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
-/// @brief The device names to pass as `--device` in multi-GPU split mode: every
+/// @brief The device names for a multi-GPU split: every
 /// discrete GPU, deduplicated by `props.device_id` so a card registered under
 /// two backends is named once, preferring @p selectedDeviceName's registry.
 ///
@@ -202,8 +202,8 @@ bool gpuBackendSupportsRowSplit();
 /// since it cannot be matched against its own duplicate.
 ///
 /// Empty when every GPU/iGPU device comes from one registry, which is every
-/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
-/// caller then keeps omitting `--device`.
+/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing.
+/// No production caller.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName);
 
