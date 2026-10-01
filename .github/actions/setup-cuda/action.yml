@@ -51,8 +51,9 @@ runs:
     # `pull_request_target` runs with GITHUB_REF on the base branch, so a
     # combined `actions/cache` let any authorized PR populate the entry that
     # main's privileged runs then restore, and cpp-lint reaches here with no
-    # label at all. Keep the established Linux r4 keys warm. Windows uses a
-    # separate key so its x64 server toolkit cannot collide with Linux x64.
+    # label at all. Linux keeps its existing r4 key so cached toolkits stay
+    # valid. Windows uses a separate key so its x64 server toolkit cannot
+    # collide with Linux x64.
     - name: Select CUDA cache key
       id: cache-key
       shell: bash
@@ -123,11 +124,13 @@ runs:
         CUDA_TARGET: ${{ inputs.cuda-target }}
         CUDA_VERSION: ${{ inputs.cuda-version }}
       run: |
-        # Pinned against redistrib_13.0.3.json (supply-chain pin: a silent
-        # re-upload fails the sha256 check). nvcc + libnvvm (cicc lives
-        # there in the 13.x split) + crt + cudart + cccl + culibos + cublas
-        # is the minimal set that compiles and links the ggml CUDA backend;
-        # the runtime-loaded module resolves CUDA libraries at run time.
+        # Pinned against redistrib_13.0.3.json, or redistrib_12.6.3.json for
+        # Jetson (supply-chain pin: a silent re-upload fails the sha256 check).
+        # Each list below is the minimal set that compiles and links the ggml
+        # CUDA backend for its target: nvcc, cudart, cccl and cublas, plus on
+        # 13.x libnvvm (cicc lives there in the 13.x split) and crt, plus
+        # culibos on Linux 13.x. The runtime-loaded module resolves CUDA
+        # libraries at run time.
         #
         # NVIDIA publishes separate server ARM and Jetson distributions. CUDA
         # 13 is available for SBSA, while Orin is tied to CUDA 12 and needs the
@@ -159,14 +162,15 @@ runs:
         #     in ggml_cuda_kernel_can_use_pdl, cudaFuncGetAttributes
         #   [exit 134]
         #
-        # sm_121 is above every entry in the arm64 tier, so it had to JIT, and
-        # the driver refused PTX newer than itself. That box has CUDA 13.3
-        # installed and it made no difference: a runtime library and the driver's
-        # PTX JIT are separate things.
+        # On the earlier arch list, sm_121 was above every entry in the arm64
+        # tier, so it had to JIT, and the driver refused PTX newer than itself.
+        # That box has CUDA 13.3 installed and it made no difference: a runtime
+        # library and the driver's PTX JIT are separate things.
         #
         # 13.0.3 ships cuda_cudart 13.0.96, which is exactly what those boxes
         # carry, so its PTX is what their driver was built to take. Going older
-        # is not free either: sm_120a needs CUDA 13, so 12.x would drop the 5090.
+        # is not free either: 120a-real needs CUDA 12.8+ and 121a-real needs
+        # 12.9+, so an older toolkit would drop the cubins for the 5090 and GB10.
         #
         # Bumping this is a COMPATIBILITY decision, not a chore. It raises the
         # minimum driver for every JIT-served card, and nothing in CI catches it

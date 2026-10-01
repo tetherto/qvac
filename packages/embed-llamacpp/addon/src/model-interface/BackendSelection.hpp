@@ -113,6 +113,7 @@ std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 
 /// @brief Device names for split mode, preferring the selected backend when
 /// one physical GPU is registered by more than one backend.
+/// No production caller in this PR.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName);
 
