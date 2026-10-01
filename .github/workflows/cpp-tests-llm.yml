@@ -222,6 +222,13 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm run coverage:cpp:build
 
+      # Diagnostic only. Reports which cmake vcpkg would take from PATH; an npm
+      # .cmd shim there breaks vcpkg's clean-environment builds.
+      - name: Diagnose cmake on PATH
+        if: ${{ matrix.os == 'windows-2025' }}
+        continue-on-error: true
+        run: node .github/scripts/diagnose-windows-cmake-path.mjs --vcpkg
+
       - name: Build C++ tests
         if: ${{ matrix.os != 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
