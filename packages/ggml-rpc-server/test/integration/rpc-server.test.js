@@ -20,10 +20,15 @@ async function rejection(promise) {
   throw new Error("Expected the promise to reject");
 }
 
-async function startStopped(t, options) {
-  const server = await startRpcServer(options);
-  t.teardown(() => server.stop());
-  return server;
+// Register teardown before the start settles: a sibling start under
+// Promise.all can end the test while this one is still in flight.
+function startStopped(t, options) {
+  const starting = startRpcServer(options);
+  t.teardown(async () => {
+    const server = await starting.catch(() => null);
+    await server?.stop();
+  });
+  return starting;
 }
 
 test("serves the RPC protocol on the CPU device", async (t) => {
