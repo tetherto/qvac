@@ -203,26 +203,6 @@ export const kvCacheStatsVerification: TestDefinition = {
   metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 90000 }
 }
 
-// Reasoning-model dependency ("tools" is the cross-platform Qwen3 build),
-// since the default `llm` resource is Llama and emits no reasoning block.
-export const kvCacheRemoveThinkingCompaction: TestDefinition = {
-  testId: 'kv-cache-remove-thinking-compaction',
-  params: {
-    cacheKeyOn: 'remove-thinking-on-session',
-    cacheKeyOff: 'remove-thinking-off-session',
-    messages: [
-      'Think step by step, then answer: what is 17 multiplied by 23?',
-      'Now add 100 to that result.'
-    ],
-    // Bounded, not disabled: the assertion needs a reasoning block, and a
-    // positive budget still force-emits the closing think tag.
-    generationParams: { reasoning_budget: 128, predict: 256, temp: 0, seed: 42 }
-  },
-  expectation: { validation: 'type', expectedType: 'string' },
-  suites: ['smoke'],
-  metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 180000 }
-}
-
 export const kvCacheNoSystemPrompt: TestDefinition = {
   testId: 'kv-cache-no-system-prompt',
   params: {
@@ -376,7 +356,6 @@ export const kvCacheTests = [
   kvCacheWithTools,
   kvCacheDeleteAndReuse,
   kvCacheStatsVerification,
-  kvCacheRemoveThinkingCompaction,
   kvCacheNoSystemPrompt,
   kvCacheToolsSequentialSave,
   kvCacheCancelThenNewPrompt

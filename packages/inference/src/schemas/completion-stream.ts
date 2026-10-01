@@ -71,12 +71,6 @@ export const generationParamsSchema = z
       .describe(
         "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards."
       ),
-    remove_thinking_from_context: z
-      .boolean()
-      .optional()
-      .describe(
-        'When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.'
-      ),
     tool_choice: z
       .string()
       .min(1)
@@ -88,14 +82,6 @@ export const generationParamsSchema = z
   .strict()
 
 const TOOL_CHOICE_MODES = new Set(['auto', 'none', 'required'])
-
-/**
- * Whether a `tool_choice` demands a tool call (`required` or a named tool),
- * as opposed to `auto` / `none`, which only shape how the model may call one.
- */
-export function toolChoiceDemandsCall(toolChoice: string | undefined): boolean {
-  return toolChoice !== undefined && toolChoice !== 'auto' && toolChoice !== 'none'
-}
 
 type ToolChoiceTool = { type: 'function'; name: string; deferLoading?: boolean | undefined }
 
