@@ -345,12 +345,14 @@ function generateTtsName({
   modelName,
   tagExtra,
   tagType,
-  quantization
+  quantization,
+  tags
 }: BaseNameInput): string {
   const name = tagName || modelName || ''
   const language = tagExtra || ''
   const type = tagType || ''
-  const nameParts = [name, language, type, quantization].filter((p) => p && p !== '')
+  const variant = tags.includes('fused') ? 'fused' : ''
+  const nameParts = [name, language, type, variant, quantization].filter((p) => p && p !== '')
   let exportName = `TTS_${nameParts.map(cleanPart).join('_')}`
   if (filename.endsWith('.onnx.json') || filename.includes('config.json')) {
     exportName = exportName + '_CONFIG'
