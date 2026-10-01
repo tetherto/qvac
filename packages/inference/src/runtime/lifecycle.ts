@@ -1,3 +1,4 @@
+import { closeRpcResources } from '@/handlers/rpc-server'
 import { initEnv } from '@/runtime/env'
 import { closeAllRagInstances } from '@/rag/index'
 import { disposeAllVectorIndexes } from '@/runtime/vector-index-registry'
@@ -21,6 +22,7 @@ import { destroyResourceCollector, initializeResourceCollector } from '@/resourc
 
 let initialized = false
 let cleanupRan = false
+let cleanupPromise: Promise<void> | null = null
 
 const logger = getEngineLogger()
 
@@ -67,17 +69,27 @@ function clearRegistries(): void {
  * registry client). Idempotent. Does not release the cache lock.
  */
 async function runCleanup(): Promise<void> {
+  if (cleanupPromise) return cleanupPromise
   if (cleanupRan) return
-  cleanupRan = true
-  destroyResourceCollector()
-  clearRegistries()
-  disposeAllVectorIndexes()
-  await Promise.allSettled([
-    closeAllRagInstances(),
-    cleanupDownloads(),
-    unloadAllModels(),
-    closeRegistryClient()
-  ])
+  cleanupPromise = (async () => {
+    destroyResourceCollector()
+    clearRegistries()
+    disposeAllVectorIndexes()
+    await Promise.allSettled([
+      closeAllRagInstances(),
+      cleanupDownloads(),
+      unloadAllModels(),
+      closeRegistryClient()
+    ])
+    // Models may own buffers on our RPC servers. Release them before closing their sockets.
+    await closeRpcResources()
+    cleanupRan = true
+  })()
+  try {
+    await cleanupPromise
+  } finally {
+    cleanupPromise = null
+  }
 }
 
 /**
@@ -95,6 +107,7 @@ export async function cleanupForTerminate(): Promise<void> {
     logger.info('✅ Pre-terminate cleanup completed')
   } catch (error) {
     logger.error('❌ Error during pre-terminate cleanup:', error)
+    throw error
   }
 }
 
@@ -107,8 +120,10 @@ export async function close(): Promise<void> {
     await runCleanup()
   } catch (error) {
     logger.error('❌ Error during cleanup:', error)
+    throw error
+  } finally {
+    releaseCacheLock()
+    initialized = false
+    cleanupRan = false
   }
-  releaseCacheLock()
-  initialized = false
-  cleanupRan = false
 }

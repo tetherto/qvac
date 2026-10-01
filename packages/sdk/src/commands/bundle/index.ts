@@ -214,7 +214,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   const { runtimeEntry, bundleEntry } = generateWorkerEntries(
     pluginSpecifiers,
     sdkName,
-    resolveSdkImport
+    resolveSdkImport,
+    config.rpcServerProvider
   )
   await fsp.writeFile(entryPath, runtimeEntry, 'utf8')
   logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
