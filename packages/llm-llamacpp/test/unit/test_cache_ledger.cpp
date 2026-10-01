@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/CacheLedger.hpp"
+#include "utils/ModelMemoryPolicy.hpp"
 
 namespace cache = qvac_lib_inference_addon_llama::cache;
 
@@ -160,6 +161,8 @@ TEST(CacheLedger, ParseCheckpointPolicyDefaultsWhenAbsent) {
   std::unordered_map<std::string, std::string> config{{"ctx_size", "4096"}};
   const cache::CheckpointPolicy policy = cache::parseCheckpointPolicy(config);
   EXPECT_EQ(policy.maxCount, cache::DEFAULT_PROCESS_CHECKPOINTS);
+  EXPECT_FALSE(policy.maxCountExplicit)
+      << "an absent count is left for the model load to pick by architecture";
   EXPECT_EQ(policy.maxBytes, 0u);
   EXPECT_EQ(policy.storage, SnapshotStorage::Disk);
   EXPECT_EQ(config.size(), 1u) << "unrelated keys must be left alone";
@@ -173,6 +176,7 @@ TEST(CacheLedger, ParseCheckpointPolicyConsumesEverySpelling) {
       {"ctx_size", "4096"}};
   const cache::CheckpointPolicy policy = cache::parseCheckpointPolicy(config);
   EXPECT_EQ(policy.maxCount, 4u);
+  EXPECT_TRUE(policy.maxCountExplicit);
   EXPECT_EQ(policy.maxBytes, 1073741824u);
   EXPECT_EQ(policy.storage, SnapshotStorage::Memory);
   EXPECT_EQ(config.size(), 1u)
@@ -215,4 +219,17 @@ TEST(CacheLedger, ParseCheckpointPolicyRejectsBadValues) {
       {"cache_checkpoints", "4"}, {"cache-checkpoints", "4"}};
   EXPECT_THROW(cache::parseCheckpointPolicy(both), std::invalid_argument)
       << "both spellings at once must be rejected like flash-attn";
+}
+
+// Untrimmable models keep two checkpoints by default when they are recurrent
+// or hybrid, one otherwise (DeepSeek V4), and all of them snapshot only the
+// state a tail trim cannot rebuild.
+TEST(ModelMemoryPolicy, CheckpointDefaultsFollowTheArchitecture) {
+  namespace utils = qvac_lib_inference_addon_llama::utils;
+  EXPECT_EQ(utils::defaultCacheCheckpoints(true, false), 2u);
+  EXPECT_EQ(utils::defaultCacheCheckpoints(false, true), 2u);
+  EXPECT_EQ(utils::defaultCacheCheckpoints(false, false), 1u);
+  EXPECT_TRUE(utils::needsFullStateSnapshot(false, false, true));
+  EXPECT_FALSE(utils::needsFullStateSnapshot(false, false, false));
+  EXPECT_EQ(utils::untrimmableSnapshotScope(), utils::SnapshotScope::Partial);
 }

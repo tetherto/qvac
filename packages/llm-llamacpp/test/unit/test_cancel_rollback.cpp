@@ -368,6 +368,33 @@ TEST_F(
   llama_memory_seq_rm(mem, 0, -1, -1);
 }
 
+// A hybrid model keeps two checkpoints when the config does not say;
+// an explicit `cache_checkpoints` wins.
+TEST_F(CancelRollbackPrimitiveTest, HybridDefaultsToTwoCheckpoints) {
+  const std::string path = qwen35HybridModelPath();
+  if (!modelFileExists(path)) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  for (const auto& [configured, expected] :
+       std::vector<std::pair<const char*, size_t>>{{nullptr, 2}, {"5", 5}}) {
+    std::unordered_map<std::string, std::string> config;
+    config["device"] = test_common::getTestDevice();
+    config["ctx_size"] = "2048";
+    config["gpu_layers"] = test_common::getTestGpuLayers();
+    config["backendsDir"] = test_common::getTestBackendsDir().string();
+    if (configured != nullptr) {
+      config["cache_checkpoints"] = configured;
+    }
+    std::string modelPath = path;
+    auto model = std::make_unique<LlamaModel>(
+        std::move(modelPath), std::string(), std::move(config));
+    model->waitForLoadInitialization();
+    ASSERT_TRUE(model->isLoaded());
+    EXPECT_EQ(LlamaModelTestPeer::checkpointPolicy(*model).maxCount, expected)
+        << (configured != nullptr ? configured : "default");
+  }
+}
+
 TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripInMemoryHybrid) {
   auto model = loadTextModel(qwen35HybridModelPath());
   if (!model) {

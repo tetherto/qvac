@@ -185,7 +185,7 @@ void MtmdLlmContext::initializeCommonState() {
           llama_model_is_hybrid(model),
           isDeepSeekV4);
   snapshotScope_ =
-      qvac_lib_inference_addon_llama::utils::snapshotScopeFor(isDeepSeekV4);
+      qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
   // EOS-inside-reasoning recovery is a Qwen3-specific workaround;
   // gate it on the explicit Qwen3-family predicate so non-Qwen

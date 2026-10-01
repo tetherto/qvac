@@ -112,7 +112,7 @@ void TextLlmContext::initializeCommonState() {
           llama_model_is_hybrid(model),
           isDeepSeekV4);
   snapshotScope_ =
-      qvac_lib_inference_addon_llama::utils::snapshotScopeFor(isDeepSeekV4);
+      qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
   // EOS-inside-reasoning recovery (close-marker substitution +
   // trailing newlines) is a Qwen3-specific workaround. Gate it on the

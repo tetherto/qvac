@@ -31,11 +31,10 @@ inline constexpr size_t LEDGER_ENTRY_WORDS = 5;
 // (on disk or in memory, see `SnapshotStorage`), so the policy below bounds
 // that footprint.
 //   * `cache_checkpoints`: how many to keep; 0 keeps none, which turns every
-//     divergent turn into a cold prefill. The default of 2 keeps the last
-//     committed request's pair: its end-of-history checkpoint, which an
-//     ordinary next turn and a regenerate restore, and its pre-request
-//     snapshot, which serves an edit of that request's last message. More
-//     also serve edits further back in the history.
+//     divergent turn into a cold prefill. Without it the model load picks
+//     the default by architecture (`utils::defaultCacheCheckpoints`): 2 on
+//     recurrent and hybrid models, 1 on other untrimmable ones. More also
+//     serve edits further back in the history.
 //   * `cache_checkpoints_max_bytes`: total payload budget per sequence; 0 is
 //     unlimited. It is enforced before the count, and the model load fails
 //     early when it cannot hold `cache_checkpoints` checkpoints of the
@@ -62,6 +61,10 @@ inline constexpr uint64_t MAX_CACHE_RAM_MIB = 1ULL << 20; // 1 TiB
 
 struct CheckpointPolicy {
   size_t maxCount = DEFAULT_PROCESS_CHECKPOINTS;
+  /// `cache_checkpoints` was set in the load config. Otherwise the model
+  /// load replaces `maxCount` with the per-architecture default
+  /// (`utils::defaultCacheCheckpoints`).
+  bool maxCountExplicit = false;
   uint64_t maxBytes = 0; // 0 = unlimited
   qvac_lib_inference_addon_llama::utils::SnapshotStorage storage =
       qvac_lib_inference_addon_llama::utils::SnapshotStorage::Disk;
@@ -227,6 +230,7 @@ parseCheckpointPolicy(std::unordered_map<std::string, std::string>& config) {
           config, CACHE_CHECKPOINTS_KEY, CACHE_CHECKPOINTS_KEY_DASHED)) {
     policy.maxCount = parseUnsignedInRange(
         count->second, 0, MAX_CONFIGURABLE_PROCESS_CHECKPOINTS, count->first);
+    policy.maxCountExplicit = true;
   }
   if (const auto bytes = takeConfigKey(
           config,

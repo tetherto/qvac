@@ -32,6 +32,16 @@ public:
     return model.state_ ? model.state_->batchScheduler_.get() : nullptr;
   }
 
+  /// The checkpoint policy the load resolved (count filled in by
+  /// architecture when the config did not set it).
+  static qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+  checkpointPolicy(LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.state_
+               ? model.state_->cacheCheckpointPolicy_
+               : qvac_lib_inference_addon_llama::cache::CheckpointPolicy{};
+  }
+
   /// The RAM tier shared by the single-prompt cache and the scheduler.
   static qvac_lib_inference_addon_llama::batching::SlotStateCache*
   ramTier(LlamaModel& model) {

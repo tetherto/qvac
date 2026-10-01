@@ -19,10 +19,12 @@
 
 - `cache_checkpoints` load-config field (also `cache-checkpoints`): per-sequence
   cap on the process-local full-state checkpoints kept for cached requests on
-  hybrid / recurrent models. Default 2 (the last request's end-of-history
-  checkpoint, which serves an ordinary next turn and a regenerate, and its
-  pre-request snapshot, which serves an edit of the last message), `0`
-  disables them, maximum 1024.
+  hybrid / recurrent models. Without it the default follows the
+  architecture: 2 on recurrent and hybrid models (the last request's
+  end-of-history checkpoint, which serves an ordinary next turn and a
+  regenerate, and its pre-request snapshot, which serves an edit of the last
+  message), 1 on other untrimmable models such as DeepSeek V4. `0` disables
+  them, maximum 1024.
 - `cache_checkpoints_max_bytes`: byte budget for those checkpoints, enforced
   before the count. The load fails early with `InvalidArgument` when the budget
   cannot hold `cache_checkpoints` checkpoints of the largest size the context
@@ -89,11 +91,12 @@
   longest matching checkpoint. With `parallel >= 2` the scheduler keeps
   checkpoints per `cacheKey` between requests, which previously ended with
   each slot.
-- Checkpoints and rollback snapshots on hybrid and recurrent models hold only
-  the recurrent state; a restore trims the attention KV instead. Their size no
-  longer grows with the context (about 20 MB each on Qwen3.5-0.8B), and
-  `cache_checkpoints_max_bytes` is validated against that size. DeepSeek V4
-  keeps full snapshots.
+- Checkpoints and rollback snapshots hold only the state a tail trim cannot
+  rebuild: the recurrent state on hybrid and recurrent models, the
+  sliding-window cells and compressor states on DeepSeek V4. A restore trims
+  the rest back. Their size no longer grows with the context (about 20 MB
+  each on Qwen3.5-0.8B), and `cache_checkpoints_max_bytes` is validated
+  against that size.
 - With `parallel >= 2`, a cached request could save a `cacheKey` file that
   every later load rejected with `UnableToLoadSessionFile` ("cache ledger
   totals do not match cache state"). This happened when it was cancelled by
