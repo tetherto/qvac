@@ -227,29 +227,24 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
   string(REGEX MATCH "release [0-9]+\\.[0-9]+, V[0-9.]+" QVAC_NVCC_VERSION "${QVAC_NVCC_VERSION_OUT}")
   message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE} (${QVAC_NVCC_VERSION}, port expects ${QVAC_FABRIC_CUDA_TOOLKIT})")
 
-  # Keep both virtual floors on x64. The sm_75 PTX serves Turing and newer
-  # unlisted GPUs, while sm_80 PTX keeps ggml's feature resolution aligned for
-  # Ada and Hopper. The fabric source probes a no-op kernel before registering a
-  # CUDA module, so a module that cannot load code falls through safely.
+  # x64 and the CUDA 13 arm64 module ship ggml's own default list for a CUDA 13
+  # toolkit, plus 80-real. Virtual entries JIT onto newer GPUs that have no
+  # cubin of their own. CUDA 13 cannot build 50, 61 or 70 at all. The fabric
+  # source probes a no-op kernel before registering a CUDA module, so a module
+  # that cannot load code falls through safely.
   #
   # The semicolons must stay backslash-escaped so vcpkg passes the architecture
   # list to CMake as one argument.
   #
-  # Tiered by target architecture: an arm64 package has no use for the x64
-  # cubins and vice versa. Jetson gets its own CUDA 12 module, while the normal
-  # arm64 module stays on CUDA 13 for DGX Spark.
+  # The Jetson module is built against the L4T toolkit, which runs only on
+  # Jetson Orin, so it carries only that GPU's arch.
   set(QVAC_CUDA_NO_VMM OFF)
   if(QVAC_CUDA_JETSON)
     # The fabric VMM pool falls back to cudaMalloc if Tegra cannot reserve its
     # fixed address space, so keep VMM enabled and exercise that runtime path.
     set(QVAC_CUDA_ARCHS "87-real")
-  elseif(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64")
-    set(QVAC_CUDA_ARCHS "80-virtual\;121-real")
   else()
-    # Ampere and Blackwell are native. The sm_75 floor serves Turing and newer
-    # unlisted GPUs through PTX, while sm_80 PTX preserves Ampere feature
-    # resolution for Ada and Hopper.
-    set(QVAC_CUDA_ARCHS "75-virtual\;80-virtual\;80-real\;86-real\;120a-real")
+    set(QVAC_CUDA_ARCHS "75-virtual\;80-virtual\;80-real\;86-real\;89-real\;90-virtual\;120a-real\;121a-real")
   endif()
   message(STATUS "qvac-fabric: cuda-backend ON, building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
   list(APPEND PLATFORM_OPTIONS
