@@ -1223,10 +1223,7 @@ bool backend_selection::gpuBackendSupportsRowSplit(
   // lacks `ggml_backend_split_buffer_type`. So require all of them, not any
   // one, and treat "no GPU devices at all" as unsupported.
   //
-  // QVAC-23763: split mode now scopes `--device` to one registry (see
-  // splitModeDeviceNames), so qvac-fabric sees a narrower set than is checked
-  // here. Left registry-wide on purpose: that only degrades row to layer sooner
-  // than needed, never the other way, and no shipped backend has split buffers.
+  // No production caller: split-mode 'row' is rejected at config time.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
@@ -1333,9 +1330,9 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
   // QVAC-23763: mirror qvac-fabric's own iGPU rules, because they only apply on
   // the path this list bypasses. llama_prepare_model_devices() drops iGPUs once
   // any discrete GPU was found and keeps at most one otherwise, but with
-  // `--device` set it takes every named device verbatim, so emitting an iGPU
-  // beside a discrete card would put layers on hardware it would never have
-  // used. A deliberately selected iGPU, `main-gpu: 'integrated'`, is the
+  // an explicit device list it takes every named device verbatim, so emitting
+  // an iGPU beside a discrete card would put layers on hardware it would never
+  // have used. A deliberately selected iGPU, `main-gpu: 'integrated'`, is the
   // exception: scope to that one device.
   if (selectedIsIgpu) {
     return {selectedDeviceName};
@@ -1346,7 +1343,7 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
   // backends; scoping by registry also dropped a *second* physical card on a
   // mixed-vendor host, an NVIDIA plus a discrete AMD say, which is the very
   // population split mode is for. Preferring the selected registry on a tie
-  // keeps an explicit `backend` override binding, which omitting `--device`
+  // keeps an explicit `backend` override binding, which an unfiltered list
   // would not: qvac-fabric's own dedupe keeps whichever backend registered
   // first, and CUDA loads before Vulkan.
   // Deduping needs EVERY selected-registry device to publish a bus id. One that

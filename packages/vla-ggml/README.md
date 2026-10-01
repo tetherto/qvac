@@ -202,8 +202,9 @@ regardless, pass `backend: 'cpu'` to `load()`.
 Among accepted devices the order is CUDA, then HIP/ROCm, then anything else
 (Vulkan or Metal). CUDA ships as a dynamically loaded module alongside Vulkan
 on Linux x64, Linux arm64, and Windows x64. Linux arm64 includes separate CUDA
-13 and CUDA 12 modules for DGX Spark and Jetson. Windows needs the CUDA 13
-runtime DLLs on `PATH`. If the CUDA module, driver, or runtime is missing, the
+13 and CUDA 12 modules for DGX Spark and Jetson. On Windows the fabric prebuild
+stages `cudart64_13.dll`, `cublas64_13.dll` and `cublasLt64_13.dll` next to the
+CUDA module. If the CUDA module, driver, or runtime is missing, the
 device never registers and selection simply continues down that order.
 
 `backend` also takes a comma-separated GPU priority list, so

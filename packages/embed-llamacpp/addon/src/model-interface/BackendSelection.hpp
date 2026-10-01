@@ -90,9 +90,9 @@ struct BackendInterface {
       ggml_backend_dev_t device);
   void* (*ggml_backend_reg_get_proc_address)(
       ggml_backend_reg_t reg, const char* name);
-  // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
-  // physical card registered under two backends from two distinct cards. May
-  // be null; that path then falls back to scoping by registry.
+  // QVAC-23763: props.device_id tells one physical card registered under two
+  // backends from two distinct cards. Required: getSplitDeviceSelection() calls
+  // it unconditionally.
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
@@ -222,19 +222,17 @@ std::pair<BackendType, std::string> chooseBackend(
     const std::optional<MainGpu>& mainGpu = std::nullopt,
     const std::vector<std::string>& backendOverride = {});
 
-/// @brief Count GPU devices available for multi-GPU split mode.
-/// Returns the number of discrete GPUs when any are present; otherwise
-/// falls back to the iGPU count. This mirrors backends like Vulkan which
-/// exclude iGPUs by default when discrete GPUs exist.
+/// @brief Count devices in the final Fabric-compatible split set, that is
+/// `getSplitDeviceSelection(bckI).devices.size()`.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one GPU device is present AND every available
 /// GPU/iGPU device's backend provides split buffers, because qvac-fabric
 /// requires split buffers from each device it distributes over and throws on
-/// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
-/// this is false in every shipped configuration.
+/// the first one that lacks them. No production caller: split-mode 'row' is
+/// rejected at config time. As of qvac-fabric v10069 only SYCL provides split
+/// buffers, so this is false in every shipped configuration.
 bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
 /// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
