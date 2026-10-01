@@ -2177,6 +2177,47 @@ test('assess: a probe that never ran names why, beside the fallback', (t) => {
   )
 })
 
+// The native path assembles its own result rather than extending the modelled
+// one, so it carries the placement separately.
+test('assess: the resolved device survives every evidence class', (t) => {
+  const sample = { totalBytes: 64 * GIB, usedBytes: 16 * GIB }
+
+  const native = assessModelFitFromResources({
+    models: [candidate({ device: 'gpu' })],
+    execution: 'sequential',
+    resources: resources(sample),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile(),
+    nativeFit: NATIVE_FIT
+  })
+
+  const calibrated = assessModelFitFromResources({
+    models: [candidate({ device: 'cpu' })],
+    execution: 'sequential',
+    resources: resources(sample),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile()
+  })
+
+  const floored = assessModelFitFromResources({
+    models: [candidate({ device: 'cpu' })],
+    execution: 'sequential',
+    resources: resources(sample),
+    platform: 'android-arm64',
+    calibration: undefined,
+    resolveProfile: () => profile()
+  })
+
+  t.is(native.evidence, 'native-fit')
+  t.is(native.models[0]?.device, 'gpu')
+  t.is(calibrated.evidence, 'calibration')
+  t.is(calibrated.models[0]?.device, 'cpu')
+  t.is(floored.evidence, 'computed-only')
+  t.is(floored.models[0]?.device, 'cpu')
+})
+
 test('assess: a native verdict reports no refusal', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],

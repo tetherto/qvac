@@ -6,7 +6,9 @@ import type {
   ModelFitModelRef,
   NativeProbeFit
 } from '@/schemas/assess-model-fit'
-import { isCanonicalModelType, normalizeModelType } from '@/schemas/index'
+import { isCanonicalModelType, normalizeModelType, ModelType } from '@/schemas/index'
+import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
+import { ModelTypeRequiredError } from '@/errors/index'
 import { projectFitFromLoad } from '@/resources/model-fit/fit-stub/project-fit-from-load'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
@@ -44,12 +46,76 @@ export async function handleAssessModelFit(
   return { type: 'assessModelFit', ...result }
 }
 
+/**
+ * The engine that would run this load, named outright or read off the source,
+ * as `loadModel` resolves it.
+ *
+ * @throws {ModelTypeRequiredError} When neither names one.
+ */
+function modelTypeOf(candidate: ModelFitCandidate): string {
+  if (candidate.modelType !== undefined) return normalizeModelType(candidate.modelType)
+
+  const inferred = inferModelTypeFromModelSrc(candidate.modelSrc)
+  if (inferred === undefined) throw new ModelTypeRequiredError()
+
+  return normalizeModelType(inferred)
+}
+
 /** The audio engines, whose estimator sizes a load by its window rather than a context. */
 const AUDIO_ENGINES: readonly string[] = [
   'whispercpp-transcription',
   'parakeet-transcription',
   'bci-whispercpp-transcription'
 ]
+
+/**
+ * Engines that name a device outright, in llama's own `gpu` / `cpu` spelling.
+ * Both default to the GPU.
+ */
+const DEVICE_NAMED: readonly string[] = [ModelType.llamacppCompletion, ModelType.llamacppEmbedding]
+
+function contextUsesGpu(config: Record<string, unknown>): unknown {
+  const contextParams = config['contextParams']
+  if (contextParams === null || typeof contextParams !== 'object') return undefined
+  return (contextParams as Record<string, unknown>)['use_gpu']
+}
+
+/**
+ * Engines that carry a GPU switch, each read at the key its own config spells
+ * it under. These are the keys the fit builders read in `native-probe/engines`,
+ * so a projection and a device never disagree. Only bci defaults to on.
+ */
+const GPU_SWITCH: Record<string, (config: Record<string, unknown>) => boolean> = {
+  [ModelType.ttsGgml]: (config) => config['useGPU'] === true,
+  [ModelType.audiogenGgml]: (config) => config['useGPU'] === true,
+  [ModelType.parakeetTranscription]: (config) => config['useGPU'] === true,
+  [ModelType.whispercppTranscription]: (config) => contextUsesGpu(config) === true,
+  [ModelType.bciWhispercppTranscription]: (config) => contextUsesGpu(config) !== false
+}
+
+/**
+ * Where a load resolved to run. `dispatch` applies the host's device defaults
+ * before any handler sees the config, so what arrives here is the resolved one.
+ *
+ * `nGpuLayers` wins over `useGPU` on tts, and the config schema rejects the two
+ * disagreeing, so reading it first is safe.
+ */
+function resolvedDevice(modelType: string, config: Record<string, unknown>): string | undefined {
+  if (DEVICE_NAMED.includes(modelType)) {
+    const device = config['device']
+    return typeof device === 'string' ? device.toLowerCase() : 'gpu'
+  }
+
+  const layers = config['nGpuLayers']
+  if (modelType === ModelType.ttsGgml && typeof layers === 'number') {
+    return layers === 0 ? 'cpu' : 'gpu'
+  }
+
+  const usesGpu = GPU_SWITCH[modelType]
+  if (usesGpu === undefined) return undefined
+
+  return usesGpu(config) ? 'gpu' : 'cpu'
+}
 
 /** The window the speech engines hold whole; longer audio is chunked into it. */
 const AUDIO_WINDOW_MS = 30_000
@@ -128,10 +194,11 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
   const descriptor = typeof candidate.modelSrc === 'string' ? undefined : candidate.modelSrc
   const location = typeof candidate.modelSrc === 'string' ? candidate.modelSrc : undefined
   const config = candidate.modelConfig ?? {}
-  const modelType = normalizeModelType(candidate.modelType)
+  const modelType = modelTypeOf(candidate)
 
   const contextTokens = config['ctx_size']
   const artifacts = companionRefs(config)
+  const device = resolvedDevice(modelType, config)
 
   return {
     model: {
@@ -143,6 +210,7 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
       })
     },
     ...(artifacts.length > 0 && { artifacts }),
+    ...(device !== undefined && { device }),
     workload: AUDIO_ENGINES.includes(modelType)
       ? {
           kind: 'audio',
@@ -169,9 +237,9 @@ async function resolveNativeFit(
   const candidate = candidates[0]
   if (!candidate) return {}
 
-  const modelType = normalizeModelType(candidate.modelType)
+  const modelType = modelTypeOf(candidate)
   if (!isCanonicalModelType(modelType)) {
-    return { unavailable: `no plugin handles model type ${candidate.modelType}` }
+    return { unavailable: `no plugin handles model type ${modelType}` }
   }
 
   const budgetMs = getConfig().fitStubBudgetMs

@@ -381,6 +381,7 @@ function nativeModelResult(
     name: modelled.name,
     verdict: nativeFit.verdict === 'fit' ? 'likely-fits' : 'likely-too-large',
     evidence: 'native-fit',
+    ...(modelled.device !== undefined && { device: modelled.device }),
     estimatorVersion: nativeFit.estimatorVersion,
     reasons:
       nativeFit.message === undefined ? [nativeFit.reason] : [nativeFit.reason, nativeFit.message]
@@ -951,6 +952,7 @@ function toModelResult(
     return {
       name: candidate.model.name,
       verdict: 'unknown',
+      ...(candidate.device !== undefined && { device: candidate.device }),
       reasons: [...result.reasons]
     }
   }
@@ -961,6 +963,7 @@ function toModelResult(
       name: candidate.model.name,
       verdict,
       evidence: 'computed-only',
+      ...(candidate.device !== undefined && { device: candidate.device }),
       floorBytes: result.bytes,
       estimatorVersion: FLOOR_VERSION,
       reasons: [
@@ -983,6 +986,7 @@ function toModelResult(
     name: candidate.model.name,
     verdict: budget ? verdictAgainst(total, deviceBudgets ?? [budget], alsoBoundBy) : 'unknown',
     evidence: 'calibration',
+    ...(candidate.device !== undefined && { device: candidate.device }),
     estimate: { lowerBoundBytes: total.lower, upperBoundBytes: total.upper },
     estimatorVersion: result.estimatorVersion,
     reasons: budget

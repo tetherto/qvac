@@ -409,6 +409,7 @@
                 ]
               },
               "modelType": {
+                "description": "Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.",
                 "type": "string",
                 "enum": [
                   "llamacpp-completion",
@@ -437,7 +438,6 @@
                   "vla",
                   "classification"
                 ],
-                "description": "Engine that would run the load.",
                 "title": "AssessModelFitRequestModelsItemModelType"
               },
               "modelConfig": {
@@ -450,7 +450,6 @@
                 "title": "AssessModelFitRequestModelsItemModelConfig"
               }
             },
-            "required": ["modelType"],
             "title": "AssessModelFitRequestModelsItem"
           },
           "description": "Models to assess together under one memory budget."
@@ -598,6 +597,10 @@
               },
               "estimatorVersion": {
                 "description": "Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
+                "type": "string"
+              },
+              "device": {
+                "description": "Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement.",
                 "type": "string"
               },
               "reasons": {

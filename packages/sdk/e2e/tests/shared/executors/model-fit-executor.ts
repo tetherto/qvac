@@ -62,20 +62,27 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
         oneModelAssessed: result.models.length === 1
       }
 
-      if (p.evidence === 'native-fit') {
+      // Only the fitters that read device memory alone decline a load the host
+      // pinned to the CPU; the speech and voice fitters answer for one like any
+      // other.
+      const declinedOnCpu = model.device === 'cpu' && result.evidence !== 'native-fit'
+
+      if (p.evidence !== 'native-fit') {
+        checks['neverConfirms'] = result.verdict !== 'likely-fits'
+      } else if (declinedOnCpu) {
+        checks['noDeviceEvidence'] = true
+      } else {
         checks['evidenceMatches'] = result.evidence === p.evidence
         checks['perModelEvidenceMatches'] = model.evidence === p.evidence
         checks['verdictIsReal'] = REAL_VERDICTS.includes(result.verdict)
         checks['probeProduced'] = (model.estimatorVersion ?? '').startsWith('native-probe')
         checks['engineGaveReason'] = (model.reasons[0] ?? '').length > 0
-      } else {
-        checks['neverConfirms'] = result.verdict !== 'likely-fits'
       }
 
       const summary =
         `dep=${p.dep}, verdict=${result.verdict}, evidence=${result.evidence ?? 'none'}, ` +
-        `estimator=${model.estimatorVersion ?? 'none'}, reasons=[${model.reasons.join('; ')}], ` +
-        `setReasons=[${result.reasons.join('; ')}], ` +
+        `device=${model.device ?? 'none'}, estimator=${model.estimatorVersion ?? 'none'}, ` +
+        `reasons=[${model.reasons.join('; ')}], setReasons=[${result.reasons.join('; ')}], ` +
         `checks=${JSON.stringify(checks)}`
 
       if (!Object.values(checks).every(Boolean)) {

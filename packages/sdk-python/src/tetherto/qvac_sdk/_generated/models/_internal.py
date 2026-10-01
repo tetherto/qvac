@@ -172,13 +172,13 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
         ),
     ] = None
     model_type: Annotated[
-        AssessModelFitRequestModelsItemModelType,
+        AssessModelFitRequestModelsItemModelType | None,
         Field(
             alias="modelType",
-            description="Engine that would run the load.",
+            description="Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.",
             title="AssessModelFitRequestModelsItemModelType",
         ),
-    ]
+    ] = None
     model_config_: Annotated[
         AssessModelFitRequestModelsItemModelConfig | None,
         Field(
@@ -343,6 +343,12 @@ class AssessModelFitResponseModelsItem(GeneratedBaseModel):
         Field(
             alias="estimatorVersion",
             description="Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
+        ),
+    ] = None
+    device: Annotated[
+        str | None,
+        Field(
+            description="Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement."
         ),
     ] = None
     reasons: Annotated[list[str], Field(description="Why this model got this verdict.")]

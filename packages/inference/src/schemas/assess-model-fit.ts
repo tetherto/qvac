@@ -52,6 +52,7 @@ export interface ModelFitEstimateTarget {
   model: ModelFitModelRef
   workload: ModelFitWorkload
   artifacts?: ModelFitModelRef[]
+  device?: string
 }
 
 /**
@@ -79,7 +80,11 @@ export const modelFitCandidateSchema = z.object({
     .describe(
       'The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.'
     ),
-  modelType: modelTypeInputSchema.describe('Engine that would run the load.'),
+  modelType: modelTypeInputSchema
+    .optional()
+    .describe(
+      'Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.'
+    ),
   modelConfig: z
     .record(z.string(), z.unknown())
     .optional()
@@ -184,6 +189,12 @@ export const modelFitModelResultSchema = z.object({
     .optional()
     .describe(
       'Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.'
+    ),
+  device: z
+    .string()
+    .optional()
+    .describe(
+      'Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement.'
     ),
   reasons: z.array(z.string()).describe('Why this model got this verdict.')
 })
