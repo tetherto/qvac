@@ -504,15 +504,13 @@ TEST(
 
 // Regression: the reasoning-budget markers and the reasoning *detector* must
 // be built from the same source. `selectReasoningTagSource`, which drives
-// detection and so EOS-inside-reasoning substitution, has always fallen back
+// detection, has always fallen back
 // to the model-family table when the template exposes no thinking tags. The
 // budget used to read the template alone and therefore tokenised nothing, so
 // fabric built no reasoning-budget sampler (`common/sampling.cpp` needs both
 // marker lists non-empty). `grammar_should_apply` then returns true for the
 // whole request, which arms the lazy tool grammar *inside* `<think>` — the one
-// thing the budget sampler is there to prevent — and makes the substitution
-// accept in both contexts feed the grammar the close tag instead of skipping
-// it, where a triggered grammar throws.
+// thing the budget sampler is there to prevent.
 TEST(TemplateDerivedSamplingTest, ReasoningBudgetFallsBackToModelFamilyTags) {
   common_params params = paramsWithoutReasoningBudget();
   // toolRender() carries no thinking tags at all: this is the tagless

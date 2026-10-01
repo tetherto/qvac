@@ -1111,22 +1111,6 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       slot->driver->syncPosition(req->currentPos);
       const SequenceStepResult result = slot->driver->onLogitsReady(
           logitIdx, generatedAfterAccept, outputCallback);
-      // The batch path passes no `inlineDecodeBatch` to `onLogitsReady`, so
-      // the driver must not have advanced its KV position outside of the
-      // tokens the scheduler tracks via `Request::currentPos`. Fail loudly
-      // if a future driver change starts inline-decoding from this path,
-      // since the next `syncPosition` would silently desync KV positions.
-      if (result.decodedInline) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InternalError),
-            "ContinuousBatchScheduler::step: driver reported decodedInline "
-            "on the batch path (seqId " +
-                std::to_string(seqId) +
-                "); inline decoding is not supported by the batcher's "
-                "position tracking");
-      }
       if (result.contextOverflow) {
         // The slot's window is full; stop this one sequence instead of
         // failing the whole batch. Carry the driver's own reason through so

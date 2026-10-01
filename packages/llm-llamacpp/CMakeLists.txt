@@ -52,7 +52,6 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
 )
 
 target_sources(
@@ -106,7 +105,6 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
 
   target_include_directories(

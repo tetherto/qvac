@@ -86,8 +86,8 @@ void MtmdLlmContext::initializeCommonState() {
     modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
   }
 
-  std::string chatTemplate = getChatTemplate(modelCtx_.model, params_);
-  tmpls_ = common_chat_templates_init(modelCtx_.model, chatTemplate);
+  // An empty `chat_template` uses the template embedded in the GGUF.
+  tmpls_ = common_chat_templates_init(modelCtx_.model, params_.chat_template);
 
   smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
   if (!smpl_) {
@@ -187,19 +187,6 @@ void MtmdLlmContext::initializeCommonState() {
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
-  // EOS-inside-reasoning recovery is a Qwen3-specific workaround;
-  // gate it on the explicit Qwen3-family predicate so non-Qwen
-  // reasoning families (e.g. Gemma 4) don't inherit it. See
-  // TextLlmContext for the same gate.
-  {
-    const std::optional<std::string> arch =
-        qvac_lib_inference_addon_llama::utils::getModelArchitecture(
-            modelCtx_.model);
-    isQwen3ReasoningFamily_ =
-        arch.has_value() &&
-        qvac_lib_inference_addon_llama::utils::
-            isQwen3ReasoningFamilyArchitecture(arch.value());
-  }
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -529,7 +516,6 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // Clear per-inference rollback state before capturing this request's generic
   // prefill-entry checkpoint.
   requestRollback_.clear();
-  forcedTokens_.clear();
   // Set before tokenization because reasoning setup and cache transactions
   // distinguish generation from prefill-only requests.
   isPrefillOnlyRequest_ = prefill;
@@ -1001,17 +987,8 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       break;
     }
 
-    llama_token tokenId =
+    const llama_token tokenId =
         common_sampler_sample(smpl_.get(), modelCtx_.lctx, -1);
-    // Test-only substitution; see
-    // `forceNextSampledTokenInsideReasoningForTesting` for why it is gated on
-    // the reasoning state and why it precedes the accept. Twin in
-    // `onLogitsReady` below, because the two paths sample separately.
-    if (forcedNextSampledTokenForTesting_ != LLAMA_TOKEN_NULL &&
-        reasoningState_.inside_reasoning) {
-      tokenId = forcedNextSampledTokenForTesting_;
-      forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
-    }
     common_sampler_accept(smpl_.get(), tokenId, true);
     --nRemain;
 
@@ -1024,8 +1001,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       }
     }
 
-    // Reasoning channel detection remains necessary for output framing and
-    // the Qwen EOS-inside-reasoning recovery.
+    // Reasoning channel detection remains necessary for output framing.
     if (reasoningEnabled_) {
       qvac_lib_inference_addon_llama::utils::updateReasoningBuffer(
           tokenStr, reasoningState_);
@@ -1046,48 +1022,6 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
           outputCallback(callMarker);
         }
       }
-      flushPendingUtf8ToCallback(outputCallback);
-      generationStopReason_ = GenerationStopReason::Eos;
-      break;
-    }
-
-    // EOS sampled while still inside the reasoning channel: substitute the
-    // cached close marker and decode it before exiting.
-    if (isEos && isQwen3ReasoningFamily_ && reasoningState_.inside_reasoning &&
-        reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
-      tokenId = reasoningState_.cached_close_tag_token;
-      tokenStr =
-          common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
-      // See TextLlmContext::onLogitsReady: the substituted close tag has to
-      // reach fabric's reasoning-budget matcher, or it stays in COUNTING and
-      // a lazy tool grammar is disarmed for the rest of the request. Lazy
-      // *and* budget-sampler-built, which together are what make feeding the
-      // grammar sampler impossible here.
-      if (params_.sampling.grammar_lazy &&
-          reasoningBudgetSamplerBuilt(params_.sampling)) {
-        common_sampler_accept(smpl_.get(), tokenId, true);
-      }
-      reasoningState_.inside_reasoning = false;
-
-      if (outputCallback) {
-        std::string completeChars = utf8Buffer_.addToken(tokenStr);
-        if (!completeChars.empty()) {
-          outputCallback(completeChars);
-        }
-      }
-
-      common_batch_clear(*batch);
-      common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
-      if (llama_decode(modelCtx_.lctx, *batch) != 0) {
-        const char* errorMsg =
-            "[MtmdLlm] failed to decode substituted reasoning close tag\n";
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(FailedToDecode), errorMsg);
-      }
-      ++current_.pos;
-      ++lastGeneratedTokenCount_;
-      ++current_.cacheTokens;
-      appendResidentToken(tokenId);
       flushPendingUtf8ToCallback(outputCallback);
       generationStopReason_ = GenerationStopReason::Eos;
       break;
@@ -1208,12 +1142,10 @@ void MtmdLlmContext::resetToolDefinitionsDropped() {
 void MtmdLlmContext::configureReasoningTags(
     const std::string& thinkingStartTag, const std::string& thinkingEndTag,
     const std::optional<ReasoningTags>& fallbackTags) {
-  // Family-default tags act as both the fallback when the active chat
-  // template does not expose reasoning tags, and as the source for the
-  // Qwen-family single-token close marker used by EOS-inside-reasoning
-  // recovery. Resolved by the caller so the lookup runs at most once per
-  // prompt render and the reasoning-budget markers can be derived from the
-  // same value.
+  // Family-default tags act as the fallback when the active chat template
+  // does not expose reasoning tags. Resolved by the caller so the lookup runs
+  // at most once per prompt render and the reasoning-budget markers can be
+  // derived from the same value.
   const std::optional<ReasoningTags> reasoningTags =
       selectReasoningTagSource(thinkingStartTag, thinkingEndTag, fallbackTags);
 
@@ -1223,13 +1155,8 @@ void MtmdLlmContext::configureReasoningTags(
     return;
   }
 
-  std::string eosRecoveryCloseTag;
-  if (isQwen3ReasoningFamily_ && fallbackTags.has_value()) {
-    eosRecoveryCloseTag = fallbackTags->close;
-  }
-
-  const bool reasoningInitOk = initializeReasoningState(
-      modelCtx_.lctx, reasoningState_, *reasoningTags, eosRecoveryCloseTag);
+  const bool reasoningInitOk =
+      initializeReasoningState(modelCtx_.lctx, reasoningState_, *reasoningTags);
   if (reasoningInitOk) {
     reasoningEnabled_ = true;
     return;
@@ -1337,7 +1264,6 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
-  forcedTokens_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
 
@@ -1900,7 +1826,6 @@ void MtmdLlmContext::onPrefillComplete(
   }
   // Reset per-inference reasoning detection state shared by the single-prompt
   // and continuous-batching paths.
-  forcedTokens_.clear();
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
   if (thinkingForcedOpen_ && reasoningEnabled_) {
@@ -1953,26 +1878,9 @@ SequenceStepResult MtmdLlmContext::sampleFromLogits(
         .stopReason = GenerationStopReason::ContextOverflow};
   }
 
-  const bool sampledToken = forcedTokens_.empty();
-  llama_token tokenId = LLAMA_TOKEN_NULL;
-  if (sampledToken) {
-    tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
-    // Test-only substitution; twin of the one in `generateResponse` above.
-    if (forcedNextSampledTokenForTesting_ != LLAMA_TOKEN_NULL &&
-        reasoningState_.inside_reasoning) {
-      tokenId = forcedNextSampledTokenForTesting_;
-      forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
-    }
-    common_sampler_accept(smpl_.get(), tokenId, true);
-  } else {
-    tokenId = forcedTokens_.front();
-    forcedTokens_.erase(forcedTokens_.begin());
-    // Mirrors TextLlmContext::onLogitsReady: the sampler's history must see
-    // emitted forced tokens, but `is_generated = false` keeps them out of
-    // the grammar, which never sampled them and would throw on an emptied
-    // stack. See the long comment there for the full rationale.
-    common_sampler_accept(smpl_.get(), tokenId, false);
-  }
+  const llama_token tokenId =
+      common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+  common_sampler_accept(smpl_.get(), tokenId, true);
 
   std::string tokenStr =
       common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
@@ -1987,30 +1895,6 @@ SequenceStepResult MtmdLlmContext::sampleFromLogits(
   }
 
   const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
-  if (sampledToken && isEos && isQwen3ReasoningFamily_ &&
-      reasoningState_.inside_reasoning &&
-      reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
-    tokenId = reasoningState_.cached_close_tag_token;
-    tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
-    // See TextLlmContext::onLogitsReady for why the substituted close tag
-    // must reach the reasoning-budget matcher, and why the lazy flag has to
-    // be paired with the budget sampler actually being built.
-    if (params_.sampling.grammar_lazy &&
-        reasoningBudgetSamplerBuilt(params_.sampling)) {
-      common_sampler_accept(smpl_.get(), tokenId, true);
-    }
-    reasoningState_.inside_reasoning = false;
-    if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
-      forcedTokens_.push_back(reasoningState_.cached_newline_token);
-      forcedTokens_.push_back(reasoningState_.cached_newline_token);
-    }
-    const std::string closeChars = utf8Buffer_.addToken(tokenStr);
-    if (!closeChars.empty() && outputCallback) {
-      outputCallback(closeChars);
-    }
-    return {.token = tokenId, .finished = false};
-  }
-
   if (isEos && isHarmonyModel_ && params_.use_jinja &&
       tokenId == harmonyCallToken_) {
     QLOG_IF(

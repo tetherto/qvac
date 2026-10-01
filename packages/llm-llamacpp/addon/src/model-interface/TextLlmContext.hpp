@@ -213,23 +213,6 @@ public:
   void snapshotPreRequestCursor() override;
   void snapshotPreRequestRollbackAnchor() override;
 
-  /// Replaces the next token this context samples *while the reasoning block
-  /// is open*, before the sampler accepts it. Two reasons for that shape:
-  /// the EOS-inside-reasoning recovery only triggers on a genuinely sampled
-  /// EOS, so `forcedTokens_` cannot reach it (that queue marks a token as not
-  /// sampled by construction); and no template this package ships force-opens
-  /// the channel, so a substitution on the first sample would land before the
-  /// block exists. Consumed by the first qualifying sample after the call.
-  void
-  forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
-    forcedNextSampledTokenForTesting_ = token;
-  }
-  /// Makes the next synthetic reasoning-recovery decode fail before it reaches
-  /// llama.cpp. Used to verify that the request transaction rolls back instead
-  /// of committing a partially injected close sequence.
-  void forceReasoningRecoveryDecodeFailureForTesting() noexcept {
-    forceReasoningRecoveryDecodeFailureForTesting_ = true;
-  }
   /// Entries the last prompt reconciliation kept resident (0 = cold).
   [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
     return lastCacheReuse_;
@@ -284,14 +267,6 @@ private:
   // that fails too. Called at request entry so the failure is a StatusError
   // rather than a null dereference inside fabric's sampler.
   void requireSampler();
-
-  // Replaces an EOS sampled while inside the reasoning channel with the
-  // model's single-token close marker and injects the trailing newlines.
-  // No-op (returns false) when the close marker is multi-token.
-  bool handleReasoningEOS(
-      llama_token& tokenId, std::string& tokenStr, llama_batch& batch,
-      llama_pos& nPast,
-      const std::function<void(const std::string&)>& outputCallback);
 
   void flushPendingUtf8ToCallback(
       const std::function<void(const std::string&)>& outputCallback);
@@ -370,12 +345,9 @@ private:
   int32_t toolDefinitionsDropped_ = 0;
   // Per-request `tool_choice` for the chat-template render.
   RenderOverrides renderOverrides_;
-  std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
-  llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
-  bool forceReasoningRecoveryDecodeFailureForTesting_ = false;
   // Snapshot of `nPast_` at `evalMessageWithTools` entry. Restored by
   // `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;
@@ -390,29 +362,6 @@ private:
   // tags when the active model has no recognised channel.
   qvac_lib_inference_addon_llama::utils::ReasoningState reasoningState_;
   bool reasoningEnabled_ = false;
-
-  // True only for architectures in the Qwen3 reasoning family (qwen3,
-  // qwen3moe, qwen35, qwen35moe). Gates the EOS-inside-reasoning
-  // recovery (close-marker substitution + newline injection), which is
-  // a Qwen3-specific workaround.
-  bool isQwen3ReasoningFamily_ = false;
-
-  // EOS-inside-reasoning recovery: the recovery substitutes `</think>\n\n` so
-  // the model produces an answer after thinking, but on marginal prompts the
-  // very next sampled token is EOG again, which would defeat the recovery
-  // with an empty answer. One-shot: consumed by the next sampled token.
-  // Narrowed vs the original (reverted in 39a2fef88) fix: all EOG ids are
-  // banned in a single pre-sampling pass (no sample-and-reroll loop). The
-  // ban is unconditional — the generation loop only calls onLogitsReady()
-  // while the n_predict budget allows the current token, so banning EOG on
-  // the final budgeted sample yields a content token without ever
-  // extending generation past the budget.
-  bool banEogAfterReasoningRecovery_ = false;
-
-  // All EOG token ids of the loaded vocab, precomputed once in
-  // initializeCommonState() (Qwen3 family only) so the recovery ban is one
-  // pass over a short list with no mid-stream O(nVocab) scan.
-  std::vector<llama_token> eogTokens_;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

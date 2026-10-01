@@ -106,33 +106,6 @@ function verifyReasoningTags(t, response, testName) {
   t.ok(response.length > 100, `${testName} should generate substantial output`)
 }
 
-// Shared helper: Verify generation continued after reasoning.
-// The EOS-inside-reasoning recovery guarantees a content token after the
-// forced `</think>` — the only legitimate empty answer is when the forced
-// close-marker tokens themselves exhausted the n_predict budget. That case
-// is detected via `stats.stopReason === 'predictionLimit'` rather than by
-// comparing `generatedTokens` to n_predict: the recovery commits the close
-// tag plus up to two newlines, all counted, so the stat can reach n_predict
-// while the logical generation loop still had budget.
-function verifyContinuedAfterReasoning(t, response, testName, opts = {}) {
-  const thinkCloseIndex = response.indexOf('</think>')
-  if (thinkCloseIndex === -1) {
-    t.fail(`No </think> tag found in ${testName}`)
-    return false
-  }
-
-  const textAfterThink = response.substring(thinkCloseIndex + '</think>'.length).trim()
-  if (textAfterThink.length === 0 && opts.stopReason === 'predictionLimit') {
-    t.pass(
-      `Generation hit the n_predict cutoff (stopReason=${opts.stopReason}) after ` +
-        `the forced </think> tag — accepted (${testName})`
-    )
-    return true
-  }
-  t.ok(textAfterThink.length > 0, `Generation should continue after </think> tag (${testName})`)
-  return textAfterThink.length > 0
-}
-
 // Shared helper: Create initial messages for reasoning test
 function createInitialMessages() {
   return [
@@ -166,72 +139,6 @@ function stripReasoningForPrompt(response) {
   const stripped = response.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim()
   return stripped || response
 }
-
-safeTest(
-  'reasoning tag EOS replacement works with tools=false',
-  {
-    skip: isDarwinX64,
-    timeout: 600_000
-  },
-  async (t) => {
-    const { inference } = await setupReasoningModel(t, false)
-
-    // First completion - should work correctly
-    const messages1 = createInitialMessages()
-    const response1 = await runCompletion(inference, messages1)
-    t.comment(`First completion (tools=false, len=${response1.length}):\n${response1}`)
-    verifyReasoningTags(t, response1, 'First completion')
-
-    // Second completion - this is where the fix should activate
-    const messages2 = createFollowUpMessages(messages1, response1)
-    const { response: response2, stats: stats2 } = await runCompletionWithStats(
-      inference,
-      messages2
-    )
-    t.comment(`Second completion (tools=false, len=${response2.length}):\n${response2}`)
-
-    verifyReasoningTags(t, response2, 'Second completion')
-
-    // Verify the fix worked: generation continued after reasoning (or the
-    // n_predict budget was exhausted, which legitimately ends the response).
-    verifyContinuedAfterReasoning(t, response2, 'tools=false', {
-      stopReason: stats2.stopReason
-    })
-  }
-)
-
-safeTest(
-  'reasoning tag EOS replacement works with tools=true',
-  {
-    skip: isDarwinX64,
-    timeout: 600_000
-  },
-  async (t) => {
-    const { inference } = await setupReasoningModel(t, true)
-
-    // First completion - should work correctly
-    const messages1 = createInitialMessages()
-    const response1 = await runCompletion(inference, messages1)
-    t.comment(`First completion (tools=true, len=${response1.length}):\n${response1}`)
-    verifyReasoningTags(t, response1, 'First completion (tools=true)')
-
-    // Second completion - this is where the fix should activate
-    const messages2 = createFollowUpMessages(messages1, response1)
-    const { response: response2, stats: stats2 } = await runCompletionWithStats(
-      inference,
-      messages2
-    )
-    t.comment(`Second completion (tools=true, len=${response2.length}):\n${response2}`)
-
-    verifyReasoningTags(t, response2, 'Second completion (tools=true)')
-
-    // Verify the fix worked: generation continued after reasoning (or the
-    // n_predict budget was exhausted, which legitimately ends the response).
-    verifyContinuedAfterReasoning(t, response2, 'tools=true', {
-      stopReason: stats2.stopReason
-    })
-  }
-)
 
 safeTest(
   'Qwen3 reasoning-budget=0 disables thinking',

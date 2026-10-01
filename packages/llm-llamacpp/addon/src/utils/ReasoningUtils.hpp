@@ -27,10 +27,6 @@ struct ReasoningTags {
 
 struct ReasoningState {
   ReasoningTags tags;
-  // Cached close-marker id when the marker tokenises to a single
-  // token (enables EOS-inside-reasoning replacement).
-  llama_token cached_close_tag_token = LLAMA_TOKEN_NULL;
-  llama_token cached_newline_token = LLAMA_TOKEN_NULL;
   bool inside_reasoning = false;
   std::string recent_output_buffer;
 
@@ -39,17 +35,12 @@ struct ReasoningState {
   static constexpr size_t BUFFER_SIZE = 50;
 };
 
-// Initialise `state` with `tags`. Tokenises both markers under
-// `lctx`'s vocab to populate the cached counts and ids. Empty
-// `tags.open`/`tags.close` leave the state in a disabled mode.
-// `eosRecoveryCloseTag`, when non-empty, is tokenised separately for
-// the Qwen-family EOS-inside-reasoning recovery path; detection still
-// uses `tags.close`.
+// Initialise `state` with `tags`. Empty `tags.open`/`tags.close` leave the
+// state in a disabled mode.
 //
 // Returns false only when the context or markers are unavailable.
 [[nodiscard]] bool initializeReasoningState(
-    ::llama_context* lctx, ReasoningState& state, ReasoningTags tags,
-    const std::string& eosRecoveryCloseTag = {});
+    ::llama_context* lctx, ReasoningState& state, ReasoningTags tags);
 
 // Append `tokenStr` to the rolling buffer and flip
 // `state.inside_reasoning` when the buffer first contains the

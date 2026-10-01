@@ -72,13 +72,9 @@ stopReasonAfterRequestRollback(GenerationStopReason reason) {
 }
 
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
-/// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
-/// example to flush a forced follow-up token) without bouncing through
-/// the scheduler's main batch.
 struct SequenceStepResult {
   llama_token token = LLAMA_TOKEN_NULL;
   bool finished = false;
-  bool decodedInline = false;
   bool contextOverflow = false;
   GenerationStopReason stopReason = GenerationStopReason::None;
 };
@@ -284,9 +280,9 @@ public:
   /// Driven by the scheduler once `llama_decode` has produced logits for
   /// this sequence's last batch entry. Implementations sample the next
   /// token, run any driver-specific bookkeeping, and report back via
-  /// `SequenceStepResult`. `inlineDecodeBatch`, when non-null, may be
-  /// used to piggy-back a forced follow-up `llama_decode` outside of the
-  /// scheduler's main batch.
+  /// `SequenceStepResult`. `inlineDecodeBatch` is non-null on the
+  /// single-prompt path, which decodes the sampled token itself, and null
+  /// under the scheduler, which decodes it in its next batch.
   virtual SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,

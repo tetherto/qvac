@@ -58,6 +58,19 @@
 - A single-prompt key switch no longer rewrites the old session's file when
   nothing ran since it was last written or loaded.
 
+### Removed
+
+- The built-in Qwen3 chat template override. Dense Qwen3 models (`qwen3`
+  architecture) now render with the template embedded in their GGUF, like
+  every other model; a `chat_template` in the load config still wins. Unlike
+  the override, Qwen's template drops an earlier answer's reasoning before the
+  last user message.
+- The EOS-inside-reasoning recovery. When a Qwen3-family model sampled an
+  end-of-generation token inside its reasoning block, the addon replaced it
+  with the closing `</think>` (plus two newlines on the text path) and kept
+  generating. That EOS now ends the response, with `stopReason: 'eos'`, as it
+  does on every other model.
+
 ### Fixed
 
 - A single-prompt cache load on a parallel model no longer trims every

@@ -35,7 +35,6 @@ add_executable(
   test_chat_template_utils.cpp
   test_reasoning_utils.cpp
   test_sequence_state_snapshot.cpp
-  test_qwen_template.cpp
   test_logging_macros.cpp
   test_log_safe_string.cpp
   test_stop_string_match.cpp
@@ -87,7 +86,6 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
 )
 
 target_compile_options(

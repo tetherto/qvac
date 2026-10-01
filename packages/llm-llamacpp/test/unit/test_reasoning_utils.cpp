@@ -136,8 +136,6 @@ TEST_F(ReasoningUtilsTest, ReasoningStateDefaultInitialization) {
   EXPECT_FALSE(state.inside_reasoning);
   EXPECT_TRUE(state.tags.open.empty());
   EXPECT_TRUE(state.tags.close.empty());
-  EXPECT_EQ(state.cached_close_tag_token, LLAMA_TOKEN_NULL);
-  EXPECT_EQ(state.cached_newline_token, LLAMA_TOKEN_NULL);
   EXPECT_TRUE(state.recent_output_buffer.empty());
   EXPECT_EQ(state.BUFFER_SIZE, 50);
 }
@@ -203,9 +201,6 @@ TEST_F(ReasoningUtilsTest, UpdateBufferStaysOutsideForUnrelatedContent) {
 // `find(state.tags.close)` against the streamed piece buffer, so the
 // `inside_reasoning` flip fires only once the entire padded string is
 // present — i.e. on the LAST padding piece, not on `</think>` itself.
-//
-// EOS recovery therefore uses `reasoningState_.cached_close_tag_token`, the
-// canonical single-vocab `</think>`, instead of the sampled padding token.
 TEST_F(
     ReasoningUtilsTest, UpdateBufferFlipDefersToTrailingPaddingOnPaddedClose) {
   ReasoningState state;

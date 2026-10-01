@@ -13,7 +13,6 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
-#include "QwenTemplate.hpp"
 #include "addon/LlmErrors.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -54,8 +53,7 @@ bool isGemma4Architecture(std::string_view architecture) {
 }
 
 // Architectures in the Qwen3 family that emit `<think>`/`</think>`.
-// Broader than `isQwen3Architecture` (which is exact-match "qwen3")
-// but deliberately narrower than the full
+// Deliberately narrower than the full
 // `qwen3*` HuggingFace lineage — explicit list keeps unrelated
 // `qwen3*`-named archs from silently inheriting the wrong tags.
 inline constexpr std::array<std::string_view, 6> QWEN3_REASONING_FAMILY_ARCHES{
@@ -99,29 +97,8 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
   return std::nullopt;
 }
 
-bool isQwen3Architecture(std::string_view architecture) {
-  return normalizeArchitecture(architecture) == "qwen3";
-}
-
-bool isQwen3Model(const ::llama_model* model) {
-  if (model == nullptr) {
-    return false;
-  }
-
-  const std::optional<std::string> arch = getModelArchitecture(model);
-  return arch.has_value() && isQwen3Architecture(arch.value());
-}
-
 bool isMedPsyBasename(std::string_view basename) {
   return !basename.empty() && toLower(basename) == MEDPSY_BASENAME_LOWER;
-}
-
-bool isMedPsyModel(const ::llama_model* model) {
-  // No explicit nullptr guard needed: getModelBasename() ->
-  // readMetadataString() returns std::nullopt for a null model, and
-  // value_or("") below feeds isMedPsyBasename an empty string view which it
-  // rejects.
-  return isMedPsyBasename(getModelBasename(model).value_or(""));
 }
 
 bool isGemma4Basename(std::string_view basename) {
@@ -245,44 +222,6 @@ selectReasoningTagsForModel(const ::llama_model* model) {
     return ReasoningTags{.open = "<|channel>thought", .close = "<channel|>"};
   }
   return std::nullopt;
-}
-
-std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride) {
-  if (!manualOverride.empty()) {
-    return manualOverride;
-  }
-
-  // MedPsy ships its own chat template embedded in GGUF metadata. Returning an
-  // empty string makes common_chat_templates_init() defer to that embedded
-  // template instead of substituting the hardcoded Qwen3 templates below, even
-  // when the model's architecture is reported as qwen3.
-  if (isMedPsyModel(model)) {
-    QLOG_IF(
-        Priority::INFO,
-        "[ChatTemplateUtils] MedPsy basename detected; using embedded chat "
-        "template\n");
-    return "";
-  }
-
-  if (isQwen3Model(model)) {
-    return getFixedQwen3Template();
-  }
-
-  return "";
-}
-
-std::string
-getChatTemplate(const ::llama_model* model, const common_params& params) {
-  std::string chatTemplate = params.chat_template;
-  if (params.use_jinja) {
-    chatTemplate = getChatTemplateForModel(model, params.chat_template);
-    if (!chatTemplate.empty() && chatTemplate != params.chat_template) {
-      QLOG_IF(
-          Priority::INFO, "[ChatTemplateUtils] Using fixed Qwen3 template\n");
-    }
-  }
-  return chatTemplate;
 }
 
 namespace {
