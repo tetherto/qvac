@@ -816,10 +816,7 @@ bool backend_selection::gpuBackendSupportsRowSplit(
   // lacks `ggml_backend_split_buffer_type`. So require all of them, not any
   // one, and treat "no GPU devices at all" as unsupported.
   //
-  // QVAC-23763: split mode now scopes `--device` to one registry (see
-  // splitModeDeviceNames), so qvac-fabric sees a narrower set than is checked
-  // here. Left registry-wide on purpose: that only degrades row to layer sooner
-  // than needed, never the other way, and no shipped backend has split buffers.
+  // No production caller: split-mode 'row' is rejected at config time.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {

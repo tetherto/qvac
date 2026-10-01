@@ -50,7 +50,7 @@ Vulkan when an NVIDIA device is present. On Windows, the fabric prebuild stages
   native code for selected Ampere, Ada and Blackwell targets. Linux arm64 ships separate CUDA 13
   and CUDA 12 modules for DGX Spark and Jetson Orin. A device that cannot load either module is
   refused during registration, so selection falls through to Vulkan, then CPU.
-- The driver caches the PTX JIT result under `$HOME/.nv/ComputeCache`. If `$HOME` is absent or
+- On Linux, the driver caches the PTX JIT result under `$HOME/.nv/ComputeCache`. If `$HOME` is absent or
   read-only, as in many containers, that cache is disabled and the JIT cost is paid on every
   process start rather than once. Set `CUDA_CACHE_PATH` to a writable directory to avoid that.
 

@@ -1080,22 +1080,15 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
   EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
 }
 
-// ---- QVAC-23763: TurboQuant / PolarQuant on CUDA, second line of defence ----
+// ---- QVAC-23763: TurboQuant / PolarQuant rejected on CUDA ----
 //
-// ggml-cuda ships no TBQ/PQ kernels. chooseBackend now passes such a device
-// over before the cascade picks it, so on a host that also has Vulkan the load
-// lands there instead of being refused - see the capability filter cases in
-// test_backend_selection.cpp.
-//
-// Reaching this code therefore means the filter did not run, or disagreed, and
-// the throw is an InternalError assertion rather than a rejection of the
-// caller's config. These two cases pin that the assertion is still armed. They
-// are deliberately not deleted: it is the only thing between a regression in
-// the filter and a native abort. Standard quantized types and CPU stay allowed.
+// ggml-cuda ships no TBQ/PQ kernels. chooseBackend passes such a device over
+// before the cascade picks it, see the capability filter cases in
+// test_backend_selection.cpp. An explicit devices list naming a CUDA device
+// skips that filter and reaches this guard, which throws InvalidArgument.
+// Standard quantized types and CPU stay allowed.
 
-TEST_F(
-    TuneConfigMapTest,
-    Cuda_TurboQuantKCacheTypeIsAnInternalErrorAfterFiltering) {
+TEST_F(TuneConfigMapTest, Cuda_RejectsTurboQuantKCacheType) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["cache-type-k"] = "tbq4_0";
 
@@ -1112,9 +1105,7 @@ TEST_F(
       qvac_errors::StatusError);
 }
 
-TEST_F(
-    TuneConfigMapTest,
-    Cuda_PolarQuantVCacheTypeIsAnInternalErrorAfterFiltering) {
+TEST_F(TuneConfigMapTest, Cuda_RejectsPolarQuantVCacheType) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["cache-type-v"] = "pq3_0";
 

@@ -1009,11 +1009,9 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
       ::productionSupportsKvCacheType};
   BackendChoice choice = chooseBackend(request, bckI);
 
-  // Only on the real path, and only once a CUDA device actually won: the inner
-  // overload is what the unit tests drive, and it must not touch the
-  // filesystem. The device name is checked rather than the bucket, because a
-  // unified-memory card such as the GB10 registers CUDA as an iGPU and is
-  // selected through the iGPU branch.
+  // Only on the real path, and only once the cascade picks a CUDA device: the
+  // inner overload is what the unit tests drive, and it must not touch the
+  // filesystem.
   if (choice.type == BackendType::GPU &&
       choice.name.find("cuda") != std::string::npos &&
       shouldWarnAboutJitCache()) {
@@ -1469,10 +1467,7 @@ bool backend_selection::gpuBackendSupportsRowSplit(
   // lacks `ggml_backend_split_buffer_type`. So require all of them, not any
   // one, and treat "no GPU devices at all" as unsupported.
   //
-  // QVAC-23763: split mode now scopes `--device` to one registry (see
-  // splitModeDeviceNames), so qvac-fabric sees a narrower set than is checked
-  // here. Left registry-wide on purpose: that only degrades row to layer sooner
-  // than needed, never the other way, and no shipped backend has split buffers.
+  // No production caller: split-mode 'row' is rejected at config time.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
