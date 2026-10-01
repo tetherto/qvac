@@ -75,7 +75,8 @@ export const TTS_ENGINES = [
   'parler',
   'cosyvoice3',
   'audio8',
-  'moss'
+  'moss',
+  'pocket'
 ] as const
 
 // Mirror of the addon's `SentenceDelimiterPreset` (./text-stream-accumulator).
@@ -744,19 +745,85 @@ export const ttsMossRuntimeConfigSchema = z
 // Pocket English 2026-04 uses a CPU FlowLM + Mimi pipeline. The main
 // modelSrc is flow-lm.gguf; companion artifacts are resolved before activation.
 export const ttsPocketRuntimeConfigSchema = z.object({
-  ttsEngine: z.literal('pocket'),
-  language: z.literal('en').default('en'),
-  useGPU: z.literal(false).optional(),
-  threads: z.number().int().min(1).max(1024).optional(),
-  nCtx: z.number().int().min(1).max(8192).optional(),
-  maxTokens: z.number().int().min(1).max(1024).optional(),
-  steps: z.number().int().min(1).max(64).optional(),
-  seed: z.number().int().min(0).max(4294967295).optional(),
-  temperature: z.number().finite().min(0).max(10).optional(),
-  noiseClamp: z.number().finite().min(0).max(3.402823466e38).optional(),
-  eosThreshold: z.number().finite().min(-3.402823466e38).max(3.402823466e38).optional(),
-  framesAfterEos: z.number().int().min(-1).max(100).optional(),
-  outputSampleRate: z.number().int().min(8000).max(192000).optional()
+  ttsEngine: z.literal('pocket').describe('Pocket FlowLM + Mimi text-to-speech engine.'),
+  language: z
+    .literal('en')
+    .default('en')
+    .describe('Language of the synthesized speech; Pocket currently supports English only.'),
+  useGPU: z
+    .literal(false)
+    .optional()
+    .describe('Pocket currently runs on the CPU; GPU execution is not supported.'),
+  threads: z
+    .number()
+    .int()
+    .min(1)
+    .max(1024)
+    .optional()
+    .describe('Number of CPU inference threads, from 1 to 1024.'),
+  nCtx: z
+    .number()
+    .int()
+    .min(1)
+    .max(8192)
+    .optional()
+    .describe('FlowLM context size in tokens, from 1 to 8192.'),
+  maxTokens: z
+    .number()
+    .int()
+    .min(1)
+    .max(1024)
+    .optional()
+    .describe('Maximum number of generated audio tokens, from 1 to 1024.'),
+  steps: z
+    .number()
+    .int()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe('Flow-matching sampling steps per audio token, from 1 to 64.'),
+  seed: z
+    .number()
+    .int()
+    .min(0)
+    .max(4294967295)
+    .optional()
+    .describe('Unsigned 32-bit random seed for audio sampling.'),
+  temperature: z
+    .number()
+    .finite()
+    .min(0)
+    .max(10)
+    .optional()
+    .describe('Sampling temperature, from 0 to 10.'),
+  noiseClamp: z
+    .number()
+    .finite()
+    .min(0)
+    .max(3.402823466e38)
+    .optional()
+    .describe('Non-negative clamp applied to the sampled noise.'),
+  eosThreshold: z
+    .number()
+    .finite()
+    .min(-3.402823466e38)
+    .max(3.402823466e38)
+    .optional()
+    .describe('End-of-speech logit threshold used to stop generation.'),
+  framesAfterEos: z
+    .number()
+    .int()
+    .min(-1)
+    .max(100)
+    .optional()
+    .describe('Extra audio frames generated after end-of-speech; -1 selects the native default.'),
+  outputSampleRate: z
+    .number()
+    .int()
+    .min(8000)
+    .max(192000)
+    .optional()
+    .describe('Output audio sample rate in Hz, from 8000 to 192000.')
 })
 
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
@@ -1119,10 +1186,18 @@ function refineChatterboxTokenizerAssets(
 }
 
 export const ttsPocketLoadConfigSchema = ttsPocketRuntimeConfigSchema.extend({
-  mimiModelSrc: modelSrcInputSchema,
-  frontendSrc: modelSrcInputSchema,
-  voiceSrc: modelSrcInputSchema.optional(),
-  referenceAudioSrc: modelSrcInputSchema.optional()
+  mimiModelSrc: modelSrcInputSchema.describe('Pocket Mimi audio-codec GGUF model source.'),
+  frontendSrc: modelSrcInputSchema.describe('Pocket tokenizer frontend JSON source.'),
+  voiceSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Prepared Pocket voice GGUF source; supply exactly one of voiceSrc or referenceAudioSrc.'
+    ),
+  referenceAudioSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Pocket voice-conditioning reference WAV source; supply exactly one of referenceAudioSrc or voiceSrc.'
+    )
 })
 
 function validatePocketVoice(

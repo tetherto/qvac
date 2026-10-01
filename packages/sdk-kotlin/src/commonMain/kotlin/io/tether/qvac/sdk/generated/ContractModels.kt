@@ -545,6 +545,8 @@ enum class TtsEngine {
     AUDIO8,
     @SerialName("moss")
     MOSS,
+    @SerialName("pocket")
+    POCKET,
 }
 
 @Serializable
