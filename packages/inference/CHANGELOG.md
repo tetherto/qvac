@@ -6,8 +6,6 @@
 
 QVAC Inference 0.21.0 is the engine cut that SDK 0.21.0 will depend on. A model can split across machines through llama.cpp's RPC backend, Ternary Bonsai 2 27B runs in QVAC's engine, tools can defer their schemas behind `tool_search`, and TTS/ASR pick up MOSS plus Parakeet Core ML on Apple. Catalog constant names for BitNet, Llama tool-calling, and Indic Parakeet change. `assessModelFit` now takes `loadModel` fields instead of a separate workload object.
 
-Publish this package before `@qvac/sdk@0.21.0`. The SDK release points its `@qvac/inference` range at this version.
-
 ## Breaking Changes
 
 ### `assessModelFit` uses loadModel parameters
