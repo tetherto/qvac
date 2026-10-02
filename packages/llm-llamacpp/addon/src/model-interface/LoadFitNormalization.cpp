@@ -1259,8 +1259,9 @@ NormalizedLoad normalizeLoadForFit(
 
   // The deprecated mmap and direct-io flags are separate options that both
   // assign params.load_mode, and llama_load_mode is a flat selector rather
-  // than a bitfield, so the generic loop would let whichever ran last erase
-  // the other. Flags agreeing on a mode are left to it.
+  // than a bitfield, so whichever ran last would erase the other. They are
+  // applied here and never reach the argument parser, which dropped them in
+  // b11018.
   struct DeprecatedLoadFlag {
     const char* key;
     bool isPositive;
@@ -1309,6 +1310,10 @@ NormalizedLoad normalizeLoadForFit(
     }
     deprecatedMode = mode;
     deprecatedKey = flag.key;
+    configFilemap.erase(it);
+  }
+  if (deprecatedMode.has_value()) {
+    params.load_mode = deprecatedMode.value();
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
