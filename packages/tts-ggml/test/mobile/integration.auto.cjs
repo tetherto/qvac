@@ -50,6 +50,14 @@ async function runLavasrEnhancerTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/lavasr-enhancer.test.js', options)
 }
 
+async function runMossSfxTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/moss-sfx.test.js', options)
+}
+
+async function runMossSpeechTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/moss-speech.test.js', options)
+}
+
 async function runMossTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/moss.test.js', options)
 }
@@ -68,6 +76,10 @@ async function runParlerWerTest (options = {}) { // eslint-disable-line no-unuse
 
 async function runParlerTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/parler.test.js', options)
+}
+
+async function runPocketIntegrationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/pocket.integration.test.js', options)
 }
 
 async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -106,11 +118,14 @@ module.exports = {
   runFitTest,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
+  runMossSfxTest,
+  runMossSpeechTest,
   runMossTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,
   runParlerWerTest,
   runParlerTest,
+  runPocketIntegrationTest,
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,

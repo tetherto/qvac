@@ -77,6 +77,7 @@ export type AppendData = {
     data?: ArrayBufferLike;
 } | {
     type: typeof END_OF_INPUT;
+    job?: Record<string, unknown>;
 };
 export type ParakeetOutputCallback = (addon: unknown, event: unknown, jobId: number, data: unknown, error: unknown) => void;
 export type ParakeetStateCallback = (addon: ParakeetInterface, newState: string) => void;
