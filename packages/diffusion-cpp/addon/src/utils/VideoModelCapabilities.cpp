@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <fstream>
 #include <limits>
+#include <sstream>
 #include <string>
 
 namespace qvac_lib_inference_addon_sd {
@@ -39,7 +40,8 @@ bool skip(std::istream& input, uint64_t bytes) {
 
 bool skipString(std::istream& input) {
   uint64_t length = 0;
-  return read(input, length) && skip(input, length);
+  return read(input, length) && length <= K_MAX_STRING_BYTES &&
+         skip(input, length);
 }
 
 bool readString(std::istream& input, std::string& value) {
@@ -129,10 +131,8 @@ bool isMiniMaxH3VideoTensor(const std::string& name) {
 
 } // namespace
 
-VideoModelCapabilities
-inspectVideoModelCapabilities(const std::string& modelPath) {
+VideoModelCapabilities inspectVideoModelCapabilities(std::istream& input) {
   VideoModelCapabilities capabilities;
-  std::ifstream input(modelPath, std::ios::binary);
   if (!input)
     return capabilities;
 
@@ -203,6 +203,21 @@ inspectVideoModelCapabilities(const std::string& modelPath) {
   }
 
   return capabilities;
+}
+
+VideoModelCapabilities
+inspectVideoModelCapabilities(const std::string& modelPath) {
+  std::ifstream input(modelPath, std::ios::binary);
+  return inspectVideoModelCapabilities(input);
+}
+
+VideoModelCapabilities inspectVideoModelCapabilities(
+    const std::uint8_t* data, std::size_t size) {
+  if (data == nullptr || size == 0)
+    return {};
+  const auto* chars = reinterpret_cast<const char*>(data);
+  std::istringstream input(std::string(chars, size), std::ios::binary);
+  return inspectVideoModelCapabilities(input);
 }
 
 } // namespace qvac_lib_inference_addon_sd
