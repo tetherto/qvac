@@ -33,9 +33,12 @@ std::string sniffGgufArchitecture(const std::string& ggufPath);
 // default); ignored by the other architectures.
 // `backendOverride` lists GPU backend families in priority order, e.g.
 // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
+// `backendRequired` makes that list binding: one matching no accepted device
+// throws rather than falling through to the default order.
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
     const VlaEmbodimentRequest& embodiment = {},
-    const std::vector<std::string>& backendOverride = {});
+    const std::vector<std::string>& backendOverride = {},
+    bool backendRequired = false);
 
 } // namespace qvac_lib_infer_vla_ggml

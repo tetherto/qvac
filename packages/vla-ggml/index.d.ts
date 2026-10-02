@@ -33,8 +33,9 @@ declare class VlaModel {
     private _connectNativeLogger;
     private _onAddonEvent;
     private _releaseNativeLogger;
-    load({ backend, }?: {
+    load({ backend, backendRequired, }?: {
         backend?: VlaModel.VlaBackendSelector;
+        backendRequired?: boolean;
     }): Promise<void>;
     private _load;
     get hparams(): VlaModel.VlaHparams | null;

@@ -681,6 +681,127 @@ TEST_F(LoadFitNormalizationTest, BackendOverrideWithDevicesIsRejected) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, StrictBackendConstrainsSplitDevices) {
+  bool backendRequired = false;
+  std::vector<std::string> requiredFamilies;
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+  dependencies.resolveBackend =
+      [&backendRequired](const backend_selection::BackendRequest& request) {
+        backendRequired = request.backendRequired;
+        return lfn::SelectedBackend{
+            .type = backend_selection::GPU, .name = "cuda0"};
+      };
+  const auto selection = splitSelection({"cuda0"});
+  dependencies.splitDevices =
+      [selection, &requiredFamilies](
+          const std::string&,
+          const backend_selection::LoadConstraints& constraints) {
+        requiredFamilies = constraints.requiredBackendFamilies;
+        return selection;
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+
+  EXPECT_TRUE(backendRequired);
+  EXPECT_EQ(requiredFamilies, (std::vector<std::string>{"cuda"}));
+}
+
+TEST_F(LoadFitNormalizationTest, StrictBackendRejectsExplicitOtherFamily) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+  config["devices"] = "CUDA0,Vulkan0";
+
+  EXPECT_THROW(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend(
+              {.type = backend_selection::GPU, .name = "CUDA0"},
+              {"CUDA0", "Vulkan0"})),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, StrictBackendAllowsExplicitRpcDevice) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+  config["devices"] = "rpc0,CUDA0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"}, {});
+  auto selection = splitSelection({"rpc0", "CUDA0", "Vulkan0"});
+  selection.devices[0].isRpc = true;
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "CUDA0");
+  ASSERT_NE(result.params.devices[0], nullptr);
+  ASSERT_NE(result.params.devices[1], nullptr);
+  EXPECT_EQ(result.params.devices[2], nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, StrictBackendAllowsRpcOnlySplit) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+  config["rpc-servers"] = "127.0.0.1:50052";
+  auto dependencies = backend(
+      {.type = backend_selection::CPU, .name = "none"},
+      {"RPC0"},
+      nullptr,
+      std::vector<std::string>{"RPC0"});
+  dependencies.resolveBackend =
+      [](const backend_selection::BackendRequest& request) {
+        EXPECT_FALSE(request.backendRequired);
+        return lfn::SelectedBackend{
+            .type = backend_selection::CPU, .name = "none"};
+      };
+  auto selection = splitSelection({"RPC0"});
+  selection.devices[0].isRpc = true;
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "RPC0");
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_EQ(result.params.devices[0], selection.devices[0].handle);
+}
+
+TEST_F(LoadFitNormalizationTest, StrictBackendRejectsEmptySplit) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+
+  EXPECT_THROW(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "CUDA0"}, {})),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -2414,6 +2535,35 @@ TEST_F(
       EXPECT_THAT(error.what(), ::testing::HasSubstr("split-mode 'none'"));
       EXPECT_THAT(error.what(), ::testing::HasSubstr("'layer' or 'tensor'"));
     }
+  }
+}
+
+// CUDA0 and Vulkan0 are one card, so the automatic dedupe keeps CUDA0. An
+// explicit `devices: Vulkan0` must still resolve to the Vulkan copy, with and
+// without a strict Vulkan override.
+TEST_F(LoadFitNormalizationTest, ExplicitDeviceResolvesADedupedTwin) {
+  for (const bool strictVulkan : {false, true}) {
+    auto config = baseConfig();
+    config["devices"] = "Vulkan0";
+    if (strictVulkan) {
+      config["backend"] = "vulkan";
+      config["backend-required"] = "true";
+    }
+    auto dependencies =
+        backend({.type = backend_selection::GPU, .name = "Vulkan0"}, {});
+    auto selection = splitSelection({"CUDA0", "Vulkan0"});
+    selection.devices[0].deviceId = "0000:01:00.0";
+    selection.devices[1].deviceId = "0000:01:00.0";
+    selection.dedupedTwins.push_back(selection.devices[1]);
+    selection.devices.pop_back();
+    dependencies.allSplitDevices = [selection]() { return selection; };
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+    EXPECT_EQ(result.params.mmproj_backend, "Vulkan0") << strictVulkan;
+    ASSERT_NE(result.params.devices[0], nullptr) << strictVulkan;
+    EXPECT_EQ(result.params.devices[1], nullptr) << strictVulkan;
   }
 }
 

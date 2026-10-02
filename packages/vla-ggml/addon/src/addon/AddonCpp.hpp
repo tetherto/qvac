@@ -46,12 +46,16 @@ public:
   // path rather than relative to process CWD (required on mobile).
   // `backendOverride`: GPU backend families in priority order, e.g.
   // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
+  // `backendRequired`: make that list binding, so one matching no accepted
+  // device fails the load rather than silently using the default order.
   explicit VlaModel(
       const std::string& ggufPath, bool forceCpu = false,
       std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {},
-      const std::vector<std::string>& backendOverride = {})
+      const std::vector<std::string>& backendOverride = {},
+      bool backendRequired = false)
       : model_(createVlaModelFromGguf(
-            ggufPath, forceCpu, backendsDir, embodiment, backendOverride)) {
+            ggufPath, forceCpu, backendsDir, embodiment, backendOverride,
+            backendRequired)) {
     // Canonical `backendDevice` encoding used across the inference addons
     // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Captured at load time so
     // `runtimeStats()` can report it without re-querying ggml.

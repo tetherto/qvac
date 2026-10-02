@@ -138,13 +138,15 @@ Selects which GPU to use. The behavior depends on the split mode:
 
 | Value | Behavior in `'none'` mode |
 |-------|----------|
-| integer (e.g. `'0'`, `'1'`) | Selects a GPU by its index in the raw ggml device registry, matching qvac-fabric's own indexing. If that device is not in the backend allowlist, the load falls back to CPU rather than silently sliding onto a different GPU. |
+| integer (e.g. `'0'`, `'1'`) | Selects a GPU by its index in the raw ggml device registry, matching qvac-fabric's own indexing. The whole value must be an integer, so `'1abc'` is rejected. If that device is not in the backend allowlist, the load falls back to CPU rather than silently sliding onto a different GPU. |
+| `'cuda:0'`, `'vulkan:1'`, etc. | Selects the nth device of a backend family. Resolution scans devices, so it is independent of backend load order. Family names are the GPU families `backend` accepts, not `auto`, and `hip` is canonicalised to `rocm`. |
+| `'0000:65:00.0'` | Selects by physical PCI bus id. The domain is optional and may have 4 or 8 digits, so `'65:00.0'` and nvidia-smi's `'00000000:65:00.0'` also work. The id matches every backend registration of that card, and every virtual CUDA device on it, so `backend` picks among them. A virtual `-v<N>` id is rejected. Only meaningful on backends that publish a bus id. |
 | `'integrated'` | Filters to integrated GPUs only during backend selection. Falls back to CPU if none is eligible. |
 | `'dedicated'`  | Filters to dedicated GPUs only during backend selection. Falls back to CPU if none is eligible. |
 
 Accepts both `main-gpu` (hyphen) and `main_gpu` (underscore). Providing both throws an error. The string values are case-insensitive.
 
-Note the index is against the **raw** registry, not the filtered list. This is deliberate: it is the same index space qvac-fabric and the other addons use, so a given integer means the same device everywhere regardless of which backends the allowlist happens to admit on that host.
+A bare integer is not stable across backend changes. It indexes the raw registry, and adding a backend such as CUDA can move every index. Prefer a backend-qualified index or PCI bus id. These forms are resolved by scanning rather than indexing. If one matches no device, the addon fails instead of selecting a different GPU.
 
 ## Distributed inference across machines (`rpc-servers`)
 
@@ -300,7 +302,7 @@ The path taken depends on the split mode, and the two are genuinely different co
 
 In both cases, only devices whose backend family is in the allowlist are considered. If nothing survives, a load without `rpc-servers` falls back to CPU with `split-mode` reset to `'none'` and `tensor-split` erased; a load that requested RPC fails instead. A warning names rejected device and registry identities when applicable.
 
-- **`devices` set** (any split-mode): the addon resolves RPC aliases, validates the named devices against the eligible set, and passes that selection as `--device`. This is the most predictable way to constrain which RPC devices take part; under `'none'`, only one name is allowed.
+- **`devices` set** (any split-mode): the addon resolves RPC aliases, validates the named devices against the eligible set, and pins the resolved handles through `params.devices`. This is the most predictable way to constrain which RPC devices take part; under `'none'`, only one name is allowed. Combining it with `backend` needs `backend-required`, and every named local device must then match the required family.
 
 ### Why the device list is pinned in split modes
 

@@ -23,7 +23,29 @@ enum BackendType : std::uint8_t { CPU, GPU };
 
 enum class MainGpuType : std::uint8_t { Integrated, Dedicated };
 
-using MainGpu = std::variant<int, MainGpuType>;
+/// @brief `main-gpu: "cuda:0"` - the nth device of a backend family.
+///
+/// QVAC-23763: a bare integer indexes ggml's full device list, whose order
+/// depends on which backends loaded. Adding CUDA therefore silently repointed
+/// every existing numeric value. Naming the family makes the address stable
+/// against that.
+struct MainGpuQualified {
+  std::string family;
+  int index = 0;
+  bool operator==(const MainGpuQualified&) const = default;
+};
+
+/// @brief `main-gpu: "0000:65:00.0"` - a PCI bus id, as `props.device_id`.
+///
+/// The only genuinely stable address: it survives backend order, driver order
+/// and adding a card. Meaningless on a backend that publishes no bus id, which
+/// is why the numeric and qualified forms remain.
+struct MainGpuBusId {
+  std::string id;
+  bool operator==(const MainGpuBusId&) const = default;
+};
+
+using MainGpu = std::variant<int, MainGpuType, MainGpuQualified, MainGpuBusId>;
 
 BackendType preferredBackendTypeFromString(const std::string& device);
 
@@ -45,6 +67,21 @@ std::vector<std::string> parseBackendOverride(const std::string& backendStr);
 /// Returns an empty vector when the key is absent.
 std::vector<std::string> tryBackendOverrideFromMap(
     std::unordered_map<std::string, std::string>& configFilemap);
+
+/// @brief Extract and erase `backend-required` (or `backend_required`).
+///
+/// QVAC-23763: a `backend` that matches no device logs a warning and runs the
+/// default cascade, so every pin written with it is advisory. This makes it
+/// binding: with it set, a backend list that matches nothing is an error rather
+/// than a silent move to another backend.
+///
+/// Accepts true/on/1 and false/off/0. Throws when both spellings are present,
+/// when the value is neither, or when it is set true without a `backend` -
+/// which has no meaning and is far more likely a mistake than an intent.
+/// Defaults to false, so existing configs keep the advisory behaviour.
+bool tryBackendRequiredFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap,
+    bool backendOverridePresent);
 
 using llamaLogCallbackF =
     void (*)(ggml_log_level level, const char* text, void* userData);
@@ -110,6 +147,9 @@ struct LoadConstraints {
   /// Empty when the caller set no cache-type. Non-TBQ/PQ types are present but
   /// always pass the production probe.
   std::vector<enum ggml_type> kvCacheTypes;
+  /// When non-empty, every local device used by a split load must belong to
+  /// one of these backend families. RPC devices are exempt.
+  std::vector<std::string> requiredBackendFamilies;
   /// Set when selection kept a KV-incapable GPU for fabric's per-layer CPU KV
   /// placement. Such devices then also qualify for the split set.
   bool allowCpuKvFallback = false;
@@ -136,6 +176,9 @@ struct BackendRequest {
   std::optional<MainGpu> mainGpu;
   bool isFinetuning = false;
   std::vector<std::string> backendOverride;
+  /// When true, a @c backendOverride that matches nothing is an error rather
+  /// than a fall-through to the default cascade. QVAC-23763.
+  bool backendRequired = false;
   LoadConstraints constraints;
 };
 
@@ -304,9 +347,9 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
-/// @brief The device names for a multi-GPU split: every discrete GPU,
-/// deduplicated by `props.device_id` so a card registered under two backends is
-/// named once, preferring @p selectedDeviceName's registry.
+/// @brief The local device names a multi-GPU split load pins: every
+/// discrete GPU, deduplicated by `props.device_id` so a card registered under
+/// two backends is named once, preferring @p selectedDeviceName's registry.
 ///
 /// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
 /// registers twice, as CUDA0 and Vulkan0, so an unfiltered device list would
@@ -317,12 +360,9 @@ bool gpuBackendSupportsRowSplit();
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
-/// Empty when every usable GPU/iGPU device comes from one registry and no
-/// device was excluded by @p constraints, or when @p selectedDeviceName
-/// matches nothing.
-///
-/// No production caller: split loads pin device handles from
-/// `getSplitDeviceSelection()` instead.
+/// Empty when every usable GPU/iGPU device comes from one registry, no device
+/// was excluded by @p constraints and no backend family is required, or when
+/// @p selectedDeviceName matches nothing.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});

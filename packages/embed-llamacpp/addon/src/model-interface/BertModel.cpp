@@ -535,22 +535,31 @@ BertModelSetup setupParams(
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
-    // The split path below does not apply the override, so reject the
-    // combination rather than silently run on another backend.
-    if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
-        splitMode != LLAMA_SPLIT_MODE_NONE) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          "'backend' cannot be combined with 'split-mode'.");
+    const bool backendRequired =
+        tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+
+    BackendRequest backendRequest;
+    backendRequest.preferred = preferredBackend;
+    backendRequest.mainGpu = mainGpu;
+    backendRequest.backendOverride = backendOverride;
+    backendRequest.backendRequired = backendRequired;
+    if (backendRequired) {
+      backendRequest.constraints.requiredBackendFamilies = backendOverride;
     }
-    std::pair<BackendType, std::string> chosenBackend{BackendType::CPU, "none"};
+    if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+      backendRequest.mainGpu.reset();
+    }
+
+    const BackendChoice choice =
+        chooseBackend(backendRequest, llamaLogCallback);
+    std::pair<BackendType, std::string> chosenBackend{choice.type, choice.name};
     SplitDeviceSelection splitSelection;
-    bool isOpenCl = false;
-    if (preferredBackend == BackendType::GPU &&
+    bool isOpenCl = chosenBackend.first == BackendType::GPU &&
+                    chosenBackend.second.find("opencl") != std::string::npos;
+    if (chosenBackend.first == BackendType::GPU &&
         splitMode != LLAMA_SPLIT_MODE_NONE) {
-      splitSelection = getSplitDeviceSelection();
+      splitSelection = getSplitDeviceSelection(
+          chosenBackend.second, backendRequest.constraints);
       if (!splitSelection.droppedAmbiguousDevices.empty()) {
         std::string message = "[BertModel] split leaves out ";
         for (size_t index = 0;
@@ -567,25 +576,27 @@ BertModelSetup setupParams(
         const SplitBackendTraits traits = splitBackendTraits(splitSelection);
         chosenBackend = {BackendType::GPU, traits.backendName};
         isOpenCl = traits.isOpenCl;
-      } else if (!splitSelection.rejectedDevices.empty()) {
-        std::string message =
-            "[BertModel] no eligible GPU backend found; rejected ";
-        for (size_t index = 0; index < splitSelection.rejectedDevices.size();
-             ++index) {
-          if (index > 0) {
-            message += ", ";
-          }
-          message += splitSelection.rejectedDevices[index];
+      } else {
+        if (backendRequired) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              "backend-required matched no eligible split device");
         }
-        message += "; falling back to CPU\n";
-        llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
+        if (!splitSelection.rejectedDevices.empty()) {
+          std::string message =
+              "[BertModel] no eligible GPU backend found; rejected ";
+          for (size_t index = 0; index < splitSelection.rejectedDevices.size();
+               ++index) {
+            if (index > 0) {
+              message += ", ";
+            }
+            message += splitSelection.rejectedDevices[index];
+          }
+          message += "; falling back to CPU\n";
+          llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
+        }
+        chosenBackend = {BackendType::CPU, "none"};
       }
-    } else {
-      chosenBackend = chooseBackend(
-          preferredBackend, llamaLogCallback, mainGpu, backendOverride);
-      // Name-based: chooseBackend returns only a name, no registry handle.
-      isOpenCl = chosenBackend.first == BackendType::GPU &&
-                 chosenBackend.second.find("opencl") != std::string::npos;
     }
     const bool useGpu = chosenBackend.first == BackendType::GPU;
 

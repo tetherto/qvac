@@ -1461,15 +1461,32 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
-    // The explicit-device path uses the named devices as given, so the
-    // override would be ignored there. Reject the combination.
+
+    const bool backendRequired =
+        tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+    // An explicit device list is used as given. Only a required backend checks
+    // it below, so without one the override would be silently ignored.
     if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
-        !explicitDevices.empty()) {
+        !explicitDevices.empty() && !backendRequired) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
-          "'backend' cannot be combined with 'devices'. Use 'devices' alone "
-          "to choose the devices.");
+          "'backend' with 'devices' needs 'backend-required'. Otherwise use "
+          "'devices' alone to choose the devices.");
     }
+    const auto matchesRequiredLocal =
+        [&backendOverride](const SplitDevice& device) {
+          if (device.isRpc) {
+            return false;
+          }
+          const std::string name = toLowerAscii(device.name);
+          return std::ranges::any_of(
+              backendOverride, [&name](const std::string& family) {
+                return name.find(family) != std::string::npos ||
+                       (family == "rocm" &&
+                        name.find("hip") != std::string::npos) ||
+                       (family == "metal" && name.rfind("mtl", 0) == 0);
+              });
+        };
 
     LoadConstraints constraints;
     for (const char* key :
@@ -1485,13 +1502,16 @@ NormalizedLoad normalizeLoadForFit(
         constraints.kvCacheTypes.push_back(kvType);
       }
     }
-
+    if (backendRequired) {
+      constraints.requiredBackendFamilies = backendOverride;
+    }
     BackendRequest request;
     request.preferred = preferredBackend;
     request.metadata = &metadata;
     request.mainGpu = mainGpu;
     request.isFinetuning = finetuneOverrides.active;
     request.backendOverride = backendOverride;
+    request.backendRequired = backendRequired && !rpcDevicesRegistered;
     request.constraints = constraints;
     if (splitMode != LLAMA_SPLIT_MODE_NONE) {
       request.mainGpu.reset();
@@ -1547,6 +1567,19 @@ NormalizedLoad normalizeLoadForFit(
                   K_LEGACY_PARSER_NAME.data()));
         }
       }
+      if (backendRequired) {
+        for (const backend_selection::SplitDevice& device :
+             splitSelection.devices) {
+          if (!device.isRpc && !matchesRequiredLocal(device)) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InvalidArgument,
+                string_format(
+                    "%s: device '%s' does not match the required backend.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    device.name.c_str()));
+          }
+        }
+      }
       // Restrict the final split set as well as the primary backend choice.
       const size_t explicitDeviceCount = splitSelection.devices.size();
       backend_selection::applyAdrenoRestrictions(
@@ -1596,8 +1629,9 @@ NormalizedLoad normalizeLoadForFit(
         if (projector == nullptr) {
           const auto localFallback = std::ranges::find_if(
               availableSelection.devices,
-              [](const backend_selection::SplitDevice& device) {
-                return !device.isRpc;
+              [&](const backend_selection::SplitDevice& device) {
+                return !device.isRpc &&
+                       (!backendRequired || matchesRequiredLocal(device));
               });
           if (localFallback != availableSelection.devices.end()) {
             projector = &*localFallback;
@@ -1628,6 +1662,11 @@ NormalizedLoad normalizeLoadForFit(
             anyDevice(&backend_selection::SplitDevice::isOpenCl);
         selected.isMetal = anyDevice(&backend_selection::SplitDevice::isMetal);
       } else {
+        if (backendRequired) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              "backend-required matched no eligible split device");
+        }
         if (!splitSelection.rejectedDevices.empty()) {
           std::string rejected;
           for (const std::string& device : splitSelection.rejectedDevices) {
@@ -1790,12 +1829,17 @@ NormalizedLoad normalizeLoadForFit(
     }
 
     if (!explicitDevices.empty()) {
-      configVector.emplace_back("--device");
-      configVector.emplace_back(explicitDevices);
+      // Pin the handles selection already resolved, as the split branch below
+      // does, rather than resolving the names a second time through --device.
+      params.devices.clear();
+      params.devices.reserve(splitSelection.devices.size() + 1);
+      for (const backend_selection::SplitDevice& device :
+           splitSelection.devices) {
+        params.devices.push_back(device.handle);
+      }
+      params.devices.push_back(nullptr);
     } else if (splitMode == LLAMA_SPLIT_MODE_NONE) {
-      // In multi-GPU split mode we intentionally omit --device so llama.cpp
-      // distributes layers/rows across all available GPUs rather than pinning
-      // to the single backend that chooseBackend selected.
+      // Single-device mode: pin the backend chosen above via --device.
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
     } else {

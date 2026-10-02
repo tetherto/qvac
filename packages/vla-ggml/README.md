@@ -175,7 +175,7 @@ tokenising (see [Models](#models)). Check `hparams.numCameras` /
 
 | Export | What |
 |---|---|
-| `VlaModel` | Async model wrapper. Constructor takes `{ files, config?, logger?, opts? }`. `config.embodiment` (GR00T only) selects a row from a multi-embodiment GGUF and takes the full `VlaEmbodimentSelector`: a tag string, a numeric `cat_id` (`0..31`), or `{ tag \| catId, numCameras }` where `numCameras` overrides the stored view count (`''` / omitted = GGUF default). Call `await model.load({ backend? })` then `await (await model.run(input)).await()`. `await model.setEmbodiment(selector)` takes the same shape, switches embodiment on a loaded GR00T model and returns the refreshed hparams. |
+| `VlaModel` | Async model wrapper. Constructor takes `{ files, config?, logger?, opts? }`. `config.embodiment` (GR00T only) selects a row from a multi-embodiment GGUF and takes the full `VlaEmbodimentSelector`: a tag string, a numeric `cat_id` (`0..31`), or `{ tag \| catId, numCameras }` where `numCameras` overrides the stored view count (`''` / omitted = GGUF default). Call `await model.load({ backend?, backendRequired? })` then `await (await model.run(input)).await()`. `await model.setEmbodiment(selector)` takes the same shape, switches embodiment on a loaded GR00T model and returns the refreshed hparams. |
 | `preprocessImage(pixels, w, h, { size, layout, scale })` | Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32 in `[-1, 1]`. `scale` accepts `1` (already 0..1), `1/255` (input is 0..255), or `'auto'` (default heuristic). |
 | `padState(state, targetDim)` | Zero-pad a robot-state vector to the model's `maxStateDim`. |
 Full TypeScript types in [`index.d.ts`](./index.d.ts).
@@ -215,6 +215,21 @@ device is absent is skipped and selection continues; an unrecognised name is
 rejected. The Adreno rules above still apply, so an override can never
 resurrect a device they rejected. Setting `CUDA_VISIBLE_DEVICES=-1` in the
 environment is an equivalent way to force Vulkan without touching the config.
+
+By default that list is **advisory**: if it matches no accepted device, the
+addon logs a warning and continues down the normal order, so a load that was
+meant to run on one backend can quietly run on another. Pass
+`backendRequired: true` alongside it to make it binding. The load then fails
+instead, and the error names every device that *was* accepted, which matters
+here because the Adreno rules above can be the reason a device is missing from
+that list at all.
+
+```js
+await model.load({ backend: 'cuda,vulkan', backendRequired: true })
+```
+
+It is only meaningful with a GPU list: `backendRequired` with `backend: 'auto'`
+or `'cpu'` is rejected, since there is no preference to make binding.
 
 ## Built With
 

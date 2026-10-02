@@ -1052,6 +1052,15 @@ namespace LlmLlamacpp {
      * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
      */
     backend?: string;
+    /**
+     * Make `backend` binding rather than advisory. Without it, a backend list
+     * that matches no device logs a warning and runs the default cascade, so a
+     * caller that must not silently move backends has no way to say so.
+     *
+     * Only meaningful alongside `backend`; setting it without one is rejected.
+     * Accepts `true`/`on`/`1` and `false`/`off`/`0`. Defaults to false.
+     */
+    "backend-required"?: boolean | string;
     gpu_layers?: NumericLike;
     ctx_size?: NumericLike;
     system_prompt?: string;
@@ -1068,6 +1077,22 @@ namespace LlmLlamacpp {
     frequency_penalty?: NumericLike;
     tools?: boolean | string;
     verbosity?: NumericLike;
+    /**
+     * Which GPU to use. Four forms:
+     *
+     * - a device index, e.g. `0`. **Indexes ggml's full device list, whose
+     *   order depends on which backends loaded**. Adding CUDA moves it. The
+     *   whole value must be an integer; `'1abc'` is rejected.
+     * - `'integrated'` / `'dedicated'`
+     * - a backend-qualified index, e.g. `'cuda:0'`, the nth device of that
+     *   family, independent of backend order
+     * - a PCI bus id, e.g. `'0000:65:00.0'`, stable against backend order,
+     *   driver order and adding a card
+     *
+     * Prefer one of the last two. In split-mode `'none'`, a qualified index or
+     * PCI bus id that matches no device fails instead of selecting a different
+     * GPU.
+     */
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `NumericLike` documents the expected form; any string is accepted.
     "main-gpu"?: NumericLike | string;
     /**

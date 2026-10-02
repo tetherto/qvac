@@ -851,20 +851,25 @@ static bool initCpuBackend(SmolvlaModel& model) {
 // integration test can run the same hardware both ways.
 static void tryInitGpuBackend(
     SmolvlaModel& model, bool forceCpu,
-    const std::vector<std::string>& backendOverride) {
+    const std::vector<std::string>& backendOverride,
+    const bool backendRequired) {
   if (forceCpu) {
     QLOG_IF(
         Priority::INFO,
         "smolvla_load_model: force_cpu=true — skipping GPU selection");
   }
-  ggml_backend_dev_t gpu =
-      forceCpu ? nullptr
-               : vla_backend_selection::pickBestGpuDevice(backendOverride);
+  ggml_backend_dev_t gpu = forceCpu ? nullptr
+                                    : vla_backend_selection::pickBestGpuDevice(
+                                          backendOverride, backendRequired);
   if (!gpu) {
     return;
   }
   ggml_backend_t gpuBackend = ggml_backend_dev_init(gpu, nullptr);
   if (!gpuBackend) {
+    if (backendRequired) {
+      throw std::runtime_error(
+          "smolvla_load_model: required GPU backend initialization failed");
+    }
     return;
   }
   model.backend = gpuBackend;
@@ -1513,7 +1518,8 @@ static bool loadWeightsAllocCopy(
 bool smolvlaLoadModel(
     const char* path, SmolvlaModel& model, bool forceCpu,
     const std::string& backendsDir,
-    const std::vector<std::string>& backendOverride) {
+    const std::vector<std::string>& backendOverride,
+    const bool backendRequired) {
   QLOG_IF(
       Priority::INFO,
       std::string("smolvla_load_model: loading model from '") + path +
@@ -1525,7 +1531,7 @@ bool smolvlaLoadModel(
     model.load_error = "failed to initialise the CPU backend";
     return false;
   }
-  tryInitGpuBackend(model, forceCpu, backendOverride);
+  tryInitGpuBackend(model, forceCpu, backendOverride, backendRequired);
   if (!model.has_gpu) {
     QLOG_IF(Priority::INFO, "smolvla_load_model: using CPU backend");
   }
