@@ -481,6 +481,20 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
       std::move(job), "processVideo: failed to decode control_frames[1]");
 }
 
+TEST_F(SdWanValidationTest, RejectsControlFramesAboveDecodedJobBudget) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "width": 8192,
+    "height": 8192, "video_frames": 5
+  })";
+  auto png = wan_helpers::makeSolidPng(8192, 8192, 0, 0, 0);
+  job.controlFramesBytes = {png, png, png};
+  expectThrowContains(
+      std::move(job),
+      "processVideo: failed to decode control_frames[2]: image exceeds "
+      "remaining 128 Mi job pixel budget");
+}
+
 // ---------------------------------------------------------------------------
 // Dimension validation (added in QVAC-18026 follow-up): init_image and every
 // control_frames entry must all match the video width/height before
