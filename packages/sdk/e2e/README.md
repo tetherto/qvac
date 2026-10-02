@@ -315,8 +315,14 @@ in the form.
   npm run build
   npm run check:resource-table
   npm run check:step-dependencies
+  npm run check:skip-matrix
   npx qvac-test catalog:validate --config=.
   ```
+
+  `check:skip-matrix` compares the platform policy against the recorded set in
+  [`tests/resources/skip-matrix.json`](./tests/resources/skip-matrix.json). A
+  deliberate change is recorded with `node scripts/check-skip-matrix.mjs --write`
+  and committed alongside the rule that caused it.
 
 - **Working on the framework too?** `package.json` pins `@qvac/test-suite` to a
   published range, so a plain install leaves `node_modules` holding the release

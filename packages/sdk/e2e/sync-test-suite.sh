@@ -24,4 +24,24 @@ cp "$src/package.json" "$dest/package.json"
 # around instead of reporting.
 chmod +x "$dest/dist/cli/index.js"
 
+# The mobile and Electron builds keep their own copy of the framework under
+# `build/consumers/*/node_modules`, populated when the consumer was packaged.
+# Refreshing only the e2e copy leaves those bundles running whatever was
+# published, and the failure is silent rather than loud: an older reader does
+# not reject a definition it does not fully understand, it just quietly does
+# less with it. That is how a whole platform policy went missing on an iOS run
+# while every local check passed.
+synced_consumers=0
+for consumer_dest in "$here"/build/consumers/*/node_modules/@qvac/test-suite; do
+  [ -d "$consumer_dest" ] || continue
+  rm -rf "$consumer_dest/dist" "$consumer_dest/schema"
+  cp -R "$src/dist" "$consumer_dest/dist"
+  cp -R "$src/schema" "$consumer_dest/schema"
+  cp "$src/package.json" "$consumer_dest/package.json"
+  synced_consumers=$((synced_consumers + 1))
+done
+
 echo "synced @qvac/test-suite from $src"
+if [ "$synced_consumers" -gt 0 ]; then
+  echo "  and $synced_consumers packaged consumer bundle(s)"
+fi
