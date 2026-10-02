@@ -1,7 +1,5 @@
+import { BARE_PACK_NODE_ENGINES, isBarePackNodeSupported } from '@qvac/sdk/commands'
 import type { Check } from '@/doctor/check'
-
-const MIN_NODE_MAJOR = 18
-const RECOMMENDED_NODE_MAJOR = 20
 
 // Where the `qvac` CLI itself can run. This is NOT the set of SDK deploy
 // targets — the SDK additionally targets Android and iOS via Expo/BareKit,
@@ -14,44 +12,29 @@ const SUPPORTED_CLI_HOSTS: ReadonlyArray<string> = [
   'win32-x64'
 ]
 
-function parseNodeMajor(version: string): number | null {
-  const match = /^v?(\d+)\./.exec(version)
-  if (!match || match[1] === undefined) return null
-  const n = Number.parseInt(match[1], 10)
-  return Number.isFinite(n) ? n : null
-}
+const NODE_VERSION_PATTERN = /^v?\d+\.\d+\.\d+/
 
 export const checkNodeVersion: Check = (ctx) => {
   const version = ctx.nodeVersion
-  const major = parseNodeMajor(version)
-  if (major === null) {
+  if (!NODE_VERSION_PATTERN.test(version)) {
     return {
       id: 'node-version',
       label: 'Node.js version',
       status: 'warn',
       severity: 'required',
       value: version,
-      hint: `Could not parse Node.js version; expected v${MIN_NODE_MAJOR} or newer.`
+      hint: `Could not parse Node.js version; expected ${BARE_PACK_NODE_ENGINES}.`
     }
   }
-  if (major < MIN_NODE_MAJOR) {
+  const display = version.startsWith('v') ? version : `v${version}`
+  if (!isBarePackNodeSupported(version)) {
     return {
       id: 'node-version',
       label: 'Node.js version',
       status: 'fail',
       severity: 'required',
-      value: `v${version}`,
-      hint: `Upgrade Node.js to v${MIN_NODE_MAJOR} or newer (current: v${version}).`
-    }
-  }
-  if (major < RECOMMENDED_NODE_MAJOR) {
-    return {
-      id: 'node-version',
-      label: 'Node.js version',
-      status: 'warn',
-      severity: 'required',
-      value: `v${version}`,
-      hint: `Node.js v${MIN_NODE_MAJOR} is supported but end-of-life; upgrade to v${RECOMMENDED_NODE_MAJOR}+ when possible.`
+      value: display,
+      hint: `Upgrade Node.js to ${BARE_PACK_NODE_ENGINES} (current: ${display}); bare-pack's bare-module-lexer addon aborts on older Node.`
     }
   }
   return {
@@ -59,7 +42,7 @@ export const checkNodeVersion: Check = (ctx) => {
     label: 'Node.js version',
     status: 'pass',
     severity: 'required',
-    value: `v${version}`
+    value: display
   }
 }
 

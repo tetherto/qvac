@@ -32,6 +32,7 @@ const ERROR_LABELS: Record<string, string> = {
   UnsupportedLockfileError: 'Lockfile Error',
   INVALID_PLUGIN_SPECIFIER: 'Plugin Error',
   BARE_PACK_NOT_INSTALLED: 'Bundler Error',
+  BARE_PACK_NODE_UNSUPPORTED: 'Bundler Error',
   BARE_PACK_ERROR: 'Bundle Failed',
   BARE_IMPORTS_MAP_NOT_FOUND: 'SDK Error',
   SDK_NOT_FOUND_IN_NODE_MODULES: 'SDK Error',

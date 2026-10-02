@@ -46,6 +46,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
   HOST_PREBUILDS_INSTALL_REFUSED: 50615,
   HOST_PREBUILDS_INSTALL_FAILED: 50616,
+  BARE_PACK_NODE_UNSUPPORTED: 50617,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800
@@ -195,6 +196,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: 'BARE_PACK_ERROR',
     message: (exitCode: number, entryPath: string, outputPath: string) =>
       `bare-pack exited with code ${exitCode}\n\n  Entry file: ${entryPath}\n  Output file: ${outputPath}\n\n  Run bare-pack manually for more details.`
+  },
+  [SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED]: {
+    name: 'BARE_PACK_NODE_UNSUPPORTED',
+    message: (nodeVersion: string, requiredRange: string) =>
+      `bare-pack needs Node ${requiredRange}; its bare-module-lexer native addon aborts on older Node. Found Node v${nodeVersion}. Upgrade Node and run the bundle again.`
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER]: {
     name: 'INVALID_PLUGIN_SPECIFIER',
