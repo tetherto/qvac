@@ -619,6 +619,28 @@ BertModelSetup setupParams(
           }
           deviceList += device.name;
         }
+        if (splitSelection.heterogeneous) {
+          std::string perDevice;
+          for (const SplitDevice& device : splitSelection.devices) {
+            if (device.isRpc) {
+              continue;
+            }
+            if (!perDevice.empty()) {
+              perDevice += ", ";
+            }
+            perDevice += device.name + " (" + device.registry + ")";
+          }
+          qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+              GGML_LOG_LEVEL_WARN,
+              string_format(
+                  "[BertModel] split mode spans different backends: %s. An "
+                  "even tensor-split will pace the model to the slowest card; "
+                  "set backend with backend-required to use one backend, or "
+                  "set tensor-split to weight it.\n",
+                  perDevice.c_str())
+                  .c_str(),
+              nullptr);
+        }
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_INFO,
             string_format(
@@ -846,6 +868,34 @@ void BertModel::init(BertModelSetup& setup) {
         toString(UnableToLoadModel),
         "model initialization returned a null model/context");
   }
+  std::string placedDevices;
+  if (runtimeBackendDevice_ == 1) {
+    for (ggml_backend_dev_t device : init_.params.devices) {
+      if (device == nullptr) {
+        break;
+      }
+      if (!placedDevices.empty()) {
+        placedDevices += ',';
+      }
+      const char* name = ggml_backend_dev_name(device);
+      placedDevices += name != nullptr ? name : "unknown";
+    }
+    std::transform(
+        placedDevices.begin(),
+        placedDevices.end(),
+        placedDevices.begin(),
+        [](unsigned char character) {
+          return static_cast<char>(std::tolower(character));
+        });
+  }
+  const std::string selectionLog =
+      "[backend-selection] selected=" +
+      (placedDevices.empty()
+           ? std::string(runtimeBackendDevice_ == 0 ? "none" : "unknown")
+           : placedDevices) +
+      " path=final";
+  qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+      GGML_LOG_LEVEL_INFO, selectionLog.c_str(), nullptr);
   vocab_ = llama_model_get_vocab(model_);
   batch_ = llama_batch_init(init_.params.n_batch, 0, 1);
   pooling_type = llama_pooling_type(ctx_);

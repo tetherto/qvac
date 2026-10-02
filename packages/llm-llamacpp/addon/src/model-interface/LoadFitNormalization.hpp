@@ -78,6 +78,7 @@ struct SelectedBackend {
   bool isOpenCl = false;
   bool isMetal = false;
   bool cpuKvFallback = false;
+  backend_selection::SelectionTrace trace;
 };
 
 using BackendResolver =
@@ -116,6 +117,13 @@ struct NormalizedLoad {
   NormalizedFitSnapshot fitSnapshot;
   std::optional<int> adrenoVersion;
   int64_t runtimeBackendDevice = 0;
+  /// QVAC-23763: which GPU backend family actually ran, and why a
+  /// higher-priority one did not. `runtimeBackendDevice` above is only cpu/gpu,
+  /// so a silent fallback between GPU backends is invisible without these.
+  /// Numeric `BackendFamilyCode` / `ExclusionReason`; see the note on
+  /// BackendFamilyCode for why they are not strings.
+  int64_t runtimeBackendFamily = 0;
+  int64_t runtimeBackendSkipReason = 0;
 };
 
 NormalizationDependencies

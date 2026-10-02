@@ -1445,6 +1445,7 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
       }
     }
   }
+  vla_backend_selection::logSelectedBackend(m->backend);
 
   // GPU path: no_alloc=true so the GGUF loader doesn't mmap; we then allocate a
   // device backend buffer and stream the weights into it

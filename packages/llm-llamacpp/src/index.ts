@@ -1538,6 +1538,20 @@ namespace LlmLlamacpp {
     avgConcurrentSeq: number;
     backendDevice: "cpu" | "gpu";
     /**
+     * Which backend family holds model layers. RPC-only splits report `rpc`;
+     * mixed-family splits report `other`. `backendDevice` above only
+     * distinguishes cpu from gpu. QVAC-23763.
+     */
+    backendFamily: AddonModule.BackendFamily;
+    /**
+     * Why a higher-priority backend was passed over, or `"none"` when nothing
+     * was. `"kv-cache-type-unsupported"` means the device could not run the
+     * requested KV-cache type and selection moved to a lower-priority device,
+     * which may itself use fabric's CPU KV fallback.
+     * QVAC-23763.
+     */
+    backendSkipReason: AddonModule.BackendSkipReason;
+    /**
      * Why generation stopped. Per-sequence, so it is reported for a single
      * request on either path (sequential or one prompt on a parallel model).
      *

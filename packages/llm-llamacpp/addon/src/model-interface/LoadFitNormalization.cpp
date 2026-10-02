@@ -399,7 +399,43 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
     }
     selected.devices.push_back(*match);
   }
+  std::optional<std::string_view> localRegistry;
+  for (const backend_selection::SplitDevice& device : selected.devices) {
+    if (device.isRpc) {
+      continue;
+    }
+    if (!localRegistry.has_value()) {
+      localRegistry = device.registry;
+    } else if (device.registry != localRegistry.value()) {
+      selected.heterogeneous = true;
+      break;
+    }
+  }
   return selected;
+}
+
+backend_selection::BackendFamilyCode familyForPlacement(
+    backend_selection::BackendType type, const std::string& selectedName,
+    llama_split_mode splitMode, bool hasExplicitDevices,
+    const backend_selection::SplitDeviceSelection& selection) {
+  using backend_selection::BackendFamilyCode;
+  if (type != backend_selection::BackendType::GPU ||
+      (splitMode == LLAMA_SPLIT_MODE_NONE && !hasExplicitDevices) ||
+      selection.devices.empty()) {
+    return backend_selection::backendFamilyCodeOf(type, selectedName);
+  }
+  std::optional<BackendFamilyCode> family;
+  for (const backend_selection::SplitDevice& device : selection.devices) {
+    const BackendFamilyCode current =
+        device.isRpc
+            ? BackendFamilyCode::Rpc
+            : backend_selection::backendFamilyCodeOf(type, device.name);
+    if (family.has_value() && family.value() != current) {
+      return BackendFamilyCode::Other;
+    }
+    family = current;
+  }
+  return family.value();
 }
 
 std::string
@@ -1076,7 +1112,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .isMaliGpu = choice.isMaliGpu,
                 .isOpenCl = isOpenCl,
                 .isMetal = isMetal,
-                .cpuKvFallback = choice.cpuKvFallback};
+                .cpuKvFallback = choice.cpuKvFallback,
+                .trace = std::move(choice.trace)};
           },
       .splitDevices =
           [](const std::string& selectedDeviceName,
@@ -1519,6 +1556,7 @@ NormalizedLoad normalizeLoadForFit(
 
     backend_selection::SplitDeviceSelection splitSelection;
     SelectedBackend selected = dependencies.resolveBackend(request);
+    ExclusionReason selectionSkipReason = selected.trace.skippedReason;
     std::optional<int> mmprojAdrenoVersion = selected.adrenoVersion;
     // The split set must accept the device selection kept for fabric's CPU KV
     // placement, or the constraint filter drops it and the load lands on CPU.
@@ -1657,6 +1695,11 @@ NormalizedLoad normalizeLoadForFit(
         }
         selected.name = primary.name;
         selected.type = BackendType::GPU;
+        // A caller-chosen list passed nothing over. A cascade-chosen split
+        // keeps the cascade's reason.
+        if (!explicitDevices.empty()) {
+          selectionSkipReason = ExclusionReason::None;
+        }
         selected.adrenoVersion = maxAdrenoVersion;
         selected.isOpenCl =
             anyDevice(&backend_selection::SplitDevice::isOpenCl);
@@ -1667,6 +1710,9 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument,
               "backend-required matched no eligible split device");
         }
+        // The split filter, not the earlier single-device cascade, caused
+        // this CPU fallback. Do not report the earlier device's skip reason.
+        selectionSkipReason = ExclusionReason::None;
         if (!splitSelection.rejectedDevices.empty()) {
           std::string rejected;
           for (const std::string& device : splitSelection.rejectedDevices) {
@@ -1686,6 +1732,13 @@ NormalizedLoad normalizeLoadForFit(
       }
     }
     result.adrenoVersion = selected.adrenoVersion;
+    result.runtimeBackendFamily = static_cast<int64_t>(::familyForPlacement(
+        selected.type,
+        selected.name,
+        splitMode,
+        !explicitDevices.empty(),
+        splitSelection));
+    result.runtimeBackendSkipReason = static_cast<int64_t>(selectionSkipReason);
 
     // QVAC-21257: optional runtime override for the multimodal projector
     // (mmproj / vision encoder) backend. The default is auto-selected per
@@ -1863,19 +1916,44 @@ NormalizedLoad normalizeLoadForFit(
               splitSelection.devices.size(),
               deviceList.c_str()));
     }
+    if (splitSelection.heterogeneous) {
+      std::string perDevice;
+      for (const backend_selection::SplitDevice& device :
+           splitSelection.devices) {
+        if (device.isRpc) {
+          continue;
+        }
+        if (!perDevice.empty()) {
+          perDevice += ", ";
+        }
+        perDevice += device.name + " (" + device.registry + ")";
+      }
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[LlamaModel] split mode spans different backends: %s. An "
+              "even tensor-split will pace the model to the slowest card; "
+              "set backend with backend-required to use one backend, or "
+              "set tensor-split to weight it.\n",
+              perDevice.c_str()));
+    }
     configFilemap.erase("device");
 
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
-    isCuda = isGpu &&
-             (toLowerAscii(selected.name).find("cuda") != std::string::npos ||
-              std::ranges::any_of(
-                  splitSelection.devices,
-                  [](const backend_selection::SplitDevice& device) {
-                    return toLowerAscii(device.name).find("cuda") !=
-                           std::string::npos;
-                  }));
+    isCuda =
+        isGpu &&
+        (backend_selection::backendFamilyCodeOf(
+             backend_selection::BackendType::GPU, selected.name) ==
+             backend_selection::BackendFamilyCode::Cuda ||
+         std::ranges::any_of(
+             splitSelection.devices,
+             [](const backend_selection::SplitDevice& device) {
+               return backend_selection::backendFamilyCodeOf(
+                          backend_selection::BackendType::GPU, device.name) ==
+                      backend_selection::BackendFamilyCode::Cuda;
+             }));
   }
 
   tuneLoadConfigMap(

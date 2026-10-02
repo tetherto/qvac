@@ -87,6 +87,11 @@ This release migrates the addon off its bundled, statically-linked `qvac-fabric`
 
 ### Added
 
+- `backendFamily` and `backendSkipReason` in the runtime stats. `backendDevice`
+  reports only `"cpu"` or `"gpu"`, so a load that silently fell back from one GPU
+  backend to another was invisible. `backendFamily` names which one ran (`cuda`,
+  `vulkan`, `metal`, `opencl`, `rocm`, `sycl`, `cpu`, `other`, `none`) and
+  `backendSkipReason` says why a higher-priority one was passed over.
 - `backend-required` (also `backend_required`). By default a `backend` list that
   matches no device logs a warning and runs the default cascade, so the pin is
   advisory. With this set the load fails instead, naming every device that was
@@ -245,6 +250,16 @@ This release migrates the addon off its bundled, statically-linked `qvac-fabric`
 
 ### Changed
 
+- **Breaking (logs):** backend selection emits a candidate line with
+  `[backend-selection] candidate=… registry=… path=… skipped=…`, then a
+  `selected=… path=final` line after model initialization, in place of
+  the previous prose (`Chosen GPU CUDA`, `Chosen %s Backend (backend override)`,
+  `Chosen CPU`). Not an API, but anything matching those strings needs updating.
+  The named fields make which backend won, and why a higher-priority one did
+  not, assertable. Neither was before.
+- A multi-GPU split whose devices span more than one backend is logged at WARN,
+  naming each device with its registry. An even `tensor-split` paces the model
+  to the slowest card, and nothing said so. Split membership is unchanged.
 - **Breaking:** `main-gpu`'s index form now requires the whole value to be an
   integer. `"1abc"` previously parsed as `1` and is now rejected. This makes the
   bus-id form safe, since `"0000:65:00.0"` previously parsed silently as device

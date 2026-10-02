@@ -157,6 +157,36 @@ struct LoadConstraints {
 
 enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
 
+/// @brief The backend family a load actually ran on, as a stable numeric code.
+///
+/// QVAC-23763: `backendDevice` reports only cpu/gpu, so a silent fallback from
+/// one GPU backend to another is invisible in the stats.
+///
+/// Numeric because RuntimeStats carries `variant<double, int64_t>` and marshals
+/// every value through `js::Number::create`; a string would need
+/// inference-addon-cpp widened, which is separately published with several
+/// consumers. The device *name* therefore stays in the structured log.
+///
+/// The values are contractual - the JS side maps them back - so append here,
+/// never renumber.
+enum class BackendFamilyCode : std::uint8_t {
+  None = 0,
+  Cpu = 1,
+  Vulkan = 2,
+  Cuda = 3,
+  Metal = 4,
+  OpenCl = 5,
+  Rocm = 6,
+  Sycl = 7,
+  Other = 8,
+  Rpc = 9,
+};
+
+/// @brief Classify a chosen backend into a @c BackendFamilyCode.
+/// @p deviceName is a ggml device name, in any case.
+BackendFamilyCode
+backendFamilyCodeOf(BackendType type, const std::string& deviceName);
+
 /// @brief How the choice was reached, and what it beat.
 struct SelectionTrace {
   std::string selectedName;
@@ -203,6 +233,7 @@ BackendChoice chooseBackend(
 
 struct SplitDevice {
   std::string name;
+  std::string registry;
   ggml_backend_dev_t handle = nullptr;
   size_t sourceGpuIndex = 0;
   bool isRpc = false;
@@ -216,6 +247,7 @@ struct SplitDeviceSelection {
   std::vector<SplitDevice> devices;
   size_t sourceGpuCount = 0;
   std::vector<std::string> rejectedDevices;
+  bool heterogeneous = false;
   // Discrete devices left out as a possible twin of a kept one, so the same
   // card is not split across two backends. An explicit `devices` list may
   // still name them.
@@ -347,6 +379,23 @@ bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 /// registry.
 bool gpuBackendSupportsRowSplit();
 
+/// @brief `splitModeDeviceNames()` plus each device's registry.
+///
+/// QVAC-23763: records whether the split spans more than one registry. No
+/// production caller reads it; the user-facing warning comes from
+/// @c SplitDeviceSelection::heterogeneous.
+struct SplitDeviceList {
+  std::vector<std::string> names;
+  /// Parallel to @c names.
+  std::vector<std::string> registries;
+  /// True when @c names spans more than one registry.
+  bool heterogeneous = false;
+};
+
+SplitDeviceList splitModeDeviceNamesDetailed(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
+
 /// @brief The local device names a multi-GPU split load pins: every
 /// discrete GPU, deduplicated by `props.device_id` so a card registered under
 /// two backends is named once, preferring @p selectedDeviceName's registry.
@@ -369,6 +418,11 @@ std::vector<std::string> splitModeDeviceNames(
 
 /// @brief `splitModeDeviceNames()` against the real ggml backend registry.
 std::vector<std::string> splitModeDeviceNames(
+    const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
+
+/// @brief `splitModeDeviceNamesDetailed()` against the real ggml registry.
+SplitDeviceList splitModeDeviceNamesDetailed(
     const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});
 

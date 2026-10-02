@@ -21,6 +21,11 @@ test('TPS-shaped data preserves unknown backendDevice values as-is', function (t
   t.is(result.data.backendDevice, 2)
 })
 
+test('RPC backend family code maps to rpc', function (t) {
+  const result = mapAddonEvent('anything', { TPS: 1, backendDevice: 1, backendFamily: 9 }, null)
+  t.is(result.data.backendFamily, 'rpc')
+})
+
 // stopReason rides the per-job stats on both the sequential and the concurrent
 // path. It is index-matched to the C++ GenerationStopReason enum, and absent
 // when the native side could not attribute one (e.g. a batch group whose

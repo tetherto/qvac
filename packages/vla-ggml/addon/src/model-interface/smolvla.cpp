@@ -1532,6 +1532,7 @@ bool smolvlaLoadModel(
     return false;
   }
   tryInitGpuBackend(model, forceCpu, backendOverride, backendRequired);
+  vla_backend_selection::logSelectedBackend(model.backend);
   if (!model.has_gpu) {
     QLOG_IF(Priority::INFO, "smolvla_load_model: using CPU backend");
   }
