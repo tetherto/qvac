@@ -84,8 +84,32 @@ import { getLoadedModelInfo } from '@qvac/sdk'
 const info = await getLoadedModelInfo({ modelId })
 
 info.fitProbe?.verdict // 'fit' | 'does-not-fit' | 'unknown'
-info.fitProbe?.projection?.devices // per-device totals, free, margin, model, context, compute
+info.fitProbe?.projection?.deviceBytes
+info.fitProbe?.projection?.hostBytes
 info.fitProbe?.plan // the placement the fitter resolved
+```
+
+---
+
+## Dispatch the fit probe to every engine
+
+PR: [#4671](https://github.com/tetherto/qvac/pull/4671)
+
+The load-time fit probe and `assessModelFit`'s native-fit path run on every engine that ships a fitter, not llama.cpp only. `assessModelFit` infers `modelType` from `modelSrc` when omitted. Each model result can carry `device` (`gpu` or `cpu`) and `reasons`. `getLoadedModelInfo().fitProbe.projection` is a flat byte breakdown. `fitStubBudgetMs` on config (default 40000) is the registry-fetch budget for the weightless description.
+
+```typescript
+import { assessModelFit, getLoadedModelInfo, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
+
+const result = await assessModelFit({
+  models: [{ modelSrc: QWEN3_8B_INST_Q4_K_M, modelConfig: { ctx_size: 8192 } }]
+})
+result.models[0].device // 'gpu' | 'cpu', where the load resolved
+result.models[0].reasons
+
+const info = await getLoadedModelInfo({ modelId })
+info.fitProbe?.projection?.deviceBytes
+info.fitProbe?.projection?.hostBytes
+info.fitProbe?.projection?.report
 ```
 
 ---
