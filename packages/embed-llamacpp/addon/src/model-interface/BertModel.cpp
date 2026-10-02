@@ -560,6 +560,18 @@ BertModelSetup setupParams(
         splitMode != LLAMA_SPLIT_MODE_NONE) {
       splitSelection = getSplitDeviceSelection(
           chosenBackend.second, backendRequest.constraints);
+      if (!splitSelection.droppedAmbiguousDevices.empty()) {
+        std::string message = "[BertModel] split leaves out ";
+        for (size_t index = 0;
+             index < splitSelection.droppedAmbiguousDevices.size();
+             ++index) {
+          message += (index > 0 ? ", " : "") +
+                     splitSelection.droppedAmbiguousDevices[index];
+        }
+        message += ": a device without a device id may be the same GPU under "
+                   "another backend\n";
+        llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
+      }
       if (!splitSelection.devices.empty()) {
         const SplitBackendTraits traits = splitBackendTraits(splitSelection);
         chosenBackend = {BackendType::GPU, traits.backendName};

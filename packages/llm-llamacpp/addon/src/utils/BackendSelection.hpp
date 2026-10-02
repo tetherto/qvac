@@ -240,6 +240,7 @@ struct SplitDevice {
   std::optional<int> adrenoVersion;
   bool isOpenCl = false;
   bool isMetal = false;
+  std::string deviceId;
 };
 
 struct SplitDeviceSelection {
@@ -247,6 +248,13 @@ struct SplitDeviceSelection {
   size_t sourceGpuCount = 0;
   std::vector<std::string> rejectedDevices;
   bool heterogeneous = false;
+  // Discrete devices left out as a possible twin of a kept one, so the same
+  // card is not split across two backends. An explicit `devices` list may
+  // still name them.
+  std::vector<SplitDevice> dedupedTwins;
+  // The subset dropped only because a twin could not be ruled out, with no
+  // device id to compare. The caller warns about them.
+  std::vector<std::string> droppedAmbiguousDevices;
 };
 
 SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
@@ -343,9 +351,12 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 ///     representations prefer @p selectedDeviceName's registry.
 ///
 /// Returns an empty vector when no GPU device is present.
+/// `droppedAmbiguous`, when set, receives the devices left out because an
+/// id-less copy of one card could not be ruled out across registries.
 std::vector<std::string> getTensorSplitDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName = {},
-    const LoadConstraints& constraints = {});
+    const LoadConstraints& constraints = {},
+    std::vector<std::string>* droppedAmbiguous = nullptr);
 
 /// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
 std::vector<std::string> getTensorSplitDeviceNames(

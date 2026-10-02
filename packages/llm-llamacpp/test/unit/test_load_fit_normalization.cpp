@@ -2698,6 +2698,54 @@ TEST_F(
   }
 }
 
+// CUDA0 and Vulkan0 are one card, so the automatic dedupe keeps CUDA0. An
+// explicit `devices: Vulkan0` must still resolve to the Vulkan copy, with and
+// without a strict Vulkan override.
+TEST_F(LoadFitNormalizationTest, ExplicitDeviceResolvesADedupedTwin) {
+  for (const bool strictVulkan : {false, true}) {
+    auto config = baseConfig();
+    config["devices"] = "Vulkan0";
+    if (strictVulkan) {
+      config["backend"] = "vulkan";
+      config["backend-required"] = "true";
+    }
+    auto dependencies =
+        backend({.type = backend_selection::GPU, .name = "Vulkan0"}, {});
+    auto selection = splitSelection({"CUDA0", "Vulkan0"});
+    selection.devices[0].deviceId = "0000:01:00.0";
+    selection.devices[1].deviceId = "0000:01:00.0";
+    selection.dedupedTwins.push_back(selection.devices[1]);
+    selection.devices.pop_back();
+    dependencies.allSplitDevices = [selection]() { return selection; };
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+    EXPECT_EQ(result.params.mmproj_backend, "Vulkan0") << strictVulkan;
+    ASSERT_NE(result.params.devices[0], nullptr) << strictVulkan;
+    EXPECT_EQ(result.params.devices[1], nullptr) << strictVulkan;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesNamingOneCardTwiceAreRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["devices"] = "CUDA0,Vulkan0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"});
+  auto selection = splitSelection({"CUDA0", "Vulkan0"});
+  selection.devices[0].deviceId = "0000:01:00.0";
+  selection.devices[1].deviceId = "0000:01:00.0";
+  selection.dedupedTwins.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
   auto config = baseConfig();
   config["devices"] = "none";
