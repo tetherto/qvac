@@ -451,12 +451,12 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 
 | Key                             | Model family | Description                                                     |
 | ------------------------------- | ------------ | --------------------------------------------------------------- |
-| `files.model`                   | all video    | Wan single/low-noise expert or LTX diffusion transformer        |
+| `files.model`                   | all video    | Wan, LTX, or MiniMax-H3 diffusion transformer                    |
 | `files.t5Xxl`                   | Wan          | UMT5-XXL text encoder                                           |
-| `files.vae`                     | Wan / LTX    | Wan VAE or LTX video VAE                                        |
+| `files.vae`                     | all video    | Matching video VAE                                              |
 | `files.clipVision`              | Wan I2V      | OpenCLIP ViT-H/14; required for `mode: 'img2vid'` on Wan        |
-| `files.llm`                     | LTX          | Gemma text encoder                                              |
-| `files.audioVae`                | LTX          | Audio VAE decoder for synchronized audio                        |
+| `files.llm`                     | LTX / H3     | Gemma or Qwen3-VL text encoder                                   |
+| `files.audioVae`                | LTX / H3     | Audio VAE for synchronized audio                                 |
 | `files.embeddingsConnectors`    | LTX          | Text-embedding connector weights; also marks the context as LTX |
 
 ### Video Parameters
@@ -465,9 +465,9 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 | ------------------------------------------------------------ | ------------------------------------------------------------------ |
 | `mode`                                                       | Required: `'txt2vid'` or `'img2vid'`                               |
 | `prompt`, `negative_prompt`                                  | Text conditioning                                                  |
-| `width`, `height`                                            | Wan: multiples of 16. LTX: multiples of 32                         |
-| `video_frames`                                               | Wan: `(4*k + 1)`. LTX: `(8*k + 1)`, max 257                        |
-| `fps`                                                        | AVI framerate metadata, default 16 for Wan examples and 24 for LTX |
+| `width`, `height`                                            | Wan 2.1: multiples of 16. LTX, Wan TI2V, H3: multiples of 32       |
+| `video_frames`                                               | Wan: `(4*k + 1)`. LTX: `(8*k + 1)`, max 257. H3: `(17*k + 5)`     |
+| `fps`                                                        | Generation rate and AVI rate; H3 is fixed at 24 FPS                  |
 | `steps`, `cfg_scale`, `sampling_method`, `scheduler`, `seed` | Sampling controls                                                  |
 | `flow_shift`                                                 | Per-job flow-shift override; Wan 2.1 T2V 1.3B works well at `3.0`  |
 | `init_image`                                                 | First frame for `img2vid`; required by that mode                   |
@@ -476,15 +476,17 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 | `cache_mode`, `cache_preset`, `cache_threshold`              | Step-cache controls                                                |
 
 Decoded `init_image`, `control_frames`, and `reference_images` together are
-limited to 128 Mi pixels per job by default; each image is limited to 64 Mi pixels by default. At
-1920×1080, up to 64 control frames fit when there are no other input images.
+limited to 128 Mi pixels per job by default; each image is limited to 64 Mi
+pixels by default. At 1920×1080, up to 64 control frames fit when there are
+no other input images.
 An initial or reference image reduces the available control-frame budget.
 Set `config.max_job_pixels` and `config.max_image_pixels` to positive pixel
 counts when the target device can support a different budget. The fixed
 16,384-pixel edge and compressed-source safeguards still apply.
 
-Video output is a single MJPG AVI `Uint8Array`. For LTX-2 models loaded with
-`audioVae`, the AVI also contains a second IEEE-float PCM stream at 48 kHz.
+Video output is a single MJPG AVI `Uint8Array`. For LTX-2 and H3 models loaded
+with `audioVae`, the AVI also contains a second IEEE-float PCM audio stream:
+48 kHz for LTX-2 and 32 kHz for H3.
 VLC handles these files well.
 
 ### Wan 2.2
@@ -506,46 +508,59 @@ backend runs one process on one device with optional CPU offload. Use dimensions
 that are multiples of 32 for this TI2V model so the emitted AVI dimensions match
 the requested dimensions.
 
-## MiniMax-H3 Text-to-Audio-Video
+## MiniMax-H3 Text-to-Video and Image-to-Video
 
-MiniMax-H3 is supported for prompt-only video generation. Download the matching
-FL2VA denoiser, Qwen3-VL text encoder, video VAE, and audio VAE:
+The Comfy-Org FL2VA ConvRot checkpoint supports both modes through
+`VideoStableDiffusion.run()`. Its `init_image` is a PNG/JPEG first frame, copied
+into the asynchronous native job and encoded into H3's keyframe conditioning.
+H3 does not use Wan's CLIP vision encoder. The video VAE must include encoder
+weights for I2V (`vae_decode_only: false`, the default).
+
+From the repository root, install the Hugging Face CLI, read the [MiniMax-H3
+license](https://huggingface.co/Comfy-Org/MiniMax-H3), and download the four
+matching files. If access requires authentication, run `hf auth login` first.
+`--dry-run` lists the files and sizes without fetching the weights. For a
+reproducible run, set `HF_REVISION` to a model repository commit SHA.
 
 ```sh
-./scripts/download-model-minimax-h3.sh --q4
+python -m pip install -U huggingface_hub
+bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh --dry-run
+HF_REVISION=<model-revision-sha> bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh
 ```
 
-Set `H3_MODELS_DIR` when running `npm run generate:h3-coffee` with model files
-stored outside the package.
+The four files total about 55 GB. The package's vcpkg overlay pins
+`qvac-ext-stable-diffusion.cpp` to `107121df3ee9664cd47f80b19add495002d0232f`
+(merged PR #44) and its ggml submodule to
+`9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb`.
 
-The initial integration intentionally rejects init images, control frames, and
-reference images. Use a 32-pixel spatial grid and a `17*k + 5` frame count.
-H3 is distilled: `cfg_scale` must be `1.0`, and the output stream is always
-24 FPS with its native stereo audio.
+From `packages/diffusion-cpp`, run the separate examples. Set `H3_MODELS_DIR`
+if the checkpoint is elsewhere, `H3_BACKEND` to select a backend, and
+`H3_OUTPUT` for the AVI path. The I2V example defaults to the FLUX.2-generated
+960×544 `assets/h3-keyframe-boat.png`; set `H3_INPUT_IMAGE` to a different
+PNG/JPEG of the same dimensions. Use `H3_FRAMES=22` for a short clip or 124
+for the longer reference workload.
 
-```js
-const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
-const model = new VideoStableDiffusion({
-  files: {
-    model: '/models/minimax-h3/minimax_h3_fl2va_pruned-Q4_K.gguf',
-    llm: '/models/minimax-h3/qwen3vl_32b_minimax_h3-Q4_K_M.gguf',
-    vae: '/models/minimax-h3/vae/minimax_h3_video_vae_fp16.safetensors',
-    audioVae: '/models/minimax-h3/vae/minimax_h3_audio_vae_fp32.safetensors'
-  },
-  config: { device: 'gpu', diffusion_fa: true, offload_to_cpu: true }
-})
-await model.load()
-const response = await model.run({
-  mode: 'txt2vid',
-  prompt: 'A cinematic close-up of a person enjoying coffee in warm morning light.',
-  width: 960,
-  height: 544,
-  video_frames: 124,
-  fps: 24,
-  steps: 8,
-  cfg_scale: 1.0
-})
+```sh
+bare examples/generate-video-minimax-h3-comfy-t2v.js
+bare examples/generate-video-minimax-h3-comfy-i2v.js
 ```
+
+`example-h3-minimax-comfy.js` first generates a commercial keyframe with
+FLUX.2 [klein] 4B and then passes that saved PNG to H3 I2V. Set
+`H3_SKIP_FLUX=1` and `H3_INPUT_IMAGE=/path/to/keyframe.png` to rerun H3 with an
+existing image. `FLUX_MODELS_DIR`, `FLUX_MODEL`, `FLUX_LLM`, `FLUX_VAE`,
+`FLUX_SEED`, `FLUX_STEPS`, and `FLUX_IMAGE_PROMPT` customize the first stage.
+
+```sh
+bare examples/example-h3-minimax-comfy.js
+```
+
+H3 requires dimensions on a 32-pixel grid and frame counts of `17*k + 5`
+(5, 22, 39, …). Its distilled guidance uses `cfg_scale: 1.0`, and output is
+always 24 FPS. The addon writes MJPG AVI with the decoded audio stream when
+`audioVae` is provided. Control frames, Ref2VA references, Wan MoE settings,
+and image-conditioning strength are rejected for this FL2VA path. The existing
+Unsloth GGUF T2V example remains available as `npm run generate:h3-coffee`.
 
 ## LTX-2 Text-to-Video With Audio
 
@@ -776,10 +791,10 @@ The projection runs in the calling process and shares its engine state: the GPU 
 - `diffusion_fa` defaults to true and is important for FLUX/LTX memory use.
 - For FLUX.2 img2img/fusion, set `config.prediction: 'flux2_flow'` so the JS
   wrapper and native layer select the in-context conditioning path.
-- Wan I2V requires `files.clipVision`; LTX img2vid does not.
-- Wan dimensions must be multiples of 16; LTX dimensions must be multiples of 32.
-- Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
-- LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
+- Wan I2V requires `files.clipVision`; LTX and MiniMax-H3 img2vid do not.
+- Wan 2.1 dimensions must be multiples of 16; LTX and H3 dimensions must be multiples of 32.
+- Wan frame counts use `(4*k + 1)`; LTX uses `(8*k + 1)` and H3 uses `(17*k + 5)`.
+- LTX and H3 audio is muxed into AVI as IEEE-float PCM.
 - On Linux the shipped prebuild must not hard-link any GPU loader
   (`libvulkan`/`libOpenCL`/`libcuda`) — an integration test asserts this. For
   local custom builds that legitimately do (e.g. `SD_CUDA=ON`), skip it with
@@ -788,6 +803,14 @@ The projection runs in the calling process and shares its engine state: the GPU 
 ## Credits
 
 ### Test Images
+
+`assets/h3-keyframe-boat.png` and `assets/h3-keyframe-balloon.png` are 960×544
+FLUX.2 [klein] 4B images generated by `examples/generate-h3-keyframes-flux2.js`.
+Run `bare examples/generate-h3-keyframes-flux2.js` from this package to recreate
+them with the FLUX.2 models listed above. Set `FLUX_MODELS_DIR` if the models
+are elsewhere, or `H3_KEYFRAME=boat` to generate only the boat. They are included
+under this package's Apache-2.0 license for I2V examples and fixed-seed
+conditioning comparisons.
 
 `assets/von-neumann.jpg` — **John von Neumann** (1956).
 Source: U.S. Department of Energy, File ID: HD.3F.191.

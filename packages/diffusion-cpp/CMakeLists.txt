@@ -24,6 +24,21 @@ if(SD_CUDA)
   if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
     set(ENV{CUDAHOSTCXX} "clang++")
   endif()
+  # The linked ggml config calls FindCUDAToolkit. Resolve nvcc's real path
+  # because it may be exposed through a symlink outside the toolkit root.
+  if(NOT CUDAToolkit_ROOT)
+    find_program(SD_NVCC_EXECUTABLE nvcc HINTS "$ENV{CUDA_PATH}/bin" "$ENV{CUDA_HOME}/bin"
+      PATHS /usr/local/cuda/bin /usr/local/cuda-12.8/bin)
+    if(SD_NVCC_EXECUTABLE)
+      file(REAL_PATH "${SD_NVCC_EXECUTABLE}" SD_NVCC_REAL)
+      get_filename_component(SD_CUDA_BIN_DIR "${SD_NVCC_REAL}" DIRECTORY)
+      get_filename_component(CUDAToolkit_ROOT "${SD_CUDA_BIN_DIR}" DIRECTORY)
+      # Override a stale cache entry left by a prior configure through a
+      # /usr/local/bin/nvcc symlink.
+      set(CUDAToolkit_NVCC_EXECUTABLE "${SD_NVCC_REAL}" CACHE FILEPATH "CUDA compiler" FORCE)
+      set(CUDAToolkit_BIN_DIR "${SD_CUDA_BIN_DIR}" CACHE PATH "CUDA toolkit bin" FORCE)
+    endif()
+  endif()
 endif()
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
@@ -44,6 +59,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlays/ports;${VCPKG_OVERLAY_PORTS}")
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(inference-addon-sd C CXX)

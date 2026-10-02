@@ -88,7 +88,7 @@ export const sdcppConfigSchema = z.object({
         '`embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder ' +
         'via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for ' +
         'synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + ' +
-        '`audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise ' +
+        '`audioVaeModelSrc` selects MiniMax-H3 text/image-to-audio-video; otherwise ' +
         'the Wan layout is used (UMT5 text encoder ' +
         'via `t5XxlModelSrc` + VAE). ' +
         'On React Native, loading the video model on-device will likely fail ' +
@@ -1151,7 +1151,6 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
     })
   }
   for (const [field, value] of [
-    ['mode', 'txt2vid'],
     ['fps', 24],
     ['cfg_scale', 1],
     ['scheduler', 'discrete']
@@ -1164,7 +1163,7 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
       })
     }
   }
-  for (const field of ['init_image', 'control_frames', 'vace_strength', 'strength'] as const) {
+  for (const field of ['control_frames', 'vace_strength', 'strength'] as const) {
     if (data[field] !== undefined) {
       ctx.addIssue({
         code: 'custom',
