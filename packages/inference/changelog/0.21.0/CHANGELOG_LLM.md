@@ -2,7 +2,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.21.0
 
-QVAC Inference 0.21.0 is the engine cut that SDK 0.21.0 will depend on. A model can split across machines through llama.cpp's RPC backend, Ternary Bonsai 2 27B runs in QVAC's engine, tools can defer their schemas behind `tool_search`, and TTS/ASR pick up MOSS plus Parakeet Core ML on Apple. Catalog constant names for BitNet, Llama tool-calling, and Indic Parakeet change. `assessModelFit` now takes `loadModel` fields instead of a separate workload object.
+QVAC Inference 0.21.0 is the engine cut that SDK 0.21.0 will depend on. A model can split across machines through llama.cpp's RPC backend, Ternary Bonsai 2 27B runs in QVAC's engine, tools can defer their schemas behind `tool_search`, and TTS/ASR pick up MOSS plus Parakeet Core ML on Apple. Catalog constant names for BitNet, Llama tool-calling, and Indic Parakeet change. `assessModelFit` now takes `loadModel` fields instead of a separate workload object, infers `modelType` from `modelSrc` when omitted, and the load-time fit probe runs on every engine that ships a fitter.
 
 ## Breaking Changes
 
@@ -38,7 +38,28 @@ await assessModelFit({
 })
 ```
 
-`modelType` is required. A load whose sources are all config fields may omit `modelSrc`. Audio `workload.windowMs` becomes `modelConfig.duration_ms`. `workload.batch` has no equivalent and is gone: no engine takes a batch size at load time.
+`modelType` is optional and inferred from `modelSrc` when omitted, the same way `loadModel` infers it. Required only where the source names no engine. A load whose sources are all config fields may omit `modelSrc`. Audio `workload.windowMs` becomes `modelConfig.duration_ms`. `workload.batch` has no equivalent and is gone: no engine takes a batch size at load time.
+
+### Flattened fit-probe projection
+
+`getLoadedModelInfo().fitProbe.projection` is a flat byte breakdown. `projection.devices` and `NativeProbeDevice` are gone. Totals are summed across devices; `deviceName` names the first.
+
+**Before:**
+
+```typescript
+info.fitProbe?.projection?.devices
+```
+
+**After:**
+
+```typescript
+info.fitProbe?.projection?.deviceBytes
+info.fitProbe?.projection?.hostBytes
+info.fitProbe?.projection?.weightsBytes
+info.fitProbe?.projection?.contextBytes
+info.fitProbe?.projection?.computeBytes
+info.fitProbe?.projection?.deviceName
+```
 
 ### Catalog constant names
 
@@ -179,7 +200,7 @@ modelConfig: {
 
 ### Loaded-model fit probe
 
-`getLoadedModelInfo` can include `fitProbe`: verdict, per-device projection, and the placement the fitter resolved, judged against the memory the system reports free.
+`getLoadedModelInfo` can include `fitProbe`: verdict, a flat projection (`deviceBytes`, `hostBytes`, and the breakdown fields the engine filled), and the placement the fitter resolved, judged against the memory the system reports free. The probe runs on every engine that ships a fitter. `assessModelFit` model results can carry `device` and `reasons`. `fitStubBudgetMs` on config (default 40000) budgets the registry fetch of the weightless description.
 
 ### BCI stream placement and diagnostics
 
