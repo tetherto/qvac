@@ -2538,6 +2538,25 @@ TEST_F(
   }
 }
 
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesNamingOneCardTwiceAreRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["devices"] = "CUDA0,Vulkan0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"});
+  auto selection = splitSelection({"CUDA0", "Vulkan0"});
+  selection.devices[0].deviceId = "0000:01:00.0";
+  selection.devices[1].deviceId = "0000:01:00.0";
+  selection.dedupedTwins.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
   auto config = baseConfig();
   config["devices"] = "none";

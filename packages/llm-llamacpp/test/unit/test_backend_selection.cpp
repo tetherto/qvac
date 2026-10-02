@@ -3,6 +3,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -2622,6 +2623,33 @@ TEST_F(
       reinterpret_cast<ggml_backend_dev_t>(&mockBackend.devices[1]));
 }
 
+// One card whose Vulkan driver lacks VK_EXT_pci_bus_info: CUDA0 has an id and
+// Vulkan0 has none. Whichever side is selected, only that copy is kept.
+TEST_F(
+    BackendSelectionTest, ConstrainedSplitSelectionKeepsOneCopyOfIdlessCard) {
+  for (const auto& [selectedName, expected, dropped] :
+       std::vector<std::tuple<std::string, std::string, std::string>>{
+           {"cuda0", "CUDA0", "vulkan0"}, {"vulkan0", "Vulkan0", "cuda0"}}) {
+    mockBackend.clearDevices();
+    mockBackend.addDevice(withDeviceId(
+        MockDevice(
+            "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+        "0000:01:00.0"));
+    mockBackend.addDevice(MockDevice(
+        "NVIDIA RTX 4090", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"));
+    BackendInterface bckI = mockBackend.toBackendInterface();
+
+    const SplitDeviceSelection selection =
+        getSplitDeviceSelection(bckI, selectedName, {});
+
+    ASSERT_EQ(selection.devices.size(), 1U) << selectedName;
+    EXPECT_EQ(selection.devices[0].name, expected) << selectedName;
+    EXPECT_EQ(
+        selection.droppedAmbiguousDevices, std::vector<std::string>{dropped})
+        << selectedName;
+  }
+}
+
 TEST_F(
     BackendSelectionTest,
     ConstrainedSplitSelectionDropsDeviceWithoutRequestedKvCapability) {
@@ -2845,6 +2873,24 @@ TEST_F(BackendSelectionTest, SplitDevices_DedupesCudaAndVulkanAlias) {
       createGPUDevice("NVIDIA RTX 4090", "vulkan0"), "0000:01:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
+}
+
+// One card whose Vulkan driver lacks VK_EXT_pci_bus_info: CUDA0 has an id and
+// vulkan0 has none, so the two cannot be told apart. Only the first registry's
+// devices are kept, and the dropped one is reported and still nameable.
+TEST_F(BackendSelectionTest, SplitDevices_DropsIdlessTwinAcrossRegistries) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", "vulkan0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
+  EXPECT_EQ(
+      selection.droppedAmbiguousDevices, (std::vector<std::string>{"vulkan0"}));
+  ASSERT_EQ(selection.dedupedTwins.size(), 1u);
+  EXPECT_EQ(selection.dedupedTwins.front().name, "vulkan0");
 }
 
 // ggml-cuda suffixes the PCI bus id with -v<N> for virtual (MPS/MIG) devices
