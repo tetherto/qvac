@@ -201,7 +201,7 @@ class ParakeetInterface {
     append(data) {
         try {
             if (data?.type === constants_1.END_OF_INPUT) {
-                return Promise.resolve(this._submitBufferedJob());
+                return Promise.resolve(this._submitBufferedJob(data.job));
             }
             if (data?.type === "audio") {
                 return Promise.resolve(this._bufferAudioChunk(data.data));
@@ -214,13 +214,13 @@ class ParakeetInterface {
             return Promise.reject(createParakeetError(error_1.ERR_CODES_PARAKEET.FAILED_TO_APPEND, normalized.message, error));
         }
     }
-    _submitBufferedJob() {
+    _submitBufferedJob(job = {}) {
         const currentJobId = this._nextJobId;
         const input = this._concatBufferedAudio();
         const previousState = this._state;
         let accepted = false;
         try {
-            accepted = this._binding.runJob(this._handle, { type: "audio", input });
+            accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
         }
         catch (error) {
             this._setState(previousState);

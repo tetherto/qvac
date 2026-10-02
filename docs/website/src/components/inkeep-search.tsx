@@ -5,9 +5,11 @@ import {
   InkeepModalSearchAndChat,
   type InkeepModalSearchAndChatProps,
 } from '@inkeep/cxkit-react';
-import { useEffect, useState } from 'react';
+import { usePathname } from 'fumadocs-core/framework';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useAskAI } from '@/components/ask-ai';
+import { lineLabelOf, retrievalFilter } from '@/lib/retrieval-filter';
 
 /**
  * Fumadocs's `RootProvider` mounts this as the `Cmd/Ctrl+K` search
@@ -19,6 +21,12 @@ export default function CustomDialog(props: SharedProps) {
   const askAI = useAskAI();
   const [syncTarget, setSyncTarget] = useState<HTMLElement | null>(null);
   const { open, onOpenChange } = props;
+
+  // Scoped to wherever the reader opened the modal from, so a search started
+  // on an older line answers from that line. Recomputed on navigation, since
+  // the widget stays mounted once opened.
+  const pathname = usePathname();
+  const filters = useMemo(() => retrievalFilter(pathname), [pathname]);
 
   useEffect(() => {
     setSyncTarget(document.documentElement);
@@ -75,6 +83,12 @@ export default function CustomDialog(props: SharedProps) {
           isDarkMode: (attributes) => !!attributes.class?.includes('dark'),
         },
       },
+      // A result from an older line says so, so a reader scanning titles is
+      // never left to infer the release from a URL they may not read.
+      transformSource: (source) => {
+        const line = lineLabelOf(source.url);
+        return line ? { tag: line } : {};
+      },
     },
     modalSettings: {
       isOpen: open,
@@ -84,7 +98,7 @@ export default function CustomDialog(props: SharedProps) {
       // both modals opening.
       triggerSelector: '[data-inkeep-modal-trigger="search"]',
     },
-    searchSettings: {},
+    searchSettings: { filters },
     defaultView: 'search',
     aiChatSettings: {
       aiAssistantAvatar: '/qvac-icon.svg',

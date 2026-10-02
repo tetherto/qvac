@@ -2,247 +2,81 @@ import test from 'brittle'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
-import type { FitConfig, FitResult } from '@qvac/model-fit'
+import { AbortController } from 'bare-abort-controller'
 
-import { ModelType } from '@/schemas/index'
-import { createLlamaFitRequest } from '@/resources/model-fit/native-probe/create-llama-fit-request'
+import type { FitProbeRequest, FitProbeResult } from '@/resources/model-fit/native-probe/engine-fit'
 import {
   crashMarkerPath,
   crashedMarkerPath,
-  runInProcessFit,
-  toFitConfig
+  runInProcessFit
 } from '@/resources/model-fit/native-probe/run-in-process-fit'
 
-const CONFIG = {
-  modelPath: '/models/model.gguf',
-  params: { device: 'gpu', ctx_size: '4096', gpu_layers: '99' },
-  nCtxMin: 4096,
-  marginMiB: 1024
+const PROBE: FitProbeRequest = {
+  engine: 'llm-llamacpp',
+  request: {
+    modelPath: '/models/model.gguf',
+    params: { 'ctx-size': '4096', 'gpu-layers': '99' },
+    minCtxSize: 4096,
+    marginBytes: 1024 * 1024 * 1024
+  }
 }
 
-const FIT_PLAN: FitResult = {
-  status: 0,
-  fits: true,
-  reason: 'fits',
-  maxDevices: 1,
-  nDevices: 1,
-  nGpuDevices: 1,
-  nGpuLayers: 32,
-  nCtx: 4096,
-  nBatch: 512,
-  nUbatch: 512,
-  tensorSplit: [1],
-  buftOverrides: [],
-  splitMode: 1,
-  mainGpu: 0,
-  typeK: 1,
-  typeV: 1,
-  flashAttnType: 1
+const FIT_RESULT: FitProbeResult = {
+  engine: 'llm-llamacpp',
+  result: {
+    status: 'fits',
+    reason: 'fits',
+    gpuLayers: 32,
+    ctxSize: 4096,
+    devices: [],
+    deviceBytes: 5 * 1024 ** 3,
+    hostBytes: 0,
+    trainCtxSize: 8192,
+    expertCount: 0
+  }
 }
 
-function tempDir() {
+function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-in-process-fit-'))
 }
 
-test('toFitConfig: forwards path, context, offload, and margin', (t) => {
-  t.alike(toFitConfig(CONFIG), {
-    modelPath: '/models/model.gguf',
-    marginMiB: 1024,
-    nCtxMin: 4096,
-    nCtx: 4096,
-    nGpuLayers: 99
-  })
-})
-
-test('toFitConfig: omits auto context so the fitter can choose', (t) => {
-  const config = toFitConfig({
-    modelPath: '/models/model.gguf',
-    params: { ctx_size: '0' }
-  })
-  t.absent('nCtx' in config)
-})
-
-test('toFitConfig: maps KV, flash, split, and main-gpu onto FitConfig', (t) => {
-  t.alike(
-    toFitConfig({
-      modelPath: '/models/model.gguf',
-      params: {
-        device: 'gpu',
-        ctx_size: '4096',
-        gpu_layers: '99',
-        'cache-type-k': 'q8_0',
-        'cache-type-v': 'q8_0',
-        'flash-attn': 'on',
-        'split-mode': 'layer',
-        'main-gpu': '0'
-      }
-    }),
-    {
-      modelPath: '/models/model.gguf',
-      nCtx: 4096,
-      nGpuLayers: 99,
-      typeK: 8,
-      typeV: 8,
-      flashAttnType: 1,
-      splitMode: 1,
-      mainGpu: 0
-    }
-  )
-})
-
-test('toFitConfig: maps embedding flash_attn, batch, and split', (t) => {
-  t.alike(
-    toFitConfig({
-      modelPath: '/models/model.gguf',
-      params: {
-        gpu_layers: '99',
-        batch_size: '1024',
-        flash_attn: 'auto',
-        'split-mode': 'none'
-      }
-    }),
-    {
-      modelPath: '/models/model.gguf',
-      nGpuLayers: 99,
-      nBatch: 1024,
-      flashAttnType: -1,
-      splitMode: 0
-    }
-  )
-})
-
-test('toFitConfig: converts the params createLlamaFitRequest actually forwards', (t) => {
-  const completion = createLlamaFitRequest({
-    modelType: ModelType.llamacppCompletion,
-    modelPath: '/models/model.gguf',
-    modelConfig: {
-      ctx_size: 4096,
-      gpu_layers: 99,
-      device: 'gpu',
-      'cache-type-k': 'q8_0',
-      'cache-type-v': 'q8_0',
-      'flash-attn': 'on',
-      'main-gpu': 0,
-      'split-mode': 'layer'
-    },
-    isShardedModel: false
-  })
-  t.ok(completion.supported)
-  if (!completion.supported) return
-  t.alike(toFitConfig(completion.config), {
-    modelPath: '/models/model.gguf',
-    nCtxMin: 4096,
-    nCtx: 4096,
-    nGpuLayers: 99,
-    typeK: 8,
-    typeV: 8,
-    flashAttnType: 1,
-    splitMode: 1,
-    mainGpu: 0
-  })
-  t.absent('nUbatch' in toFitConfig(completion.config))
-  t.absent('swaFull' in toFitConfig(completion.config))
-
-  const embedding = createLlamaFitRequest({
-    modelType: ModelType.llamacppEmbedding,
-    modelPath: '/models/embed.gguf',
-    modelConfig: {
-      device: 'gpu',
-      gpuLayers: 99,
-      batchSize: 1024,
-      flashAttention: 'auto'
-    },
-    isShardedModel: false
-  })
-  t.ok(embedding.supported)
-  if (!embedding.supported) return
-  t.alike(toFitConfig(embedding.config), {
-    modelPath: '/models/embed.gguf',
-    nGpuLayers: 99,
-    nBatch: 1024,
-    flashAttnType: -1
-  })
-})
-
-test('toFitConfig: flash-attn true is not treated as on', (t) => {
+function exists(file: string): boolean {
   try {
-    toFitConfig({
-      modelPath: '/models/model.gguf',
-      params: { 'flash-attn': 'true' }
-    })
-    t.fail('expected flash-attn true to fail conversion')
-  } catch (error) {
-    t.ok(error instanceof TypeError)
-    t.ok(/Unsupported flash-attn/.test(String(error)))
+    fs.accessSync(file)
+    return true
+  } catch {
+    return false
   }
-})
+}
 
-test('toFitConfig: unmapped KV cache type fails instead of omitting', (t) => {
-  try {
-    toFitConfig({
-      modelPath: '/models/model.gguf',
-      params: { 'cache-type-k': 'tbq4_0' }
-    })
-    t.fail('expected unmapped KV cache type to fail conversion')
-  } catch (error) {
-    t.ok(error instanceof TypeError)
-    t.ok(/Unsupported KV cache type/.test(String(error)))
-  }
-})
-
-test('runInProcessFit: returns the native projection', async (t) => {
+test('runInProcessFit: returns the engine projection and clears the marker', async (t) => {
   const stateDir = tempDir()
-  const calls: FitConfig[] = []
+  const calls: FitProbeRequest[] = []
 
-  const result = await runInProcessFit('completion', CONFIG, {
+  const result = await runInProcessFit(PROBE, {
     stateDir,
-    fit: (config) => {
-      calls.push(config)
-      return FIT_PLAN
+    callFit: async (probe) => {
+      calls.push(probe)
+      return FIT_RESULT
     }
   })
 
-  t.alike(result, { status: 'completed', result: FIT_PLAN })
-  t.alike(calls, [toFitConfig(CONFIG)])
-  t.is(exists(crashMarkerPath(stateDir, CONFIG)), false)
-  t.is(exists(crashedMarkerPath(stateDir, CONFIG)), false)
+  t.alike(result, { status: 'completed', probe: FIT_RESULT })
+  t.alike(calls, [PROBE])
+  t.is(exists(crashMarkerPath(stateDir, PROBE)), false)
+  t.is(exists(crashedMarkerPath(stateDir, PROBE)), false)
 })
 
-test('runInProcessFit: awaits a promise-returning fit and clears the marker', async (t) => {
+test('runInProcessFit: a leftover running marker skips the native call', async (t) => {
   const stateDir = tempDir()
-
-  const result = await runInProcessFit('completion', CONFIG, {
-    stateDir,
-    fit: async () => FIT_PLAN
-  })
-  t.alike(result, { status: 'completed', result: FIT_PLAN })
-  t.is(exists(crashMarkerPath(stateDir, CONFIG)), false)
-
-  const rejected = await runInProcessFit('completion', CONFIG, {
-    stateDir,
-    fit: async () => {
-      throw new RangeError('nCtx exceeds the context length the model declares')
-    }
-  })
-  t.is(rejected.status, 'unknown')
-  if (rejected.status === 'unknown') {
-    t.is(rejected.reason, 'invocation-error')
-    t.ok(/exceeds the context length/.test(rejected.message))
-  }
-  t.is(exists(crashMarkerPath(stateDir, CONFIG)), false)
-  t.is(exists(crashedMarkerPath(stateDir, CONFIG)), false)
-})
-
-test('runInProcessFit: leftover crash marker is unknown and skips the native call', async (t) => {
-  const stateDir = tempDir()
-  fs.writeFileSync(crashMarkerPath(stateDir, CONFIG), '')
+  fs.writeFileSync(crashMarkerPath(stateDir, PROBE), '')
   let called = 0
 
-  const result = await runInProcessFit('completion', CONFIG, {
+  const result = await runInProcessFit(PROBE, {
     stateDir,
-    fit: () => {
+    callFit: async () => {
       called += 1
-      return FIT_PLAN
+      return FIT_RESULT
     }
   })
 
@@ -250,21 +84,20 @@ test('runInProcessFit: leftover crash marker is unknown and skips the native cal
   t.is(result.status, 'unknown')
   if (result.status !== 'unknown') return
   t.is(result.reason, 'crashed')
-  t.is(exists(crashMarkerPath(stateDir, CONFIG)), false)
-  t.is(exists(crashedMarkerPath(stateDir, CONFIG)), true)
+  t.is(exists(crashMarkerPath(stateDir, PROBE)), false)
+  t.is(exists(crashedMarkerPath(stateDir, PROBE)), true)
 })
 
-test('runInProcessFit: leftover crashed marker keeps skipping native', async (t) => {
+test('runInProcessFit: a leftover crashed marker keeps skipping native', async (t) => {
   const stateDir = tempDir()
-  fs.mkdirSync(stateDir, { recursive: true })
-  fs.writeFileSync(crashedMarkerPath(stateDir, CONFIG), '')
+  fs.writeFileSync(crashedMarkerPath(stateDir, PROBE), '')
   let called = 0
 
-  const result = await runInProcessFit('completion', CONFIG, {
+  const result = await runInProcessFit(PROBE, {
     stateDir,
-    fit: () => {
+    callFit: async () => {
       called += 1
-      return FIT_PLAN
+      return FIT_RESULT
     }
   })
 
@@ -272,15 +105,15 @@ test('runInProcessFit: leftover crashed marker keeps skipping native', async (t)
   t.is(result.status, 'unknown')
   if (result.status !== 'unknown') return
   t.is(result.reason, 'crashed')
-  t.is(exists(crashedMarkerPath(stateDir, CONFIG)), true)
+  t.is(exists(crashedMarkerPath(stateDir, PROBE)), true)
 })
 
-test('runInProcessFit: a thrown fit still clears the crash marker', async (t) => {
+test('runInProcessFit: a thrown fit is invocation-error and clears the marker', async (t) => {
   const stateDir = tempDir()
 
-  const result = await runInProcessFit('completion', CONFIG, {
+  const result = await runInProcessFit(PROBE, {
     stateDir,
-    fit: () => {
+    callFit: async () => {
       throw new TypeError('native exploded')
     }
   })
@@ -290,37 +123,27 @@ test('runInProcessFit: a thrown fit still clears the crash marker', async (t) =>
     reason: 'invocation-error',
     message: 'TypeError: native exploded'
   })
-  t.is(exists(crashMarkerPath(stateDir, CONFIG)), false)
-  t.is(exists(crashedMarkerPath(stateDir, CONFIG)), false)
+  t.is(exists(crashMarkerPath(stateDir, PROBE)), false)
+  t.is(exists(crashedMarkerPath(stateDir, PROBE)), false)
 })
 
-test('runInProcessFit: unmapped params are invocation-error and skip native', async (t) => {
+test('runInProcessFit: an aborted caller never reaches the fitter', async (t) => {
   const stateDir = tempDir()
+  const controller = new AbortController()
+  controller.abort(undefined)
   let called = 0
-  const config = {
-    modelPath: '/models/model.gguf',
-    params: { 'cache-type-k': 'tbq4_0' }
-  }
 
-  const result = await runInProcessFit('completion', config, {
+  const result = await runInProcessFit(PROBE, {
     stateDir,
-    fit: () => {
+    signal: controller.signal,
+    callFit: async () => {
       called += 1
-      return FIT_PLAN
+      return FIT_RESULT
     }
   })
 
   t.is(called, 0)
   t.is(result.status, 'unknown')
   if (result.status !== 'unknown') return
-  t.is(result.reason, 'invocation-error')
+  t.is(result.reason, 'cancelled')
 })
-
-function exists(file: string) {
-  try {
-    fs.accessSync(file)
-    return true
-  } catch {
-    return false
-  }
-}
