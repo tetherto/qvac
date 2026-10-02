@@ -80,6 +80,15 @@
 
 ### Fixed
 
+- A hybrid or recurrent request that diverged, restored a checkpoint and was
+  then rolled back (cancel during prefill, decode error, context overflow)
+  restored only the recurrent state of the pre-request snapshot. The KV cache
+  stayed trimmed to the checkpoint while the ledger went back to the old
+  cursor, so the next request continuing the old conversation decoded on top
+  of missing cells. The rollback now lands on the restored checkpoint.
+- A multimodal request cancelled while its reconciled text suffix was being
+  decoded no longer runs its whole prefill first: the stop is checked before
+  every chunk.
 - A single-prompt cache load on a parallel model no longer trims every
   sequence to the loaded length (`llama_memory_seq_rm` on seq `-1`), which
   truncated the batch slots' conversations; it trims its own sequence.

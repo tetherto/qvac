@@ -68,7 +68,7 @@ graph TB
 | Reuse of a diverging history | trim to the shared prefix, decode the rest | restore the longest checkpoint that is a prefix, decode the rest; cold prefill if none |
 | Pre-request snapshot | never | at the start of every cached request |
 | Checkpoints | never | one per committed cached request, at the end of its history (the pre-request snapshot only serves rollback) |
-| Rollback target | shared prefix with the request's prompt | state before the prompt was sent (the snapshot) |
+| Rollback target | shared prefix with the request's prompt | state before the prompt was sent (the snapshot); the restored checkpoint when the request diverged |
 | Disk writes for a chat with one `cacheKey` and no `saveCacheToDisk` | none | none by default; temp files with `cache_checkpoint_storage: disk` |
 
 The decision is `needsFullStateSnapshot` in `ModelMemoryPolicy.hpp`, by
@@ -229,7 +229,9 @@ run() → render and tokenize the full history
                                    cache_checkpoints
   rollback                         cancel during prefill, decode error, context
                                    overflow: memory is restored from ①, ② is
-                                   discarded
+                                   discarded. A request that diverged and
+                                   restored a checkpoint retakes ① there, so
+                                   the rollback lands on that checkpoint
 ```
 
 The next request uses the kept checkpoints in its reconcile step, before it

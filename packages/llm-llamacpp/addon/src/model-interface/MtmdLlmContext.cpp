@@ -626,6 +626,70 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
 
   size_t ledgerEntryIndex = 0;
   for (size_t i = 0; i < nChunks; i++) {
+    // Checked before every chunk, reused or not, so a cancel lands before
+    // anything in it is decoded, the reconciled suffix decoded by hand below
+    // included.
+    if (stopGeneration_.load()) {
+      if (cacheRequestActive_) {
+        // Cached request cancelled before it produced anything: restore the
+        // state from before the prompt was sent. Publish the decoded cursor
+        // first so the transaction rollback trims exactly what was added.
+        current_.pos = nPastLocal;
+        refreshCurrentCacheTokensFromMemory();
+        stopGeneration_.store(false);
+        return {
+            .ok = false,
+            .cancelled = true,
+            .rollbackOk = cancelGenerationCleanup([](const std::string&) {})};
+      }
+      // A prior chunk may have queued GPU work whose logits are never read on
+      // the cancel path. Finish it before rolling KV/recurrent state back.
+      llama_synchronize(modelCtx_.lctx);
+      bool rollbackOk = true;
+      if (requestRollback_.hasSnapshot()) {
+        // Recurrent / hybrid path: restore the pre-prefill snapshot to
+        // drop partially decoded chunks (including any committed image
+        // KV cells) in one call. `nPastLocal` is discarded because the
+        // restore returns the cache to its pre-prefill cursor.
+        const llama_pos restoredPos = requestRollback_.nPast();
+        if (requestRollback_.restore(modelCtx_.lctx, seqId_)) {
+          current_ = prefillEntryUsage;
+          refreshCurrentCacheTokensFromMemory();
+        } else {
+          // Restore underflowed: the recurrent half is in an undefined
+          // state. The fallback below is best-effort only; recurrent
+          // memory does not honour `removeLastNTokens`. Report
+          // rollbackOk=false so processPromptImpl resets live state and
+          // invalidates the active cache session before any later save
+          // can persist it.
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[MtmdLlm] prefill-entry full-state snapshot restore "
+                  "failed on cancel (nPastLocal=%d, snapshotPos=%d, "
+                  "seqId=%d); recurrent state may be inconsistent until "
+                  "the next full reset\n",
+                  nPastLocal,
+                  restoredPos,
+                  seqId_));
+          const llama_pos totalDelta = nPastLocal - current_.pos;
+          current_.pos = nPastLocal;
+          removeLastNTokens(totalDelta);
+          current_ = prefillEntryUsage;
+          rollbackOk = false;
+        }
+      } else {
+        const llama_pos totalDelta = nPastLocal - current_.pos;
+        current_.pos = nPastLocal;
+        removeLastNTokens(totalDelta);
+        if (needsFullStateSnapshot_ && current_.pos > prefillEntryUsage.pos) {
+          current_ = prefillEntryUsage;
+          rollbackOk = false;
+        }
+      }
+      stopGeneration_.store(false);
+      return {.ok = false, .cancelled = true, .rollbackOk = rollbackOk};
+    }
     bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
 
@@ -692,67 +756,6 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       }
     }
 
-    if (stopGeneration_.load()) {
-      if (cacheRequestActive_) {
-        // Cached request cancelled before it produced anything: restore the
-        // state from before the prompt was sent. Publish the decoded cursor
-        // first so the transaction rollback trims exactly what was added.
-        current_.pos = nPastLocal;
-        refreshCurrentCacheTokensFromMemory();
-        stopGeneration_.store(false);
-        return {
-            .ok = false,
-            .cancelled = true,
-            .rollbackOk = cancelGenerationCleanup([](const std::string&) {})};
-      }
-      // A prior chunk may have queued GPU work whose logits are never read on
-      // the cancel path. Finish it before rolling KV/recurrent state back.
-      llama_synchronize(modelCtx_.lctx);
-      bool rollbackOk = true;
-      if (requestRollback_.hasSnapshot()) {
-        // Recurrent / hybrid path: restore the pre-prefill snapshot to
-        // drop partially decoded chunks (including any committed image
-        // KV cells) in one call. `nPastLocal` is discarded because the
-        // restore returns the cache to its pre-prefill cursor.
-        const llama_pos restoredPos = requestRollback_.nPast();
-        if (requestRollback_.restore(modelCtx_.lctx, seqId_)) {
-          current_ = prefillEntryUsage;
-          refreshCurrentCacheTokensFromMemory();
-        } else {
-          // Restore underflowed: the recurrent half is in an undefined
-          // state. The fallback below is best-effort only; recurrent
-          // memory does not honour `removeLastNTokens`. Report
-          // rollbackOk=false so processPromptImpl resets live state and
-          // invalidates the active cache session before any later save
-          // can persist it.
-          QLOG_IF(
-              Priority::WARNING,
-              string_format(
-                  "[MtmdLlm] prefill-entry full-state snapshot restore "
-                  "failed on cancel (nPastLocal=%d, snapshotPos=%d, "
-                  "seqId=%d); recurrent state may be inconsistent until "
-                  "the next full reset\n",
-                  nPastLocal,
-                  restoredPos,
-                  seqId_));
-          const llama_pos totalDelta = nPastLocal - current_.pos;
-          current_.pos = nPastLocal;
-          removeLastNTokens(totalDelta);
-          current_ = prefillEntryUsage;
-          rollbackOk = false;
-        }
-      } else {
-        const llama_pos totalDelta = nPastLocal - current_.pos;
-        current_.pos = nPastLocal;
-        removeLastNTokens(totalDelta);
-        if (needsFullStateSnapshot_ && current_.pos > prefillEntryUsage.pos) {
-          current_ = prefillEntryUsage;
-          rollbackOk = false;
-        }
-      }
-      stopGeneration_.store(false);
-      return {.ok = false, .cancelled = true, .rollbackOk = rollbackOk};
-    }
     int32_t res;
     if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
       // Inlined copy of the IMAGE branch of qvac-fabric's
@@ -1442,6 +1445,14 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
       residentLedger_.entries.clear();
       current_ = {};
       checkpoint = "cold";
+    }
+    // Roll back to the restored state, not the pre-request one; see the same
+    // branch in TextLlmContext::reconcilePrompt.
+    preRequestLedger_ = residentLedger_;
+    preRequestCacheUsage_ = current_;
+    preRequestCacheSnapshot_.clear();
+    if (current_.pos > 0) {
+      capturePreRequestCacheSnapshot();
     }
   } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
     // The rollback target moves to the divergence point (see the same branch

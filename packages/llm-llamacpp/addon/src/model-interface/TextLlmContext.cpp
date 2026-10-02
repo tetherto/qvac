@@ -1243,6 +1243,17 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
       nPast_ = 0;
       checkpoint = "cold";
     }
+    // The restore (or the clear) replaced the memory the pre-request snapshot
+    // describes: the KV cells past the checkpoint are gone, and a partial
+    // snapshot holds no KV to bring them back. Roll this request back to the
+    // restored state instead, which the KV cache, the recurrent state and the
+    // ledger all agree on, as the attention branch below does.
+    preRequestLedger_ = residentLedger_;
+    preRequestNPast_ = nPast_;
+    preRequestCacheSnapshot_.clear();
+    if (nPast_ > 0) {
+      capturePreRequestCacheSnapshot();
+    }
   } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
     // Trimming discards resident state a tail trim cannot bring back, so the
     // rollback target moves to the divergence point instead of the

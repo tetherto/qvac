@@ -855,8 +855,12 @@ TEST_F(
   EXPECT_GE(limitGeneratedTokens, 64.0)
       << "n_predict is unbounded, so a long generation here means the "
          "scheduler slot cap, not n_predict, truncated the request";
-  EXPECT_LE(std::abs(limitCacheTokens - primeCacheTokens), 1.0)
-      << "sequence-limit truncation must roll back to the warm cache baseline";
+  // The limit prompt re-renders the primer's answer without its reasoning, so
+  // it restores the primer's end-of-history checkpoint first; the rollback
+  // lands there, inside the warm cache, and keeps nothing it generated.
+  EXPECT_GT(limitCacheTokens, 0.0);
+  EXPECT_LE(limitCacheTokens, primeCacheTokens)
+      << "sequence-limit truncation must roll back into the warm cache";
 
   auto sibling = makePrompt("What is 2+2? Answer with just the number.");
   sibling.generationParams.reasoning_budget = 0;

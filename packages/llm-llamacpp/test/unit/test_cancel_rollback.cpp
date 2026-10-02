@@ -659,6 +659,115 @@ TEST_F(
       << "post-cancel prefill must successfully decode tokens";
 }
 
+// A divergent turn on a hybrid model restores the end-of-history checkpoint
+// `c` (trimming the KV cache to `c`) before it prefills the new branch.
+// Cancelled in prefill, it must roll back to `c`, the state the KV cache, the
+// recurrent state and the ledger all agree on. The pre-request snapshot holds
+// only the recurrent state at the old cursor, so restoring it would leave the
+// ledger describing KV cells `[c, N_old)` that are gone. Hybrid `seq_pos_max`
+// is the lower of the two caches' ends, so it shows that gap.
+TEST_F(
+    TextLlmContextCancelTest,
+    DivergentHybridTurnCancelledInPrefillKeepsLedgerAndMemoryInStep) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  LlmModelContext shared = makeShared(*model);
+  auto* mem = llama_get_memory(shared.lctx);
+  ASSERT_NE(mem, nullptr);
+  llama_memory_seq_rm(mem, 0, -1, -1);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, /*seqId=*/0);
+  driver.setCacheReconciliationEnabled(true);
+
+  // Turn 1 commits and leaves an end-of-history checkpoint at the end of the
+  // user message.
+  const auto quiet = [](const std::string&) {};
+  ASSERT_TRUE(driver
+                  .evalMessageWithTools(
+                      {makeMsg("user", "Name three colours of the rainbow.")},
+                      {},
+                      /*isCacheLoaded=*/false,
+                      /*prefill=*/false)
+                  .ok);
+  (void)driver.generateResponse(quiet);
+  const llama_pos oldCursor = driver.getNPast();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, oldCursor);
+
+  // Turn 2 replaces turn 1's answer, so it diverges inside the resident
+  // history and restores the checkpoint. The stop lands on the first prefill
+  // check, after that restore.
+  driver.stop();
+  const LlmContext::EvalMessageResult cancelled = driver.evalMessageWithTools(
+      {makeMsg("user", "Name three colours of the rainbow."),
+       makeMsg("assistant", "Red, green and blue."),
+       makeMsg("user", "Which of them is warmest?")},
+      {},
+      /*isCacheLoaded=*/false,
+      /*prefill=*/false);
+  ASSERT_TRUE(cancelled.cancelled);
+  ASSERT_GT(driver.lastCacheReuseForTesting(), 0u)
+      << "turn 2 restored no checkpoint, so it does not exercise the "
+         "divergent hybrid path";
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, driver.getNPast())
+      << "after the rollback the driver's cursor (" << driver.getNPast()
+      << ", old cursor " << oldCursor
+      << ") does not match the end of live memory";
+  EXPECT_GT(driver.getNPast(), 0) << "the rollback lands on the checkpoint";
+  EXPECT_LT(driver.getNPast(), oldCursor)
+      << "the old cursor's KV cells are gone; the rollback cannot land there";
+  llama_memory_seq_rm(mem, 0, -1, -1);
+}
+
+// The same on the multimodal context, driven through the model's own context.
+TEST_F(
+    TextLlmContextCancelTest,
+    DivergentMtmdHybridTurnCancelledInPrefillKeepsLedgerAndMemoryInStep) {
+  auto model = loadMtmdModel(qwen35HybridModelPath(), qwen35MmprojPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model or mmproj not found";
+  }
+  auto* mtmd =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(mtmd, nullptr);
+  auto* mem = llama_get_memory(mtmd->getCtx());
+  ASSERT_NE(mem, nullptr);
+  mtmd->setCacheReconciliationEnabled(true);
+
+  const auto quiet = [](const std::string&) {};
+  ASSERT_TRUE(mtmd->evalMessageWithTools(
+                      {makeMsg("user", "Name three colours of the rainbow.")},
+                      {},
+                      /*isCacheLoaded=*/false,
+                      /*prefill=*/false)
+                  .ok);
+  (void)mtmd->generateResponse(quiet);
+  const llama_pos oldCursor = mtmd->getNPast();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, oldCursor);
+
+  mtmd->stop();
+  const LlmContext::EvalMessageResult cancelled = mtmd->evalMessageWithTools(
+      {makeMsg("user", "Name three colours of the rainbow."),
+       makeMsg("assistant", "Red, green and blue."),
+       makeMsg("user", "Which of them is warmest?")},
+      {},
+      /*isCacheLoaded=*/false,
+      /*prefill=*/false);
+  ASSERT_TRUE(cancelled.cancelled);
+  ASSERT_GT(mtmd->lastCacheReuseForTesting(), 0u)
+      << "turn 2 restored no checkpoint, so it does not exercise the "
+         "divergent hybrid path";
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, mtmd->getNPast())
+      << "after the rollback the cursor (" << mtmd->getNPast()
+      << ", old cursor " << oldCursor
+      << ") does not match the end of live memory";
+  EXPECT_GT(mtmd->getNPast(), 0);
+  EXPECT_LT(mtmd->getNPast(), oldCursor);
+}
+
 // Calling `onCancel` on a hybrid driver after prefill must restore the
 // pre-request snapshot — i.e. roll the cache back to the cursor that
 // existed BEFORE this request's prompt was submitted, matching the
@@ -1315,9 +1424,12 @@ TEST(
   fs::remove(cachePath);
 }
 
-// Cancelling a cached request during prefill rolls it back to the state from
-// before the prompt was sent: the caller received nothing, so nothing is
-// kept. The seed cursor and the on-disk file must be exactly as they were.
+// Cancelling a cached request during prefill rolls it back: the caller
+// received nothing, so nothing it added is kept and the on-disk file is
+// untouched. The seed ends with its generation prompt, which the second user
+// message replaces, so the request restores the seed's end-of-history
+// checkpoint first and the rollback lands there, short of the seed cursor:
+// those KV cells are gone, and memory must end where the cursor says.
 TEST(
     TextLlmContextCancelDuringGenerationTest,
     SinglePromptHybridPrefillCancelRollsBackToSeed) {
@@ -1399,8 +1511,13 @@ TEST(
   ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
   worker.join();
 
-  EXPECT_EQ(baseCtx->getNPast(), preRequestNPast)
-      << "a cancelled cached prefill must restore the seed cursor";
+  EXPECT_GT(baseCtx->getNPast(), 0);
+  EXPECT_LE(baseCtx->getNPast(), preRequestNPast)
+      << "a cancelled cached prefill must keep nothing it decoded";
+  EXPECT_EQ(
+      llama_memory_seq_pos_max(llama_get_memory(baseCtx->getCtx()), 0) + 1,
+      baseCtx->getNPast())
+      << "the cursor must match the end of live memory";
   EXPECT_EQ(readBinaryFile(cachePath), before)
       << "a cancelled prefill must not rewrite the last known-good cache";
 
