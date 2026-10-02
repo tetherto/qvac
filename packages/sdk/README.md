@@ -20,7 +20,7 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 ## Supported environments and installation
 
-For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. This leaves `bare-ffmpeg` out of the native addon manifest. Keep the default setting when the app decodes compressed audio files. The `audiogen-ggml` plugin always requires `bare-ffmpeg`.
+For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the native addon manifest. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
 
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 

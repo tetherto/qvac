@@ -19,5 +19,6 @@ defaults are intentionally not duplicated here.
 
 `includeAudioDecoder` is a bundle-time option consumed by the SDK. Set it to
 `false` for workers that only process raw PCM or streaming audio, and list the
-required plugins explicitly. Compressed audio file decoding requires the
-default value, `true`.
+required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without
+FFmpeg. Compressed audio file decoding and compressed audiogen output formats
+require `bare-ffmpeg` to be bundled.

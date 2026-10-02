@@ -125,36 +125,11 @@ const AUDIO_PLUGINS = new Set([
   'audiogen-ggml'
 ])
 
-function usesAudioDecoder(pluginSpecifiers: string[], sdkName: string): boolean {
-  return pluginSpecifiers.some((specifier) => {
+function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
+  return pluginSpecifiers.filter((specifier) => {
     const builtin = parseBuiltinSpecifier(specifier, sdkName)
     return builtin !== null && AUDIO_PLUGINS.has(builtin.suffix)
   })
-}
-
-export function checkAudioDecoderCapability(
-  deferModules: string[],
-  pluginSpecifiers: string[],
-  sdkName: string,
-  includeAudioDecoder: boolean
-): void {
-  if (
-    !includeAudioDecoder &&
-    pluginSpecifiers.some((specifier) => specifier === `${sdkName}/audiogen-ggml/plugin`)
-  ) {
-    throw new Error(
-      'The audiogen-ggml plugin requires bare-ffmpeg. Remove the plugin or enable includeAudioDecoder in qvac.config.*.'
-    )
-  }
-  if (
-    includeAudioDecoder &&
-    usesAudioDecoder(pluginSpecifiers, sdkName) &&
-    deferModules.includes(AUDIO_DECODER_ADDON)
-  ) {
-    throw new Error(
-      'Audio plugins need bare-ffmpeg for file decoding. Remove bare-ffmpeg from --defer or set includeAudioDecoder: false in qvac.config.* for PCM-only use.'
-    )
-  }
 }
 
 async function checkBundleEngines(options: CheckBundleEnginesOptions) {
@@ -243,17 +218,21 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
 
-  const deferModules =
-    config.includeAudioDecoder === false
-      ? [...new Set([...(options.defer ?? []), AUDIO_DECODER_ADDON])]
-      : (options.defer ?? [])
+  const explicitDefer = options.defer ?? []
+  const includeAudioDecoder =
+    config.includeAudioDecoder !== false && !explicitDefer.includes(AUDIO_DECODER_ADDON)
+  const deferModules = includeAudioDecoder
+    ? explicitDefer
+    : [...new Set([...explicitDefer, AUDIO_DECODER_ADDON])]
 
-  checkAudioDecoderCapability(
-    deferModules,
-    pluginSpecifiers,
-    sdkName,
-    config.includeAudioDecoder !== false
-  )
+  if (!includeAudioDecoder) {
+    const affected = audioPluginsIn(pluginSpecifiers, sdkName)
+    if (affected.length > 0) {
+      logger.warn(
+        `${AUDIO_DECODER_ADDON} is not bundled: ${affected.join(', ')} cannot decode compressed audio files; compressed audiogen output formats also require FFmpeg.`
+      )
+    }
+  }
 
   await fsp.mkdir(outputDir, { recursive: true })
 
@@ -296,7 +275,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
           projectRoot,
           hosts,
           addons: (await collectAddonsFromBundle({ bundlePath, projectRoot, hosts })).filter(
-            (addon) => config.includeAudioDecoder !== false || addon.name !== AUDIO_DECODER_ADDON
+            (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
           ),
           quiet: options.quiet === true,
           logger
@@ -330,7 +309,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     outputDir,
     projectRoot,
     logger,
-    includeAudioDecoder: config.includeAudioDecoder !== false
+    includeAudioDecoder
   })
 
   if (options.checkEngines !== false) {
