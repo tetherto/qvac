@@ -14,6 +14,7 @@
 #include "model-interface/bci/BCIConfig.hpp"
 #include "model-interface/bci/BCIModel.hpp"
 #include "model-interface/bci/NeuralProcessor.hpp"
+#include "model-interface/bci/NeuralSignalParse.hpp"
 
 using namespace qvac_lib_inference_addon_bci;
 
@@ -114,6 +115,16 @@ TEST(NeuralProcessor, ProcessToMelRejectsSmallBuffer) {
   NeuralProcessor processor;
   std::vector<uint8_t> tooSmall = {1, 2, 3};
   EXPECT_THROW(processor.processToMel(tooSmall), std::exception);
+}
+
+TEST(NeuralProcessor, ProcessToMelRejectsDimensionOverflow) {
+  NeuralProcessor processor;
+  std::vector<uint8_t> buffer(K_NEURAL_SIGNAL_HEADER_BYTES);
+  const uint32_t timesteps = std::numeric_limits<uint32_t>::max();
+  const uint32_t channels = std::numeric_limits<uint32_t>::max();
+  std::memcpy(buffer.data(), &timesteps, sizeof(uint32_t));
+  std::memcpy(buffer.data() + sizeof(uint32_t), &channels, sizeof(uint32_t));
+  EXPECT_THROW(processor.processToMel(buffer), std::exception);
 }
 
 TEST(NeuralProcessor, GaussianSmoothPreservesSize) {
