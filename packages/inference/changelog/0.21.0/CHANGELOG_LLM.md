@@ -127,27 +127,40 @@ Workers bind to loopback unless `allowNonLoopbackHost` is set. The channel is un
 
 ### Deferred tool loading
 
-Set `deferLoading: true` on a tool (or on an MCP client entry) so the first prompt carries only always-loaded tools, a built-in `tool_search`, and a short catalog of names and one-line descriptions grouped by `group`. The model searches once, the engine appends the matching definitions as a tool result, and the model calls them natively on its next step. Tools without the flag work as they do today. `completion()` stays stateless and reads loaded tools back from history, so reopened chats keep them and concurrent chats cannot mix.
+A tool may set `deferLoading: true` (or an MCP client entry, to defer all its tools). The first prompt then carries only always-loaded tools and a built-in `tool_search` whose description lists the deferred tools by name and description. When the model calls `tool_search`, run `executeToolSearch()` and push its result as a `tool` message; the matching definitions are callable from the next turn. `completion()` stays stateless and reads the loaded set back from history, so keep that message. Tools without the flag are unchanged.
 
 ```typescript
-completion({
-  modelId,
-  history,
-  tools: [
-    { type: 'function', name: 'get_weather', description: '...', parameters },
-    {
-      type: 'function',
-      name: 'create_issue',
-      description: 'Open a new issue on a repository',
-      group: 'github',
-      deferLoading: true,
-      parameters
-    }
-  ]
-})
+import { completion, executeToolSearch, TOOL_SEARCH_NAME } from '@qvac/inference'
+
+const tools = [
+  { name: 'get_weather', description: '...', parameters },
+  {
+    name: 'create_issue',
+    description: 'Open a new issue on a repository',
+    parameters,
+    deferLoading: true,
+    group: 'github'
+  }
+]
+
+const run = completion({ modelId, history, tools })
+history.push({ role: 'assistant', content: (await run.final).raw.fullText })
+for (const call of await run.toolCalls) {
+  const content =
+    call.name === TOOL_SEARCH_NAME
+      ? executeToolSearch(tools, call.arguments, history)
+      : await runTool(call)
+  history.push({ role: 'tool', content })
+}
+
+// Defer every tool an MCP client exposes
+completion({ modelId, history, mcp: [{ client, deferLoading: true, group: 'github' }] })
 ```
 
-`tool_search` is reserved. `generationParams.tool_choice` cannot name a deferred tool.
+New options: `deferLoading` and `group` on tools and on `McpClientInput`.
+New exports: `TOOL_SEARCH_NAME`, `executeToolSearch(tools, args, history)`, `loadedToolNames(history)`, `searchDeferredTools(deferred, query, limit?)`, `buildToolSearchTool(deferred)`.
+
+`tool_search` is reserved. `generationParams.tool_choice` cannot name a deferred tool; force `tool_search` or drop `deferLoading` from that tool.
 
 ### MOSS TTS
 
