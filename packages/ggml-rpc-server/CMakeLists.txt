@@ -15,6 +15,14 @@ target_sources(
   ${ggml-rpc-server-addon}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/binding.cpp
+    ${PROJECT_SOURCE_DIR}/addon/rpc-server-core.cpp
 )
 qvac_addon_link_fabric(${ggml-rpc-server-addon} ${qvac_fabric_target})
 qvac_addon_finalize(${ggml-rpc-server-addon} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+
+if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  include(GoogleTest)
+  enable_testing()
+  add_subdirectory(test/unit)
+endif()
