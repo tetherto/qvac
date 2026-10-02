@@ -5,13 +5,9 @@
  *
  * Page model
  * ----------
- * Every minor line lives at `content/docs/reference/release-notes/v<X.Y>.x.mdx`
- * — no exception for the current latest. The bare canonical URL
- * `/reference/release-notes` is served by the shim `index.mdx`, which
- * `<include>`s the current latest series file via Fumadocs'
- * `remarkInclude` plugin. Rotating latest is a shim rewrite + a
- * `_redirects` block update (see `release-version-minor.ts`); this
- * script never has to know which minor is the current latest.
+ * Each documentation line has one release-notes page, at
+ * `content/docs/sdk/<line>/reference/release-notes.mdx`, and it accumulates
+ * that line's patch releases as `## vX.Y.Z` blocks.
  *
  * The `## vX.Y.0` block is written by the minor release; subsequent
  * patches insert their `## vX.Y.Z` section directly after the minor
@@ -39,15 +35,17 @@
  *   v0.X.<N>" range. Re-running with the same patch is idempotent —
  *   the existing section is replaced in place.
  * - **`--title-only`**: rewrites only the frontmatter `title:` line of
- *   the existing target MDX. Handy for one-off relabel of a series
- *   page without re-rendering its body.
+ *   the existing target MDX. Used by the minor orchestrator to relabel
+ *   a freshly-frozen series snapshot from `vX.Y.x (latest)` to plain
+ *   `vX.Y.x` without touching the body.
  *
- * Targets
- * -------
- * - `--target=<file>`: write to `release-notes/<file>` (used by both
- *   patch flows to address `vX.Y.x.mdx` explicitly)
- * - otherwise: default to the series-named sibling
- *   `vX.Y.x.mdx` derived from the version arg
+ * Target
+ * ------
+ * The release notes of the SDK's current documentation line,
+ * `content/docs/sdk/<current line>/reference/release-notes.mdx`, resolved
+ * from the version manifest. A released line is never regenerated — it is
+ * what the site already serves — so there is one target and no way to name
+ * another.
  *
  * Usage:
  *   bun run scripts/generate-release-notes.ts <version> [flags]
@@ -64,9 +62,9 @@ import {
   type OverrideSection,
 } from "./lib/changelog-parser";
 import {
+  releaseNotesPageFor,
   parseVersion,
   rewriteFrontmatterTitleLine,
-  seriesFileName,
   seriesName,
 } from "./lib/release-shared.js";
 
@@ -245,22 +243,19 @@ async function main() {
   const version = args.find((arg) => !arg.startsWith("--"));
   const appendPatch = args.includes("--append-patch");
   const titleOnly = args.includes("--title-only");
-  const targetFlag = args.find((arg) => arg.startsWith("--target="));
-  const target = targetFlag ? targetFlag.slice("--target=".length) : null;
 
   if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
     console.error(
-      "Usage: bun run scripts/generate-release-notes.ts <version> [--target=<file>] [--append-patch] [--title-only]",
+      "Usage: bun run scripts/generate-release-notes.ts <version> [--append-patch] [--title-only]",
     );
     console.error("  version must be semver (e.g. 0.11.1)");
     process.exit(1);
   }
 
-  if (args.includes("--latest")) {
+  if (args.some((arg) => arg.startsWith("--target="))) {
     console.error(
-      "Error: --latest is no longer supported. Under the shim-based layout every\n" +
-        "series (including the current latest) lives at v<X.Y>.x.mdx. The default\n" +
-        "target already resolves to that filename; drop the flag.",
+      "Error: --target is gone. The release notes are one page per " +
+        "documentation line, written to the current line the manifest declares.",
     );
     process.exit(1);
   }
@@ -275,32 +270,20 @@ async function main() {
   const parsed = parseVersion(version);
   const series = seriesName(parsed);
   const websiteDir = process.cwd();
-  const releaseNotesDir = resolve(
-    websiteDir,
-    "content",
-    "docs",
-    "reference",
-    "release-notes",
-  );
-
-  // Resolve the output target. Default falls back to the series-named
-  // sibling for the version's minor.
-  const outputPath = resolve(
-    releaseNotesDir,
-    target ?? seriesFileName(parsed.major, parsed.minor),
-  );
+  const outputPath = releaseNotesPageFor(parsed);
 
   // -------------------------------------------------------------------
-  // Title-only path — relabel a series page without touching the body.
+  // Title-only path — relabel a freshly-frozen archived snapshot.
   // -------------------------------------------------------------------
   if (titleOnly) {
-    console.log(`📝 Title-only update for SDK Release Notes — ${series}...`);
+    const titleLabel = `${series} (latest)`;
+    console.log(`📝 Title-only update for SDK Release Notes — ${titleLabel}...`);
     console.log(`   Target: ${outputPath}`);
     await rewriteFrontmatterTitleLine(
       outputPath,
-      `SDK Release Notes — ${series}`,
+      `SDK Release Notes — ${titleLabel}`,
     );
-    console.log(`✅ Title-only update complete (${series})`);
+    console.log(`✅ Title-only update complete (${titleLabel})`);
     return;
   }
 
@@ -423,7 +406,9 @@ async function main() {
     );
   }
 
-  const pageTitle = `SDK Release Notes — ${series}`;
+  // The marker is unconditional: the only line this can write to is the
+  // current one, and dropping it would demote the line it just wrote into.
+  const pageTitle = `SDK Release Notes — ${series} (latest)`;
   const pageDescription = describeReleaseRange([`v${version}`], series);
 
   const rendered = nunjucks.render("release-notes-page.njk", {
