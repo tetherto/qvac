@@ -796,6 +796,23 @@ TEST_F(BackendSelectionTest, CudaAndVulkanSamePciIdKeepsRegistryFirst) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
 }
 
+// One card whose Vulkan driver lacks VK_EXT_pci_bus_info: CUDA0 has an id and
+// the Vulkan entry has none, so a twin cannot be ruled out and only the first
+// registry's devices are kept.
+TEST_F(BackendSelectionTest, IdlessTwinAcrossRegistriesKeepsFirstRegistry) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
+  EXPECT_EQ(
+      selection.droppedAmbiguousDevices,
+      (std::vector<std::string>{VULKAN0_BACK}));
+}
+
 // Fabric compares raw ids with strcmp, so CUDA virtual devices stay distinct.
 TEST_F(BackendSelectionTest, CudaVirtualDeviceIdsAreKeptDistinct) {
   mockBackend.addDevice(withDeviceId(
@@ -811,12 +828,16 @@ TEST_F(BackendSelectionTest, CudaVirtualDeviceIdsAreKeptDistinct) {
       getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
 }
 
+// Two distinct cards, so neither is a possible twin of the other.
 TEST_F(BackendSelectionTest, SplitDeviceSelectionPreservesSourceGpuIndices) {
-  mockBackend.addDevice(MockDevice(
-      "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0"));
   mockBackend.addDevice(
       MockDevice("AMD Radeon", "ROCm0", GGML_BACKEND_DEVICE_TYPE_GPU, "HIP"));
-  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 4090", VULKAN0_BACK), "0000:02:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
   ASSERT_EQ(selection.devices.size(), 2U);

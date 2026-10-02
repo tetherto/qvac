@@ -364,9 +364,19 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
   selected.rejectedDevices = available.rejectedDevices;
   selected.devices.reserve(requested.size());
   for (const std::string& name : requested) {
-    const auto match = std::ranges::find(
-        available.devices, name, &backend_selection::SplitDevice::name);
-    if (match == available.devices.end()) {
+    // A name the automatic dedupe dropped, such as Vulkan0 when CUDA0 is the
+    // same card, is still a valid explicit choice.
+    const backend_selection::SplitDevice* match = nullptr;
+    for (const auto* candidates :
+         {&available.devices, &available.dedupedTwins}) {
+      const auto found = std::ranges::find(
+          *candidates, name, &backend_selection::SplitDevice::name);
+      if (found != candidates->end()) {
+        match = &*found;
+        break;
+      }
+    }
+    if (match == nullptr) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
@@ -374,6 +384,18 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
               "for this load.\n",
               K_LEGACY_PARSER_NAME.data(),
               name.c_str()));
+    }
+    for (const backend_selection::SplitDevice& earlier : selected.devices) {
+      if (!match->deviceId.empty() && earlier.deviceId == match->deviceId) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "%s: devices '%s' and '%s' from 'devices' are the same GPU "
+                "under two backends; name it once.\n",
+                K_LEGACY_PARSER_NAME.data(),
+                earlier.name.c_str(),
+                name.c_str()));
+      }
     }
     selected.devices.push_back(*match);
   }
@@ -1232,8 +1254,9 @@ NormalizedLoad normalizeLoadForFit(
 
   // The deprecated mmap and direct-io flags are separate options that both
   // assign params.load_mode, and llama_load_mode is a flat selector rather
-  // than a bitfield, so the generic loop would let whichever ran last erase
-  // the other. Flags agreeing on a mode are left to it.
+  // than a bitfield, so whichever ran last would erase the other. They are
+  // applied here and never reach the argument parser, which dropped them in
+  // b11018.
   struct DeprecatedLoadFlag {
     const char* key;
     bool isPositive;
@@ -1282,6 +1305,10 @@ NormalizedLoad normalizeLoadForFit(
     }
     deprecatedMode = mode;
     deprecatedKey = flag.key;
+    configFilemap.erase(it);
+  }
+  if (deprecatedMode.has_value()) {
+    params.load_mode = deprecatedMode.value();
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
@@ -1484,6 +1511,21 @@ NormalizedLoad normalizeLoadForFit(
           explicitDevices.empty()
               ? dependencies.splitDevices(selected.name, constraints)
               : dependencies.allSplitDevices();
+      if (explicitDevices.empty() &&
+          !splitSelection.droppedAmbiguousDevices.empty()) {
+        std::string dropped;
+        for (const std::string& device :
+             splitSelection.droppedAmbiguousDevices) {
+          dropped += (dropped.empty() ? "" : ", ") + device;
+        }
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] split leaves out %s: a device without a device "
+                "id may be the same GPU under another backend. Name the "
+                "devices to use them.\n",
+                dropped.c_str()));
+      }
       retainCurrentRpcDevices(
           splitSelection,
           registeredRpcDevices,

@@ -166,12 +166,20 @@ struct SplitDevice {
   std::optional<int> adrenoVersion;
   bool isOpenCl = false;
   bool isMetal = false;
+  std::string deviceId;
 };
 
 struct SplitDeviceSelection {
   std::vector<SplitDevice> devices;
   size_t sourceGpuCount = 0;
   std::vector<std::string> rejectedDevices;
+  // Discrete devices left out as a possible twin of a kept one, so the same
+  // card is not split across two backends. An explicit `devices` list may
+  // still name them.
+  std::vector<SplitDevice> dedupedTwins;
+  // The subset dropped only because a twin could not be ruled out, with no
+  // device id to compare. The caller warns about them.
+  std::vector<std::string> droppedAmbiguousDevices;
 };
 
 SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
