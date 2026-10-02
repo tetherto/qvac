@@ -430,9 +430,10 @@ jobs:
         shell: bash
         run: npm install
 
-      # Ahead of the global bare-make 1.8.0 pin from setup-bare-tooling.
-      # The local binary is current bare-make, and prepending its bin makes
-      # the vcpkg toolchain's find_program(bare-make) select it too.
+      # Local install, not `npm install -g`. The global pin is bare-make
+      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
+      # is prepended so generate and the vcpkg toolchain's
+      # find_program(bare-make) both use the current package.
       - name: Install current bare-make locally
         working-directory: ${{ env.WORKDIR }}
         shell: bash

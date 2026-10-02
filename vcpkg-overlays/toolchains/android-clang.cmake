@@ -17,7 +17,6 @@ else()
     "qvac android-clang: no bare-make toolchain for VCPKG_TARGET_ARCHITECTURE='${VCPKG_TARGET_ARCHITECTURE}'")
 endif()
 
-set(_qvac_bare_make_label "qvac android-clang")
 include("${CMAKE_CURRENT_LIST_DIR}/include-bare-make-toolchain.cmake")
 
 include("$ENV{VCPKG_ROOT}/scripts/toolchains/android.cmake")

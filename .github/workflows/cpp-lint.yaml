@@ -137,12 +137,6 @@ jobs:
         with:
           node-version: lts/*
 
-      # Local install, not `npm install -g`. The runner image's global pin is
-      # bare-make 1.8.0, whose cmake-toolchains selects system clang-22.
-      # This job must use the current bare-make (llvm-runtime clang 23).
-      # node_modules/.bin is prepended so the vcpkg toolchain's
-      # find_program(bare-make) resolves the same binary.
-
       # - if: ${{ inputs.include-vulkan-sdk }}
       #   name: Setup Vulkan SDK
       #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@2e2c94d66a50c8b8851824314e343ede5297eb1f
@@ -165,6 +159,10 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
+      # Local install, not `npm install -g`. The global pin is bare-make
+      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
+      # is prepended so generate and the vcpkg toolchain's
+      # find_program(bare-make) both use the current package.
       - name: Install current bare-make locally
         shell: bash
         working-directory: ${{ env.WORKDIR }}

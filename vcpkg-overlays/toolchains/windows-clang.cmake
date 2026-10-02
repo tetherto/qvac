@@ -17,7 +17,6 @@ else()
     "qvac windows-clang: no bare-make toolchain for VCPKG_TARGET_ARCHITECTURE='${VCPKG_TARGET_ARCHITECTURE}'")
 endif()
 
-set(_qvac_bare_make_label "qvac windows-clang")
 include("${CMAKE_CURRENT_LIST_DIR}/include-bare-make-toolchain.cmake")
 
 # vcpkg configures ports with its own CMake, which links MSVC-style targets
