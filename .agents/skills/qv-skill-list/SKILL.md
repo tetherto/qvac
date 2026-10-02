@@ -17,7 +17,7 @@ All custom repo skills live under `.agents/skills/` and use the `qv-` prefix. In
 | Mode | Behavior |
 |------|----------|
 | **Auto-invokable** | No `disable-model-invocation` in frontmatter — the agent may load the skill when your request matches the description. |
-| **Manual only** | `disable-model-invocation: true` — invoke explicitly with `/qv-<name>` (or ask the agent to run that skill). |
+| **Manual only** | `disable-model-invocation: true` or `agents/openai.yaml` with `allow_implicit_invocation: false` — invoke explicitly with `/qv-<name>` (or ask the agent to run that skill). |
 
 When unsure which skill fits, scan the tables below or ask: *"which qv skill should I use for …?"*
 
@@ -97,6 +97,14 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 ---
 
+## Code quality
+
+| Skill | Purpose | Use when |
+|-------|---------|----------|
+| [`qv-quality-reporting`](../qv-quality-reporting/SKILL.md) | Run deterministic quality analysis, triage cohesive debt groups, and prepare approval-gated Asana proposals. | Initial debt triage, recurring quality review, or twice-monthly reporting setup. **Manual:** `/qv-quality-reporting` |
+
+---
+
 ## Ecosystem and compliance
 
 | Skill | Purpose | Use when |
@@ -154,4 +162,5 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |
+| Triage code-quality debt | `qv-quality-reporting` |
 | List all skills | `qv-skill-list` (this file) |

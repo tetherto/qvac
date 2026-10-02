@@ -21,10 +21,10 @@ const DEFERRED_MODULES = ['expo-file-system', 'react-native-bare-kit']
 
 /**
  * Desktop-only spawn path, deferred so bare-pack does not walk `bare-process`
- * -> `bare-posix` (no `android-arm64` prebuild). Mobile advisory uses
- * in-process `@qvac/model-fit` (`fitParams`), not this subprocess.
+ * -> `bare-posix` (no `android-arm64` prebuild). Mobile runs the engine fitter
+ * in process instead, so it never reaches this.
  */
-const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn', '@qvac/model-fit/process']
+const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn']
 
 type MobilePlatform = 'android' | 'ios'
 
@@ -157,19 +157,12 @@ async function runVerifier(
   configPath: string | null,
   hosts: string[]
 ) {
-  if (!configPath) {
-    console.log(
-      '⚠️ QVAC: no qvac.config.* found — Bare runtime will be auto-detected ' +
-        'from node_modules (bare-runtime, then bare). Add qvac.config.json ' +
-        'with `bareRuntimeVersion` to pin ABI checks deterministically.'
-    )
-  }
-
   const result = await verifyBundle({
     projectRoot,
     addonsSource: generatedBundle,
     hosts,
-    ...(configPath ? { configPath } : {})
+    ...(configPath ? { configPath } : {}),
+    onProgress: (message) => console.log(`🕚 QVAC: ${message}`)
   })
 
   if (hasErrors(result)) {
@@ -195,7 +188,9 @@ async function runBundler(
     ...(configPath ? { configPath } : {}),
     hosts,
     defer: deferredModules,
-    quiet: true
+    quiet: true,
+    // runVerifier checks engines.bare right after, with progress output.
+    checkEngines: false
   })
 
   return linkerPaths

@@ -24,6 +24,7 @@ export const SDK_SERVER_ERROR_CODES = {
   LEGACY_TTS_MODEL_DEPRECATED: 52211,
 
   // Model Operations (52,400-52,799)
+  RPC_SERVER_OPERATION_FAILED: 52423,
   MODEL_UNLOAD_FAILED: 52400,
   EMBED_FAILED: 52401,
   EMBED_NO_EMBEDDINGS: 52402,
@@ -202,6 +203,10 @@ const serverErrorDefinitions: ErrorCodesMap = {
   },
 
   // Model Operations (52,400-52,799)
+  [SDK_SERVER_ERROR_CODES.RPC_SERVER_OPERATION_FAILED]: {
+    name: 'RPC_SERVER_OPERATION_FAILED',
+    message: (operation: string, details: string) => `${operation}: ${details}`
+  },
   [SDK_SERVER_ERROR_CODES.MODEL_UNLOAD_FAILED]: {
     name: 'MODEL_UNLOAD_FAILED',
     message: (modelId?: string) => `Failed to unload model${modelId ? ` "${modelId}"` : ''}`

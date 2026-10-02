@@ -6,10 +6,14 @@ import type { ResolveContext } from '@/schemas/plugin'
 import { getPlugin } from '@/plugins/registry'
 import { getRuntimeContext } from '@/runtime/state'
 import { formatZodError } from '@/utils/zod-error'
+import { getModelByPath } from '@/models/registry/index'
 import {
   fetchFitStub,
+  fetchFitStubSet,
   removeStub,
   type FitStubOptions,
+  type FitStubSet,
+  type FitStubSetMember,
   type FitStubUnavailableReason
 } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
 
@@ -53,6 +57,28 @@ function stubRefFor(modelSrc: ModelSrcInput) {
     registryPath,
     ...(registrySource !== undefined && { registrySource })
   }
+}
+
+function stubSetFor(registryPath: string): FitStubSet | undefined {
+  const companionSet = getModelByPath(registryPath)?.companionSet
+  if (companionSet === undefined) return undefined
+
+  let primary: FitStubSetMember | undefined
+  const others: FitStubSetMember[] = []
+
+  for (const file of companionSet.files) {
+    const member: FitStubSetMember = {
+      name: file.targetName,
+      sha256Checksum: file.sha256Checksum,
+      registryPath: file.registryPath,
+      registrySource: file.registrySource,
+      targetName: file.targetName
+    }
+    if (file.key === companionSet.primaryKey) primary = member
+    else others.push(member)
+  }
+
+  return primary === undefined ? undefined : { primary, others }
 }
 
 class NoStubError extends Error {
@@ -103,7 +129,9 @@ export async function resolveLoadFromStubs(
     const ref = stubRefFor(src)
     if (ref === undefined) throw new NoStubError('unresolvable-ref', location)
 
-    const stub = await fetchFitStub(ref, options)
+    const set = stubSetFor(ref.registryPath)
+    const stub =
+      set === undefined ? await fetchFitStub(ref, options) : await fetchFitStubSet(set, options)
     if (stub.status !== 'ready') throw new NoStubError(stub.reason, stub.message)
 
     staged.push(stub.path)

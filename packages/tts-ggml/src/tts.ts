@@ -29,6 +29,31 @@ export interface TTSJobData {
   // JSAdapter::readAudio8Voice. Ignored by other engines.
   referenceAudio?: string;
   referenceText?: string;
+  // MOSS-SoundEffect per-call generation controls (siblings of `input`), read
+  // by JSAdapter::readMossSoundEffectCall. Ignored by other engines.
+  seconds?: number;
+  negativePrompt?: string;
+  steps?: number;
+  guidance?: number;
+  shift?: number;
+  // MOSS-Speech per-call fields (siblings of `input`), read by
+  // JSAdapter::readMossSpeechCall. The user turn is already folded into
+  // `messages`. Ignored by other engines.
+  messages?: Array<{
+    role: string;
+    text?: string;
+    audio?: Int16Array | Float32Array;
+    sampleRate?: number;
+  }>;
+  replyVoice?: Int16Array | Float32Array;
+  replyVoiceSampleRate?: number;
+  textReply?: boolean;
+  maxReplySeconds?: number;
+  maxNewTokens?: number;
+  greedy?: boolean;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
 }
 
 export interface TTSWeightData {

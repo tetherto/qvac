@@ -1,7 +1,7 @@
 {
   "name": "@qvac/asr-ggml",
   "version": "0.7.0",
-  "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet) inference addon for qvac on the Bare runtime",
+  "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
   "addon": true,
   "engines": {
     "bare": ">=1.20.0"
@@ -51,7 +51,7 @@
     "test:prestage": "node --test scripts/__tests__/*.test.js && node scripts/run-python-tests.js",
     "test:integration": "npm run test:integration:whisper && npm run test:integration:parakeet",
     "test:integration:whisper": "npm run build:ts && brittle-bare test/integration/addon.test.js test/integration/multiple-transcriptions.test.js test/integration/audio-ctx-chunking.test.js test/integration/live-stream-simulation.test.js test/integration/corrupted-model.test.js test/integration/model-file-validation.test.js test/integration/fit.test.js",
-    "test:integration:parakeet:generate": "brittle -r test/integration/all.js test/integration/parakeet-addon-multimodel.test.js test/integration/parakeet-duplex-streaming.test.js test/integration/parakeet-duplex-streaming-eou.test.js test/integration/parakeet-eou-streaming.test.js test/integration/parakeet-live-stream-simulation.test.js test/integration/parakeet-nemotron.test.js test/integration/parakeet-sortformer-aosc-streaming.test.js test/integration/parakeet-sortformer-streaming-alias.test.js test/integration/parakeet-multiple-transcriptions.test.js test/integration/parakeet-corrupted-model.test.js test/integration/parakeet-model-file-validation.test.js",
+    "test:integration:parakeet:generate": "brittle -r test/integration/all.js test/integration/parakeet-addon-multimodel.test.js test/integration/parakeet-duplex-streaming.test.js test/integration/parakeet-duplex-streaming-eou.test.js test/integration/parakeet-eou-streaming.test.js test/integration/parakeet-live-stream-simulation.test.js test/integration/parakeet-nemotron.test.js test/integration/parakeet-sortformer-aosc-streaming.test.js test/integration/parakeet-sortformer-streaming-alias.test.js test/integration/parakeet-multiple-transcriptions.test.js test/integration/parakeet-corrupted-model.test.js test/integration/parakeet-model-file-validation.test.js test/integration/moss-transcribe.test.js",
     "test:integration:parakeet": "npm run build:ts && npm run test:integration:parakeet:generate && bash test/integration/parakeet-run-tests.sh",
     "test:integration:long": "npm run build:ts && brittle-bare test/integration/**/longES.test.js",
     "test:integration:multiple": "npm run build:ts && brittle-bare test/integration/**/multiple-transcriptions.test.js",
@@ -102,10 +102,12 @@
     "example:whisper:reload": "bare examples/example.reload.js",
     "example:whisper:decoder": "bare examples/example.decoder.js",
     "example:parakeet": "bare examples/parakeet-transcribe.js",
+    "example:moss-transcribe": "bare examples/moss-transcribe.js",
     "example:parakeet:unified": "bare examples/parakeet-unified-transcribe.js",
     "example:parakeet:nemotron": "bare examples/parakeet-nemotron-transcribe.js",
     "example:parakeet:indic-conformer": "bare examples/parakeet-indic-conformer-transcribe.js",
     "example:parakeet:diarize": "bare examples/parakeet-diarized-transcribe.js",
+    "example:parakeet:nemotron-diarize": "bare examples/nemotron-diarization.js",
     "example:parakeet:mic": "bare examples/parakeet-live-mic.js",
     "example:parakeet:mic-diarize": "bare examples/parakeet-live-mic-diarized.js",
     "example:parakeet:mic-diarize-aosc": "bare examples/parakeet-live-mic-diarized-aosc.js",
