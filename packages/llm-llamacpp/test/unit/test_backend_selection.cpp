@@ -2100,6 +2100,24 @@ TEST_F(BackendSelectionTest, SplitDevices_DedupesCudaAndVulkanAlias) {
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
 }
 
+// One card whose Vulkan driver lacks VK_EXT_pci_bus_info: CUDA0 has an id and
+// vulkan0 has none, so the two cannot be told apart. Only the first registry's
+// devices are kept, and the dropped one is reported and still nameable.
+TEST_F(BackendSelectionTest, SplitDevices_DropsIdlessTwinAcrossRegistries) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", "vulkan0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0"}));
+  EXPECT_EQ(
+      selection.droppedAmbiguousDevices, (std::vector<std::string>{"vulkan0"}));
+  ASSERT_EQ(selection.dedupedTwins.size(), 1u);
+  EXPECT_EQ(selection.dedupedTwins.front().name, "vulkan0");
+}
+
 // ggml-cuda suffixes the PCI bus id with -v<N> for virtual (MPS/MIG) devices
 // and fabric compares device_id verbatim, so two such entries are two devices.
 TEST_F(BackendSelectionTest, SplitDevices_KeepsVirtualCudaDevices) {

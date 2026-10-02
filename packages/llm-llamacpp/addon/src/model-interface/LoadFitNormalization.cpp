@@ -364,9 +364,19 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
   selected.rejectedDevices = available.rejectedDevices;
   selected.devices.reserve(requested.size());
   for (const std::string& name : requested) {
-    const auto match = std::ranges::find(
-        available.devices, name, &backend_selection::SplitDevice::name);
-    if (match == available.devices.end()) {
+    // A name the automatic dedupe dropped, such as Vulkan0 when CUDA0 is the
+    // same card, is still a valid explicit choice.
+    const backend_selection::SplitDevice* match = nullptr;
+    for (const auto* candidates :
+         {&available.devices, &available.dedupedTwins}) {
+      const auto found = std::ranges::find(
+          *candidates, name, &backend_selection::SplitDevice::name);
+      if (found != candidates->end()) {
+        match = &*found;
+        break;
+      }
+    }
+    if (match == nullptr) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
@@ -374,6 +384,18 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
               "for this load.\n",
               K_LEGACY_PARSER_NAME.data(),
               name.c_str()));
+    }
+    for (const backend_selection::SplitDevice& earlier : selected.devices) {
+      if (!match->deviceId.empty() && earlier.deviceId == match->deviceId) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "%s: devices '%s' and '%s' from 'devices' are the same GPU "
+                "under two backends; name it once.\n",
+                K_LEGACY_PARSER_NAME.data(),
+                earlier.name.c_str(),
+                name.c_str()));
+      }
     }
     selected.devices.push_back(*match);
   }
@@ -1454,6 +1476,21 @@ NormalizedLoad normalizeLoadForFit(
     if (preferredBackend == BackendType::GPU &&
         (splitMode != LLAMA_SPLIT_MODE_NONE || !explicitDevices.empty())) {
       splitSelection = dependencies.splitDevices();
+      if (explicitDevices.empty() &&
+          !splitSelection.droppedAmbiguousDevices.empty()) {
+        std::string dropped;
+        for (const std::string& device :
+             splitSelection.droppedAmbiguousDevices) {
+          dropped += (dropped.empty() ? "" : ", ") + device;
+        }
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] split leaves out %s: a device without a device "
+                "id may be the same GPU under another backend. Name the "
+                "devices to use them.\n",
+                dropped.c_str()));
+      }
       retainCurrentRpcDevices(
           splitSelection,
           registeredRpcDevices,

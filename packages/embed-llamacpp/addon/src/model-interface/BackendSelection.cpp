@@ -586,6 +586,7 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
   std::vector<SplitDevice> discrete;
   std::vector<SplitDevice> integrated;
   std::unordered_set<std::string> seenDiscrete;
+  bool discreteWithoutId = false;
 
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
@@ -641,7 +642,32 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       continue;
     }
     if (deviceId.empty() || seenDiscrete.insert(deviceId).second) {
+      discreteWithoutId = discreteWithoutId || deviceId.empty();
       discrete.emplace_back(std::move(selected));
+    }
+  }
+  // One card can register under CUDA and under Vulkan. The dedupe above needs
+  // an id on both sides, so when the kept devices span registries and any has
+  // no id, a twin cannot be ruled out. Keep the first registry's devices, CUDA
+  // since it registers first; a second id-less card is the accepted cost.
+  if (discreteWithoutId && !discrete.empty()) {
+    const auto registryOf = [&](const SplitDevice& device) {
+      const ggml_backend_reg_t reg =
+          bckI.ggml_backend_dev_backend_reg(device.handle);
+      return lowerCopy(
+          reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
+    };
+    const std::string firstRegistry = registryOf(discrete.front());
+    if (std::ranges::any_of(discrete, [&](const SplitDevice& device) {
+          return registryOf(device) != firstRegistry;
+        })) {
+      std::erase_if(discrete, [&](const SplitDevice& device) {
+        if (registryOf(device) == firstRegistry) {
+          return false;
+        }
+        result.droppedAmbiguousDevices.push_back(device.name);
+        return true;
+      });
     }
   }
   result.devices = std::move(rpc);
