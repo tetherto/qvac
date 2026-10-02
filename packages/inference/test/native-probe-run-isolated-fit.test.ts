@@ -3,11 +3,12 @@ import EventEmitter from 'bare-events'
 
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
 import env from 'bare-env'
+
+import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
 import {
   FIT_PROCESS_MAX_RESPONSE_BYTES,
-  FIT_PROCESS_PROTOCOL_VERSION_V2
-} from '@qvac/model-fit/process'
-
+  FIT_PROCESS_PROTOCOL_VERSION
+} from '@/resources/model-fit/native-probe/fit-process'
 import {
   runIsolatedFit,
   type ChildProcess,
@@ -17,11 +18,9 @@ import {
   type WritableChildStream
 } from '@/resources/model-fit/native-probe/run-isolated-fit'
 
-const LOAD_KIND = 'completion' as const
-const CONFIG = {
-  modelPath: '/models/test.gguf',
-  params: { device: 'gpu', 'ctx-size': '4096' },
-  nCtxMin: 4096
+const PROBE: FitProbeRequest = {
+  engine: 'llm-llamacpp',
+  request: { modelPath: '/models/test.gguf', params: { 'ctx-size': '4096' }, minCtxSize: 4096 }
 }
 const RUNTIME = {
   platform: 'darwin',
@@ -50,24 +49,19 @@ const DEFAULT_ENVIRONMENT = {
   ...ALLOWED_DEFAULT_ENVIRONMENT,
   SECRET_TOKEN: 'must-not-leak'
 }
-const COMPLETED_RESULT = {
-  status: 0,
-  fits: true,
-  reason: 'fits',
-  maxDevices: 1,
-  nDevices: 1,
-  nGpuDevices: 1,
-  nGpuLayers: 32,
-  nCtx: 4096,
-  nBatch: 512,
-  nUbatch: 512,
-  tensorSplit: [1],
-  buftOverrides: [],
-  splitMode: 1,
-  mainGpu: 0,
-  typeK: 1,
-  typeV: 1,
-  flashAttnType: 1
+const COMPLETED_PROBE = {
+  engine: 'llm-llamacpp',
+  result: {
+    status: 'fits',
+    reason: 'fits',
+    gpuLayers: 32,
+    ctxSize: 4096,
+    devices: [],
+    deviceBytes: 0,
+    hostBytes: 0,
+    trainCtxSize: 8192,
+    expertCount: 0
+  }
 } as const
 
 class FakeReadable extends EventEmitter {
@@ -151,12 +145,19 @@ function matchObject(
   t.alike(picked, expected)
 }
 
-function completedLine(result: unknown = COMPLETED_RESULT): string {
-  return `${JSON.stringify({
-    version: FIT_PROCESS_PROTOCOL_VERSION_V2,
-    status: 'completed',
-    result
-  })}\n`
+function completedLine(probe: unknown = COMPLETED_PROBE): string {
+  return `${JSON.stringify({ status: 'completed', probe })}\n`
+}
+
+function probeWithCtx(ctxSize: number) {
+  return { ...COMPLETED_PROBE, result: { ...COMPLETED_PROBE.result, ctxSize } }
+}
+
+/** Reads back the context a llama child reported, to tell two children apart. */
+function ctxOf(outcome: Awaited<ReturnType<typeof runIsolatedFit>>): number {
+  if (outcome.status !== 'completed') return 0
+  const probe = outcome.probe
+  return probe.engine === 'llm-llamacpp' ? probe.result.ctxSize : 0
 }
 
 function closeChild(child: FakeChild, code: number | null = 0, signal: string | null = null): void {
@@ -175,7 +176,7 @@ test('returns unsupported-platform without spawning on mobile', async (t) => {
     { isAndroid: false, isBrowser: false, isIOS: true }
   ]) {
     let spawnCount = 0
-    const result = await runIsolatedFit(LOAD_KIND, CONFIG, {
+    const result = await runIsolatedFit(PROBE, {
       runtime: { ...RUNTIME, ...unsupported },
       spawnProcess: () => {
         spawnCount++
@@ -209,29 +210,24 @@ test('writes one versioned request and maps a valid response to completed', asyn
     closeChild(child)
   }
 
-  const result = await runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const result = await runIsolatedFit(PROBE, optionsFor(child))
 
   t.is(handlersReadyAtWrite, true)
   t.alike(child.stdin!.writes, [
-    `${JSON.stringify({
-      version: FIT_PROCESS_PROTOCOL_VERSION_V2,
-      loadKind: LOAD_KIND,
-      config: CONFIG
-    })}\n`
+    `${JSON.stringify({ version: FIT_PROCESS_PROTOCOL_VERSION, probe: PROBE })}\n`
   ])
   t.alike(result, {
     status: 'completed',
-    result: COMPLETED_RESULT
+    probe: COMPLETED_PROBE
   })
 })
 
 test('maps runner error responses to unknown invocation-error', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stdout!.emit(
     'data',
     `${JSON.stringify({
-      version: FIT_PROCESS_PROTOCOL_VERSION_V2,
       status: 'invocation-error',
       error: { name: 'RangeError', message: 'bad config' }
     })}\n`
@@ -247,11 +243,10 @@ test('maps runner error responses to unknown invocation-error', async (t) => {
 
 test('prefers crashed over a runner error response when the child died by signal', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stdout!.emit(
     'data',
     `${JSON.stringify({
-      version: FIT_PROCESS_PROTOCOL_VERSION_V2,
       status: 'invocation-error',
       error: { name: 'RangeError', message: 'bad config' }
     })}\n`
@@ -266,7 +261,7 @@ test('prefers crashed over a runner error response when the child died by signal
 })
 
 test('maps spawn throws and error events to unknown spawn-failed', async (t) => {
-  const thrown = await runIsolatedFit(LOAD_KIND, CONFIG, {
+  const thrown = await runIsolatedFit(PROBE, {
     ...optionsFor(new FakeChild()),
     spawnProcess: () => {
       throw new TypeError('binary unavailable')
@@ -279,7 +274,7 @@ test('maps spawn throws and error events to unknown spawn-failed', async (t) => 
   })
 
   const child = new FakeChild()
-  const emittedPromise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const emittedPromise = runIsolatedFit(PROBE, optionsFor(child))
   child.emit('error', new TypeError('launch failed'))
   child.emit('close', null, null)
   t.alike(await emittedPromise, {
@@ -291,7 +286,7 @@ test('maps spawn throws and error events to unknown spawn-failed', async (t) => 
 
 test('maps non-zero exit without a response to unknown crashed', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   closeChild(child, 7)
 
   t.alike(await promise, {
@@ -303,7 +298,7 @@ test('maps non-zero exit without a response to unknown crashed', async (t) => {
 
 test('maps signal exit without a response to unknown crashed', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   closeChild(child, null, 'SIGSEGV')
 
   t.alike(await promise, {
@@ -315,20 +310,20 @@ test('maps signal exit without a response to unknown crashed', async (t) => {
 
 test('normalizes Bare numeric signal 0 as a successful exit', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stdout!.emit('data', completedLine())
   child.emit('exit', 0, 0)
   child.emit('close', 0, 0)
 
   t.alike(await promise, {
     status: 'completed',
-    result: COMPLETED_RESULT
+    probe: COMPLETED_PROBE
   })
 })
 
 test('normalizes Bare numeric signal 6 as crashed', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.emit('exit', 0, 6)
   child.emit('close', 0, 6)
 
@@ -341,7 +336,7 @@ test('normalizes Bare numeric signal 6 as crashed', async (t) => {
 
 test('rejects multiple response lines as unknown invalid-response', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stdout!.emit('data', `${completedLine()}${completedLine()}`)
   closeChild(child)
 
@@ -353,7 +348,7 @@ test('rejects multiple response lines as unknown invalid-response', async (t) =>
 
 test('rejects an additional blank line after a valid response', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stdout!.emit('data', `${completedLine()}\n`)
   closeChild(child)
 
@@ -366,7 +361,7 @@ test('rejects an additional blank line after a valid response', async (t) => {
 
 test('rejects response output larger than 1 MiB as unknown invalid-response', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   let settled = false
   void promise.then(() => {
     settled = true
@@ -387,7 +382,7 @@ test('rejects response output larger than 1 MiB as unknown invalid-response', as
 
 test('retains only the final 16 KiB of stderr', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stderr!.emit('data', `discard-${'a'.repeat(20_000)}`)
   child.stderr!.emit('data', 'FINAL')
   closeChild(child, 1)
@@ -405,11 +400,7 @@ test('retains only the final 16 KiB of stderr', async (t) => {
 
 test('times out at the configured deadline, terminates, then force-kills', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
-    optionsFor(child, { timeoutMs: 5, terminationGraceMs: 20 })
-  )
+  const promise = runIsolatedFit(PROBE, optionsFor(child, { timeoutMs: 5, terminationGraceMs: 20 }))
   let settled = false
   void promise.then(() => {
     settled = true
@@ -434,11 +425,7 @@ test('times out at the configured deadline, terminates, then force-kills', async
 test('cancellation terminates the child and returns unknown cancelled', async (t) => {
   const child = new FakeChild()
   const controller = new AbortController()
-  const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
-    optionsFor(child, { signal: controller.signal })
-  )
+  const promise = runIsolatedFit(PROBE, optionsFor(child, { signal: controller.signal }))
   let settled = false
   void promise.then(() => {
     settled = true
@@ -460,7 +447,7 @@ test('cancellation terminates the child and returns unknown cancelled', async (t
 test('settles exactly once when response and exit race', async (t) => {
   const child = new FakeChild()
   let resolutions = 0
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child)).then((result) => {
+  const promise = runIsolatedFit(PROBE, optionsFor(child)).then((result) => {
     resolutions++
     return result
   })
@@ -487,34 +474,32 @@ test('uses one child per call and keeps concurrent responses isolated', async (t
     return asChild(child)
   }
   const first = runIsolatedFit(
-    LOAD_KIND,
-    { modelPath: '/models/first.gguf', params: { device: 'gpu' } },
+    { engine: 'llm-llamacpp', request: { modelPath: '/models/first.gguf' } },
     { ...optionsFor(new FakeChild()), spawnProcess }
   )
   const second = runIsolatedFit(
-    LOAD_KIND,
-    { modelPath: '/models/second.gguf', params: { device: 'gpu' } },
+    { engine: 'llm-llamacpp', request: { modelPath: '/models/second.gguf' } },
     { ...optionsFor(new FakeChild()), spawnProcess }
   )
 
   t.is(children.length, 2)
-  children[1]!.stdout!.emit('data', completedLine({ ...COMPLETED_RESULT, nCtx: 2_048 }))
+  children[1]!.stdout!.emit('data', completedLine(probeWithCtx(2_048)))
   closeChild(children[1]!)
-  children[0]!.stdout!.emit('data', completedLine({ ...COMPLETED_RESULT, nCtx: 8_192 }))
+  children[0]!.stdout!.emit('data', completedLine(probeWithCtx(8_192)))
   closeChild(children[0]!)
 
   const firstResult = await first
   matchObject(t, firstResult, { status: 'completed' })
-  t.is(firstResult.status === 'completed' ? firstResult.result.nCtx : 0, 8_192)
+  t.is(ctxOf(firstResult), 8_192)
   const secondResult = await second
   matchObject(t, secondResult, { status: 'completed' })
-  t.is(secondResult.status === 'completed' ? secondResult.result.nCtx : 0, 2_048)
+  t.is(ctxOf(secondResult), 2_048)
 })
 
 test('passes only approved environment variables to the child', async (t) => {
   const child = new FakeChild()
   let receivedOptions: SpawnContext['options'] | undefined
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, {
+  const promise = runIsolatedFit(PROBE, {
     ...optionsFor(child),
     runnerArgs: ['completed'],
     environment: {
@@ -545,7 +530,7 @@ test('passes only approved environment variables to the child', async (t) => {
 test('uses overlapped child pipes on Windows', async (t) => {
   const child = new FakeChild()
   let receivedOptions: SpawnContext['options'] | undefined
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, {
+  const promise = runIsolatedFit(PROBE, {
     ...optionsFor(child),
     runtime: { ...RUNTIME, platform: 'win32', arch: 'x64' },
     spawnProcess: (context) => {
@@ -569,7 +554,7 @@ test('uses the runtime-safe default environment source and preserves the 14-key 
   const child = new FakeChild()
   let receivedOptions: SpawnContext['options'] | undefined
   try {
-    const promise = runIsolatedFit(LOAD_KIND, CONFIG, {
+    const promise = runIsolatedFit(PROBE, {
       runtime: RUNTIME,
       runnerPath: '/runner/process-runner.js',
       spawnProcess: (context) => {
@@ -592,21 +577,14 @@ test('uses the runtime-safe default environment source and preserves the 14-key 
   }
 })
 
-test('maps malformed and unknown-version responses to invalid-response', async (t) => {
+test('maps malformed and unknown-status responses to invalid-response', async (t) => {
   for (const line of [
     '{bad json}\n',
-    `${JSON.stringify({
-      version: FIT_PROCESS_PROTOCOL_VERSION_V2 + 1,
-      status: 'completed',
-      result: COMPLETED_RESULT
-    })}\n`,
-    `${JSON.stringify({
-      version: FIT_PROCESS_PROTOCOL_VERSION_V2,
-      status: 'unexpected'
-    })}\n`
+    `${JSON.stringify({ status: 'unexpected' })}\n`,
+    `${JSON.stringify({ status: 'completed', probe: { engine: 'llm-llamacpp' } })}\n`
   ]) {
     const child = new FakeChild()
-    const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+    const promise = runIsolatedFit(PROBE, optionsFor(child))
     child.stdout!.emit('data', line)
     closeChild(child)
     matchObject(t, await promise, {
@@ -616,9 +594,9 @@ test('maps malformed and unknown-version responses to invalid-response', async (
   }
 })
 
-test('rejects completed responses without FitResult discriminants', async (t) => {
+test('rejects completed responses carrying no engine or result', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stdout!.emit('data', completedLine({}))
   closeChild(child)
 
@@ -628,11 +606,10 @@ test('rejects completed responses without FitResult discriminants', async (t) =>
   })
 })
 
-test('rejects successful FitResult responses with incomplete plans', async (t) => {
+test('rejects a result with no status to read a verdict from', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
-  const { tensorSplit: _tensorSplit, ...incompletePlan } = COMPLETED_RESULT
-  child.stdout!.emit('data', completedLine(incompletePlan))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
+  child.stdout!.emit('data', completedLine({ engine: 'llm-llamacpp', result: { reason: 'fits' } }))
   closeChild(child)
 
   matchObject(t, await promise, {
@@ -643,7 +620,7 @@ test('rejects successful FitResult responses with incomplete plans', async (t) =
 
 test('classifies nonzero exit with partial stdout as crashed', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+  const promise = runIsolatedFit(PROBE, optionsFor(child))
   child.stdout!.emit('data', '{"version":1')
   closeChild(child, 2)
 
@@ -657,7 +634,7 @@ test('classifies nonzero exit with partial stdout as crashed', async (t) => {
 test('terminates on stdio errors and waits for close before settling', async (t) => {
   for (const streamName of ['stdin', 'stdout', 'stderr'] as const) {
     const child = new FakeChild()
-    const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child))
+    const promise = runIsolatedFit(PROBE, optionsFor(child))
     let settled = false
     void promise.then(() => {
       settled = true
@@ -692,7 +669,7 @@ test('guards synchronous stream setup and request write failures', async (t) => 
     if (failure === 'setup') child.stdout!.throwOnSetEncoding = true
     if (failure === 'write') child.stdin!.throwOnEnd = true
 
-    const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child, { terminationGraceMs: 5 }))
+    const promise = runIsolatedFit(PROBE, optionsFor(child, { terminationGraceMs: 5 }))
     let settled = false
     void promise.then(() => {
       settled = true
@@ -710,11 +687,7 @@ test('guards synchronous stream setup and request write failures', async (t) => 
 
 test('keeps the first termination reason when a child error races timeout', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
-    optionsFor(child, { timeoutMs: 5, terminationGraceMs: 5 })
-  )
+  const promise = runIsolatedFit(PROBE, optionsFor(child, { timeoutMs: 5, terminationGraceMs: 5 }))
   let settled = false
   void promise.then(() => {
     settled = true
@@ -737,8 +710,7 @@ test('keeps the first termination reason when a child error races timeout', asyn
 test('rejects oversized stdout delivered after exit while pipes drain', async (t) => {
   const child = new FakeChild()
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, {
       timeoutMs: 5,
       drainGraceMs: 50
@@ -770,8 +742,7 @@ test('rejects oversized stdout delivered after exit while pipes drain', async (t
 test('accepts a valid response that drains after child exit', async (t) => {
   const child = new FakeChild()
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, {
       drainGraceMs: 50
     })
@@ -783,15 +754,14 @@ test('accepts a valid response that drains after child exit', async (t) => {
 
   t.alike(await promise, {
     status: 'completed',
-    result: COMPLETED_RESULT
+    probe: COMPLETED_PROBE
   })
 })
 
 test('rejects a second response line delivered after child exit', async (t) => {
   const child = new FakeChild()
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, {
       drainGraceMs: 50
     })
@@ -812,8 +782,7 @@ test('rejects a second response line delivered after child exit', async (t) => {
 test('classifies early crash ahead of a racing stdin EPIPE', async (t) => {
   const child = new FakeChild()
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, {
       terminationGraceMs: 5,
       finalKillGraceMs: 5
@@ -833,8 +802,7 @@ test('classifies early crash ahead of a racing stdin EPIPE', async (t) => {
 test('bounds a standalone stdin failure when the child never exits', async (t) => {
   const child = new FakeChild()
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, {
       terminationGraceMs: 5,
       finalKillGraceMs: 5
@@ -856,7 +824,7 @@ test('bounds a standalone stdin failure when the child never exits', async (t) =
 
 test('reaps a post-spawn child error before returning spawn-failed', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child, { terminationGraceMs: 5 }))
+  const promise = runIsolatedFit(PROBE, optionsFor(child, { terminationGraceMs: 5 }))
   let settled = false
   void promise.then(() => {
     settled = true
@@ -877,8 +845,7 @@ test('reaps a post-spawn child error before returning spawn-failed', async (t) =
 test('settles after SIGKILL when the child reports neither exit nor close', async (t) => {
   const child = new FakeChild()
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, {
       timeoutMs: 5,
       terminationGraceMs: 5,
@@ -907,8 +874,7 @@ test('bounds pipe drain after exit without close', async (t) => {
     const child = new FakeChild()
     const controller = new AbortController()
     const promise = runIsolatedFit(
-      LOAD_KIND,
-      CONFIG,
+      PROBE,
       optionsFor(child, {
         drainGraceMs: 5,
         ...(scenario === 'pending' ? { signal: controller.signal } : {})
@@ -930,7 +896,7 @@ test('bounds pipe drain after exit without close', async (t) => {
       t,
       outcome,
       scenario === 'parsed'
-        ? { status: 'completed', result: COMPLETED_RESULT }
+        ? { status: 'completed', probe: COMPLETED_PROBE }
         : scenario === 'crashed'
           ? { status: 'unknown', reason: 'crashed' }
           : { status: 'unknown', reason: 'cancelled' }
@@ -946,8 +912,7 @@ test('does not write a request when the signal is already aborted', async (t) =>
   const controller = new AbortController()
   controller.abort(undefined)
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, {
       signal: controller.signal,
       terminationGraceMs: 5
@@ -968,7 +933,7 @@ test('destroys available pipes when child stdio is incomplete', async (t) => {
   const stdin = child.stdin!
   const stdout = child.stdout!
   child.stderr = null
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child, { terminationGraceMs: 5 }))
+  const promise = runIsolatedFit(PROBE, optionsFor(child, { terminationGraceMs: 5 }))
 
   t.is(stdin.destroyed, true)
   t.is(stdout.destroyed, true)
@@ -993,8 +958,7 @@ test('removes process, stream, abort listeners and timers after settlement', asy
   }) as AbortSignal['removeEventListener']
 
   const promise = runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, { signal: controller.signal, timeoutMs: 10 })
   )
   child.stdout!.emit('data', completedLine())
@@ -1012,7 +976,7 @@ test('removes process, stream, abort listeners and timers after settlement', asy
 
 test('absorbs late child and stream errors emitted after settlement', async (t) => {
   const child = new FakeChild()
-  const promise = runIsolatedFit(LOAD_KIND, CONFIG, optionsFor(child, { timeoutMs: 10 }))
+  const promise = runIsolatedFit(PROBE, optionsFor(child, { timeoutMs: 10 }))
   child.stdout!.emit('data', completedLine())
   closeChild(child)
   const result = await promise
@@ -1021,11 +985,11 @@ test('absorbs late child and stream errors emitted after settlement', async (t) 
     t.execution(() => emitter.emit('error', new TypeError('EPIPE')))
     t.execution(() => emitter.emit('error', new TypeError('ERR_STREAM_DESTROYED')))
   }
-  child.stdout!.emit('data', completedLine({ ...COMPLETED_RESULT, nCtx: 1 }))
+  child.stdout!.emit('data', completedLine(probeWithCtx(1)))
   await nextTurn()
 
-  t.alike(result, { status: 'completed', result: COMPLETED_RESULT })
-  t.alike(await promise, { status: 'completed', result: COMPLETED_RESULT })
+  t.alike(result, { status: 'completed', probe: COMPLETED_PROBE })
+  t.alike(await promise, { status: 'completed', probe: COMPLETED_PROBE })
   t.alike(child.kills, [])
 })
 
@@ -1040,8 +1004,7 @@ test('absorbs stream errors raised by the post-SIGKILL destroy path', async (t) 
   }
 
   const result = await runIsolatedFit(
-    LOAD_KIND,
-    CONFIG,
+    PROBE,
     optionsFor(child, { timeoutMs: 5, terminationGraceMs: 5, finalKillGraceMs: 5 })
   )
 
