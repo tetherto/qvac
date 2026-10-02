@@ -832,20 +832,23 @@ void ContinuousBatchScheduler::drainFinishedLocked(
     // cache from a prior turn is preserved. The subsequent
     // `clearSeqKv` still wipes the sequence in memory.
     //
-    // A failed disk save (e.g. unwritable cacheKey) is the finishing
-    // request's own error, not the scheduler's: nothing shared is corrupted
-    // by a failed file write, so it must fail only this slot's group.
-    // Letting it escape to workerLoop's catch would tear down every
-    // in-flight slot and drain the whole queue with an error naming this
-    // request's cacheKey. failSlotLocked routes a grouped slot through
-    // failGroupLocked (settling the whole group -- one job -- with this
-    // error, `SaveCachePolicy::Skip` on its remaining slots) and frees the
-    // slot either way; the loop below still clears this seqId's KV.
+    // A failed disk save (e.g. a full disk) costs only the cache, never the
+    // finished answer: the write is atomic, so the prior file is intact, and
+    // `cacheSaveFailed` tells the caller that file is now one turn behind.
     if (rollbackOk) {
       try {
-        saveCacheForSlot(req.seqId, *slots_[req.seqId]);
-      } catch (...) {
-        failSlotLocked(req.seqId, std::current_exception());
+        saveCacheForSlot(req.seqId, slot);
+      } catch (const std::exception& e) {
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "KV cache not saved for seqId %u, answer kept: %s\n",
+                req.seqId,
+                e.what()));
+        stats_.cacheSaveFailed += 1;
+        if (slot.group) {
+          slot.group->requestStats[slot.outputIndex].cacheSaveFailed = 1;
+        }
       }
     }
   }
@@ -1268,8 +1271,7 @@ void ContinuousBatchScheduler::cancelSlotLocked(
     // the process, and a failed finalize must skip the save rather than persist
     // inconsistent state. The cleanup tail below (notifyDone/freeSlot) runs
     // regardless, so the slot is always freed. The normal-completion save in
-    // drainFinishedLocked() is left throwing so live requests still surface the
-    // error.
+    // drainFinishedLocked() reports its failure through `cacheSaveFailed`.
     //
     // `savePolicy == Skip` short-circuits the save leg: error-recovery callers
     // (see `failGroupLocked`) arrive here after the driver has already thrown
@@ -1596,6 +1598,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
     // is the honest answer to it.
     agg.thinkingBlockDiscards += stats.thinkingBlockDiscards;
     agg.toolDefinitionsDropped += stats.toolDefinitionsDropped;
+    agg.cacheSaveFailed += stats.cacheSaveFailed;
     // Kept only while every request reports the same reason: a one-item group
     // (the concurrent single-prompt path) keeps it, a mixed group drops it.
     if (&stats == &all.front()) {

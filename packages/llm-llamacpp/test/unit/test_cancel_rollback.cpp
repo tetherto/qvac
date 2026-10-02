@@ -1263,7 +1263,7 @@ namespace {} // namespace
 
 TEST(
     TextLlmContextCancelDuringGenerationTest,
-    ExplicitSaveFailureInvalidatesActiveCacheSession) {
+    ExplicitSaveFailureKeepsAnswerAndInvalidatesCacheSession) {
   const std::string modelPath = qwen3PureAttentionModelPath();
   if (!fs::exists(modelPath)) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -1297,7 +1297,13 @@ TEST(
   failing.cacheKey = badCachePath.string();
   failing.saveCacheToDisk = true;
   failing.generationParams.remove_thinking_from_context = false;
-  EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
+  std::string answer;
+  ASSERT_NO_THROW(answer = model->processPrompt(failing))
+      << "a failed cache save must not discard the finished answer";
+  EXPECT_FALSE(answer.empty());
+  EXPECT_EQ(
+      test_common::getStatValue(model->runtimeStats(), "cacheSaveFailed"),
+      1.0);
   EXPECT_FALSE(fs::exists(badCachePath));
 
   LlamaModel::Prompt uncached;
@@ -1307,4 +1313,7 @@ TEST(
   ASSERT_NO_THROW(model->processPrompt(uncached))
       << "explicit save failure must invalidate the active cache session; "
          "otherwise a later prompt without cacheKey retries the stale save";
+  EXPECT_EQ(
+      test_common::getStatValue(model->runtimeStats(), "cacheSaveFailed"),
+      0.0);
 }
