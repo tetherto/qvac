@@ -1127,7 +1127,7 @@ test("verify-prebuilds binds a prebuild status to its producing on-pr run", () =
   );
   assert.match(
     lib,
-    /const expected = CARVED_OUT_PRODUCERS\[pkg\] \?\? NX_PRODUCER/,
+    /CARVED_OUT_PRODUCERS\[pkg\] \?\? NX_PRODUCER/,
     'lib resolves the expected producer per package, defaulting to the nx producer',
   )
   assert.match(

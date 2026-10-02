@@ -14,14 +14,17 @@ import {
   LOOKUP_FAILED,
   expectedCppTests,
   expectedPrebuilds,
+  expectedSdkKotlin,
   flattenPages,
   pollCppTests,
   pollPrebuilds,
+  pollSdkKotlin,
 } from './lib.mjs'
 
 const KINDS = {
   prebuild: { noun: 'prebuild', expected: expectedPrebuilds, poll: pollPrebuilds },
   'cpp-tests': { noun: 'C++ test', expected: expectedCppTests, poll: pollCppTests },
+  'sdk-kotlin': { noun: 'SDK Kotlin', expected: expectedSdkKotlin, poll: pollSdkKotlin },
 }
 
 // Prebuilds take tens of minutes (median 9-32 min, worst ~32 min observed);
