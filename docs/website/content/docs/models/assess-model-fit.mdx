@@ -38,10 +38,10 @@ assessModelFit({
 
 ### `models`
 
-The candidates, at least one. They are assessed together, against a single budget. Each takes the same three parameters as [`loadModel()`](/reference/api#loadmodel):
+The candidates, at least one. They are assessed together, against a single budget. Each takes the same parameters as [`loadModel()`](/reference/api#loadmodel):
 
 - `modelSrc` — the model, as `loadModel()` takes it. A catalog constant resolves to the registry's weightless description of the artifact; a path already on disk is read directly.
-- `modelType` — the engine that would run the load.
+- `modelType` — optional. The engine that would run the load, inferred from `modelSrc` when omitted, as `loadModel()` infers it. Required only where the source names no engine.
 - `modelConfig` — optional. The config `loadModel()` would be given, including the companion model sources a compound load needs.
 
 The engine's own plugin resolves that config, so the settings the fitter reads are the ones the load would run with, and the same object can be handed to `loadModel()` afterwards. The estimator reads its workload from the same config: `ctx_size` for a token context, `duration_ms` for an audio window.
@@ -84,7 +84,7 @@ What backs the verdict.
 | `calibration` | A two-sided `estimate` from coefficients measured on this platform. | any verdict |
 | `computed-only` | A floor from catalog facts alone — artifact bytes, plus the KV cache for llama.cpp models — reported as `floorBytes`. | `likely-too-large` or `unknown` |
 
-`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable for a single llama.cpp candidate that is a path on disk, or whose registry record publishes a description; a set of candidates, and a model that is not on disk and whose description cannot be fetched, keep the calibrated estimate.
+`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single candidate, and only where every source the load names is a path on disk or has a registry description; a set of candidates, and a source that is not on disk and whose description cannot be fetched, keep the calibrated estimate.
 
 Read `evidence` alongside the verdict, because the same `unknown` can mean different things:
 - Under `calibration`, the numbers came out too close to call.
@@ -103,9 +103,15 @@ The memory the verdict was weighed against:
 
 Both device bases additionally require the `system-memory` budget to hold, because a GPU load is paid for in system RAM too.
 
+### `device`
+
+Per model: where that load resolved to execute, `gpu` or `cpu`, after the device defaults this host applies for itself. Absent for an engine that expresses no placement.
+
+Read it alongside `evidence`. The llama fitters read device memory alone and decline a `cpu` load, so one there carries no `native-fit` — its verdict comes from `calibration` where this platform has coefficients, and from the computed floor where it does not. The speech and voice fitters answer for a `cpu` load like any other.
+
 ### `reasons`
 
-Every `unknown` names its cause here — on the model when the cause is that model, on the result when it is the machine. The ones you are most likely to meet:
+Every `unknown` names its cause here — on the model when the cause is that model, on the result when it is the machine. A verdict that fell back because the fitter produced nothing says so, and names what the fitter reported. The ones you are most likely to meet:
 - No validated calibration for this platform, or for the GPU placement the model would use.
 - The model is not a catalog constant, so there is no resource profile to read.
 - The model's engine has no estimator, so nothing sizes the load beyond its weights.
@@ -116,11 +122,28 @@ Every `unknown` names its cause here — on the model when the cause is that mod
 
 Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers Android, iOS, `win32-arm64`, audio workloads, and every engine with no estimator yet.
 
-`native-fit` is independent of calibration. Wherever the engine's fitter runs — every platform with a llama.cpp addon, mobile included — a single llama.cpp candidate on disk or with a published description gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
+`native-fit` is independent of calibration. Wherever the engine's own fitter runs — every platform that ships that engine's addon, mobile included — a single candidate on disk or with a published description gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
 
 The per-platform calibration matrix, which changes with every release, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
 
-## Example
+## Load-time probe
+
+Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. Desktop runs it in a disposable child process. Mobile, which cannot spawn one, runs it on a worker thread.
+
+The probe is advisory too. No verdict blocks or changes the load: `does-not-fit` is logged and the load runs unchanged, and a crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
+
+[`getLoadedModelInfo()`](/sdk/reference/api#getloadedmodelinfo) returns the outcome as `fitProbe`:
+- `verdict` — `fit`, `does-not-fit`, or `unknown`. These are unhedged, unlike the verdicts above, because the probe measured this build against this file.
+- `engine` — the engine package whose fitter ran.
+- `reason` and `message` — why the probe reached that verdict.
+- `plan` — the placement it projected, where the fitter resolved one: `nCtx`, `nGpuLayers`, `nGpuDevices`.
+- `projection` — what the fitter measured, present on `fit` and `does-not-fit` alike. Engines do not all measure the same things, so every field is optional: `deviceBytes` and `hostBytes` for the peaks, `weightsBytes`, `contextBytes` and `computeBytes` within `deviceBytes` where the engine separates them, `deviceFreeBytes` and `deviceTotalBytes`, and `report`, the engine's own memory table.
+
+The probe is on by default. Set the `QVAC_ADVISORY_MODEL_FIT=0` environment variable to skip it, and `fitProbe` is then absent.
+
+## Examples
+
+### Assess before download
 
 The following script asks which of five Qwen3 models this machine is likely to run at 8192 tokens of context, printing the budget basis, each verdict against the model's size on disk, and the reasons behind every `unknown`:
 
@@ -137,6 +160,28 @@ The following script asks which of five Qwen3 models this machine is likely to r
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/assess-model-fit.ts title="assess-model-fit.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Load-time probe
+
+The following script loads Qwen3.5 0.8B at 4k context, which the fitter projects to fit, and reprints the `[advisory-fit:…]` verdicts from the SDK log stream. Set `QVAC_FIT_DEMO_ATTEMPT_OVERSIZED=1` to also load gpt-oss-20B at 128k context with an f32 KV cache, which it projects not to fit and loads anyway:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/advisory-model-fit.js title="advisory-model-fit.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/advisory-model-fit.ts title="advisory-model-fit.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
