@@ -2,11 +2,34 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
-import { platform, execPath } from 'node:process'
-import { BarePackNotInstalledError, BarePackError } from '@/utils/errors-client'
+import { platform, execPath, versions } from 'node:process'
+import semver from 'semver'
+import {
+  BarePackNotInstalledError,
+  BarePackNodeUnsupportedError,
+  BarePackError
+} from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
 
 const require = createRequire(import.meta.url)
+
+// bare-module-lexer (loaded by bare-pack through bare-module-traverse) calls
+// js_is_sharedarraybuffer from its native addon, which older Node lacks; the
+// bare-pack child process aborts instead of throwing. Same range as
+// engines.node in this package.json and in @qvac/cli.
+export const BARE_PACK_NODE_ENGINES = '^22.21.0 || >=24.9.0'
+
+export function isBarePackNodeSupported(version: string): boolean {
+  return semver.satisfies(version, BARE_PACK_NODE_ENGINES)
+}
+
+// Under Bun, process.versions.node is Bun's emulated value and bare-pack runs
+// in the `node` from PATH, so only a real Node process can be checked here.
+function assertNodeCanRunBarePack(): void {
+  if (versions['bun'] !== undefined) return
+  if (isBarePackNodeSupported(versions.node)) return
+  throw new BarePackNodeUnsupportedError(versions.node, BARE_PACK_NODE_ENGINES)
+}
 
 interface RunBarePackOptions {
   entryPath: string
@@ -35,6 +58,7 @@ export async function runBarePack(options: RunBarePackOptions): Promise<void> {
   if (!barePackBin || !fs.existsSync(barePackBin)) {
     throw new BarePackNotInstalledError()
   }
+  assertNodeCanRunBarePack()
 
   return new Promise((resolve, reject) => {
     const hostArgs = hosts.flatMap((h) => ['--host', h])

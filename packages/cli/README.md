@@ -81,7 +81,8 @@ qvac doctor [options]
 
 **What it checks:**
 
-- **Runtime** — Node.js version (`>= 18`) and supported CLI host
+- **Runtime** — Node.js version (`^22.21.0 || >=24.9.0`, the floor bare-pack's
+  bare-module-lexer addon needs) and supported CLI host
   (desktop platforms only; Android/iOS are SDK deploy targets reported
   separately below).
 - **Hardware** — total RAM, available RAM (via `os.availableMemory()` on
@@ -505,7 +506,7 @@ qvac doctor
 
 **Prerequisites:**
 
-- Node.js >= 18.0.0
+- Node.js `^22.21.0 || >=24.9.0`
 - npm
 
 ### Agent-stack test ownership
