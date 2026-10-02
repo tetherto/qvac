@@ -540,32 +540,6 @@ jobs:
         shell: bash
         run: bare-make install
 
-      - name: Stage Windows CUDA runtime DLLs with fabric
-        if: ${{ inputs.workdir == 'packages/fabric' && inputs.include-cuda && inputs.include-cuda-win32 && matrix.platform == 'win32' && matrix.arch == 'x64' }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob globstar
-          cuda_modules=(prebuilds/win32-x64/**/*ggml-cuda.dll)
-          if [ "${#cuda_modules[@]}" -ne 1 ]; then
-            echo "::error::expected one Windows CUDA module, found ${#cuda_modules[@]}"
-            exit 1
-          fi
-          module_dir=$(dirname "${cuda_modules[0]}")
-          # setup-cuda's MSVC PATH puts System32 first, so a bare `find` is
-          # Windows find.exe, and CUDA_PATH is a Windows path.
-          cuda_root=$(cygpath -u "$CUDA_PATH")
-          for dll in cudart64_13.dll cublas64_13.dll cublasLt64_13.dll; do
-            mapfile -d '' -t matches < <(/usr/bin/find "$cuda_root" -type f -iname "$dll" -print0)
-            if [ "${#matches[@]}" -ne 1 ]; then
-              echo "::error::expected one $dll in CUDA_PATH, found ${#matches[@]}"
-              exit 1
-            fi
-            cp "${matches[0]}" "$module_dir/$dll"
-            test -s "$module_dir/$dll"
-          done
-
       - if: ${{ inputs.include-cuda && inputs.include-cuda-win32 && matrix.platform == 'win32' && matrix.arch == 'x64' }}
         name: Verify Windows CUDA and Vulkan modules
         working-directory: ${{ env.WORKDIR }}
@@ -584,10 +558,7 @@ jobs:
               exit 1
             fi
           done
-          ls -l \
-            "${cuda_modules[0]}" \
-            "${vulkan_modules[0]}" \
-            "$(dirname "${cuda_modules[0]}")"/{cudart64_13.dll,cublas64_13.dll,cublasLt64_13.dll}
+          ls -l "${cuda_modules[0]}" "${vulkan_modules[0]}"
 
       - if: ${{ inputs.include-cuda && inputs.include-cuda-arm64 && inputs.include-cuda-arm64-jetson && matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup CUDA 12 toolkit for Jetson module
@@ -790,11 +761,6 @@ jobs:
 
           $violations = @()
           foreach ($bin in $binaries) {
-            # The bundled NVIDIA redistributables are vendor binaries. This
-            # check applies to binaries built by this repository.
-            if ($bin.Name -in @('cudart64_13.dll', 'cublas64_13.dll', 'cublasLt64_13.dll')) {
-              continue
-            }
             $deps = & $dumpbin /nologo /dependents $bin.FullName
             foreach ($pattern in $forbidden) {
               foreach ($hit in ($deps | Select-String -Pattern $pattern)) {
