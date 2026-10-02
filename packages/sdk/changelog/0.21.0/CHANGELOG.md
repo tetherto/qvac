@@ -5,6 +5,7 @@ Release Date: 2026-10-01
 ## ✨ Features
 
 - Assess a model fit in loadModel's own parameters. (see PR [#4670](https://github.com/tetherto/qvac/pull/4670)) - See [breaking changes](./breaking.md)
+- Dispatch the fit probe to every engine. (see PR [#4671](https://github.com/tetherto/qvac/pull/4671)) - See [breaking changes](./breaking.md), [API changes](./api.md)
 
 ## 🔌 API
 
