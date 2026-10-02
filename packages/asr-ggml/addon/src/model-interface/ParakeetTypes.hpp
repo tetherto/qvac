@@ -8,6 +8,15 @@
 namespace qvac::asrggml::parakeet {
 
 /**
+ * Speaker segment from diarization (Sortformer)
+ */
+struct SpeakerSegment {
+  float start = 0.0f;
+  float end = 0.0f;
+  int speakerId = -1;
+};
+
+/**
  * Transcription result segment
  */
 struct Transcript {
@@ -35,6 +44,15 @@ struct Transcript {
   // engine doesn't surface tokens), and on any segment whose token list
   // is empty (defensive default).
   bool startsWord;
+  // Sortformer only. A streaming diarization segment carries its speaker
+  // here (-1 on every other segment); the single offline diarization
+  // transcript lists every segment in speakerSegments instead. Both mirror
+  // the "Speaker N: start - end" text, which is kept for existing parsers.
+  int speakerId = -1;
+  std::vector<SpeakerSegment> speakerSegments;
+  // MOSS-Transcribe-Diarize only: the model's speaker label ("S01", "S02",
+  // ...); speakerId carries the same speaker 0-based. Empty elsewhere.
+  std::string speaker;
 
   Transcript()
       : toAppend{false}, start(-1.0F), end(-1.0F), id{0}, isEndOfTurn{false},
@@ -54,7 +72,31 @@ enum class ModelType : std::uint8_t {
   EOU, // Real-time streaming with end-of-utterance detection
   SORTFORMER, // Speaker diarization (up to 4 speakers)
   RNNT,
-  NEMOTRON // Locale-conditioned cache-aware streaming RNN-T
+  NEMOTRON, // Locale-conditioned cache-aware streaming RNN-T
+  NemotronDiarization
+};
+
+/**
+ * Where a streaming voice-activity transition came from: the engine's RMS
+ * energy detector (CTC / TDT / RNN-T / Nemotron) or Sortformer's speaker
+ * probabilities.
+ */
+enum class VadSource : std::uint8_t { Energy, Sortformer };
+
+/**
+ * Voice-activity transition forwarded from a speech-cpp StreamEvent
+ * (VadStateChanged). Emitted only on a state change, never per chunk.
+ */
+struct VadEvent {
+  bool speaking = false;
+  // Energy: window RMS (linear, 0..1). Sortformer: highest speaker
+  // probability in the chunk.
+  float score = 0.0f;
+  // Seconds from the start of the streaming session.
+  double timestamp = 0.0;
+  // Sortformer only: dominant speaker on entering speech; -1 otherwise.
+  int speakerId = -1;
+  VadSource source = VadSource::Energy;
 };
 
 /**
@@ -78,29 +120,6 @@ struct TranscriptionResult {
   int speakerId = -1;
   float startTime = 0.0f;
   float endTime = 0.0f;
-};
-
-/**
- * Speaker segment from diarization (Sortformer)
- */
-struct SpeakerSegment {
-  float start = 0.0f;
-  float end = 0.0f;
-  int speakerId = -1;
-};
-
-/**
- * Configuration for Sortformer post-processing.
- * Pre-tuned for CallHome dataset (NVIDIA defaults).
- */
-struct DiarizationConfig {
-  float onset = 0.641f;
-  float offset = 0.561f;
-  float padOnset = 0.229f;
-  float padOffset = 0.079f;
-  float minDurationOn = 0.511f;
-  float minDurationOff = 0.296f;
-  int medianWindow = 11;
 };
 
 } // namespace qvac::asrggml::parakeet

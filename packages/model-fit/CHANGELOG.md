@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.14.1] - 2026-09-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+  `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
+  expert caching defaulting to CUDA only, GLM-5 Next support). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so
+  the range bump is what picks up the new fabric. A caret on a `0.x` version
+  locks the minor, so `^0.18.0` would not have resolved `0.19.0` on its own.
+  MoE fit projections on Metal and Vulkan no longer include an automatic
+  expert cache, matching what `@qvac/llm-llamacpp` now loads there. No API
+  change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.19.0` together.
+
+### Fixed
+
+- The addon no longer fails to compile against `qvac-fabric` 10549.5.0, which
+  appends `moe_cache_auto_explicit` (defaulted) to `common_fit_params`. The fit
+  is now invoked through a lambda that calls it with the existing nine
+  arguments, so it builds against both 10549.4.0 and 10549.5.0. No API change.
+
+## [0.14.0] - 2026-09-28
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.17.0` -> `^0.18.0`, which moves the
+  shared runtime and ggml backends into `@qvac/fabric-<host>` platform
+  packages. Desktop installs get theirs as an optional dependency of
+  `@qvac/fabric`, and the backends root now comes from
+  `@qvac/fabric/backends`. No API change.
+- Mobile apps must add `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as direct dependencies at the same exact version.
+
 ## [0.13.0] - 2026-09-23
 
 ### Added

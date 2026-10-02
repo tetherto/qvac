@@ -13,6 +13,7 @@ import { QvacErrorAddonASRGgml, ERR_CODES } from "../../lib/error";
 import { resolveBackendsDir } from "../../lib/backends";
 import { END_OF_INPUT } from "../../lib/constants";
 import { normalizeAudioStream, type ByteFormat } from "../../lib/audio";
+import { assertNoRunOptions } from "../parakeet/driver";
 import type {
   ASRRunOutput,
   ASRStreamOutput,
@@ -22,6 +23,7 @@ import type {
 import type {
   ASRGgmlFiles,
   ASRGgmlReloadConfig,
+  ASRRunOptions,
   ASRStreamingOptions,
   AsrDriver,
   DriverContext,
@@ -90,6 +92,12 @@ export interface WhisperConfig extends Record<string, unknown> {
   temperature?: number;
   suppress_nst?: boolean;
   n_threads?: number;
+  /** Add per-token text, timing, and probability to each segment (`tokens`). */
+  token_timestamps?: boolean;
+  /** tinydiarize models: report `speakerTurnNext` on each segment. */
+  tdrz_enable?: boolean;
+  /** Prepend `initial_prompt` to every decode window, not only the first. */
+  carry_initial_prompt?: boolean;
 }
 
 /** Whisper branch of the discriminated engine-config union. */
@@ -256,7 +264,9 @@ export class WhisperDriver implements AsrDriver {
 
   async run(
     audio: NormalizedAudioStream,
+    options: ASRRunOptions = {},
   ): Promise<QvacResponse<ASRRunOutput>> {
+    assertNoRunOptions(options, "whisper");
     const addon = this._requiredAddon();
     this._pendingJobId = await addon.append({
       type: "audio",

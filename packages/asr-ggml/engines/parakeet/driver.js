@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ParakeetDriver = void 0;
+exports.assertNoRunOptions = assertNoRunOptions;
 const parakeet_1 = require("./parakeet");
 const error_1 = require("../../lib/error");
 const constants_1 = require("../../lib/constants");
@@ -19,6 +20,10 @@ const PARAKEET_CONFIG_KEYS = [
     "streamingHistoryMs",
     "streamingEmitPartials",
     "streamingEnergyVad",
+    "streamingEnergyVadThresholdDb",
+    "streamingEnergyVadWindowMs",
+    "streamingEnergyVadHangoverMs",
+    "streamingSpeakerVad",
     "streamingLeftContextMs",
     "streamingRightLookaheadMs",
     "streamingSpkCacheEnable",
@@ -27,6 +32,12 @@ const PARAKEET_CONFIG_KEYS = [
     "streamingChunkLeftContextMs",
     "streamingChunkRightContextMs",
     "streamingSpkCacheUpdatePeriod",
+    "diarizationThreshold",
+    "diarizationMinSegmentMs",
+    "prewarm",
+    "prewarmAudioSeconds",
+    "longFormWindowFrames",
+    "longFormContextFrames",
     "backendsDir",
     "openclCacheDir",
 ];
@@ -37,6 +48,12 @@ const PARAKEET_STREAMING_OPT_KEYS = [
     "rightLookaheadMs",
     "emitPartials",
     "emitEnergyVad",
+    "energyVadThresholdDb",
+    "energyVadWindowMs",
+    "energyVadHangoverMs",
+    "emitSpeakerVad",
+    "diarizationThreshold",
+    "diarizationMinSegmentMs",
     "spkCacheEnable",
     "spkCacheLen",
     "fifoLen",
@@ -44,6 +61,16 @@ const PARAKEET_STREAMING_OPT_KEYS = [
     "chunkRightContextMs",
     "spkCacheUpdatePeriod",
 ];
+/** Rejects per-call `run()` options on an engine that takes none. */
+function assertNoRunOptions(options, engine) {
+    const keys = Object.keys(options ?? {});
+    if (keys.length === 0)
+        return;
+    throw new error_1.QvacErrorAddonASRGgml({
+        code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: `${keys.join(", ")}: run options are moss-transcribe only (engine is ${engine})`,
+    });
+}
 function asError(error) {
     return error instanceof Error ? error : new Error(String(error));
 }
@@ -151,7 +178,8 @@ class ParakeetDriver {
     getBackendInfo() {
         return this.addon?.getBackendInfo?.() ?? null;
     }
-    run(audio) {
+    run(audio, options = {}) {
+        assertNoRunOptions(options, "parakeet");
         const response = this.ctx.job.start();
         void this._pumpBatchAudio(audio).catch((error) => {
             this.ctx.job.fail(asError(error));
@@ -250,6 +278,10 @@ class ParakeetDriver {
             streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,
             streamingEmitPartials: this.params.streamingEmitPartials !== false,
             streamingEnergyVad: this.params.streamingEnergyVad === true,
+            streamingEnergyVadThresholdDb: this.params.streamingEnergyVadThresholdDb,
+            streamingEnergyVadWindowMs: this.params.streamingEnergyVadWindowMs,
+            streamingEnergyVadHangoverMs: this.params.streamingEnergyVadHangoverMs,
+            streamingSpeakerVad: this.params.streamingSpeakerVad === true,
             streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
             streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1,
             streamingSpkCacheEnable: this.params.streamingSpkCacheEnable !== false,
@@ -258,6 +290,12 @@ class ParakeetDriver {
             streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs,
             streamingChunkRightContextMs: this.params.streamingChunkRightContextMs,
             streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod,
+            diarizationThreshold: this.params.diarizationThreshold,
+            diarizationMinSegmentMs: this.params.diarizationMinSegmentMs,
+            prewarm: this.params.prewarm === true,
+            prewarmAudioSeconds: this.params.prewarmAudioSeconds,
+            longFormWindowFrames: this.params.longFormWindowFrames,
+            longFormContextFrames: this.params.longFormContextFrames,
             backendsDir: this.params.backendsDir,
             openclCacheDir: this.params.openclCacheDir,
         };
@@ -282,6 +320,12 @@ class ParakeetDriver {
             if (segment?.isEndOfTurn === true) {
                 this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
             }
+            return;
+        }
+        if (event === "VadState") {
+            // The native payload is already VadEvent-shaped (energy detector or
+            // Sortformer speaker activity).
+            this.ctx.job.output(data);
             return;
         }
         if (event === "JobEnded") {

@@ -9,8 +9,11 @@
 
 #include <any>
 #include <cmath>
+#include <filesystem>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -24,6 +27,8 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <js.h>
+#include <parakeet/fit.h>
+#include <parakeet/log.h>
 #include <whisper.h>
 
 #include "addon/AsrErrors.hpp"
@@ -34,6 +39,7 @@
 #include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/StreamingProcessor.hpp"
 #include "model-interface/WhisperTypes.hpp"
+#include "model-interface/moss/MossTranscribeModel.hpp"
 #include "model-interface/parakeet/ParakeetModel.hpp"
 #include "model-interface/whisper/WhisperModel.hpp"
 
@@ -45,8 +51,11 @@ using qvac_lib_inference_addon_cpp::OutputQueue;
 // ── Native log forwarding ────────────────────────────────────────────────
 //
 // One process-wide install, shared by both engines. Hook choice:
-//   - ggml_log_set(forwardGgmlLog) covers parakeet-only processes (the
-//     parakeet engine logs exclusively through ggml's callback).
+//   - ggml_log_set(forwardGgmlLog) covers ggml-origin lines in
+//     parakeet-only processes.
+//   - parakeet_log_set(forwardGgmlLog) routes speech-cpp's own parakeet
+//     lines ("[parakeet] ..." warnings, prewarm diagnostics), which otherwise
+//     go to stderr. It also re-applies the callback to ggml.
 //   - whisper_log_set(forwardGgmlLog) stores the callback in whisper's
 //     g_state.log_callback AND re-applies it to ggml -- both immediately and
 //     again inside whisper_backend_init_gpu() (src/whisper.cpp). A raw
@@ -60,11 +69,50 @@ inline void installNativeLogForwarderOnce() {
   static std::once_flag once;
   std::call_once(once, [] {
     ggml_log_set(&forwardGgmlLog, nullptr);
+    parakeet_log_set(&forwardGgmlLog, nullptr);
     whisper_log_set(&forwardGgmlLog, nullptr);
   });
 }
 
-// ── Whisper output handlers (payload shapes byte-for-byte pre-merge) ─────
+// ── Whisper output handlers ──────────────────────────────────────────────
+//
+// text / toAppend / start / end / id keep their pre-merge shape. language
+// and noSpeechProb are always set; speakerTurnNext (tdrz_enable) and tokens
+// (token_timestamps) only when the matching whisperConfig flag is on.
+
+inline js::Object
+whisperTranscriptToJsObject(js_env_t* env, const whisper::Transcript& t) {
+  auto obj = js::Object::create(env);
+  obj.setProperty(env, "text", js::String::create(env, t.text));
+  obj.setProperty(env, "toAppend", js::Boolean::create(env, t.toAppend));
+  obj.setProperty(env, "start", js::Number::create(env, t.start));
+  obj.setProperty(env, "end", js::Number::create(env, t.end));
+  obj.setProperty(
+      env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
+  if (!t.language.empty()) {
+    obj.setProperty(env, "language", js::String::create(env, t.language));
+  }
+  obj.setProperty(env, "noSpeechProb", js::Number::create(env, t.noSpeechProb));
+  if (t.speakerTurnNext.has_value()) {
+    obj.setProperty(
+        env, "speakerTurnNext", js::Boolean::create(env, *t.speakerTurnNext));
+  }
+  if (t.tokens.has_value()) {
+    auto tokens = js::Array::create(env);
+    for (size_t i = 0; i < t.tokens->size(); ++i) {
+      const auto& token = (*t.tokens)[i];
+      auto jsToken = js::Object::create(env);
+      jsToken.setProperty(env, "text", js::String::create(env, token.text));
+      jsToken.setProperty(env, "start", js::Number::create(env, token.start));
+      jsToken.setProperty(env, "end", js::Number::create(env, token.end));
+      jsToken.setProperty(
+          env, "probability", js::Number::create(env, token.probability));
+      tokens.set(env, i, jsToken);
+    }
+    obj.setProperty(env, "tokens", tokens);
+  }
+  return obj;
+}
 
 struct JsWhisperTranscriptHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
@@ -73,29 +121,7 @@ struct JsWhisperTranscriptHandler
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             whisper::Transcript>(
             [this](const whisper::Transcript& output) -> js_value_t* {
-              auto jsTranscript = js::Object::create(this->env_);
-              jsTranscript.setProperty(
-                  this->env_,
-                  "text",
-                  js::String::create(this->env_, output.text));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "toAppend",
-                  js::Boolean::create(this->env_, output.toAppend));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "start",
-                  js::Number::create(this->env_, output.start));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "end",
-                  js::Number::create(this->env_, output.end));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "id",
-                  js::Number::create(
-                      this->env_, static_cast<uint64_t>(output.id)));
-              return jsTranscript;
+              return whisperTranscriptToJsObject(this->env_, output);
             }) {}
 };
 
@@ -109,29 +135,10 @@ struct JsWhisperTranscriptArrayHandler
                 const std::vector<whisper::Transcript>& output) -> js_value_t* {
               auto jsOutput = js::Array::create(this->env_);
               for (size_t i = 0; i < output.size(); ++i) {
-                auto jsTranscript = js::Object::create(this->env_);
-                jsTranscript.setProperty(
+                jsOutput.set(
                     this->env_,
-                    "text",
-                    js::String::create(this->env_, output[i].text));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "toAppend",
-                    js::Boolean::create(this->env_, output[i].toAppend));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "start",
-                    js::Number::create(this->env_, output[i].start));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "end",
-                    js::Number::create(this->env_, output[i].end));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "id",
-                    js::Number::create(
-                        this->env_, static_cast<uint64_t>(output[i].id)));
-                jsOutput.set(this->env_, i, jsTranscript);
+                    i,
+                    whisperTranscriptToJsObject(this->env_, output[i]));
               }
               return jsOutput;
             }) {}
@@ -192,6 +199,27 @@ transcriptToJsObject(js_env_t* env, const parakeet::Transcript& t) {
       env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
   obj.setProperty(env, "isEndOfTurn", js::Boolean::create(env, t.isEndOfTurn));
   obj.setProperty(env, "startsWord", js::Boolean::create(env, t.startsWord));
+  // Sortformer and MOSS-Transcribe-Diarize only; ASR segments keep their
+  // existing shape.
+  if (t.speakerId >= 0) {
+    obj.setProperty(env, "speakerId", js::Number::create(env, t.speakerId));
+  }
+  if (!t.speaker.empty()) {
+    obj.setProperty(env, "speaker", js::String::create(env, t.speaker));
+  }
+  if (!t.speakerSegments.empty()) {
+    auto segments = js::Array::create(env);
+    for (size_t i = 0; i < t.speakerSegments.size(); ++i) {
+      const auto& seg = t.speakerSegments[i];
+      auto jsSeg = js::Object::create(env);
+      jsSeg.setProperty(
+          env, "speakerId", js::Number::create(env, seg.speakerId));
+      jsSeg.setProperty(env, "start", js::Number::create(env, seg.start));
+      jsSeg.setProperty(env, "end", js::Number::create(env, seg.end));
+      segments.set(env, i, jsSeg);
+    }
+    obj.setProperty(env, "speakerSegments", segments);
+  }
   return obj;
 }
 
@@ -216,6 +244,49 @@ struct JsParakeetTranscriptArrayHandler
             }) {}
 };
 
+// Parakeet streaming VAD transition: `{ type: "vad", speaking, score,
+// timestamp, source, speakerId? }`. source is "energy" or "sortformer";
+// speakerId is present only when a Sortformer speaker enters speech.
+struct JsParakeetVadEventHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          parakeet::VadEvent> {
+  JsParakeetVadEventHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            parakeet::VadEvent>(
+            [this](const parakeet::VadEvent& event) -> js_value_t* {
+              auto obj = js::Object::create(this->env_);
+              obj.setProperty(
+                  this->env_, "type", js::String::create(this->env_, "vad"));
+              obj.setProperty(
+                  this->env_,
+                  "speaking",
+                  js::Boolean::create(this->env_, event.speaking));
+              obj.setProperty(
+                  this->env_,
+                  "score",
+                  js::Number::create(this->env_, event.score));
+              obj.setProperty(
+                  this->env_,
+                  "timestamp",
+                  js::Number::create(this->env_, event.timestamp));
+              obj.setProperty(
+                  this->env_,
+                  "source",
+                  js::String::create(
+                      this->env_,
+                      event.source == parakeet::VadSource::Sortformer
+                          ? "sortformer"
+                          : "energy"));
+              if (event.speakerId >= 0) {
+                obj.setProperty(
+                    this->env_,
+                    "speakerId",
+                    js::Number::create(this->env_, event.speakerId));
+              }
+              return obj;
+            }) {}
+};
+
 // ── createInstance ───────────────────────────────────────────────────────
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -232,10 +303,18 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       adapter.readEngineType(configurationParams, env);
 
   unique_ptr<model::IModel> model;
+  parakeet::ParakeetModel* parakeetModel = nullptr;
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outputHandlers;
   if (engineType == EngineType::Parakeet) {
-    model = make_unique<parakeet::ParakeetModel>(
+    auto ownedModel = make_unique<parakeet::ParakeetModel>(
         adapter.buildParakeetConfig(configurationParams, env));
+    parakeetModel = ownedModel.get();
+    model = std::move(ownedModel);
+    outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
+    outputHandlers.add(make_shared<JsParakeetVadEventHandler>());
+  } else if (engineType == EngineType::MossTranscribe) {
+    model = make_unique<moss::MossTranscribeModel>(
+        adapter.buildMossTranscribeConfig(configurationParams, env));
     outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
   } else {
     model = make_unique<whisper::WhisperModel>(
@@ -253,6 +332,14 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::move(outputHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  if (parakeetModel != nullptr) {
+    // Framework-path streaming (cfg.streaming) VAD transitions share the
+    // job output queue; the duplex path queues its own.
+    parakeetModel->setOnVadEventCallback([queue = addon->addonCpp->outputQueue](
+                                             const parakeet::VadEvent& event) {
+      queue->queueResult(std::any(event));
+    });
+  }
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -283,6 +370,17 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     vector<float> inputSamples =
         js::TypedArray<float>(env, jsInput).as<vector<float>>(env);
     return instance.runJob(any(std::move(inputSamples)));
+  }
+
+  if (dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get()) != nullptr) {
+    moss::MossTranscribeModel::AnyInput mossInput;
+    mossInput.samples =
+        js::TypedArray<float>(env, jsInput).as<vector<float>>(env);
+    JSAdapter adapter;
+    mossInput.request =
+        adapter.readMossTranscribeRequest(args.getJsObject(1, "inputObj"), env);
+    return instance.runJob(any(std::move(mossInput)));
   }
 
   auto inputObj = args.getJsObject(1, "inputObj");
@@ -324,6 +422,13 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
         "reload is not supported for the parakeet engine; destroy and "
         "recreate the instance");
   }
+  if (dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get()) != nullptr) {
+    throw errors::parakeet::makeStatus(
+        errors::parakeet::Code::ReloadNotSupported,
+        "reload is not supported for the moss-transcribe engine; destroy and "
+        "recreate the instance");
+  }
 
   auto configurationParams = args.getJsObject(1, "configurationParams");
   JSAdapter adapter;
@@ -343,6 +448,247 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+// ── assessFit ────────────────────────────────────────────────────────────
+//
+// `engine` picks the fitter, the same value createInstance takes. A model the
+// fitter cannot read is an "error" status carrying the engine's own reason,
+// never a throw.
+//
+// Takes no instance and runs on the calling thread: both fitters read model
+// metadata only, never weight data, and return in milliseconds.
+
+inline js_value_t*
+whisperFit(js_env_t* env, js::Object request, const std::string& modelPath);
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+
+  const std::string modelPath =
+      request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  auto engine = request.getOptionalProperty<js::String>(env, "engine");
+  if (engine.has_value()) {
+    const std::string name = engine->as<std::string>(env);
+    if (name == "whisper") {
+      return whisperFit(env, request, modelPath);
+    }
+    if (name == "moss-transcribe") {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "assessFit does not support the moss-transcribe engine");
+    }
+    // An unrecognised name reaches the parakeet fitter with a model it cannot
+    // read, and the caller sees a broken model for what is a broken request.
+    if (name != "parakeet") {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Unknown fit engine: " + name);
+    }
+  }
+
+  ::parakeet::FitOptions options;
+  options.model_gguf_path = modelPath;
+
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    const double raw = value->as<double>(env);
+    // A count cast from a negative or non-finite double is undefined.
+    if (!std::isfinite(raw) || raw < 0) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          std::string("assessFit: ") + name + " must be a non-negative count");
+    }
+    return raw;
+  };
+
+  if (auto seconds = number("audioSeconds")) {
+    options.audio_seconds = static_cast<float>(*seconds);
+  }
+  if (auto layers = number("gpuLayers")) {
+    options.n_gpu_layers = static_cast<int>(*layers);
+  }
+  if (auto threads = number("threads")) {
+    options.n_threads = static_cast<int>(*threads);
+  }
+  if (auto frames = number("longFormWindowFrames")) {
+    options.long_form_window_frames = static_cast<int>(*frames);
+  }
+  if (auto frames = number("longFormContextFrames")) {
+    options.long_form_context_frames = static_cast<int>(*frames);
+  }
+  if (auto chunkMs = number("nemotronChunkMs")) {
+    options.nemotron_chunk_ms = static_cast<int>(*chunkMs);
+  }
+  if (auto margin = number("marginBytes")) {
+    options.margin_bytes = static_cast<uint64_t>(*margin);
+  }
+  if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
+    // The backends live in the per-target subdir cmake-bare writes under the
+    // prebuilds root. The registry is built once per process, so a root that
+    // resolves to nothing leaves every later load without a device too.
+    std::filesystem::path root(dir->as<std::string>(env));
+#ifdef BACKENDS_SUBDIR
+    root = (root / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+    options.backends_dir = root.string();
+  }
+
+  const ::parakeet::FitResult fit = ::parakeet::fit_params(options);
+
+  const char* status = "error";
+  if (fit.status == ::parakeet::FitStatus::Success) {
+    status = "fits";
+  } else if (fit.status == ::parakeet::FitStatus::Failure) {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  auto text = [&](const char* name, const std::string& value) {
+    result.setProperty(env, name, js::String::create(env, value));
+  };
+  auto bytes = [&](const char* name, uint64_t value) {
+    result.setProperty(
+        env, name, js::Number::create(env, static_cast<double>(value)));
+  };
+
+  text("status", status);
+  text("reason", fit.reason);
+  text("modelType", fit.model_type);
+  text("modelVariant", fit.model_variant);
+  text("deviceName", fit.device_name);
+  text("report", fit.report);
+  result.setProperty(
+      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+  result.setProperty(
+      env,
+      "deviceSharesHostMemory",
+      js::Boolean::create(env, fit.device_shares_host_memory));
+  bytes("deviceFreeBytes", fit.device_free_bytes);
+  bytes("deviceTotalBytes", fit.device_total_bytes);
+  bytes("deviceBytes", fit.device.total_bytes);
+  bytes("weightsBytes", fit.device.weights_bytes);
+  bytes("encoderComputeBytes", fit.device.encoder_compute_bytes);
+  bytes("decoderStateBytes", fit.device.decoder_state_bytes);
+  bytes("decoderComputeBytes", fit.device.decoder_compute_bytes);
+  bytes("hostBytes", fit.host_bytes);
+
+  return result;
+}
+JSCATCH
+
+inline js_value_t*
+whisperFit(js_env_t* env, js::Object request, const std::string& modelPath) {
+  // whisper_fit_params reads ggml's global device registry and loads nothing
+  // itself, so whatever is registered here is its whole view of the machine.
+#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
+  auto backendsDir =
+      request.getOptionalProperty<js::String>(env, "backendsDir");
+  whisper::ensureBackendsLoaded(
+      backendsDir.has_value() ? backendsDir->as<std::string>(env)
+                              : std::string());
+#endif
+
+  whisper_fit_options options = whisper_fit_default_options();
+  options.model_path = modelPath.c_str();
+
+  std::string vadPath;
+  if (auto vad = request.getOptionalProperty<js::String>(env, "vadModelPath")) {
+    vadPath = vad->as<std::string>(env);
+    options.vad_model_path = vadPath.empty() ? nullptr : vadPath.c_str();
+  }
+
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    const double raw = value->as<double>(env);
+    // A count cast from a negative or non-finite double is undefined.
+    if (!std::isfinite(raw) || raw < 0) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          std::string("assessFit: ") + name + " must be a non-negative count");
+    }
+    return raw;
+  };
+  auto boolean = [&](const char* name) -> std::optional<bool> {
+    auto value = request.getOptionalProperty<js::Boolean>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<bool>(env);
+  };
+
+  // Whisper takes a GPU switch where parakeet takes a layer count. The shared
+  // `gpuLayers` maps onto it, any positive value meaning the GPU stack.
+  if (auto layers = number("gpuLayers")) {
+    options.use_gpu = *layers > 0;
+  }
+  if (auto flashAttn = boolean("flashAttn")) {
+    options.flash_attn = *flashAttn;
+  }
+  if (auto device = number("gpuDevice")) {
+    options.gpu_device = static_cast<int>(*device);
+  }
+  if (auto decoders = number("decoders")) {
+    options.n_decoders = static_cast<int>(*decoders);
+  }
+  if (auto seconds = number("audioSeconds")) {
+    options.audio_seconds = static_cast<float>(*seconds);
+  }
+  if (auto margin = number("marginBytes")) {
+    options.margin_bytes = static_cast<uint64_t>(*margin);
+  }
+
+  whisper_fit_result fit{};
+  whisper_fit_params(&options, &fit);
+
+  const char* status = "error";
+  if (fit.status == WHISPER_FIT_SUCCESS) {
+    status = "fits";
+  } else if (fit.status == WHISPER_FIT_FAILURE) {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  auto text = [&](const char* name, const char* value) {
+    result.setProperty(env, name, js::String::create(env, std::string(value)));
+  };
+  auto bytes = [&](const char* name, uint64_t value) {
+    result.setProperty(
+        env, name, js::Number::create(env, static_cast<double>(value)));
+  };
+
+  text("status", status);
+  text("reason", fit.reason);
+  text("modelType", fit.model_type);
+  text("modelVariant", "");
+  text("deviceName", fit.device_name);
+  text("report", fit.report);
+  result.setProperty(
+      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+  result.setProperty(
+      env,
+      "deviceSharesHostMemory",
+      js::Boolean::create(env, fit.device_shares_host_memory));
+  bytes("deviceFreeBytes", fit.device_free_bytes);
+  bytes("deviceTotalBytes", fit.device_total_bytes);
+  bytes("deviceBytes", fit.device.total_bytes);
+  bytes("weightsBytes", fit.device.weights_bytes);
+  bytes("kvBytes", fit.device.kv_bytes);
+  bytes("computeBytes", fit.device.compute_bytes);
+  bytes("vadBytes", fit.device.vad_bytes);
+  bytes("hostOverflowBytes", fit.device.host_overflow_bytes);
+  bytes("hostBytes", fit.host_bytes);
+
+  return result;
+}
+
 // ── getBackendInfo ───────────────────────────────────────────────────────
 //
 // Returns the backend the engine resolved at load() as a JS object:
@@ -353,8 +699,8 @@ JSCATCH
 // 3090") recovered from the ggml device registry; it is the
 // nvidia-smi-independent fallback the perf reporter uses on CI runners
 // where the host probes can't see the GPU. encoderBackend is "coreml" when
-// parakeet's FastConformer encoder runs on the Apple Neural Engine sidecar,
-// else it mirrors backendName; the whisper-cpp port builds without
+// parakeet loaded an Apple Neural Engine encoder sidecar at load(), else it
+// mirrors backendName; the whisper-cpp port builds without
 // WHISPER_COREML, so its arm always reports encoderOnCoreml=false -- the
 // keys exist purely for cross-engine shape stability. Available after
 // activate(); reports CPU/"" before load.
@@ -394,6 +740,30 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
         env,
         "encoderOnCoreml",
         js::Boolean::create(env, parakeetModel->getEncoderOnCoreml() != 0));
+    result.setProperty(
+        env,
+        "modelType",
+        js::String::create(env, parakeetModel->getModelTypeName()));
+    return result;
+  }
+
+  if (auto* mossModel = dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get())) {
+    result.setProperty(
+        env,
+        "backendDevice",
+        js::String::create(
+            env,
+            std::string(
+                mossModel->getBackendDeviceClass() == 1 ? "GPU" : "CPU")));
+    result.setProperty(
+        env, "backendId", js::Number::create(env, mossModel->getBackendId()));
+    result.setProperty(
+        env,
+        "backendName",
+        js::String::create(env, mossModel->getBackendName()));
+    result.setProperty(
+        env, "modelType", js::String::create(env, "moss-transcribe"));
     return result;
   }
 
@@ -423,6 +793,7 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
       "encoderBackend",
       js::String::create(env, whisperModel.getBackendName()));
   result.setProperty(env, "encoderOnCoreml", js::Boolean::create(env, false));
+  result.setProperty(env, "modelType", js::String::create(env, "whisper"));
   // Whisper-only extras: device-memory snapshot at load().
   result.setProperty(
       env,
@@ -553,9 +924,12 @@ streamingConfigFromModel(parakeet::ParakeetModel& model) {
   config.historyMs = model.getStreamingHistoryMs();
   config.emitPartials = model.getStreamingEmitPartials();
   config.emitEnergyVad = model.getStreamingEnergyVad();
-  config.diarOnsetThreshold = model.getDiarOnsetThreshold();
-  config.diarMinSegmentMs =
-      static_cast<int>(model.getDiarMinDurationOn() * 1000.0F);
+  config.energyVadThresholdDb = model.getStreamingEnergyVadThresholdDb();
+  config.energyVadWindowMs = model.getStreamingEnergyVadWindowMs();
+  config.energyVadHangoverMs = model.getStreamingEnergyVadHangoverMs();
+  config.emitSpeakerVad = model.getStreamingSpeakerVad();
+  config.diarizationThreshold = model.getDiarizationThreshold();
+  config.diarizationMinSegmentMs = model.getDiarizationMinSegmentMs();
   config.leftContextMs = model.getStreamingLeftContextMs();
   config.rightLookaheadMs = model.getStreamingRightLookaheadMs();
   config.spkCacheEnable = model.getStreamingSpkCacheEnable();
@@ -567,28 +941,51 @@ streamingConfigFromModel(parakeet::ParakeetModel& model) {
   return config;
 }
 
+// A JS number as an int, or nullopt for NaN, +/-Infinity and values outside
+// the int range (casting those is undefined behaviour).
+inline std::optional<int>
+readIntOverride(js_env_t* env, js::Object& obj, const char* name) {
+  auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name);
+  if (!value || !std::isfinite(*value) ||
+      *value < static_cast<double>(std::numeric_limits<int>::min()) ||
+      *value > static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::nullopt;
+  }
+  return static_cast<int>(*value);
+}
+
 inline void overrideIfPositive(
     js_env_t* env, js::Object& obj, const char* name, int& target) {
-  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
-    const int intValue = static_cast<int>(*value);
-    if (intValue > 0)
-      target = intValue;
-  }
+  if (auto value = readIntOverride(env, obj, name); value && *value > 0)
+    target = *value;
 }
 
 inline void overrideIfNonNegative(
     js_env_t* env, js::Object& obj, const char* name, int& target) {
-  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
-    const int intValue = static_cast<int>(*value);
-    if (intValue >= 0)
-      target = intValue;
-  }
+  if (auto value = readIntOverride(env, obj, name); value && *value >= 0)
+    target = *value;
 }
 
 inline void
 overrideBool(js_env_t* env, js::Object& obj, const char* name, bool& target) {
   if (auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(env, name)) {
     target = *value;
+  }
+}
+
+inline void overrideIfFinite(
+    js_env_t* env, js::Object& obj, const char* name, float& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    if (std::isfinite(*value))
+      target = static_cast<float>(*value);
+  }
+}
+
+inline void overrideIfUnitInterval(
+    js_env_t* env, js::Object& obj, const char* name, float& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    if (*value >= 0.0 && *value <= 1.0)
+      target = static_cast<float>(*value);
   }
 }
 
@@ -602,6 +999,20 @@ inline void applyStreamingOverrides(
       env, configObj, "rightLookaheadMs", config.rightLookaheadMs);
   overrideBool(env, configObj, "emitPartials", config.emitPartials);
   overrideBool(env, configObj, "emitEnergyVad", config.emitEnergyVad);
+  overrideIfFinite(
+      env, configObj, "energyVadThresholdDb", config.energyVadThresholdDb);
+  overrideIfPositive(
+      env, configObj, "energyVadWindowMs", config.energyVadWindowMs);
+  overrideIfNonNegative(
+      env, configObj, "energyVadHangoverMs", config.energyVadHangoverMs);
+  overrideBool(env, configObj, "emitSpeakerVad", config.emitSpeakerVad);
+  overrideIfUnitInterval(
+      env, configObj, "diarizationThreshold", config.diarizationThreshold);
+  overrideIfNonNegative(
+      env,
+      configObj,
+      "diarizationMinSegmentMs",
+      config.diarizationMinSegmentMs);
   // AOSC per-call overrides (v2.1+ Sortformer only).
   overrideBool(env, configObj, "spkCacheEnable", config.spkCacheEnable);
   overrideIfPositive(env, configObj, "spkCacheLen", config.spkCacheLen);
@@ -622,6 +1033,13 @@ inline js_value_t* startStreaming(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto configObj = args.getJsObject(1, "config");
+  if (dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get()) != nullptr) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "the moss-transcribe engine transcribes whole recordings and does not "
+        "stream; use run()");
+  }
 
   // Order matters, and it is the pre-merge order: parse/validate the config,
   // then let the registry run the double-start check and the construction as

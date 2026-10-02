@@ -51,7 +51,6 @@ static bool shouldAbortWhisper(void* userData) {
 }
 
 #if defined(__ANDROID__) || defined(__linux__)
-namespace {
 // Android, desktop linux-arm64, and linux-x64-with-CUDA builds ship ggml
 // with `GGML_BACKEND_DL=ON`, so no backend is statically registered. dlopen
 // the per-arch CPU + GPU `.so` modules once per process; otherwise
@@ -85,7 +84,6 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
     ggml_backend_load_all_from_path(variantsDir.string().c_str());
   });
 }
-} // namespace
 #endif // __ANDROID__ || __linux__
 
 BCIModel::BCIModel(BCIConfig config)

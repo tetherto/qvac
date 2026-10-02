@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <parakeet/engine.h>
 
 #include "addon/AsrErrors.hpp"
 #include "model-interface/ParakeetTypes.hpp"
@@ -104,6 +105,12 @@ private:
   std::vector<uint8_t> buf_;
 };
 
+pkt::EngineResult makeEngineResult(bool usedCoreml) {
+  pkt::EngineResult result;
+  result.encoder_used_coreml = usedCoreml;
+  return result;
+}
+
 class ParakeetModelTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -180,6 +187,23 @@ TEST_F(ParakeetModelTest, NemotronMetadataSelectsNormalAsrModel) {
   EXPECT_NE(detected, ModelType::TDT);
   EXPECT_NE(detected, ModelType::EOU);
   EXPECT_NE(detected, ModelType::SORTFORMER);
+}
+
+TEST_F(ParakeetModelTest, NemotronDiarizationMetadataSelectsDiarization) {
+  const ModelType detected = ParakeetModel::modelTypeFromMetadata(
+      "nemotron-diarization", ModelType::TDT);
+  EXPECT_EQ(detected, ModelType::NemotronDiarization);
+  ParakeetConfig diarConfig = cfg;
+  diarConfig.modelType = detected;
+  ParakeetModel model(diarConfig);
+  EXPECT_TRUE(model.isDiarization());
+  EXPECT_FALSE(model.isSortformer());
+  EXPECT_FLOAT_EQ(
+      model.getDiarizationThreshold(),
+      ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_THRESHOLD);
+  EXPECT_EQ(
+      model.getDiarizationMinSegmentMs(),
+      ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_MIN_SEGMENT_MS);
 }
 
 TEST_F(ParakeetModelTest, UnknownMetadataPreservesModelTypeFallback) {
@@ -399,6 +423,78 @@ TEST_F(ParakeetModelTest, RuntimeStatsAccumulateAcrossCalls) {
   m.process(ParakeetModel::Input(8000, 0.0f));
   EXPECT_EQ(findStatInt(m.runtimeStats(), "processCalls"), 2);
   EXPECT_EQ(findStatInt(m.runtimeStats(), "totalSamples"), 16000);
+}
+
+TEST_F(ParakeetModelTest, RecordTranscriptionResultAccumulatesStageStats) {
+  ParakeetModel m(cfg);
+  pkt::EngineResult result;
+  result.encoder_ms = 12.0;
+  result.decode_ms = 3.0;
+  result.preprocess_ms = 2.0;
+  result.encoder_frames = 50;
+  result.token_ids = {1, 2, 3};
+
+  m.recordTranscriptionResult(result);
+  m.recordTranscriptionResult(result);
+
+  const auto stats = m.runtimeStats();
+  EXPECT_EQ(findStatInt(stats, "encoderMs"), 24);
+  EXPECT_EQ(findStatInt(stats, "decoderMs"), 6);
+  EXPECT_EQ(findStatInt(stats, "melSpecMs"), 4);
+  EXPECT_EQ(findStatInt(stats, "totalEncodedFrames"), 100);
+  EXPECT_EQ(findStatInt(stats, "totalTokens"), 6);
+}
+
+TEST_F(ParakeetModelTest, EncoderUsedCoremlAbsentWithoutOfflineTranscription) {
+  ParakeetModel m(cfg);
+  EXPECT_FALSE(hasStatKey(m.runtimeStats(), "encoderUsedCoreml"));
+}
+
+TEST_F(ParakeetModelTest, EncoderUsedCoremlSetWhenEveryCallRanOnCoreml) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeEngineResult(true));
+  m.recordTranscriptionResult(makeEngineResult(true));
+
+  const auto stats = m.runtimeStats();
+  ASSERT_TRUE(hasStatKey(stats, "encoderUsedCoreml"));
+  EXPECT_EQ(findStatInt(stats, "encoderUsedCoreml"), 1);
+}
+
+TEST_F(ParakeetModelTest, EncoderUsedCoremlZeroWhenEncoderRanOnGgml) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeEngineResult(false));
+
+  const auto stats = m.runtimeStats();
+  ASSERT_TRUE(hasStatKey(stats, "encoderUsedCoreml"));
+  EXPECT_EQ(findStatInt(stats, "encoderUsedCoreml"), 0);
+}
+
+TEST_F(ParakeetModelTest, EncoderUsedCoremlZeroWhenOneCallFellBackToGgml) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeEngineResult(true));
+  m.recordTranscriptionResult(makeEngineResult(false));
+  m.recordTranscriptionResult(makeEngineResult(true));
+
+  EXPECT_EQ(findStatInt(m.runtimeStats(), "encoderUsedCoreml"), 0);
+}
+
+TEST_F(ParakeetModelTest, EncoderUsedCoremlStartsOverForEachJob) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeEngineResult(false));
+  ASSERT_TRUE(hasStatKey(m.runtimeStats(), "encoderUsedCoreml"));
+
+  m.process(std::any(ParakeetModel::Input(4000, 0.0f)));
+
+  EXPECT_FALSE(hasStatKey(m.runtimeStats(), "encoderUsedCoreml"));
+}
+
+TEST_F(ParakeetModelTest, EncoderOnCoremlKeepsReportingLoadStatus) {
+  ParakeetModel m(cfg);
+  m.recordTranscriptionResult(makeEngineResult(true));
+
+  const auto stats = m.runtimeStats();
+  EXPECT_EQ(findStatInt(stats, "encoderOnCoreml"), 0);
+  EXPECT_EQ(findStatInt(stats, "encoderUsedCoreml"), 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q8.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "SalamandraTA 2B instruct model",
     "quantization": "q8",
     "params": "2B",
     "licenseId": "Apache-2.0",
@@ -2190,10 +2190,10 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
-    "source": "https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
+    "source": "https://huggingface.co/mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/a8d3114d7b68df89b92f04372231d348e4f91753/Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Llama 3.2 1B with tool calling support",
-    "quantization": "q4_k",
+    "quantization": "q4_k_m",
     "params": "1B",
     "licenseId": "Apache-2.0",
     "tags": ["generation", "instruct", "llama-tool-calling", "tool-calling-v2"],
@@ -2848,7 +2848,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2859,7 +2859,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2870,7 +2870,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2893,7 +2893,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2905,7 +2905,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2917,7 +2917,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2928,7 +2928,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2972,7 +2972,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2983,7 +2983,7 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2992,6 +2992,28 @@
     "licenseId": "CC-BY-4.0",
     "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
     "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "f16",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "q8_0",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-1.1b"
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
@@ -3005,7 +3027,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3016,7 +3038,7 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3027,7 +3049,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3036,6 +3058,501 @@
     "licenseId": "nvidia-open-model-license",
     "tags": ["transcription", "parakeet", "unified", "ggml", "en"],
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 AOSC encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 AOSC encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 AOSC encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 AOSC encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder-bypass-pre-encode.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 AOSC encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 batch encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 batch encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 batch encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 batch encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/diar_streaming_sortformer_4spk-v2.1-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Streaming Sortformer 4SPK v2.1 batch encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "sortformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/indic-conformer-600m-multilingual-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Indic Conformer 600M multilingual encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "MIT",
+    "tags": ["transcription", "parakeet", "indic-conformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/indic-conformer-600m-multilingual-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Indic Conformer 600M multilingual encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "MIT",
+    "tags": ["transcription", "parakeet", "indic-conformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/indic-conformer-600m-multilingual-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Indic Conformer 600M multilingual encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "MIT",
+    "tags": ["transcription", "parakeet", "indic-conformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/indic-conformer-600m-multilingual-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Indic Conformer 600M multilingual encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "MIT",
+    "tags": ["transcription", "parakeet", "indic-conformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/indic-conformer-600m-multilingual-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Indic Conformer 600M multilingual encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "MIT",
+    "tags": ["transcription", "parakeet", "indic-conformer", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/nemotron-3.5-asr-streaming-0.6b-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Nemotron 3.5 ASR streaming 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/nemotron-3.5-asr-streaming-0.6b-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Nemotron 3.5 ASR streaming 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/nemotron-3.5-asr-streaming-0.6b-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Nemotron 3.5 ASR streaming 0.6B encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/nemotron-3.5-asr-streaming-0.6b-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Nemotron 3.5 ASR streaming 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/nemotron-3.5-asr-streaming-0.6b-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Nemotron 3.5 ASR streaming 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "nemotron", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "ctc", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "ctc", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "ctc", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "ctc", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-ctc-0.6b-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "ctc", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-0.6b-v3-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-0.6b-v3-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-0.6b-v3-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-0.6b-v3-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-0.6b-v3-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-1.1b-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 1.1B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-1.1b-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 1.1B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-1.1b-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 1.1B encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-1.1b-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 1.1B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-tdt-1.1b-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 1.1B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet Unified English 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet Unified English 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet Unified English 0.6B encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet Unified English 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet-unified-en-0.6b-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet Unified English 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["transcription", "parakeet", "unified", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet_realtime_eou_120m-v1-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet EOU 120M v1 encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "eou", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet_realtime_eou_120m-v1-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet EOU 120M v1 encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "eou", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet_realtime_eou_120m-v1-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet EOU 120M v1 encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "eou", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet_realtime_eou_120m-v1-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet EOU 120M v1 encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "eou", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-28/parakeet_realtime_eou_120m-v1-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet EOU 120M v1 encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "eou", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
@@ -8539,6 +9056,61 @@
     "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 codec encoder / analysis half for voice cloning (GGUF, multilingual)",
@@ -8627,7 +9199,7 @@
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -8638,7 +9210,7 @@
     "notes": "F16 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -8649,7 +9221,7 @@
     "notes": "Q4_0 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -8836,7 +9408,7 @@
     "link": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -8847,7 +9419,7 @@
     "notes": "F16 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -8858,7 +9430,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -8878,5 +9450,71 @@
     "tags": ["generation", "multimodal", "qwen3.8-flash-next", "instruct", "video-instruct"],
     "notes": "Required for image and video input with every Qwen3.8 Flash Next quantization.",
     "link": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-decoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTS codec decoder (GGUF, multilingual)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-tts", "codec", "decoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-encoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTS codec encoder for voice cloning (GGUF, multilingual)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-tts", "codec", "encoder", "multilingual", "gguf"],
+    "notes": "Only needed for voice cloning; text-only synthesis can omit this GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-09-25/moss-tts-delay-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTS Delay language model (GGUF, multilingual)",
+    "quantization": "f16",
+    "params": "8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-tts", "delay", "llm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PQ2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PQ2_0 model",
+    "quantization": "pq2_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Ternary weights stored in 2-bit slots (2.13 bits/weight); faster prompt processing than PTQ1_0. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PTQ1_0 model",
+    "quantization": "ptq1_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Densely packed ternary weights (1.75 bits/weight); smallest footprint. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Ternary Bonsai 2 27B",
+    "quantization": "q8_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Required for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
   }
 ]

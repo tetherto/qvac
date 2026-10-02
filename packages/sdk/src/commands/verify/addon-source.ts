@@ -24,6 +24,20 @@ export interface AddonPackageJson {
   engines?: {
     bare?: string
   }
+  dependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+}
+
+/** Any package in the collected graph, addon or not. */
+export interface PackageRecord {
+  name: string
+  version?: string
+  packageJsonPath: string
+  isAddon: boolean
+  enginesBare?: string
+  /** Declared ranges of every dependency kind, keyed by dependency name. */
+  dependencies: Record<string, string>
 }
 
 export interface ReadAddonPackageJsonOptions {
@@ -42,6 +56,7 @@ export interface ReadAddonPackageJsonResult {
   isAddon: boolean
   invalid?: InvalidPackageJsonRecord
   addon?: NativeAddon
+  record?: PackageRecord
 }
 
 export async function readAddonPackageJson(
@@ -76,8 +91,11 @@ export async function readAddonPackageJson(
   }
 
   const pkg = parsed as AddonPackageJson
+  const record = buildRecord(pkg, packageJsonPath, expectedName)
   if (pkg.addon !== true) {
-    return { found: true, isAddon: false }
+    return record === null
+      ? { found: true, isAddon: false }
+      : { found: true, isAddon: false, record }
   }
 
   const name = pkg.name ?? expectedName
@@ -101,7 +119,40 @@ export async function readAddonPackageJson(
   if (typeof pkg.version === 'string') addon.version = pkg.version
   if (typeof pkg.engines?.bare === 'string') addon.enginesBare = pkg.engines.bare
 
-  return { found: true, isAddon: true, addon }
+  return record === null
+    ? { found: true, isAddon: true, addon }
+    : { found: true, isAddon: true, addon, record }
+}
+
+function stringRecord(value: unknown) {
+  const out: Record<string, string> = {}
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return out
+  for (const [key, range] of Object.entries(value)) {
+    if (typeof range === 'string') out[key] = range
+  }
+  return out
+}
+
+function buildRecord(
+  pkg: AddonPackageJson,
+  packageJsonPath: string,
+  expectedName: string | undefined
+): PackageRecord | null {
+  const name = typeof pkg.name === 'string' ? pkg.name : expectedName
+  if (!name) return null
+  const record: PackageRecord = {
+    name,
+    packageJsonPath,
+    isAddon: pkg.addon === true,
+    dependencies: {
+      ...stringRecord(pkg.peerDependencies),
+      ...stringRecord(pkg.optionalDependencies),
+      ...stringRecord(pkg.dependencies)
+    }
+  }
+  if (typeof pkg.version === 'string') record.version = pkg.version
+  if (typeof pkg.engines?.bare === 'string') record.enginesBare = pkg.engines.bare
+  return record
 }
 
 function buildInvalid(
@@ -117,11 +168,44 @@ function buildInvalid(
 export interface CollectDiagnostics {
   invalidPackageJsons: InvalidPackageJsonRecord[]
   emptyResolutions: boolean
+  /** Every readable package the collector visited, in visit order. */
+  packages: PackageRecord[]
 }
 
 export function createCollectDiagnostics(): CollectDiagnostics {
-  return { invalidPackageJsons: [], emptyResolutions: false }
+  return { invalidPackageJsons: [], emptyResolutions: false, packages: [] }
 }
+
+/**
+ * Caps concurrent filesystem calls so a large node_modules tree is read in
+ * parallel without exhausting file descriptors.
+ */
+export function createLimiter(max: number) {
+  let active = 0
+  const queue: Array<() => void> = []
+
+  // A finishing task hands its slot straight to the next waiter, so a caller
+  // arriving in between cannot take it as well.
+  function release() {
+    const next = queue.shift()
+    if (next) next()
+    else active--
+  }
+
+  async function run<T>(task: () => Promise<T>) {
+    if (active >= max) await new Promise<void>((resolve) => queue.push(resolve))
+    else active++
+    try {
+      return await task()
+    } finally {
+      release()
+    }
+  }
+
+  return run
+}
+
+export const FS_CONCURRENCY = 32
 
 export function formatAddonId(addon: { name: string; version?: string }): string {
   return `${addon.name}@${addon.version ?? 'unknown'}`

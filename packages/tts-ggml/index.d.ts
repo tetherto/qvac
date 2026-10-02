@@ -1,6 +1,7 @@
 import { type QvacResponse } from "@qvac/infer-base";
 import * as errorModule from "./lib/error";
 import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
+import { assessFit as assessFitImpl, type Audio8FitRequest, type MossFitRequest, type ChatterboxFitRequest, type CosyvoiceFitRequest, type ParlerFitRequest, type SupertonicFitRequest, type TtsFitEngine, type TtsFitRequest, type TtsFitResult, type TtsFitStatus } from "./lib/fit";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
@@ -8,6 +9,9 @@ declare const ENGINE_COSYVOICE3 = "cosyvoice3";
 declare const ENGINE_PARLER = "parler";
 declare const ENGINE_AUDIO8 = "audio8";
 declare const ENGINE_MOSS = "moss";
+declare const ENGINE_MOSS_SFX = "moss-sfx";
+declare const ENGINE_MOSS_SPEECH = "moss-speech";
+declare const ENGINE_POCKET = "pocket";
 declare const COSYVOICE_DIALECTS: {
     readonly cantonese: "广东话";
     readonly northeastern: "东北话";
@@ -55,7 +59,8 @@ declare const EMOTIONS: readonly ["command", "anger", "narration", "conversation
 declare const PACES: readonly ["slow", "moderate", "fast"];
 type Emotion = (typeof EMOTIONS)[number];
 type Pace = (typeof PACES)[number];
-type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS;
+declare const MOSS_SPEECH_ROLES: readonly ["system", "user", "assistant"];
+type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS | typeof ENGINE_MOSS_SFX | typeof ENGINE_MOSS_SPEECH | typeof ENGINE_POCKET;
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
  * from these fields (Chatterbox vs Supertonic) unless overridden via
@@ -63,6 +68,10 @@ type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof E
  * through to the native layer as-is.
  */
 interface TTSGgmlFiles {
+    pocketFlowModel?: string;
+    pocketMimiModel?: string;
+    pocketFrontend?: string;
+    pocketVoice?: string;
     /**
      * Bundle root. For Chatterbox, expected to contain
      * `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` (turbo) or
@@ -98,7 +107,10 @@ interface TTSGgmlFiles {
      */
     audio8CodecEncoder?: string;
     audio8CodecEncoderPath?: string;
-    /** MOSS Delay backbone GGUF path. Overrides `modelDir`. */
+    /**
+     * MOSS Delay backbone GGUF path: MOSS-TTS (`moss-tts-delay-*.gguf`) or the
+     * MOSS-TTSD dialogue checkpoint (`moss-ttsd-*.gguf`). Overrides `modelDir`.
+     */
     mossBackbone?: string;
     mossBackbonePath?: string;
     /** MOSS codec synthesis half (codes to 24 kHz wav). Overrides `modelDir`. */
@@ -106,10 +118,30 @@ interface TTSGgmlFiles {
     mossCodecDecoderPath?: string;
     /**
      * MOSS codec analysis half (wav to codes). Only needed to clone a voice
-     * from `referenceAudio`; a text-only deployment can leave it out.
+     * from `referenceAudio` or for `dialogueReferences`; a text-only deployment
+     * can leave it out.
      */
     mossCodecEncoder?: string;
     mossCodecEncoderPath?: string;
+    /**
+     * MOSS-SoundEffect GGUF (`moss-sfx-*.gguf`): text encoder, DiT and VAE in
+     * one file. Routes to the `moss-sfx` engine. Overrides `modelDir`.
+     */
+    mossSoundEffect?: string;
+    mossSoundEffectPath?: string;
+    /**
+     * MOSS-Speech language model GGUF (`moss-speech-*.gguf`, e.g.
+     * `moss-speech-q8_0.gguf`). Routes to the `moss-speech` engine together
+     * with `mossSpeechCodec`. Overrides `modelDir`.
+     */
+    mossSpeechModel?: string;
+    mossSpeechModelPath?: string;
+    /**
+     * MOSS-Speech codec GGUF (`moss-speech-codec-*.gguf`): speech tokenizer,
+     * reply decoder and the default reply voice. Overrides `modelDir`.
+     */
+    mossSpeechCodec?: string;
+    mossSpeechCodecPath?: string;
     /**
      * CosyVoice3 model directory holding the sub-model GGUFs
      * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
@@ -301,6 +333,66 @@ interface Audio8VoiceFields {
     referenceText?: string;
 }
 /**
+ * MOSS-SoundEffect per-call generation controls (moss-sfx only). Each one is
+ * optional; unset `steps` / `guidance` / `shift` use the defaults stored in the
+ * model file (100 steps, guidance 4, shift 5).
+ */
+interface MossSoundEffectFields {
+    /** Length of the sound effect, in (0, 30] seconds, rounded to 0.1 s. Defaults to 10. */
+    seconds?: number;
+    /** What the sound effect should avoid (classifier-free guidance negative). */
+    negativePrompt?: string;
+    /** Diffusion steps, 1..1000. More steps cost proportionally more time. */
+    steps?: number;
+    /** Classifier-free guidance scale, 1..50; 1 skips the negative branch. */
+    guidance?: number;
+    /** Flow-matching schedule shift, (0, 100]. */
+    shift?: number;
+}
+/** Mono PCM accepted by the MOSS-Speech engine: 16-bit integers or floats in [-1, 1]. */
+type MossSpeechPcm = Int16Array | Float32Array;
+/** One conversation turn for the MOSS-Speech engine: text or audio, never both. */
+interface MossSpeechMessage {
+    role: (typeof MOSS_SPEECH_ROLES)[number];
+    text?: string;
+    audio?: MossSpeechPcm;
+    /** Sample rate of `audio`, 8000..192000 Hz. */
+    sampleRate?: number;
+}
+/**
+ * MOSS-Speech per-call fields (moss-speech only). The user turn is `audio`
+ * (with `sampleRate`) or the run `input` text; `messages` carries the earlier
+ * conversation.
+ */
+interface MossSpeechFields {
+    /** The user's spoken turn, mono PCM. */
+    audio?: MossSpeechPcm;
+    /** Sample rate of `audio`, 8000..192000 Hz. */
+    sampleRate?: number;
+    /** Earlier turns, oldest first; the new user turn is appended after them. */
+    messages?: MossSpeechMessage[];
+    /** A system turn placed first; replaces the model's default system prompt. */
+    systemPrompt?: string;
+    /** Reply voice prompt (up to 60 s of mono PCM); the codec's default voice otherwise. */
+    replyVoice?: MossSpeechPcm;
+    /** Sample rate of `replyVoice`, 8000..192000 Hz. */
+    replyVoiceSampleRate?: number;
+    /** Reply with text only (no audio); the text comes back as `text`. */
+    textReply?: boolean;
+    /** Cut the spoken reply after this many seconds (0 = no cut). */
+    maxReplySeconds?: number;
+    /** Bound on generated rows, 1..4096 (engine default 1000). */
+    maxNewTokens?: number;
+    /** Greedy decoding instead of sampling. */
+    greedy?: boolean;
+    /** Sampling temperature, (0, 10] (default 0.7). */
+    temperature?: number;
+    /** Nucleus sampling, (0, 1] (default 0.95). */
+    topP?: number;
+    /** Top-k sampling, >= 0 (default 20). */
+    topK?: number;
+}
+/**
  * CosyVoice3 per-call instruction. Same values as the constructor's
  * `instruct`; a per-call conditioning control replaces the configured one for
  * that synthesis, and one control takes effect per synthesis.
@@ -309,6 +401,11 @@ interface CosyvoiceJobFields {
     instruct?: string | CosyvoiceInstruct;
 }
 interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields {
+    /** Pocket: generation/context controls; native sampling uses a portable RNG. */
+    maxTokens?: number;
+    noiseClamp?: number;
+    eosThreshold?: number;
+    framesAfterEos?: number;
     files?: TTSGgmlFiles;
     config?: TTSGgmlRuntimeConfig;
     logger?: object;
@@ -317,7 +414,12 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     engine?: EngineType;
     /** Chatterbox: directory of baked voice-conditioning tensors. */
     voiceDir?: string;
-    /** RNG seed for Chatterbox CFM/SineGen or Supertonic latent generation. */
+    /**
+     * RNG seed for Chatterbox CFM/SineGen, Supertonic latent generation,
+     * the MOSS-SoundEffect diffusion noise (0 when unset, so an unseeded prompt
+     * repeats its clip), or Pocket's portable sampling RNG. Pocket accepts
+     * integers from 0 to 4294967295 (inclusive).
+     */
     seed?: number;
     /**
      * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
@@ -330,10 +432,11 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      */
     nGpuLayers?: number;
     /**
-     * Chatterbox-only cap on the T3 context length (prompt + generated speech
+     * Chatterbox: cap on the T3 context length (prompt + generated speech
      * tokens, 25 tokens ~= 1 second of audio). The KV cache is allocated up
      * front at this length, so the cap directly bounds memory. Pass 0 to use
      * the GGUF's full context; negative values are rejected.
+     * Pocket: FlowLM context capacity; accepts integers from 1 to 8192.
      */
     nCtx?: number;
     /**
@@ -477,7 +580,7 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * from the reference (engine default off).
      */
     flowCutPrompt?: boolean;
-    /** Supertonic vector-estimator CFM steps. 0 uses the GGUF default. */
+    /** Supertonic CFM steps (0 uses GGUF default); Pocket sampling steps (1–64, default 1). */
     steps?: number;
     /** Alias for `steps` for compatibility with `@qvac/tts-onnx`. */
     numInferenceSteps?: number;
@@ -526,6 +629,7 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * top-k 1000, top-p 0.95, where temperature 0 decodes greedily and top-k 0
      * disables the cutoff). Audio8 filters by top-k/top-p on the raw logits and
      * only then applies the temperature, following its reference.
+     * Pocket: sampling temperature; accepts finite values from 0 to 10.
      */
     temperature?: number;
     topK?: number;
@@ -537,6 +641,22 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     maxFrames?: number;
     /** Audio8: take the argmax instead of sampling. */
     greedy?: boolean;
+    /**
+     * MOSS: target length in codec frames (12.5 per second), from 0 to 2015
+     * (about 161 s); 0 or unset keeps the length free. Set at construction or
+     * with `reload()`, not per call.
+     */
+    durationTokens?: number;
+    /**
+     * MOSS-TTSD dialogue: one 24 kHz reference recording per speaker, in the
+     * order the text tags them (`[S1]`, `[S2]`, ...). The model continues the
+     * references, so the input text must open with each reference's transcript
+     * under its tag, followed by the lines to generate; sentence streaming is
+     * therefore rejected (use `run()` or `streamChunkTokens`). Needs
+     * `files.mossCodecEncoder`, excludes `referenceAudio`, and is fixed for the
+     * instance. With a `modelDir`, requires a `moss-ttsd-*.gguf` backbone.
+     */
+    dialogueReferences?: string[];
     minNewTokens?: number;
     /** Parler prompt digit expansion (engine default: enabled). */
     normalizeNumbers?: boolean;
@@ -549,8 +669,12 @@ interface InferenceState {
     destroyed: boolean;
 }
 interface TTSOutputChunk {
+    chunkIndex?: number;
+    isLast?: boolean;
     /** Signed 16-bit mono PCM audio payload. */
     outputArray: Int16Array;
+    /** MOSS-Speech: the reply's text channel (the whole answer with `textReply`). */
+    text?: string;
     /**
      * Output sample rate. The native engine rate (24000 for Chatterbox,
      * CosyVoice3 and MOSS; 44100 for Supertonic, Parler, and Audio8), or 48000
@@ -559,6 +683,7 @@ interface TTSOutputChunk {
     sampleRate?: number;
 }
 interface RuntimeStats {
+    firstAudioMs?: number;
     totalTime: number;
     tokensPerSecond: number;
     realTimeFactor: number;
@@ -584,6 +709,22 @@ interface RuntimeStats {
      * counts, in batch and in streaming alike.
      */
     generatedFrames?: number;
+    /**
+     * Audio8 only, macOS / iOS: 1 while an Apple Core ML sidecar for the codec's
+     * synthesis stack is attached (a compiled `audio8-codec-decoder.mlmodelc`
+     * next to the decoder GGUF); 0 without one, or once a failing sidecar has
+     * been retired. Streams report the last chunk that supplied this field.
+     */
+    codecSidecarLoaded?: number;
+    /**
+     * Audio8 only: 1 when this synthesis ran the codec's synthesis stack on the
+     * Apple Core ML sidecar -- a compiled `audio8-codec-decoder.mlmodelc` next
+     * to the decoder GGUF on macOS / iOS -- 0 when it ran on the ggml backend
+     * `backendId` reports (which the language model always uses). A loaded
+     * sidecar that cannot serve a call falls back to ggml and reports 0 for it.
+     * Streams report the last chunk that supplied this field, not a sum.
+     */
+    codecOnCoreml?: number;
     /** Chatterbox only: T3 decode wall time of the last synthesis, in ms. */
     t3Ms?: number;
     /** Chatterbox only: S3Gen + HiFT wall time of the last synthesis, in ms. */
@@ -662,7 +803,7 @@ interface RunStreamingOptions extends ParlerDescriptionFields, Audio8VoiceFields
 }
 /** Input accepted by `runStreaming`. */
 type TextStreamInput = string | string[] | Iterable<string> | AsyncIterable<string>;
-interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields, CosyvoiceJobFields {
+interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields, CosyvoiceJobFields, MossSoundEffectFields, MossSpeechFields {
     type?: string;
     input: string;
     streamOutput?: boolean;
@@ -694,6 +835,9 @@ declare class TTSGgml {
     static readonly ENGINE_PARLER = "parler";
     static readonly ENGINE_AUDIO8 = "audio8";
     static readonly ENGINE_MOSS = "moss";
+    static readonly ENGINE_MOSS_SFX = "moss-sfx";
+    static readonly ENGINE_MOSS_SPEECH = "moss-speech";
+    static readonly ENGINE_POCKET = "pocket";
     opts: object;
     exclusiveRun: boolean;
     logger: object;
@@ -704,6 +848,12 @@ declare class TTSGgml {
     private _ttsInferenceQueueWaiter;
     private _sentenceStreamCtx;
     private _config;
+    private _pocketJobPending;
+    private _pocketCancelPromise;
+    private _pocketLifecycleInProgress;
+    private _pocketParams;
+    private _pocketOptions;
+    private _pocketFiles;
     private _lazySessionLoading;
     private _outputSampleRate;
     private _engineType;
@@ -766,6 +916,11 @@ declare class TTSGgml {
     private _mossBackbonePath?;
     private _mossCodecDecoderPath?;
     private _mossCodecEncoderPath?;
+    private _mossSoundEffectPath?;
+    private _mossSpeechModelPath?;
+    private _mossSpeechCodecPath?;
+    private _dialogueReferences?;
+    private _durationTokens?;
     private _referenceText?;
     private _greedy?;
     private _description?;
@@ -785,7 +940,10 @@ declare class TTSGgml {
     constructor(options?: TTSGgmlOptions);
     private _resolveEngineAndModelPaths;
     private _resolveAudio8ModelPaths;
+    private _mossBackbonePatterns;
+    private _findMossBackbone;
     private _resolveMossModelPaths;
+    private _assignMossVoiceOptions;
     private _assignSynthesisOptions;
     private _assertEngineStreamingSupport;
     private _requestsChunkStreaming;
@@ -797,7 +955,14 @@ declare class TTSGgml {
      */
     private _assertEngineScopedOptions;
     private _assertAudio8OptionConsistency;
+    private _assertMossSoundEffectOptionConsistency;
+    private _assertMossSpeechOptionConsistency;
+    private _assertMossSpeechOutputRate;
+    private _assertMossSoundEffectOutputRate;
     private _assertMossOptionConsistency;
+    private _assertNoMossOnlyOptions;
+    private _assertMossDialogueReferences;
+    private _assertSentenceStreamingAllowed;
     private _assertMossOutputRate;
     private _assertMossVoiceConsistent;
     /**
@@ -846,6 +1011,18 @@ declare class TTSGgml {
      * streaming options. Returns undefined when none are present.
      */
     private _resolveAudio8JobFields;
+    private _assertNoSpeechFields;
+    private _assertNoOtherEngineFields;
+    /**
+     * Validate the MOSS-Speech call and fold the new user turn (spoken `audio`
+     * or text `input`) and `systemPrompt` into the native `messages` list.
+     */
+    private _resolveSpeechJobFields;
+    /**
+     * Extract + validate the per-call MOSS-SoundEffect controls from a run
+     * input. Returns undefined when none are present.
+     */
+    private _resolveSoundEffectJobFields;
     /**
      * The per-call fields of whichever engine is loaded, if any are set. Parler
      * takes the full description/template surface, Audio8 its voice override,
@@ -856,6 +1033,7 @@ declare class TTSGgml {
     getApiDefinition(): string;
     getState(): InferenceState;
     load(..._args: unknown[]): Promise<void>;
+    private _loadModel;
     /**
      * Run text-to-speech. With `{ streamOutput: true }`, splits `input` into
      * chunks and emits PCM through `response.onUpdate` for each chunk.
@@ -897,6 +1075,8 @@ declare class TTSGgml {
     private _buildParlerParams;
     private _buildAudio8Params;
     private _buildMossParams;
+    private _buildMossSoundEffectParams;
+    private _buildMossSpeechParams;
     /** The knobs every engine in SAMPLING_ENGINES reads. */
     private _assignSamplingParams;
     /**
@@ -909,6 +1089,7 @@ declare class TTSGgml {
     private _assignLavasrParams;
     private _createAddon;
     unload(): Promise<void>;
+    private _unloadModel;
     destroy(): Promise<void>;
     private _runInternal;
     private _mergeSentenceStreamStats;
@@ -919,6 +1100,11 @@ declare class TTSGgml {
     private _handleAddonOutput;
     private _enrichStreamChunk;
     private _handleAddonStats;
+    private _waitPocketCancel;
+    private _withPocketLifecycle;
+    private _checkPocketReload;
+    private _checkPocketRequest;
+    private _dispatchJob;
     cancel(): Promise<void>;
     private _failAndClearActiveResponse;
     /** Everything reload() may overwrite, so a rejected reload can undo itself. */
@@ -926,6 +1112,7 @@ declare class TTSGgml {
     private _restoreReloadableState;
     private _applyReloadableRuntimeConfig;
     private _assertMossReloadKeepsVoice;
+    private _applyMossReload;
     private _applyReloadableConditioning;
     private _applyReloadableParlerConfig;
     /**
@@ -934,6 +1121,7 @@ declare class TTSGgml {
      * reload is not validated against state the caller never accepted.
      */
     private _applyReloadableConfig;
+    private _reloadPocket;
     reload(newConfig?: Record<string, unknown>): Promise<void>;
     /**
      * The voice a reload lands on. Same rule as _mergeAudio8Voice and
@@ -983,6 +1171,16 @@ type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
 type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 type NamespaceVoiceControlsCatalog = VoiceControlsCatalog;
+type NamespaceFitEngine = TtsFitEngine;
+type NamespaceFitRequest = TtsFitRequest;
+type NamespaceFitResult = TtsFitResult;
+type NamespaceFitStatus = TtsFitStatus;
+type NamespaceSupertonicFit = SupertonicFitRequest;
+type NamespaceParlerFit = ParlerFitRequest;
+type NamespaceChatterboxFit = ChatterboxFitRequest;
+type NamespaceAudio8Fit = Audio8FitRequest;
+type NamespaceMossFit = MossFitRequest;
+type NamespaceCosyvoiceFit = CosyvoiceFitRequest;
 declare namespace TTSGgml {
     export import QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
     export import ERR_CODES = errorModule.ERR_CODES;
@@ -1001,6 +1199,17 @@ declare namespace TTSGgml {
     type InferenceState = NamespaceInferenceState;
     type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
     type VoiceControlsCatalog = NamespaceVoiceControlsCatalog;
+    type TtsFitEngine = NamespaceFitEngine;
+    type TtsFitRequest = NamespaceFitRequest;
+    type TtsFitResult = NamespaceFitResult;
+    type TtsFitStatus = NamespaceFitStatus;
+    type SupertonicFitRequest = NamespaceSupertonicFit;
+    type ParlerFitRequest = NamespaceParlerFit;
+    type ChatterboxFitRequest = NamespaceChatterboxFit;
+    type Audio8FitRequest = NamespaceAudio8Fit;
+    type MossFitRequest = NamespaceMossFit;
+    type CosyvoiceFitRequest = NamespaceCosyvoiceFit;
     const resolveBackendsDir: typeof resolveBackendsDirImpl;
+    const assessFit: typeof assessFitImpl;
 }
 export = TTSGgml;

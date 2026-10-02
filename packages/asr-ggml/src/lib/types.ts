@@ -2,8 +2,25 @@
  * Shared engine-agnostic types for the unified `@qvac/asr-ggml` surface.
  */
 
+/** One diarized speaker turn (Sortformer). Times in seconds. */
+export interface SpeakerSegment {
+  speakerId: number;
+  start: number;
+  end: number;
+}
+
+/** One decoded Whisper text token (special tokens are left out). */
+export interface TranscriptionToken {
+  text: string;
+  /** Token start time in seconds. */
+  start: number;
+  /** Token end time in seconds. */
+  end: number;
+  probability: number;
+}
+
 /**
- * A single transcription segment. Core fields are shared by both engines;
+ * A single transcription segment. Core fields are shared by every engine;
  * engine-specific extras pass through untouched via the index signature.
  */
 export interface TranscriptionSegment {
@@ -19,18 +36,46 @@ export interface TranscriptionSegment {
   isEndOfTurn?: boolean;
   /** Parakeet: segment begins a new SentencePiece word. */
   startsWord?: boolean;
+  /** Parakeet Sortformer streaming: speaker of this diarization segment. */
+  speakerId?: number;
+  /**
+   * Parakeet Sortformer offline: every diarized turn, matching the
+   * `"Speaker N: start - end"` lines of `text`.
+   */
+  speakerSegments?: SpeakerSegment[];
+  /**
+   * MOSS-Transcribe-Diarize: the model's speaker label (`"S01"`, `"S02"`,
+   * ...); `speakerId` carries the same speaker 0-based.
+   */
+  speaker?: string;
+  /** Whisper: language the window was decoded in (e.g. `"en"`). */
+  language?: string;
+  /** Whisper: probability that the segment's window holds no speech. */
+  noSpeechProb?: number;
+  /** Whisper with `tdrz_enable`: a speaker turn follows this segment. */
+  speakerTurnNext?: boolean;
+  /** Whisper with `token_timestamps`: per-token text, timing, probability. */
+  tokens?: TranscriptionToken[];
   [key: string]: unknown;
 }
 
 /**
- * Typed voice-activity event. Whisper-only at launch (`source: "silero"`);
- * `"energy"` is reserved for parakeet's Phase-2 native plumbing.
+ * Typed voice-activity event, emitted on each speech/silence transition.
+ * `"silero"`: whisper streaming VAD (`score` is the speech probability).
+ * `"energy"`: parakeet ASR energy detector (`score` is the window RMS).
+ * `"sortformer"`: parakeet Sortformer speaker activity (`score` is the
+ * highest speaker probability; `speakerId` is the dominant speaker on
+ * entering speech).
  */
 export interface VadEvent {
   type: "vad";
   speaking: boolean;
   score: number;
-  source: "silero" | "energy";
+  source: "silero" | "energy" | "sortformer";
+  /** Parakeet: seconds from the start of the streaming session. */
+  timestamp?: number;
+  /** Parakeet Sortformer: dominant speaker when speech starts. */
+  speakerId?: number;
 }
 
 /** Typed end-of-turn event. */
@@ -60,8 +105,8 @@ export enum BackendId {
 }
 
 /**
- * Backend information reported by the native engine. Six core keys are
- * shared cross-engine; the `gpuMem*` extras are whisper-only.
+ * Backend information reported by the native engine. The core keys and
+ * `modelType` are shared cross-engine; the `gpuMem*` extras are whisper-only.
  */
 export interface BackendInfo {
   backendDevice: string;
@@ -70,11 +115,17 @@ export interface BackendInfo {
   backendDescription: string;
   encoderBackend: string;
   encoderOnCoreml: boolean;
+  /**
+   * Loaded model family: `"whisper"`, or parakeet's detected type
+   * (`"ctc"`, `"tdt"`, `"rnnt"`, `"eou"`, `"nemotron"`, `"sortformer"`,
+   * `"nemotron-diarization"`).
+   */
+  modelType?: string;
   gpuMemTotalMb?: number;
   gpuMemFreeMb?: number;
 }
 
-/** Runtime-statistics fields shared by both engines. */
+/** Runtime-statistics fields shared by the Whisper and Parakeet engines. */
 export interface RuntimeStatsCore {
   backendId: number;
   backendDevice: number;
@@ -110,6 +161,9 @@ export interface ParakeetRuntimeStats extends RuntimeStatsCore {
   totalEncodedFrames: number;
   gpuUnsupported: number;
   encoderOnCoreml: number;
+  encoderUsedCoreml?: number;
+  /** Sortformer only: 1 when the v2.1 AOSC speaker cache was active. */
+  aoscActive?: number;
 }
 
 export type RuntimeStats = WhisperRuntimeStats | ParakeetRuntimeStats;

@@ -1,5 +1,5 @@
 export interface TTSConfigurationParams {
-    [key: string]: string | number | boolean | undefined;
+    [key: string]: string | number | boolean | string[] | undefined;
 }
 export interface TTSJobData {
     type: string;
@@ -17,6 +17,26 @@ export interface TTSJobData {
     instruct?: string;
     referenceAudio?: string;
     referenceText?: string;
+    seconds?: number;
+    negativePrompt?: string;
+    steps?: number;
+    guidance?: number;
+    shift?: number;
+    messages?: Array<{
+        role: string;
+        text?: string;
+        audio?: Int16Array | Float32Array;
+        sampleRate?: number;
+    }>;
+    replyVoice?: Int16Array | Float32Array;
+    replyVoiceSampleRate?: number;
+    textReply?: boolean;
+    maxReplySeconds?: number;
+    maxNewTokens?: number;
+    greedy?: boolean;
+    temperature?: number;
+    topP?: number;
+    topK?: number;
 }
 export interface TTSWeightData {
     filename: string;
@@ -37,7 +57,7 @@ export interface TTSBinding {
     getVoiceControls(): NativeVoiceControls;
     createInstance(owner: TTSInterface, configuration: TTSConfigurationParams, outputCallback: TTSOutputCallback | null): object;
     activate(handle: object | null): Promise<void>;
-    runJob(handle: object | null, data: TTSJobData): void;
+    runJob(handle: object | null, data: TTSJobData): boolean | void | Promise<boolean | void>;
     loadWeights(handle: object | null, weightsData: TTSWeightData): void;
     cancel(handle: object | null): Promise<void>;
     destroyInstance(handle: object): Promise<void> | void;

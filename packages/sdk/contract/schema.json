@@ -47,6 +47,9 @@
           "$ref": "#/$defs/diffusionStream.request"
         },
         {
+          "$ref": "#/$defs/discoverRpcServers.request"
+        },
+        {
           "$ref": "#/$defs/downloadAsset.request"
         },
         {
@@ -98,7 +101,13 @@
           "$ref": "#/$defs/resume.request"
         },
         {
+          "$ref": "#/$defs/startRpcServer.request"
+        },
+        {
           "$ref": "#/$defs/state.request"
+        },
+        {
+          "$ref": "#/$defs/stopRpcServer.request"
         },
         {
           "$ref": "#/$defs/suspend.request"
@@ -182,6 +191,9 @@
           "$ref": "#/$defs/diffusionStream.response"
         },
         {
+          "$ref": "#/$defs/discoverRpcServers.response"
+        },
+        {
           "$ref": "#/$defs/downloadAsset.response"
         },
         {
@@ -245,7 +257,13 @@
           "$ref": "#/$defs/resume.response"
         },
         {
+          "$ref": "#/$defs/startRpcServer.response"
+        },
+        {
           "$ref": "#/$defs/state.response"
+        },
+        {
+          "$ref": "#/$defs/stopRpcServer.response"
         },
         {
           "$ref": "#/$defs/suspend.response"
@@ -295,112 +313,147 @@
           "items": {
             "type": "object",
             "properties": {
-              "model": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "description": "Catalog name of the model entry."
-                  },
-                  "sha256Checksum": {
-                    "type": "string",
-                    "description": "Expected SHA-256 checksum of the model file."
-                  },
-                  "registryPath": {
-                    "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
-                    "type": "string"
-                  },
-                  "registrySource": {
-                    "description": "Registry source identifier, e.g. `huggingface`.",
-                    "type": "string"
-                  }
-                },
-                "required": ["name", "sha256Checksum"],
-                "description": "Catalog model constant to assess.",
-                "title": "AssessModelFitRequestModelsItemModel"
-              },
-              "artifacts": {
-                "description": "Additional catalog constants this load also requires.",
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string",
-                      "description": "Catalog name of the model entry."
-                    },
-                    "sha256Checksum": {
-                      "type": "string",
-                      "description": "Expected SHA-256 checksum of the model file."
-                    },
-                    "registryPath": {
-                      "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
-                      "type": "string"
-                    },
-                    "registrySource": {
-                      "description": "Registry source identifier, e.g. `huggingface`.",
-                      "type": "string"
-                    }
-                  },
-                  "required": ["name", "sha256Checksum"],
-                  "title": "AssessModelFitRequestModelsItemArtifactsItem"
-                }
-              },
-              "workload": {
-                "oneOf": [
+              "modelSrc": {
+                "description": "The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.",
+                "anyOf": [
                   {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "const": "llm"
-                      },
-                      "contextTokens": {
-                        "type": "integer",
-                        "exclusiveMinimum": 0,
-                        "maximum": 9007199254740991,
-                        "description": "Context window the caller intends to use, in tokens."
-                      }
-                    },
-                    "required": ["kind", "contextTokens"],
-                    "description": "Token-context workload for llama.cpp completion and embedding models.",
-                    "title": "AssessModelFitRequestModelsItemWorkloadLlm"
+                    "type": "string"
                   },
                   {
                     "type": "object",
                     "properties": {
-                      "kind": {
+                      "src": {
                         "type": "string",
-                        "const": "audio"
+                        "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                       },
-                      "windowMs": {
-                        "type": "number",
-                        "exclusiveMinimum": 0,
-                        "description": "Audio window handed to the engine per call, in milliseconds."
+                      "name": {
+                        "description": "Display name for this model instance; overrides the name derived from the source.",
+                        "type": "string"
                       },
-                      "streaming": {
-                        "type": "boolean",
-                        "description": "Whether the caller streams continuously."
+                      "modelId": {
+                        "description": "Unique identifier used to reference the model in QVAC calls.",
+                        "type": "string"
                       },
-                      "batch": {
-                        "description": "Concurrent windows per call.",
-                        "type": "integer",
-                        "exclusiveMinimum": 0,
-                        "maximum": 9007199254740991
+                      "registryPath": {
+                        "description": "Registry-relative path to the model (set for registry-backed models).",
+                        "type": "string"
+                      },
+                      "registrySource": {
+                        "description": "Registry source identifier, e.g. `huggingface`.",
+                        "type": "string"
+                      },
+                      "blobCoreKey": {
+                        "description": "Hyperdrive blob core key for the model file.",
+                        "type": "string"
+                      },
+                      "blobIndex": {
+                        "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                        "type": "number"
+                      },
+                      "engine": {
+                        "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                        "type": "string"
+                      },
+                      "expectedSize": {
+                        "description": "Expected total size of the model file in bytes.",
+                        "type": "number"
+                      },
+                      "sha256Checksum": {
+                        "description": "Expected SHA-256 checksum of the model file.",
+                        "type": "string"
+                      },
+                      "addon": {
+                        "description": "Inference addon / capability category this model belongs to.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "llamacpp-completion",
+                              "whispercpp-transcription",
+                              "bci-whispercpp-transcription",
+                              "llamacpp-embedding",
+                              "nmtcpp-translation",
+                              "onnx-tts",
+                              "tts-ggml",
+                              "parakeet-transcription",
+                              "ggml-ocr",
+                              "sdcpp-generation",
+                              "audiogen-ggml",
+                              "ggml-vla",
+                              "ggml-classification",
+                              "llm",
+                              "whisper",
+                              "bci",
+                              "embeddings",
+                              "nmt",
+                              "parakeet",
+                              "tts",
+                              "ocr",
+                              "diffusion",
+                              "audiogen",
+                              "vla",
+                              "classification"
+                            ],
+                            "title": "AssessModelFitRequestModelsItemModelSrcAddon"
+                          },
+                          {
+                            "type": "string",
+                            "const": "vad"
+                          }
+                        ]
                       }
                     },
-                    "required": ["kind", "windowMs", "streaming"],
-                    "description": "Audio-window workload for speech-to-text models.",
-                    "title": "AssessModelFitRequestModelsItemWorkloadAudio"
+                    "required": ["src"],
+                    "title": "AssessModelFitRequestModelsItemModelSrc"
                   }
+                ]
+              },
+              "modelType": {
+                "type": "string",
+                "enum": [
+                  "llamacpp-completion",
+                  "whispercpp-transcription",
+                  "bci-whispercpp-transcription",
+                  "llamacpp-embedding",
+                  "nmtcpp-translation",
+                  "onnx-tts",
+                  "tts-ggml",
+                  "parakeet-transcription",
+                  "ggml-ocr",
+                  "sdcpp-generation",
+                  "audiogen-ggml",
+                  "ggml-vla",
+                  "ggml-classification",
+                  "llm",
+                  "whisper",
+                  "bci",
+                  "embeddings",
+                  "nmt",
+                  "parakeet",
+                  "tts",
+                  "ocr",
+                  "diffusion",
+                  "audiogen",
+                  "vla",
+                  "classification"
                 ],
-                "description": "Workload the caller intends to run."
+                "description": "Engine that would run the load.",
+                "title": "AssessModelFitRequestModelsItemModelType"
+              },
+              "modelConfig": {
+                "description": "The config `loadModel` would be given, including any companion model sources.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {},
+                "title": "AssessModelFitRequestModelsItemModelConfig"
               }
             },
-            "required": ["model", "workload"],
+            "required": ["modelType"],
             "title": "AssessModelFitRequestModelsItem"
           },
-          "description": "Candidates to assess together under one memory budget."
+          "description": "Models to assess together under one memory budget."
         },
         "execution": {
           "default": "sequential",
@@ -1092,7 +1145,7 @@
           "maximum": 9007199254740991
         },
         "inferenceSteps": {
-          "description": "MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.",
+          "description": "MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.",
           "type": "integer",
           "minimum": 0,
           "maximum": 1000
@@ -2027,6 +2080,14 @@
                     "description": {
                       "type": "string"
                     },
+                    "deferLoading": {
+                      "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                      "type": "boolean"
+                    },
+                    "group": {
+                      "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
+                      "type": "string"
+                    },
                     "parameters": {
                       "type": "object",
                       "properties": {
@@ -2630,7 +2691,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -2922,7 +2987,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -3038,6 +3107,8 @@
                 "finetune",
                 "loadModel",
                 "downloadAsset",
+                "rpcServer",
+                "rpcDiscovery",
                 "rag"
               ],
               "description": "Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.",
@@ -3207,6 +3278,14 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "deferLoading": {
+                "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                "type": "boolean"
+              },
+              "group": {
+                "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
                 "type": "string"
               },
               "parameters": {
@@ -3813,6 +3892,14 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "deferLoading": {
+                "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                "type": "boolean"
+              },
+              "group": {
+                "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
                 "type": "string"
               },
               "parameters": {
@@ -4556,8 +4643,8 @@
     "constants.TtsEngine": {
       "title": "TtsEngine",
       "type": "string",
-      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8"],
-      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8"]
+      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8", "moss"],
+      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8", "MOSS"]
     },
     "constants.TtsPace": {
       "title": "TtsPace",
@@ -5025,6 +5112,95 @@
         }
       },
       "required": ["type"],
+      "additionalProperties": false
+    },
+    "discoverRpcServers.request": {
+      "title": "DiscoverRpcServersRequest",
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Shared discovery topic. Only use with trusted private-network participants."
+        },
+        "timeoutMs": {
+          "description": "Search budget in milliseconds, including TCP probes. Defaults to 5000, at most 30000.",
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 30000
+        },
+        "type": {
+          "type": "string",
+          "const": "discoverRpcServers"
+        },
+        "requestId": {
+          "description": "Caller-generated identifier for targeted cancellation with cancel({ requestId }). Generated by the engine when omitted.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["topic", "type"]
+    },
+    "discoverRpcServers.response": {
+      "title": "DiscoverRpcServersResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "discoverRpcServers"
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rdmaAvailable": {
+                "type": "boolean",
+                "description": "Server advertised RDMA availability for this endpoint at discovery time. Actual transport depends on client support and negotiation."
+              },
+              "devices": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Zero-based device index within this endpoint."
+                    },
+                    "freeMemory": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Available device memory in bytes at discovery time."
+                    },
+                    "totalMemory": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Total device memory in bytes."
+                    }
+                  },
+                  "required": ["index", "freeMemory", "totalMemory"],
+                  "additionalProperties": false,
+                  "title": "DiscoverRpcServersResponseServersItemDevicesItem"
+                },
+                "description": "Native served devices in endpoint enumeration order."
+              }
+            },
+            "required": ["url", "rdmaAvailable", "devices"],
+            "additionalProperties": false,
+            "title": "DiscoverRpcServersResponseServersItem"
+          }
+        }
+      },
+      "required": ["type", "servers"],
       "additionalProperties": false
     },
     "downloadAsset.request": {
@@ -5892,6 +6068,122 @@
               "type": "string",
               "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
               "title": "LoadedModelInfoToolDialect"
+            },
+            "fitProbe": {
+              "description": "Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+              "type": "object",
+              "properties": {
+                "verdict": {
+                  "type": "string",
+                  "enum": ["fit", "does-not-fit", "unknown"],
+                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+                  "title": "NativeProbeFitVerdict"
+                },
+                "basis": {
+                  "type": "string",
+                  "const": "native-probe",
+                  "description": "Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+                },
+                "estimatorVersion": {
+                  "type": "string",
+                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve."
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Machine-readable reason for the verdict. Never parsed out of log text."
+                },
+                "message": {
+                  "description": "Human-readable detail, when the reason has any.",
+                  "type": "string"
+                },
+                "plan": {
+                  "description": "Placement the probe projected. Present wherever the fitter resolved one.",
+                  "type": "object",
+                  "properties": {
+                    "nCtx": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Context the probe resolved for this load, in tokens."
+                    },
+                    "nGpuLayers": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Layers the probe would offload."
+                    },
+                    "nGpuDevices": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "GPU devices the offload would span."
+                    }
+                  },
+                  "required": ["nCtx", "nGpuLayers", "nGpuDevices"],
+                  "additionalProperties": false,
+                  "title": "NativeProbeFitPlan"
+                },
+                "projection": {
+                  "description": "What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
+                  "type": "object",
+                  "properties": {
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Device name as the backend reports it, or `host`."
+                          },
+                          "totalBytes": {
+                            "type": "number",
+                            "description": "Memory the device reports installed."
+                          },
+                          "freeBytes": {
+                            "type": "number",
+                            "description": "Memory the device reports free, before the margin."
+                          },
+                          "marginBytes": {
+                            "type": "number",
+                            "description": "Headroom the fitter withheld on this device."
+                          },
+                          "modelBytes": {
+                            "type": "number",
+                            "description": "Weights the load would place here."
+                          },
+                          "contextBytes": {
+                            "type": "number",
+                            "description": "Context and cache the load would place here."
+                          },
+                          "computeBytes": {
+                            "type": "number",
+                            "description": "Compute buffers the load would place here."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "totalBytes",
+                          "freeBytes",
+                          "marginBytes",
+                          "modelBytes",
+                          "contextBytes",
+                          "computeBytes"
+                        ],
+                        "additionalProperties": false,
+                        "title": "NativeProbeFitProjectionDevicesItem"
+                      },
+                      "description": "Every device the load would touch."
+                    }
+                  },
+                  "required": ["devices"],
+                  "additionalProperties": false,
+                  "title": "NativeProbeFitProjection"
+                }
+              },
+              "required": ["verdict", "basis", "estimatorVersion", "reason"],
+              "additionalProperties": false,
+              "title": "NativeProbeFit"
             }
           },
           "required": ["modelId", "modelType", "handlers", "loadedAt"],
@@ -10024,8 +10316,18 @@
                         }
                       ]
                     },
+                    "rpc-servers": {
+                      "description": "Comma-separated unique native RPC host:port endpoints in device registration order for this load. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "devices": {
+                      "description": "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+                      "type": "string",
+                      "minLength": 1
+                    },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
                       "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
@@ -14535,6 +14837,448 @@
                       "required": ["ttsEngine", "audio8CodecDecoderModelSrc"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "moss",
+                          "description": "TTS engine: MOSS (OpenMOSS MOSS-TTS v1.5 / MOSS-TTSD Delay; 24 kHz, 8B backbone, desktop only)."
+                        },
+                        "language": {
+                          "description": "Language hint written into the model prompt, e.g. `en` or `zh`. Default `en`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "durationTokens": {
+                          "description": "Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), 0–2015; 0 or unset keeps the length free.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2015
+                        },
+                        "streamChunkTokens": {
+                          "description": "Codec frames per native streaming chunk (12.5 per second, so 25 ≈ 2 s); 0 or unset synthesizes the whole text before emitting.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "description": "Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "mossCodecDecoderModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc"
+                            }
+                          ],
+                          "description": "MOSS codec decoder model source (codes to 24 kHz waveform)."
+                        },
+                        "mossCodecEncoderModelSrc": {
+                          "description": "MOSS codec encoder model source (waveform to codes); required only with `referenceAudioSrc` or `dialogueReferenceSrcs`.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc"
+                            }
+                          ]
+                        },
+                        "referenceAudioSrc": {
+                          "description": "MOSS voice-cloning reference recording source: a 24 kHz WAV (no resampling; multichannel is downmixed, at most 60 s). No transcript needed. Fixed for the loaded model.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc"
+                            }
+                          ]
+                        },
+                        "dialogueReferenceSrcs": {
+                          "description": "MOSS-TTSD dialogue: one 24 kHz WAV per speaker (one to five, at most 60 s combined), in the order the text tags them (`[S1]`, `[S2]`, …). The text must open with each recording’s transcript under its tag, followed by the lines to generate. Needs a MOSS-TTSD backbone as `modelSrc`; fixed for the loaded model.",
+                          "minItems": 1,
+                          "maxItems": 5,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "src": {
+                                    "type": "string",
+                                    "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                  },
+                                  "name": {
+                                    "description": "Display name for this model instance; overrides the name derived from the source.",
+                                    "type": "string"
+                                  },
+                                  "modelId": {
+                                    "description": "Unique identifier used to reference the model in QVAC calls.",
+                                    "type": "string"
+                                  },
+                                  "registryPath": {
+                                    "description": "Registry-relative path to the model (set for registry-backed models).",
+                                    "type": "string"
+                                  },
+                                  "registrySource": {
+                                    "description": "Registry source identifier, e.g. `huggingface`.",
+                                    "type": "string"
+                                  },
+                                  "blobCoreKey": {
+                                    "description": "Hyperdrive blob core key for the model file.",
+                                    "type": "string"
+                                  },
+                                  "blobIndex": {
+                                    "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                    "type": "number"
+                                  },
+                                  "engine": {
+                                    "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                    "type": "string"
+                                  },
+                                  "expectedSize": {
+                                    "description": "Expected total size of the model file in bytes.",
+                                    "type": "number"
+                                  },
+                                  "sha256Checksum": {
+                                    "description": "Expected SHA-256 checksum of the model file.",
+                                    "type": "string"
+                                  },
+                                  "addon": {
+                                    "description": "Inference addon / capability category this model belongs to.",
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "llamacpp-completion",
+                                          "whispercpp-transcription",
+                                          "bci-whispercpp-transcription",
+                                          "llamacpp-embedding",
+                                          "nmtcpp-translation",
+                                          "onnx-tts",
+                                          "tts-ggml",
+                                          "parakeet-transcription",
+                                          "ggml-ocr",
+                                          "sdcpp-generation",
+                                          "audiogen-ggml",
+                                          "ggml-vla",
+                                          "ggml-classification",
+                                          "llm",
+                                          "whisper",
+                                          "bci",
+                                          "embeddings",
+                                          "nmt",
+                                          "parakeet",
+                                          "tts",
+                                          "ocr",
+                                          "diffusion",
+                                          "audiogen",
+                                          "vla",
+                                          "classification"
+                                        ],
+                                        "title": "LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon"
+                                      },
+                                      {
+                                        "type": "string",
+                                        "const": "vad"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": ["src"],
+                                "title": "LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": ["ttsEngine", "mossCodecDecoderModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMoss"
                     }
                   ]
                 }
@@ -14790,7 +15534,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video", "world"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -16113,6 +16857,40 @@
                           "description": "Keep weights in CPU memory and offload during GPU compute.",
                           "type": "boolean"
                         },
+                        "paramsBackend": {
+                          "description": "Parameter residency for the walk session, independent of graph execution. 'diffusion' is the walk DiT and 'vae' the taehv decoder. 'diffusion=cpu' stages DiT weights from CPU RAM; 'diffusion=disk' reads them from the model file on demand. Disk is never selected automatically, and 'vae=disk' is rejected natively because taehv retains its prepared weights across steps. Explicit assignments override offloadParamsToCpu for those modules.",
+                          "type": "string",
+                          "maxLength": 4096
+                        },
+                        "maxVram": {
+                          "description": "VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
+                          "type": ["number", "string"]
+                        },
+                        "streamLayers": {
+                          "description": "Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
+                          "type": "boolean"
+                        },
+                        "verbosity": {
+                          "description": "Native log level while the session is alive: 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG. The level is process-wide and restored on unload.",
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "const": 0
+                            },
+                            {
+                              "type": "number",
+                              "const": 1
+                            },
+                            {
+                              "type": "number",
+                              "const": 2
+                            },
+                            {
+                              "type": "number",
+                              "const": 3
+                            }
+                          ]
+                        },
                         "frameJpegQuality": {
                           "description": "Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at that quality on the standard scale (higher = better quality and larger frames). A block is roughly 14 MB of raw pixels at 832x480 and the default numFramePerBlock — more at a higher resolution or a larger block — so 85 is a good choice whenever frames cross a process or network boundary.",
                           "type": "integer",
@@ -16767,7 +17545,7 @@
                           "minLength": 1
                         },
                         "inferenceSteps": {
-                          "description": "MiniMax flow sampling steps; `0` uses the model default.",
+                          "description": "MiniMax flow sampling steps; `0` uses the engine default (20).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 1000
@@ -19151,6 +19929,98 @@
       "required": ["type"],
       "additionalProperties": false
     },
+    "startRpcServer.request": {
+      "title": "StartRpcServerRequest",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "IPv4 bind address. Defaults to 127.0.0.1.",
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "description": "TCP port. Omit to allocate a free port.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "device": {
+          "description": "Native server devices, in caller order.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ]
+        },
+        "cache": {
+          "description": "Enable the native RPC tensor cache.",
+          "type": "boolean"
+        },
+        "threads": {
+          "description": "Native server thread count.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectRdma": {
+          "description": "Require an RDMA-capable native backend. Reject before startup if unavailable.",
+          "type": "boolean"
+        },
+        "allowNonLoopbackHost": {
+          "description": "Explicitly allow a non-loopback bind on a trusted private network. This does not authenticate clients.",
+          "type": "boolean"
+        },
+        "discoveryTopic": {
+          "description": "Opt in to advertising a ready private IPv4 endpoint under this shared topic. The topic does not authenticate peers.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "type": {
+          "type": "string",
+          "const": "startRpcServer"
+        },
+        "requestId": {
+          "description": "Caller-generated identifier for targeted cancellation with cancel({ requestId }). Generated by the engine when omitted.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["type"]
+    },
+    "startRpcServer.response": {
+      "title": "StartRpcServerResponse",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rdmaCapable": {
+          "type": "boolean",
+          "description": "Whether the native backend supports RDMA. It falls back to TCP for clients without RDMA."
+        },
+        "type": {
+          "type": "string",
+          "const": "startRpcServer"
+        }
+      },
+      "required": ["serverId", "url", "rdmaCapable", "type"],
+      "additionalProperties": false
+    },
     "state.request": {
       "title": "StateRequest",
       "type": "object",
@@ -19177,6 +20047,33 @@
         }
       },
       "required": ["type", "state"],
+      "additionalProperties": false
+    },
+    "stopRpcServer.request": {
+      "title": "StopRpcServerRequest",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "stopRpcServer"
+        }
+      },
+      "required": ["serverId", "type"]
+    },
+    "stopRpcServer.response": {
+      "title": "StopRpcServerResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "stopRpcServer"
+        }
+      },
+      "required": ["type"],
       "additionalProperties": false
     },
     "suspend.request": {
@@ -19368,6 +20265,14 @@
             },
             "enhancerBackendId": {
               "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -19557,6 +20462,14 @@
             },
             "enhancerBackendId": {
               "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -19739,7 +20652,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -19790,9 +20707,9 @@
               "type": "number"
             },
             "source": {
-              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
               "type": "string",
-              "enum": ["silero", "energy"],
+              "enum": ["silero", "energy", "sortformer"],
               "title": "TranscribeResponseVadSource"
             }
           },
@@ -20133,7 +21050,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -20184,9 +21105,9 @@
               "type": "number"
             },
             "source": {
-              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
               "type": "string",
-              "enum": ["silero", "energy"],
+              "enum": ["silero", "energy", "sortformer"],
               "title": "TranscribeStreamResponseVadSource"
             }
           },

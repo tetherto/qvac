@@ -279,8 +279,10 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 | **Image generation** | Text-to-image and image-to-image generation via a Diffusion backend. |
 | **Video generation** | Text-to-video and image-to-video generation via a Diffusion backend. |
 | **Music generation** | Generate music from text, lyrics, and musical controls via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) (desktop). |
-| **Transcription** | Speech-to-text via a [Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3). |
-| **Text-to-Speech** | Speech synthesis via a GGML backend. |
+| **Transcription** | Speech-to-text via a [Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml), [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), or [MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize) (speaker-labelled transcripts with hotwords). |
+| **Speaker diarization** | Whisper tinydiarize speaker turns, four-speaker Sortformer, up to eight-speaker [Nemotron 3 Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization), and speaker-labelled MOSS-Transcribe-Diarize transcripts through [`@qvac/asr-ggml`](packages/asr-ggml/README.md). |
+| **Audio decoding** | [FFmpeg audio decoder](packages/decoder-audio/README.md) with streaming PCM output and a default 64 MiB decoded-output limit. |
+| **Text-to-Speech** | Speech synthesis, speech-to-speech replies and text-to-sound-effects generation via a GGML backend. |
 | **Translation** | Neural machine translation, via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
@@ -315,6 +317,37 @@ Explore and use QVAC:
 We welcome contributions! Feel free to open a pull request, report bugs, or share ideas through issues.
 
 See [CONTRIBUTING](./CONTRIBUTING.md) for details.
+
+### Deterministic code-quality audit
+
+Run `pnpm quality:audit` to analyze JavaScript and TypeScript structure, module
+dependencies, and workspace package cycles. The human-readable report is written
+to `.quality/report.md` as a snapshot of current findings. The stable machine
+report at `.quality/report.json` also classifies findings against the baseline
+as new, existing, or resolved and records measurement or severity changes to
+existing findings so agents can measure progress.
+
+Findings are advisory, while parser, resolver, and detector errors make the
+command fail so an incomplete analysis cannot appear clean. When analysis is
+incomplete, resolution calculation is explicitly withheld. Existing debt is
+tracked by stable fingerprints in
+`scripts/code-quality/accepted-baseline.json`. After reviewing an intentional
+baseline change, replace it with
+`pnpm quality:baseline`. Run `pnpm quality:test` and
+`pnpm quality:typecheck` when changing the audit itself. Thresholds, source
+profiles, and documented generated-import exemptions live in
+`scripts/code-quality/config.ts`.
+
+Run `pnpm quality:reporting` for the complete local reporting flow. It refreshes
+the audit, groups related findings into deterministic file hotspots and
+dependency clusters, adds 180-day Git-change evidence, and writes
+`.quality/triage.md` plus `.quality/triage.json`. The first Markdown page shows
+ten candidate remediation groups; the JSON retains every group. Use
+`pnpm quality:triage` to rebuild only the triage artifacts from an existing
+successful audit report. Recurring runs compare against the last successful run
+stored in `.quality/previous-run-baseline.json`, then advance that ignored local
+snapshot only after triage succeeds. This makes later regressions and
+resolutions visible without changing the committed debt baseline.
 
 ## Banners and badges
 

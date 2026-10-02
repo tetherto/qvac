@@ -138,6 +138,13 @@ export {
 } from '@/schemas/index'
 
 export { type ToolInput, type ToolHandler } from '@/utils/tool-helpers'
+export {
+  TOOL_SEARCH_NAME,
+  buildToolSearchTool,
+  executeToolSearch,
+  loadedToolNames,
+  searchDeferredTools
+} from '@/utils/tools/defer'
 
 // The full value-clean schema, profiling, and constant barrels: the @qvac/sdk client
 // and worker source every internal schema/const/profiling name from here, so it
@@ -174,6 +181,7 @@ export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 // and on the synchronous throws of `plugins()` / `registerPlugin` (the plugin
 // group below).
 export {
+  RpcServerOperationError,
   InferenceCancelledError,
   ContextOverflowError,
   type ContextOverflowErrorSizes,
@@ -197,3 +205,7 @@ export type { Logger, LogTransport, LoggerOptions } from '@/logging/index'
 // Profiler
 export { profiler, attachBackendDiagnostics } from '@/profiling/index'
 export type { ProfilerRuntimeOptions, ProfilerExport } from '@/profiling/index'
+
+export type { RpcServerProvider, RpcServerHandle } from '@/schemas/rpc-server'
+
+export { getRpcDeviceMap, type RpcDeviceMapping } from '@/rpc/device-map'

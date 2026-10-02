@@ -8,6 +8,8 @@ export declare const ENGINE_MINIMAX = "minimax";
 export declare const MINIMAX_FRAMES_PER_SECOND = 25;
 export declare const MINIMAX_DEFAULT_MAX_FRAMES = 300;
 export type AudioGenEngine = typeof ENGINE_ACESTEP | typeof ENGINE_MINIMAX;
+/** MiniMax compute device, see `AudioGenRuntimeConfig.device`. */
+export type AudiogenMinimaxDevice = 'cpu' | 'gpu' | 'auto';
 /** Model file paths for ACE-Step or MiniMax-Music3. */
 export interface AudioGenFiles {
     /** Directory holding the four ACE-Step GGUFs (engine auto-classifies them). */
@@ -39,6 +41,12 @@ export interface AudioGenRuntimeConfig {
      * in use. MiniMax puts the whole model pair on the device (~22 GB for f16).
      */
     useGPU?: boolean;
+    /**
+     * MiniMax only, instead of `useGPU`: `'gpu'` requires a usable GPU and fails
+     * `load()` otherwise, `'auto'` (what `useGPU: true` means) falls back to the
+     * CPU, `'cpu'` never touches a GPU.
+     */
+    device?: AudiogenMinimaxDevice;
     /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
     nGpuLayers?: number;
     /** 0 = engine auto-picks. */
@@ -79,10 +87,20 @@ export interface GenerateOptions {
     duration?: number;
     /** MiniMax semantic-frame cap. Cannot be combined with `duration`. */
     maxFrames?: number;
-    /** MiniMax flow steps for this generation; 0 uses the engine default (20). */
+    /**
+     * Diffusion steps for this generation, 0..1000; omit to keep
+     * `config.inferenceSteps`. 0 is the engine default: MiniMax 20 flow steps,
+     * ACE-Step 8 on turbo DiTs and 50 on base/sft.
+     */
     inferenceSteps?: number;
     /** MiniMax flow classifier-free guidance scale for this generation. */
     cfgScale?: number;
+    /**
+     * ACE-Step DiT timestep shift for this generation; omit to keep
+     * `config.shift`. 0 is the engine default: 3.0 on turbo DiTs, 1.0 on
+     * base/sft.
+     */
+    shift?: number;
     /** LM sampling temperature (ACE-Step default: 0.85). */
     lmTemperature?: number;
     /** LM nucleus-sampling probability (ACE-Step default: 0.9). */
@@ -230,6 +248,31 @@ export interface RepaintOptions extends AudioEditPrompt {
 export interface AudioEditRunOptions {
     /** Seeds the first operation; each following operation uses seed + its index. */
     seed?: number;
+    /**
+     * Optional timbre reference for every operation: interleaved stereo float
+     * PCM at 48 kHz, the same layout `GenerateOptions.referenceAudio` uses.
+     */
+    referenceAudio?: Float32Array;
+    /** Vocal language hint for the edit prompts; the engine defaults to `'unknown'`. */
+    vocalLanguage?: string;
+    /** Beats per minute for the edit prompts; 0/undefined leaves it unset. */
+    bpm?: number;
+    /** Key + scale for the edit prompts, e.g. "C minor". */
+    keyscale?: string;
+    /** Time signature for the edit prompts, e.g. "4/4". */
+    timesignature?: string;
+    /** Append BPM, time signature and key to each operation's conditioning caption. */
+    augmentCaptionWithMetadata?: boolean;
+    /** Repaint only: apply the Haar DCW sampler correction (default: true). */
+    dcwEnabled?: boolean;
+    /** Repaint only: DCW low-frequency correction strength (default: 0.05). */
+    dcwScaler?: number;
+    /** Repaint only: DCW high-frequency correction strength (default: 0.02). */
+    dcwHighScaler?: number;
+    /** DiT steps for every operation, 0..1000; omit to keep `config.inferenceSteps`. */
+    inferenceSteps?: number;
+    /** DiT timestep shift for every operation; omit to keep `config.shift`. */
+    shift?: number;
 }
 interface NativeFlowEditOperation {
     type: AudioEditOperationType.FlowEdit;
@@ -257,6 +300,38 @@ export interface AudiogenProgress {
     step: number;
     total: number;
 }
+/**
+ * The request an ACE-Step run actually rendered, after the LM filled in what
+ * the caller left unset (Phase 1, Simple Mode, Query Rewriting). An edit run
+ * reports its base seed and the prompt metadata it was given; its caption is
+ * empty (each operation carries its own) and `codeFrames` is 0. MiniMax runs
+ * report none.
+ */
+export interface AudiogenGenerationMetadata {
+    /**
+     * The caption the run used: the LM-composed one under Simple Mode or Query
+     * Rewriting. With `augmentCaptionWithMetadata` set it is always the caller's
+     * own caption (before the metadata suffix), even under those modes.
+     */
+    caption: string;
+    /** The lyrics the run used (LM-written under Simple Mode). */
+    lyrics: string;
+    /** Beats per minute; 0 when unresolved. */
+    bpm: number;
+    keyscale: string;
+    /** Beats per bar, the time-signature numerator (4 for "4/4"); 0 when unresolved. */
+    beatsPerBar: number;
+    vocalLanguage: string;
+    /** The seed the run used: the engine-drawn one when no `seed` was passed. */
+    seed: number;
+    /**
+     * 5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and
+     * detokenizer are skipped (cover-nofsq, lego, edits).
+     */
+    codeFrames: number;
+    /** Per-condition breakdown of `stats.qualityScore`; present only with `computeQualityScore`. */
+    qualityReport?: string;
+}
 /** One interleaved-Int16 PCM chunk emitted by the engine. */
 export interface AudiogenPcmChunk {
     outputArray: Int16Array;
@@ -264,6 +339,8 @@ export interface AudiogenPcmChunk {
     channels: number;
     /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
     lrc?: string;
+    /** What an ACE-Step run rendered; absent for MiniMax. */
+    metadata?: AudiogenGenerationMetadata;
 }
 /** A progress tick delivered through the run's output stream. */
 export interface AudiogenProgressChunk {
@@ -283,6 +360,8 @@ export interface AudiogenUnderstandResult {
     timesignature: string;
     vocalLanguage: string;
     audioCodes: Int32Array;
+    /** The seed the LM decode used: the engine-drawn one when no `seed` was passed. */
+    seed: number;
 }
 /** The understand result delivered through the response's output stream. */
 export interface AudiogenUnderstandChunk {
@@ -312,6 +391,19 @@ export interface AudiogenStats {
     /** 0 = none, 1 = not requested, 2 = no devices, 3 = init failed. */
     gpuFallbackReason?: number;
     /**
+     * MiniMax only: semantic frames the AR stage emitted (25 per second). Below
+     * the frame cap when the song ended at the model's end-of-sequence.
+     */
+    emittedFrames?: number;
+    /** MiniMax only: engine time in the autoregressive semantic stage. */
+    arMs?: number;
+    /** MiniMax only: engine time building the flow conditioning. */
+    conditionMs?: number;
+    /** MiniMax only: engine time in the flow-matching DiT. */
+    flowMs?: number;
+    /** MiniMax only: engine time in the vocoder. */
+    vocoderMs?: number;
+    /**
      * Lyric-to-audio alignment confidence in [0, 1]. Present only when the run
      * set `generateLrc`; the LRC text itself rides on the PCM chunk (`lrc`) and
      * is repeated here for convenience.
@@ -330,6 +422,11 @@ export interface AudiogenStats {
      * by an `understand()` response; also streamed as an output item.
      */
     understand?: AudiogenUnderstandResult;
+    /**
+     * What an ACE-Step run rendered, repeated from the PCM chunk
+     * (`AudiogenPcmChunk.metadata`). Absent for `understand()` and MiniMax.
+     */
+    metadata?: AudiogenGenerationMetadata;
 }
 /** Options accepted by `understand()`. */
 export interface UnderstandOptions {
@@ -407,6 +504,7 @@ export declare class AudioGen {
     private _lastLrc;
     private _cancelTerminalResolve;
     private _lastUnderstand;
+    private _lastMetadata;
     constructor(options?: AudioGenOptions);
     /** Create the native engine and load its GGUF files. Idempotent. */
     load(): Promise<void>;
@@ -459,6 +557,8 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
 export { resolveBackendsDir } from './lib/backends';
+export { assessFit } from './lib/fit';
+export type { AudiogenFitRequest, AudiogenFitResult, AudiogenFitStatus } from './lib/fit';
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error';
 export { AudioEditOperationType, RepaintMode } from './audiogen';
 export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

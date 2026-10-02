@@ -1,0 +1,273 @@
+name: Mobile Integration Tests (GGML RPC Server)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to test
+        type: string
+        required: false
+      repository:
+        description: Repository to check out
+        type: string
+        required: false
+      workdir:
+        description: Package directory in the monorepo
+        type: string
+        required: false
+        default: packages/ggml-rpc-server
+      prebuild_run_id:
+        description: Run id whose ggml-rpc-server prebuilds to install
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Physical device platform
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      android_device:
+        description: Android device used by a manual run
+        type: choice
+        required: false
+        options:
+          - Google Pixel 9
+          - Google Pixel 8
+          - Samsung Galaxy S25 Ultra
+        default: Google Pixel 9
+      ios_device:
+        description: iOS device used by a manual run
+        type: choice
+        required: false
+        options:
+          - Apple iPhone 17
+          - Apple iPhone 16 Pro
+          - Apple iPhone 15
+        default: Apple iPhone 16 Pro
+      ref:
+        description: Git ref to test; defaults to the dispatched ref
+        type: string
+        required: false
+        default: ""
+      workdir:
+        description: Package directory in the monorepo
+        type: string
+        required: false
+        default: packages/ggml-rpc-server
+      prebuild_run_id:
+        description: "Run id whose prebuilds to install for this PR. Takes precedence over the same-run build and fails the run if its artifact is missing or expired. Mutually exclusive with building prebuilds in this dispatch."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+concurrency:
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  validate-devices:
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout trusted device validation action
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Checkout validation data from the tested ref
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: packages/ggml-rpc-server/test/mobile/integration.auto.cjs
+          sparse-checkout-cone-mode: false
+          path: validation-data
+          persist-credentials: false
+
+      - name: Validate requested device
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.platform == 'Android' && inputs.android_device || inputs.ios_device }}
+          device-model-operator: EQUALS
+          runner-source-path: validation-data/packages/ggml-rpc-server/test/mobile/integration.auto.cjs
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+  # Without an explicit run id, produce this ref's artifacts in the dispatch.
+  # A pinned run must not trigger a redundant build that could shadow it.
+  prebuild-manual:
+    if: inputs.platform != '' && inputs.prebuild_run_id == ''
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-ggml-rpc-server.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ inputs.ref || github.sha }}
+      workdir: ${{ inputs.workdir }}
+
+  build-and-test:
+    needs: [runner_names, validate-devices, prebuild-manual]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (needs.prebuild-manual.result == 'success' || needs.prebuild-manual.result == 'skipped') }}
+    name: Build ${{ matrix.platform }} and run managed RPC lifecycle
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    environment: release
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS"}]}' || '{"include":[{"platform":"Android"}]}') || '{"include":[{"platform":"Android"},{"platform":"iOS"}]}') }}
+    steps:
+      - name: Checkout trusted mobile actions
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: addon
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up mobile test environment
+        id: setup
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/ggml-rpc-server' }}
+          addon-npm-name: '@qvac/ggml-rpc-server'
+          prebuild-artifact-prefix: prebuild-ggml-rpc-server-
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          prebuild-run-id: ${{ inputs.prebuild_run_id }}
+
+      - name: Verify the requested prebuild run was installed
+        if: always() && inputs.prebuild_run_id != ''
+        shell: bash
+        env:
+          REQUESTED: ${{ inputs.prebuild_run_id }}
+          RESOLVED: ${{ steps.setup.outputs.prebuild-source-run-id }}
+        run: |
+          if [ "$RESOLVED" != "$REQUESTED" ]; then
+            echo "::error::prebuild_run_id=$REQUESTED was requested but the prebuilds came from '$RESOLVED'."
+            exit 1
+          fi
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/ggml-rpc-server' }}
+          addon-npm-name: '@qvac/ggml-rpc-server'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ inputs.workdir || 'packages/ggml-rpc-server' }}
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
+          enables-perf: 'false'
+
+      - name: Schedule Device Farm test run
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform }}
+          device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
+          android-device-pool-arn: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
+          ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'single-pool' }}
+          device-models: ${{ inputs.platform == 'Android' && inputs.android_device || (inputs.platform == 'iOS' && inputs.ios_device || '') }}
+          device-model-operator: EQUALS
+
+      - name: Monitor Device Farm test run
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform }}
+          addon-npm-name: '@qvac/ggml-rpc-server'
+          enables-perf: 'false'
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Comment results on PR
+        if: always() && github.event_name == 'pull_request_target'
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: '@qvac/ggml-rpc-server'
+          platform: ${{ matrix.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}

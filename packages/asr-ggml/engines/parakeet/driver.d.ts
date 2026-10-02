@@ -1,7 +1,7 @@
 import type { QvacResponse } from "@qvac/infer-base";
 import { ParakeetInterface, type ParakeetConfigurationParams, type StreamingConfig } from "./parakeet";
 import type { ASRRunOutput, AudioInput, BackendInfo } from "../../lib/types";
-import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
+import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
 /**
  * Parakeet-specific configuration options. CTC, TDT, RNN-T, EOU, Nemotron,
  * and Sortformer are auto-detected from the loaded GGUF metadata.
@@ -43,8 +43,24 @@ export interface ParakeetConfig {
     streamingHistoryMs?: number;
     /** Emit partial segments before chunk boundaries (default: true). */
     streamingEmitPartials?: boolean;
-    /** Optional ASR energy-VAD events (default: false). */
+    /**
+     * Run the energy detector on ASR streaming sessions and emit
+     * `{ type: "vad", source: "energy" }` events on each speech/silence
+     * transition (default: false). CTC, TDT, RNN-T, and Nemotron only.
+     */
     streamingEnergyVad?: boolean;
+    /** Energy-VAD speech threshold in dBFS RMS (default: -35). */
+    streamingEnergyVadThresholdDb?: number;
+    /** Energy-VAD RMS window in ms (default: 30; speech-cpp caps it at 1000). */
+    streamingEnergyVadWindowMs?: number;
+    /** Silence required before leaving the speaking state, in ms (default: 200). */
+    streamingEnergyVadHangoverMs?: number;
+    /**
+     * Sortformer streaming: emit `{ type: "vad", source: "sortformer" }`
+     * events when speech starts or stops, tagged with the dominant speaker
+     * (default: false).
+     */
+    streamingSpeakerVad?: boolean;
     /** ASR encoder left-context window in milliseconds. */
     streamingLeftContextMs?: number;
     /**
@@ -59,12 +75,40 @@ export interface ParakeetConfig {
     streamingSpkCacheLen?: number;
     /** AOSC FIFO warmup buffer rows (default: 188). */
     streamingFifoLen?: number;
-    /** AOSC encoder left-context window in ms (default: 80). */
+    /** AOSC encoder left-context window in ms (default: 80 for Sortformer, 0 for Nemotron 3 Diarization). */
     streamingChunkLeftContextMs?: number;
     /** AOSC encoder right-context window in ms (default: 560). */
     streamingChunkRightContextMs?: number;
     /** AOSC FIFO-overflow pop-out count (default: 144). */
     streamingSpkCacheUpdatePeriod?: number;
+    /**
+     * Speaker-activity threshold, 0..1, for offline and streaming diarization
+     * (default: 0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).
+     */
+    diarizationThreshold?: number;
+    /** Shortest diarization segment reported, in ms (default: 510 for Sortformer, 200 for Nemotron 3 Diarization). */
+    diarizationMinSegmentMs?: number;
+    /**
+     * Run one synthetic encoder pass at load so the first request does not pay
+     * the GPU shader/kernel compile (default: false).
+     */
+    prewarm?: boolean;
+    /**
+     * Length of the prewarm pass in seconds of audio (default: 1); must be
+     * greater than 0 when `prewarm` is on.
+     */
+    prewarmAudioSeconds?: number;
+    /**
+     * Offline long-form encoder window in encoder frames: 0 = auto (default),
+     * > 0 = explicit ceiling, < 0 = always single pass (can run out of memory
+     * on long inputs).
+     */
+    longFormWindowFrames?: number;
+    /**
+     * Context each long-form window shares with its neighbours, in encoder
+     * frames: 0 = auto (default), < 0 = none.
+     */
+    longFormContextFrames?: number;
     /**
      * Directory containing dynamically-loaded ggml backend libraries. Defaults
      * to the package's own `prebuilds/` folder.
@@ -86,6 +130,8 @@ export type ParakeetStreamingRunConfig = StreamingConfig;
 export interface ParakeetReloadConfig {
     parakeetConfig?: Partial<ParakeetConfig>;
 }
+/** Rejects per-call `run()` options on an engine that takes none. */
+export declare function assertNoRunOptions(options: ASRRunOptions, engine: string): void;
 /**
  * Parakeet engine driver: owns the `ParakeetInterface`, the parakeet event
  * mapping, and the parakeet streaming lifecycle. Backed by
@@ -108,7 +154,7 @@ export declare class ParakeetDriver implements AsrDriver {
     cancelActive(jobId?: number): Promise<void>;
     status(): Promise<string>;
     getBackendInfo(): BackendInfo | null;
-    run(audio: NormalizedAudioStream): Promise<QvacResponse<ASRRunOutput>>;
+    run(audio: NormalizedAudioStream, options?: ASRRunOptions): Promise<QvacResponse<ASRRunOutput>>;
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/decoder-audio",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "",
   "license": "Apache-2.0",
   "author": "Tether",
@@ -14,7 +14,7 @@
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",
     "test:types": "npm run typecheck && npm run test:dts && npm run check:generated",
     "test:unit": "npm run build:ts && brittle-bare test/unit/*.test.js && npm run test:package",
-    "test:package": "node --test test/package/package-contract.test.js",
+    "test:package": "node --test test/package/*.test.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "coverage:unit": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
     "coverage": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",

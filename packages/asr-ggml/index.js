@@ -6,9 +6,11 @@ const QvacLogger = require("@qvac/logging");
 const infer_base_1 = require("@qvac/infer-base");
 const error_1 = require("./lib/error");
 const backends_1 = require("./lib/backends");
+const fit_1 = require("./lib/fit");
 const types_1 = require("./lib/types");
 const driver_1 = require("./engines/whisper/driver");
 const driver_2 = require("./engines/parakeet/driver");
+const driver_3 = require("./engines/moss/driver");
 const GGUF_MAGIC = [0x47, 0x47, 0x55, 0x46]; // ASCII "GGUF"
 /**
  * Creates one serialized queue lane. `"onReturn"` releases the slot when
@@ -89,7 +91,7 @@ function sniffEngine(modelPath) {
     }
 }
 function isKnownEngine(value) {
-    return value === "whisper" || value === "parakeet";
+    return value === "whisper" || value === "parakeet" || value === driver_3.ENGINE_MOSS_TRANSCRIBE;
 }
 /**
  * The model file the driver will actually open. Whisper's
@@ -120,6 +122,7 @@ function resolveModelPath(files, config, engine) {
 class ASRGgml {
     static ENGINE_WHISPER = "whisper";
     static ENGINE_PARAKEET = "parakeet";
+    static ENGINE_MOSS_TRANSCRIBE = driver_3.ENGINE_MOSS_TRANSCRIBE;
     static ERR_CODES = error_1.ERR_CODES;
     static Error = error_1.QvacErrorAddonASRGgml;
     static inferenceManagerConfig = Object.freeze({
@@ -192,7 +195,10 @@ class ASRGgml {
             job: this._job,
             enableStats: this.enableStats,
         };
-        if (this._engineType === "parakeet") {
+        if (this._engineType === driver_3.ENGINE_MOSS_TRANSCRIBE) {
+            this._driver = new driver_3.MossTranscribeDriver(ctx, files, config || { engine: driver_3.ENGINE_MOSS_TRANSCRIBE });
+        }
+        else if (this._engineType === "parakeet") {
             this._driver = new driver_2.ParakeetDriver(ctx, files, config || { engine: "parakeet" });
         }
         else {
@@ -295,10 +301,10 @@ class ASRGgml {
             adds: "unpause",
         }));
     }
-    async run(audio) {
+    async run(audio, options = {}) {
         const runFn = async () => {
             await this._waitForClosingSessionOrThrow("concurrent run() during an open streaming session");
-            return await this._driver.run(this._driver.normalizeAudio(audio));
+            return await this._driver.run(this._driver.normalizeAudio(audio), options);
         };
         if (this.exclusiveRun) {
             return await this._inferenceQueue.run(runFn, "onSettle");
@@ -340,7 +346,7 @@ class ASRGgml {
             if (!isKnownEngine(configEngine)) {
                 throw new error_1.QvacErrorAddonASRGgml({
                     code: error_1.ERR_CODES.INVALID_ENGINE,
-                    adds: 'config.engine must be "whisper" or "parakeet"',
+                    adds: 'config.engine must be "whisper", "parakeet" or "moss-transcribe"',
                 });
             }
             return configEngine;
@@ -391,5 +397,6 @@ class ASRGgml {
 (function (ASRGgml) {
     ASRGgml.BackendId = types_1.BackendId;
     ASRGgml.resolveBackendsDir = backends_1.resolveBackendsDir;
+    ASRGgml.assessFit = fit_1.assessFit;
 })(ASRGgml || (ASRGgml = {}));
 module.exports = ASRGgml;

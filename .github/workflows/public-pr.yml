@@ -30,6 +30,11 @@ on:
         type: boolean
         description: "Status of general checks"
         default: true
+      cpp-tests-status:
+        required: false
+        type: boolean
+        description: "Status of C++ unit and fuzz tests"
+        default: true
       tests-status: # Deprecated, use sanity-checks-status, integration-tests-status, and general-checks-status instead
         required: false
         type: boolean
@@ -71,6 +76,10 @@ jobs:
           fi
           if [[ "${{ inputs.general-checks-status }}" != "" && "${{ inputs.general-checks-status }}" != "true" ]]; then
             echo "::error title=General checks have not returned success::Some general checks have not returned success"
+            failed=1
+          fi
+          if [[ "${{ inputs.cpp-tests-status }}" != "" && "${{ inputs.cpp-tests-status }}" != "true" ]]; then
+            echo "::error title=C++ tests have not returned success::C++ unit or fuzz tests have not returned success"
             failed=1
           fi
           if [[ "${{ inputs.tests-status }}" != "" && "${{ inputs.tests-status }}" != "true" ]]; then

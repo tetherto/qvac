@@ -6,6 +6,7 @@
     "model-fit",
     "ocr-ggml",
     "embed-llamacpp",
-    "llm-llamacpp"
+    "llm-llamacpp",
+    "ggml-rpc-server"
   ]
 }

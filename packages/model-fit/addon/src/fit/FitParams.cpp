@@ -106,10 +106,9 @@ void captureProjection(
 ///
 /// Only the directory the caller named is validated. `BACKENDS_SUBDIR` is
 /// appended afterwards and is deliberately *not* required to exist: it is where
-/// this package installs dynamic backends on the platforms that have them, and
-/// on Apple and Windows the ggml backends are linked statically and the subdir
-/// is never created (see the `(ANDROID OR UNIX) AND NOT APPLE` guard in
-/// CMakeLists.txt). Demanding it would turn "nothing to load here" into a hard
+/// this package installs dynamic backends on Linux, Android, and Windows. On
+/// Apple platforms the ggml backends are linked statically and the subdir is
+/// never created. Demanding it would turn "nothing to load here" into a hard
 /// error on exactly the platforms that need no loading.
 std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
   const std::filesystem::path backendsPath(backendsDir);
@@ -611,8 +610,34 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
               std::to_string(trainedCtx) + ")");
         }
 
+        // Wrapped in a lambda: a parameter fabric appends with a default
+        // changes common_fit_params' type, which breaks the LlamaFitInvoker
+        // conversion.
         execution = invokeLlamaFit(
-            req.modelPath, params, req.marginMiB, nCtxMin, common_fit_params);
+            req.modelPath,
+            params,
+            req.marginMiB,
+            nCtxMin,
+            [](const char* path,
+               llama_model_params* modelParams,
+               llama_context_params* contextParams,
+               float* split,
+               llama_model_tensor_buft_override* overrides,
+               size_t* marginsOut,
+               uint32_t ctxMin,
+               bool prefetchWeightsAuto,
+               ggml_log_level logLevel) {
+              return common_fit_params(
+                  path,
+                  modelParams,
+                  contextParams,
+                  split,
+                  overrides,
+                  marginsOut,
+                  ctxMin,
+                  prefetchWeightsAuto,
+                  logLevel);
+            });
       });
   if (!supported) {
     out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);

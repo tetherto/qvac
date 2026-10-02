@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { Platform } from 'react-native'
 import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
 import type { TestDefinition } from '@qvac/test-suite'
@@ -46,6 +47,7 @@ import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
+import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
 import { HttpEmbeddingExecutor } from '../shared/executors/http-embedding-executor.js'
@@ -594,6 +596,10 @@ export const executor = createExecutor({
       'Tools test disabled on mobile'
     ),
     new SkipExecutor(
+      /^deferred-tools-(?!prompt-cost$|load-then-call$)/,
+      'Deferred tools: only the smoke cases run on mobile (no tools-qwen35 resource, model reloads too slow)'
+    ),
+    new SkipExecutor(
       /^(diffusion-|addon-logging-diffusion$)/,
       'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
     ),
@@ -614,6 +620,9 @@ export const executor = createExecutor({
       /^parakeet-indic-conformer-/,
       'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
     ),
+    ...(Platform.OS === 'android'
+      ? [new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML requires iOS')]
+      : []),
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
@@ -637,7 +646,8 @@ export const executor = createExecutor({
           skipTests(
             ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
             'Parakeet streaming EOU/iterator recovery is flaky on Android'
-          )
+          ),
+          skipTests(['tts-audio8-coreml'], 'Core ML runs on macOS and iOS only')
         ]
       : []),
     ...(Platform.OS === 'ios'
@@ -681,6 +691,7 @@ export const executor = createExecutor({
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
+    new DeferredToolsExecutor(resources),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new MobileOcrExecutor(resources),
@@ -698,6 +709,7 @@ export const executor = createExecutor({
     new MobileDownloadResilienceExecutor(resolveBakedMqttHost()),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(Platform.OS),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),

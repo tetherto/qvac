@@ -195,6 +195,18 @@ runs:
         arch: arm64
         search-dirs: ${{ github.workspace }}/addon/${{ inputs.addon-workdir }}
 
+    # npm never selects a cross-built platform package, and bare-link reads
+    # only a package's own prebuilds/, so a split addon the framework installed
+    # (e.g. @qvac/fabric) would reach the app without its runtime. Must run
+    # after the framework installs the addon and before `npm run bundle` and
+    # the native project build.
+    - name: Overlay mobile platform prebuilds
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: node "$GITHUB_ACTION_PATH/overlay-platform-prebuilds.mjs" --platform "$PLATFORM"
+
     # Patches the freshly generated e2e/tests/app.test.js to bump the
     # per-test Mocha ceiling. Two ways to opt in:
     #   * per-test-timeout-minutes      → applies on ALL platforms (Android + iOS)

@@ -44,6 +44,8 @@ export const SDK_CLIENT_ERROR_CODES = {
   INVALID_PLUGIN_SPECIFIER: 50612,
   BARE_IMPORTS_MAP_NOT_FOUND: 50613,
   BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
+  HOST_PREBUILDS_INSTALL_REFUSED: 50615,
+  HOST_PREBUILDS_INSTALL_FAILED: 50616,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800
@@ -208,6 +210,22 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: 'BARE_RUNTIME_BINARY_NOT_FOUND',
     message: (platform: string, arch: string) =>
       `Could not load the Bare runtime binary for ${platform}-${arch}. The platform package "bare-runtime-${platform}-${arch}" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \`pnpm add bare-runtime-${platform}-${arch}\`) or by installing with npm or bun. See https://github.com/tetherto/qvac/issues/1492`
+  },
+  [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_INSTALL_REFUSED]: {
+    name: 'HOST_PREBUILDS_INSTALL_REFUSED',
+    message: (reason: string, dependencies: string) =>
+      `Cannot install the addon platform packages automatically: ${reason}.` +
+      (dependencies
+        ? `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall:\n${dependencies}`
+        : '')
+  },
+  [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_INSTALL_FAILED]: {
+    name: 'HOST_PREBUILDS_INSTALL_FAILED',
+    message: (details: string, dependencies: string) =>
+      `Installing the addon platform packages failed: ${details}` +
+      (dependencies
+        ? `\n\n  Fix the error, or add them to the dependencies in package.json, pinned to these exact versions, and reinstall:\n${dependencies}`
+        : '')
   },
 
   // Profiler Errors (50,800-50,899)

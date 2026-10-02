@@ -59,10 +59,9 @@ public:
   /// Called from createInstance so load failures surface synchronously.
   void load();
 
-  /// Optional addon-prebuilds root (e.g. `<addon>/prebuilds`). On Android
-  /// it's combined with the BACKENDS_SUBDIR compile-time relative path to
-  /// locate the per-microarch CPU variant .so files for ggml's runtime
-  /// backend loader. No-op on platforms where the CPU backend is static.
+  /// Optional addon-prebuilds root (e.g. `<addon>/prebuilds`). Combined with
+  /// the BACKENDS_SUBDIR compile-time relative path to locate ggml's runtime
+  /// backend modules. No-op on platforms where the CPU backend is static.
   void setBackendsDir(std::string backendsDir);
 
 private:

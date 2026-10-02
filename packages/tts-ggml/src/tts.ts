@@ -4,7 +4,7 @@ import {
 } from "./lib/error";
 
 export interface TTSConfigurationParams {
-  [key: string]: string | number | boolean | undefined;
+  [key: string]: string | number | boolean | string[] | undefined;
 }
 
 export interface TTSJobData {
@@ -29,6 +29,31 @@ export interface TTSJobData {
   // JSAdapter::readAudio8Voice. Ignored by other engines.
   referenceAudio?: string;
   referenceText?: string;
+  // MOSS-SoundEffect per-call generation controls (siblings of `input`), read
+  // by JSAdapter::readMossSoundEffectCall. Ignored by other engines.
+  seconds?: number;
+  negativePrompt?: string;
+  steps?: number;
+  guidance?: number;
+  shift?: number;
+  // MOSS-Speech per-call fields (siblings of `input`), read by
+  // JSAdapter::readMossSpeechCall. The user turn is already folded into
+  // `messages`. Ignored by other engines.
+  messages?: Array<{
+    role: string;
+    text?: string;
+    audio?: Int16Array | Float32Array;
+    sampleRate?: number;
+  }>;
+  replyVoice?: Int16Array | Float32Array;
+  replyVoiceSampleRate?: number;
+  textReply?: boolean;
+  maxReplySeconds?: number;
+  maxNewTokens?: number;
+  greedy?: boolean;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
 }
 
 export interface TTSWeightData {
@@ -59,7 +84,7 @@ export interface TTSBinding {
     outputCallback: TTSOutputCallback | null,
   ): object;
   activate(handle: object | null): Promise<void>;
-  runJob(handle: object | null, data: TTSJobData): void;
+  runJob(handle: object | null, data: TTSJobData): boolean | void | Promise<boolean | void>;
   loadWeights(
     handle: object | null,
     weightsData: TTSWeightData,
@@ -111,10 +136,11 @@ export class TTSInterface {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await -- preserves the established promise-returning wrapper API.
   async runJob(data: TTSJobData): Promise<void> {
     try {
-      this._binding.runJob(this._handle, data);
+      if (await this._binding.runJob(this._handle, data) === false) {
+        throw new Error("Native addon rejected the job");
+      }
     } catch (error) {
       throw new QvacErrorAddonTTSGgml({
         code: ERR_CODES.FAILED_TO_APPEND,

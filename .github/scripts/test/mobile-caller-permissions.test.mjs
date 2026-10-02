@@ -17,6 +17,7 @@ const WORKFLOW_DIR = join(root, '.github/workflows')
 
 const workflows = () => readdirSync(WORKFLOW_DIR).filter((n) => /\.ya?ml$/.test(n))
 const read = (name) => readFileSync(join(WORKFLOW_DIR, name), 'utf8').split('\n')
+const definitions = () => workflows().map((name) => ({ name, lines: read(name) }))
 
 function permsAt(lines, start, indent) {
   const entries = {}
@@ -35,12 +36,12 @@ function workflowPerms(lines) {
 
 // Any job declaring it, not just build-and-test: keying on a job name meant a
 // rename silently dropped the leaf and stopped checking all of its callers.
-function leavesNeedingActionsRead() {
+function leavesNeedingActionsRead(sources = definitions()) {
   return new Set(
-    workflows().filter((name) => {
+    sources.filter(({ name, lines }) => {
       if (!name.startsWith('integration-mobile-test-')) return false
-      return Object.values(jobPerms(read(name))).some((perms) => perms.actions !== undefined)
-    }),
+      return Object.values(jobPerms(lines)).some((perms) => perms.actions !== undefined)
+    }).map(({ name }) => name),
   )
 }
 
@@ -62,11 +63,10 @@ function jobPerms(lines) {
   return out
 }
 
-function mobileCalls() {
-  const need = leavesNeedingActionsRead()
+function mobileCalls(sources = definitions()) {
+  const need = leavesNeedingActionsRead(sources)
   const found = []
-  for (const name of workflows()) {
-    const lines = read(name)
+  for (const { name, lines } of sources) {
     const wf = workflowPerms(lines)
     lines.forEach((line, i) => {
       const m = line.match(/uses:\s*\.\/\.github\/workflows\/(integration-mobile-test-[\w.-]+\.ya?ml)/)
@@ -96,7 +96,15 @@ test('discovery finds the leaves and their callers', () => {
   const need = leavesNeedingActionsRead()
   assert.ok(need.size >= 12, `expected at least 12 leaves needing actions: read, found ${need.size}`)
   const found = mobileCalls()
-  assert.ok(found.length >= 20, `expected at least 20 caller jobs, found ${found.length}`)
+  // The nx migration removed the per-addon callers. Assert their actual
+  // replacements instead of a pre-migration global job-count threshold.
+  for (const addon of ['asr-ggml', 'bci-whispercpp', 'tts-ggml']) {
+    assert.ok(found.some(({ caller, job, target }) =>
+      caller === 'on-merge-nx.yml' &&
+      job === `mobile-post-publish-${addon}` &&
+      target === `integration-mobile-test-${addon}.yml`
+    ), `missing consolidated post-publish caller for ${addon}`)
+  }
 })
 
 // `actions: none` is valid YAML and grants nothing, so an absent key is not the
@@ -116,4 +124,30 @@ test('every caller of a mobile leaf grants actions: read', () => {
       'run it downloads prebuilds from and GitHub aborts the run before any job ' +
       'starts:\n  ' + gaps.join('\n  '),
   )
+})
+
+// Exercise discovery independently of how many workflows the repository has.
+test('discovery retains inherited permissions and a job-level denial', () => {
+  const sources = [
+    {
+      name: 'integration-mobile-test-fixture.yml',
+      lines: ['jobs:', '  build:', '    permissions:', '      actions: read'],
+    },
+    {
+      name: 'caller.yml',
+      lines: [
+        'permissions:', '  actions: read', 'jobs:',
+        '  inherited:',
+        '    uses: ./.github/workflows/integration-mobile-test-fixture.yml',
+        '  denied:', '    permissions:', '      actions: none',
+        '    uses: ./.github/workflows/integration-mobile-test-fixture.yml',
+      ],
+    },
+  ]
+  const calls = mobileCalls(sources)
+  assert.deepEqual(calls.map(({ job, granted }) => ({ job, granted })), [
+    { job: 'inherited', granted: { actions: 'read' } },
+    { job: 'denied', granted: { actions: 'none' } },
+  ])
+  assert.deepEqual(calls.filter(({ granted }) => !READS.has(granted.actions)).map(({ job }) => job), ['denied'])
 })

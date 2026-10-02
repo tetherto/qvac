@@ -22,6 +22,7 @@ import type {
 import type {
   ASRGgmlFiles,
   ASRGgmlReloadConfig,
+  ASRRunOptions,
   ASRStreamingOptions,
   AsrDriver,
   DriverContext,
@@ -70,8 +71,24 @@ export interface ParakeetConfig {
   streamingHistoryMs?: number;
   /** Emit partial segments before chunk boundaries (default: true). */
   streamingEmitPartials?: boolean;
-  /** Optional ASR energy-VAD events (default: false). */
+  /**
+   * Run the energy detector on ASR streaming sessions and emit
+   * `{ type: "vad", source: "energy" }` events on each speech/silence
+   * transition (default: false). CTC, TDT, RNN-T, and Nemotron only.
+   */
   streamingEnergyVad?: boolean;
+  /** Energy-VAD speech threshold in dBFS RMS (default: -35). */
+  streamingEnergyVadThresholdDb?: number;
+  /** Energy-VAD RMS window in ms (default: 30; speech-cpp caps it at 1000). */
+  streamingEnergyVadWindowMs?: number;
+  /** Silence required before leaving the speaking state, in ms (default: 200). */
+  streamingEnergyVadHangoverMs?: number;
+  /**
+   * Sortformer streaming: emit `{ type: "vad", source: "sortformer" }`
+   * events when speech starts or stops, tagged with the dominant speaker
+   * (default: false).
+   */
+  streamingSpeakerVad?: boolean;
   /** ASR encoder left-context window in milliseconds. */
   streamingLeftContextMs?: number;
   /**
@@ -86,12 +103,40 @@ export interface ParakeetConfig {
   streamingSpkCacheLen?: number;
   /** AOSC FIFO warmup buffer rows (default: 188). */
   streamingFifoLen?: number;
-  /** AOSC encoder left-context window in ms (default: 80). */
+  /** AOSC encoder left-context window in ms (default: 80 for Sortformer, 0 for Nemotron 3 Diarization). */
   streamingChunkLeftContextMs?: number;
   /** AOSC encoder right-context window in ms (default: 560). */
   streamingChunkRightContextMs?: number;
   /** AOSC FIFO-overflow pop-out count (default: 144). */
   streamingSpkCacheUpdatePeriod?: number;
+  /**
+   * Speaker-activity threshold, 0..1, for offline and streaming diarization
+   * (default: 0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).
+   */
+  diarizationThreshold?: number;
+  /** Shortest diarization segment reported, in ms (default: 510 for Sortformer, 200 for Nemotron 3 Diarization). */
+  diarizationMinSegmentMs?: number;
+  /**
+   * Run one synthetic encoder pass at load so the first request does not pay
+   * the GPU shader/kernel compile (default: false).
+   */
+  prewarm?: boolean;
+  /**
+   * Length of the prewarm pass in seconds of audio (default: 1); must be
+   * greater than 0 when `prewarm` is on.
+   */
+  prewarmAudioSeconds?: number;
+  /**
+   * Offline long-form encoder window in encoder frames: 0 = auto (default),
+   * > 0 = explicit ceiling, < 0 = always single pass (can run out of memory
+   * on long inputs).
+   */
+  longFormWindowFrames?: number;
+  /**
+   * Context each long-form window shares with its neighbours, in encoder
+   * frames: 0 = auto (default), < 0 = none.
+   */
+  longFormContextFrames?: number;
   /**
    * Directory containing dynamically-loaded ggml backend libraries. Defaults
    * to the package's own `prebuilds/` folder.
@@ -131,6 +176,10 @@ const PARAKEET_CONFIG_KEYS: readonly string[] = [
   "streamingHistoryMs",
   "streamingEmitPartials",
   "streamingEnergyVad",
+  "streamingEnergyVadThresholdDb",
+  "streamingEnergyVadWindowMs",
+  "streamingEnergyVadHangoverMs",
+  "streamingSpeakerVad",
   "streamingLeftContextMs",
   "streamingRightLookaheadMs",
   "streamingSpkCacheEnable",
@@ -139,6 +188,12 @@ const PARAKEET_CONFIG_KEYS: readonly string[] = [
   "streamingChunkLeftContextMs",
   "streamingChunkRightContextMs",
   "streamingSpkCacheUpdatePeriod",
+  "diarizationThreshold",
+  "diarizationMinSegmentMs",
+  "prewarm",
+  "prewarmAudioSeconds",
+  "longFormWindowFrames",
+  "longFormContextFrames",
   "backendsDir",
   "openclCacheDir",
 ];
@@ -150,6 +205,12 @@ const PARAKEET_STREAMING_OPT_KEYS: readonly string[] = [
   "rightLookaheadMs",
   "emitPartials",
   "emitEnergyVad",
+  "energyVadThresholdDb",
+  "energyVadWindowMs",
+  "energyVadHangoverMs",
+  "emitSpeakerVad",
+  "diarizationThreshold",
+  "diarizationMinSegmentMs",
   "spkCacheEnable",
   "spkCacheLen",
   "fifoLen",
@@ -157,6 +218,16 @@ const PARAKEET_STREAMING_OPT_KEYS: readonly string[] = [
   "chunkRightContextMs",
   "spkCacheUpdatePeriod",
 ];
+
+/** Rejects per-call `run()` options on an engine that takes none. */
+export function assertNoRunOptions(options: ASRRunOptions, engine: string): void {
+  const keys = Object.keys(options ?? {});
+  if (keys.length === 0) return;
+  throw new QvacErrorAddonASRGgml({
+    code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+    adds: `${keys.join(", ")}: run options are moss-transcribe only (engine is ${engine})`,
+  });
+}
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
@@ -298,7 +369,9 @@ export class ParakeetDriver implements AsrDriver {
 
   run(
     audio: NormalizedAudioStream,
+    options: ASRRunOptions = {},
   ): Promise<QvacResponse<ASRRunOutput>> {
+    assertNoRunOptions(options, "parakeet");
     const response = this.ctx.job.start() as QvacResponse<ASRRunOutput>;
     void this._pumpBatchAudio(audio).catch((error: unknown) => {
       this.ctx.job.fail(asError(error));
@@ -417,6 +490,12 @@ export class ParakeetDriver implements AsrDriver {
       streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,
       streamingEmitPartials: this.params.streamingEmitPartials !== false,
       streamingEnergyVad: this.params.streamingEnergyVad === true,
+      streamingEnergyVadThresholdDb:
+        this.params.streamingEnergyVadThresholdDb,
+      streamingEnergyVadWindowMs: this.params.streamingEnergyVadWindowMs,
+      streamingEnergyVadHangoverMs:
+        this.params.streamingEnergyVadHangoverMs,
+      streamingSpeakerVad: this.params.streamingSpeakerVad === true,
       streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
       streamingRightLookaheadMs:
         this.params.streamingRightLookaheadMs ?? -1,
@@ -430,6 +509,12 @@ export class ParakeetDriver implements AsrDriver {
         this.params.streamingChunkRightContextMs,
       streamingSpkCacheUpdatePeriod:
         this.params.streamingSpkCacheUpdatePeriod,
+      diarizationThreshold: this.params.diarizationThreshold,
+      diarizationMinSegmentMs: this.params.diarizationMinSegmentMs,
+      prewarm: this.params.prewarm === true,
+      prewarmAudioSeconds: this.params.prewarmAudioSeconds,
+      longFormWindowFrames: this.params.longFormWindowFrames,
+      longFormContextFrames: this.params.longFormContextFrames,
       backendsDir: this.params.backendsDir,
       openclCacheDir: this.params.openclCacheDir,
     };
@@ -472,6 +557,12 @@ export class ParakeetDriver implements AsrDriver {
       if (segment?.isEndOfTurn === true) {
         this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
       }
+      return;
+    }
+    if (event === "VadState") {
+      // The native payload is already VadEvent-shaped (energy detector or
+      // Sortformer speaker activity).
+      this.ctx.job.output(data);
       return;
     }
     if (event === "JobEnded") {

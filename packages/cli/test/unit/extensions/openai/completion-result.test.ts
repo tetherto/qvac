@@ -2,11 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CompletionRun, CompletionStats, ToolCall, ToolCallError } from '@qvac/sdk'
 import { InferenceCancelledError } from '@qvac/sdk'
-import {
-  drainCompletion,
-  completionTokensFromStats,
-  formatToolErrors
-} from '@/serve/extensions/openai/adapters/completion-result'
+import { completionTokensFromStats, formatToolErrors } from '@/serve/core/completion'
+import { drainCompletion } from '@/serve/extensions/openai/adapters/completion-result'
 import { HttpError } from '@/serve/lib/http-error'
 
 function fakeRun(opts: {

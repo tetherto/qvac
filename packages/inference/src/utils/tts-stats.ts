@@ -33,6 +33,15 @@ export function chunkMetadata(chunk: TtsStreamChunk) {
   }
 }
 
+/**
+ * Appends a chunk's samples to `target` in place, which keeps collecting an
+ * utterance linear in its length — a natively chunked MOSS run emits dozens of
+ * chunks into one buffer.
+ */
+export function appendPcm(target: number[], samples: ArrayLike<number>) {
+  for (let i = 0; i < samples.length; i++) target.push(samples[i]!)
+}
+
 // Field-for-field, apart from `audioDurationMs` -> `audioDuration`, which keeps
 // the name the SDK has always exposed.
 export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
@@ -52,6 +61,10 @@ export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
     ...(stats.enhancerBackendDevice !== undefined && {
       enhancerBackendDevice: stats.enhancerBackendDevice
     }),
-    ...(stats.enhancerBackendId !== undefined && { enhancerBackendId: stats.enhancerBackendId })
+    ...(stats.enhancerBackendId !== undefined && { enhancerBackendId: stats.enhancerBackendId }),
+    ...(stats.codecSidecarLoaded !== undefined && {
+      codecSidecarLoaded: stats.codecSidecarLoaded
+    }),
+    ...(stats.codecOnCoreml !== undefined && { codecOnCoreml: stats.codecOnCoreml })
   }
 }

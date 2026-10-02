@@ -1,3 +1,4 @@
+import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
@@ -16,6 +17,7 @@ import { kvCacheTests } from './kv-cache-tests.js'
 import { kvCacheRestartTests } from './kv-cache-restart-tests.js'
 import { errorTests } from './error-tests.js'
 import { toolsTests } from './tools-tests.js'
+import { deferredToolsTests } from './deferred-tools-tests.js'
 import { ocrTests } from './ocr-tests.js'
 import { classificationTests } from './classification-tests.js'
 import { ttsTests } from './tts-tests.js'
@@ -307,6 +309,7 @@ export const tests = [
 
   // Tools tests
   ...toolsTests,
+  ...deferredToolsTests,
 
   // OCR tests
   ...ocrTests,
@@ -348,6 +351,7 @@ export const tests = [
   ...finetuneTests,
 
   // Lifecycle tests (suspend/resume)
+  ...rpcServerTests,
   ...lifecycleTests,
 
   // Registry-download config tests (retries + stream timeout)

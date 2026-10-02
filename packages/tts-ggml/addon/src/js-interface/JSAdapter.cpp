@@ -1,8 +1,11 @@
 #include "js-interface/JSAdapter.hpp"
 
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "inference-addon-cpp/Errors.hpp"
 #include "js-interface/NumberConversion.hpp"
@@ -88,6 +91,43 @@ std::optional<float> readOptionalFloat(
       std::string("Property '") + key + "' must be a number or numeric string");
 }
 
+std::optional<double>
+readOptionalFiniteDouble(js::Object obj, js_env_t* env, const char* key) {
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return std::nullopt;
+  }
+  if (js::is<js::Number>(env, raw)) {
+    const double value = js::Number::fromValue(raw).as<double>(env);
+    if (std::isfinite(value)) {
+      return value;
+    }
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must be a finite number (got " +
+            formatJsNumber(value) + ")");
+  }
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key + "' must be a number");
+}
+
+std::optional<float>
+readOptionalFiniteFloat(js::Object obj, js_env_t* env, const char* key) {
+  const auto value = readOptionalFiniteDouble(obj, env, key);
+  if (!value.has_value()) {
+    return std::nullopt;
+  }
+  if (const auto converted = finiteFloatFromJsNumber(*value)) {
+    return converted;
+  }
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key +
+          "' is outside the 32-bit float range (got " + formatJsNumber(*value) +
+          ")");
+}
+
 std::string readOptionalString(
     js::Object obj, js_env_t* env, const char* key) {
   auto v = obj.getOptionalPropertyAs<js::String, std::string>(env, key);
@@ -99,12 +139,128 @@ std::optional<bool> readOptionalBool(
   return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
 }
 
+std::string readArrayString(
+    js::Array array, js_env_t* env, uint32_t index, const char* key) {
+  js_value_t* raw = nullptr;
+  if (js_get_element(env, array, index, &raw) != 0 ||
+      !js::is<js::String>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must contain only strings");
+  }
+  return js::String::fromValue(raw).as<std::string>(env);
+}
+
+std::vector<std::string>
+readStringElements(js::Array array, js_env_t* env, const char* key) {
+  const uint32_t count = array.size(env);
+  std::vector<std::string> values;
+  values.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    values.push_back(readArrayString(array, env, i, key));
+  }
+  return values;
+}
+
+constexpr float INT16_PCM_SCALE = 32768.0f;
+
+std::vector<float> int16PcmToFloat(const std::vector<int16_t>& pcm) {
+  std::vector<float> samples;
+  samples.reserve(pcm.size());
+  for (const int16_t sample : pcm) {
+    samples.push_back(static_cast<float>(sample) / INT16_PCM_SCALE);
+  }
+  return samples;
+}
+
+std::vector<float> readPcm(js_value_t* raw, js_env_t* env, const char* key) {
+  if (js::is<js::TypedArray<float>>(env, raw)) {
+    return js::TypedArray<float>::fromValue(raw).as<std::vector<float>>(env);
+  }
+  if (js::is<js::TypedArray<int16_t>>(env, raw)) {
+    return int16PcmToFloat(
+        js::TypedArray<int16_t>::fromValue(raw).as<std::vector<int16_t>>(env));
+  }
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key +
+          "' must be an Int16Array or a Float32Array of mono PCM");
+}
+
+moss::MossSpeechAudio readOptionalSpeechAudio(
+    js::Object obj, js_env_t* env, const char* pcmKey, const char* rateKey) {
+  js_value_t* raw = obj.getProperty(env, pcmKey);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return {};
+  }
+  moss::MossSpeechAudio audio;
+  audio.pcm = readPcm(raw, env, pcmKey);
+  audio.sampleRate = readOptionalInt(obj, env, rateKey).value_or(0);
+  return audio;
+}
+
+moss::MossSpeechTurn readSpeechTurn(js_value_t* raw, js_env_t* env) {
+  if (!js::is<js::Object>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "Property 'messages' must contain only message objects");
+  }
+  auto obj = js::Object::fromValue(raw);
+  moss::MossSpeechTurn turn;
+  turn.role = readOptionalString(obj, env, "role");
+  turn.text = readOptionalString(obj, env, "text");
+  turn.audio = readOptionalSpeechAudio(obj, env, "audio", "sampleRate");
+  return turn;
+}
+
+std::vector<moss::MossSpeechTurn>
+readSpeechTurns(js::Array array, js_env_t* env) {
+  const uint32_t count = array.size(env);
+  std::vector<moss::MossSpeechTurn> turns;
+  turns.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    js_value_t* raw = nullptr;
+    if (js_get_element(env, array, i, &raw) != 0) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument, "cannot read a 'messages' entry");
+    }
+    turns.push_back(readSpeechTurn(raw, env));
+  }
+  return turns;
+}
+
+std::vector<moss::MossSpeechTurn>
+readRequiredSpeechTurns(js::Object job, js_env_t* env) {
+  js_value_t* raw = job.getProperty(env, "messages");
+  if (!js::is<js::Array>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "moss-speech jobs need a 'messages' array");
+  }
+  return readSpeechTurns(js::Array::fromValue(raw), env);
+}
+
+std::vector<std::string>
+readOptionalStringArray(js::Object obj, js_env_t* env, const char* key) {
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return {};
+  }
+  if (!js::is<js::Array>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must be an array of strings");
+  }
+  return readStringElements(js::Array::fromValue(raw), env, key);
+}
 }
 
 EngineType JSAdapter::readEngineType(
     js::Object configurationParams, js_env_t* env) {
   const std::string explicitType =
       readOptionalString(configurationParams, env, "engineType");
+  if (explicitType == "pocket")
+    return EngineType::Pocket;
   if (explicitType == "chatterbox") return EngineType::Chatterbox;
   if (explicitType == "supertonic") return EngineType::Supertonic;
   if (explicitType == "cosyvoice3")
@@ -115,11 +271,16 @@ EngineType JSAdapter::readEngineType(
     return EngineType::Audio8;
   if (explicitType == "moss")
     return EngineType::Moss;
+  if (explicitType == "moss-sfx")
+    return EngineType::MossSoundEffect;
+  if (explicitType == "moss-speech")
+    return EngineType::MossSpeech;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
         "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', "
-        "'parler', 'audio8' or 'moss' (got '" +
+        "'parler', 'audio8', 'moss', 'moss-sfx', 'moss-speech' or 'pocket' "
+        "(got '" +
             explicitType + "')");
   }
 
@@ -151,6 +312,16 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "mossBackbonePath");
   if (!mossPath.empty())
     return EngineType::Moss;
+
+  const std::string mossSoundEffectPath =
+      readOptionalString(configurationParams, env, "mossSoundEffectPath");
+  if (!mossSoundEffectPath.empty())
+    return EngineType::MossSoundEffect;
+
+  const std::string mossSpeechPath =
+      readOptionalString(configurationParams, env, "mossSpeechModelPath");
+  if (!mossSpeechPath.empty())
+    return EngineType::MossSpeech;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -331,14 +502,74 @@ JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "mossCodecEncoderPath");
   cfg.referenceAudio =
       readOptionalString(configurationParams, env, "referenceAudio");
+  cfg.dialogueReferences =
+      readOptionalStringArray(configurationParams, env, "dialogueReferences");
   cfg.language = readOptionalString(configurationParams, env, "language");
+  cfg.durationTokens =
+      readOptionalInt(configurationParams, env, "durationTokens");
   cfg.seed = readOptionalInt(configurationParams, env, "seed");
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.streamChunkFrames =
       readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
+}
+
+moss::MossSoundEffectConfig JSAdapter::buildMossSoundEffectConfig(
+    js::Object configurationParams, js_env_t* env) {
+  moss::MossSoundEffectConfig cfg;
+  cfg.modelPath =
+      readOptionalString(configurationParams, env, "mossSoundEffectPath");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  return cfg;
+}
+
+moss::MossSoundEffectCall
+JSAdapter::readMossSoundEffectCall(js::Object job, js_env_t* env) {
+  moss::MossSoundEffectCall call;
+  call.seconds = readOptionalFiniteDouble(job, env, "seconds");
+  call.steps = readOptionalInt(job, env, "steps");
+  call.guidance = readOptionalFiniteFloat(job, env, "guidance");
+  call.shift = readOptionalFiniteFloat(job, env, "shift");
+  call.negativePrompt = readOptionalString(job, env, "negativePrompt");
+  return call;
+}
+
+moss::MossSpeechConfig JSAdapter::buildMossSpeechConfig(
+    js::Object configurationParams, js_env_t* env) {
+  moss::MossSpeechConfig cfg;
+  cfg.modelPath =
+      readOptionalString(configurationParams, env, "mossSpeechModelPath");
+  cfg.codecPath =
+      readOptionalString(configurationParams, env, "mossSpeechCodecPath");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  return cfg;
+}
+
+moss::MossSpeechCall
+JSAdapter::readMossSpeechCall(js::Object job, js_env_t* env) {
+  moss::MossSpeechCall call;
+  call.messages = readRequiredSpeechTurns(job, env);
+  call.voice =
+      readOptionalSpeechAudio(job, env, "replyVoice", "replyVoiceSampleRate");
+  call.textReply = readOptionalBool(job, env, "textReply").value_or(false);
+  call.greedy = readOptionalBool(job, env, "greedy").value_or(false);
+  call.maxReplySeconds = readOptionalFloat(job, env, "maxReplySeconds");
+  call.maxNewTokens = readOptionalInt(job, env, "maxNewTokens");
+  call.temperature = readOptionalFloat(job, env, "temperature");
+  call.topP = readOptionalFloat(job, env, "topP");
+  call.topK = readOptionalInt(job, env, "topK");
+  return call;
 }
 
 supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
@@ -442,6 +673,58 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  return cfg;
+}
+
+pocket::PocketConfig
+JSAdapter::buildPocketConfig(js::Object params, js_env_t* env) {
+  pocket::PocketConfig cfg;
+  auto& o = cfg.options;
+  o.flow_lm_path = readOptionalString(params, env, "pocketFlowModelPath");
+  o.mimi_path = readOptionalString(params, env, "pocketMimiModelPath");
+  o.frontend_path = readOptionalString(params, env, "pocketFrontendPath");
+  o.voice_path = readOptionalString(params, env, "pocketVoicePath");
+  o.reference_audio_path = readOptionalString(params, env, "referenceAudio");
+  // Validate before narrowing JS doubles to C++ integers/floats. Numeric
+  // strings and fractional/out-of-range integers are deliberately not coerced.
+  const auto number = [&](const char* key,
+                          double fallback,
+                          double min,
+                          double max,
+                          bool integer = true) {
+    auto* value = params.getProperty(env, key);
+    if (js::is<js::Undefined>(env, value))
+      return fallback;
+    if (!js::is<js::Number>(env, value))
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument,
+          std::string(key) + " must be a number");
+    const double n = js::Number::fromValue(value).as<double>(env);
+    if (!std::isfinite(n) || n < min || n > max ||
+        (integer && std::floor(n) != n))
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument, std::string("invalid Pocket ") + key);
+    return n;
+  };
+  o.n_threads = number("threads", o.n_threads, 1, 1024);
+  o.context = number("nCtx", o.context, 1, 8192);
+  o.max_tokens = number("maxTokens", o.max_tokens, 1, 1024);
+  o.steps = number("steps", o.steps, 1, 64);
+  o.frames_after_eos = number("framesAfterEos", o.frames_after_eos, -1, 100);
+  o.seed = number("seed", o.seed, 0, 4294967295.0);
+  o.output_sample_rate =
+      number("outputSampleRate", o.output_sample_rate, 8000, 192000);
+  o.temperature = number("temperature", o.temperature, 0, 10, false);
+  o.noise_clamp = number("noiseClamp", o.noise_clamp, 0, 3.402823466e38, false);
+  o.eos_threshold = number(
+      "eosThreshold", o.eos_threshold, -3.402823466e38, 3.402823466e38, false);
+  const auto language = readOptionalString(params, env, "language");
+  if ((!language.empty() && language != "en") ||
+      readOptionalBool(params, env, "useGPU").value_or(false) ||
+      number("nGpuLayers", 0, 0, 0) != 0)
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "Pocket currently supports English on CPU");
   return cfg;
 }
 }

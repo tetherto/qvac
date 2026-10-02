@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import * as os from 'node:os'
 import mqtt from 'mqtt'
 import {
@@ -44,7 +45,7 @@ import {
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
   PARAKEET_UNIFIED_0_6B_Q4_0,
-  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
@@ -60,6 +61,7 @@ import { collectTestDeps } from '../shared/collect-test-deps.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
+import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { TranslationBergamotCacheExecutor } from '../shared/executors/translation-bergamot-cache-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
@@ -418,7 +420,7 @@ resources.define('parakeet-unified', {
 })
 
 resources.define('parakeet-indic-conformer', {
-  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  constant: PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   type: 'parakeet-transcription',
   config: { language: 'hi' }
 })
@@ -544,6 +546,10 @@ const snapStorageHandler = isSnapConsumer
 export const executor = createExecutor({
   handlers: [
     snapStorageHandler,
+    new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML cache test requires iOS'),
+    ...(process.platform === 'darwin'
+      ? []
+      : [new SkipExecutor(/^tts-audio8-coreml$/, 'Core ML runs on macOS and iOS only')]),
     // Electron keeps the stable desktop/shared surface enabled, but excludes
     // suites that are resource-heavy or incompatible with the packaged
     // Electron worker lifecycle.
@@ -589,6 +595,7 @@ export const executor = createExecutor({
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
+    new DeferredToolsExecutor(resources),
 
     // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
     new TranslationBergamotCacheExecutor(),
@@ -611,6 +618,7 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),

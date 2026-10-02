@@ -31,6 +31,7 @@ const WHISPER_CONFIG_KEYS = [
     "tdrz_enable",
     "suppress_regex",
     "initial_prompt",
+    "carry_initial_prompt",
     "language",
     "suppress_blank",
     "suppress_nst",

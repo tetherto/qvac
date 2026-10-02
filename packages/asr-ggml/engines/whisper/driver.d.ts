@@ -3,7 +3,7 @@ import { WhisperInterface, type StreamingConfig } from "./whisper";
 import { type WhisperConfigurationParams } from "./configChecker";
 import { type ByteFormat } from "../../lib/audio";
 import type { ASRRunOutput, AudioInput, BackendInfo } from "../../lib/types";
-import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
+import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
 export interface VadParams {
     threshold?: number;
     min_speech_duration_ms?: number;
@@ -23,6 +23,12 @@ export interface WhisperConfig extends Record<string, unknown> {
     temperature?: number;
     suppress_nst?: boolean;
     n_threads?: number;
+    /** Add per-token text, timing, and probability to each segment (`tokens`). */
+    token_timestamps?: boolean;
+    /** tinydiarize models: report `speakerTurnNext` on each segment. */
+    tdrz_enable?: boolean;
+    /** Prepend `initial_prompt` to every decode window, not only the first. */
+    carry_initial_prompt?: boolean;
 }
 /** Whisper branch of the discriminated engine-config union. */
 export interface WhisperEngineConfig {
@@ -73,7 +79,7 @@ export declare class WhisperDriver implements AsrDriver {
     cancelActive(jobId?: number): Promise<void>;
     status(): Promise<string>;
     getBackendInfo(): BackendInfo | null;
-    run(audio: NormalizedAudioStream): Promise<QvacResponse<ASRRunOutput>>;
+    run(audio: NormalizedAudioStream, options?: ASRRunOptions): Promise<QvacResponse<ASRRunOutput>>;
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
     _validateStreamingOptions(opts: ASRStreamingOptions): WhisperStreamingOptions;
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;

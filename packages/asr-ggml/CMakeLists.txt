@@ -169,6 +169,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper/WhisperHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parakeet/ParakeetModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parakeet/ParakeetConfig.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/moss/MossTranscribeModel.cpp
 )
 
 target_include_directories(
@@ -411,11 +412,14 @@ if(BUILD_TESTING)
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_whisper_lifecycle.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_whisper_segment_fields.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/AddonCppTest.cpp
     # parakeet suite
     ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_config_and_audio.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_fabric_options.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/ParakeetAddonCppTest.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/moss_transcribe_test.cpp
     # engine cores recompiled for coverage instrumentation (tts-ggml pattern)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/StreamingProcessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ParakeetStreamingProcessor.cpp
@@ -424,6 +428,7 @@ if(BUILD_TESTING)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper/WhisperHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parakeet/ParakeetModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parakeet/ParakeetConfig.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/moss/MossTranscribeModel.cpp
   )
 
   target_include_directories(asr_ggml_tests PRIVATE

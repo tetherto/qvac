@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.55.1] - 2026-09-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+  `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
+  expert caching defaulting to CUDA only, GLM-5 Next support). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so
+  the range bump is what picks up the new fabric. A caret on a `0.x` version
+  locks the minor, so `^0.18.0` would not have resolved `0.19.0` on its own.
+  No API change.
+- MoE models on Metal and Vulkan no longer get an automatic expert cache.
+  Set `moe-cache-mib: auto` to opt back in on those backends.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.19.0` together.
+
+### Fixed
+
+- CPU tensor overrides now use the buffer type recognized by the shared model
+  loader. With GPU offload, pinned MoE expert weights use the backend's host
+  buffer instead of an ordinary CPU model buffer. No public API changes
+  ([#4762](https://github.com/tetherto/qvac/pull/4762)).
+- `assessFit` now honours `moe-cache-mib: auto` the way the load does. The
+  load's fit received that choice but the projection did not, so on Metal or
+  Vulkan a MoE model's projected `gpuLayers` and `deviceBytes` could differ
+  from the load.
+
+## [0.55.0] - 2026-09-28
+
+### Added
+
+- `assessFit` projects a load's memory demand against the memory free right
+  now, without loading weights. It reads GGUF metadata only, so the registry's
+  weightless copy of a model answers the same as the model itself. The load is
+  given in llama's own CLI spelling and dispatched through llama's argument
+  table, so a pinned placement such as `gpu-layers` reaches the projection.
+  The result carries a `fits` / `does-not-fit` / `error` status and reason, the
+  resolved `gpuLayers` and `ctxSize`, and per-device model, context and compute
+  bytes. Exported from the package root and as `LlmLlamacpp.assessFit`, with
+  `LlamaFitRequest`, `LlamaFitResult`, `LlamaFitStatus` and `LlamaFitDevice`
+  types ([#4664](https://github.com/tetherto/qvac/pull/4664)).
+- `rpc-servers` and `devices` configuration options distribute inference
+  across remote `ggml-rpc-server` devices. Remote devices join the local ones
+  and can be selected explicitly with `devices`, in combination with the
+  `layer` and `tensor` split modes. The RPC channel is unauthenticated; use it
+  only on a trusted private network
+  ([#4527](https://github.com/tetherto/qvac/pull/4527)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.17.0` -> `^0.18.0`, which moves the
+  shared runtime and ggml backends into `@qvac/fabric-<host>` platform
+  packages. Desktop installs get theirs as an optional dependency of
+  `@qvac/fabric`, and `resolveBackendsDir()` now takes the root from
+  `@qvac/fabric/backends`. No API change.
+- Mobile apps must add `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as direct dependencies at the same exact version.
+
 ## [0.54.0] - 2026-09-23
 
 ### Changed

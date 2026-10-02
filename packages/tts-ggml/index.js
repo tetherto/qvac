@@ -36,12 +36,18 @@ var __importStar = (this && this.__importStar) || (function () {
 const bareOs = require("bare-os");
 const path = require("bare-path");
 const fs = require("bare-fs");
-const QvacLogger = require("@qvac/logging");
+const loggingModule = require("@qvac/logging");
+// Published logging releases expose a CJS constructor; the workspace exposes
+// an ESM default. Bare require(ESM) returns a namespace without __esModule.
+const loggingExport = loggingModule;
+const QvacLogger = typeof loggingExport === "function" ? loggingExport : loggingExport.default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const tts_1 = require("./tts");
 const errorModule = __importStar(require("./lib/error"));
+const pocketConfig_1 = require("./lib/pocketConfig");
 const backends_1 = require("./lib/backends");
+const fit_1 = require("./lib/fit");
 const textChunker_1 = require("./lib/textChunker");
 const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const { platform } = bareOs;
@@ -56,6 +62,9 @@ const ENGINE_COSYVOICE3 = "cosyvoice3";
 const ENGINE_PARLER = "parler";
 const ENGINE_AUDIO8 = "audio8";
 const ENGINE_MOSS = "moss";
+const ENGINE_MOSS_SFX = "moss-sfx";
+const ENGINE_MOSS_SPEECH = "moss-speech";
+const ENGINE_POCKET = "pocket";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
 const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
@@ -239,10 +248,59 @@ const AUDIO8_ENCODER_RE = /^audio8-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
 const AUDIO8_QUANT_ORDER = ["q8_0", "f16", "q4_0", "f32"];
 const AUDIO8_VOICE_KEYS = ["referenceAudio", "referenceText"];
 const MOSS_BACKBONE_RE = /^moss-tts-delay(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_DIALOGUE_BACKBONE_RE = /^moss-ttsd(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_DECODER_RE = /^moss-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_NATIVE_SAMPLE_RATE = 24000;
 const MOSS_FRAMES_PER_SECOND = 12.5;
+const MOSS_MAX_NEW_TOKENS = 2048;
+const MOSS_MAX_CHANNELS = 32;
+const MOSS_TERMINATION_ROWS = 2;
+const MOSS_MAX_DURATION_TOKENS = MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
+const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"];
+const MOSS_SFX_RE = /^moss-sfx(-[a-z0-9_]+)*\.gguf$/i;
+const MOSS_SFX_NATIVE_SAMPLE_RATE = 48000;
+const MOSS_SFX_MAX_SECONDS = 30;
+const MOSS_SFX_MAX_STEPS = 1000;
+const MOSS_SFX_MAX_GUIDANCE = 50;
+const MOSS_SFX_MAX_SHIFT = 100;
+const MOSS_SFX_CALL_KEYS = [
+    "seconds",
+    "negativePrompt",
+    "steps",
+    "guidance",
+    "shift",
+];
+const MOSS_SPEECH_RE = /^moss-speech(-(?!codec)[a-z0-9_]+)?\.gguf$/i;
+const MOSS_SPEECH_CODEC_RE = /^moss-speech-codec(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_SPEECH_NATIVE_SAMPLE_RATE = 24000;
+const MOSS_SPEECH_MIN_SAMPLE_RATE = 8000;
+const MOSS_SPEECH_MAX_SAMPLE_RATE = 192000;
+const MOSS_SPEECH_MAX_NEW_TOKENS = 4096;
+const MOSS_SPEECH_MAX_REPLY_SECONDS = 3600;
+const MOSS_SPEECH_MAX_TEMPERATURE = 10;
+const MOSS_SPEECH_MAX_TOP_P = 1;
+const MOSS_SPEECH_ROLES = ["system", "user", "assistant"];
+const MOSS_SPEECH_ONLY_KEYS = [
+    "audio",
+    "sampleRate",
+    "messages",
+    "systemPrompt",
+    "replyVoice",
+    "replyVoiceSampleRate",
+    "textReply",
+    "maxReplySeconds",
+    "maxNewTokens",
+];
+const MOSS_SPEECH_CONTROL_KEYS = [
+    "textReply",
+    "maxReplySeconds",
+    "maxNewTokens",
+    "greedy",
+    "temperature",
+    "topP",
+    "topK",
+];
 /** Engines that draw tokens, and so accept temperature / topK / topP / maxFrames. */
 const SAMPLING_ENGINES = [ENGINE_PARLER, ENGINE_AUDIO8];
 // Per-engine supported subsets, mirroring controls::supported_emotions() /
@@ -254,16 +312,22 @@ const ENGINE_EMOTIONS = {
     [ENGINE_COSYVOICE3]: ["anger", "happy", "neutral", "sad"],
     [ENGINE_SUPERTONIC]: [],
     [ENGINE_CHATTERBOX]: [],
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [],
     [ENGINE_MOSS]: [],
+    [ENGINE_MOSS_SFX]: [],
+    [ENGINE_MOSS_SPEECH]: [],
 };
 const ENGINE_PACES = {
     [ENGINE_PARLER]: PACES, // rendered into the training caption
     [ENGINE_COSYVOICE3]: PACES, // slow/fast -> instruct; moderate -> none
     [ENGINE_SUPERTONIC]: PACES, // mapped onto the duration multiplier
     [ENGINE_CHATTERBOX]: [], // time-stretch only; use `speed`
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [], // no rate control at all
     [ENGINE_MOSS]: [],
+    [ENGINE_MOSS_SFX]: [],
+    [ENGINE_MOSS_SPEECH]: [],
 };
 // Which channels an engine can change per call. Supertonic takes its pace
 // through EngineOptions when the engine is built, and tts-cpp exposes no
@@ -278,8 +342,11 @@ const ENGINE_PER_CALL_CONDITIONING = {
     [ENGINE_COSYVOICE3]: CONDITIONING_KEYS,
     [ENGINE_SUPERTONIC]: [],
     [ENGINE_CHATTERBOX]: [],
+    [ENGINE_POCKET]: [],
     [ENGINE_AUDIO8]: [],
     [ENGINE_MOSS]: [],
+    [ENGINE_MOSS_SFX]: [],
+    [ENGINE_MOSS_SPEECH]: [],
 };
 function normalizeError(error) {
     return typeof error === "string"
@@ -419,6 +486,171 @@ function findQuantRankedGguf(modelDir, pattern) {
         return undefined;
     matches.sort((left, right) => ggufQuantRank(left, pattern) - ggufQuantRank(right, pattern));
     return path.join(modelDir, matches[0]);
+}
+function assertSoundEffectRange(name, value, accepts, range) {
+    if (typeof value === "number" && Number.isFinite(value) && accepts(value))
+        return;
+    throw new Error(`tts-ggml: moss-sfx ${name} must be ${range} (got ${String(value)})`);
+}
+function assertSoundEffectFields(fields) {
+    if (fields.seconds !== undefined) {
+        assertSoundEffectRange("seconds", fields.seconds, (n) => n > 0 && n <= MOSS_SFX_MAX_SECONDS, `in (0, ${MOSS_SFX_MAX_SECONDS}]`);
+    }
+    if (fields.steps !== undefined) {
+        assertSoundEffectRange("steps", fields.steps, (n) => Number.isInteger(n) && n >= 1 && n <= MOSS_SFX_MAX_STEPS, `an integer in [1, ${MOSS_SFX_MAX_STEPS}]`);
+    }
+    if (fields.guidance !== undefined) {
+        assertSoundEffectRange("guidance", fields.guidance, (n) => n >= 1 && n <= MOSS_SFX_MAX_GUIDANCE, `in [1, ${MOSS_SFX_MAX_GUIDANCE}]`);
+    }
+    if (fields.shift !== undefined) {
+        assertSoundEffectRange("shift", fields.shift, (n) => n > 0 && n <= MOSS_SFX_MAX_SHIFT, `in (0, ${MOSS_SFX_MAX_SHIFT}]`);
+    }
+    if (fields.negativePrompt !== undefined && typeof fields.negativePrompt !== "string") {
+        throw new Error("tts-ggml: moss-sfx negativePrompt must be a string");
+    }
+}
+function isSpeechPcm(value) {
+    return value instanceof Int16Array || value instanceof Float32Array;
+}
+function assertSpeechSampleRate(value, name, where) {
+    if (typeof value === "number" &&
+        Number.isInteger(value) &&
+        value >= MOSS_SPEECH_MIN_SAMPLE_RATE &&
+        value <= MOSS_SPEECH_MAX_SAMPLE_RATE) {
+        return;
+    }
+    throw new Error(`tts-ggml: ${where}: moss-speech ${name} must be an integer in ` +
+        `[${MOSS_SPEECH_MIN_SAMPLE_RATE}, ${MOSS_SPEECH_MAX_SAMPLE_RATE}] (got ${String(value)})`);
+}
+function assertSpeechAudio(audio, rate, names, where) {
+    if (!isSpeechPcm(audio) || audio.length === 0) {
+        throw new Error(`tts-ggml: ${where}: moss-speech ${names[0]} must be a non-empty Int16Array or Float32Array`);
+    }
+    assertSpeechSampleRate(rate, names[1], where);
+}
+function assertSpeechMessage(message, index, where) {
+    const label = `messages[${index}]`;
+    if (message == null || typeof message !== "object") {
+        throw new Error(`tts-ggml: ${where}: moss-speech ${label} must be an object`);
+    }
+    const turn = message;
+    if (!MOSS_SPEECH_ROLES.includes(turn.role)) {
+        throw new Error(`tts-ggml: ${where}: moss-speech ${label}.role must be one of ${MOSS_SPEECH_ROLES.join(", ")}`);
+    }
+    const hasText = typeof turn.text === "string" && turn.text.length > 0;
+    const hasAudio = turn.audio !== undefined;
+    if (hasText === hasAudio) {
+        throw new Error(`tts-ggml: ${where}: moss-speech ${label} carries exactly one of text or audio`);
+    }
+    if (hasAudio) {
+        assertSpeechAudio(turn.audio, turn.sampleRate, [`${label}.audio`, `${label}.sampleRate`], where);
+    }
+}
+function assertSpeechMessages(messages, where) {
+    if (messages === undefined)
+        return;
+    if (!Array.isArray(messages)) {
+        throw new Error(`tts-ggml: ${where}: moss-speech messages must be an array`);
+    }
+    assertEachSpeechMessage(messages, where);
+}
+function assertEachSpeechMessage(messages, where) {
+    messages.forEach((message, index) => assertSpeechMessage(message, index, where));
+}
+function assertSpeechUserTurn(fields, where) {
+    const hasText = typeof fields.input === "string" && fields.input.trim().length > 0;
+    const hasAudio = fields.audio !== undefined;
+    if (hasText && hasAudio) {
+        throw new Error(`tts-ggml: ${where}: moss-speech takes the user turn as audio or input text, not both`);
+    }
+    if (hasAudio) {
+        assertSpeechAudio(fields.audio, fields.sampleRate, ["audio", "sampleRate"], where);
+        return;
+    }
+    if (!hasText) {
+        throw new Error(`tts-ggml: ${where}: moss-speech needs the user turn as audio (with sampleRate) or input text`);
+    }
+}
+function assertSpeechRange(name, value, accepts, range, where) {
+    if (value === undefined)
+        return;
+    if (typeof value === "number" && Number.isFinite(value) && accepts(value))
+        return;
+    const got = typeof value === "number" ? String(value) : typeof value;
+    throw new Error(`tts-ggml: ${where}: moss-speech ${name} must be ${range} (got ${got})`);
+}
+function assertSpeechControls(fields, where) {
+    assertSpeechRange("maxReplySeconds", fields.maxReplySeconds, (n) => n >= 0 && n <= MOSS_SPEECH_MAX_REPLY_SECONDS, `in [0, ${MOSS_SPEECH_MAX_REPLY_SECONDS}]`, where);
+    assertSpeechRange("maxNewTokens", fields.maxNewTokens, (n) => Number.isInteger(n) && n >= 1 && n <= MOSS_SPEECH_MAX_NEW_TOKENS, `an integer in [1, ${MOSS_SPEECH_MAX_NEW_TOKENS}]`, where);
+    assertSpeechRange("temperature", fields.temperature, (n) => n > 0 && n <= MOSS_SPEECH_MAX_TEMPERATURE, `in (0, ${MOSS_SPEECH_MAX_TEMPERATURE}]`, where);
+    assertSpeechRange("topP", fields.topP, (n) => n > 0 && n <= MOSS_SPEECH_MAX_TOP_P, `in (0, ${MOSS_SPEECH_MAX_TOP_P}]`, where);
+    assertSpeechRange("topK", fields.topK, (n) => Number.isInteger(n) && n >= 0, "an integer >= 0", where);
+    assertSpeechBooleans(fields, where);
+    if (fields.systemPrompt !== undefined && typeof fields.systemPrompt !== "string") {
+        throw new Error(`tts-ggml: ${where}: moss-speech systemPrompt must be a string`);
+    }
+}
+function assertSpeechBooleans(fields, where) {
+    for (const flag of ["textReply", "greedy"]) {
+        if (fields[flag] !== undefined && typeof fields[flag] !== "boolean") {
+            throw new Error(`tts-ggml: ${where}: moss-speech ${flag} must be a boolean`);
+        }
+    }
+}
+function assertSpeechRateHasAudio(audio, rate, names, where) {
+    if (audio !== undefined || rate === undefined)
+        return;
+    throw new Error(`tts-ggml: ${where}: moss-speech ${names[1]} needs ${names[0]}`);
+}
+function assertSpeechCall(fields, where) {
+    assertSpeechUserTurn(fields, where);
+    assertSpeechRateHasAudio(fields.audio, fields.sampleRate, ["audio", "sampleRate"], where);
+    assertSpeechRateHasAudio(fields.replyVoice, fields.replyVoiceSampleRate, ["replyVoice", "replyVoiceSampleRate"], where);
+    assertSpeechMessages(fields.messages, where);
+    if (fields.replyVoice !== undefined) {
+        assertSpeechAudio(fields.replyVoice, fields.replyVoiceSampleRate, ["replyVoice", "replyVoiceSampleRate"], where);
+    }
+    assertSpeechControls(fields, where);
+}
+function speechUserTurn(fields) {
+    if (fields.audio !== undefined) {
+        return { role: "user", audio: fields.audio, sampleRate: fields.sampleRate };
+    }
+    return { role: "user", text: fields.input };
+}
+function speechMessages(fields) {
+    const system = fields.systemPrompt ? [{ role: "system", text: fields.systemPrompt }] : [];
+    return [...system, ...(fields.messages ?? []), speechUserTurn(fields)];
+}
+function speechReplyVoice(fields) {
+    if (fields.replyVoice === undefined)
+        return {};
+    return { replyVoice: fields.replyVoice, replyVoiceSampleRate: fields.replyVoiceSampleRate };
+}
+function speechControls(fields) {
+    const present = MOSS_SPEECH_CONTROL_KEYS.filter((key) => fields[key] !== undefined);
+    return Object.fromEntries(present.map((key) => [key, fields[key]]));
+}
+/** Collect the fields only MOSS-Speech reads that are present on `source`; undefined when none are set. */
+function pickSpeechFields(source) {
+    if (source == null || typeof source !== "object")
+        return undefined;
+    const present = MOSS_SPEECH_ONLY_KEYS.filter((key) => source[key] !== undefined);
+    if (present.length === 0)
+        return undefined;
+    return Object.fromEntries(present.map((key) => [key, source[key]]));
+}
+/**
+ * Collect the MOSS-SoundEffect generation controls present on `source`.
+ * Returns undefined when none are set.
+ */
+function pickSoundEffectFields(source) {
+    if (source == null || typeof source !== "object")
+        return undefined;
+    const present = MOSS_SFX_CALL_KEYS.filter((key) => source[key] !== undefined);
+    if (present.length === 0)
+        return undefined;
+    return Object.fromEntries(present.map((key) => [key, source[key]]));
 }
 /**
  * Collect the Audio8 voice-cloning properties present on `source` (a run
@@ -580,6 +812,10 @@ function normalizeGgmlFiles(files) {
         return {};
     return {
         modelDir: firstNonEmpty(files.modelDir),
+        pocketFlowModel: firstNonEmpty(files.pocketFlowModel),
+        pocketMimiModel: firstNonEmpty(files.pocketMimiModel),
+        pocketFrontend: firstNonEmpty(files.pocketFrontend),
+        pocketVoice: firstNonEmpty(files.pocketVoice),
         t3Model: firstNonEmpty(files.t3Model, files.t3ModelPath, files.t3),
         s3genModel: firstNonEmpty(files.s3genModel, files.s3genModelPath, files.s3gen),
         supertonicModel: firstNonEmpty(files.supertonicModel, files.supertonicModelPath, files.supertonic),
@@ -601,6 +837,9 @@ function normalizeGgmlFiles(files) {
         mossBackbone: firstNonEmpty(files.mossBackbone, files.mossBackbonePath),
         mossCodecDecoder: firstNonEmpty(files.mossCodecDecoder, files.mossCodecDecoderPath),
         mossCodecEncoder: firstNonEmpty(files.mossCodecEncoder, files.mossCodecEncoderPath),
+        mossSoundEffect: firstNonEmpty(files.mossSoundEffect, files.mossSoundEffectPath),
+        mossSpeechModel: firstNonEmpty(files.mossSpeechModel, files.mossSpeechModelPath),
+        mossSpeechCodec: firstNonEmpty(files.mossSpeechCodec, files.mossSpeechCodecPath),
         voicesDir: firstNonEmpty(files.voicesDir),
         lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
         lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
@@ -614,13 +853,18 @@ function detectEngineType(engine, files) {
         engine === ENGINE_COSYVOICE3 ||
         engine === ENGINE_PARLER ||
         engine === ENGINE_AUDIO8 ||
-        engine === ENGINE_MOSS) {
+        engine === ENGINE_MOSS ||
+        engine === ENGINE_MOSS_SFX ||
+        engine === ENGINE_MOSS_SPEECH ||
+        engine === ENGINE_POCKET) {
         return engine;
     }
     if (engine != null && engine !== "") {
         throw new Error("tts-ggml: 'engine' option must be 'chatterbox', 'supertonic', " +
-            `'cosyvoice3', 'parler', 'audio8' or 'moss' (got '${String(engine)}')`);
+            `'cosyvoice3', 'parler', 'audio8', 'moss', 'moss-sfx', 'moss-speech' or 'pocket' (got '${String(engine)}')`);
     }
+    if (files.pocketFlowModel || files.pocketMimiModel)
+        return ENGINE_POCKET;
     // Explicit CosyVoice3 files/dir take precedence over shared-modelDir sniffing.
     if (files.cosyvoiceModelDir || files.cosyvoiceLlmModel) {
         return ENGINE_COSYVOICE3;
@@ -635,6 +879,10 @@ function detectEngineType(engine, files) {
         return ENGINE_AUDIO8;
     if (files.mossBackbone || files.mossCodecDecoder)
         return ENGINE_MOSS;
+    if (files.mossSoundEffect)
+        return ENGINE_MOSS_SFX;
+    if (files.mossSpeechModel || files.mossSpeechCodec)
+        return ENGINE_MOSS_SPEECH;
     if (files.modelDir) {
         if (dirHasCosyvoice3(files.modelDir))
             return ENGINE_COSYVOICE3;
@@ -653,6 +901,15 @@ function detectEngineType(engine, files) {
             return ENGINE_AUDIO8;
         if (findQuantRankedGguf(files.modelDir, MOSS_BACKBONE_RE))
             return ENGINE_MOSS;
+        if (findQuantRankedGguf(files.modelDir, MOSS_DIALOGUE_BACKBONE_RE)) {
+            return ENGINE_MOSS;
+        }
+        if (findQuantRankedGguf(files.modelDir, MOSS_SFX_RE))
+            return ENGINE_MOSS_SFX;
+        if (findQuantRankedGguf(files.modelDir, MOSS_SPEECH_RE))
+            return ENGINE_MOSS_SPEECH;
+        if (fileExistsSafe(path.join(files.modelDir, "flow-lm.gguf")))
+            return ENGINE_POCKET;
     }
     return ENGINE_CHATTERBOX;
 }
@@ -776,6 +1033,34 @@ function assertAudio8SamplingFinite(sampling, where) {
         throw new Error(`tts-ggml: ${where}: ${field} must be a finite number`);
     }
 }
+function isValidDurationTokens(value) {
+    return Number.isInteger(value) && value >= 0 && value <= MOSS_MAX_DURATION_TOKENS;
+}
+function assertMossDurationTokens(value, where) {
+    if (value == null || isValidDurationTokens(value))
+        return;
+    throw new Error(`tts-ggml: ${where}: durationTokens must be an integer from 0 to ` +
+        `${MOSS_MAX_DURATION_TOKENS} (0 = free length)`);
+}
+function copyDialogueReferences(references) {
+    if (references == null)
+        return undefined;
+    return Array.isArray(references)
+        ? [...references]
+        : references;
+}
+function isNonEmptyString(value) {
+    return typeof value === "string" && value !== "";
+}
+function assertDialogueReferenceList(references) {
+    if (Array.isArray(references) &&
+        references.length > 0 &&
+        references.every(isNonEmptyString)) {
+        return;
+    }
+    throw new Error("tts-ggml: dialogueReferences must be a non-empty array of WAV paths, " +
+        "one per speaker");
+}
 function assertNotNegative(value, name, zeroMeans, where) {
     if (value === undefined || value >= 0)
         return;
@@ -866,6 +1151,9 @@ class TTSGgml {
     static ENGINE_PARLER = ENGINE_PARLER;
     static ENGINE_AUDIO8 = ENGINE_AUDIO8;
     static ENGINE_MOSS = ENGINE_MOSS;
+    static ENGINE_MOSS_SFX = ENGINE_MOSS_SFX;
+    static ENGINE_MOSS_SPEECH = ENGINE_MOSS_SPEECH;
+    static ENGINE_POCKET = ENGINE_POCKET;
     opts;
     exclusiveRun;
     logger;
@@ -876,6 +1164,12 @@ class TTSGgml {
     _ttsInferenceQueueWaiter;
     _sentenceStreamCtx;
     _config;
+    _pocketJobPending = null;
+    _pocketCancelPromise = null;
+    _pocketLifecycleInProgress = false;
+    _pocketParams = null;
+    _pocketOptions = {};
+    _pocketFiles = {};
     _lazySessionLoading;
     _outputSampleRate;
     _engineType;
@@ -938,6 +1232,11 @@ class TTSGgml {
     _mossBackbonePath;
     _mossCodecDecoderPath;
     _mossCodecEncoderPath;
+    _mossSoundEffectPath;
+    _mossSpeechModelPath;
+    _mossSpeechCodecPath;
+    _dialogueReferences;
+    _durationTokens;
     _referenceText;
     _greedy;
     _description;
@@ -967,7 +1266,7 @@ class TTSGgml {
         this._sentenceStreamCtx = null;
         this._ttsInferenceQueueWaiter = Promise.resolve();
         this._job = (0, infer_base_1.createJobHandler)({
-            cancel: () => this._optionalAddon()?.cancel(),
+            cancel: () => this._engineType === ENGINE_POCKET ? this.cancel() : this._optionalAddon()?.cancel(),
         });
         this._runExclusive = this.exclusiveRun
             ? (0, infer_base_1.exclusiveRunQueue)()
@@ -979,6 +1278,15 @@ class TTSGgml {
         this._lazySessionLoading = resolveDefaultLazySessionLoading(options.lazySessionLoading);
         this._outputSampleRate = validateOutputSampleRate(this._config.outputSampleRate);
         this._engineType = detectEngineType(options.engine, normalizedFiles);
+        this._assignMossVoiceOptions(options);
+        if (this._engineType === ENGINE_POCKET) {
+            if (normalizedFiles.lavasrEnhancer || normalizedFiles.lavasrDenoiser) {
+                throw new Error("Pocket does not support LavaSR enhancement or denoising");
+            }
+            this._pocketFiles = normalizedFiles;
+            this._pocketOptions = { ...options };
+            this._pocketParams = (0, pocketConfig_1.buildPocketParams)(normalizedFiles, options, this._config);
+        }
         this._resolveEngineAndModelPaths(normalizedFiles);
         this._mecabDictPath = firstNonEmpty(options.mecabDictPath, options.mecabDictDir, normalizedFiles.mecabDictDir);
         this._cangjieTsvPath = firstNonEmpty(options.cangjieTsvPath, normalizedFiles.cangjieTsvPath);
@@ -997,6 +1305,8 @@ class TTSGgml {
     }
     _resolveEngineAndModelPaths(files) {
         this._voicesDir = files.voicesDir;
+        if (this._engineType === ENGINE_POCKET)
+            return;
         if (this._engineType === ENGINE_COSYVOICE3) {
             // CosyVoice3 discovers its sub-model GGUFs from a model directory; the
             // native engine resolves the individual components. Explicit
@@ -1030,6 +1340,15 @@ class TTSGgml {
             this._resolveMossModelPaths(files);
             return;
         }
+        if (this._engineType === ENGINE_MOSS_SFX) {
+            this._mossSoundEffectPath = firstNonEmpty(files.mossSoundEffect, findQuantRankedGguf(files.modelDir, MOSS_SFX_RE));
+            return;
+        }
+        if (this._engineType === ENGINE_MOSS_SPEECH) {
+            this._mossSpeechModelPath = firstNonEmpty(files.mossSpeechModel, findQuantRankedGguf(files.modelDir, MOSS_SPEECH_RE));
+            this._mossSpeechCodecPath = firstNonEmpty(files.mossSpeechCodec, findQuantRankedGguf(files.modelDir, MOSS_SPEECH_CODEC_RE));
+            return;
+        }
         if (files.modelDir) {
             const resolved = resolveChatterboxModelDirPaths(files.modelDir);
             this._t3ModelPath = firstNonEmpty(files.t3Model, resolved.t3);
@@ -1045,10 +1364,22 @@ class TTSGgml {
         this._audio8CodecDecoderPath = firstNonEmpty(files.audio8CodecDecoder, findQuantRankedGguf(files.modelDir, AUDIO8_DECODER_RE));
         this._audio8CodecEncoderPath = firstNonEmpty(files.audio8CodecEncoder, findQuantRankedGguf(files.modelDir, AUDIO8_ENCODER_RE));
     }
+    _mossBackbonePatterns() {
+        return this._dialogueReferences
+            ? [MOSS_DIALOGUE_BACKBONE_RE]
+            : [MOSS_BACKBONE_RE, MOSS_DIALOGUE_BACKBONE_RE];
+    }
+    _findMossBackbone(modelDir) {
+        return firstNonEmpty(...this._mossBackbonePatterns().map((pattern) => findQuantRankedGguf(modelDir, pattern)));
+    }
     _resolveMossModelPaths(files) {
-        this._mossBackbonePath = firstNonEmpty(files.mossBackbone, findQuantRankedGguf(files.modelDir, MOSS_BACKBONE_RE));
+        this._mossBackbonePath = firstNonEmpty(files.mossBackbone, this._findMossBackbone(files.modelDir));
         this._mossCodecDecoderPath = firstNonEmpty(files.mossCodecDecoder, findQuantRankedGguf(files.modelDir, MOSS_DECODER_RE));
         this._mossCodecEncoderPath = firstNonEmpty(files.mossCodecEncoder, findQuantRankedGguf(files.modelDir, MOSS_ENCODER_RE));
+    }
+    _assignMossVoiceOptions(options) {
+        this._dialogueReferences = copyDialogueReferences(options.dialogueReferences);
+        this._durationTokens = options.durationTokens ?? undefined;
     }
     _assignSynthesisOptions(options) {
         this._referenceAudio = options.referenceAudio;
@@ -1125,6 +1456,14 @@ class TTSGgml {
                 "utterance at a time. Use sentence-level streaming via " +
                 "runStream() / runStreaming() / run({ streamOutput: true }).");
         }
+        if ((this._engineType === ENGINE_MOSS_SFX ||
+            this._engineType === ENGINE_MOSS_SPEECH) &&
+            (this._streamChunkTokens != null ||
+                this._streamFirstChunkTokens != null)) {
+            throw new Error("tts-ggml: streamChunkTokens / streamFirstChunkTokens are not " +
+                `supported by the ${this._engineType} engine, which returns a ` +
+                "whole result at a time. Use run().");
+        }
         if (this._engineType === ENGINE_MOSS &&
             this._streamFirstChunkTokens != null) {
             throw new Error("tts-ggml: streamFirstChunkTokens is not supported by the moss " +
@@ -1139,6 +1478,8 @@ class TTSGgml {
         this._assertCosyvoiceCloneConsistent();
         this._assertAudio8OptionConsistency();
         this._assertMossOptionConsistency();
+        this._assertMossSoundEffectOptionConsistency();
+        this._assertMossSpeechOptionConsistency();
         this._assertConditioningConsistency("constructor");
         if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
             throw new Error("tts-ggml: the LavaSR denoiser is not yet supported with " +
@@ -1192,7 +1533,7 @@ class TTSGgml {
         this._assertSamplerOptionSupport();
     }
     _assertSamplerOptionSupport() {
-        if (SAMPLING_ENGINES.includes(this._engineType))
+        if (this._engineType === ENGINE_POCKET || SAMPLING_ENGINES.includes(this._engineType))
             return;
         // Chatterbox's T3 samples too, but its length cap is nPredict, not maxFrames.
         const tokenSampling = this._engineType === ENGINE_CHATTERBOX
@@ -1281,15 +1622,116 @@ class TTSGgml {
                 `(engine is ${this._engineType})`);
         }
     }
-    _assertMossOptionConsistency() {
-        if (this._engineType !== ENGINE_MOSS)
+    _assertMossSoundEffectOptionConsistency() {
+        if (this._engineType !== ENGINE_MOSS_SFX)
             return;
+        if (this._enhancerGgufPath || this._denoiserGgufPath) {
+            throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+                "the moss-sfx engine. Drop lavasrEnhancer / lavasrDenoiser.");
+        }
+        if (this._referenceAudio) {
+            throw new Error("tts-ggml: referenceAudio is not supported by the moss-sfx engine, " +
+                "which generates sound effects from a text prompt");
+        }
+        if (this._steps != null) {
+            throw new Error("tts-ggml: the moss-sfx engine takes steps per call " +
+                "(run({ input, steps })), not in the constructor");
+        }
+        this._assertMossSoundEffectOutputRate();
+        if (!this._mossSoundEffectPath) {
+            throw new Error("tts-ggml: the moss-sfx engine needs its GGUF: stage " +
+                "moss-sfx-*.gguf in modelDir or set files.mossSoundEffect");
+        }
+    }
+    _assertMossSpeechOptionConsistency() {
+        if (this._engineType !== ENGINE_MOSS_SPEECH)
+            return;
+        if (this._enhancerGgufPath || this._denoiserGgufPath) {
+            throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+                "the moss-speech engine. Drop lavasrEnhancer / lavasrDenoiser.");
+        }
+        if (this._referenceAudio) {
+            throw new Error("tts-ggml: the moss-speech engine takes its reply voice per call " +
+                "(run({ replyVoice, replyVoiceSampleRate })), not referenceAudio");
+        }
+        this._assertMossSpeechOutputRate();
+        if (!this._mossSpeechModelPath || !this._mossSpeechCodecPath) {
+            throw new Error("tts-ggml: the moss-speech engine needs its model and codec GGUFs: " +
+                "stage moss-speech-*.gguf and moss-speech-codec-*.gguf in modelDir " +
+                "or set files.mossSpeechModel and files.mossSpeechCodec");
+        }
+    }
+    _assertMossSpeechOutputRate() {
+        if (this._outputSampleRate == null ||
+            this._outputSampleRate === MOSS_SPEECH_NATIVE_SAMPLE_RATE) {
+            return;
+        }
+        throw new Error(`tts-ggml: the moss-speech engine outputs ${MOSS_SPEECH_NATIVE_SAMPLE_RATE} Hz ` +
+            `audio and cannot resample (outputSampleRate=${this._outputSampleRate})`);
+    }
+    _assertMossSoundEffectOutputRate() {
+        if (this._outputSampleRate == null ||
+            this._outputSampleRate === MOSS_SFX_NATIVE_SAMPLE_RATE) {
+            return;
+        }
+        throw new Error(`tts-ggml: the moss-sfx engine outputs ${MOSS_SFX_NATIVE_SAMPLE_RATE} Hz ` +
+            `audio and cannot resample (outputSampleRate=${this._outputSampleRate})`);
+    }
+    _assertMossOptionConsistency() {
+        if (this._engineType !== ENGINE_MOSS) {
+            this._assertNoMossOnlyOptions();
+            return;
+        }
         if (this._enhancerGgufPath || this._denoiserGgufPath) {
             throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
                 "the moss engine. Drop lavasrEnhancer / lavasrDenoiser.");
         }
         this._assertMossOutputRate();
         this._assertMossVoiceConsistent();
+        assertMossDurationTokens(this._durationTokens, "constructor");
+        this._assertMossDialogueReferences();
+    }
+    _assertNoMossOnlyOptions() {
+        const mossOnly = setOptionNames({
+            durationTokens: this._durationTokens,
+            dialogueReferences: this._dialogueReferences !== undefined || undefined,
+        });
+        if (mossOnly.length === 0)
+            return;
+        throw new Error(`tts-ggml: ${mossOnly.join(", ")} are moss-only options ` +
+            `(engine is ${this._engineType})`);
+    }
+    _assertMossDialogueReferences() {
+        if (this._dialogueReferences === undefined)
+            return;
+        assertDialogueReferenceList(this._dialogueReferences);
+        if (this._referenceAudio) {
+            throw new Error("tts-ggml: referenceAudio and dialogueReferences are exclusive; " +
+                "pass one recording per speaker in dialogueReferences");
+        }
+        if (!this._mossCodecEncoderPath) {
+            throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the codec " +
+                "encoder GGUF (files.mossCodecEncoder)");
+        }
+        if (!this._mossBackbonePath) {
+            throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the MOSS-TTSD " +
+                "backbone: stage moss-ttsd-*.gguf in modelDir or set files.mossBackbone");
+        }
+    }
+    _assertSentenceStreamingAllowed(where) {
+        if (this._engineType === ENGINE_MOSS_SPEECH) {
+            throw new Error(`tts-ggml: ${where}: the moss-speech engine answers one turn at a ` +
+                "time and does not stream; use run()");
+        }
+        if (this._engineType === ENGINE_MOSS_SFX) {
+            throw new Error(`tts-ggml: ${where}: the moss-sfx engine generates a whole sound ` +
+                "effect from one prompt and does not stream; use run()");
+        }
+        if (this._dialogueReferences === undefined)
+            return;
+        throw new Error(`tts-ggml: ${where}: MOSS dialogue cannot be split into sentences, ` +
+            "because every job must open with the reference transcripts; use " +
+            "run() or native streaming (streamChunkTokens)");
     }
     _assertMossOutputRate() {
         if (this._outputSampleRate == null ||
@@ -1466,22 +1908,70 @@ class TTSGgml {
         this._assertAudio8VoiceConsistent(this._mergeAudio8Voice(fields), where);
         return fields;
     }
+    _assertNoSpeechFields(source, where) {
+        const fields = pickSpeechFields(source);
+        if (!fields)
+            return;
+        throw new Error(`tts-ggml: ${where}: ${Object.keys(fields).join(", ")} are ` +
+            `moss-speech-only options (engine is ${this._engineType})`);
+    }
+    _assertNoOtherEngineFields(source, where) {
+        this._resolveConditioningJobFields(source, where, this._resolveJobInstruct(source, where));
+        this._resolveAudio8JobFields(source, where);
+        this._resolveSoundEffectJobFields(source, where);
+    }
+    /**
+     * Validate the MOSS-Speech call and fold the new user turn (spoken `audio`
+     * or text `input`) and `systemPrompt` into the native `messages` list.
+     */
+    _resolveSpeechJobFields(source, where) {
+        const fields = source ?? {};
+        assertSpeechCall(fields, where);
+        return {
+            messages: speechMessages(fields),
+            ...speechReplyVoice(fields),
+            ...speechControls(fields),
+        };
+    }
+    /**
+     * Extract + validate the per-call MOSS-SoundEffect controls from a run
+     * input. Returns undefined when none are present.
+     */
+    _resolveSoundEffectJobFields(source, where) {
+        const fields = pickSoundEffectFields(source);
+        if (!fields)
+            return undefined;
+        if (this._engineType !== ENGINE_MOSS_SFX) {
+            throw new Error(`tts-ggml: ${where}: ${Object.keys(fields).join(", ")} are ` +
+                `moss-sfx-only options (engine is ${this._engineType})`);
+        }
+        assertSoundEffectFields(fields);
+        return fields;
+    }
     /**
      * The per-call fields of whichever engine is loaded, if any are set. Parler
      * takes the full description/template surface, Audio8 its voice override,
      * and every engine the cross-engine conditioning it supports.
      */
     _resolveJobFields(source, where) {
+        if (this._engineType === ENGINE_MOSS_SPEECH) {
+            this._assertNoOtherEngineFields(source, where);
+            return this._resolveSpeechJobFields(source, where);
+        }
         const instruct = this._resolveJobInstruct(source, where);
         const engineFields = this._engineType === ENGINE_PARLER
             ? this._resolveParlerJobFields(source, where)
             : this._resolveConditioningJobFields(source, where, instruct);
         const audio8 = this._resolveAudio8JobFields(source, where);
-        if (!engineFields && !audio8 && instruct === undefined)
+        const soundEffect = this._resolveSoundEffectJobFields(source, where);
+        this._assertNoSpeechFields(source, where);
+        if (!engineFields && !audio8 && !soundEffect && instruct === undefined) {
             return undefined;
+        }
         return {
             ...(engineFields ?? {}),
             ...(audio8 ?? {}),
+            ...(soundEffect ?? {}),
             ...(instruct === undefined ? {} : { instruct }),
         };
     }
@@ -1498,6 +1988,9 @@ class TTSGgml {
     }
     async load(..._args) {
         void _args;
+        return this._withPocketLifecycle(() => this._loadModel());
+    }
+    async _loadModel() {
         if (this.state.destroyed) {
             throw new QvacErrorAddonTTSGgml({
                 code: ERR_CODES.FAILED_TO_LOAD,
@@ -1506,14 +1999,17 @@ class TTSGgml {
         }
         if (this.state.configLoaded || this.state.weightsLoaded) {
             this._getLogger().info("Reload requested - unloading existing model first");
-            await this.unload();
+            await this._unloadModel();
         }
         await this._load();
         this.state.configLoaded = true;
         this.state.weightsLoaded = true;
     }
     async run(input) {
-        if (input?.streamOutput === true) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        if (input?.streamOutput === true && this._engineType !== ENGINE_POCKET) {
+            this._assertSentenceStreamingAllowed("run with streamOutput");
             if (typeof input.input !== "string" ||
                 input.input.trim().length === 0) {
                 throw new QvacErrorAddonTTSGgml({
@@ -1537,7 +2033,13 @@ class TTSGgml {
      * `run({ input: text, streamOutput: true, ...options })`.
      */
     async runStream(text, options = {}) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
         const normalized = options == null || typeof options !== "object" ? {} : options;
+        if (this._engineType === ENGINE_POCKET) {
+            const run = () => this._runStreamOrchestrator(text, normalized, this._resolveJobFields(normalized, "runStream"));
+            return this.exclusiveRun ? this._enqueueExclusiveTtsResponse(run) : run();
+        }
         return this.run({
             input: text,
             streamOutput: true,
@@ -1558,6 +2060,9 @@ class TTSGgml {
      * small streamed fragments are coalesced.
      */
     async runStreaming(textStream, options = {}) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        this._assertSentenceStreamingAllowed("runStreaming");
         const jobFields = this._resolveJobFields(options, "runStreaming");
         const streamOptions = this._resolveRunStreamingOptions(textStream, options);
         let normalized = this._normalizeTextStream(textStream);
@@ -1648,6 +2153,7 @@ class TTSGgml {
         });
     }
     _runTextStreamOrchestrator(source, jobFields) {
+        this._checkPocketRequest();
         const response = this._job.start();
         this._sentenceStreamCtx = {
             textStreamMode: true,
@@ -1658,7 +2164,10 @@ class TTSGgml {
             chunkResolver: null,
             jobFields,
         };
+        const context = this._sentenceStreamCtx;
         void this._sentenceStreamTextIterableDrive().catch((error) => {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
@@ -1674,6 +2183,8 @@ class TTSGgml {
         }
         try {
             for await (const piece of context.asyncTextSource) {
+                if (context !== this._sentenceStreamCtx)
+                    return;
                 const text = String(piece).trim();
                 if (text.length === 0)
                     continue;
@@ -1682,7 +2193,9 @@ class TTSGgml {
                 const done = new Promise((resolve, reject) => {
                     context.chunkResolver = { resolve, reject };
                 });
-                await this._requireAddon().runJob({
+                // Dispatch may fail before the completion promise is awaited.
+                void done.catch(() => { });
+                await this._dispatchJob({
                     type: "text",
                     input: text,
                     ...(context.jobFields ?? {}),
@@ -1691,11 +2204,15 @@ class TTSGgml {
             }
         }
         catch (error) {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
             return;
         }
+        if (context !== this._sentenceStreamCtx)
+            return;
         const current = this._sentenceStreamCtx;
         const chunks = current?.chunks || [];
         const accumulator = current?.acc || emptyStreamAccumulator();
@@ -1718,6 +2235,7 @@ class TTSGgml {
         return (this._engineType === ENGINE_AUDIO8 || this._engineType === ENGINE_MOSS);
     }
     _runStreamOrchestrator(text, options, jobFields) {
+        this._checkPocketRequest();
         const chunks = (0, textChunker_1.splitTtsText)(String(text), {
             language: this._config.language,
             locale: options.locale,
@@ -1729,6 +2247,7 @@ class TTSGgml {
                 adds: "chunked synthesis: text produced no chunks after split",
             });
         }
+        this._checkPocketRequest();
         const response = this._job.start();
         this._sentenceStreamCtx = {
             chunks,
@@ -1737,7 +2256,10 @@ class TTSGgml {
             chunkResolver: null,
             jobFields,
         };
+        const context = this._sentenceStreamCtx;
         void this._sentenceStreamDriveBody().catch((error) => {
+            if (context !== this._sentenceStreamCtx)
+                return;
             this._rejectActiveChunk(error);
             this._sentenceStreamCtx = null;
             this._job.fail(normalizeError(error));
@@ -1749,17 +2271,23 @@ class TTSGgml {
         if (!context || context.textStreamMode)
             return;
         for (let index = 0; index < context.chunks.length; index++) {
+            if (context !== this._sentenceStreamCtx)
+                return;
             context.chunkIdx = index;
             const done = new Promise((resolve, reject) => {
                 context.chunkResolver = { resolve, reject };
             });
-            await this._requireAddon().runJob({
+            // Dispatch may fail before the completion promise is awaited.
+            void done.catch(() => { });
+            await this._dispatchJob({
                 type: "text",
                 input: context.chunks[index],
                 ...(context.jobFields ?? {}),
             });
             await done;
         }
+        if (context !== this._sentenceStreamCtx)
+            return;
         this._sentenceStreamCtx = null;
     }
     async _load() {
@@ -1780,6 +2308,8 @@ class TTSGgml {
         }
     }
     _buildTtsParams() {
+        if (this._pocketParams)
+            return { ...this._pocketParams };
         if (this._engineType === ENGINE_SUPERTONIC) {
             return this._buildSupertonicParams();
         }
@@ -1794,6 +2324,12 @@ class TTSGgml {
         }
         if (this._engineType === ENGINE_MOSS) {
             return this._buildMossParams();
+        }
+        if (this._engineType === ENGINE_MOSS_SFX) {
+            return this._buildMossSoundEffectParams();
+        }
+        if (this._engineType === ENGINE_MOSS_SPEECH) {
+            return this._buildMossSpeechParams();
         }
         return this._buildChatterboxParams();
     }
@@ -2076,9 +2612,34 @@ class TTSGgml {
         if (this._referenceAudio != null) {
             parameters.referenceAudio = this._referenceAudio;
         }
+        if (this._dialogueReferences) {
+            parameters.dialogueReferences = [...this._dialogueReferences];
+        }
+        if (this._durationTokens != null) {
+            parameters.durationTokens = this._durationTokens | 0;
+        }
         if (this._streamChunkTokens != null) {
             parameters.streamChunkTokens = this._streamChunkTokens | 0;
         }
+        this._assignBackendParams(parameters);
+        return parameters;
+    }
+    _buildMossSoundEffectParams() {
+        this._assertMossSoundEffectOutputRate();
+        const parameters = {
+            engineType: ENGINE_MOSS_SFX,
+            mossSoundEffectPath: this._mossSoundEffectPath || "",
+        };
+        this._assignBackendParams(parameters);
+        return parameters;
+    }
+    _buildMossSpeechParams() {
+        this._assertMossSpeechOutputRate();
+        const parameters = {
+            engineType: ENGINE_MOSS_SPEECH,
+            mossSpeechModelPath: this._mossSpeechModelPath || "",
+            mossSpeechCodecPath: this._mossSpeechCodecPath || "",
+        };
         this._assignBackendParams(parameters);
         return parameters;
     }
@@ -2155,27 +2716,62 @@ class TTSGgml {
         return new tts_1.TTSInterface(binding, configuration, outputCallback);
     }
     async unload() {
+        return this._withPocketLifecycle(() => this._unloadModel());
+    }
+    async _unloadModel() {
         await this.cancel();
         this._failAndClearActiveResponse("Model was unloaded");
         const addon = this._optionalAddon();
-        if (addon)
-            await addon.destroyInstance();
-        this.state.configLoaded = false;
-        this.state.weightsLoaded = false;
+        try {
+            if (addon)
+                await addon.destroyInstance();
+        }
+        finally {
+            if (this.addon === addon) {
+                this.addon = null;
+                this.state.configLoaded = false;
+                this.state.weightsLoaded = false;
+            }
+        }
     }
     async destroy() {
-        await this.unload();
-        this.state.destroyed = true;
+        return this._withPocketLifecycle(async () => {
+            await this._unloadModel();
+            this.state.destroyed = true;
+        });
     }
     async _runInternal(input) {
+        await this._waitPocketCancel();
+        this._checkPocketRequest();
         const jobFields = this._resolveJobFields(input, "run");
+        const signal = input?.signal;
+        const pocketSignal = this._engineType === ENGINE_POCKET && signal && !signal.aborted ? signal : undefined;
         const response = this._job.start({
-            signal: input?.signal,
+            signal: pocketSignal ? undefined : signal,
         });
-        if (input?.signal?.aborted)
+        if (signal?.aborted)
             return response;
+        if (pocketSignal) {
+            const onAbort = () => {
+                if (this._job.active !== response)
+                    return;
+                const reason = pocketSignal.reason;
+                const error = reason instanceof Error ? reason : new Error(typeof reason === "string" ? `Aborted: ${reason}` : "Aborted");
+                // Preserve the caller's reason while stopping native work. Cancellation
+                // retains the completion barrier until its terminal callback arrives.
+                try {
+                    response.failed(error);
+                }
+                finally {
+                    void this.cancel().catch((error) => this._getLogger().error("Pocket abort cancellation failed", error));
+                }
+            };
+            pocketSignal.addEventListener("abort", onAbort, { once: true });
+            const detach = () => pocketSignal.removeEventListener("abort", onAbort);
+            void response.await().then(detach, detach);
+        }
         try {
-            await this._requireAddon().runJob({
+            await this._dispatchJob({
                 type: input.type || "text",
                 input: input.input,
                 ...(jobFields ?? {}),
@@ -2188,6 +2784,12 @@ class TTSGgml {
         return response;
     }
     _mergeSentenceStreamStats(accumulator, data) {
+        if (accumulator.firstAudioMs === undefined &&
+            typeof data.firstAudioMs === "number" &&
+            Number.isFinite(data.firstAudioMs) &&
+            data.firstAudioMs >= 0) {
+            accumulator.firstAudioMs = data.firstAudioMs;
+        }
         accumulator.totalTime +=
             typeof data.totalTime === "number" ? data.totalTime : 0;
         accumulator.audioDurationMs +=
@@ -2198,6 +2800,12 @@ class TTSGgml {
             typeof data.totalSamples === "number" ? data.totalSamples : 0;
         accumulator.generatedFrames +=
             typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
+        if (typeof data.codecSidecarLoaded === "number") {
+            accumulator.codecSidecarLoaded = data.codecSidecarLoaded;
+        }
+        if (typeof data.codecOnCoreml === "number") {
+            accumulator.codecOnCoreml = data.codecOnCoreml;
+        }
     }
     _rejectActiveChunk(error) {
         const resolver = this._sentenceStreamCtx?.chunkResolver;
@@ -2213,6 +2821,11 @@ class TTSGgml {
             this._job.end();
     }
     _addonOutputCallback(_addon, event, data, error) {
+        if (this._pocketJobPending && ((typeof error === "string" && error.length > 0) || isStatsEvent(data))) {
+            const pending = this._pocketJobPending;
+            this._pocketJobPending = null;
+            pending.resolve();
+        }
         if (typeof error === "string" && error.length > 0) {
             this._handleAddonError(error);
         }
@@ -2262,7 +2875,7 @@ class TTSGgml {
             enriched.sampleRate = data.sampleRate;
         }
         if (!context.textStreamMode) {
-            enriched.isLast = index >= context.chunks.length - 1;
+            enriched.isLast = index >= context.chunks.length - 1 && data.isLast !== false;
         }
         return enriched;
     }
@@ -2283,10 +2896,83 @@ class TTSGgml {
             this._endJobWithStats(computeSentenceStreamStats(context.chunks, context.acc, this._pacesOnFrames()));
         }
     }
+    async _waitPocketCancel() {
+        if (this._engineType === ENGINE_POCKET && this._pocketCancelPromise)
+            await this._pocketCancelPromise;
+    }
+    async _withPocketLifecycle(action) {
+        if (this._engineType !== ENGINE_POCKET)
+            return action();
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        this._pocketLifecycleInProgress = true;
+        try {
+            await action();
+        }
+        finally {
+            this._pocketLifecycleInProgress = false;
+        }
+    }
+    _checkPocketReload() {
+        if (this._pocketLifecycleInProgress)
+            throw new Error("Pocket lifecycle operation is already in progress");
+    }
+    _checkPocketRequest() {
+        if (this._engineType === ENGINE_POCKET) {
+            if (this.state.destroyed)
+                throw new Error("Pocket instance was destroyed");
+            if (!this.state.weightsLoaded || !this._optionalAddon())
+                throw new Error("Pocket model is not loaded");
+        }
+        if (this._engineType === ENGINE_POCKET && (this._job.active || this._pocketJobPending)) {
+            throw new Error("Pocket synthesis is already in progress");
+        }
+        this._checkPocketReload();
+    }
+    async _dispatchJob(input) {
+        const addon = this._requireAddon();
+        if (this._engineType !== ENGINE_POCKET)
+            return addon.runJob(input);
+        if (this._pocketJobPending)
+            throw new Error("Pocket native job is already in progress");
+        let resolve = () => { };
+        const promise = new Promise((done) => { resolve = done; });
+        const pending = { promise, resolve };
+        this._pocketJobPending = pending;
+        try {
+            await addon.runJob(input);
+        }
+        catch (error) {
+            if (this._pocketJobPending === pending)
+                this._pocketJobPending = null;
+            resolve();
+            throw error;
+        }
+    }
     async cancel() {
         const addon = this._optionalAddon();
-        if (addon?.cancel)
-            await addon.cancel();
+        if (this._engineType !== ENGINE_POCKET) {
+            if (addon?.cancel)
+                await addon.cancel();
+            return;
+        }
+        if (this._pocketCancelPromise)
+            return this._pocketCancelPromise;
+        const pending = this._pocketJobPending;
+        this._pocketCancelPromise = (async () => {
+            this._failAndClearActiveResponse("Synthesis cancelled");
+            if (addon?.cancel)
+                await addon.cancel();
+            // Joining the worker can precede delivery of its terminal callback.
+            if (pending)
+                await pending.promise;
+        })();
+        try {
+            await this._pocketCancelPromise;
+        }
+        finally {
+            this._pocketCancelPromise = null;
+        }
     }
     _failAndClearActiveResponse(reason) {
         this._rejectActiveChunk(reason instanceof Error ? reason : new Error(reason));
@@ -2315,6 +3001,7 @@ class TTSGgml {
             minNewTokens: this._minNewTokens,
             normalizeNumbers: this._normalizeNumbers,
             seed: this._seed,
+            durationTokens: this._durationTokens,
         };
     }
     _restoreReloadableState(state) {
@@ -2337,6 +3024,7 @@ class TTSGgml {
         this._minNewTokens = state.minNewTokens;
         this._normalizeNumbers = state.normalizeNumbers;
         this._seed = state.seed;
+        this._durationTokens = state.durationTokens;
     }
     _applyReloadableRuntimeConfig(newConfig) {
         this._assertMossReloadKeepsVoice(newConfig);
@@ -2351,14 +3039,26 @@ class TTSGgml {
             this._outputSampleRate = validateOutputSampleRate(runtimeConfig.outputSampleRate);
         }
         this._applyAudio8Reload(newConfig);
+        this._applyMossReload(newConfig);
     }
     _assertMossReloadKeepsVoice(newConfig) {
         if (this._engineType !== ENGINE_MOSS)
             return;
-        if (newConfig.referenceAudio === undefined)
+        const voiceKeys = MOSS_INSTANCE_VOICE_KEYS.filter((key) => newConfig[key] !== undefined);
+        if (voiceKeys.length === 0)
             return;
-        throw new Error("tts-ggml: reload: the moss engine encodes referenceAudio once per " +
-            "instance; create a new instance to clone a different recording");
+        throw new Error(`tts-ggml: reload: the moss engine encodes ${voiceKeys.join(", ")} ` +
+            "once per instance; create a new instance to clone different recordings");
+    }
+    _applyMossReload(newConfig) {
+        if (this._engineType !== ENGINE_MOSS)
+            return;
+        const durationTokens = newConfig
+            .durationTokens;
+        if (durationTokens === undefined)
+            return;
+        assertMossDurationTokens(durationTokens, "reload");
+        this._durationTokens = durationTokens ?? undefined;
     }
     // Cross-engine conditioning is reloadable on every engine that supports it,
     // so both families change emotion the same way.
@@ -2445,8 +3145,47 @@ class TTSGgml {
             throw error;
         }
     }
+    async _reloadPocket(newConfig) {
+        await this._waitPocketCancel();
+        this._checkPocketReload();
+        if (this.state.destroyed)
+            throw new Error("Pocket instance was destroyed");
+        const options = { ...this._pocketOptions, ...newConfig };
+        const config = { ...this._config, ...newConfig };
+        const params = (0, pocketConfig_1.buildPocketParams)(this._pocketFiles, options, config);
+        this._pocketLifecycleInProgress = true;
+        let replacement = null;
+        try {
+            // Drain native work and release its model before allocating another one.
+            // Failed activation leaves the instance unloaded with its last good config.
+            await this._unloadModel();
+            replacement = this._createAddon(params, this._addonOutputCallback.bind(this));
+            await replacement.activate();
+            this.addon = replacement;
+            replacement = null;
+            this._pocketParams = params;
+            this._pocketOptions = options;
+            this._config.language = "en";
+            this._config.useGPU = false;
+            this._outputSampleRate = typeof params.outputSampleRate === "number" ? params.outputSampleRate : null;
+            this._config.outputSampleRate = this._outputSampleRate ?? undefined;
+            this.state.configLoaded = true;
+            this.state.weightsLoaded = true;
+        }
+        finally {
+            try {
+                if (replacement)
+                    await replacement.destroyInstance();
+            }
+            finally {
+                this._pocketLifecycleInProgress = false;
+            }
+        }
+    }
     async reload(newConfig = {}) {
         this._getLogger().debug("Reloading addon with new configuration", newConfig);
+        if (this._engineType === ENGINE_POCKET)
+            return this._reloadPocket(newConfig);
         const parameters = this._applyReloadableConfig(newConfig);
         await this.cancel();
         this._failAndClearActiveResponse("Model was reloaded");
@@ -2573,6 +3312,7 @@ class TTSGgml {
     TTSGgml.QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
     TTSGgml.ERR_CODES = errorModule.ERR_CODES;
     TTSGgml.resolveBackendsDir = backends_1.resolveBackendsDir;
+    TTSGgml.assessFit = fit_1.assessFit;
 })(TTSGgml || (TTSGgml = {}));
 module.exports.QvacErrorAddonTTSGgml =
     errorModule.QvacErrorAddonTTSGgml;

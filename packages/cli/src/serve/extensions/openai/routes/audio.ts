@@ -18,7 +18,10 @@ import {
   transcriptionsBody,
   translationsBody,
   audioSpeechBody,
-  SPEECH_UNSUPPORTED_PARAMS
+  voicesListResponse,
+  SPEECH_UNSUPPORTED_PARAMS,
+  type SpeechVoice,
+  type VoiceObject
 } from '@/serve/extensions/openai/schemas/audio'
 import { resolveModelAlias } from '@/serve/core/config/models'
 import { openaiOptions } from '@/serve/extensions/openai/config'
@@ -38,6 +41,8 @@ import {
 import type { ModelEntry } from '@/serve/core/model-registry'
 import type { ResolvedModelEntry } from '@/serve/core/config/types'
 import { openaiState, type OpenAIState } from '@/serve/extensions/openai/state'
+
+type SpeechMatchMode = 'voice_map' | 'hyphen' | 'model'
 
 const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text', 'srt', 'vtt', 'verbose_json'])
 
@@ -94,7 +99,9 @@ alias (\`{model}-{voice}\`), then the bare \`model\`. If no candidate
 resolves, the error message lists all three lookup keys it tried.
 
 **\`voice\`** is required unless \`serve.openai.audio.speech.defaultVoice\` is
-configured (default: \`"alloy"\`).
+configured (default: \`"alloy"\`). It takes a built-in OpenAI voice name, any
+other string, or a custom voice reference \`{ "id": "..." }\`, which routes the
+same way as its \`id\` string.
 
 **\`input_too_long\`** is returned when \`input.length\` exceeds
 \`serve.openai.audio.speech.maxInputChars\` (default 4096). Whitespace-only
@@ -348,7 +355,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       let modelEntry: ResolvedModelEntry | ModelEntry | null = null
       let resolvedAlias = ''
-      let matchMode: 'voice_map' | 'hyphen' | 'model' = 'model'
+      let matchMode: SpeechMatchMode = 'model'
 
       if (typeof voiceMapAlias === 'string' && voiceMapAlias.trim().length > 0) {
         const mapped = voiceMapAlias.trim()
@@ -492,7 +499,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/v1/audio/voices',
     {
-      schema: { tags: ['Audio'], summary: 'List TTS voices', description: descriptions.voices }
+      schema: {
+        tags: ['Audio'],
+        summary: 'List TTS voices',
+        description: descriptions.voices,
+        response: { 200: voicesListResponse }
+      }
     },
     // lunte-disable-next-line require-await
     async () => {
@@ -537,12 +549,6 @@ function toModelObject(
     created: Math.floor(createdMs / 1000),
     owned_by: 'qvac'
   }
-}
-
-interface VoiceObject {
-  id: string
-  object: 'audio.voice'
-  model: string | null
 }
 
 interface TranscriptionInvocationOptions {
@@ -637,12 +643,11 @@ function assertTimedFormatSupported(responseFormat: string, sdkType: string): vo
   )
 }
 
-function resolveVoice(raw: unknown, fallback: string | null): string | null {
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim()
-    if (trimmed.length > 0) return trimmed
-  }
-  return fallback
+// A custom voice reference `{ id }` routes the same way as a bare name.
+function resolveVoice(raw: SpeechVoice | undefined, fallback: string | null): string | null {
+  const name = typeof raw === 'object' ? raw.id : raw
+  const trimmed = name?.trim()
+  return trimmed ? trimmed : fallback
 }
 
 const MIME_TO_EXT: Record<string, string> = {

@@ -45,6 +45,10 @@ export interface ParakeetConfigurationParams {
   streamingHistoryMs?: number;
   streamingEmitPartials?: boolean;
   streamingEnergyVad?: boolean;
+  streamingEnergyVadThresholdDb?: number;
+  streamingEnergyVadWindowMs?: number;
+  streamingEnergyVadHangoverMs?: number;
+  streamingSpeakerVad?: boolean;
   streamingLeftContextMs?: number;
   streamingRightLookaheadMs?: number;
   streamingSpkCacheEnable?: boolean;
@@ -53,6 +57,12 @@ export interface ParakeetConfigurationParams {
   streamingChunkLeftContextMs?: number;
   streamingChunkRightContextMs?: number;
   streamingSpkCacheUpdatePeriod?: number;
+  diarizationThreshold?: number;
+  diarizationMinSegmentMs?: number;
+  prewarm?: boolean;
+  prewarmAudioSeconds?: number;
+  longFormWindowFrames?: number;
+  longFormContextFrames?: number;
   backendsDir?: string;
   openclCacheDir?: string;
 }
@@ -64,6 +74,12 @@ export interface StreamingConfig {
   rightLookaheadMs?: number;
   emitPartials?: boolean;
   emitEnergyVad?: boolean;
+  energyVadThresholdDb?: number;
+  energyVadWindowMs?: number;
+  energyVadHangoverMs?: number;
+  emitSpeakerVad?: boolean;
+  diarizationThreshold?: number;
+  diarizationMinSegmentMs?: number;
   spkCacheEnable?: boolean;
   spkCacheLen?: number;
   fifoLen?: number;
@@ -88,7 +104,7 @@ export type AudioInput =
 
 export type AppendData =
   | { type: "audio"; data?: ArrayBufferLike }
-  | { type: typeof END_OF_INPUT };
+  | { type: typeof END_OF_INPUT; job?: Record<string, unknown> };
 
 export type ParakeetOutputCallback = (
   addon: unknown,
@@ -246,6 +262,14 @@ export class ParakeetInterface {
     );
   }
 
+  private _looksLikeVadEvent(data: unknown): boolean {
+    return (
+      data !== null &&
+      typeof data === "object" &&
+      (data as { type?: unknown }).type === "vad"
+    );
+  }
+
   private _looksLikeStats(data: unknown): boolean {
     return (
       data !== null &&
@@ -280,6 +304,7 @@ export class ParakeetInterface {
       return eventStr;
     }
     if (isError || eventStr.includes("Error")) return "Error";
+    if (this._looksLikeVadEvent(data)) return "VadState";
     if (eventStr.includes("RuntimeStats")) return "JobEnded";
     if (eventStr.includes("Output")) return "Output";
     if (this._looksLikeStats(data)) return "JobEnded";
@@ -385,7 +410,7 @@ export class ParakeetInterface {
   append(data: AppendData): Promise<number> {
     try {
       if (data?.type === END_OF_INPUT) {
-        return Promise.resolve(this._submitBufferedJob());
+        return Promise.resolve(this._submitBufferedJob(data.job));
       }
       if (data?.type === "audio") {
         return Promise.resolve(this._bufferAudioChunk(data.data));
@@ -404,13 +429,13 @@ export class ParakeetInterface {
     }
   }
 
-  private _submitBufferedJob(): number {
+  private _submitBufferedJob(job: Record<string, unknown> = {}): number {
     const currentJobId = this._nextJobId;
     const input = this._concatBufferedAudio();
     const previousState = this._state;
     let accepted = false;
     try {
-      accepted = this._binding.runJob(this._handle, { type: "audio", input });
+      accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
     } catch (error) {
       this._setState(previousState);
       throw error;

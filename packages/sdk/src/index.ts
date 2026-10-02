@@ -31,6 +31,9 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  startRpcServer,
+  stopRpcServer,
+  discoverRpcServers,
   getSystemResources,
   assessModelFit,
   loggingStream,
@@ -146,6 +149,8 @@ export {
   type TtsCosyvoice3RuntimeConfig,
   type TtsAudio8LoadConfig,
   type TtsAudio8RuntimeConfig,
+  type TtsMossLoadConfig,
+  type TtsMossRuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
@@ -197,6 +202,11 @@ export {
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
+  TOOL_SEARCH_NAME,
+  buildToolSearchTool,
+  executeToolSearch,
+  loadedToolNames,
+  searchDeferredTools,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
@@ -387,3 +397,14 @@ export type {
   ProfilerGPUResourceGauge,
   ProfilerResourceGauge
 } from '@qvac/inference/surface'
+
+export type {
+  StartRpcServerOptions,
+  StopRpcServerOptions,
+  DiscoverRpcServersOptions,
+  RpcServerInfo,
+  RpcServerCandidate
+} from '@qvac/inference/surface'
+export { RpcServerOperationError } from './utils/errors-server'
+
+export { getRpcDeviceMap, type RpcDeviceMapping, type RpcDevice } from '@qvac/inference/surface'
