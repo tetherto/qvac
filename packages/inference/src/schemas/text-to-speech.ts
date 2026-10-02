@@ -1200,8 +1200,9 @@ export const ttsRequestSchema = z
 // The chunked paths (`stream: true`, `sentenceStream`, and the duplex session)
 // run one native job per sentence and the addon's aggregate carries only the
 // four summable fields (totalTime, audioDuration, totalSamples,
-// generatedFrames); the five backend fields below are reported by batch
-// synthesis (`stream: false`) only.
+// generatedFrames) and Audio8's two Core ML flags, which keep the value of the
+// last sentence that reported them; the five backend fields below are
+// reported by batch synthesis (`stream: false`) only.
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
   totalTime: z.number().optional(),
@@ -1220,7 +1221,19 @@ export const ttsStatsSchema = z.object({
   backendId: z.number().optional(),
   gpuUnsupported: z.number().optional(),
   enhancerBackendDevice: z.number().optional(),
-  enhancerBackendId: z.number().optional()
+  enhancerBackendId: z.number().optional(),
+  codecSidecarLoaded: z
+    .number()
+    .optional()
+    .describe(
+      'Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.'
+    ),
+  codecOnCoreml: z
+    .number()
+    .optional()
+    .describe(
+      'Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.'
+    )
 })
 
 // The rate of `buffer`. It is not a constant of the engine: `outputSampleRate`

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -69,7 +70,11 @@ function packInference() {
   if (typeof filename !== 'string' || filename.length === 0) {
     throw new Error(`npm pack produced no inference tarball: ${output}`)
   }
-  return path.join(ARTIFACT_DIR, filename)
+  const packedPath = path.join(ARTIFACT_DIR, filename)
+  const hash = createHash('sha256').update(fs.readFileSync(packedPath)).digest('hex').slice(0, 12)
+  const fingerprintedPath = path.join(ARTIFACT_DIR, filename.replace(/\.tgz$/, `-${hash}.tgz`))
+  fs.renameSync(packedPath, fingerprintedPath)
+  return fingerprintedPath
 }
 
 const originalManifest = fs.readFileSync(SDK_MANIFEST, 'utf8')

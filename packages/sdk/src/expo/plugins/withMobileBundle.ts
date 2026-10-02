@@ -157,19 +157,12 @@ async function runVerifier(
   configPath: string | null,
   hosts: string[]
 ) {
-  if (!configPath) {
-    console.log(
-      '⚠️ QVAC: no qvac.config.* found — Bare runtime will be auto-detected ' +
-        'from node_modules (bare-runtime, then bare). Add qvac.config.json ' +
-        'with `bareRuntimeVersion` to pin ABI checks deterministically.'
-    )
-  }
-
   const result = await verifyBundle({
     projectRoot,
     addonsSource: generatedBundle,
     hosts,
-    ...(configPath ? { configPath } : {})
+    ...(configPath ? { configPath } : {}),
+    onProgress: (message) => console.log(`🕚 QVAC: ${message}`)
   })
 
   if (hasErrors(result)) {
@@ -195,7 +188,9 @@ async function runBundler(
     ...(configPath ? { configPath } : {}),
     hosts,
     defer: deferredModules,
-    quiet: true
+    quiet: true,
+    // runVerifier checks engines.bare right after, with progress output.
+    checkEngines: false
   })
 
   return linkerPaths

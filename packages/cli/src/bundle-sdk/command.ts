@@ -20,6 +20,7 @@ export function registerBundleCommand(program: Command): void {
     )
     .option('-q, --quiet', 'Minimal output')
     .option('-v, --verbose', 'Detailed output')
+    .option('--offline', 'Skip GitHub and npm registry lookups in the engines.bare check')
     .action(
       async (options: {
         config?: string
@@ -29,6 +30,7 @@ export function registerBundleCommand(program: Command): void {
         install: boolean
         quiet?: boolean
         verbose?: boolean
+        offline?: boolean
       }) => {
         try {
           const { bundleSdk, HostPrebuildsInstallFailedError, HostPrebuildsInstallRefusedError } =
@@ -40,7 +42,8 @@ export function registerBundleCommand(program: Command): void {
             hosts: options.host.length > 0 ? options.host : undefined,
             defer: options.defer.length > 0 ? options.defer : undefined,
             quiet: options.quiet,
-            verbose: options.verbose
+            verbose: options.verbose,
+            network: options.offline !== true
           }
 
           try {

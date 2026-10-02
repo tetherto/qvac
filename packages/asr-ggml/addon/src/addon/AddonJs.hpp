@@ -39,6 +39,7 @@
 #include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/StreamingProcessor.hpp"
 #include "model-interface/WhisperTypes.hpp"
+#include "model-interface/moss/MossTranscribeModel.hpp"
 #include "model-interface/parakeet/ParakeetModel.hpp"
 #include "model-interface/whisper/WhisperModel.hpp"
 
@@ -198,9 +199,13 @@ transcriptToJsObject(js_env_t* env, const parakeet::Transcript& t) {
       env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
   obj.setProperty(env, "isEndOfTurn", js::Boolean::create(env, t.isEndOfTurn));
   obj.setProperty(env, "startsWord", js::Boolean::create(env, t.startsWord));
-  // Sortformer only; ASR segments keep their existing shape.
+  // Sortformer and MOSS-Transcribe-Diarize only; ASR segments keep their
+  // existing shape.
   if (t.speakerId >= 0) {
     obj.setProperty(env, "speakerId", js::Number::create(env, t.speakerId));
+  }
+  if (!t.speaker.empty()) {
+    obj.setProperty(env, "speaker", js::String::create(env, t.speaker));
   }
   if (!t.speakerSegments.empty()) {
     auto segments = js::Array::create(env);
@@ -307,6 +312,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model = std::move(ownedModel);
     outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
     outputHandlers.add(make_shared<JsParakeetVadEventHandler>());
+  } else if (engineType == EngineType::MossTranscribe) {
+    model = make_unique<moss::MossTranscribeModel>(
+        adapter.buildMossTranscribeConfig(configurationParams, env));
+    outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
   } else {
     model = make_unique<whisper::WhisperModel>(
         adapter.buildWhisperConfig(configurationParams, env));
@@ -363,6 +372,17 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     return instance.runJob(any(std::move(inputSamples)));
   }
 
+  if (dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get()) != nullptr) {
+    moss::MossTranscribeModel::AnyInput mossInput;
+    mossInput.samples =
+        js::TypedArray<float>(env, jsInput).as<vector<float>>(env);
+    JSAdapter adapter;
+    mossInput.request =
+        adapter.readMossTranscribeRequest(args.getJsObject(1, "inputObj"), env);
+    return instance.runJob(any(std::move(mossInput)));
+  }
+
   auto inputObj = args.getJsObject(1, "inputObj");
   string audioFormat = "s16le";
   auto maybeAudioFormat =
@@ -400,6 +420,13 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
     throw errors::parakeet::makeStatus(
         errors::parakeet::Code::ReloadNotSupported,
         "reload is not supported for the parakeet engine; destroy and "
+        "recreate the instance");
+  }
+  if (dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get()) != nullptr) {
+    throw errors::parakeet::makeStatus(
+        errors::parakeet::Code::ReloadNotSupported,
+        "reload is not supported for the moss-transcribe engine; destroy and "
         "recreate the instance");
   }
 
@@ -446,6 +473,11 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     const std::string name = engine->as<std::string>(env);
     if (name == "whisper") {
       return whisperFit(env, request, modelPath);
+    }
+    if (name == "moss-transcribe") {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "assessFit does not support the moss-transcribe engine");
     }
     // An unrecognised name reaches the parakeet fitter with a model it cannot
     // read, and the caller sees a broken model for what is a broken request.
@@ -715,6 +747,26 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
     return result;
   }
 
+  if (auto* mossModel = dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get())) {
+    result.setProperty(
+        env,
+        "backendDevice",
+        js::String::create(
+            env,
+            std::string(
+                mossModel->getBackendDeviceClass() == 1 ? "GPU" : "CPU")));
+    result.setProperty(
+        env, "backendId", js::Number::create(env, mossModel->getBackendId()));
+    result.setProperty(
+        env,
+        "backendName",
+        js::String::create(env, mossModel->getBackendName()));
+    result.setProperty(
+        env, "modelType", js::String::create(env, "moss-transcribe"));
+    return result;
+  }
+
   auto& whisperModel =
       dynamic_cast<whisper::WhisperModel&>(instance.addonCpp->model.get());
   const auto deviceClass = whisperModel.getBackendDeviceClass();
@@ -981,6 +1033,13 @@ inline js_value_t* startStreaming(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto configObj = args.getJsObject(1, "config");
+  if (dynamic_cast<moss::MossTranscribeModel*>(
+          &instance.addonCpp->model.get()) != nullptr) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "the moss-transcribe engine transcribes whole recordings and does not "
+        "stream; use run()");
+  }
 
   // Order matters, and it is the pre-merge order: parse/validate the config,
   // then let the registry run the double-start check and the construction as
