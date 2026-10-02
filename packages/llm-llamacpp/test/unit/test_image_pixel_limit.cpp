@@ -162,11 +162,7 @@ TEST(ImagePixelLimit, AcceptsTopDownBmpWithinPixelLimit) {
 }
 
 TEST(ImagePixelLimit, AcceptsJpegHeader) {
-  const auto path = std::filesystem::path(__FILE__)
-                        .parent_path()
-                        .parent_path()
-                        .parent_path() /
-                    "media" / "news-paper.jpg";
+  const auto path = std::filesystem::path(TEST_MEDIA_DIR) / "news-paper.jpg";
   std::ifstream stream(path, std::ios::binary);
   ASSERT_TRUE(stream.is_open());
   const std::vector<uint8_t> jpeg{

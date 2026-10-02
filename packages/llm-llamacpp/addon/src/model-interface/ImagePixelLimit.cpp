@@ -19,6 +19,7 @@
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_WINDOWS_UTF8
+// Keep this header in sync with fabric's vendor/stb/stb_image.h.
 #include <stb_image.h>
 
 namespace image_pixel_limit {
@@ -76,7 +77,8 @@ bool isMtmdAudio(const uint8_t* data, size_t size) {
 
 [[noreturn]] void rejectUnknownDimensions(const std::string& path = {}) {
   std::string message =
-      "[ImagePixelLimit] Cannot determine image dimensions before decoding. "
+      "[ImagePixelLimit] Unsupported or corrupt image: cannot determine "
+      "dimensions before decoding. "
       "Input was rejected to enforce image-max-megapixels.";
   if (!path.empty()) {
     message += " File: " + path;
@@ -141,7 +143,7 @@ uint64_t takeMaxPixels(std::unordered_map<std::string, std::string>& config) {
         qvac_lib_inference_addon_llama::errors::ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
-        "image-max-megapixels must be a positive integer");
+        "image-max-megapixels must be a positive integer, got: " + it->second);
   }
   config.erase(it);
   return megapixels * PIXELS_PER_MEGAPIXEL;

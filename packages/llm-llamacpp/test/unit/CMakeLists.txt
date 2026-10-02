@@ -136,6 +136,7 @@ get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 target_compile_definitions(addon-test PRIVATE
   STANDALONE_TEST_BUILD
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
+  TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
 )
 
 # Optional coverage instrumentation

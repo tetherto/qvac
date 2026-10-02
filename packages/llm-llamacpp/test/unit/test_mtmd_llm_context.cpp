@@ -320,19 +320,31 @@ TEST_F(MtmdLlmContextTest, ImageLimitRejectsBeforeCacheAndFileDecode) {
   ASSERT_TRUE(model.isLoaded());
   auto* const memory = llama_get_memory(model.getContext());
   ASSERT_NE(memory, nullptr);
-  const auto cellsBefore = llama_memory_seq_token_count(memory, -1);
 
   const auto png = imageAboveOneMegapixel();
   const auto tempName =
       "qvac25639-" +
       std::to_string(
           std::chrono::steady_clock::now().time_since_epoch().count());
-  const auto cachePath = fs::temp_directory_path() / (tempName + ".cache");
+  const auto activeCachePath =
+      fs::temp_directory_path() / (tempName + "-active.cache");
+  const auto rejectedCachePath =
+      fs::temp_directory_path() / (tempName + "-rejected.cache");
+  LlamaModel::Prompt warmSession;
+  warmSession.input = R"([{"role":"user","content":"Say hello."}])";
+  warmSession.cacheKey = activeCachePath.string();
+  warmSession.saveCacheToDisk = true;
+  warmSession.prefill = true;
+  ASSERT_NO_THROW(model.processPrompt(warmSession));
+  ASSERT_TRUE(fs::exists(activeCachePath));
+  const auto cellsBefore = llama_memory_seq_token_count(memory, -1);
+  ASSERT_GT(cellsBefore, 0u);
+
   LlamaModel::Prompt oversized;
   oversized.input =
       R"([{"role":"user","type":"media","content":""},{"role":"user","content":"Describe the image."}])";
   oversized.media.push_back(png);
-  oversized.cacheKey = cachePath.string();
+  oversized.cacheKey = rejectedCachePath.string();
   try {
     model.processPrompt(oversized);
     FAIL() << "Expected the configured image limit to reject the prompt";
@@ -340,12 +352,7 @@ TEST_F(MtmdLlmContextTest, ImageLimitRejectsBeforeCacheAndFileDecode) {
     EXPECT_NE(std::string(error.what()).find("1 MP limit"), std::string::npos);
   }
   EXPECT_EQ(llama_memory_seq_token_count(memory, -1), cellsBefore);
-  EXPECT_FALSE(fs::exists(cachePath));
-
-  LlamaModel::Prompt textOnly;
-  textOnly.input = R"([{"role":"user","content":"Say hello."}])";
-  textOnly.cacheKey = cachePath.string();
-  EXPECT_NO_THROW(model.processPrompt(textOnly));
+  EXPECT_FALSE(fs::exists(rejectedCachePath));
 
   const auto imagePath = fs::temp_directory_path() / (tempName + ".png");
   {
@@ -360,7 +367,7 @@ TEST_F(MtmdLlmContextTest, ImageLimitRejectsBeforeCacheAndFileDecode) {
       std::string(R"([{"role":"user","type":"media","content":")") +
       imagePath.generic_string() +
       R"("},{"role":"user","content":"Describe the image."}])";
-  filePrompt.cacheKey = cachePath.string();
+  filePrompt.cacheKey = rejectedCachePath.string();
   const auto cellsBeforeFile = llama_memory_seq_token_count(memory, -1);
   try {
     model.processPrompt(filePrompt);
@@ -369,8 +376,16 @@ TEST_F(MtmdLlmContextTest, ImageLimitRejectsBeforeCacheAndFileDecode) {
     EXPECT_NE(std::string(error.what()).find("1 MP limit"), std::string::npos);
   }
   EXPECT_EQ(llama_memory_seq_token_count(memory, -1), cellsBeforeFile);
+  EXPECT_EQ(cellsBeforeFile, cellsBefore);
+  EXPECT_FALSE(fs::exists(rejectedCachePath));
+
+  LlamaModel::Prompt followUp;
+  followUp.input = R"([{"role":"user","content":"Say hello again."}])";
+  followUp.cacheKey = activeCachePath.string();
+  EXPECT_NO_THROW(model.processPrompt(followUp));
   fs::remove(imagePath);
-  fs::remove(cachePath);
+  fs::remove(activeCachePath);
+  fs::remove(rejectedCachePath);
 }
 
 TEST_F(MtmdLlmContextTest, ImageLimitRejectsBatchPrompt) {
@@ -392,9 +407,12 @@ TEST_F(MtmdLlmContextTest, ImageLimitRejectsBatchPrompt) {
   oversized.input =
       R"([{"role":"user","type":"media","content":""},{"role":"user","content":"Describe the image."}])";
   oversized.media.push_back(imageAboveOneMegapixel());
-  EXPECT_THROW(
-      model.processPromptBatch(std::vector<LlamaModel::Prompt>{oversized}),
-      qvac_errors::StatusError);
+  try {
+    model.processPromptBatch(std::vector<LlamaModel::Prompt>{oversized});
+    FAIL() << "Expected the configured image limit to reject the batch";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(std::string(error.what()).find("1 MP limit"), std::string::npos);
+  }
 }
 
 TEST_F(MtmdLlmContextTest, ResetState) {
