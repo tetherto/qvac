@@ -164,6 +164,20 @@ jobs:
             echo "::error::Run $FABRIC_RUN_ID is not an on-pr-fabric run for $HEAD_SHA"
             exit 1
           fi
+          # The fabric run can be dispatched together with this one, so wait
+          # for its artifact.
+          deadline=$(( $(date +%s) + 120 * 60 ))
+          until [ "$(gh api "repos/$REPO/actions/runs/$FABRIC_RUN_ID/artifacts?name=fabric-prebuilds" --jq '.total_count')" -gt 0 ]; do
+            if [ "$(gh api "repos/$REPO/actions/runs/$FABRIC_RUN_ID" --jq '.status')" = "completed" ]; then
+              echo "::error::Run $FABRIC_RUN_ID completed without a fabric-prebuilds artifact"
+              exit 1
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out waiting for fabric-prebuilds from run $FABRIC_RUN_ID"
+              exit 1
+            fi
+            sleep 60
+          done
           gh run download "$FABRIC_RUN_ID" --repo "$REPO" --name fabric-prebuilds --dir fabric-prebuilds-staging
       - name: Re-publish fabric-prebuilds for downstream jobs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
