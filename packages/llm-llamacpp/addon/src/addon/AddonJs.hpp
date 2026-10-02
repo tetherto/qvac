@@ -783,6 +783,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         buftOverrides.data(),
         margins.data(),
         minCtx,
+        nullptr,
         false,
         GGML_LOG_LEVEL_INFO);
   } catch (const std::exception&) {

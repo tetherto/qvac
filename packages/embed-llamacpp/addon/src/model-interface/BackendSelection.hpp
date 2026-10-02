@@ -68,6 +68,9 @@ struct SplitDeviceSelection {
   std::vector<SplitDevice> devices;
   size_t sourceGpuCount = 0;
   std::vector<std::string> rejectedDevices;
+  // Discrete devices dropped because a twin of one card could not be ruled
+  // out across backends, with no device id to compare. The caller warns.
+  std::vector<std::string> droppedAmbiguousDevices;
 };
 
 std::pair<BackendType, std::string> chooseBackend(
