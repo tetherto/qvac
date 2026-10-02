@@ -274,18 +274,18 @@ test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
 })
 
 test('CPP_TEST_KEYS covers C++-test packages and uses the vla merge-guard key', () => {
-  assert.equal(CPP_TEST_KEYS.length, 9)
+  assert.equal(CPP_TEST_KEYS.length, 10)
   assert.ok(CPP_TEST_KEYS.includes('audiogen-ggml'))
+  assert.ok(CPP_TEST_KEYS.includes('ocr-ggml'))
   assert.ok(CPP_TEST_KEYS.includes('vla'))
   assert.ok(!CPP_TEST_KEYS.includes('fabric'))
   assert.ok(!CPP_TEST_KEYS.includes('vla-ggml'))
 })
 
-// A key without a producer that can fail either times out every PR touching
-// the package (ocr: nothing posts) or passes vacuously (asr/bci: continueOnError
-// with no hardGateCommand). Re-add only once that is no longer true.
+// asr/bci stay out: continueOnError with no hardGateCommand means a unit-test
+// failure cannot redden the status. Re-add only once that is no longer true.
 test('CPP_TEST_KEYS excludes packages with no failable C++ test producer', () => {
-  for (const pkg of ['ocr-ggml', 'asr-ggml', 'bci-whispercpp']) {
+  for (const pkg of ['asr-ggml', 'bci-whispercpp']) {
     assert.ok(!CPP_TEST_KEYS.includes(pkg), `${pkg} has no failable C++ test producer`)
   }
 })

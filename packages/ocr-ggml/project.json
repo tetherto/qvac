@@ -99,7 +99,10 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:cpp",
-        "cwd": "packages/ocr-ggml"
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "carveOut": true
+        }
       }
     },
     "on-merge": {

@@ -661,6 +661,21 @@ jobs:
       ref: ${{ inputs.ref }}
       fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'model-fit') && inputs.fabric-overlay-artifact || '' }}
 
+  cpp-tests-ocr:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'ocr-ggml')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/cpp-tests-ocr.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'ocr-ggml') && inputs.fabric-overlay-artifact || '' }}
+
   cpp-tests-translation:
     needs: matrix
     if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'translation-nmtcpp')

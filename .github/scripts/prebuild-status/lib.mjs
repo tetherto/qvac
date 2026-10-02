@@ -31,9 +31,10 @@ export const PREBUILD_KEYS = [
 // not in PREBUILD_KEYS; its suite is currently a stub that always passes.
 // Left out on purpose, because a key without a producer that can fail either
 // times out or passes vacuously:
-//   - ocr-ggml: test:cpp has no options.ci, so nothing posts its status.
 //   - asr-ggml, bci-whispercpp: test:cpp is continueOnError with no
-//     hardGateCommand, so their suites cannot fail the job.
+//     hardGateCommand, so a unit-test failure cannot fail the job. Their
+//     fuzz step can, but the required check stays off until they have a
+//     hardGateCommand.
 export const CPP_TEST_KEYS = [
   'audiogen-ggml',
   'classification-ggml',
@@ -41,6 +42,7 @@ export const CPP_TEST_KEYS = [
   'embed-llamacpp',
   'llm-llamacpp',
   'model-fit',
+  'ocr-ggml',
   'translation-nmtcpp',
   'tts-ggml',
   'vla',
