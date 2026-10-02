@@ -11,7 +11,7 @@ runH3Video({
   ),
   prompt:
     process.env.H3_PROMPT ||
-    'The orange paper boat from the first frame glides slowly across the water toward the distant cliff. Gentle ripples and warm dusk light, fixed composition, soft solo piano music, no speech.',
+    'The wooden Thai long-tail boat from the first frame glides slowly over clear turquoise water toward the distant limestone cliff. Gentle ripples and natural tropical light, realistic travel film, steady camera, soft upbeat instrumental music, no speech.',
   outputPath: process.env.H3_OUTPUT
 }).catch((error) => {
   console.error(error)
