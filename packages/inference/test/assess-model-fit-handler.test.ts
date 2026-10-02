@@ -102,3 +102,129 @@ test('handler: an audio window is capped at what the engine holds whole', (t) =>
 
   t.alike(target.workload, { kind: 'audio', windowMs: 30_000, streaming: false })
 })
+
+test('handler: an engine that names a device reports it verbatim', (t) => {
+  const gpu = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.llamacppCompletion,
+    modelConfig: { device: 'gpu' }
+  })
+  const cpu = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.llamacppEmbedding,
+    modelConfig: { device: 'CPU' }
+  })
+
+  t.is(gpu.device, 'gpu')
+  t.is(cpu.device, 'cpu', 'spelling is normalised, the value is not')
+})
+
+test('handler: a GPU switch resolves to a device, and defaults to the CPU', (t) => {
+  const on = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.audiogenGgml,
+    modelConfig: { useGPU: true }
+  })
+  const off = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: {}
+  })
+
+  t.is(on.device, 'gpu')
+  t.is(off.device, 'cpu')
+})
+
+test('handler: a switch is read where its own engine spells it', (t) => {
+  const parakeet = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.parakeetTranscription,
+    modelConfig: { useGPU: true }
+  })
+  const whisper = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: { contextParams: { use_gpu: true } }
+  })
+
+  t.is(parakeet.device, 'gpu')
+  t.is(whisper.device, 'gpu')
+})
+
+test('handler: bci holds the GPU unless its config turns it off', (t) => {
+  const silent = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.bciWhispercppTranscription,
+    modelConfig: {}
+  })
+  const off = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.bciWhispercppTranscription,
+    modelConfig: { contextParams: { use_gpu: false } }
+  })
+
+  t.is(silent.device, 'gpu')
+  t.is(off.device, 'cpu')
+})
+
+// `nGpuLayers` takes effect on its own and the config schema rejects it
+// disagreeing with `useGPU`, so it is read first.
+test('handler: tts reads its layer count ahead of its switch', (t) => {
+  const layers = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.ttsGgml,
+    modelConfig: { nGpuLayers: 99 }
+  })
+  const none = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.ttsGgml,
+    modelConfig: { nGpuLayers: 0 }
+  })
+
+  t.is(layers.device, 'gpu')
+  t.is(none.device, 'cpu')
+})
+
+test('handler: the engine is read off the source when the caller omits it', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: { ...CONSTANT, engine: 'llamacpp-completion' },
+    modelConfig: { ctx_size: 8192 }
+  })
+
+  t.alike(target.workload, { kind: 'llm', contextTokens: 8192 })
+  t.is(target.device, 'gpu', 'the inferred engine decides how the config is read')
+})
+
+test('handler: a source naming its addon resolves the engine too', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: { ...CONSTANT, addon: 'whisper' },
+    modelConfig: { duration_ms: 15_000 }
+  })
+
+  t.alike(target.workload, { kind: 'audio', windowMs: 15_000, streaming: false })
+})
+
+test('handler: an explicit engine wins over the source', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: { ...CONSTANT, engine: 'llamacpp-completion' },
+    modelType: ModelType.llamacppEmbedding,
+    modelConfig: {}
+  })
+
+  t.is(target.device, 'gpu')
+  t.alike(target.workload, { kind: 'llm' }, 'the embedding arm sizes no context')
+})
+
+test('handler: a source naming no engine is refused', (t) => {
+  t.exception(() => estimateTargetFor({ modelSrc: CONSTANT, modelConfig: {} }))
+})
+
+test('handler: an engine with no placement reports none', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.nmtcppTranslation,
+    modelConfig: {}
+  })
+
+  t.is(target.device, undefined)
+})
