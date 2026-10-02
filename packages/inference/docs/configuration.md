@@ -16,3 +16,8 @@ the exported inference surface rather than maintaining an independent schema.
 
 Read the current source before documenting defaults; configuration fields and
 defaults are intentionally not duplicated here.
+
+`includeAudioDecoder` is a bundle-time option consumed by the SDK. Set it to
+`false` for workers that only process raw PCM or streaming audio, and list the
+required plugins explicitly. Compressed audio file decoding requires the
+default value, `true`.

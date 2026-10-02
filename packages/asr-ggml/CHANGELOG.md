@@ -28,6 +28,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Update the `@qvac/decoder-audio` development dependency to `^0.8.0` for the audio decoding examples.
 - Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29#1, preserving the
   QVAC seed, BCI windowed-attention and streaming/VAD patches.
 - Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships

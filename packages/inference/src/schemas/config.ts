@@ -238,6 +238,8 @@ export const qvacConfigSchema = z.object({
    */
   plugins: z.array(z.string()).optional(),
 
+  includeAudioDecoder: z.boolean().optional(),
+
   /** Optional provider module selected at SDK bundle time. Direct Bare callers register in code. */
   rpcServerProvider: z.string().min(1).optional(),
 

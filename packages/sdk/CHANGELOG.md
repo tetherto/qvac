@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Support `includeAudioDecoder: false` in `qvac.config.*` to omit `bare-ffmpeg` from PCM-only mobile bundles.
+- Update `@qvac/decoder-audio` to `^0.8.0`.
+
 ## [0.20.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.20.1

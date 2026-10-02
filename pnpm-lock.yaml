@@ -99,7 +99,7 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/registry-client':
         specifier: ^0.6.1
@@ -1058,7 +1058,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
@@ -1733,7 +1733,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
