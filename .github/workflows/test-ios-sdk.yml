@@ -179,7 +179,10 @@ jobs:
     environment: release
     timeout-minutes: 60
     outputs:
-      runId: ${{ steps.runid.outputs.runId }}
+      # GitHub drops a job output that contains a secret value, and a short
+      # one (e.g. a port) can turn up in the SHA or job id. Single chars
+      # can't match it; downstream jobs join them back into E2E_RUN_ID.
+      runIdChars: ${{ steps.runid.outputs.runIdChars }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -357,20 +360,11 @@ jobs:
 
           const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
           const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
-          // Base36-encode the numeric job.id so the literal decimal digits
-          // no longer appear in the runId. GitHub's secret masker does a
-          // substring match against masked secret values; if a short numeric
-          // secret (e.g. `secrets.MQTT_PORT`) happens to appear as a
-          // substring of the decimal job.id, the masker will both redact
-          // the runId in logs and silently drop the job-level output with a
-          // "Skip output 'runId' since it may contain secret." warning,
-          // breaking every downstream `needs.build.outputs.runId` consumer.
-          // Encoding job.id as base36 keeps the value unique and stable
-          // while structurally eliminating numeric-substring collisions.
           const jobIdEncoded = BigInt(job.id).toString(36);
           const runId = `ios-${refPart}-${jobIdEncoded}`;
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runIdChars=${JSON.stringify([...runId])}\n`, 'utf8');
           console.log(`Generated runId: ${runId}`);
           })().catch((err) => {
             console.error(err);
@@ -522,7 +516,16 @@ jobs:
     outputs:
       name: ${{ steps.select.outputs.name }}
       availability: ${{ steps.select.outputs.availability }}
+    env:
+      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
     steps:
+      - name: Check runId
+        run: |
+          if [ -z "$E2E_RUN_ID" ]; then
+            echo "::error::The build job published no runId, so the producer cannot pair with the consumer on the device. Check the build job's \"Generate runId\" step."
+            exit 1
+          fi
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -564,7 +567,7 @@ jobs:
 
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "consumer-${{ needs.build.outputs.runId }}.ipa" \
+            --name "consumer-${{ env.E2E_RUN_ID }}.ipa" \
             --type "IOS_APP" \
             --output json)
 
@@ -634,7 +637,7 @@ jobs:
         run: |
           SPEC_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "qvac-ios-test-spec-${{ needs.build.outputs.runId }}.yml" \
+            --name "qvac-ios-test-spec-${{ env.E2E_RUN_ID }}.yml" \
             --type "APPIUM_NODE_TEST_SPEC" \
             --output json)
 
@@ -714,7 +717,7 @@ jobs:
       - name: Upload run ARN
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: device-farm-arn-ios-${{ needs.build.outputs.runId }}-${{ steps.save-arn.outputs.safe-name }}
+          name: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-${{ steps.save-arn.outputs.safe-name }}
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
           retention-days: 1
 
@@ -724,6 +727,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: ${{ inputs.device-farm-start-timeout }}
+    env:
+      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -733,7 +738,7 @@ jobs:
       - name: Download run ARNs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-ios-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
@@ -757,6 +762,7 @@ jobs:
     environment: release
     timeout-minutes: 120
     env:
+      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
@@ -884,7 +890,7 @@ jobs:
           INCLUDE_TESTS: ${{ inputs.include }}
         run: |
           echo "Starting producer..."
-          echo "   Run ID: ${{ needs.build.outputs.runId }}"
+          echo "   Run ID: ${{ env.E2E_RUN_ID }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
           echo "   Suite: ${{ inputs.suite || '(all)' }}"
@@ -916,7 +922,7 @@ jobs:
           # [A-Za-z0-9._-] upstream, so there is nothing to split on.
           # shellcheck disable=SC2086
           npx qvac-test run:producer \
-            --runId "${{ needs.build.outputs.runId }}" \
+            --runId "${{ env.E2E_RUN_ID }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
             --report-dir=./reports \
@@ -1030,7 +1036,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-ios-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
@@ -1058,6 +1064,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 35
+    env:
+      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -1068,13 +1076,13 @@ jobs:
       - name: Download run ARNs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-ios-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
       - name: Stop Device Farm runs and download artifacts
         run: |
-          echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+          echo "Cleaning up Device Farm runs for runId: ${{ env.E2E_RUN_ID }}"
           mkdir -p ./device-farm-logs
 
           for arn_file in run-arns/*.txt; do
@@ -1133,7 +1141,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: device-farm-logs-ios-${{ needs.build.outputs.runId }}
+          name: device-farm-logs-ios-${{ env.E2E_RUN_ID }}
           path: ./device-farm-logs/
           retention-days: 30
 
