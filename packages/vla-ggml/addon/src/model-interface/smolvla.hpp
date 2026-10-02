@@ -294,9 +294,12 @@ bool smolvlaCanMmapWeights(ggml_backend_t backend);
 //
 // On failure `model.load_error` holds a human-readable reason; callers
 // surface it so a load failure is diagnosable from the JS error alone.
+// `backendOverride` lists GPU backend families in priority order, e.g.
+// {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
 bool smolvlaLoadModel(
     const char* path, SmolvlaModel& model, bool forceCpu,
-    const std::string& backendsDir);
+    const std::string& backendsDir,
+    const std::vector<std::string>& backendOverride = {});
 
 // Free model resources. Idempotent — also called from
 // `smolvla_model::~smolvla_model`.

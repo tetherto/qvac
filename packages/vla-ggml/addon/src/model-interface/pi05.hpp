@@ -447,9 +447,12 @@ public:
   // GPU device selection (always uses the CPU backend); `backendsDir`
   // is the absolute path to the prebuild directory containing the
   // ggml backend plugin shared libs (.so/.dylib/.dll).
+  // `backendOverride` lists GPU backend families in priority order, e.g.
+  // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
   Pi05Model(
       const std::string& ggufPath, bool forceCpu,
-      const std::string& backendsDir);
+      const std::string& backendsDir,
+      const std::vector<std::string>& backendOverride = {});
 
   // Out-of-line because `Pi05ModelInternal` is forward-declared above;
   // unique_ptr's destructor needs the complete type, which lives in
