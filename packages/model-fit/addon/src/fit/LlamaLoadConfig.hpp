@@ -70,17 +70,12 @@ struct LlamaLoadFitRequest {
   uint32_t nCtxMin = 0;
 };
 
-// Mirrors common_fit_params in common/fit.h. 11018.0.0 added two parameters
-// between `n_ctx_min` and the log level — `const common_fit_extra_model*`
-// (`extra`, a second model fitted alongside the main one, such as a draft
-// model) and, from 10549.0.0, the `bool prefetch_weights_auto` after it — then
-// a trailing `bool moe_cache_auto_explicit`. That last one is declared with a
-// default argument, which a function-pointer conversion does not carry, so it
-// has to be spelled out here and passed at every call.
+// The `bool` is fabric's `prefetch_weights_auto`, added in common/fit.h by
+// qvac-fabric 10549.0.0. It is the last parameter before the log level.
 using LlamaFitInvoker = std::function<common_params_fit_status(
     const char*, llama_model_params*, llama_context_params*, float*,
-    llama_model_tensor_buft_override*, size_t*, uint32_t,
-    const common_fit_extra_model*, bool, ggml_log_level, bool)>;
+    llama_model_tensor_buft_override*, size_t*, uint32_t, bool,
+    ggml_log_level)>;
 using SupportedLlamaLoadHandler = std::function<void(common_params&)>;
 
 struct LlamaFitExecution {

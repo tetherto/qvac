@@ -635,6 +635,7 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
                   overrides,
                   marginsOut,
                   ctxMin,
+                  nullptr,
                   prefetchWeightsAuto,
                   logLevel);
             });
