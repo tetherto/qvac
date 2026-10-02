@@ -529,9 +529,21 @@ HF_REVISION=<model-revision-sha> bash packages/diffusion-cpp/scripts/download-mi
 ```
 
 The four files total about 55 GB. The package's vcpkg overlay pins
-`qvac-ext-stable-diffusion.cpp` to `107121df3ee9664cd47f80b19add495002d0232f`
-(merged PR #44) and its ggml submodule to
-`9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb`.
+`qvac-ext-stable-diffusion.cpp` to `0ab0713c226d78f83cfd5d05fc43de71bd7cebcd`
+(merged PR #44 plus ComfyUI NVFP4 AWQ loader support) and its ggml submodule to
+`9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb`. To use the smaller NVFP4
+encoder, download that variant and pass its path to the examples:
+
+```sh
+H3_TEXT_ENCODER_VARIANT=nvfp4_awq HF_REVISION=<model-revision-sha> \
+  bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh
+H3_LLM=/path/to/models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors \
+  bare packages/diffusion-cpp/examples/generate-video-minimax-h3-comfy-t2v.js
+```
+
+The NVFP4 checkpoint requests full-precision matrix multiplication in ComfyUI.
+The backend uses ggml's native NVFP4 multiplication, so its output can differ
+from ComfyUI's. The int8 ConvRot encoder remains the default.
 
 From `packages/diffusion-cpp`, run the separate examples. Set `H3_MODELS_DIR`
 if the checkpoint is elsewhere, `H3_BACKEND` to select a backend, and
