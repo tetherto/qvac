@@ -35,11 +35,12 @@ const isVulkanHappyPath =
 const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
 const isAndroid = platform === 'android'
 
-// isVulkanHappyPath is a platform test, and on linux x64 the platform no longer
-// decides the backend: CUDA enumerates ahead of Vulkan and has no TurboQuant or
-// PolarQuant kernels, so the addon refuses these cache types there. Name the
-// backend the sweep is actually about instead of relying on enumeration order.
-const pinToVulkan = platform === 'linux' && arch === 'x64'
+// isVulkanHappyPath is a platform test, and on linux and windows x64 the
+// platform no longer decides the backend: CUDA enumerates ahead of Vulkan and
+// has no TurboQuant or PolarQuant kernels, so the addon refuses these cache
+// types there. Name the backend the sweep is actually about instead of relying
+// on enumeration order.
+const pinToVulkan = (platform === 'linux' || platform === 'win32') && arch === 'x64'
 
 const skipReason =
   isVulkanHappyPath || isMetalRejectPath
