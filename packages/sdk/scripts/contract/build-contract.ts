@@ -463,7 +463,18 @@ export function toWireJsonSchema(
   const json = schema.toJSONSchema({
     target: 'draft-2020-12',
     io,
-    unrepresentable: 'any'
+    unrepresentable: 'any',
+    override({ zodSchema, jsonSchema }) {
+      // Zod 4.4 omits closed tuple bounds. Preserve the wire contract (e.g.
+      // OCR's four-coordinate bbox) when regenerating unrelated additions.
+      if (zodSchema instanceof z.ZodTuple && !zodSchema.def.rest) {
+        jsonSchema.items = false
+        jsonSchema.maxItems = zodSchema.def.items.length
+        if (zodSchema.def.items.every((item) => !z.safeParse(item, undefined).success)) {
+          jsonSchema.minItems = zodSchema.def.items.length
+        }
+      }
+    }
   }) as JsonSchema
   delete json['$schema']
   const flattened = flattenAllOfWithUnion(json, defName)

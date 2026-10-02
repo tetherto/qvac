@@ -114,6 +114,7 @@ describe('resolveSampleRate', () => {
 
   it('maps Supertonic to 44100 Hz', () => {
     assert.equal(resolveSampleRate({ ttsEngine: 'supertonic' }), 44100)
+    assert.equal(resolveSampleRate({ ttsEngine: 'pocket' }), 24000)
   })
 
   it('is case-insensitive on engine name', () => {

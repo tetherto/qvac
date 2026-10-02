@@ -163,7 +163,8 @@
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
-    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
+    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts",
+    "test:pocket": "tsc -p test/pocket/tsconfig.json && tsc-alias -p test/pocket/tsconfig.json --resolve-full-paths && brittle-bare test/dist/test/pocket/*.test.js"
   },
   "engines": {
     "bare": ">=1.30.3"
@@ -199,7 +200,7 @@
     "semver": "^7.8.5",
     "tar-stream": "^3.2.0",
     "which-runtime": "^1.2.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   },
   "peerDependencies": {
     "@qvac/asr-ggml": "^0.7.0",

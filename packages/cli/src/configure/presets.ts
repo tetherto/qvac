@@ -91,6 +91,18 @@ interface TtsEngineTemplate {
 // decoders — that a bare model pick can't supply. Voice cloning stays a user
 // asset (placeholder).
 export const TTS_ENGINE_TEMPLATES: Record<TtsEngine, TtsEngineTemplate> = {
+  pocket: {
+    label: 'Pocket (English, CPU)',
+    hint: 'Set the local FlowLM, Mimi, frontend and prepared voice paths.',
+    model: '/path/to/pocket/flow-lm.gguf',
+    config: {
+      ttsEngine: 'pocket',
+      mimiModelSrc: '/path/to/pocket/mimi.gguf',
+      frontendSrc: '/path/to/pocket/frontend.json',
+      voiceSrc: '/path/to/pocket/voice.gguf',
+      steps: 4
+    }
+  },
   chatterbox: {
     label: 'Chatterbox (English, voice cloning)',
     hint: 'T3 + S3Gen; set referenceAudioSrc to clone a voice.',

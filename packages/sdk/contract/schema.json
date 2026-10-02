@@ -4643,8 +4643,16 @@
     "constants.TtsEngine": {
       "title": "TtsEngine",
       "type": "string",
-      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8", "moss"],
-      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8", "MOSS"]
+      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8", "moss", "pocket"],
+      "x-enum-varnames": [
+        "CHATTERBOX",
+        "SUPERTONIC",
+        "PARLER",
+        "COSYVOICE3",
+        "AUDIO8",
+        "MOSS",
+        "POCKET"
+      ]
     },
     "constants.TtsPace": {
       "title": "TtsPace",
@@ -15279,6 +15287,470 @@
                       "required": ["ttsEngine", "mossCodecDecoderModelSrc"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigMoss"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "pocket",
+                          "description": "Pocket FlowLM + Mimi text-to-speech engine."
+                        },
+                        "language": {
+                          "default": "en",
+                          "description": "Language of the synthesized speech; Pocket currently supports English only.",
+                          "type": "string",
+                          "const": "en"
+                        },
+                        "useGPU": {
+                          "description": "Pocket currently runs on the CPU; GPU execution is not supported.",
+                          "type": "boolean",
+                          "const": false
+                        },
+                        "threads": {
+                          "description": "Number of CPU inference threads, from 1 to 1024.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1024
+                        },
+                        "nCtx": {
+                          "description": "FlowLM context size in tokens, from 1 to 8192.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 8192
+                        },
+                        "maxTokens": {
+                          "description": "Maximum number of generated audio tokens, from 1 to 1024.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1024
+                        },
+                        "steps": {
+                          "description": "Flow-matching sampling steps per audio token, from 1 to 64.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 64
+                        },
+                        "seed": {
+                          "description": "Unsigned 32-bit random seed for audio sampling.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4294967295
+                        },
+                        "temperature": {
+                          "description": "Sampling temperature, from 0 to 10.",
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        "noiseClamp": {
+                          "description": "Non-negative clamp applied to the sampled noise.",
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 3.402823466e38
+                        },
+                        "eosThreshold": {
+                          "description": "End-of-speech logit threshold used to stop generation.",
+                          "type": "number",
+                          "minimum": -3.402823466e38,
+                          "maximum": 3.402823466e38
+                        },
+                        "framesAfterEos": {
+                          "description": "Extra audio frames generated after end-of-speech; -1 selects the native default.",
+                          "type": "integer",
+                          "minimum": -1,
+                          "maximum": 100
+                        },
+                        "outputSampleRate": {
+                          "description": "Output audio sample rate in Hz, from 8000 to 192000.",
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "mimiModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketMimiModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketMimiModelSrc"
+                            }
+                          ],
+                          "description": "Pocket Mimi audio-codec GGUF model source."
+                        },
+                        "frontendSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketFrontendSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketFrontendSrc"
+                            }
+                          ],
+                          "description": "Pocket tokenizer frontend JSON source."
+                        },
+                        "voiceSrc": {
+                          "description": "Prepared Pocket voice GGUF source; supply exactly one of voiceSrc or referenceAudioSrc.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketVoiceSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketVoiceSrc"
+                            }
+                          ]
+                        },
+                        "referenceAudioSrc": {
+                          "description": "Pocket voice-conditioning reference WAV source; supply exactly one of referenceAudioSrc or voiceSrc.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketReferenceAudioSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigPocketReferenceAudioSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["ttsEngine", "mimiModelSrc", "frontendSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigPocket"
                     }
                   ]
                 }
