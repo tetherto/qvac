@@ -1,4 +1,4 @@
-import EmbedLlamacpp, { IdMapIndex } from '@qvac/embed-llamacpp'
+import EmbedLlamacpp, { IdMapIndex, assessFit as embedAssessFit } from '@qvac/embed-llamacpp'
 import type { TurboVecIndexProvider } from '@qvac/rag'
 import {
   definePlugin,
@@ -59,6 +59,7 @@ export const embeddingsPlugin = definePlugin({
   displayName: 'Embeddings (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
   loadConfigSchema: embedConfigBaseSchema,
+  assessFit: embedAssessFit,
 
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig

@@ -121,12 +121,19 @@ std::any WorldSessionModel::processSceneCreate(const SceneCreateJob& job) {
   // in docs/abot-world.md; the walk path resets the flag itself.
   const auto t0 = std::chrono::steady_clock::now();
 
-  sd_image_t decoded = image_codec::decodeImage(job.imageBytes);
+  image_codec::DecodeFailure decodeFailure;
+  sd_image_t decoded = image_codec::decodeImage(
+      job.imageBytes,
+      config_.maxImagePixels,
+      &decodeFailure,
+      config_.maxImagePixels);
   std::unique_ptr<uint8_t, image_codec::FreeDeleter> decodedData(decoded.data);
   if (decoded.data == nullptr) {
     throw StatusError(
         general_error::InvalidArgument,
-        "scene image could not be decoded; expected PNG or JPEG bytes");
+        "scene image could not be decoded: " +
+            image_codec::decodeFailureMessage(
+                decodeFailure, config_.maxImagePixels));
   }
 
   qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);

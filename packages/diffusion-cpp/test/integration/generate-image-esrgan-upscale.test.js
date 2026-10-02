@@ -250,6 +250,19 @@ test(
     try {
       await model.load()
 
+      let updates = 0
+      const rejected = await model.run({
+        ...BASE_PARAMS,
+        width: 1024,
+        height: 1024,
+        upscale: { repeats: 2 }
+      })
+      rejected.onUpdate(() => {
+        updates += 1
+      })
+      await t.exception.all(rejected.await(), /ESRGAN output exceeds configured pixel/)
+      t.is(updates, 0, 'oversized upscale is rejected before generation')
+
       for (const runCase of [
         { label: 'upscale true', upscale: true, repeats: 1 },
         { label: 'upscale repeats 2', upscale: { repeats: 2 }, repeats: 2 }
