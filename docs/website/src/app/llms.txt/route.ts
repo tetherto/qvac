@@ -1,7 +1,15 @@
-import { source } from '@/lib/source';
-import { LATEST_VERSION } from '@/lib/versions';
-import { isArchivedPage } from '@/lib/docs-open-graph';
+import {
+  AGENT_DOCS_URL,
+  currentVersionOf,
+  formatPageEntry,
+  formatSectionTitle,
+  unversionedPages,
+  versionedCollections,
+  versionsUrl,
+} from '@/lib/artifacts';
+import { collectionTabs } from '@/lib/custom-tree';
 import type { InferPageType } from 'fumadocs-core/source';
+import type { source } from '@/lib/source';
 
 // Resolves the response at build time so the result is written to
 // `out/llms.txt` as a static file under `output: 'export'`.
@@ -13,25 +21,29 @@ type Page = InferPageType<typeof source>;
 const ROOT_SECTION = '(root)';
 
 /**
- * Generates the `llms.txt` agent index at build time.
+ * The collections in the order the collection bar lists them, read from the
+ * entries that render the bar so the two never drift apart.
+ */
+const COLLECTION_ORDER = collectionTabs.map((tab) => tab.url.slice(1));
+
+/**
+ * Generates the root `llms.txt` at build time.
+ *
+ * It is a router, not a catalogue. A versioned collection is represented by
+ * its resolver, one fetch away, which names the lines and their indexes;
+ * listing that collection's pages here would mean either mixing two releases
+ * in one list or silently picking one for the reader. An unversioned
+ * collection has no such choice to make, so its pages are listed directly.
  *
  * Format follows the de-facto convention popularized by https://llmstxt.org/:
  * an H1 with the project name, a short paragraph describing the site, a
- * "Guidance" preamble, and one `## Section` per top-level slug whose body is
- * a bullet list of `- [Title](url): description` entries.
- *
- * Archived per-section versions (e.g. `/reference/api/v0.7.0`) are filtered
- * out via `isArchivedPage` so the index advertises only the latest canonical
- * documentation — consistent with `sitemap.xml`, `llms-full.txt`, and the
- * per-page `noindex` metadata.
+ * "Guidance" preamble, and `## Section` headings whose body is a bullet list
+ * of `- [Title](url): description` entries.
  */
 export function GET() {
-  const pages = source
-    .getPages()
-    .filter((page) => !isArchivedPage(page))
-    .sort((a, b) => a.url.localeCompare(b.url));
-
-  const grouped = groupPagesByTopLevelSlug(pages);
+  const collections = versionedCollections();
+  const pages = unversionedPages();
+  const grouped = groupPagesBySection(pages);
 
   const lines: string[] = [
     '# QVAC Documentation',
@@ -40,12 +52,20 @@ export function GET() {
     '',
     '## Guidance',
     '',
-    '- To fetch one page as Markdown, append `.md` to its path (e.g. `/introduction` → `/introduction.md`). Alternatively, send the HTTP header `Accept: text/markdown` and any page URL will be redirected to its Markdown variant.',
-    '- To obtain a dump with all documentation, fetch `/llms-full.txt`.',
-    '- When citing sources to users, use the canonical URL without `.md` (e.g. `/introduction`), not the Markdown variant.',
-    `- Latest SDK version: ${LATEST_VERSION}`,
-    `- Total pages: ${pages.length}`,
+    '- To fetch one page as Markdown, append `.md` to its path (e.g. `/sdk/js-ts-sdk` → `/sdk/js-ts-sdk.md`). Alternatively, send the HTTP header `Accept: text/markdown` and any page URL will be redirected to its Markdown variant.',
+    '- When citing sources to users, use the canonical URL without `.md` (e.g. `/sdk/js-ts-sdk`), not the Markdown variant.',
+    `- Some collections are versioned: they publish one documentation line per release, and each line has its own page index and its own full-text corpus. Resolve the line that matches the release you are working against before reading anything else. How to do that: ${AGENT_DOCS_URL}`,
+    '- To obtain a dump of everything at once, fetch `/llms-full.txt`. It carries the unversioned collections and the current line of each versioned one.',
+    '',
+    '## Versioned collections',
+    '',
   ];
+
+  for (const { software, path, lines: published } of collections) {
+    lines.push(
+      `- ${titleOf(path)} — tracks \`${software.package}\`, current line ${currentVersionOf(software)}, ${published.length} lines published. Resolver: ${path}/llms.txt. Machine-readable: ${versionsUrl(path)}`,
+    );
+  }
 
   for (const section of Object.keys(grouped).sort(compareSections)) {
     lines.push('', `## ${formatSectionTitle(section)}`, '');
@@ -57,25 +77,36 @@ export function GET() {
   return new Response(lines.join('\n') + '\n');
 }
 
-function groupPagesByTopLevelSlug(pages: Page[]): Record<string, Page[]> {
+/** The collection bar's name for a path, falling back to the path itself. */
+function titleOf(path: string): string {
+  return collectionTabs.find((tab) => tab.url === path)?.title ?? path;
+}
+
+/**
+ * Groups by collection and then by the section within it, so a heading reads
+ * `Ecosystem / Addons`. Grouping by the first slug alone would put every page
+ * of a collection under one heading, since the collection occupies the slot
+ * the section used to.
+ */
+function groupPagesBySection(pages: Page[]): Record<string, Page[]> {
   const initial: Record<string, Page[]> = {};
   for (const page of pages) {
-    const key = page.slugs[0] ?? ROOT_SECTION;
+    const [collection, section] = page.slugs;
+    const key = collection
+      ? section
+        ? `${collection}/${section}`
+        : collection
+      : ROOT_SECTION;
     (initial[key] ??= []).push(page);
   }
 
-  // Collapse standalone root pages (single-slug, only entry in their group)
-  // into the root section so they don't each spawn a one-entry `##` heading.
-  // Sections that genuinely have multiple pages (e.g. `cli` with `/cli` and
-  // `/cli/http-server`) keep their own heading.
+  // A section holding a single page directly under its collection (say
+  // `/resources/overview`) folds into the collection's own heading, rather
+  // than spawning a one-entry section of its own.
   const collapsed: Record<string, Page[]> = {};
   for (const [key, list] of Object.entries(initial)) {
-    if (
-      key !== ROOT_SECTION &&
-      list.length === 1 &&
-      list[0].slugs.length === 1
-    ) {
-      (collapsed[ROOT_SECTION] ??= []).push(list[0]);
+    if (list.length === 1 && list[0].slugs.length === 2) {
+      (collapsed[list[0].slugs[0]] ??= []).push(list[0]);
     } else {
       collapsed[key] = list;
     }
@@ -83,26 +114,26 @@ function groupPagesByTopLevelSlug(pages: Page[]): Record<string, Page[]> {
   return collapsed;
 }
 
-/** Keeps `(root)` first so top-level pages (quickstart, installation, …) lead. */
+/** Sorts alphabetically, but after every collection the bar knows about. */
+function collectionRank(collection: string): number {
+  const rank = COLLECTION_ORDER.indexOf(collection);
+  return rank === -1 ? COLLECTION_ORDER.length : rank;
+}
+
+/**
+ * Orders collections as the collection bar presents them, and within one puts
+ * the collection's own pages ahead of its sections.
+ */
 function compareSections(a: string, b: string): number {
   if (a === ROOT_SECTION) return -1;
   if (b === ROOT_SECTION) return 1;
-  return a.localeCompare(b);
-}
 
-function formatSectionTitle(key: string): string {
-  if (key === ROOT_SECTION) return 'Overview';
-  return key
-    .split('-')
-    .map((part) =>
-      part.length <= 3 ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1),
-    )
-    .join(' ');
-}
-
-function formatPageEntry(page: Page): string {
-  const title = page.data.title;
-  const description = page.data.description?.trim();
-  const base = `- [${title}](${page.url})`;
-  return description ? `${base}: ${description}` : base;
+  const [aCollection, aSection] = a.split('/');
+  const [bCollection, bSection] = b.split('/');
+  if (aCollection !== bCollection) {
+    return collectionRank(aCollection) - collectionRank(bCollection);
+  }
+  if (!aSection) return -1;
+  if (!bSection) return 1;
+  return aSection.localeCompare(bSection);
 }
