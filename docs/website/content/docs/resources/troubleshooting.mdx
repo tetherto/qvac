@@ -72,6 +72,28 @@ sudo apt install -y libatomic1
 
 Omit `sudo` when running as root inside a container. Restart the application after installing the library. See [system requirements](/sdk/system-requirements#linux) and [issue #4290](https://github.com/tetherto/qvac/issues/4290).
 
+## RPC server failure: missing libibverbs.so.1
+
+### Situation
+
+On Linux, `startRpcServer()` fails with:
+
+```text
+Handler execution failed: startRpcServer: RPC backend is not available; the RPC module may have failed to load because libibverbs.so.1 is missing
+```
+
+### Cause
+
+The Linux RPC backend links `libibverbs.so.1`, even for TCP-only connections.
+
+### Solution
+
+```bash
+sudo apt install -y libibverbs1
+```
+
+Omit `sudo` as root. For RDMA, also install your NIC's provider package (e.g. `ibverbs-providers`).
+
 ## Startup crash: requested module does not provide a default export
 
 ### Situation
