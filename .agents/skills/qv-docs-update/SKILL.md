@@ -25,6 +25,15 @@ Never edit anything under `packages/**`. If a source file is wrong, report it an
 
 The writable surface is defined in [references/docs-scope.md](references/docs-scope.md). Read that file before writing anything. A write outside the allowlist aborts the run and reverts every patch already applied.
 
+One constraint from that file shapes every phase, so it is repeated here. The SDK and the CLI are each cut into one documentation line per published version, and this skill writes to the **current** line only — the folder written in parentheses, `sdk/(v0.20)` and `cli/(v0.14)`. It documents the working tree, which is the release not yet cut; a line already cut documents a release already shipped. Resolve the folder each run, never from memory:
+
+```bash
+ls docs/website/content/docs/sdk | grep '^(v'
+ls docs/website/content/docs/cli | grep '^(v'
+```
+
+The two scripts that read the docs — the Phase 4 router and the Phase 6 parity gate — resolve it the same way and exit 2 if a collection has anything other than exactly one current line. Page paths below are written `sdk/<line>/…`, and the routing map uses the same placeholder.
+
 ## Pipeline objects
 
 The skill builds four objects, in order. Each one appears as a block in the final report.
@@ -318,10 +327,10 @@ The output has this shape:
   "new_capability_symbols": [],
   "pages": [
     {
-      "page": "ai-capabilities/text-generation.mdx",
+      "page": "sdk/(v0.20)/ai-capabilities/text-generation.mdx",
       "targets": [
         {
-          "page": "ai-capabilities/text-generation.mdx",
+          "page": "sdk/(v0.20)/ai-capabilities/text-generation.mdx",
           "section": "Examples › Usage",
           "sectionLevel": 3,
           "via": "R1",
@@ -342,7 +351,7 @@ Read the fields as follows:
 - `pages[].targets[]` are the candidates. Each one is a page section to judge in step 3.
 - `evidence` is the authored binding the router matched. It is a fact about the repo, not a guess.
 - `line` is where that binding sits in the page. Use it to find the section fast.
-- `section` is `null` on a page-level hit: every R3 hit, and the `cli/http-server/**` subtree of R4. The router bound the page, not a section, because the map and the subtree rule name pages only.
+- `section` is `null` on a page-level hit: every R3 hit, and the `cli/<line>/http-server/**` subtree of R4. The router bound the page, not a section, because the map and the subtree rule name pages only.
 - `unrouted[]` are source files no router could place. Handle them in step 5.
 - `discarded[]` are hits that fell outside the allowlist or hit a path declared undocumented. Copy them into the report. Never re-add them.
 - `new_capability_symbols[]` are new exported symbols in `client/api/` with no page. Each one means `NEW_CAPABILITY_PAGE`.
@@ -354,7 +363,7 @@ There are four routers, and their hits are unioned. R1, R2 and R4 are exact: eac
 | Router | Binding it resolves | Buckets it covers |
 | --- | --- | --- |
 | R1 | the literal `file=<rootDir>/…` directive in a fence | `examples` |
-| R2 | the `/reference/api#<symbol>` anchor | `api`, export diff |
+| R2 | the `/sdk/reference/api#<symbol>` anchor | `api`, export diff |
 | R4 | the `` ### `qvac <command>` `` heading | `cli-command` |
 | R3 | [references/routing-map.yaml](references/routing-map.yaml) | everything else |
 
@@ -363,7 +372,7 @@ Four router behaviours affect how you read the output:
 - R1 has no false-positive mode. No page inlines a full example. A TS example also routes the page that shows its transpiled `dist/**.js` counterpart.
 - R2 takes symbols from the barrel, not the filename. `completion-stream.ts` exports `completion`, so the anchor is `#completion` and never `#completionstream`. `rag.ts` exports nine functions and `transcribe.ts` exports two. Use the same rule when you write a link in a patch.
 - R2 also has a secondary pass for a symbol linked somewhere other than its anchor, reported as the weaker binding. `text-generation.mdx` links the text `` `batchCompletion()` `` to the batch-processing page instead of to its API anchor, and carries a paragraph on how that function shares `parallel` slots. That page is a real target even though the anchor is absent. A symbol mentioned in prose with no link at all is routed by nothing.
-- R4 also routes the narrative sections that describe a command outside `## Reference`, and for `serve/` it adds the whole `cli/http-server/**` subtree.
+- R4 also routes the narrative sections that describe a command outside `## Reference`, and for `serve/` it adds the whole `cli/<line>/http-server/**` subtree. That subtree is in the CLI's line, not the SDK's: the HTTP server ships in the SDK and is documented under `qvac serve`, and the two collections are versioned independently.
 - R3 runs per file, not per run. It picks up only the files the exact routers could not resolve. A commit that touches an example and a config module gets an R1 hit for the example, and R3 still runs for the config module. One file's exact hit never suppresses the fallback for another file.
 
 A `pages: []` entry in the routing map is a positive declaration that a path is intentionally not documented. It is why a file can be unrouted without becoming a question.
@@ -385,9 +394,9 @@ The `Reason` field is the contract for the patch. Phase 5 is bound to it, so wri
 ```text
 DOCS_TARGETS — 2 pages, 3 targets
 
-ai-capabilities/text-generation.mdx
+sdk/(v0.20)/ai-capabilities/text-generation.mdx
   1. Section: "Features"
-     Via:     R2 (completion -> /reference/api#completion)
+     Via:     R2 (completion -> /sdk/reference/api#completion)
      Reason:  the list of generation controls is complete today and would
               become incomplete by omitting maxTokens.
      Action:  list maxTokens among the controls.
@@ -398,7 +407,7 @@ ai-capabilities/text-generation.mdx
               script now demonstrates the new parameter.
      Action:  update the introductory sentence.
 
-configuration/index.mdx
+sdk/(v0.20)/configuration/index.mdx
   3. Section: "Reference"
      Via:     R3 (packages/sdk/src/client/config-loader/**)
      Reason:  R3 bound the page and named no section; "Reference" is the only
@@ -407,13 +416,13 @@ configuration/index.mdx
      Action:  add the key, its accepted values, and its default.
 
 Dismissed:
-- ai-capabilities/batch-processing.mdx
+- sdk/(v0.20)/ai-capabilities/batch-processing.mdx
   Reason: links completion() only by comparison; no claim went stale.
 ```
 
 There is no page limit, and multi-page is a normal result.
 
-The team rule "1 change == 1 scope" describes the scope of the change in the source. It says nothing about how many pages document that change, and the two are different quantities. A new CLI command that reads a new config key is perfectly scoped, and it needs both `cli/index.mdx` and the configuration page. Do not drop a target to keep the page count down. The gate against wide routing is the written reason, not a count.
+The team rule "1 change == 1 scope" describes the scope of the change in the source. It says nothing about how many pages document that change, and the two are different quantities. A new CLI command that reads a new config key is perfectly scoped, and it needs both `cli/<line>/index.mdx` and the configuration page. Do not drop a target to keep the page count down. The gate against wide routing is the written reason, not a count.
 
 5. If more than four pages survived filtering, then emit this note and continue. It never blocks.
 
@@ -425,7 +434,7 @@ or the source change mixes scopes. The patches stand.
 
 6. For each entry in `new_capability_symbols[]`, classify the symbol by the rule in [States](#states), then run the matching subprocedure, below. If the symbol performs inference, run `NEW_CAPABILITY_PAGE`. Else run `NEW_MODELS_PAGE`.
 
-Both subprocedures also apply to a symbol the router could not place because **no page links its anchor yet**. R2 binds a page by the `/reference/api#<symbol>` link it already contains, so a public symbol that no prose page mentions routes to nothing and reaches `unrouted[]` whether or not it is new in this run. A symbol in that position, exported from the barrel and listed in the API summary, needs the page the routers found missing rather than a question to the developer. Confirm the absence before creating the page: search `docs/website/content/docs/` for the symbol name and for its anchor, and treat a hit in `reference/**` or `release-notes/**` as no coverage, since both are generated.
+Both subprocedures also apply to a symbol the router could not place because **no page links its anchor yet**. R2 binds a page by the `/sdk/reference/api#<symbol>` link it already contains, so a public symbol that no prose page mentions routes to nothing and reaches `unrouted[]` whether or not it is new in this run. A symbol in that position, exported from the barrel and listed in the API summary, needs the page the routers found missing rather than a question to the developer. Confirm the absence before creating the page: search the current line, `docs/website/content/docs/sdk/<line>/`, for the symbol name and for its anchor, and treat a hit under `reference/` as no coverage, since the API summary and the release notes are both generated there. Search that line alone — a hit in a line already cut says the symbol was documented for a shipped release, not that the current one covers it.
 
 7. For each entry in `unrouted[]` that is user-facing **and carries no `newSymbol`**, emit `HUMAN_INPUT_REQUIRED` for that source and ask which page covers the topic.
 
@@ -457,9 +466,9 @@ Match the patch to the change type:
 | New example using existing functions | Add a `###` subsection under `Examples`: one introductory sentence, then a complete `<Tabs>` block for the language files that exist. |
 | New essential parameter on an existing function | Document it on the capability page, as a `Features` bullet or as prose in the relevant section. Follow `text-generation.mdx`. |
 | Observable behaviour changed | Correct the stale statement in place. Do not rewrite the section. |
-| New function in an existing capability | Add it to the `Functions` list with a `/reference/api#<symbol>` link. |
-| New flag on an existing CLI command | Document it inside that command's own `###` block in `cli/index.mdx`, following how the neighbouring flags are shown. |
-| New CLI command | Add a `` ### `qvac <command>` `` heading under `## Reference` in `cli/index.mdx`, matching the shape of the commands already there. Never a new page. |
+| New function in an existing capability | Add it to the `Functions` list with a `/sdk/reference/api#<symbol>` link. |
+| New flag on an existing CLI command | Document it inside that command's own `###` block in `cli/<line>/index.mdx`, following how the neighbouring flags are shown. |
+| New CLI command | Add a `` ### `qvac <command>` `` heading under `## Reference` in `cli/<line>/index.mdx`, matching the shape of the commands already there. Never a new page. |
 | New function that institutes a new capability | Run the `NEW_CAPABILITY_PAGE` subprocedure, below. |
 | New function that institutes a new model-lifecycle topic | Run the `NEW_MODELS_PAGE` subprocedure, below. |
 
@@ -479,7 +488,7 @@ There are five gates. Run them in order. If any gate fails, report the error, le
 
 Check the files this run wrote, never the dirty working tree. The tree legitimately holds the developer's own changes under `packages/**`, which Phase 1 collected on purpose. Treating those as scope violations would abort every run. To confirm nothing else in the website was touched, run `git status --short -- docs/website/` and verify that every path it lists is one you wrote.
 
-A file outside the allowlist aborts the run. Revert everything already applied. `index.mdx` and `custom-tree.ts` pass only when the diff is an append inside the one block their row in the restricted allowlist names — the AI-capabilities block under `NEW_CAPABILITY_PAGE`, the `Models` block under `NEW_MODELS_PAGE`.
+A file outside the allowlist aborts the run. Revert everything already applied. The three restricted files pass only when the diff is an append inside the one block their row names — the AI-capabilities grid in `ecosystem/index.mdx` and the `pages` array of `ai-capabilities/meta.json` under `NEW_CAPABILITY_PAGE`, the `pages` array of `models/meta.json` under `NEW_MODELS_PAGE`. `src/lib/custom-tree.ts` is not among them: it declares the sidebars of the two unversioned collections, and this skill adds a page to neither.
 
 2. Run `git diff` and review the full diff.
 
@@ -499,7 +508,7 @@ bun run .agents/skills/qv-docs-update/scripts/check-capability-parity.ts
 
 It cross-checks all four registration points, verifies the card's icon is imported and matches the sidebar's, and catches registrations pointing at pages that do not exist. Three of the four points fail silently without it: omit the card, the bullet, or the sidebar entry and the build still succeeds, the tests still pass, and the capability is missing everywhere a user would look.
 
-If the run created a models page instead, then check its three registration points by hand: the page file exists, `introduction.mdx` carries a bullet linking its URL under `### Utilities`, and `custom-tree.ts` carries an entry with the same URL inside the `Models` block. The script does not cover `models/`. The silent failure is the same one — omit the bullet or the entry and every other gate still passes — so do not skip this because no command reports it.
+If the run created a models page instead, then check its three registration points by hand: the page file exists and declares an `icon:`, `sdk/<line>/index.mdx` carries a bullet linking its URL under `### Utilities`, and `sdk/<line>/models/meta.json` lists its slug. The script does not cover `models/`. The silent failure is the same one — omit the bullet or the slug and every other gate still passes — so do not skip this because no command reports it.
 
 5. Run the website suites from `docs/website/`.
 
@@ -521,53 +530,55 @@ A new capability is not "create an MDX". It is one operation with four points, e
 
 | # | File | Operation |
 | --- | --- | --- |
-| 1 | `content/docs/ai-capabilities/<slug>.mdx` | **create**, from [references/capability-page-template.mdx](references/capability-page-template.mdx) |
-| 2 | `content/docs/index.mdx` | **append** 1 `<Card>` at the end of the `## AI capabilities` grid, **and** 1 identifier to the `lucide-react` import |
-| 3 | `content/docs/introduction.mdx` | **append** 1 bullet at the end of the `### AI tasks` list |
-| 4 | `src/lib/custom-tree.ts` | **append** 1 entry at the end of the `AI capabilities` block |
+| 1 | `content/docs/sdk/<line>/ai-capabilities/<slug>.mdx` | **create**, from [references/capability-page-template.mdx](references/capability-page-template.mdx) |
+| 2 | `content/docs/sdk/<line>/ai-capabilities/meta.json` | **append** 1 slug at the end of the `pages` array |
+| 3 | `content/docs/ecosystem/index.mdx` | **append** 1 `<Card>` at the end of the `## AI capabilities` grid, **and** 1 identifier to the `lucide-react` import |
+| 4 | `content/docs/sdk/<line>/index.mdx` | **append** 1 bullet at the end of the `### AI tasks` list |
+
+The capability belongs to the release being documented, so all of this happens in the current line and in no other. A line already cut shipped without the capability.
 
 1. If the change requires touching any file outside those four, then stop and emit `HUMAN_INPUT_REQUIRED`. The case is not a new capability.
 
-2. Create the page from the template.
+2. Create the page from the template, and declare its icon in the frontmatter.
 
-3. Append the card and its icon import to `content/docs/index.mdx`.
+A versioned collection composes its navigation from the content, so a page carries its own icon rather than a hand-written tree carrying it. The icon is not derivable from the source: propose a Lucide name, use the same one in the card at step 3, and flag it in the report as needing editorial confirmation.
 
-Both edits are required. Without the import, the build breaks.
+3. Append the slug to `content/docs/sdk/<line>/ai-capabilities/meta.json`.
+
+The `pages` array is explicit and ordered, with no catch-all, so it is the whole of the sidebar for that folder. Without this entry the page is reachable by URL and invisible in navigation.
+
+```json
+{
+  "title": "AI capabilities",
+  "pages": ["text-generation", "…", "image-classification"]
+}
+```
+
+4. Append the card and its icon import to `content/docs/ecosystem/index.mdx`.
+
+The grid lives on the Ecosystem overview — the page the old site index became — and its cards point at the version-less capability URLs, which the current line answers. Both edits are required. Without the import, the build breaks.
 
 ```mdx
 import { MessagesSquare, /* … */, Shapes, Eye, Brain, /* … */ } from 'lucide-react'
 ```
 
 ```mdx
-  <Card href="/ai-capabilities/image-classification" title={<span className="inline-flex items-center gap-2"><Shapes className="size-4 text-[var(--color-fd-primary)]" />Image classification</span>}>
+  <Card href="/sdk/ai-capabilities/image-classification" title={<span className="inline-flex items-center gap-2"><Shapes className="size-4 text-[var(--color-fd-primary)]" />Image classification</span>}>
     Classify images into labels with confidence scores via a customized GGML backend.
   </Card>
 ```
 
-If the icon name collides in MDX scope, then alias it. `Image` is imported as `Image as ImageIcon` for that reason.
+If the icon name collides in MDX scope, then alias it. `Image` is imported as `Image as ImageIcon` for that reason. The page's frontmatter declares the Lucide export itself, so it reads `icon: Image` where the card reads `<ImageIcon>`, and the parity gate resolves the alias before comparing them.
 
-4. Append the bullet to `content/docs/introduction.mdx`.
+5. Append the bullet to `content/docs/sdk/<line>/index.mdx`, under `### AI tasks`.
+
+That page is the SDK collection overview, the one the old `introduction.mdx` became.
 
 ```mdx
-* [**Image classification:**](/ai-capabilities/image-classification) assigning class labels with confidence scores to images, via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml).
+* [**Image classification:**](/sdk/ai-capabilities/image-classification) assigning class labels with confidence scores to images, via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml).
 ```
 
-5. Append the sidebar entry to `src/lib/custom-tree.ts`, between the `AI capabilities` and `P2P capabilities` separators.
-
-The sidebar is a hand-maintained tree. It is not derived from the filesystem. Without this entry the page is reachable by URL and invisible in navigation.
-
-```ts
-{
-  name: 'Image classification',
-  url: '/ai-capabilities/image-classification',
-  type: 'page',
-  icon: resolveIcon('Shapes'),
-},
-```
-
-6. Use the same icon in the card (step 3) and the sidebar entry (step 5).
-
-The icon is not derivable from the source. Propose a Lucide name and flag it in the report as needing editorial confirmation.
+6. Use the same icon in the page's frontmatter (step 2) and the card (step 4).
 
 7. Write the card and bullet descriptions from this formula, which is already present as an MDX comment in both files.
 
@@ -583,22 +594,24 @@ This is not a phase. It is a conditional subprocedure, and it runs only when a c
 
 - **Inputs:** the symbol, its example file, and the question the topic answers for a user.
 - **Outputs:** three edits: one new page, two appends.
-- **Expected result:** the page, the bullet and the sidebar entry all exist and agree.
+- **Expected result:** the page, its slug in `models/meta.json`, and the bullet all exist and agree.
 
-It is the `NEW_CAPABILITY_PAGE` operation on the `models/` subtree, with one point fewer. There is no card, because the home page's only grid is `## AI capabilities` and this topic is not one.
+It is the `NEW_CAPABILITY_PAGE` operation on the `models/` subtree, with one point fewer. There is no card, because the Ecosystem overview's only grid is `## AI capabilities` and this topic is not one.
 
 | # | File | Operation |
 | --- | --- | --- |
-| 1 | `content/docs/models/<slug>.mdx` | **create**, following `models/download-lifecycle.mdx` and `models/sharded-models.mdx` |
-| 2 | `content/docs/introduction.mdx` | **append** 1 bullet at the end of the `### Utilities` list |
-| 3 | `src/lib/custom-tree.ts` | **append** 1 entry at the end of the `Models` block |
+| 1 | `content/docs/sdk/<line>/models/<slug>.mdx` | **create**, following `models/download-lifecycle.mdx` and `models/sharded-models.mdx` |
+| 2 | `content/docs/sdk/<line>/models/meta.json` | **append** 1 slug at the end of the `pages` array |
+| 3 | `content/docs/sdk/<line>/index.mdx` | **append** 1 bullet at the end of the `### Utilities` list |
+
+Like a capability, the topic belongs to the release being documented, so every edit lands in the current line.
 
 1. If the change requires touching any file outside those three, then stop and emit `HUMAN_INPUT_REQUIRED`. The case is not a model-lifecycle topic.
 
 2. Create the page, following the shape both existing `models/` pages share.
 
 ```text
-frontmatter:  title, description, schemaType: HowTo
+frontmatter:  title, icon, description, schemaType: HowTo
 ## Overview
 ## Functions
 <topic sections>
@@ -610,26 +623,24 @@ It is close to the capability skeleton and differs in two ways. There is no `## 
 
 Open `## Overview` by naming the function and the question it answers for the user, then link the function to its API anchor. Do not open by naming an inference engine: that opening belongs to capability pages, which have one, and this topic does not.
 
-3. Append the bullet to `content/docs/introduction.mdx`, under `### Utilities`.
+3. Append the slug to `content/docs/sdk/<line>/models/meta.json`.
 
-Model-lifecycle topics go in `### Utilities`, not `### AI tasks`. Both existing pages are already there.
+```json
+{
+  "title": "Models",
+  "pages": ["download-lifecycle", "sharded-models", "assess-model-fit"]
+}
+```
+
+4. Append the bullet to `content/docs/sdk/<line>/index.mdx`, under `### Utilities`.
+
+Model-lifecycle topics go in `### Utilities`, not `### AI tasks`. All three existing pages are already there.
 
 ```mdx
-* [**Sharded models:**](/models/sharded-models) download a model that is sharded into multiple parts.
+* [**Sharded models:**](/sdk/models/sharded-models) download a model that is sharded into multiple parts.
 ```
 
-4. Append the sidebar entry to `src/lib/custom-tree.ts`, between the `Models` and `AI capabilities` separators.
-
-```ts
-{
-  name: 'Sharded models',
-  url: '/models/sharded-models',
-  type: 'page',
-  icon: resolveIcon('Merge'),
-},
-```
-
-5. Propose a Lucide icon name and flag it in the report as needing editorial confirmation.
+5. Declare a Lucide icon in the page's frontmatter and flag it in the report as needing editorial confirmation.
 
 The icon is not derivable from the source. Unlike a capability, this page has only one icon to choose, since there is no card to keep in agreement.
 
@@ -648,14 +659,14 @@ Source impact:
 completion() accepts an optional maxTokens parameter.
 
 Routing:
-- ai-capabilities/text-generation.mdx  via R2 (symbol)  -> section "Features"
-- ai-capabilities/text-generation.mdx  via R1 (example) -> section "Examples › Usage"
+- sdk/(v0.20)/ai-capabilities/text-generation.mdx  via R2 (symbol)  -> section "Features"
+- sdk/(v0.20)/ai-capabilities/text-generation.mdx  via R1 (example) -> section "Examples › Usage"
 
 Generated coverage:
 - The API summary covers the signature. It does not cover the parameter's meaning.
 
 Documentation updated:
-- ai-capabilities/text-generation.mdx (2 sections, +7 −2)
+- sdk/(v0.20)/ai-capabilities/text-generation.mdx (2 sections, +7 −2)
 
 Validation:
 - scope ok
@@ -684,7 +695,7 @@ Source impact:
 completion() accepts an optional maxTokens parameter.
 
 Resolved:
-- ai-capabilities/text-generation.mdx  "Features"  via R2  +4 −0
+- sdk/(v0.20)/ai-capabilities/text-generation.mdx  "Features"  via R2  +4 −0
   (patch proposed, awaiting approval)
 
 Pending:
@@ -703,7 +714,7 @@ Do not do any of the following:
 - Ground a patch beyond symbol existence and `file=` resolution. Broad factual validation is v2. The developer reviewing the diff wrote the feature, so they catch a false claim.
 - Judge the style guide with a second model pass.
 - Trigger this skill automatically. Hook-based auto-detection belongs to a CI companion outside this skill.
-- Create a page for anything other than a new AI capability or a new model-lifecycle topic. Those two are derivable from a source change, because a public symbol with no page is a fact the routers report. A new page from an information-architecture decision is permanently out of scope: reorganising pages that already cover their subject is not derivable from a source change. A new CLI command is a new section of `cli/index.mdx`. A new Python example is a tab on an existing page, or a section of `python-sdk.mdx`.
+- Create a page for anything other than a new AI capability or a new model-lifecycle topic. Those two are derivable from a source change, because a public symbol with no page is a fact the routers report. A new page from an information-architecture decision is permanently out of scope: reorganising pages that already cover their subject is not derivable from a source change. A new CLI command is a new section of `cli/<line>/index.mdx`. A new Python example is a tab on an existing page, or a section of `sdk/<line>/python-sdk.mdx`.
 
 ## Files
 

@@ -2,12 +2,9 @@
  * Rendering phase: reads extracted api-data.json and produces a single
  * API-summary MDX file (functions + objects + folded errors).
  *
- * Under the shim-based layout every minor series has one permanent
- * output at `content/docs/reference/api/v<X.Y>.x.mdx` (literal `x`).
- * The canonical bare URL `/reference/api` is served by a shim
- * (`index.mdx`) that `<include>`s the current-latest series file;
- * that shim is written by `release-version-minor.ts` via `writeShim`,
- * not by this renderer.
+ * The output target is one of:
+ *   - `content/docs/sdk/reference/api/index.mdx`  (latest version)
+ *   - `content/docs/sdk/reference/api/v<X.Y.Z>.mdx`  (frozen older version)
  *
  * Page assembly uses a single Nunjucks template at
  * `scripts/api-docs/templates/single-page.njk`.
@@ -28,8 +25,8 @@ export interface RenderOptions {
   /**
    * Absolute path of the file to write (parent directory will be created
    * automatically). Examples:
-   *   - .../content/docs/reference/api/index.mdx
-   *   - .../content/docs/reference/api/v0.8.0.mdx
+   *   - .../content/docs/sdk/reference/api/index.mdx
+   *   - .../content/docs/sdk/reference/api/v0.8.0.mdx
    */
   outputFile: string;
 }

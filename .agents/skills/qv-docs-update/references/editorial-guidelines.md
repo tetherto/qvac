@@ -4,6 +4,8 @@ Every rule below is a pattern the current pages already follow. Obey them and th
 
 Where the corpus is inconsistent, this file says so. Match the page you are editing. Never normalise a neighbour.
 
+Page paths below are relative to the SDK's current documentation line, `content/docs/sdk/<line>/` — the only line this skill writes to, per [docs-scope.md](docs-scope.md). URLs are written as the site serves them: version-less, because the current line is what answers those addresses.
+
 Primary exemplars: `ai-capabilities/text-generation.mdx` is the richest page, `ai-capabilities/image-classification.mdx` the minimal canonical one.
 
 ## Language and terminology
@@ -21,7 +23,7 @@ Primary exemplars: `ai-capabilities/text-generation.mdx` is the richest page, `a
 All 18 capability pages share this skeleton:
 
 ```text
-frontmatter:  title, description, schemaType: HowTo
+frontmatter:  title, icon, description, schemaType: HowTo
 ## Overview
 ## Functions
 ## Models              (17/18 — rag.mdx has "## Pipeline" instead)
@@ -35,7 +37,9 @@ Place optional sections between `## Models` and `## Example(s)`, and only with e
 
 Frontmatter `title` capitalization is not normalized across the corpus (`Text generation`, `Text-to-Speech`). Follow the capability's own name.
 
-Only capability pages get `schemaType: HowTo`. `cli/index.mdx` uses `schemaType: TechArticle` and adds `ogImage`.
+Frontmatter `icon` is a Lucide export name, and it is what draws the page's sidebar entry: a versioned collection composes its navigation from the content, so the icon is declared here and nowhere else. A capability's icon must match the one its card renders on the Ecosystem overview, which the parity gate checks.
+
+Only capability pages get `schemaType: HowTo`. `cli/<line>/index.mdx` uses `schemaType: TechArticle` and adds `ogImage`.
 
 ### `## Overview`
 
@@ -51,11 +55,11 @@ Write an ordered list of the call sequence. Link each item to its API summary an
 
 ```mdx
 Use the following sequence of function calls:
-1. [`loadModel()`](/reference/api#loadmodel)
-2. [`completion()`](/reference/api#completion)
-3. [`unloadModel()`](/reference/api#unloadmodel)
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`completion()`](/sdk/reference/api#completion)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
 
-For how to use each function, see [SDK — API reference](/reference/api/).
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 ```
 
 Copy the closing line verbatim. It is boilerplate.
@@ -65,18 +69,18 @@ This shape belongs to capability pages only. Pages outside `ai-capabilities/` ha
 Some pages annotate an item with a trailing em-dash note:
 
 ```mdx
-1. [`loadModel()`](/reference/api#loadmodel) — load with `modelConfig.parallel >= 2`.
+1. [`loadModel()`](/sdk/reference/api#loadmodel) — load with `modelConfig.parallel >= 2`.
 ```
 
-Build the anchor by lowercasing the symbol name and stripping the parentheses: `assessModelFit()` becomes `/reference/api#assessmodelfit`.
+Build the anchor by lowercasing the symbol name and stripping the parentheses: `assessModelFit()` becomes `/sdk/reference/api#assessmodelfit`.
 
 Take the symbol from `packages/sdk/src/client/api/index.ts`, not from the filename. The barrel is the authority, and `completion-stream.ts` exports `completion`.
 
 **Always link a symbol to its API anchor when one exists.** The anchor is R2's primary binding, so this rule keeps the next run's routing working. Two shapes in the corpus break it:
 
 ```mdx
-[`getLogger()`](/reference/api)                                  {/* no anchor */}
-[`batchCompletion()`](/ai-capabilities/batch-processing)          {/* points at a page, not the anchor */}
+[`getLogger()`](/sdk/reference/api)                                  {/* no anchor */}
+[`batchCompletion()`](/sdk/ai-capabilities/batch-processing)          {/* points at a page, not the anchor */}
 ```
 
 R2 has a secondary pass that catches a symbol linked somewhere other than its anchor, so neither is invisible. The hit is reported as the weaker binding. A symbol mentioned in prose with no link at all is routed by nothing.
@@ -94,7 +98,7 @@ Write either prose plus a `-` bullet list of cross-references, or a `-` list of 
 Nearly every page closes the section with a pointer to the model constants. Every variant ends with the same link:
 
 ```
-[SDK — Models](/introduction#models)
+[SDK — Models](/sdk#models)
 ```
 
 The lead-in has four variants and they are not interchangeable. Match the page you are editing.
@@ -167,7 +171,7 @@ Rules that follow from that shape:
 
 `<Tabs>` is the pattern for runnable scripts, not a universal wrapper. `configuration/index.mdx` shows its schema with `<WrapCode>` and a single JSON fence, because there is one language and nothing to switch between.
 
-Inline snippets are permitted where a whole runnable file would be noise. Observed uses: a call-shape illustration, a `loadModel({…})` recipe inside `## Models`, an event-loop pattern, a shell one-liner in `cli/index.mdx`, and a sample of log output in a bare fence. The `kvCache` block is the model to follow:
+Inline snippets are permitted where a whole runnable file would be noise. Observed uses: a call-shape illustration, a `loadModel({…})` recipe inside `## Models`, an event-loop pattern, a shell one-liner in `cli/<line>/index.mdx`, and a sample of log output in a bare fence. The `kvCache` block is the model to follow:
 
 ````mdx
 ```js
@@ -216,7 +220,7 @@ Copy the footer tip verbatim. It is boilerplate.
 
 ```mdx
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
 </Callout>
 ```
 
@@ -224,7 +228,7 @@ If a capability has no Python example, then declare it with this callout, verbat
 
 ```mdx
 <Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/python-sdk) for the API surface.
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
 </Callout>
 ```
 
@@ -233,10 +237,10 @@ The Python client supports this capability through the same worker. A dedicated 
 Link, do not duplicate. When another page covers the topic, link it. These shapes are in use:
 
 ```mdx
-see [Multimodal](/ai-capabilities/multimodal)
-see [Sharded models](/models/sharded-models)
-see [Concurrent completions](#concurrent-completions)          {/* same-page anchor */}
-[`deleteCache({ kvCacheKey })`](/reference/api#deletecache)     {/* symbol -> API summary */}
+see [Multimodal](/sdk/ai-capabilities/multimodal)
+see [Sharded models](/sdk/models/sharded-models)
+see [Concurrent completions](#concurrent-completions)              {/* same-page anchor */}
+[`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache)     {/* symbol -> API summary */}
 [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml)
 ```
 

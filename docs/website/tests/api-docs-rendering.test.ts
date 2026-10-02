@@ -184,6 +184,12 @@ describe('single-page template', () => {
     expect(mdx).toContain('description: One-page reference of all public functions and objects exported by @qvac/sdk')
   })
 
+  it('emits the sidebar title and icon the line layout expects', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toContain('sidebarTitle: API')
+    expect(mdx).toContain('icon: BookA')
+  })
+
   it('emits the autogen / scope callout', () => {
     const mdx = env.render('single-page.njk', renderArgs).trim()
     expect(mdx).toContain('Auto-generated from `.d.ts` declarations and TSDoc comments.')
@@ -294,5 +300,44 @@ describe('single-page template', () => {
     expect(mdx).toContain(
       '> 🧪 **Prototype only**: Not production grade; use foo() instead in production.',
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// release-notes-page.njk rendering
+// ---------------------------------------------------------------------------
+
+describe('release-notes-page template', () => {
+  const env = createTestEnv()
+
+  const releaseNotesArgs = {
+    pageTitle: 'SDK Release Notes — v0.9.x (latest)',
+    pageDescription: 'Release notes for QVAC SDK v0.9.1.',
+    overrides: [],
+    versions: [
+      {
+        version: '0.9.1',
+        packages: [{ pkg: 'sdk', body: '- Fixed a leak in the worker pool.' }],
+      },
+    ],
+  }
+
+  it('emits valid frontmatter with the page title and description', () => {
+    const mdx = env.render('release-notes-page.njk', releaseNotesArgs).trim()
+    expect(mdx).toMatch(/^---\ntitle: SDK Release Notes — v0\.9\.x \(latest\)\n/)
+    expect(mdx).toContain('description: Release notes for QVAC SDK v0.9.1.')
+  })
+
+  it('emits the sidebar title and icon the line layout expects', () => {
+    const mdx = env.render('release-notes-page.njk', releaseNotesArgs).trim()
+    expect(mdx).toContain('sidebarTitle: Release notes')
+    expect(mdx).toContain('icon: Tag')
+  })
+
+  it('renders one ## heading per version and one ### per package', () => {
+    const mdx = env.render('release-notes-page.njk', releaseNotesArgs).trim()
+    expect(mdx).toContain('## v0.9.1')
+    expect(mdx).toContain('### @qvac/sdk')
+    expect(mdx).toContain('- Fixed a leak in the worker pool.')
   })
 })
