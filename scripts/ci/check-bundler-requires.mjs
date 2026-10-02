@@ -13,18 +13,17 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const LEXER_PACKAGE = 'bare-module-lexer'
-// The mobile app bundle is produced by `bare-pack`, so the lexer has to be the
-// one `bare-pack` itself resolves. Reading it out of an ambient `node_modules`
-// picks up whatever version happens to be hoisted nearby, and the desync this
-// check hunts for differs between lexer releases.
-// Exact pin: a floating range re-resolves against the latest publish on every run.
-const BUNDLER_SPEC = 'bare-pack@1.5.1'
-// Transitive via bare-module-traverse, so pinned with an override. 1.6.6 needs
-// node_api_is_sharedarraybuffer (Node >= 22.21); 1.6.3 predates it (pin from #4218).
-const LEXER_OVERRIDES = { [LEXER_PACKAGE]: '1.6.3' }
+// The mobile app bundle is produced by the `bare-pack` that @qvac/sdk depends
+// on, so the lexer has to be the one that bare-pack resolves. Reading it out of
+// an ambient `node_modules` picks up whatever version happens to be hoisted
+// nearby, and the desync this check hunts for differs between lexer releases.
+// The SDK's engines.node is the Node floor that lexer's native addon needs;
+// below it the addon aborts the process instead of throwing.
+const SDK_MANIFEST_PATH = fileURLToPath(new URL('../../packages/sdk/package.json', import.meta.url))
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
 // and fixtures under `test/` embed require-looking strings in output text
@@ -70,31 +69,50 @@ function collectScripts(directory) {
   })
 }
 
-function installBundler() {
+function readSdkManifest() {
+  const manifest = JSON.parse(fs.readFileSync(SDK_MANIFEST_PATH, 'utf8'))
+  return {
+    bundlerSpec: `bare-pack@${manifest.dependencies['bare-pack']}`,
+    nodeRange: manifest.engines.node
+  }
+}
+
+function installBundler(bundlerSpec) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bundler-requires-'))
   fs.writeFileSync(
     path.join(root, 'package.json'),
-    JSON.stringify({ name: 'bundler-requires', private: true, overrides: LEXER_OVERRIDES })
+    JSON.stringify({ name: 'bundler-requires', private: true })
   )
   const result = spawnSync(
     'npm',
-    ['install', '--no-save', '--no-audit', '--no-fund', '--prefix', root, BUNDLER_SPEC],
+    ['install', '--no-save', '--no-audit', '--no-fund', '--prefix', root, bundlerSpec, 'semver'],
     { encoding: 'utf8' }
   )
   if (result.status !== 0) {
-    throw new Error(`failed to install ${BUNDLER_SPEC}: ${result.stderr || result.stdout}`)
+    throw new Error(`failed to install ${bundlerSpec}: ${result.stderr || result.stdout}`)
   }
   return path.join(root, 'node_modules', 'bare-pack', 'package.json')
 }
 
+function assertNodeCanLoadLexer(bundlerManifest, nodeRange) {
+  const semver = createRequire(bundlerManifest)('semver')
+  if (semver.satisfies(process.versions.node, nodeRange)) return
+  throw new Error(
+    `${LEXER_PACKAGE} needs Node ${nodeRange} (its native addon aborts on older Node); ` +
+      `running on v${process.versions.node}`
+  )
+}
+
 function loadLexer() {
-  const bundlerManifest = installBundler()
+  const { bundlerSpec, nodeRange } = readSdkManifest()
+  const bundlerManifest = installBundler(bundlerSpec)
+  assertNodeCanLoadLexer(bundlerManifest, nodeRange)
   const lexerPath = createRequire(bundlerManifest).resolve(LEXER_PACKAGE)
   const lexer = createRequire(import.meta.url)(lexerPath)
   const version = JSON.parse(
     fs.readFileSync(path.join(path.dirname(lexerPath), 'package.json'), 'utf8')
   ).version
-  process.stdout.write(`Using ${LEXER_PACKAGE}@${version} as resolved by ${BUNDLER_SPEC}.\n`)
+  process.stdout.write(`Using ${LEXER_PACKAGE}@${version} as resolved by ${bundlerSpec}.\n`)
   return lexer
 }
 

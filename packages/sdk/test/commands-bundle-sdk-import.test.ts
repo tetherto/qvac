@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { bundleSdk } from '@/commands/bundle'
+import { isBarePackNodeSupported } from '@/commands/bundle/bare-pack'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
@@ -318,6 +319,17 @@ describe('inference native dependency boundary', () => {
     })
     assert.ok(addons.some((addon) => addon.includes('translation-nmtcpp')))
     assert.ok(addons.every((addon) => !addon.includes('ggml-rpc-server')))
+  })
+})
+
+describe('isBarePackNodeSupported', () => {
+  it('accepts Node 22.21+ and 24.9+, rejects everything older and Node 23', () => {
+    for (const version of ['22.21.0', '22.30.1', '24.9.0', '24.20.0', '26.0.0']) {
+      assert.equal(isBarePackNodeSupported(version), true, version)
+    }
+    for (const version of ['20.11.0', '22.20.0', '23.11.0', '24.8.0', 'nightly']) {
+      assert.equal(isBarePackNodeSupported(version), false, version)
+    }
   })
 })
 

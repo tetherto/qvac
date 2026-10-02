@@ -1,4 +1,5 @@
 export { bundleSdk } from '@/commands/bundle/index'
+export { BARE_PACK_NODE_ENGINES, isBarePackNodeSupported } from '@/commands/bundle/bare-pack'
 export type { BundleSdkOptions, BundleSdkResult } from '@/commands/bundle/index'
 export { ensureHostPrebuilds } from '@/commands/host-prebuilds/index'
 export type {
