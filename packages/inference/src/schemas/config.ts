@@ -238,6 +238,12 @@ export const qvacConfigSchema = z.object({
    */
   plugins: z.array(z.string()).optional(),
 
+  /**
+   * SDK bundle-time option; direct Bare callers ignore it. Defaults to true
+   * when bundling. Set false to omit bare-ffmpeg for raw PCM input or
+   * PCM/WAV audiogen output.
+   * Compressed audio input and compressed audiogen output require FFmpeg.
+   */
   includeAudioDecoder: z.boolean().optional(),
 
   /** Optional provider module selected at SDK bundle time. Direct Bare callers register in code. */
