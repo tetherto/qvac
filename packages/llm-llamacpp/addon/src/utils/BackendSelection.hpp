@@ -276,9 +276,12 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 ///     representations prefer @p selectedDeviceName's registry.
 ///
 /// Returns an empty vector when no GPU device is present.
+/// `droppedAmbiguous`, when set, receives the devices left out because an
+/// id-less copy of one card could not be ruled out across registries.
 std::vector<std::string> getTensorSplitDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName = {},
-    const LoadConstraints& constraints = {});
+    const LoadConstraints& constraints = {},
+    std::vector<std::string>* droppedAmbiguous = nullptr);
 
 /// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
 std::vector<std::string> getTensorSplitDeviceNames(

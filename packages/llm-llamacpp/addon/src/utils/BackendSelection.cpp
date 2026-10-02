@@ -1266,8 +1266,8 @@ backend_selection::getSplitDeviceSelection(
   result.sourceGpuCount = unfiltered.sourceGpuCount;
   result.rejectedDevices = unfiltered.rejectedDevices;
 
-  const std::vector<std::string> selectedNames =
-      getTensorSplitDeviceNames(bckI, selectedDeviceName, constraints);
+  const std::vector<std::string> selectedNames = getTensorSplitDeviceNames(
+      bckI, selectedDeviceName, constraints, &result.droppedAmbiguousDevices);
   const bool allowNonAdrenoOpenCl =
       backendNameMatchesFamily(selectedDeviceName, "opencl");
   std::vector<SplitDevice> rpcDevices;
@@ -1378,7 +1378,8 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
 
 std::vector<std::string> backend_selection::getTensorSplitDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
-    const LoadConstraints& constraints) {
+    const LoadConstraints& constraints,
+    std::vector<std::string>* droppedAmbiguous) {
   struct TensorCandidate {
     std::string name;
     std::string registry;
@@ -1444,13 +1445,44 @@ std::vector<std::string> backend_selection::getTensorSplitDeviceNames(
         {std::move(name), std::move(registry), std::move(deviceId)});
   }
 
-  const auto& candidates = !discrete.empty() ? discrete : integrated;
+  auto candidates = !discrete.empty() ? discrete : integrated;
+  // One card can register under CUDA and under Vulkan, and an id-less copy can
+  // never be matched to its twin. When the candidates span registries and any
+  // has no id, keep one registry: the selected one when known, else the first.
+  const bool anyWithoutId =
+      std::ranges::any_of(candidates, [](const TensorCandidate& candidate) {
+        return candidate.deviceId.empty();
+      });
+  const bool spansRegistries =
+      !candidates.empty() &&
+      std::ranges::any_of(candidates, [&](const TensorCandidate& candidate) {
+        return candidate.registry != candidates.front().registry;
+      });
+  if (anyWithoutId && spansRegistries) {
+    const std::string keptRegistry = !selectedRegistry.empty()
+                                         ? selectedRegistry
+                                         : candidates.front().registry;
+    const bool keptHasIdless =
+        std::ranges::any_of(candidates, [&](const TensorCandidate& candidate) {
+          return candidate.registry == keptRegistry &&
+                 candidate.deviceId.empty();
+        });
+    std::erase_if(candidates, [&](const TensorCandidate& candidate) {
+      const bool drop = candidate.registry != keptRegistry &&
+                        (keptHasIdless || selectedRegistry.empty() ||
+                         candidate.deviceId.empty());
+      if (drop && droppedAmbiguous != nullptr) {
+        droppedAmbiguous->push_back(candidate.name);
+      }
+      return drop;
+    });
+  }
   std::vector<std::string> names;
   std::unordered_set<std::string> seenIds;
   for (size_t i = 0; i < candidates.size(); ++i) {
     const TensorCandidate& candidate = candidates[i];
-    // A null device_id cannot be deduped against; keep the device rather than
-    // dropping it, since omitting a real GPU is worse than a duplicate.
+    // Within one registry a null device_id cannot be deduped against; keep the
+    // device rather than dropping it, since omitting a real GPU is worse.
     if (candidate.deviceId.empty()) {
       names.push_back(candidate.name);
       continue;

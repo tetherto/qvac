@@ -3,6 +3,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -2287,6 +2288,33 @@ TEST_F(
   EXPECT_EQ(
       selection.devices[0].handle,
       reinterpret_cast<ggml_backend_dev_t>(&mockBackend.devices[1]));
+}
+
+// One card whose Vulkan driver lacks VK_EXT_pci_bus_info: CUDA0 has an id and
+// Vulkan0 has none. Whichever side is selected, only that copy is kept.
+TEST_F(
+    BackendSelectionTest, ConstrainedSplitSelectionKeepsOneCopyOfIdlessCard) {
+  for (const auto& [selectedName, expected, dropped] :
+       std::vector<std::tuple<std::string, std::string, std::string>>{
+           {"cuda0", "CUDA0", "vulkan0"}, {"vulkan0", "Vulkan0", "cuda0"}}) {
+    mockBackend.clearDevices();
+    mockBackend.addDevice(withDeviceId(
+        MockDevice(
+            "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+        "0000:01:00.0"));
+    mockBackend.addDevice(MockDevice(
+        "NVIDIA RTX 4090", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"));
+    BackendInterface bckI = mockBackend.toBackendInterface();
+
+    const SplitDeviceSelection selection =
+        getSplitDeviceSelection(bckI, selectedName, {});
+
+    ASSERT_EQ(selection.devices.size(), 1U) << selectedName;
+    EXPECT_EQ(selection.devices[0].name, expected) << selectedName;
+    EXPECT_EQ(
+        selection.droppedAmbiguousDevices, std::vector<std::string>{dropped})
+        << selectedName;
+  }
 }
 
 TEST_F(
