@@ -58,9 +58,8 @@ Consequences for release changelog / metadata PRs:
 
 - Title is `chore:` (optional `[mod]` when the cut is catalog-only). Do not put
   `[bc]` on the release title; breaking lives in `breaking.md`.
-- Body API / Models / Breaking sections are copied from
-  `changelog/<this version>/`, not from an earlier hop or the generator
-  summary. Delete a section only when that file is absent.
+- Body ends at How was it tested. Do not copy API / Models / Breaking into the
+  PR; those stay in `changelog/<this version>/`.
 
 ## Workflow
 
@@ -101,7 +100,7 @@ Infer first, ask only if uncertain:
 - `[bc]`: removed/changed existing public API signatures
 - `[mod]`: changes to model constant definitions
 - ASK only if change scope is ambiguous
-- **Release changelog PRs** (base `release-*`, diff is notes / NOTICE / version / generated docs): title is `chore:` (optional `[mod]`). Do not copy `[bc]` / `[api]` from the notes into the title. Body API / Models / Breaking still copy `changelog/<this version>/`.
+- **Release changelog PRs** (base `release-*`, diff is notes / NOTICE / version / generated docs): title is `chore:` (optional `[mod]`). Do not copy `[bc]` / `[api]` from the notes into the title. Do not copy API / Models / Breaking into the body.
 
 **Testing section:**
 - If test files modified → "Unit tests added/updated for X"
@@ -279,7 +278,7 @@ Before outputting the PR description, verify:
 - [ ] "What problem" describes user impact, not implementation
 - [ ] "How it solves" is high-level approach, not line-by-line
 - [ ] Unused sections are deleted
-- [ ] `[bc]` tag has BEFORE/AFTER code examples (feature PRs). Release changelog PRs: no `[bc]` on the title; Breaking section copies `breaking.md` when that file exists
+- [ ] `[bc]` tag has BEFORE/AFTER code examples (feature PRs). Release changelog PRs: no `[bc]` on the title; do not copy Breaking into the body
 - [ ] `[api]` tag has usage example
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
@@ -289,7 +288,7 @@ Before outputting the PR description, verify:
 - [ ] For sdk releases with generated docs, `git status` shows only the current line's `reference/api.mdx` (minor) and `reference/release-notes.mdx` as committable docs changes, never `src/lib/versions.ts` or `public/_redirects` — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
-- [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body API / Models / Breaking match `changelog/<this version>/`
+- [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body ends at testing (no API / Models / Breaking)
 - [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
 - [ ] PR is Ready for review when baseline CI is expected (not left as Draft unintentionally)
 
