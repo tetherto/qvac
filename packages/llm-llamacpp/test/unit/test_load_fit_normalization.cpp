@@ -401,13 +401,15 @@ protected:
     }
     return {
         .resolveBackend =
-            [selected](
-                backend_selection::BackendType,
-                const std::optional<backend_selection::MainGpu>&,
-                const ModelMetaData&,
-                bool,
-                const std::vector<std::string>&) { return selected; },
-        .splitDevices = [devices]() { return devices; },
+            [selected](const backend_selection::BackendRequest&) {
+              return selected;
+            },
+        .splitDevices =
+            [devices](
+                const std::string&, const backend_selection::LoadConstraints&) {
+              return devices;
+            },
+        .allSplitDevices = [devices]() { return devices; },
         .registerRpcDevices =
             [rpcRegistrations,
              registeredRpcDevices](const std::string& servers) {
@@ -556,11 +558,15 @@ TEST_F(
   config["split-mode"] = "layer";
   config["main-gpu"] = "0";
   auto dependencies =
-      backend({.type = backend_selection::CPU, .name = "none"}, {});
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
   auto selection = splitSelection({"vulkan0"});
   selection.sourceGpuCount = 2;
   selection.devices.front().sourceGpuIndex = 1;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -572,17 +578,94 @@ TEST_F(
   EXPECT_EQ(result.params.devices.back(), nullptr);
 }
 
-TEST_F(LoadFitNormalizationTest, BackendOverrideWithSplitModeIsRejected) {
+TEST_F(
+    LoadFitNormalizationTest,
+    SplitModePassesDeduplicatedKvConstraintsToSelection) {
+  std::vector<enum ggml_type> resolverTypes;
+  std::vector<enum ggml_type> splitTypes;
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"});
+  dependencies.resolveBackend =
+      [&resolverTypes](const backend_selection::BackendRequest& request) {
+        resolverTypes = request.constraints.kvCacheTypes;
+        return lfn::SelectedBackend{
+            .type = backend_selection::GPU, .name = "vulkan0"};
+      };
+  const auto selection = splitSelection({"vulkan0"});
+  dependencies.splitDevices =
+      [selection, &splitTypes](
+          const std::string&,
+          const backend_selection::LoadConstraints& constraints) {
+        splitTypes = constraints.kvCacheTypes;
+        return selection;
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-k"] = "pq3_0";
+  config["cache-type-v"] = "pq3_0";
+
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+
+  EXPECT_EQ(resolverTypes, (std::vector<enum ggml_type>{GGML_TYPE_PQ3_0}));
+  EXPECT_EQ(splitTypes, resolverTypes);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeKeepsCpuKvFallbackDevice) {
+  bool splitAllowsFallback = false;
+  auto dependencies = backend(
+      {.type = backend_selection::GPU,
+       .name = "vulkan0",
+       .cpuKvFallback = true});
+  const auto selection = splitSelection({"vulkan0"});
+  dependencies.splitDevices =
+      [selection, &splitAllowsFallback](
+          const std::string&,
+          const backend_selection::LoadConstraints& constraints) {
+        splitAllowsFallback = constraints.allowCpuKvFallback;
+        return selection;
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-k"] = "pq3_0";
+  config["cache-type-v"] = "pq3_0";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_TRUE(splitAllowsFallback);
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_NE(result.params.devices.front(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, BackendOverrideSteersSplitSelection) {
+  std::vector<std::string> requestedOverride;
+  std::string splitSelectedName;
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+  dependencies.resolveBackend =
+      [&requestedOverride](const backend_selection::BackendRequest& request) {
+        requestedOverride = request.backendOverride;
+        return lfn::SelectedBackend{
+            .type = backend_selection::GPU, .name = "vulkan0"};
+      };
+  const auto selection = splitSelection({"vulkan0"});
+  dependencies.splitDevices = [selection, &splitSelectedName](
+                                  const std::string& selectedName,
+                                  const backend_selection::LoadConstraints&) {
+    splitSelectedName = selectedName;
+    return selection;
+  };
   auto config = baseConfig();
   config["split-mode"] = "layer";
   config["backend"] = "vulkan";
-  auto dependencies =
-      backend({.type = backend_selection::GPU, .name = "cuda0"});
 
-  EXPECT_THROW(
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
-      qvac_errors::StatusError);
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+
+  EXPECT_EQ(requestedOverride, (std::vector<std::string>{"vulkan"}));
+  EXPECT_EQ(splitSelectedName, "vulkan0");
 }
 
 TEST_F(LoadFitNormalizationTest, BackendOverrideWithDevicesIsRejected) {
@@ -608,7 +691,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
        .isOpenCl = true});
   auto selection = splitSelection({"vulkan0"});
   selection.devices.front().isOpenCl = false;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -629,7 +716,11 @@ TEST_F(LoadFitNormalizationTest, SplitModePrimarySkipsPrependedRpcDevice) {
   auto selection = splitSelection({"rpc0", "vulkan0"});
   selection.devices[0].isRpc = true;
   selection.devices[0].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -648,7 +739,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeFallsBackToRpcPrimaryWhenAllRpc) {
   auto selection = splitSelection({"rpc0", "rpc1"});
   selection.devices[0].isRpc = true;
   selection.devices[1].isRpc = true;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -666,7 +761,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeKvTraitsComeFromAnyDevice) {
   auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
   selection.devices[1].isOpenCl = true;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -686,7 +785,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeOpenClDeviceRejectsQuantizedKv) {
   auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
   selection.devices[1].isOpenCl = true;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   EXPECT_THROW(
       static_cast<void>(lfn::normalizeLoadForFit(
@@ -704,7 +807,11 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFollowsFilteredDeviceMapping) {
   selection.sourceGpuCount = 3;
   selection.devices[0].sourceGpuIndex = 0;
   selection.devices[1].sourceGpuIndex = 2;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -725,7 +832,11 @@ TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsFinalCountWhenReordered) {
   selection.sourceGpuCount = 3;
   selection.devices[0].sourceGpuIndex = 2;
   selection.devices[1].sourceGpuIndex = 0;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -748,7 +859,11 @@ TEST_F(
   selection.sourceGpuCount = 3;
   selection.devices[0].sourceGpuIndex = 0;
   selection.devices[1].sourceGpuIndex = 2;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
@@ -810,7 +925,11 @@ TEST_F(LoadFitNormalizationTest, TensorSplitFinalOrderWinsWhenCountsAreEqual) {
   auto selection = splitSelection({"rpc0", "vulkan0"});
   selection.devices[0].sourceGpuIndex = 1;
   selection.devices[1].sourceGpuIndex = 0;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -893,7 +1012,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeWarnsWhenEveryGpuIsRejected) {
   backend_selection::SplitDeviceSelection selection;
   selection.sourceGpuCount = 1;
   selection.rejectedDevices = {"ROCm0 (HIP)"};
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   auto& verbosity = qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
   const Priority previous = verbosity;
@@ -949,7 +1072,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeOneBitBitnetBelowAdreno800UsesCpu) {
   auto selection = splitSelection({"vulkan0", "vulkan1"});
   selection.devices[0].adrenoVersion = 740;
   selection.devices[1].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
@@ -975,7 +1102,11 @@ TEST_F(
   selection.devices[1].adrenoVersion = 830;
   selection.devices[1].isOpenCl = true;
   const ggml_backend_dev_t vulkanHandle = selection.devices[0].handle;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
@@ -998,7 +1129,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeFinetuningBelowAdreno800UsesCpu) {
   auto selection = splitSelection({"vulkan0", "vulkan1"});
   selection.devices[0].adrenoVersion = 740;
   selection.devices[1].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf",
@@ -1021,7 +1156,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeFinetuningOnAdreno800PlusKeepsGpu) {
   auto selection = splitSelection({"vulkan0", "vulkan1"});
   selection.devices[0].adrenoVersion = 830;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf",
@@ -1046,7 +1185,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeNonAdrenoSetIsNotRestricted) {
       backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
   auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
   selection.devices[1].isOpenCl = true;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf",
@@ -1075,7 +1218,11 @@ TEST_F(
   selection.devices[0].isRpc = true;
   selection.devices[0].adrenoVersion = 830;
   selection.devices[1].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
@@ -1099,7 +1246,11 @@ TEST_F(
   auto selection = splitSelection({"rpc0", "vulkan0"});
   selection.devices[0].isRpc = true;
   selection.devices[0].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf",
@@ -1125,7 +1276,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeReportsMaxAdrenoTierAcrossDevices) {
   auto selection = splitSelection({"vulkan0", "vulkan1"});
   selection.devices[0].adrenoVersion = 740;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -1147,7 +1302,11 @@ TEST_F(LoadFitNormalizationTest, SplitModeMaxAdrenoTierIgnoresRpcEndpoint) {
   selection.devices[0].isRpc = true;
   selection.devices[0].adrenoVersion = 830;
   selection.devices[1].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -1170,7 +1329,11 @@ TEST_F(
   auto selection = splitSelection({"vulkan0", "vulkan1"});
   selection.devices[0].adrenoVersion = 740;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
@@ -1200,7 +1363,11 @@ TEST_F(
       {});
   auto selection = splitSelection({"vulkan0"});
   selection.devices[0].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
@@ -2261,7 +2428,7 @@ TEST_F(LoadFitNormalizationTest, ExplicitDevicesNamingOneCardTwiceAreRejected) {
   selection.devices[1].deviceId = "0000:01:00.0";
   selection.dedupedTwins.push_back(selection.devices[1]);
   selection.devices.pop_back();
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.allSplitDevices = [selection]() { return selection; };
 
   EXPECT_THROW(
       static_cast<void>(lfn::normalizeLoadForFit(
@@ -2346,7 +2513,7 @@ TEST_F(
   selection.devices[0].isRpc = true;
   selection.devices[1].isOpenCl = true;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.allSplitDevices = [selection]() { return selection; };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -2371,7 +2538,7 @@ TEST_F(
   auto selection = splitSelection({"none"});
   selection.devices[0].isOpenCl = true;
   selection.devices[0].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.allSplitDevices = [selection]() { return selection; };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
@@ -2554,21 +2721,17 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
         qvac_errors::general_error::InvalidArgument,
         "could not reach RPC server '127.0.0.1:50052'");
   };
-  dependencies.splitDevices = [&selectionAttempted]() {
+  dependencies.splitDevices = [&selectionAttempted](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
     selectionAttempted = true;
     return backend_selection::SplitDeviceSelection{};
   };
-  dependencies.resolveBackend =
-      [&selectionAttempted](
-          backend_selection::BackendType,
-          const std::optional<backend_selection::MainGpu>&,
-          const ModelMetaData&,
-          bool,
-          const std::vector<std::string>&) {
-        selectionAttempted = true;
-        return lfn::SelectedBackend{
-            .type = backend_selection::CPU, .name = "none"};
-      };
+  dependencies.resolveBackend = [&selectionAttempted](
+                                    const backend_selection::BackendRequest&) {
+    selectionAttempted = true;
+    return lfn::SelectedBackend{.type = backend_selection::CPU, .name = "none"};
+  };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(

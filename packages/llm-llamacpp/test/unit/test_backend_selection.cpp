@@ -3,6 +3,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -37,6 +38,9 @@ struct MockDevice {
   /// means its own. The iGPU retention rule compares registry identity, not
   /// name, so a shared registry can only be modelled by aliasing a handle.
   std::optional<size_t> regAliasIndex;
+  /// KV-cache type names this device's backend cannot run, as
+  /// `deviceSupportsKvCacheType` would answer. Empty means it runs everything.
+  std::vector<std::string> unsupportedKvTypes;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -52,6 +56,13 @@ static MockDevice withDeviceId(MockDevice device, std::string&& id) {
 
 static MockDevice withRegistryOf(MockDevice device, size_t deviceIndex) {
   device.regAliasIndex = deviceIndex;
+  return device;
+}
+
+/// The TurboQuant/PolarQuant types CUDA has no kernels for, as of the pinned
+/// qvac-fabric. Used to stand a device up as incapable of running them.
+static MockDevice withoutTurboQuant(MockDevice device) {
+  device.unsupportedKvTypes = {"tbq3_0", "tbq4_0", "pq3_0", "pq4_0"};
   return device;
 }
 
@@ -105,7 +116,16 @@ public:
         &MockBackendInterface::staticDevType,
         &MockBackendInterface::staticRegGetProcAddress,
         &MockBackendInterface::staticDevGetProps,
-        &MockBackendInterface::staticLlamaLogCallback};
+        &MockBackendInterface::staticLlamaLogCallback,
+        &MockBackendInterface::staticSupportsKvCacheType};
+  }
+
+  /// A BackendInterface with the capability probe left null, which is how a
+  /// caller that predates it looks. The filter must then fail open.
+  BackendInterface toBackendInterfaceWithoutKvProbe() const {
+    BackendInterface bckI = toBackendInterface();
+    bckI.deviceSupportsKvCacheType = nullptr;
+    return bckI;
   }
 
 private:
@@ -183,7 +203,7 @@ private:
     return GGML_BACKEND_DEVICE_TYPE_CPU;
   }
 
-  // `static_dev_backend_reg` hands back the device pointer as the registry
+  // `staticDevBackendReg` hands back the device pointer as the registry
   // handle, so recover the MockDevice from it to answer per-device.
   static void*
   staticRegGetProcAddress(ggml_backend_reg_t reg, const char* name) {
@@ -216,6 +236,22 @@ private:
       g_currentInstance->string_storage.push_back(mockDev->deviceId);
       props->device_id = g_currentInstance->string_storage.back().c_str();
     }
+  }
+
+  // Stands in for the SET_ROWS supports_op probe. A device lists the KV-cache
+  // type names its backend cannot run; everything else it can.
+  static bool
+  staticSupportsKvCacheType(ggml_backend_dev_t dev, enum ggml_type kvType) {
+    if (g_currentInstance == nullptr || dev == nullptr) {
+      return true;
+    }
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    const char* name = ggml_type_name(kvType);
+    if (name == nullptr) {
+      return true;
+    }
+    return std::ranges::find(mockDev->unsupportedKvTypes, std::string(name)) ==
+           mockDev->unsupportedKvTypes.end();
   }
   static void staticLlamaLogCallback(
       ggml_log_level level, const char* text, void* userData) {
@@ -1387,6 +1423,12 @@ TEST_F(BackendSelectionTest, CudaPreferredOverVulkanRegardlessOfDeviceOrder) {
   expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
+TEST_F(BackendSelectionTest, IntegratedCudaPreferredOverVulkan) {
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
 // No CUDA module or no NVIDIA driver: the device never registers, so the
 // cascade lands on Vulkan with no special handling.
 TEST_F(BackendSelectionTest, VulkanChosenWhenNoCudaDevice) {
@@ -1528,6 +1570,269 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
       nullptr,
       {"vulkan", "opencl"});
   EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// The two guards above have a second arm each, and neither was pinned. Both
+// matter for QVAC-23763: the override loop skips any candidate a guard marked
+// excluded, and all four arms have to keep working.
+
+// BitNet TQ on Adreno <800 is CPU only (TQ kernels run faster there), so no
+// override may reach a GPU. The 800+ arm of this guard is pinned above.
+TEST_F(
+    BackendSelectionTest,
+    OverrideCannotResurrectGpuClearedByBitNetGuardSub800) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &bitnetMeta,
+      std::nullopt,
+      nullptr,
+      false,
+      nullptr,
+      {"vulkan", "opencl"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// Finetuning on Adreno 800+ prefers Vulkan by excluding Adreno OpenCL, so an
+// explicit opencl override must land on Vulkan rather than resurrecting it. The
+// <800 arm of this guard is pinned above.
+TEST_F(
+    BackendSelectionTest,
+    OverrideCannotResurrectOpenClClearedByFinetuneGuard800Plus) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"opencl"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+// excludeAll() also marks CUDA candidates excluded, so an override must not
+// resurrect a CUDA device after a guard ruled it out. Contrived host, CUDA
+// beside an Adreno, but the mechanism is the point.
+TEST_F(
+    BackendSelectionTest, OverrideCannotResurrectCudaClearedByFinetuneGuard) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"cuda"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// ---- the capability filter (QVAC-23763 R9/R10) ----
+
+static BackendChoice chooseWithKvTypes(
+    MockBackendInterface& mockBackend,
+    const std::vector<const char*>& kvTypeNames,
+    BackendType preferred = BackendType::GPU,
+    const std::vector<std::string>& backendOverride = {}) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = preferred;
+  request.backendOverride = backendOverride;
+  for (const char* n : kvTypeNames) {
+    request.constraints.kvCacheTypes.push_back(kvCacheTypeFromString(n));
+  }
+  return chooseBackend(request, bckI);
+}
+
+// The headline: a TurboQuant load on an NVIDIA host that also has Vulkan used
+// to be refused after CUDA was already chosen. It now steps down instead.
+TEST_F(BackendSelectionTest, CudaDemotedToVulkanForTurboQuant) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "vulkan0");
+  EXPECT_EQ(choice.trace.skippedName, "cuda0");
+  EXPECT_EQ(
+      choice.trace.skippedReason, ExclusionReason::KvCacheTypeUnsupported);
+}
+
+TEST_F(BackendSelectionTest, CudaDemotedForPolarQuantToo) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"pq3_0"}).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, AdrenoOpenClKvGuardDoesNotMoveToVulkan) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(ADRENO_DESC, OPENCL_BACK)));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "gpuopencl");
+}
+
+// A quantized type CUDA *can* run must not trigger the filter, or every
+// quantized-KV load on an NVIDIA host silently moves to Vulkan.
+TEST_F(BackendSelectionTest, CudaKeptForStandardQuantizedKvType) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"q8_0"}).name, "cuda0");
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"f16"}).name, "cuda0");
+}
+
+// Either side of the cache being unsupported is enough to pass the device over.
+TEST_F(BackendSelectionTest, KvConstraintChecksEveryRequestedType) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"q8_0", "tbq4_0"}).name, "vulkan0");
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0", "q8_0"}).name, "vulkan0");
+}
+
+// CUDA cannot use the fabric CPU KV fallback for TurboQuant. Do not move the
+// entire model to CPU instead.
+TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantErrors) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  EXPECT_THROW(
+      chooseWithKvTypes(mockBackend, {"tbq4_0"}), qvac_errors::StatusError);
+}
+
+TEST_F(BackendSelectionTest, VulkanKeepsGpuForFabricCpuKvFallback) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, CpuKvFallbackIsReportedOnTheChoice) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  EXPECT_TRUE(chooseWithKvTypes(mockBackend, {"tbq4_0"}).cpuKvFallback);
+}
+
+TEST_F(BackendSelectionTest, CapableDeviceIsNotACpuKvFallback) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  EXPECT_FALSE(chooseWithKvTypes(mockBackend, {"tbq4_0"}).cpuKvFallback);
+}
+
+TEST_F(BackendSelectionTest, UnsupportedCudaCanFallThroughToVulkanCpuKv) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissFallsBackToCpu) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice("Intel Arc A770", OPENCL_BACK)));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).type, BackendType::CPU);
+}
+
+// ...but a deliberate CPU load must not throw. No devices are enumerated, so
+// there is nothing to be incapable.
+TEST_F(BackendSelectionTest, CpuLoadWithTurboQuantDoesNotThrow) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  const BackendChoice choice =
+      chooseWithKvTypes(mockBackend, {"tbq4_0"}, BackendType::CPU);
+  EXPECT_EQ(choice.type, BackendType::CPU);
+}
+
+// The guards that merely prefer another backend must still reach CPU silently.
+// Conflating them with "incapable" would turn BitNet-on-Adreno<800 from a
+// working CPU run into a failed load on every shipped Adreno 740.
+TEST_F(BackendSelectionTest, PreferOtherGuardsStillFallToCpuWithoutThrowing) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.metadata = &bitnetMeta;
+  EXPECT_EQ(chooseBackend(request, bckI).type, BackendType::CPU);
+}
+
+// A null probe is how any BackendInterface built before this existed looks. It
+// must fail OPEN, or a forgotten initialiser silently disables the filter in
+// the other direction and refuses a device that works.
+TEST_F(BackendSelectionTest, NullKvCapabilityProbeFailsOpen) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bckI.deviceSupportsKvCacheType = nullptr;
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  request.constraints.kvCacheTypes.push_back(kvCacheTypeFromString("tbq4_0"));
+  EXPECT_EQ(chooseBackend(request, bckI).name, "cuda0");
+}
+
+// The resurrect invariant, for the new reason: an override naming a device the
+// capability filter ruled out must not bring it back.
+TEST_F(BackendSelectionTest, OverrideCannotResurrectKvExcludedCuda) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  const BackendChoice choice =
+      chooseWithKvTypes(mockBackend, {"tbq4_0"}, BackendType::GPU, {"cuda"});
+  EXPECT_EQ(choice.name, "vulkan0");
+}
+
+// ---- kvCacheTypeFromString ----
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringResolvesTurboQuant) {
+  EXPECT_EQ(kvCacheTypeFromString("tbq3_0"), GGML_TYPE_TBQ3_0);
+  EXPECT_EQ(kvCacheTypeFromString("pq3_0"), GGML_TYPE_PQ3_0);
+  // The types the addon rejects on CUDA must all be recognised, or the filter
+  // silently sees no constraint and the guard never fires.
+  for (const char* name : {"tbq3_0", "tbq4_0", "pq3_0", "pq4_0"}) {
+    const enum ggml_type t = kvCacheTypeFromString(name);
+    EXPECT_NE(t, GGML_TYPE_COUNT) << name;
+    EXPECT_TRUE(ggml_is_tbq_or_pq(t)) << name;
+  }
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringResolvesOrdinaryTypes) {
+  EXPECT_EQ(kvCacheTypeFromString("f16"), GGML_TYPE_F16);
+  EXPECT_EQ(kvCacheTypeFromString("q8_0"), GGML_TYPE_Q8_0);
+  // and these must not look like TBQ/PQ, or every quantized load gets filtered
+  EXPECT_FALSE(ggml_is_tbq_or_pq(kvCacheTypeFromString("q8_0")));
+  EXPECT_FALSE(ggml_is_tbq_or_pq(kvCacheTypeFromString("f16")));
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringIsCaseInsensitive) {
+  EXPECT_EQ(kvCacheTypeFromString("TBQ4_0"), kvCacheTypeFromString("tbq4_0"));
+  EXPECT_NE(kvCacheTypeFromString("TBQ4_0"), GGML_TYPE_COUNT);
+}
+
+TEST_F(BackendSelectionTest, KvCacheTypeFromStringRejectsNonsense) {
+  EXPECT_EQ(kvCacheTypeFromString(""), GGML_TYPE_COUNT);
+  EXPECT_EQ(kvCacheTypeFromString("not_a_type"), GGML_TYPE_COUNT);
+  EXPECT_EQ(
+      kvCacheTypeFromString(std::string(1, static_cast<char>(0xff))),
+      GGML_TYPE_COUNT);
+  // a prefix of a real name must not resolve
+  EXPECT_EQ(kvCacheTypeFromString("tbq"), GGML_TYPE_COUNT);
 }
 
 // ---- parseBackendOverride ----
@@ -1695,6 +2000,27 @@ TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyOnSingleRegistry) {
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWithNoGpuAtAll) {
   mockBackend.addDevice(createCPUDevice("host", "CPU"));
   EXPECT_TRUE(splitDevicesFor(mockBackend, "cuda0").empty());
+}
+
+TEST_F(BackendSelectionTest, SplitModeDevicesKeepOnlyCapableRepresentations) {
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(
+          createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG)),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(createGPUDeviceInRegistry(
+          "NVIDIA RTX 4090 #2", CUDA1_BACK, CUDA_REG)),
+      "0000:02:00.0"));
+
+  LoadConstraints constraints;
+  constraints.kvCacheTypes.push_back(GGML_TYPE_PQ3_0);
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      splitModeDeviceNames(bckI, "vulkan0", constraints),
+      (std::vector<std::string>{"vulkan0"}));
 }
 
 // The case this exists for: two NVIDIA cards, each registered twice. Without
@@ -1940,6 +2266,105 @@ TEST_F(BackendSelectionTest, SplitDevices_ExcludesIgpuWhenDiscretePresent) {
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
+TEST_F(
+    BackendSelectionTest,
+    ConstrainedSplitSelectionKeepsSelectedBackendHandleForDuplicateGpu) {
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"),
+      "0000:01:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+
+  const SplitDeviceSelection selection =
+      getSplitDeviceSelection(bckI, "vulkan0", {});
+
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, "Vulkan0");
+  EXPECT_EQ(selection.devices[0].sourceGpuIndex, 1U);
+  EXPECT_EQ(
+      selection.devices[0].handle,
+      reinterpret_cast<ggml_backend_dev_t>(&mockBackend.devices[1]));
+}
+
+// One card whose Vulkan driver lacks VK_EXT_pci_bus_info: CUDA0 has an id and
+// Vulkan0 has none. Whichever side is selected, only that copy is kept.
+TEST_F(
+    BackendSelectionTest, ConstrainedSplitSelectionKeepsOneCopyOfIdlessCard) {
+  for (const auto& [selectedName, expected, dropped] :
+       std::vector<std::tuple<std::string, std::string, std::string>>{
+           {"cuda0", "CUDA0", "vulkan0"}, {"vulkan0", "Vulkan0", "cuda0"}}) {
+    mockBackend.clearDevices();
+    mockBackend.addDevice(withDeviceId(
+        MockDevice(
+            "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+        "0000:01:00.0"));
+    mockBackend.addDevice(MockDevice(
+        "NVIDIA RTX 4090", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"));
+    BackendInterface bckI = mockBackend.toBackendInterface();
+
+    const SplitDeviceSelection selection =
+        getSplitDeviceSelection(bckI, selectedName, {});
+
+    ASSERT_EQ(selection.devices.size(), 1U) << selectedName;
+    EXPECT_EQ(selection.devices[0].name, expected) << selectedName;
+    EXPECT_EQ(
+        selection.droppedAmbiguousDevices, std::vector<std::string>{dropped})
+        << selectedName;
+  }
+}
+
+TEST_F(
+    BackendSelectionTest,
+    ConstrainedSplitSelectionDropsDeviceWithoutRequestedKvCapability) {
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA")),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      MockDevice(
+          "NVIDIA RTX 4090", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan"),
+      "0000:01:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  LoadConstraints constraints;
+  constraints.kvCacheTypes = {GGML_TYPE_PQ3_0};
+
+  const SplitDeviceSelection selection =
+      getSplitDeviceSelection(bckI, "vulkan0", constraints);
+
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, "Vulkan0");
+}
+
+// The CPU KV fallback keeps a KV-incapable Vulkan device in the split set, but
+// still not a guarded CUDA one.
+TEST_F(BackendSelectionTest, CpuKvFallbackSplitKeepsOnlyUnguardedDevices) {
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(MockDevice(
+          "NVIDIA RTX 4090", "CUDA0", GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA")),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(MockDevice(
+          "Mali-G720", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_GPU, "Vulkan")),
+      "0000:02:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  LoadConstraints constraints;
+  constraints.kvCacheTypes = {GGML_TYPE_PQ3_0};
+
+  EXPECT_TRUE(
+      getSplitDeviceSelection(bckI, "vulkan0", constraints).devices.empty());
+
+  constraints.allowCpuKvFallback = true;
+  const SplitDeviceSelection selection =
+      getSplitDeviceSelection(bckI, "vulkan0", constraints);
+
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, "Vulkan0");
+}
+
 // A second iGPU from a different backend registry is the same physical device
 // enumerated twice. These two share a registry NAME but not a handle, and the
 // rule compares handles; their device_ids differ, so device_id dedup cannot
@@ -2028,6 +2453,23 @@ TEST_F(BackendSelectionTest, SplitDevices_DedupesDualRegisteredGpu) {
       withDeviceId(createGPUDevice("Adreno 830", "gpuopencl"), "0000:03:00.0"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+TEST_F(BackendSelectionTest, TensorDevicesPreferCapableSelectedBackend) {
+  mockBackend.addDevice(withDeviceId(
+      withoutTurboQuant(
+          createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG)),
+      "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:01:00.0"));
+
+  LoadConstraints constraints;
+  constraints.kvCacheTypes.push_back(GGML_TYPE_PQ3_0);
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI, "vulkan0", constraints),
+      (std::vector<std::string>{"vulkan0"}));
 }
 
 // Two identical cards: Vulkan reports the SAME description for both and

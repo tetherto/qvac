@@ -77,15 +77,11 @@ struct SelectedBackend {
   bool isMaliGpu = false;
   bool isOpenCl = false;
   bool isMetal = false;
+  bool cpuKvFallback = false;
 };
 
-/// Args: preferred type, main-gpu override, model metadata, isFinetuning,
-/// and the parsed `backend` priority list (empty when the caller did not set
-/// one). QVAC-23763.
-using BackendResolver = std::function<SelectedBackend(
-    backend_selection::BackendType,
-    const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
-    bool, const std::vector<std::string>&)>;
+using BackendResolver =
+    std::function<SelectedBackend(const backend_selection::BackendRequest&)>;
 
 // Registers the comma-separated 'host:port' endpoints as ggml RPC devices and
 // returns their process-global ggml device names in endpoint/device order.
@@ -103,9 +99,12 @@ std::vector<ggml_backend_reg_t> collectRpcRegistrations(
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
-  /// Authoritative eligible device set for explicit placement and every
-  /// multi-GPU split mode.
-  std::function<backend_selection::SplitDeviceSelection()> splitDevices;
+  /// Authoritative eligible device set for every multi-GPU split mode.
+  std::function<backend_selection::SplitDeviceSelection(
+      const std::string&, const backend_selection::LoadConstraints&)>
+      splitDevices;
+  /// Available devices before selecting an explicit placement list.
+  std::function<backend_selection::SplitDeviceSelection()> allSplitDevices;
   RpcDeviceRegistrar registerRpcDevices;
   /// Process-wide RPC devices registered by this addon, including earlier
   /// loads.

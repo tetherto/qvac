@@ -46,9 +46,22 @@ are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
   falls through to Vulkan, then CPU. Nothing needs configuring for that.
 - `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
   environment has the same effect without touching the load config.
-- TurboQuant / PolarQuant KV-cache types (`tbq3_0`, `tbq4_0`, `pq3_0`, `pq4_0`) are **not**
-  supported on CUDA and are rejected during model configuration. Use a Vulkan GPU or CPU for those.
-  Standard quantized types (`q4_0`, `q8_0`, …) work normally.
+- TurboQuant / PolarQuant KV-cache types (`tbq3_0`, `tbq4_0`, `pq3_0`, `pq4_0`) have no CUDA
+  kernels. Rather than refusing the load, backend selection asks ggml whether each device can run
+  the requested type and passes over the ones that cannot, so on a machine that also has Vulkan
+  these types simply run on Vulkan. Standard quantized types (`q4_0`, `q8_0`, …) work normally on
+  CUDA and are unaffected. When *no* available GPU can run the type, the outcome depends on the
+  backend. A Vulkan device is still chosen, and fabric moves that layer's KV cache to CPU. On CUDA,
+  OpenCL and Metal the load fails, naming the devices it passed over, such as on a CUDA-only
+  machine, because quietly falling back to CPU would be far slower than the `device: "gpu"` you
+  asked for. Use `device: "cpu"` if that is what you want.
+- The shipped x64 CUDA module covers **compute capability 7.5 and above**, with PTX for 7.5 and
+  native code for selected Ampere, Ada and Blackwell targets. Linux arm64 ships separate CUDA 13
+  and CUDA 12 modules for DGX Spark and Jetson Orin. A device that cannot load either module is
+  refused during registration, so selection falls through to Vulkan, then CPU.
+- On Linux, the driver caches the PTX JIT result under `$HOME/.nv/ComputeCache`. If `$HOME` is absent or
+  read-only, as in many containers, that cache is disabled and the JIT cost is paid on every
+  process start rather than once. Set `CUDA_CACHE_PATH` to a writable directory to avoid that.
 - BitNet (TQ1_0 / TQ2_0) and some LoRA finetuning kernels are not yet available on CUDA. Use
   `backend: "vulkan"` for those workloads until the kernels land.
 
@@ -192,7 +205,7 @@ const config = {
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices` |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `devices` |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |

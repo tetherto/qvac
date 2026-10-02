@@ -1082,9 +1082,11 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
 
 // ---- QVAC-23763: TurboQuant / PolarQuant rejected on CUDA ----
 //
-// ggml-cuda ships no TBQ/PQ kernels, so these types abort natively. Standard
-// quantized types are fine there, so this mirrors the Metal guard rather than
-// the stricter OpenCL one. CPU stays allowed: ggml-tbq-quants is CPU-side.
+// ggml-cuda ships no TBQ/PQ kernels. chooseBackend passes such a device over
+// before the cascade picks it, see the capability filter cases in
+// test_backend_selection.cpp. An explicit devices list naming a CUDA device
+// skips that filter and reaches this guard, which throws InvalidArgument.
+// Standard quantized types and CPU stay allowed.
 
 TEST_F(TuneConfigMapTest, Cuda_RejectsTurboQuantKCacheType) {
   MockModelMetaData meta(false, "llama");
