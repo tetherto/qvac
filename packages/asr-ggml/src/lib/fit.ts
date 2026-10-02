@@ -46,7 +46,8 @@ export interface AsrFitResult {
   /** The engine's own wording, e.g. `model-unreadable`, `workload-too-large`. */
   reason: string
   /**
-   * Parakeet: `ctc` | `rnnt` | `tdt` | `eou` | `nemotron` | `sortformer`.
+   * Parakeet: `ctc` | `rnnt` | `tdt` | `eou` | `nemotron` | `sortformer` |
+   * `nemotron-diarization`.
    * Whisper: `tiny` | `base` | ... | `large v3`.
    */
   modelType: string

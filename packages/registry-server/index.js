@@ -2,7 +2,7 @@
 
 const Scripts = require('./scripts')
 const RegistryConfig = require('./lib/config')
-const constants = require('./constants')
+const constants = require('./shared/constants')
 const env = require('./utils/env')
 
 module.exports = {

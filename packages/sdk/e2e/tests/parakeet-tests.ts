@@ -145,6 +145,19 @@ export const parakeetUnifiedWav = createParakeetTest(
   ['smoke']
 )
 
+// iOS-only: verifies that the registry GGUF and all five Core ML bundle
+// components land together in the device's cache before batch inference.
+export const parakeetUnifiedCoremlIos: TestDefinition = {
+  testId: 'parakeet-unified-coreml-ios',
+  params: { audioFileName: 'transcription-short-wav.wav' },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-unified',
+    estimatedDurationMs: 300000
+  }
+}
+
 export const parakeetUnifiedMp3 = createParakeetTest(
   'parakeet-unified-mp3',
   'parakeet-unified',
@@ -250,6 +263,7 @@ export const parakeetCtcTests = [
 
 export const parakeetUnifiedTests = [
   parakeetUnifiedWav,
+  parakeetUnifiedCoremlIos,
   parakeetUnifiedMp3,
   parakeetUnifiedSilence,
   parakeetUnifiedCorruptedWav

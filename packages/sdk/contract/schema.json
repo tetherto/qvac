@@ -47,6 +47,9 @@
           "$ref": "#/$defs/diffusionStream.request"
         },
         {
+          "$ref": "#/$defs/discoverRpcServers.request"
+        },
+        {
           "$ref": "#/$defs/downloadAsset.request"
         },
         {
@@ -98,7 +101,13 @@
           "$ref": "#/$defs/resume.request"
         },
         {
+          "$ref": "#/$defs/startRpcServer.request"
+        },
+        {
           "$ref": "#/$defs/state.request"
+        },
+        {
+          "$ref": "#/$defs/stopRpcServer.request"
         },
         {
           "$ref": "#/$defs/suspend.request"
@@ -182,6 +191,9 @@
           "$ref": "#/$defs/diffusionStream.response"
         },
         {
+          "$ref": "#/$defs/discoverRpcServers.response"
+        },
+        {
           "$ref": "#/$defs/downloadAsset.response"
         },
         {
@@ -245,7 +257,13 @@
           "$ref": "#/$defs/resume.response"
         },
         {
+          "$ref": "#/$defs/startRpcServer.response"
+        },
+        {
           "$ref": "#/$defs/state.response"
+        },
+        {
+          "$ref": "#/$defs/stopRpcServer.response"
         },
         {
           "$ref": "#/$defs/suspend.response"
@@ -391,6 +409,7 @@
                 ]
               },
               "modelType": {
+                "description": "Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.",
                 "type": "string",
                 "enum": [
                   "llamacpp-completion",
@@ -419,7 +438,6 @@
                   "vla",
                   "classification"
                 ],
-                "description": "Engine that would run the load.",
                 "title": "AssessModelFitRequestModelsItemModelType"
               },
               "modelConfig": {
@@ -432,7 +450,6 @@
                 "title": "AssessModelFitRequestModelsItemModelConfig"
               }
             },
-            "required": ["modelType"],
             "title": "AssessModelFitRequestModelsItem"
           },
           "description": "Models to assess together under one memory budget."
@@ -580,6 +597,10 @@
               },
               "estimatorVersion": {
                 "description": "Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
+                "type": "string"
+              },
+              "device": {
+                "description": "Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement.",
                 "type": "string"
               },
               "reasons": {
@@ -2673,7 +2694,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -2965,7 +2990,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -3081,6 +3110,8 @@
                 "finetune",
                 "loadModel",
                 "downloadAsset",
+                "rpcServer",
+                "rpcDiscovery",
                 "rag"
               ],
               "description": "Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.",
@@ -5086,6 +5117,95 @@
       "required": ["type"],
       "additionalProperties": false
     },
+    "discoverRpcServers.request": {
+      "title": "DiscoverRpcServersRequest",
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Shared discovery topic. Only use with trusted private-network participants."
+        },
+        "timeoutMs": {
+          "description": "Search budget in milliseconds, including TCP probes. Defaults to 5000, at most 30000.",
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 30000
+        },
+        "type": {
+          "type": "string",
+          "const": "discoverRpcServers"
+        },
+        "requestId": {
+          "description": "Caller-generated identifier for targeted cancellation with cancel({ requestId }). Generated by the engine when omitted.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["topic", "type"]
+    },
+    "discoverRpcServers.response": {
+      "title": "DiscoverRpcServersResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "discoverRpcServers"
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rdmaAvailable": {
+                "type": "boolean",
+                "description": "Server advertised RDMA availability for this endpoint at discovery time. Actual transport depends on client support and negotiation."
+              },
+              "devices": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Zero-based device index within this endpoint."
+                    },
+                    "freeMemory": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Available device memory in bytes at discovery time."
+                    },
+                    "totalMemory": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Total device memory in bytes."
+                    }
+                  },
+                  "required": ["index", "freeMemory", "totalMemory"],
+                  "additionalProperties": false,
+                  "title": "DiscoverRpcServersResponseServersItemDevicesItem"
+                },
+                "description": "Native served devices in endpoint enumeration order."
+              }
+            },
+            "required": ["url", "rdmaAvailable", "devices"],
+            "additionalProperties": false,
+            "title": "DiscoverRpcServersResponseServersItem"
+          }
+        }
+      },
+      "required": ["type", "servers"],
+      "additionalProperties": false
+    },
     "downloadAsset.request": {
       "title": "DownloadAssetRequest",
       "type": "object",
@@ -5959,17 +6079,21 @@
                 "verdict": {
                   "type": "string",
                   "enum": ["fit", "does-not-fit", "unknown"],
-                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
                   "title": "NativeProbeFitVerdict"
                 },
                 "basis": {
                   "type": "string",
                   "const": "native-probe",
-                  "description": "Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+                  "description": "Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
+                },
+                "engine": {
+                  "description": "Engine package whose fitter produced this outcome. Absent when none ran.",
+                  "type": "string"
                 },
                 "estimatorVersion": {
                   "type": "string",
-                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve."
+                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve, counting device memory only where it comes out of system RAM."
                 },
                 "reason": {
                   "type": "string",
@@ -6010,56 +6134,43 @@
                   "description": "What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
                   "type": "object",
                   "properties": {
-                    "devices": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "name": {
-                            "type": "string",
-                            "description": "Device name as the backend reports it, or `host`."
-                          },
-                          "totalBytes": {
-                            "type": "number",
-                            "description": "Memory the device reports installed."
-                          },
-                          "freeBytes": {
-                            "type": "number",
-                            "description": "Memory the device reports free, before the margin."
-                          },
-                          "marginBytes": {
-                            "type": "number",
-                            "description": "Headroom the fitter withheld on this device."
-                          },
-                          "modelBytes": {
-                            "type": "number",
-                            "description": "Weights the load would place here."
-                          },
-                          "contextBytes": {
-                            "type": "number",
-                            "description": "Context and cache the load would place here."
-                          },
-                          "computeBytes": {
-                            "type": "number",
-                            "description": "Compute buffers the load would place here."
-                          }
-                        },
-                        "required": [
-                          "name",
-                          "totalBytes",
-                          "freeBytes",
-                          "marginBytes",
-                          "modelBytes",
-                          "contextBytes",
-                          "computeBytes"
-                        ],
-                        "additionalProperties": false,
-                        "title": "NativeProbeFitProjectionDevicesItem"
-                      },
-                      "description": "Every device the load would touch."
+                    "deviceName": {
+                      "description": "Device the projection was made against.",
+                      "type": "string"
+                    },
+                    "deviceBytes": {
+                      "description": "Peak the load would place on the device, under the workload the probe assumed.",
+                      "type": "number"
+                    },
+                    "hostBytes": {
+                      "description": "Peak the load would place in host RAM.",
+                      "type": "number"
+                    },
+                    "weightsBytes": {
+                      "description": "Model weights, within `deviceBytes`.",
+                      "type": "number"
+                    },
+                    "contextBytes": {
+                      "description": "Context, KV cache and decoder state, within `deviceBytes`.",
+                      "type": "number"
+                    },
+                    "computeBytes": {
+                      "description": "Compute buffers and graph arenas, within `deviceBytes`.",
+                      "type": "number"
+                    },
+                    "deviceFreeBytes": {
+                      "description": "Device memory free when the probe ran.",
+                      "type": "number"
+                    },
+                    "deviceTotalBytes": {
+                      "description": "Device memory installed.",
+                      "type": "number"
+                    },
+                    "report": {
+                      "description": "The engine's own per-module memory table, suitable for a log line.",
+                      "type": "string"
                     }
                   },
-                  "required": ["devices"],
                   "additionalProperties": false,
                   "title": "NativeProbeFitProjection"
                 }
@@ -10199,8 +10310,18 @@
                         }
                       ]
                     },
+                    "rpc-servers": {
+                      "description": "Comma-separated unique native RPC host:port endpoints in device registration order for this load. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "devices": {
+                      "description": "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+                      "type": "string",
+                      "minLength": 1
+                    },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
                       "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
@@ -19802,6 +19923,98 @@
       "required": ["type"],
       "additionalProperties": false
     },
+    "startRpcServer.request": {
+      "title": "StartRpcServerRequest",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "IPv4 bind address. Defaults to 127.0.0.1.",
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "description": "TCP port. Omit to allocate a free port.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "device": {
+          "description": "Native server devices, in caller order.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ]
+        },
+        "cache": {
+          "description": "Enable the native RPC tensor cache.",
+          "type": "boolean"
+        },
+        "threads": {
+          "description": "Native server thread count.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectRdma": {
+          "description": "Require an RDMA-capable native backend. Reject before startup if unavailable.",
+          "type": "boolean"
+        },
+        "allowNonLoopbackHost": {
+          "description": "Explicitly allow a non-loopback bind on a trusted private network. This does not authenticate clients.",
+          "type": "boolean"
+        },
+        "discoveryTopic": {
+          "description": "Opt in to advertising a ready private IPv4 endpoint under this shared topic. The topic does not authenticate peers.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "type": {
+          "type": "string",
+          "const": "startRpcServer"
+        },
+        "requestId": {
+          "description": "Caller-generated identifier for targeted cancellation with cancel({ requestId }). Generated by the engine when omitted.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["type"]
+    },
+    "startRpcServer.response": {
+      "title": "StartRpcServerResponse",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rdmaCapable": {
+          "type": "boolean",
+          "description": "Whether the native backend supports RDMA. It falls back to TCP for clients without RDMA."
+        },
+        "type": {
+          "type": "string",
+          "const": "startRpcServer"
+        }
+      },
+      "required": ["serverId", "url", "rdmaCapable", "type"],
+      "additionalProperties": false
+    },
     "state.request": {
       "title": "StateRequest",
       "type": "object",
@@ -19828,6 +20041,33 @@
         }
       },
       "required": ["type", "state"],
+      "additionalProperties": false
+    },
+    "stopRpcServer.request": {
+      "title": "StopRpcServerRequest",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "stopRpcServer"
+        }
+      },
+      "required": ["serverId", "type"]
+    },
+    "stopRpcServer.response": {
+      "title": "StopRpcServerResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "stopRpcServer"
+        }
+      },
+      "required": ["type"],
       "additionalProperties": false
     },
     "suspend.request": {
@@ -20019,6 +20259,14 @@
             },
             "enhancerBackendId": {
               "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -20208,6 +20456,14 @@
             },
             "enhancerBackendId": {
               "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -20390,7 +20646,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -20441,9 +20701,9 @@
               "type": "number"
             },
             "source": {
-              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
               "type": "string",
-              "enum": ["silero", "energy"],
+              "enum": ["silero", "energy", "sortformer"],
               "title": "TranscribeResponseVadSource"
             }
           },
@@ -20784,7 +21044,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -20835,9 +21099,9 @@
               "type": "number"
             },
             "source": {
-              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
               "type": "string",
-              "enum": ["silero", "energy"],
+              "enum": ["silero", "energy", "sortformer"],
               "title": "TranscribeStreamResponseVadSource"
             }
           },

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Fail if installing a package together with all of its @qvac peers resolves
- * @qvac/infer-base, @qvac/logging, or @qvac/error to more than one version.
+ * @qvac/infer-base, @qvac/logging, @qvac/error, or @qvac/fabric to more than
+ * one version.
  *
  * Only the dependency tree is resolved (npm --package-lock-only against a
  * tarball holding just package.json), so no build or prebuild download is

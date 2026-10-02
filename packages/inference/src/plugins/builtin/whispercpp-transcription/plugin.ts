@@ -48,6 +48,7 @@ export const whisperPlugin = definePlugin({
   displayName: 'Whisper (whisper.cpp)',
   addonPackage: ADDON_ASR,
   loadConfigSchema: whisperConfigSchema,
+  assessFit: ASRGgml.assessFit,
 
   async resolveConfig(cfg: WhisperConfig, ctx: ResolveContext) {
     const { vadModelSrc, ...whisperConfig } = cfg

@@ -236,14 +236,14 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
     ['Hermes-2-Pro-Mistral-7B', '/Users/x/.qvac/models/abc_Hermes-2-Pro-Mistral-7B-Q4_K_M.gguf'],
     ['MISTRAL_7B_INSTRUCT', '/Users/x/.qvac/models/abc_Mistral-7B-Instruct-v0.3-Q4_K_M.gguf'],
     [undefined, '/cache/abc_Mistral-Nemo-Instruct-2407.gguf'],
-    // Llama tool-calling fine-tunes (mav23, nguyenthanhthuan, etc.)
+    // Llama tool-calling fine-tunes (mradermacher, nguyenthanhthuan, etc.)
     // empirically emit OpenAI-style JSON, not pythonic, so they fall through
     // the catch-all rather than being auto-routed to pythonic. Callers with
     // a pythonic-emitting Llama variant should use `completion({ toolDialect:
     // "pythonic" })` to opt in.
     [
-      'LLAMA_TOOL_CALLING_1B_INST_Q4_K',
-      '/Users/x/.qvac/models/abc_llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf'
+      'LLAMA_TOOL_CALLING_1B_INST_Q4_K_M',
+      '/Users/x/.qvac/models/abc_Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf'
     ],
     ['LLAMA_3_2_1B_INST_Q4_0', '/Users/x/.qvac/models/abc_Llama-3.2-1B-Instruct-Q4_0.gguf'],
     [undefined, '/cache/abc_Llama-3.3-70B-Instruct-Tool-Calling.gguf'],

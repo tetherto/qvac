@@ -4,10 +4,11 @@ import { QvacErrorAddonASRGgml } from "./lib/error";
 import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import { assessFit as assessFitImpl, type AsrFitRequest, type AsrFitResult, type AsrFitStatus, type ParakeetFitRequest, type WhisperFitRequest } from "./lib/fit";
 import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
-import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
+import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
 import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
 import { type ParakeetConfig, type ParakeetEngineConfig, type ParakeetStreamingRunConfig } from "./engines/parakeet/driver";
-type ASRGgmlConfig = WhisperEngineConfig | ParakeetEngineConfig;
+import { type MossTranscribeConfig, type MossTranscribeEngineConfig, type MossTranscribeRunOptions } from "./engines/moss/driver";
+type ASRGgmlConfig = WhisperEngineConfig | ParakeetEngineConfig | MossTranscribeEngineConfig;
 interface ASRGgmlOptions {
     files: ASRGgmlFiles;
     /** Engine-scoped configuration; the discriminant is `config.engine`. */
@@ -28,6 +29,7 @@ interface ASRGgmlOptions {
 declare class ASRGgml {
     static readonly ENGINE_WHISPER = "whisper";
     static readonly ENGINE_PARAKEET = "parakeet";
+    static readonly ENGINE_MOSS_TRANSCRIBE: "moss-transcribe";
     static readonly ERR_CODES: Readonly<{
         FAILED_TO_LOAD_WEIGHTS: 6001;
         FAILED_TO_CANCEL: 6002;
@@ -103,7 +105,7 @@ declare class ASRGgml {
     status(): Promise<string>;
     pause(): Promise<never>;
     unpause(): Promise<never>;
-    run(audio: AudioInput): Promise<QvacResponse<ASRRunOutput>>;
+    run(audio: AudioInput, options?: ASRRunOptions): Promise<QvacResponse<ASRRunOutput>>;
     runStreaming(audio: AudioInput, opts?: ASRStreamingOptions): Promise<QvacResponse<ASRStreamOutput>>;
     /**
      * Resolves the engine declared by the caller, or `null` when neither
@@ -120,6 +122,10 @@ type ASRGgmlFilesShape = ASRGgmlFiles;
 type ASRGgmlConfigShape = ASRGgmlConfig;
 type WhisperEngineConfigShape = WhisperEngineConfig;
 type ParakeetEngineConfigShape = ParakeetEngineConfig;
+type MossTranscribeEngineConfigShape = MossTranscribeEngineConfig;
+type MossTranscribeConfigShape = MossTranscribeConfig;
+type MossTranscribeRunOptionsShape = MossTranscribeRunOptions;
+type ASRRunOptionsShape = ASRRunOptions;
 type WhisperConfigShape = WhisperConfig;
 type ParakeetConfigShape = ParakeetConfig;
 type VadParamsShape = VadParams;
@@ -152,6 +158,10 @@ declare namespace ASRGgml {
     type ASRGgmlConfig = ASRGgmlConfigShape;
     type WhisperEngineConfig = WhisperEngineConfigShape;
     type ParakeetEngineConfig = ParakeetEngineConfigShape;
+    type MossTranscribeEngineConfig = MossTranscribeEngineConfigShape;
+    type MossTranscribeConfig = MossTranscribeConfigShape;
+    type MossTranscribeRunOptions = MossTranscribeRunOptionsShape;
+    type ASRRunOptions = ASRRunOptionsShape;
     type WhisperConfig = WhisperConfigShape;
     type ParakeetConfig = ParakeetConfigShape;
     type VadParams = VadParamsShape;

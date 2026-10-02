@@ -17,6 +17,26 @@ export interface TTSJobData {
     instruct?: string;
     referenceAudio?: string;
     referenceText?: string;
+    seconds?: number;
+    negativePrompt?: string;
+    steps?: number;
+    guidance?: number;
+    shift?: number;
+    messages?: Array<{
+        role: string;
+        text?: string;
+        audio?: Int16Array | Float32Array;
+        sampleRate?: number;
+    }>;
+    replyVoice?: Int16Array | Float32Array;
+    replyVoiceSampleRate?: number;
+    textReply?: boolean;
+    maxReplySeconds?: number;
+    maxNewTokens?: number;
+    greedy?: boolean;
+    temperature?: number;
+    topP?: number;
+    topK?: number;
 }
 export interface TTSWeightData {
     filename: string;
