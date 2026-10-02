@@ -438,7 +438,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          npm install --no-save bare-make
+          npm install --no-save --ignore-scripts bare-make
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           ./node_modules/.bin/bare-make --version
 
