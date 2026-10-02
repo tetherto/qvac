@@ -14,6 +14,7 @@
 
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
+#include "ImagePixelLimit.hpp"
 #include "MediaLoadOrder.hpp"
 #include "ReasoningRecoveryHelpers.hpp"
 #include "addon/LlmErrors.hpp"
@@ -44,9 +45,10 @@ bool isFileInitialized(const std::filesystem::path& path) {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
-    common_params& commonParams, common_init_result_ptr llamaInit)
+    common_params& commonParams, common_init_result_ptr llamaInit,
+    uint64_t maxImagePixels)
     : llamaInit_(std::move(llamaInit)), params_(commonParams),
-      compactor_(rollbackState_) {
+      maxImagePixels_(maxImagePixels), compactor_(rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   initializeCommonState();
@@ -54,9 +56,11 @@ MtmdLlmContext::MtmdLlmContext(
 
 MtmdLlmContext::MtmdLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
-    mtmd_context* sharedVision, llama_seq_id seqId, llama_pos perSeqCtxCeiling)
+    mtmd_context* sharedVision, llama_seq_id seqId, llama_pos perSeqCtxCeiling,
+    uint64_t maxImagePixels)
     : sharedVision_(sharedVision), modelCtx_(shared), params_(commonParams),
-      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_) {
+      maxImagePixels_(maxImagePixels), perSeqCtxCeiling_(perSeqCtxCeiling),
+      compactor_(rollbackState_) {
   seqId_ = seqId;
   if (sharedVision_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -1349,6 +1353,12 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
+  try {
+    image_pixel_limit::checkBuffer(media.data(), media.size(), maxImagePixels_);
+  } catch (const qvac_errors::StatusError&) {
+    resetMedia();
+    throw;
+  }
   mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
                        visionContext(),
                        media.data(),
@@ -1386,22 +1396,24 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
-  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_file(
-                       visionContext(),
-                       fname.c_str(),
-                       /*placeholder=*/false)
-                       .bitmap);
-  if (!bmp.ptr) {
+  std::vector<uint8_t> media;
+  try {
+    media = image_pixel_limit::readRegularFile(fname);
+  } catch (const qvac_errors::StatusError&) {
     resetMedia();
-    std::string errorMsg = string_format(
-        "[MtmdLlm] Failed to load media from file: %s\n", fname.c_str());
+    throw;
+  }
+  try {
+    loadMedia(media);
+  } catch (const qvac_errors::StatusError& error) {
+    resetMedia();
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
-        errorMsg);
+        "[MtmdLlm] Failed to load media from file: " + fname + ": " +
+            error.what());
   }
-  bitmaps_.entries.push_back(std::move(bmp));
 }
 
 void MtmdLlmContext::resetState(bool resetStats) {

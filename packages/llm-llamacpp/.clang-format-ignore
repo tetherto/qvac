@@ -1,0 +1,2 @@
+# Keep the vendored header byte-for-byte aligned with fabric.
+addon/src/vendor/stb_image.h
