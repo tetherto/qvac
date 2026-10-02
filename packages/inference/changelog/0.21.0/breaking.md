@@ -36,14 +36,39 @@ Field by field:
 
 | Before                                     | After                                                                                                                                                                                          |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`                                    | `modelSrc`, plus `modelType` naming the engine                                                                                                                                                 |
+| `model`                                    | `modelSrc`, plus optional `modelType` naming the engine when `modelSrc` does not                                                                                                               |
 | `workload: { kind: 'llm', contextTokens }` | `modelConfig: { ctx_size }`. Omitting it sizes the load at the model's trained context.                                                                                                        |
 | `workload: { kind: 'audio', windowMs }`    | `modelConfig: { duration_ms }`, capped at the engine's 30 s window                                                                                                                             |
 | `workload: { kind: 'audio', streaming }`   | `modelConfig: { streaming }`, on the engines whose load takes it                                                                                                                               |
 | `workload: { kind: 'audio', batch }`       | Removed. No engine takes a batch size at load time, so it has no equivalent in `loadModel`'s parameters.                                                                                       |
 | `artifacts: [...]`                         | The companion `*ModelSrc` fields inside `modelConfig`, where the load already carries them. A companion the catalog cannot profile makes the candidate `unknown` rather than counting nothing. |
 
-`modelType` is required, and a load whose sources are all config fields may omit `modelSrc`.
+`modelType` is optional and inferred from `modelSrc` when omitted, the same way `loadModel` infers it. Required only where the source names no engine. A load whose sources are all config fields may omit `modelSrc`.
+
+---
+
+## Flatten the native fit-probe projection
+
+PR: [#4671](https://github.com/tetherto/qvac/pull/4671)
+
+**BEFORE:**
+
+```typescript
+info.fitProbe?.projection?.devices // NativeProbeDevice[]: per-device totals, free, margin, model, context, compute
+```
+
+**AFTER:**
+
+```typescript
+info.fitProbe?.projection?.deviceBytes
+info.fitProbe?.projection?.hostBytes
+info.fitProbe?.projection?.weightsBytes
+info.fitProbe?.projection?.contextBytes
+info.fitProbe?.projection?.computeBytes
+info.fitProbe?.projection?.deviceName
+```
+
+`NativeProbeDevice` and `projection.devices` are gone. Totals are summed across devices; `deviceName` names the first.
 
 ---
 
