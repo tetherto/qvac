@@ -125,6 +125,8 @@ export interface SdConfig {
   upscaler_direct?: boolean
   upscaler_offload_params_to_cpu?: boolean
   upscaler_threads?: NumericLike
+  max_image_pixels?: NumericLike
+  max_job_pixels?: NumericLike
   verbosity?: NumericLike
   [key: string]: string | number | boolean | undefined
 }
@@ -152,6 +154,7 @@ export interface EsrganUpscalerConfig {
   upscaler_direct?: boolean
   upscaler_offload_params_to_cpu?: boolean
   upscaler_threads?: NumericLike
+  max_image_pixels?: NumericLike
   device?: 'cpu' | 'gpu'
   verbosity?: NumericLike
   [key: string]: string | number | boolean | undefined

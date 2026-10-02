@@ -35,6 +35,8 @@
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 #include "model-interface/moss/MossModel.hpp"
+#include "model-interface/moss/MossSoundEffectModel.hpp"
+#include "model-interface/moss/MossSpeechModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
 #include "model-interface/pocket/PocketModel.hpp"
 #include "model-interface/supertonic/SupertonicModel.hpp"
@@ -47,6 +49,8 @@ using audio8::Audio8Model;
 using chatterbox::ChatterboxModel;
 using cosyvoice::CosyvoiceModel;
 using moss::MossModel;
+using moss::MossSoundEffectModel;
+using moss::MossSpeechModel;
 using parler::ParlerModel;
 using pocket::PocketModel;
 using supertonic::SupertonicModel;
@@ -78,6 +82,32 @@ struct JsAudioOutputHandler
                   this->env_,
                   "sampleRate",
                   js::Number::create(this->env_, sampleRate));
+              return result;
+            }) {}
+};
+
+struct JsSpeechReplyHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          moss::MossSpeechReply> {
+  explicit JsSpeechReplyHandler(int sampleRate)
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            moss::MossSpeechReply>(
+            [this,
+             sampleRate](const moss::MossSpeechReply& reply) -> js_value_t* {
+              auto result = js::Object::create(this->env_);
+              std::span<const int16_t> outputSpan(
+                  reply.pcm.data(), reply.pcm.size());
+              auto typedArray =
+                  js::TypedArray<int16_t>::create(this->env_, outputSpan);
+              result.setProperty(this->env_, "outputArray", typedArray);
+              result.setProperty(
+                  this->env_,
+                  "sampleRate",
+                  js::Number::create(this->env_, sampleRate));
+              result.setProperty(
+                  this->env_,
+                  "text",
+                  js::String::create(this->env_, reply.text));
               return result;
             }) {}
 };
@@ -181,6 +211,16 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     auto mtm = make_unique<MossModel>(std::move(cfg));
     sampleRate = mtm->sampleRate();
     model = std::move(mtm);
+  } else if (engineType == EngineType::MossSoundEffect) {
+    auto cfg = adapter.buildMossSoundEffectConfig(configurationParams, env);
+    auto sfx = make_unique<MossSoundEffectModel>(std::move(cfg));
+    sampleRate = sfx->sampleRate();
+    model = std::move(sfx);
+  } else if (engineType == EngineType::MossSpeech) {
+    auto cfg = adapter.buildMossSpeechConfig(configurationParams, env);
+    auto speech = make_unique<MossSpeechModel>(std::move(cfg));
+    sampleRate = speech->sampleRate();
+    model = std::move(speech);
   } else {
     auto cfg = adapter.buildChatterboxConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
@@ -195,6 +235,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<JsAudioOutputHandler>(sampleRate));
   outHandlers.add(make_shared<JsStreamingPcmHandler>(sampleRate));
+  outHandlers.add(make_shared<JsSpeechReplyHandler>(sampleRate));
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -295,6 +336,23 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
           outputQueue->queueResult(std::any(std::move(chunk)));
         };
+    return instance.runJob(std::any(std::move(modelInput)));
+  }
+
+  if (dynamic_cast<MossSpeechModel*>(&instance.addonCpp->model.get())) {
+    MossSpeechModel::AnyInput modelInput;
+    JSAdapter adapter;
+    modelInput.call =
+        adapter.readMossSpeechCall(args.getJsObject(1, "inputObj"), env);
+    return instance.runJob(std::any(std::move(modelInput)));
+  }
+
+  if (dynamic_cast<MossSoundEffectModel*>(&instance.addonCpp->model.get())) {
+    MossSoundEffectModel::AnyInput modelInput;
+    modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    JSAdapter adapter;
+    modelInput.call =
+        adapter.readMossSoundEffectCall(args.getJsObject(1, "inputObj"), env);
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -636,6 +694,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   case EngineType::Moss:
     // speech-cpp ships a fitter for every voice but MOSS.
     return unsupportedEngineResult(env, "moss");
+  case EngineType::MossSoundEffect:
+    return unsupportedEngineResult(env, "moss-sfx");
+  case EngineType::MossSpeech:
+    return unsupportedEngineResult(env, "moss-speech");
   }
 
   return unsupportedEngineResult(env, "unknown");
@@ -737,6 +799,37 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
                 "reload: model is not a MossModel");
           }
           mtm->reloadWith(std::move(newCfg));
+        });
+  }
+
+  if (dynamic_cast<MossSpeechModel*>(&instance.addonCpp->model.get())) {
+    auto newCfg = adapter.buildMossSpeechConfig(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
+          auto* speech = dynamic_cast<MossSpeechModel*>(&addonCpp->model.get());
+          if (speech == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InternalError,
+                "reload: model is not a MossSpeechModel");
+          }
+          speech->reloadWith(std::move(newCfg));
+        });
+  }
+
+  if (dynamic_cast<MossSoundEffectModel*>(&instance.addonCpp->model.get())) {
+    auto newCfg = adapter.buildMossSoundEffectConfig(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
+          auto* sfx =
+              dynamic_cast<MossSoundEffectModel*>(&addonCpp->model.get());
+          if (sfx == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InternalError,
+                "reload: model is not a MossSoundEffectModel");
+          }
+          sfx->reloadWith(std::move(newCfg));
         });
   }
 
