@@ -51,6 +51,7 @@ macro(qvac_addon_preproject)
 
   set(VCPKG_OVERLAY_TRIPLETS
       "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
   # Android STL configuration must be set before project().
   if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
