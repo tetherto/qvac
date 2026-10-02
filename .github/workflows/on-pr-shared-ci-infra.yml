@@ -14,6 +14,9 @@ on:
       - ".github/actions/run-mobile-integration-tests/setup/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
+      - "packages/sdk/e2e/scripts/impacted-tests.mjs"
+      - "packages/sdk/e2e/scripts/test/**"
+      - ".github/actions/sdk-e2e-report-impacted/**"
       - "packages/ocr-ggml/.agent/setup.sh"
       - "packages/ocr-ggml/.agent/skills/**"
       - "vcpkg-overlays/triplets/**"
@@ -94,6 +97,30 @@ jobs:
         run: node scripts/ci/validate-agent-config.mjs
       - name: Test agent setup migration safety
         run: bash scripts/ci/test-agent-setup.sh
+
+  # The impact mapper is fail-open, so nothing else fails when it breaks.
+  sdk-e2e-impact-mapper-tests:
+    name: SDK e2e impact mapper unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            packages/sdk/e2e/scripts
+            .github/actions/sdk-e2e-report-impacted
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+      - name: Install esbuild
+        run: npm install --no-save --no-fund --no-audit --prefix "$RUNNER_TEMP/mapper" esbuild@0.27.0
+      - name: Run impact mapper unit tests
+        env:
+          ESBUILD_MODULE: ${{ runner.temp }}/mapper/node_modules/esbuild/lib/main.js
+        run: node --test packages/sdk/e2e/scripts/test/*.test.mjs
 
   model-availability:
     name: Model availability (${{ matrix.package }})
