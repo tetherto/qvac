@@ -69,7 +69,13 @@ export default {
         name: 'python',
         platform: 'desktop-python',
         mode: 'bridge',
-        interpreter: '../../sdk-python/.venv/bin/python',
+        // Windows puts a venv's interpreter under `Scripts`, every other
+        // platform under `bin`. Hardcoding one of them is what would keep this
+        // leg on a single OS.
+        interpreter:
+          process.platform === 'win32'
+            ? '../../sdk-python/.venv/Scripts/python.exe'
+            : '../../sdk-python/.venv/bin/python',
         args: ['-m', 'qvac_e2e.runner'],
         cwd: './python',
         env: {

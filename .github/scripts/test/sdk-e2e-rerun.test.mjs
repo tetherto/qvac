@@ -21,6 +21,7 @@ import {
   planSize,
   readBaseState,
   readPlanComment,
+  readRepoFile,
   runBashStep,
   runGithubScript,
   runNodeStep,
@@ -135,8 +136,8 @@ function resolveConfig(targets) {
       EVENT_NAME: 'workflow_call',
       TARGETS: targets,
       SUITE: '',
-      SUITE_CUSTOM: '',
       RUN_DESKTOP: '',
+      RUN_PYTHON: '',
       RUN_ELECTRON: '',
       RUN_SNAP: '',
       RUN_ANDROID: '',
@@ -541,4 +542,54 @@ test('each kind of run gets its own concurrency group', () => {
     groupFor({ action: 'labeled', label: 'verify' }),
     'two ignored labels must not cancel each other either',
   )
+})
+
+test('every consumer family test-sdk.yml dispatches is handled by the report actions', () => {
+  const consumers = [
+    ...readRepoFile('.github/workflows/test-sdk.yml').matchAll(/^\s+consumer:\s*(\w+)\s*$/gm),
+  ].map((m) => m[1])
+  assert.ok(consumers.length >= 4, `expected consumer families, got ${consumers.join(', ')}`)
+
+  // `report-finalize` resolves the artifact pattern from a case over the family.
+  // A family it does not know exits 1, which reds the job and publishes no
+  // report -- and the test legs themselves stay green, so nothing else says so.
+  const finalize = readRepoFile('.github/actions/sdk-e2e-report-finalize/action.yml')
+  const arm = /case "\$FAMILY" in\s*\n\s*([a-z|]+)\)/.exec(finalize)
+  assert.ok(arm, 'report-finalize no longer resolves the pattern from a case')
+  const handled = new Set(arm[1].split('|'))
+
+  // `base-state` parses `results-<family>-<platform>` back out of the artifact
+  // name; a family missing here is silently dropped from the PR comment.
+  const parsed = /\^results-\(([a-z|]+)\)-/.exec(
+    readRepoFile('.github/actions/sdk-e2e-base-state/action.yml'),
+  )
+  assert.ok(parsed, 'base-state no longer parses artifact names by family')
+  const known = new Set(parsed[1].split('|'))
+
+  // `report-finalize` also decides from the family whether the artifact name
+  // carries the platform. A matrix family missing here downloads its results
+  // and then looks for them under the wrong directory.
+  const qualified = /const isNodeFamily =\s*([^;]+);/.exec(finalize)
+  assert.ok(qualified, 'report-finalize no longer decides artifact layout by family')
+  const perPlatform = new Set(
+    [...qualified[1].matchAll(/family === '([a-z]+)'/g)].map((m) => m[1]),
+  )
+
+  // `resolve-rerun` orders the plan by family. One missing from the list is
+  // dropped from the plan with a warning, so the rerun quietly covers less.
+  const ordered = /const FAMILY_ORDER = \[([^\]]+)\]/.exec(
+    readRepoFile('.github/actions/sdk-e2e-resolve-rerun/action.yml'),
+  )
+  assert.ok(ordered, 'resolve-rerun no longer orders the plan by family')
+  const planned = new Set([...ordered[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]))
+
+  for (const family of new Set(consumers)) {
+    assert.ok(handled.has(family), `report-finalize does not handle family "${family}"`)
+    assert.ok(known.has(family), `base-state does not parse "results-${family}-*"`)
+    assert.ok(
+      perPlatform.has(family),
+      `report-finalize looks for "results-${family}" without the platform suffix`,
+    )
+    assert.ok(planned.has(family), `resolve-rerun drops "${family}" from the rerun plan`)
+  }
 })
