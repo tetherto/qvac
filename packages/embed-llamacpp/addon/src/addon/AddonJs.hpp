@@ -336,6 +336,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         buftOverrides.data(),
         margins.data(),
         minCtx,
+        nullptr,
         false,
         GGML_LOG_LEVEL_INFO,
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the

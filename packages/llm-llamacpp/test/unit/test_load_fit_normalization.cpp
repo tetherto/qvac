@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -399,11 +400,13 @@ protected:
           [](const std::string& name) { return name.rfind("RPC", 0) == 0; });
     }
     return {
-        .resolveBackend = [selected](
-                              backend_selection::BackendType,
-                              const std::optional<backend_selection::MainGpu>&,
-                              const ModelMetaData&,
-                              bool) { return selected; },
+        .resolveBackend =
+            [selected](
+                backend_selection::BackendType,
+                const std::optional<backend_selection::MainGpu>&,
+                const ModelMetaData&,
+                bool,
+                const std::vector<std::string>&) { return selected; },
         .splitDevices = [devices]() { return devices; },
         .registerRpcDevices =
             [rpcRegistrations,
@@ -567,6 +570,32 @@ TEST_F(
   ASSERT_EQ(result.params.devices.size(), 2U);
   EXPECT_NE(result.params.devices.front(), nullptr);
   EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, BackendOverrideWithSplitModeIsRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "vulkan";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, BackendOverrideWithDevicesIsRejected) {
+  auto config = baseConfig();
+  config["devices"] = "vulkan0";
+  config["backend"] = "vulkan";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
 }
 
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
@@ -2221,6 +2250,25 @@ TEST_F(
   }
 }
 
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesNamingOneCardTwiceAreRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["devices"] = "CUDA0,Vulkan0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"});
+  auto selection = splitSelection({"CUDA0", "Vulkan0"});
+  selection.devices[0].deviceId = "0000:01:00.0";
+  selection.devices[1].deviceId = "0000:01:00.0";
+  selection.dedupedTwins.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
   auto config = baseConfig();
   config["devices"] = "none";
@@ -2234,6 +2282,52 @@ TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
 
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.runtimeBackendDevice, 1);
+}
+
+TEST_F(LoadFitNormalizationTest, RawCudaDeviceNameKeepsKvGuardArmed) {
+  for (const auto& [splitMode, explicitDevice] :
+       std::vector<std::pair<std::string, bool>>{
+           {"none", false}, {"layer", false}, {"none", true}}) {
+    auto config = baseConfig();
+    config["split-mode"] = splitMode;
+    config["cache-type-k"] = "tbq4_0";
+    if (explicitDevice) {
+      config["devices"] = "CUDA0";
+    }
+
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend(
+              {.type = backend_selection::GPU, .name = "CUDA0"}, {"CUDA0"})));
+      FAIL() << "CUDA0 must reject TurboQuant in " << splitMode;
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("CUDA backend"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, MixedSplitKeepsCudaKvGuardArmed) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-v"] = "pq3_0";
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "Vulkan0"},
+            {"Vulkan0", "CUDA0"})));
+    FAIL() << "a participating CUDA device must reject PolarQuant";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("CUDA backend"));
+  }
 }
 
 TEST_F(
@@ -2469,7 +2563,8 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
           backend_selection::BackendType,
           const std::optional<backend_selection::MainGpu>&,
           const ModelMetaData&,
-          bool) {
+          bool,
+          const std::vector<std::string>&) {
         selectionAttempted = true;
         return lfn::SelectedBackend{
             .type = backend_selection::CPU, .name = "none"};

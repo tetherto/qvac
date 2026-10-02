@@ -364,9 +364,19 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
   selected.rejectedDevices = available.rejectedDevices;
   selected.devices.reserve(requested.size());
   for (const std::string& name : requested) {
-    const auto match = std::ranges::find(
-        available.devices, name, &backend_selection::SplitDevice::name);
-    if (match == available.devices.end()) {
+    // A name the automatic dedupe dropped, such as Vulkan0 when CUDA0 is the
+    // same card, is still a valid explicit choice.
+    const backend_selection::SplitDevice* match = nullptr;
+    for (const auto* candidates :
+         {&available.devices, &available.dedupedTwins}) {
+      const auto found = std::ranges::find(
+          *candidates, name, &backend_selection::SplitDevice::name);
+      if (found != candidates->end()) {
+        match = &*found;
+        break;
+      }
+    }
+    if (match == nullptr) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
@@ -374,6 +384,18 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
               "for this load.\n",
               K_LEGACY_PARSER_NAME.data(),
               name.c_str()));
+    }
+    for (const backend_selection::SplitDevice& earlier : selected.devices) {
+      if (!match->deviceId.empty() && earlier.deviceId == match->deviceId) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "%s: devices '%s' and '%s' from 'devices' are the same GPU "
+                "under two backends; name it once.\n",
+                K_LEGACY_PARSER_NAME.data(),
+                earlier.name.c_str(),
+                name.c_str()));
+      }
     }
     selected.devices.push_back(*match);
   }
@@ -668,7 +690,7 @@ void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
-    bool isMetal, bool isGpu, bool isTensorSplit) {
+    bool isMetal, bool isGpu, bool isCuda, bool isTensorSplit) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -910,7 +932,7 @@ void tuneLoadConfigMap(
   // 28448086915: S25/S26 crash on a q4_0 KV-cache shift; Mali Vulkan passes).
   // Only f32/f16/bf16 are safe on OpenCL. Metal: standard quant types are
   // supported; only TurboQuant/PolarQuant is rejected.
-  if (isOpenCl || isMetal) {
+  if (isOpenCl || isMetal || isCuda) {
     auto isTurboQuantKvType = [](const std::string& v) {
       return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
     };
@@ -961,6 +983,25 @@ void tuneLoadConfigMap(
                 side,
                 it->second.c_str(),
                 side));
+      }
+      // QVAC-23763: CUDA has no TurboQuant/PolarQuant kernels at all. Unlike
+      // the OpenCL case above, standard quantized types are fine, so only
+      // TBQ/PQ is rejected, exactly like Metal. CPU is deliberately still
+      // allowed: ggml-tbq-quants is a core (CPU) implementation and the
+      // existing OpenCL/Metal messages already point users there.
+      if (isCuda) {
+        if (!isTurboQuantKvType(it->second))
+          return;
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant "
+                "KV-cache type and is not supported on the CUDA backend. "
+                "Either pick a different cache type "
+                "(f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl) or switch "
+                "device to a Vulkan GPU or CPU.\n",
+                side,
+                it->second.c_str()));
       }
       // Metal: only TurboQuant/PolarQuant is unsupported.
       if (!isTurboQuantKvType(it->second))
@@ -1024,7 +1065,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
               backend_selection::BackendType preferred,
               const std::optional<backend_selection::MainGpu>& mainGpu,
               const ModelMetaData& metadata,
-              bool isFinetuning) {
+              bool isFinetuning,
+              const std::vector<std::string>& backendOverride) {
             std::optional<int> adrenoVersion;
             bool isMaliGpu = false;
             auto [type, name] = backend_selection::chooseBackend(
@@ -1034,7 +1076,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 &metadata,
                 &adrenoVersion,
                 isFinetuning,
-                &isMaliGpu);
+                &isMaliGpu,
+                backendOverride);
             const bool isOpenCl = name.find("opencl") != std::string::npos;
             const bool isMetal = name.find("metal") != std::string::npos ||
                                  name.rfind("mtl", 0) == 0;
@@ -1216,8 +1259,9 @@ NormalizedLoad normalizeLoadForFit(
 
   // The deprecated mmap and direct-io flags are separate options that both
   // assign params.load_mode, and llama_load_mode is a flat selector rather
-  // than a bitfield, so the generic loop would let whichever ran last erase
-  // the other. Flags agreeing on a mode are left to it.
+  // than a bitfield, so whichever ran last would erase the other. They are
+  // applied here and never reach the argument parser, which dropped them in
+  // b11018.
   struct DeprecatedLoadFlag {
     const char* key;
     bool isPositive;
@@ -1266,6 +1310,10 @@ NormalizedLoad normalizeLoadForFit(
     }
     deprecatedMode = mode;
     deprecatedKey = flag.key;
+    configFilemap.erase(it);
+  }
+  if (deprecatedMode.has_value()) {
+    params.load_mode = deprecatedMode.value();
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
@@ -1410,17 +1458,44 @@ NormalizedLoad normalizeLoadForFit(
 
   bool isOpenCl = false;
   bool isMetal = false;
+  bool isCuda = false;
   bool isGpu = false;
   {
     using namespace backend_selection;
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+    const std::vector<std::string> backendOverride =
+        tryBackendOverrideFromMap(configFilemap);
+    // The split and explicit-device paths below do not apply the override, so
+    // reject the combination rather than silently run on another backend.
+    if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
+        (splitMode != LLAMA_SPLIT_MODE_NONE || !explicitDevices.empty())) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "'backend' cannot be combined with 'split-mode' or 'devices'. "
+          "Use 'devices' alone to choose the devices for a split.");
+    }
     backend_selection::SplitDeviceSelection splitSelection;
     SelectedBackend selected;
     std::optional<int> mmprojAdrenoVersion;
     if (preferredBackend == BackendType::GPU &&
         (splitMode != LLAMA_SPLIT_MODE_NONE || !explicitDevices.empty())) {
       splitSelection = dependencies.splitDevices();
+      if (explicitDevices.empty() &&
+          !splitSelection.droppedAmbiguousDevices.empty()) {
+        std::string dropped;
+        for (const std::string& device :
+             splitSelection.droppedAmbiguousDevices) {
+          dropped += (dropped.empty() ? "" : ", ") + device;
+        }
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] split leaves out %s: a device without a device "
+                "id may be the same GPU under another backend. Name the "
+                "devices to use them.\n",
+                dropped.c_str()));
+      }
       retainCurrentRpcDevices(
           splitSelection,
           registeredRpcDevices,
@@ -1540,7 +1615,11 @@ NormalizedLoad normalizeLoadForFit(
       }
     } else {
       selected = dependencies.resolveBackend(
-          preferredBackend, mainGpu, metadata, finetuneOverrides.active);
+          preferredBackend,
+          mainGpu,
+          metadata,
+          finetuneOverrides.active,
+          backendOverride);
       mmprojAdrenoVersion = selected.adrenoVersion;
     }
     result.adrenoVersion = selected.adrenoVersion;
@@ -1721,6 +1800,14 @@ NormalizedLoad normalizeLoadForFit(
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
+    isCuda = isGpu &&
+             (toLowerAscii(selected.name).find("cuda") != std::string::npos ||
+              std::ranges::any_of(
+                  splitSelection.devices,
+                  [](const backend_selection::SplitDevice& device) {
+                    return toLowerAscii(device.name).find("cuda") !=
+                           std::string::npos;
+                  }));
   }
 
   tuneLoadConfigMap(
@@ -1731,9 +1818,10 @@ NormalizedLoad normalizeLoadForFit(
       isOpenCl,
       isMetal,
       isGpu,
+      isCuda,
       // params.split_mode is already assigned above (and reset to NONE on CPU
       // fallback), so this is the mode fabric will actually see. Tensor mode
-      // changes how 'auto' is classified for the q8_0 KV default — see the
+      // changes how 'auto' is classified for the q8_0 KV default, see the
       // comment on flashAttnEnabled.
       params.split_mode == LLAMA_SPLIT_MODE_TENSOR);
 
