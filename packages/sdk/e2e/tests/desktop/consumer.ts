@@ -32,7 +32,7 @@ import {
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
   PARAKEET_UNIFIED_0_6B_Q4_0,
-  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
@@ -85,6 +85,7 @@ import { ConfigReloadExecutor } from '../shared/executors/node/config-reload-exe
 import { NodeLoggingExecutor } from '../shared/executors/node/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
 import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
+import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
@@ -473,7 +474,7 @@ resources.define('parakeet-unified', {
 })
 
 resources.define('parakeet-indic-conformer', {
-  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  constant: PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   type: 'parakeet-transcription',
   config: { language: 'hi' }
 })
@@ -690,10 +691,14 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML cache test requires iOS'),
     new SkipExecutor(
       /^snap-storage-/,
       'Snap storage tests require the strict-confined Snap consumer'
     ),
+    ...(process.platform === 'darwin'
+      ? []
+      : [new SkipExecutor(/^tts-audio8-coreml$/, 'Core ML runs on macOS and iOS only')]),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
@@ -705,6 +710,7 @@ export const executor = createExecutor({
     new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
+    new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),

@@ -45,14 +45,21 @@ import {
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
   PARAKEET_UNIFIED_0_6B_Q4_0,
-  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  BCI_WINDOWED
+  BCI_WINDOWED,
+  FLUX_2_KLEIN_4B_Q4_0,
+  FLUX_2_KLEIN_4B_VAE,
+  QWEN3_4B_Q4_K_M,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_VAE_BF16
 } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -78,6 +85,7 @@ import { ConfigReloadExecutor } from '../shared/executors/node/config-reload-exe
 import { NodeLoggingExecutor } from '../shared/executors/node/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
 import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
+import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
@@ -420,7 +428,7 @@ resources.define('parakeet-unified', {
 })
 
 resources.define('parakeet-indic-conformer', {
-  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  constant: PARAKEET_INDIC_CONFORMER_600M_Q4_0,
   type: 'parakeet-transcription',
   config: { language: 'hi' }
 })
@@ -435,6 +443,32 @@ resources.define('parakeet-eou', {
   constant: PARAKEET_EOU_120M_V1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
+})
+
+resources.define('diffusion', {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: 'sdcpp-generation',
+  skipPreDownload: true,
+  config: {
+    device: 'gpu',
+    threads: 4,
+    prediction: 'flux2_flow',
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE
+  }
+})
+
+resources.define('audiogen-turbo', {
+  type: 'audiogen-ggml',
+  skipPreDownload: true,
+  config: {
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    useGPU: true,
+    inferenceSteps: 8
+  }
 })
 
 resources.define('bci', {
@@ -546,6 +580,10 @@ const snapStorageHandler = isSnapConsumer
 export const executor = createExecutor({
   handlers: [
     snapStorageHandler,
+    new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML cache test requires iOS'),
+    ...(process.platform === 'darwin'
+      ? []
+      : [new SkipExecutor(/^tts-audio8-coreml$/, 'Core ML runs on macOS and iOS only')]),
     // Electron keeps the stable desktop/shared surface enabled, but excludes
     // suites that are resource-heavy or incompatible with the packaged
     // Electron worker lifecycle.
@@ -560,6 +598,10 @@ export const executor = createExecutor({
     new SkipExecutor(
       /^audio-(gen|edit|understand)-/,
       'AudioGen e2e is desktop-only: the ACE-Step stack is four GGUFs, too heavy for the stable Electron pass'
+    ),
+    new SkipExecutor(
+      /^model-fit-(?:probe-)?(?:audiogen|diffusion)$/,
+      'Neither set runs in Electron — both are far beyond the stable pass — so neither the load-time probe nor the fit assessment is checked here.'
     ),
     new SkipExecutor(
       /^finetune-/,
@@ -588,6 +630,7 @@ export const executor = createExecutor({
     new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
+    new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),

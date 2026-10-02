@@ -12,6 +12,7 @@ on:
       - reopened
     paths:
       - "packages/sdk/**"
+      - "packages/sdk-kotlin/**"
       - "packages/cli/**"
       - "packages/rag/**"
       - "packages/logging/**"

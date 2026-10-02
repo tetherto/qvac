@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.1] - 2026-09-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+  `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
+  expert caching defaulting to CUDA only, GLM-5 Next support). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so
+  the range bump is what picks up the new fabric. A caret on a `0.x` version
+  locks the minor, so `^0.18.0` would not have resolved `0.19.0` on its own.
+  Classification runs on the CPU and uses none of those paths, so the bump
+  keeps it on the current shared runtime. No API change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.19.0` together.
+
 ## [0.28.0] - 2026-09-28
 
 ### Changed

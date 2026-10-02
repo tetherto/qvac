@@ -409,6 +409,7 @@
                 ]
               },
               "modelType": {
+                "description": "Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.",
                 "type": "string",
                 "enum": [
                   "llamacpp-completion",
@@ -437,7 +438,6 @@
                   "vla",
                   "classification"
                 ],
-                "description": "Engine that would run the load.",
                 "title": "AssessModelFitRequestModelsItemModelType"
               },
               "modelConfig": {
@@ -450,7 +450,6 @@
                 "title": "AssessModelFitRequestModelsItemModelConfig"
               }
             },
-            "required": ["modelType"],
             "title": "AssessModelFitRequestModelsItem"
           },
           "description": "Models to assess together under one memory budget."
@@ -598,6 +597,10 @@
               },
               "estimatorVersion": {
                 "description": "Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
+                "type": "string"
+              },
+              "device": {
+                "description": "Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement.",
                 "type": "string"
               },
               "reasons": {
@@ -2691,7 +2694,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -2983,7 +2990,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -6068,17 +6079,21 @@
                 "verdict": {
                   "type": "string",
                   "enum": ["fit", "does-not-fit", "unknown"],
-                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
                   "title": "NativeProbeFitVerdict"
                 },
                 "basis": {
                   "type": "string",
                   "const": "native-probe",
-                  "description": "Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+                  "description": "Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
+                },
+                "engine": {
+                  "description": "Engine package whose fitter produced this outcome. Absent when none ran.",
+                  "type": "string"
                 },
                 "estimatorVersion": {
                   "type": "string",
-                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve."
+                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve, counting device memory only where it comes out of system RAM."
                 },
                 "reason": {
                   "type": "string",
@@ -6119,56 +6134,43 @@
                   "description": "What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
                   "type": "object",
                   "properties": {
-                    "devices": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "name": {
-                            "type": "string",
-                            "description": "Device name as the backend reports it, or `host`."
-                          },
-                          "totalBytes": {
-                            "type": "number",
-                            "description": "Memory the device reports installed."
-                          },
-                          "freeBytes": {
-                            "type": "number",
-                            "description": "Memory the device reports free, before the margin."
-                          },
-                          "marginBytes": {
-                            "type": "number",
-                            "description": "Headroom the fitter withheld on this device."
-                          },
-                          "modelBytes": {
-                            "type": "number",
-                            "description": "Weights the load would place here."
-                          },
-                          "contextBytes": {
-                            "type": "number",
-                            "description": "Context and cache the load would place here."
-                          },
-                          "computeBytes": {
-                            "type": "number",
-                            "description": "Compute buffers the load would place here."
-                          }
-                        },
-                        "required": [
-                          "name",
-                          "totalBytes",
-                          "freeBytes",
-                          "marginBytes",
-                          "modelBytes",
-                          "contextBytes",
-                          "computeBytes"
-                        ],
-                        "additionalProperties": false,
-                        "title": "NativeProbeFitProjectionDevicesItem"
-                      },
-                      "description": "Every device the load would touch."
+                    "deviceName": {
+                      "description": "Device the projection was made against.",
+                      "type": "string"
+                    },
+                    "deviceBytes": {
+                      "description": "Peak the load would place on the device, under the workload the probe assumed.",
+                      "type": "number"
+                    },
+                    "hostBytes": {
+                      "description": "Peak the load would place in host RAM.",
+                      "type": "number"
+                    },
+                    "weightsBytes": {
+                      "description": "Model weights, within `deviceBytes`.",
+                      "type": "number"
+                    },
+                    "contextBytes": {
+                      "description": "Context, KV cache and decoder state, within `deviceBytes`.",
+                      "type": "number"
+                    },
+                    "computeBytes": {
+                      "description": "Compute buffers and graph arenas, within `deviceBytes`.",
+                      "type": "number"
+                    },
+                    "deviceFreeBytes": {
+                      "description": "Device memory free when the probe ran.",
+                      "type": "number"
+                    },
+                    "deviceTotalBytes": {
+                      "description": "Device memory installed.",
+                      "type": "number"
+                    },
+                    "report": {
+                      "description": "The engine's own per-module memory table, suitable for a log line.",
+                      "type": "string"
                     }
                   },
-                  "required": ["devices"],
                   "additionalProperties": false,
                   "title": "NativeProbeFitProjection"
                 }
@@ -20257,6 +20259,14 @@
             },
             "enhancerBackendId": {
               "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -20446,6 +20456,14 @@
             },
             "enhancerBackendId": {
               "type": "number"
+            },
+            "codecSidecarLoaded": {
+              "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
+              "type": "number"
+            },
+            "codecOnCoreml": {
+              "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -20628,7 +20646,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -20679,9 +20701,9 @@
               "type": "number"
             },
             "source": {
-              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
               "type": "string",
-              "enum": ["silero", "energy"],
+              "enum": ["silero", "energy", "sortformer"],
               "title": "TranscribeResponseVadSource"
             }
           },
@@ -21022,7 +21044,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -21073,9 +21099,9 @@
               "type": "number"
             },
             "source": {
-              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
               "type": "string",
-              "enum": ["silero", "energy"],
+              "enum": ["silero", "energy", "sortformer"],
               "title": "TranscribeStreamResponseVadSource"
             }
           },

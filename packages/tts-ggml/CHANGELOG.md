@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
+  48 kHz sound effects of up to 30 seconds from a text description, from one
+  GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
+  takes per-call `seconds`, `negativePrompt`, `steps`, `guidance` and `shift`;
+  there is no streaming. Desktop, with a GPU recommended.
+- MOSS-Speech engine (`engine: 'moss-speech'`, fnlp MOSS-Speech): answers a
+  spoken question (`run({ audio, sampleRate })`, or a typed `input`) with a
+  24 kHz spoken reply and its text (`data.text`), from a language-model GGUF
+  plus a codec GGUF (`files.mossSpeechModel` / `files.mossSpeechCodec`, or
+  `moss-speech-*.gguf` in `modelDir`). Per call: earlier turns in `messages`,
+  `systemPrompt`, a reply voice (`replyVoice`), `maxReplySeconds`,
+  `maxNewTokens`, `textReply` and sampling controls; there is no streaming.
+  Desktop, with a GPU.
+
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships the
+  MOSS-SoundEffect and MOSS-Speech engines.
+
 ### Fixed
 
 - Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
@@ -98,6 +119,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ggml log lines (backend selection, device enumeration) reach the JS logger
     through tts-cpp's `tts_cpp_log_set` instead of stderr. Engine diagnostics
     that tts-cpp still prints straight to stderr are unaffected.
+
+### Fixed
+
+- Include the standalone Pocket BareKit worklet in published packages and
+  guard shared mobile runners against imports that break after concatenation.
 
 ### Changed
 
