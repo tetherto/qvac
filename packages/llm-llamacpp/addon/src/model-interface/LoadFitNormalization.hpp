@@ -136,6 +136,13 @@ void canonicalizeCpuTensorBufferOverrides(
     std::vector<llama_model_tensor_buft_override>& overrides,
     ggml_backend_buffer_type_t parsedCpuBuft);
 
+// Load mode selected by one of llama's deprecated load flags (mmap, no-mmap,
+// direct-io, no-direct-io, mlock), which fabric's argument table no longer
+// has. std::nullopt for any other key; std::invalid_argument for a value the
+// flag does not take.
+std::optional<llama_load_mode>
+deprecatedLoadFlagMode(const std::string& flag, const std::string& value);
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
