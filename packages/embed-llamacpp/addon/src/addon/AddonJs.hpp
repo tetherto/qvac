@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -107,6 +108,18 @@ inline std::optional<std::string> applyLlamaLoadParams(
         supplied->getProperty<js::String>(env, key.c_str())
             .as<std::string>(env);
     const std::string arg = "--" + key;
+
+    // No longer in llama's argument table, so applied here.
+    try {
+      const std::optional<llama_load_mode> deprecatedMode =
+          deprecatedLoadFlagMode(key, value);
+      if (deprecatedMode.has_value()) {
+        params.load_mode = deprecatedMode.value();
+        continue;
+      }
+    } catch (const std::invalid_argument&) {
+      return "unsupported-config";
+    }
 
     const auto found = options.find(arg);
     if (found == options.end()) {

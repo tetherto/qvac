@@ -1365,6 +1365,74 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeBothKeysRejects) {
       qvac_errors::StatusError);
 }
 
+TEST_F(BertModelTest, DeprecatedNoMmapAliasLoadsWithoutMmap) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["no-mmap"] = "";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(BertModelTest, DeprecatedAliasPolarityFromValueIsHonoured) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["mmap"] = "off";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(BertModelTest, DeprecatedAliasesSelectingDifferentModesAreRejected) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["no-mmap"] = "";
+  config["direct-io"] = "";
+
+  EXPECT_THROW(
+      {
+        BertModel model(getValidModelPath(), config);
+        model.initializeBackend(test_backends_dir);
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, LoadModeWinsOverDeprecatedAlias) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["load-mode"] = "none";
+  config["mmap"] = "";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
 TEST_F(BertModelTest, CancelMidDecode_ThrowsJobCancelled) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
