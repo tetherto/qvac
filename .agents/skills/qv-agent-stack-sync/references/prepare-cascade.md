@@ -46,8 +46,8 @@ gh pr create --repo tetherto/qvac --draft \
   --body "..."
 ```
 
-SDK pod template. Body API / Models / Breaking copied from
-`changelog/<this version>/`. Note future dep versions if lower npm is not live.
+SDK pod template. Body ends at testing; do not copy API / Models / Breaking.
+Note future dep versions if lower npm is not live.
 Publish is human-gated.
 
 ### 4. Draft backmerge PR
