@@ -525,6 +525,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   prefillComplete_ = false;
 
   lastGeneratedTokenCount_ = 0;
+  lastPromptTokenCount_ = 0;
+  lastPromptEvalMs_ = 0.0;
+  lastGenerationMs_ = 0.0;
 
   mtmd::input_chunks chunks(mtmd_input_chunks_init());
 
@@ -623,6 +626,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   }
 
   llama_pos nPastLocal = current_.pos;
+  // Image chunks are decoded by mtmd's helper, so the prompt tokens decoded
+  // are counted as the KV cells the prefill adds.
+  const llama_pos cacheTokensAtPrefill = current_.cacheTokens;
+  const auto prefillStart = std::chrono::steady_clock::now();
 
   size_t ledgerEntryIndex = 0;
   for (size_t i = 0; i < nChunks; i++) {
@@ -816,6 +823,13 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   }
   current_.pos = nPastLocal;
   refreshCurrentCacheTokensFromMemory();
+  // See TextLlmContext::evalMessageWithTools.
+  llama_synchronize(modelCtx_.lctx);
+  lastPromptEvalMs_ = std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - prefillStart)
+                          .count();
+  lastPromptTokenCount_ =
+      std::max<llama_pos>(0, current_.cacheTokens - cacheTokensAtPrefill);
   // The single-prompt path does not go through `onPrefillComplete`, so mark
   // the phase here: from now on a cancel keeps the request's state.
   prefillComplete_ = true;
@@ -945,6 +959,12 @@ void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
 LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
+  const auto generationStart = std::chrono::steady_clock::now();
+  ScopeGuard recordGenerationTime([this, generationStart]() noexcept {
+    lastGenerationMs_ = std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - generationStart)
+                            .count();
+  });
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
 

@@ -1805,6 +1805,52 @@ TEST(PromptParsingTest, ModelWithoutReasoningChannelKeepsContent) {
   EXPECT_TRUE(parsed.chatMsgs[1].reasoning_content.empty());
 }
 
+// A prompt that is fully cached is re-decoded for its last token only, to get
+// fresh logits. llama books a one-token decode as generation, so stats read
+// from its perf counters reported no prompt work (TTFT 0, ppTPS 0). The
+// addon counts and times its own prefill.
+TEST(CacheRuntimeStatsTest, FullyCachedPromptReportsItsPromptWork) {
+  const std::string path =
+      test_common::BaseTestModelPath::get("Qwen3-0.6B-Q8_0.gguf");
+  if (!fs::exists(path)) {
+    GTEST_SKIP() << "Qwen3-0.6B-Q8_0.gguf not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "8";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string modelPath = path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path cacheFile = "fully_cached_prompt_stats.bin";
+  fs::remove(cacheFile);
+  const std::string input =
+      R"([{"role":"user","content":"Name one colour of the rainbow."}])";
+  LlamaModel::Prompt warm;
+  warm.input = input;
+  warm.cacheKey = cacheFile.string();
+  warm.prefill = true;
+  ASSERT_NO_THROW((void)model->processPrompt(warm));
+
+  LlamaModel::Prompt repeat;
+  repeat.input = input;
+  repeat.cacheKey = cacheFile.string();
+  ASSERT_NO_THROW((void)model->processPrompt(repeat));
+  const auto stats = model->runtimeStats();
+  EXPECT_EQ(test_common::getStatValue(stats, "promptTokens"), 1.0)
+      << "only the last prompt token is re-decoded";
+  EXPECT_GT(test_common::getStatValue(stats, "TTFT"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "ppTPS"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "TPS"), 0.0);
+  fs::remove(cacheFile);
+}
+
 // Batch mode gives every request a fresh slot driver, so the checkpoints
 // must outlive it in the scheduler to reach the next turn on the same
 // cacheKey. The prefill stops at the end of the history for the capture.

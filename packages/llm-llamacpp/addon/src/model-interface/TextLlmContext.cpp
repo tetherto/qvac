@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -528,6 +529,9 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   // prefill-entry checkpoint.
   requestRollback_.clear();
   lastGeneratedTokenCount_ = 0;
+  lastPromptTokenCount_ = 0;
+  lastPromptEvalMs_ = 0.0;
+  lastGenerationMs_ = 0.0;
 
   PrefillPlan plan =
       preparePrefill(chatMsgs, tools, {}, {}, isCacheLoaded, prefill);
@@ -565,6 +569,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
     }
   }
 
+  const auto prefillStart = std::chrono::steady_clock::now();
   llama_pos count = nPast_;
   llama_pos tokenIndex = 0;
   while (tokenIndex < nTokens) {
@@ -653,11 +658,18 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
     }
 
     nPast_ += textBatch->n_tokens;
+    lastPromptTokenCount_ += textBatch->n_tokens;
     // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
     if (checkpointAt.has_value() && tokenIndex == *checkpointAt) {
       captureHistoryCheckpoint(nPast_);
     }
   }
+  // Finish the queued decodes so the prompt time covers the work, not just
+  // its submission; generation would wait for it at its first sample anyway.
+  llama_synchronize(modelCtx_.lctx);
+  lastPromptEvalMs_ = std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - prefillStart)
+                          .count();
 
   onPrefillComplete(nPast_, inputTokens.size());
   return {};
@@ -797,6 +809,12 @@ void TextLlmContext::emitOutputPiece(
 LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
+  const auto generationStart = std::chrono::steady_clock::now();
+  ScopeGuard recordGenerationTime([this, generationStart]() noexcept {
+    lastGenerationMs_ = std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - generationStart)
+                            .count();
+  });
   LlamaBatch batch(1, 0, 1); // batch for next token generation
   unsigned generatedAfterAccept = 0;
 

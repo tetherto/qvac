@@ -1259,9 +1259,8 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     }
 
     if (prompt.prefill) {
-      // On prefill, no logits are accessed so llama.cpp's synchronize() is
-      // never triggered. Force it here so t_p_eval_ms is committed to the perf
-      // context before the caller reads runtimeStats().
+      // On prefill no logits are read, so nothing else waits for the queued
+      // decodes before the caller reads runtimeStats() or the cache is saved.
       llama_synchronize(state_->llmContext_->getCtx());
       shouldSaveCache = true;
     } else {
@@ -1574,27 +1573,28 @@ LlamaModel::batchRuntimeStatsLocked() const {
 
 qvac_lib_inference_addon_cpp::RuntimeStats
 LlamaModel::singleRuntimeStatsLocked() const {
-  auto perfData = llama_perf_context(state_->llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
   const bool wasPrefill =
       state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
-  const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
-  // Counted where the tokens are produced, not inferred from `n_eval`.
-  // See `LlmContext::lastGeneratedTokenCount`.
+  // Counted and timed where the work happens, not read from llama's perf
+  // counters, which book a one-token decode (a fully cached prompt re-decoding
+  // its last token) as generation. See `LlmContext::lastPromptTokenCount`.
+  const LlmContext& context = *state_->llmContext_;
+  const double promptEvalMs = context.lastPromptEvalMs();
+  const int64_t promptTokenCount = context.lastPromptTokenCount();
+  const double timeToFirstToken = wasPrefill ? 0.0 : promptEvalMs;
   const int64_t generatedTokens =
-      wasPrefill ? 0
-                 : static_cast<int64_t>(
-                       state_->llmContext_->lastGeneratedTokenCount());
-  const int64_t promptTokens =
-      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
-  const double tokensPerSecond = (!wasPrefill && perfData.t_eval_ms > 0)
-                                     ? kMillisInSecond / perfData.t_eval_ms *
+      wasPrefill ? 0 : static_cast<int64_t>(context.lastGeneratedTokenCount());
+  const int64_t promptTokens = wasPrefill ? 0 : promptTokenCount;
+  const double generationMs = context.lastGenerationMs();
+  const double tokensPerSecond = (!wasPrefill && generationMs > 0)
+                                     ? kMillisInSecond / generationMs *
                                            static_cast<double>(generatedTokens)
                                      : 0.0;
   const double promptProcessingTPS =
-      perfData.t_p_eval_ms > 0
-          ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
-          : 0.0;
+      promptEvalMs > 0 ? kMillisInSecond / promptEvalMs *
+                             static_cast<double>(promptTokenCount)
+                       : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
   return {
       {"TTFT", timeToFirstToken},

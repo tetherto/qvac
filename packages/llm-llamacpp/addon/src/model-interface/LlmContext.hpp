@@ -372,8 +372,26 @@ public:
     return lastGeneratedTokenCount_;
   }
 
+  /**
+   * Prompt tokens the most recent single-prompt prefill decoded, and the
+   * wall-clock milliseconds it took (synchronized), and the milliseconds its
+   * generation took. Measured here rather than read from llama's perf
+   * counters for the same reason as `lastGeneratedTokenCount`: llama books a
+   * decode of exactly one token as generation, so a prompt that was cached
+   * but for the one token re-decoded for logits reported no prompt work at
+   * all. llama-server times its slots itself for the same reason.
+   */
+  [[nodiscard]] int64_t lastPromptTokenCount() const {
+    return lastPromptTokenCount_;
+  }
+  [[nodiscard]] double lastPromptEvalMs() const { return lastPromptEvalMs_; }
+  [[nodiscard]] double lastGenerationMs() const { return lastGenerationMs_; }
+
 protected:
   int32_t lastGeneratedTokenCount_ = 0;
+  int64_t lastPromptTokenCount_ = 0;
+  double lastPromptEvalMs_ = 0.0;
+  double lastGenerationMs_ = 0.0;
 
 public:
   /**

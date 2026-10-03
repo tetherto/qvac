@@ -547,9 +547,15 @@ engine per request):
 
 ### 1. Single request, no batching (`parallel = 1`)
 
-Single-prompt path (from `llama_perf_context`). One job owns the model, so
-the generic snapshot's figures already ARE that request's figures — there is
-no separate per-job source, nothing is overridden.
+Single-prompt path, counted and timed by the context itself, as llama-server
+and the batch path do: `TTFT` is the prefill's wall-clock time, `promptTokens`
+the tokens it decoded, `TPS` the generated tokens over the generation's
+wall-clock time. llama's perf counters are not used, because they book a
+decode of exactly one token as generation: a fully cached prompt, which
+re-decodes only its last token for fresh logits, would report no prompt work.
+One job owns the model, so the generic snapshot's figures already ARE that
+request's figures — there is no separate per-job source, nothing is
+overridden.
 
 ```json
 {

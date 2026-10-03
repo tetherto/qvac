@@ -94,6 +94,11 @@
   rolled-back cursor on attention models: the multimodal context had not yet
   published them. The rollback now trims to its target whatever the cursor
   says.
+- Single-prompt runtime stats for a fully cached prompt reported `TTFT`,
+  `promptTokens` and `ppTPS` as 0, and a low `TPS`: the prefill re-decodes
+  only the last prompt token, which llama's perf counters book as generation.
+  The contexts now count and time their own prefill and generation, as
+  llama-server and the batch path do.
 - A single-prompt cache load on a parallel model no longer trims every
   sequence to the loaded length (`llama_memory_seq_rm` on seq `-1`), which
   truncated the batch slots' conversations; it trims its own sequence.
