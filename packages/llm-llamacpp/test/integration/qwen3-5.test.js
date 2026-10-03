@@ -195,7 +195,7 @@ test(
       const prompt1 = [systemMsg, userTurn1]
       // This cache smoke test uses a short decode budget and only verifies
       // that Qwen3.5 can persist/extend KV state. Dedicated reasoning tests
-      // cover thinking/compaction with a larger budget that reaches </think>.
+      // cover reasoning reconciliation with a larger budget that reaches </think>.
       const noReasoning = {
         generationParams: { reasoning_budget: 0 }
       }
@@ -485,12 +485,7 @@ test(
               'Before answering, reason in detail for at least 20 sentences, then answer: What is the capital of France?'
           }
         ],
-        {
-          cacheKey: sessionName,
-          generationParams: {
-            remove_thinking_from_context: true
-          }
-        }
+        { cacheKey: sessionName }
       )
       const output = await collectResponse(response)
 

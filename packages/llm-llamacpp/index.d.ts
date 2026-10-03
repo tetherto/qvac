@@ -264,6 +264,43 @@ declare namespace LlmLlamacpp {
          * `InvalidArgument` naming both knobs.
          */
         parallel?: NumericLike;
+        /**
+         * Per-sequence cap on the process-local full-state checkpoints kept for
+         * cached requests on hybrid / recurrent models (Qwen3.5, Jamba,
+         * Granite-Hybrid, DeepSeek V4, ...). Such models cannot trim a KV tail,
+         * so a diverging history is served by restoring the longest checkpoint
+         * that is still a prefix of the new prompt. A committed cached request
+         * adds one, at the end of its history, holding only the state a tail
+         * trim cannot rebuild. The default is 1: the last one, which an ordinary
+         * next turn and a regenerate restore. `2` also keeps the one before it,
+         * which an edit of the last user message restores. Changing the user
+         * message k-th from the end (1 = the last) without reprocessing the whole
+         * conversation needs at least k + 1; with the default 1, editing the last
+         * user message reprocesses everything. `0` keeps and takes none (every
+         * divergent turn is a cold prefill), the maximum is 1024.
+         * Ignored on pure-attention models, which never take checkpoints.
+         * Also accepted as `cache-checkpoints`; supplying both is an error.
+         */
+        cache_checkpoints?: NumericLike;
+        /**
+         * Byte budget for the checkpoints kept per sequence, enforced before
+         * `cache_checkpoints`: the oldest checkpoints are dropped until the total
+         * payload fits. `0` (default) is unlimited. When set, the model load fails
+         * with `InvalidArgument` if the budget cannot hold `cache_checkpoints`
+         * checkpoints of the largest size the context allows, so a misconfigured
+         * budget is reported up front rather than discovered mid-conversation.
+         * Also accepted as `cache-checkpoints-max-bytes`.
+         */
+        cache_checkpoints_max_bytes?: NumericLike;
+        /**
+         * Where checkpoints and the per-request rollback snapshot live:
+         * `'memory'` (default) keeps them in host RAM so a cached chat never
+         * touches the disk, `'disk'` writes them to the OS temp directory. Each
+         * snapshot holds only the state a tail trim cannot rebuild, a size fixed
+         * by the model (about 20 MB on Qwen3.5-0.8B). Also accepted as
+         * `cache-checkpoint-storage`.
+         */
+        cache_checkpoint_storage?: "disk" | "memory";
         [key: string]: string | number | boolean | string[] | undefined;
     }
     interface LlmLlamacppArgs {
@@ -287,6 +324,14 @@ declare namespace LlmLlamacpp {
     interface UserTextMessage {
         role: "system" | "assistant" | "user" | "tool" | "session" | string;
         content: string;
+        /**
+         * An assistant turn's reasoning, separate from its answer in `content`, as
+         * in OpenAI-compatible APIs. Optional: an answer sent back with its
+         * reasoning inline (`<think>…</think>` first, as the model streamed it) is
+         * split into the two, using the reasoning markers the chat template
+         * reports, so the template can drop or place it. Ignored on other roles.
+         */
+        reasoning_content?: string;
         type?: undefined;
         [key: string]: any;
     }
@@ -357,84 +402,6 @@ declare namespace LlmLlamacpp {
          * value is restored afterwards.
          */
         reasoning_budget?: number;
-        /**
-         * When the model emits a reasoning block during generation (e.g.
-         * `<think>...</think>` for the Qwen3 family, `<|channel>thought ...
-         * <channel|>` for Gemma 4), drop those tokens from the KV cache at
-         * end-of-generation so subsequent turns do not accumulate reasoning
-         * history.
-         *
-         * Defaults to `false` for all models except the Qwen3 reasoning family
-         * (Qwen3, Qwen3.5, and Qwen3.6, including MoE variants), which defaults
-         * to `true`. Set this per-request `generationParams` value to override the
-         * model default. Set to `false` to preserve reasoning tokens in the KV / SSM
-         * cache across turns (e.g. chain-of-thought agents that want the next turn
-         * to attend to prior reasoning, interpretability tooling, or cache-reuse
-         * patterns that depend on the reasoning-inclusive state). Supported on both
-         * text and multimodal contexts. No-op for models without a recognised
-         * reasoning channel.
-         *
-         * Every model kind is handled the same way: the sequence is rewound to a
-         * boundary anchored BEFORE the reasoning span, and the tokens that sit
-         * outside the span, the pre-reasoning preamble and the answer tail, are
-         * replayed through the decoder. Only the anchor's form differs. Recurrent
-         * / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba, Granite-Hybrid, ...)
-         * anchor a full-state snapshot, because the recurrent half cannot be
-         * rewound by dropping cells; pure-attention models anchor a bare position
-         * and rewind with a tail trim.
-         *
-         * No structural reasoning marker is seeded or replayed, so the compacted
-         * cache is preamble plus answer with no `<think>` / `</think>` scaffold
-         * left behind, and close-marker length decides nothing: a marker that
-         * tokenises to several pieces is supported like any other. Chat templates
-         * that force-open the reasoning channel during prefill and templates that
-         * let the model generate the opener are both supported; on the
-         * generated-opener path the sampled pieces that open the block are clipped
-         * out of the replay rather than rebuilt.
-         *
-         * Prefill-only (cache-warm) requests anchor nothing: they never enter
-         * generation and cannot emit reasoning tokens.
-         *
-         * Uniform hard-fail contract: any inability to remove the reasoning
-         * span from cache, whether the boundary anchor, the rewind, or the
-         * replay step, is surfaced to the caller as a `StatusError`. There is no
-         * soft-failure counter: if the feature is
-         * enabled and cache cleanup cannot complete, the final request result is
-         * failed rather than reported as a successful answer with the reasoning span
-         * still resident in cache.
-         *
-         * Streaming caveat: token callbacks (`outputCallback` / batch `onToken`) are
-         * invoked during generation, while reasoning-block compaction runs at
-         * end-of-generation. If compaction fails, streaming callers may already have
-         * received partial or complete text. Treat streamed text as tentative until
-         * the request completes successfully; non-streaming callers receive no
-         * successful returned answer on this failure path.
-         *
-         * Before throwing, the affected sequence is cleaned up so that the
-         * next request on the same context starts from a coherent state:
-         *   * Boundary-anchor failure: nothing has been rewound yet, so the
-         *     driver rolls back to its pre-prompt checkpoint (or clears the
-         *     sequence entirely on restore underflow) and resets positional
-         *     accounting, then rethrows.
-         *   * Rewind or replay failure: compaction rewinds before it replays,
-         *     so live KV has already been written to by this point and a tail
-         *     trim can no longer reach a coherent state. The compactor
-         *     best-effort wipes the sequence and the driver zeroes its
-         *     positional accounting to match, so subsequent turns cannot decode
-         *     into contaminated positions.
-         *
-         * On the continuous-batch path, the scheduler's error-recovery leg
-         * deliberately does NOT persist the failed slot's cache: when the
-         * request was configured with `cacheKey` + `saveCacheToDisk`, the
-         * last known-good on-disk cache is preserved rather than being
-         * overwritten with the post-failure state. The same skip-save rule
-         * applies to graceful cancels of hybrid / recurrent requests when
-         * rollback to the pre-request cursor cannot be completed (recurrent
-         * full-state restore refused, or no pre-request snapshot was captured
-         * yet the driver has advanced past the pre-request cursor). Cancels
-         * that can be rolled back cleanly still persist as usual.
-         */
-        remove_thinking_from_context?: boolean;
     }
     interface RunOptions {
         /**
@@ -447,28 +414,27 @@ declare namespace LlmLlamacpp {
          */
         prefill?: boolean;
         generationParams?: GenerationParams;
+        /**
+         * Enables addon-owned prompt caching at this path. Every cached request
+         * must resend the complete authoritative message history and tool list;
+         * delta-only continuations are not supported. The addon renders once and
+         * decodes only the suffix after the longest matching token/media prefix.
+         */
         cacheKey?: string;
         /**
          * When `true` and `cacheKey` is set, the driver persists the sequence's
          * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
          * later run keyed by the same string can resume without re-prefilling.
          *
-         * The continuous-batch scheduler intentionally SKIPS the save on
-         * teardown legs where persistence could corrupt the last known-good
-         * on-disk cache:
-         *   - Any batch error-recovery path (e.g. decode failure, per-slot
-         *     failure with `SaveCachePolicy::Skip`, or a
-         *     `remove_thinking_from_context` hard-fail).
-         *   - Graceful cancel of a hybrid / recurrent request whose driver
-         *     cannot roll live memory back to the pre-request cursor —
-         *     either the recurrent full-state restore was refused, or no
-         *     pre-request snapshot exists yet the driver advanced past the
-         *     pre-request cursor. Cancels that roll back cleanly still save.
-         *
-         * On both skip paths the sequence's in-memory KV is still cleared, so
-         * subsequent requests decode from a coherent baseline; only the
-         * on-disk cache is untouched. Pure-attention drivers always roll back
-         * via `removeLastNTokens` and therefore save on cancel as usual.
+         * The save is the commit of the request's cache transaction, so it runs
+         * whenever the caller received what was produced: end-of-sequence, an
+         * antiprompt hit, the caller's own `n_predict` limit, or a cancel after
+         * generation started. Such a cancel keeps the prompt and every streamed
+         * token resident, so the next full-history turn resumes from there. A
+         * cancel during prefill, a decode error and a context overflow roll the
+         * request back to the state before the prompt was sent, and on those legs
+         * the on-disk cache is left untouched so the last known-good file
+         * survives. Prefill-only requests commit as soon as prefill completes.
          */
         saveCacheToDisk?: boolean;
         /**
@@ -523,15 +489,7 @@ declare namespace LlmLlamacpp {
         CacheTokens: number;
         generatedTokens: number;
         promptTokens: number;
-        /**
-         * Number of `<think>` (or model-equivalent) reasoning blocks dropped
-         * from the KV cache at end-of-generation by the
-         * `remove_thinking_from_context` feature. Per-inference for single
-         * requests; summed across completed slots for batch requests. 0 when
-         * the model has no recognised reasoning channel, when the feature
-         * was disabled per-request, or when no reasoning blocks were emitted.
-         */
-        thinkingBlockDiscards: number;
+        /** Legacy counter retained for stats-shape compatibility; always 0. */
         /**
          * Number of prompt renders in this request that provably left the tool
          * definitions out — the template either rejected them, or supplying them

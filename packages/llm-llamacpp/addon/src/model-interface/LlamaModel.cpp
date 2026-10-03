@@ -38,7 +38,9 @@
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ModelMemoryPolicy.hpp"
 #include "utils/ScopeGuard.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 #include "utils/SharedSnapshot.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
@@ -96,11 +98,62 @@ void LlamaModel::reload(
   setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE, newFinetuneOverrides);
 }
 
+LlamaModel::~LlamaModel() {
+  cancelInference();
+  std::unique_lock lock(stateMtx_);
+  // Writing unsaved conversations at unload is part of the RAM tier's
+  // write-back contract. Without the tier nothing is written at unload, as
+  // before: a conversation's file is only written by the saves the caller
+  // controls (saveCacheToDisk, a key switch, a keyless request).
+  if (state_ && state_->ramTier_ && state_->ramTier_->enabled()) {
+    flushResidentCaches();
+  }
+}
+
+void LlamaModel::flushResidentCaches() noexcept {
+  // Conversations kept in memory between requests have turns their files may
+  // not hold yet; a clean unload must not lose them. Order: the scheduler
+  // first (its parked sequences share the context with the single-prompt
+  // session), then the active session, then the RAM tier.
+  if (!state_) {
+    return;
+  }
+  try {
+    if (state_->batchScheduler_) {
+      state_->batchScheduler_->flushForUnload();
+    }
+    // The session lives in the shared context: only touch it when no job
+    // can still be decoding there.
+    if (state_->cacheManager_.has_value() && activeSingleJobs_.load() == 0 &&
+        activeBatchJobs_.load() == 0) {
+      state_->cacheManager_->flushForUnload();
+    }
+    if (state_->ramTier_) {
+      state_->ramTier_->flushDirty();
+    }
+  } catch (const std::exception& e) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[LlamaModel] flushing cached conversations failed: %s\n",
+            e.what()));
+  } catch (...) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] flushing cached conversations failed\n");
+  }
+}
+
 void LlamaModel::setInitLoader(
     std::optional<InitLoader::LOADER_TYPE> loaderType,
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   cancelInference();
   std::unique_lock lock(stateMtx_);
+  // A reload discards the contexts while the process keeps serving the same
+  // conversations (finetuning reloads before training, and the finetuner
+  // saves the active session for the same reason): keep what they hold,
+  // with or without the RAM tier.
+  flushResidentCaches();
   // Unconditionally stop the old contexts before destroying them, regardless
   // of job counters. cancel() above only routes to active engines (counters >
   // 0), but reload() must clean up *any* residual state in the old context
@@ -193,6 +246,20 @@ void LlamaModel::init(bool acquireLock) {
     snap->backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
   }
 
+  // Addon-only knobs: consume them here so they are not forwarded to
+  // llama.cpp's argument parser, which would reject them as unknown.
+  try {
+    snap->cacheCheckpointPolicy_ =
+        qvac_lib_inference_addon_llama::cache::parseCheckpointPolicy(
+            configFilemap);
+    snap->cacheRamBytes_ =
+        qvac_lib_inference_addon_llama::cache::parseCacheRamBytes(
+            configFilemap);
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, e.what());
+  }
+
   auto normalized = load_fit_normalization::normalizeLoadForFit(
       modelPath,
       std::move(configFilemap),
@@ -244,13 +311,74 @@ void LlamaModel::init(bool acquireLock) {
       std::move(llamaInit));
 
   if (snap->llmContext_) {
+    snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
+    validateCheckpointBudget(*snap);
     snap->cacheManager_.emplace(
         snap->llmContext_.get(),
         [this](bool resetStats) { this->resetState(resetStats); });
+    snap->ramTier_ =
+        std::make_shared<batching::SlotStateCache>(snap->cacheRamBytes_);
+    snap->cacheManager_->setRamTier(snap->ramTier_);
   }
 
   if (isMultiBatchActivated(*snap)) {
     snap->batchScheduler_ = initBatchScheduler(*snap);
+  }
+}
+
+void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
+  namespace utils = qvac_lib_inference_addon_llama::utils;
+  const auto& policy = state.cacheCheckpointPolicy_;
+  if (policy.maxBytes == 0 || policy.maxCount == 0) {
+    return;
+  }
+  llama_model* mdl = state.llmContext_->getModel();
+  llama_context* ctx = state.llmContext_->getCtx();
+  if (mdl == nullptr || ctx == nullptr) {
+    return;
+  }
+  // Only models that cannot trim a KV tail keep checkpoints; a budget on a
+  // pure-attention model is inert and needs no validation.
+  const std::optional<std::string> architecture =
+      utils::getModelArchitecture(mdl);
+  const bool isDeepSeekV4 = architecture.has_value() &&
+                            utils::isDeepSeekV4Architecture(*architecture);
+  if (!utils::needsFullStateSnapshot(
+          llama_model_is_recurrent(mdl),
+          llama_model_is_hybrid(mdl),
+          isDeepSeekV4)) {
+    return;
+  }
+  const uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
+  const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
+      ctx,
+      llama_model_get_vocab(mdl),
+      perSeqTokens,
+      utils::untrimmableSnapshotScope());
+  if (worstCase == 0) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] could not measure the sequence state size; "
+        "cache_checkpoints_max_bytes is enforced at runtime only\n");
+    return;
+  }
+  const uint64_t needed = worstCase * static_cast<uint64_t>(policy.maxCount);
+  if (needed > policy.maxBytes) {
+    const uint64_t fit = policy.maxBytes / worstCase;
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "[LlamaModel] cache_checkpoints_max_bytes=%llu cannot hold "
+            "cache_checkpoints=%zu checkpoints: one checkpoint of a "
+            "%u-token sequence takes up to %llu bytes, so %zu need %llu. "
+            "Lower cache_checkpoints to %llu or raise the budget.",
+            static_cast<unsigned long long>(policy.maxBytes),
+            policy.maxCount,
+            perSeqTokens,
+            static_cast<unsigned long long>(worstCase),
+            policy.maxCount,
+            static_cast<unsigned long long>(needed),
+            static_cast<unsigned long long>(fit)));
   }
 }
 
@@ -268,19 +396,24 @@ namespace {
 // declaration order); null for text-only contexts selects the text driver.
 // Capability is queried via `visionContext()` rather than an RTTI cast, so a
 // future multimodal context is picked up without inheriting MtmdLlmContext.
-batching::DriverFactory
-buildDriverFactory(LlmModelContext shared, mtmd_context* sharedVision) {
-  return [shared, sharedVision](
+batching::DriverFactory buildDriverFactory(
+    LlmModelContext shared, mtmd_context* sharedVision,
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy) {
+  return [shared, sharedVision, checkpointPolicy](
              const common_params& params,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
     const auto sid = static_cast<llama_seq_id>(seqId);
+    std::unique_ptr<SequenceDriver> driver;
     if (sharedVision != nullptr) {
-      return std::make_unique<MtmdLlmContext>(
+      driver = std::make_unique<MtmdLlmContext>(
           params, shared, sharedVision, sid, perSeqCtxCeiling);
+    } else {
+      driver = std::make_unique<TextLlmContext>(
+          params, shared, sid, perSeqCtxCeiling);
     }
-    return std::make_unique<TextLlmContext>(
-        params, shared, sid, perSeqCtxCeiling);
+    driver->setCacheCheckpointPolicy(checkpointPolicy);
+    return driver;
   };
 }
 
@@ -305,14 +438,19 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
   // load unmapped. Both traps are really a `parallel` misconfiguration, so
   // they are reported as InvalidArgument naming the knobs the caller sets.
   try {
-    return std::make_unique<batching::ContinuousBatchScheduler>(
+    auto scheduler = std::make_unique<batching::ContinuousBatchScheduler>(
         shared,
         maxChunkSize,
         ctxTotalTokens,
         batchSize,
         batchCapacity,
         cparams,
-        buildDriverFactory(shared, state.llmContext_->visionContext()));
+        buildDriverFactory(
+            shared,
+            state.llmContext_->visionContext(),
+            state.cacheCheckpointPolicy_));
+    scheduler->setRamTier(state.ramTier_);
+    return scheduler;
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -889,15 +1027,12 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
-      // Both from `observed`, not the aggregate: the aggregate is
+      // This comes from `observed`, not the aggregate: the aggregate is
       // `group->stats = stats_`, a copy of the scheduler-wide accumulator, so
       // under overlapping top-level `run()` calls it reports a peer's figures
       // as this job's. `toolDefinitionsDropped` cannot tolerate that at all —
       // it answers "did *my* render lose its tools", which is what the SDK
-      // consumes in place of a heuristic (QVAC-23460) — and
-      // `thinkingBlockDiscards` moves with it rather than leaving two adjacent
-      // stats on different attribution rules.
-      {"thinkingBlockDiscards", observed.thinkingBlockDiscards},
+      // consumes in place of a heuristic (QVAC-23460).
       {"toolDefinitionsDropped", observed.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted, matching
       // batchRuntimeStatsLocked: concurrent prompts share the one
@@ -1014,10 +1149,12 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       std::memory_order_relaxed);
   if (state_->batchScheduler_) {
     state_->batchScheduler_->resetRuntimeStats();
+    // The single-prompt context runs on seq 0, which the scheduler may hold
+    // a parked batch conversation on: write that out of the way first.
+    state_->batchScheduler_->evictParked(0);
   }
 
   // Reset per-inference counters so they don't leak across runs.
-  state_->llmContext_->resetThinkingBlockDiscards();
   state_->llmContext_->resetToolDefinitionsDropped();
   state_->llmContext_->resetVisionEncodeMs();
 
@@ -1025,6 +1162,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
+  state_->llmContext_->setCacheReconciliationEnabled(
+      state_->cacheManager_.has_value() &&
+      state_->cacheManager_->wasCacheUsedInLastPrompt());
 
   // Media staged above is consumed by `tokenizeChat`, which drains `bitmaps_`
   // on both its success and its `mtmd_tokenize`-failure paths — but only if it
@@ -1119,9 +1259,8 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     }
 
     if (prompt.prefill) {
-      // On prefill, no logits are accessed so llama.cpp's synchronize() is
-      // never triggered. Force it here so t_p_eval_ms is committed to the perf
-      // context before the caller reads runtimeStats().
+      // On prefill no logits are read, so nothing else waits for the queued
+      // decodes before the caller reads runtimeStats() or the cache is saved.
       llama_synchronize(state_->llmContext_->getCtx());
       shouldSaveCache = true;
     } else {
@@ -1146,7 +1285,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       }
 
       if (generationResult.rollbackOk) {
-        shouldSaveCache = true;
+        shouldSaveCache = state_->llmContext_->shouldPersistAfterFinalize();
         shouldResetAfterInference = resolved.shouldResetAfterInference;
       } else {
         // The driver could not prove the live recurrent state was rolled back
@@ -1158,14 +1297,13 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       }
     }
   } catch (...) {
-    // Once `handleCache()` has activated or loaded a cache session, any thrown
-    // eval / generation failure must leave no active session behind. In
-    // particular, strict `remove_thinking_from_context` compaction failures
-    // throw after local rollback/wipe; keeping the old cacheKey active would
-    // let a later prompt reuse or auto-save that recovery state over the last
-    // known-good on-disk cache. Do not catch policy-validation failures before
-    // admission; explicit save failures below have their own cleanup gate.
-    resetAndInvalidateActiveCache();
+    // Once `handleCache()` has activated or loaded a cache session, restore the
+    // request transaction before deciding whether the session must be dropped.
+    const bool cachedRequest = state_->cacheManager_.has_value() &&
+                               state_->cacheManager_->hasActiveCache();
+    if (!cachedRequest || !state_->llmContext_->rollbackFailedRequest()) {
+      resetAndInvalidateActiveCache();
+    }
     throw;
   }
 
@@ -1239,8 +1377,18 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
       }
       if (llama_context* lctx = getContext(); lctx != nullptr) {
         if (llama_memory_t mem = llama_get_memory(lctx); mem != nullptr) {
+          // Conversations the scheduler parked for their next request on the
+          // same cacheKey are its own state, not single-prompt leftovers.
+          std::vector<uint32_t> parked;
+          if (state_->batchScheduler_) {
+            parked = state_->batchScheduler_->parkedSeqIds();
+          }
           const int nSeqMax = llama_n_seq_max(lctx);
           for (int seqId = 0; seqId < nSeqMax; seqId++) {
+            if (std::ranges::find(parked, static_cast<uint32_t>(seqId)) !=
+                parked.end()) {
+              continue;
+            }
             llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
           }
         }
@@ -1400,10 +1548,8 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // in-flight batches without LlamaModel having to cache state.
   const batching::RuntimeStatsSnapshot stats =
       state_->batchScheduler_->runtimeStats();
-  // TTFT comes from the scheduler's prefill-step timer rather than
-  // `llama_perf_context().t_p_eval_ms`, which would include the
-  // replay decode run by `compactThinkSpan` in
-  // `onGenerationFinished`. No `llama_perf_context_reset` here: this
+  // TTFT comes from the scheduler's prefill-step timer. No
+  // `llama_perf_context_reset` here: this
   // runs under a shared stateMtx_ concurrently with in-flight batch
   // jobs, and the scheduler releases its own mutex around llama_decode,
   // so writing the context's non-atomic perf counters from this path
@@ -1417,7 +1563,6 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
-      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
       {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
       // prompts share the one per-context accumulator (reset per prompt), so a
@@ -1428,45 +1573,28 @@ LlamaModel::batchRuntimeStatsLocked() const {
 
 qvac_lib_inference_addon_cpp::RuntimeStats
 LlamaModel::singleRuntimeStatsLocked() const {
-  // Compaction replays the kept tokens through `llama_decode` after
-  // generation ends. Those are batch decodes, so they land in `n_p_eval` /
-  // `t_p_eval_ms` and would otherwise show up as prompt tokens the caller
-  // never sent. The snapshot taken at the start of `compactThinkSpan` is the
-  // user-visible cutoff for those prompt-side counters.
-  //
-  // The generation-side counters are read live instead: the snapshot is taken
-  // before the request is fully wound down, so it can miss the final decode.
-  // `generatedTokens` is counted at the commit site so it is unaffected, but
-  // `t_eval_ms` is not exact here. A replay of exactly one token (forced-open
-  // template that ended right after `</think>`) decodes with
-  // `n_queued_tokens == 1` and so lands in `t_eval_ms`, understating TPS for
-  // that request. Reading the snapshot instead would drop the final decode
-  // from every request, which is the wider error of the two.
-  auto perfData = llama_perf_context(state_->llmContext_->getCtx());
-  if (auto snapshot = state_->llmContext_->takeUserVisiblePerfSnapshot()) {
-    perfData.n_p_eval = snapshot->n_p_eval;
-    perfData.t_p_eval_ms = snapshot->t_p_eval_ms;
-  }
   constexpr double kMillisInSecond = 1000.0;
   const bool wasPrefill =
       state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
-  const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
-  // Counted where the tokens are produced, not inferred from `n_eval`.
-  // See `LlmContext::lastGeneratedTokenCount`.
+  // Counted and timed where the work happens, not read from llama's perf
+  // counters, which book a one-token decode (a fully cached prompt re-decoding
+  // its last token) as generation. See `LlmContext::lastPromptTokenCount`.
+  const LlmContext& context = *state_->llmContext_;
+  const double promptEvalMs = context.lastPromptEvalMs();
+  const int64_t promptTokenCount = context.lastPromptTokenCount();
+  const double timeToFirstToken = wasPrefill ? 0.0 : promptEvalMs;
   const int64_t generatedTokens =
-      wasPrefill ? 0
-                 : static_cast<int64_t>(
-                       state_->llmContext_->lastGeneratedTokenCount());
-  const int64_t promptTokens =
-      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
-  const double tokensPerSecond = (!wasPrefill && perfData.t_eval_ms > 0)
-                                     ? kMillisInSecond / perfData.t_eval_ms *
+      wasPrefill ? 0 : static_cast<int64_t>(context.lastGeneratedTokenCount());
+  const int64_t promptTokens = wasPrefill ? 0 : promptTokenCount;
+  const double generationMs = context.lastGenerationMs();
+  const double tokensPerSecond = (!wasPrefill && generationMs > 0)
+                                     ? kMillisInSecond / generationMs *
                                            static_cast<double>(generatedTokens)
                                      : 0.0;
   const double promptProcessingTPS =
-      perfData.t_p_eval_ms > 0
-          ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
-          : 0.0;
+      promptEvalMs > 0 ? kMillisInSecond / promptEvalMs *
+                             static_cast<double>(promptTokenCount)
+                       : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
   return {
       {"TTFT", timeToFirstToken},
@@ -1476,8 +1604,6 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getCacheTokens())},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
-      {"thinkingBlockDiscards",
-       static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
       {"toolDefinitionsDropped",
        static_cast<int64_t>(state_->llmContext_->getToolDefinitionsDropped())},
       // Why the generation stopped, as the numeric GenerationStopReason
@@ -1591,6 +1717,13 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
               ADDON_ID, toString(UserMessageNotProvided), errorMsg);
         }
         newMsg.content = content;
+        if (newMsg.role == "assistant") {
+          const auto reasoning = jsonObj.find("reasoning_content");
+          if (reasoning != jsonObj.end() &&
+              reasoning->second.is<std::string>()) {
+            newMsg.reasoning_content = reasoning->second.get<std::string>();
+          }
+        }
         chatMsgs.push_back(newMsg);
       }
     }
@@ -1609,6 +1742,16 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
         string_format("%s: Invalid input format: %s\n", __func__, err.c_str());
     throw qvac_errors::StatusError(
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
+  }
+  // An earlier answer comes back with its reasoning inline, as the addon
+  // streamed it. Qwen's templates cut it out of `content` themselves; others
+  // (DeepSeek V4, Gemma 4) read it only from `reasoning_content` and would
+  // print it as part of the answer. Hand every template the split form, the
+  // shape llama-server's OpenAI-compatible input has, cut with the markers
+  // the template itself reports.
+  if (const auto tags = state_->llmContext_->historyReasoningTags()) {
+    qvac_lib_inference_addon_llama::utils::moveReasoningOutOfContent(
+        chatMsgs, *tags);
   }
   return parsed;
 }

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,10 @@ struct ParsedPromptPayload {
   std::vector<PlannedMedia> mediaPlan;
 };
 
+namespace qvac_lib_inference_addon_llama::batching {
+class SlotStateCache;
+}
+
 class CacheManager {
 public:
   CacheManager(
@@ -43,9 +48,35 @@ public:
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;
   static void atomicPromoteFile(const std::string& from, const std::string& to);
+  /// The file at `path` (or its directory) is gone or empty: a caller that
+  /// deleted it dropped the conversation it held.
+  static bool persistedBackingStoreMissing(const std::string& path);
+
+  /// Host-RAM tier shared with the batch scheduler (`cache_ram_mib`). When
+  /// enabled, a key switch or a request without `cacheKey` moves the active
+  /// conversation there instead of writing its file, and switching back
+  /// restores it from there.
+  void setRamTier(
+      std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
+          ramTier);
+
+  /// Writes the active conversation to its file if it has unsaved turns. Run
+  /// when the model is unloaded.
+  void flushForUnload();
 
 private:
   void saveActiveCacheForTransition();
+  /// Moves the active conversation into the RAM tier; false when the tier is
+  /// off or the state does not fit it.
+  bool moveActiveCacheToRamTier();
+  /// Restores `sessionPath_` from the RAM tier; false when it holds nothing
+  /// usable for it.
+  bool restoreFromRamTier();
+  /// Checks a state just put in memory against its ledger `stateTokens` and
+  /// adopts it, rolling the sequence back when it does not match. False for a
+  /// pre-ledger state; throws for a malformed one.
+  bool acceptLoadedState(
+      std::vector<llama_token>& stateTokens, const std::string& source);
   bool discardActiveCacheIfBackingStoreMissing();
   void writeCacheFile(const std::string& path);
   static bool isFileInitialized(const std::filesystem::path& path);
@@ -58,4 +89,9 @@ private:
   bool cacheDisabled_ = true;
   bool cacheUsedInLastPrompt_ = false;
   bool activeCacheSavedToDisk_ = false;
+  /// The active conversation has turns its file does not hold. Set whenever a
+  /// keyed request runs on it, cleared by a save or a load.
+  bool activeCacheDirty_ = false;
+  std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
+      ramTier_;
 };

@@ -32,6 +32,29 @@ public:
     return model.state_ ? model.state_->batchScheduler_.get() : nullptr;
   }
 
+  /// The checkpoint policy the load resolved.
+  static qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+  checkpointPolicy(LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.state_
+               ? model.state_->cacheCheckpointPolicy_
+               : qvac_lib_inference_addon_llama::cache::CheckpointPolicy{};
+  }
+
+  /// The RAM tier shared by the single-prompt cache and the scheduler.
+  static qvac_lib_inference_addon_llama::batching::SlotStateCache*
+  ramTier(LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.state_ ? model.state_->ramTier_.get() : nullptr;
+  }
+
+  /// `formatPrompt`: the JSON prompt parser both request paths share.
+  static ParsedPromptPayload
+  formatPrompt(LlamaModel& model, const std::string& input) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.formatPrompt(input);
+  }
+
   /// The loaded single-prompt context, for driver-level accounting tests.
   /// Null before the model has loaded.
   static LlmContext* llmContext(LlamaModel& model) {
@@ -199,21 +222,5 @@ public:
   /// hand fabric more bitmaps than its prompt has markers.
   static size_t loadedMediaCount(const MtmdLlmContext& context) {
     return context.bitmaps_.entries.size();
-  }
-
-  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
-    return context.removeThinkingFromContext_;
-  }
-
-  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
-    return context.compactor_.removeThinkingFromContext();
-  }
-
-  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
-    return context.rollbackState_.hasReasoningBoundary();
-  }
-
-  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
-    return context.rollbackState_.reasoningBoundaryNPast();
   }
 };

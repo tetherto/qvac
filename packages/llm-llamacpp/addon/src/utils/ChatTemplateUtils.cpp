@@ -13,7 +13,6 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
-#include "QwenTemplate.hpp"
 #include "addon/LlmErrors.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -54,8 +53,7 @@ bool isGemma4Architecture(std::string_view architecture) {
 }
 
 // Architectures in the Qwen3 family that emit `<think>`/`</think>`.
-// Broader than `isQwen3Architecture` (which is exact-match "qwen3")
-// but deliberately narrower than the full
+// Deliberately narrower than the full
 // `qwen3*` HuggingFace lineage — explicit list keeps unrelated
 // `qwen3*`-named archs from silently inheriting the wrong tags.
 inline constexpr std::array<std::string_view, 6> QWEN3_REASONING_FAMILY_ARCHES{
@@ -99,29 +97,8 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
   return std::nullopt;
 }
 
-bool isQwen3Architecture(std::string_view architecture) {
-  return normalizeArchitecture(architecture) == "qwen3";
-}
-
-bool isQwen3Model(const ::llama_model* model) {
-  if (model == nullptr) {
-    return false;
-  }
-
-  const std::optional<std::string> arch = getModelArchitecture(model);
-  return arch.has_value() && isQwen3Architecture(arch.value());
-}
-
 bool isMedPsyBasename(std::string_view basename) {
   return !basename.empty() && toLower(basename) == MEDPSY_BASENAME_LOWER;
-}
-
-bool isMedPsyModel(const ::llama_model* model) {
-  // No explicit nullptr guard needed: getModelBasename() ->
-  // readMetadataString() returns std::nullopt for a null model, and
-  // value_or("") below feeds isMedPsyBasename an empty string view which it
-  // rejects.
-  return isMedPsyBasename(getModelBasename(model).value_or(""));
 }
 
 bool isGemma4Basename(std::string_view basename) {
@@ -169,10 +146,6 @@ bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture) {
   const std::string normalised = normalizeArchitecture(architecture);
   return std::ranges::find(QWEN3_REASONING_FAMILY_ARCHES, normalised) !=
          QWEN3_REASONING_FAMILY_ARCHES.end();
-}
-
-bool usesThinkingCompactionByDefault(std::string_view architecture) {
-  return isQwen3ReasoningFamilyArchitecture(architecture);
 }
 
 bool isDeepSeekV4Architecture(std::string_view architecture) {
@@ -249,44 +222,6 @@ selectReasoningTagsForModel(const ::llama_model* model) {
     return ReasoningTags{.open = "<|channel>thought", .close = "<channel|>"};
   }
   return std::nullopt;
-}
-
-std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride) {
-  if (!manualOverride.empty()) {
-    return manualOverride;
-  }
-
-  // MedPsy ships its own chat template embedded in GGUF metadata. Returning an
-  // empty string makes common_chat_templates_init() defer to that embedded
-  // template instead of substituting the hardcoded Qwen3 templates below, even
-  // when the model's architecture is reported as qwen3.
-  if (isMedPsyModel(model)) {
-    QLOG_IF(
-        Priority::INFO,
-        "[ChatTemplateUtils] MedPsy basename detected; using embedded chat "
-        "template\n");
-    return "";
-  }
-
-  if (isQwen3Model(model)) {
-    return getFixedQwen3Template();
-  }
-
-  return "";
-}
-
-std::string
-getChatTemplate(const ::llama_model* model, const common_params& params) {
-  std::string chatTemplate = params.chat_template;
-  if (params.use_jinja) {
-    chatTemplate = getChatTemplateForModel(model, params.chat_template);
-    if (!chatTemplate.empty() && chatTemplate != params.chat_template) {
-      QLOG_IF(
-          Priority::INFO, "[ChatTemplateUtils] Using fixed Qwen3 template\n");
-    }
-  }
-  return chatTemplate;
 }
 
 namespace {
@@ -1030,6 +965,24 @@ bool configureTemplateDerivedSampling(
   return changed;
 }
 
+size_t generationPromptTailLength(
+    llama_context* lctx, const std::string& generationPrompt,
+    const std::vector<llama_token>& promptTokens) {
+  if (lctx == nullptr || generationPrompt.empty()) {
+    return 0;
+  }
+  // Templates open the generation prompt with a special token, which never
+  // merges with the text before it, so tokenizing it alone reproduces the
+  // prompt's own tail.
+  const std::vector<llama_token> tail =
+      common_tokenize(lctx, generationPrompt, false, true);
+  if (tail.empty() || tail.size() >= promptTokens.size() ||
+      !std::equal(tail.rbegin(), tail.rend(), promptTokens.rbegin())) {
+    return 0;
+  }
+  return tail.size();
+}
+
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag) {
   if (thinkingStartTag.empty()) {
@@ -1040,6 +993,47 @@ std::string getThinkingForcedOpenText(
     return thinkingStartTag;
   }
   return generationPrompt.substr(start);
+}
+
+std::optional<ReasoningTags> historyReasoningTags(
+    const common_chat_templates* tmpls, const ::llama_model* model,
+    bool useJinja) {
+  const std::optional<ReasoningTags> fallback =
+      selectReasoningTagsForModel(model);
+  if (tmpls == nullptr || !useJinja) {
+    return fallback;
+  }
+  common_chat_templates_inputs probe;
+  probe.use_jinja = true;
+  probe.add_generation_prompt = true;
+  probe.enable_thinking = true;
+  common_chat_msg user;
+  user.role = "user";
+  user.content = "Hi";
+  probe.messages = {user};
+  PromptRenderResult rendered;
+  try {
+    rendered = getPrompt(tmpls, probe);
+  } catch (const std::exception&) {
+    return fallback;
+  }
+  const auto trim = [](const std::string& text) {
+    constexpr const char* WHITESPACE = " \t\r\n";
+    const size_t first = text.find_first_not_of(WHITESPACE);
+    return first == std::string::npos
+               ? std::string()
+               : text.substr(
+                     first, text.find_last_not_of(WHITESPACE) - first + 1);
+  };
+  const std::string open = trim(rendered.thinkingStartTag);
+  // Harmony (gpt-oss) answers are channels, not a block then the answer:
+  // cutting the analysis channel would leave the final channel's header
+  // in front of the answer. Left whole until it has a Harmony parser.
+  if (isHarmonyModel(model) || open.starts_with("<|channel|>")) {
+    return std::nullopt;
+  }
+  return selectReasoningTagSource(
+      open, trim(rendered.thinkingEndTag), fallback);
 }
 
 } // namespace utils

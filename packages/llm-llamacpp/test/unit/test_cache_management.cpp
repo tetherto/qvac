@@ -8,10 +8,15 @@
 #include <unordered_map>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/SequenceDriver.hpp"
+#include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
+#include "test_internal_peers.hpp"
 #include "test_prompt_helpers.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 
 namespace fs = std::filesystem;
 
@@ -192,13 +197,62 @@ TEST_F(CacheManagementTest, SessionPersistence) {
   EXPECT_NO_THROW({
     std::string output2 = processPromptWithCacheOptions(
         model,
-        R"([{"role": "user", "content": "What did I ask you before? Answer shortly."}])",
+        R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}, {"role": "assistant", "content": "Bitcoin is a decentralized digital currency."}, {"role": "user", "content": "What did I ask you before? Answer shortly."}])",
         session1_path,
         true);
     EXPECT_FALSE(output2.empty());
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
+}
+
+// A generation that stops at `n_predict` is a completed request from the
+// caller's side: the answer was streamed. Its tokens therefore stay resident
+// and the transaction commits, so the next full-history turn reuses them
+// instead of re-prefilling the answer the model just produced.
+TEST_F(CacheManagementTest, PredictionLimitGenerationCommitsCache) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const auto readBytes = [](const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  };
+  const std::string history =
+      R"([{"role": "user", "content": "Explain how bitcoin mining works in detail."}])";
+
+  // Seed with a prefill-only turn so the pre-request cursor is known.
+  LlamaModel::Prompt seed;
+  seed.input = history;
+  seed.prefill = true;
+  seed.cacheKey = session1_path;
+  seed.saveCacheToDisk = true;
+  ASSERT_TRUE(model->processPrompt(seed).empty());
+  ASSERT_TRUE(fs::exists(session1_path));
+  const double seededTokens =
+      getStatValue(model->runtimeStats(), "CacheTokens");
+  ASSERT_GT(seededTokens, 0.0);
+  const std::string seededBytes = readBytes(session1_path);
+
+  // Fixture n_predict is 10, so this generation stops at the prediction
+  // limit long before the model finishes its answer.
+  const std::string output =
+      processPromptWithCacheOptions(model, history, session1_path, true);
+  EXPECT_FALSE(output.empty());
+  EXPECT_EQ(
+      getStatValue(model->runtimeStats(), "stopReason"),
+      static_cast<double>(GenerationStopReason::PredictionLimit));
+  EXPECT_GT(getStatValue(model->runtimeStats(), "CacheTokens"), seededTokens)
+      << "prediction-limit generation must commit its tokens, not roll back";
+  EXPECT_NE(readBytes(session1_path), seededBytes)
+      << "the committed generation must be persisted under cacheKey";
 }
 
 TEST_F(CacheManagementTest, SwitchToSession2) {
@@ -521,35 +575,7 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
         model_large,
-        R"([{"role": "user", "content": "What is bitcoin? Please provide a detailed explanation of how bitcoin works, including its blockchain technology, mining process, and cryptographic principles. Explain the concept of distributed consensus and how transactions are verified."}])",
-        large_cache_path);
-  });
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model_large,
-        R"([{"role": "user", "content": "Now explain ethereum in similar detail. Include information about smart contracts, the EVM, gas fees, and how it differs from bitcoin."}])",
-        large_cache_path);
-  });
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model_large,
-        R"([{"role": "user", "content": "Finally, explain blockchain technology in general, covering concepts like immutability, decentralization, consensus mechanisms, and potential use cases beyond cryptocurrencies."}])",
-        large_cache_path);
-  });
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model_large,
-        R"([{"role": "user", "content": "Explain proof of work and proof of stake consensus mechanisms in detail. Compare and contrast their advantages and disadvantages."}])",
-        large_cache_path);
-  });
-
-  EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model_large,
-        R"([{"role": "user", "content": "Describe DeFi (Decentralized Finance) applications, including DEXs, lending protocols, and yield farming. Explain how they work and their risks."}])",
+        R"([{"role": "user", "content": "What is bitcoin? Please provide a detailed explanation of how bitcoin works, including its blockchain technology, mining process, and cryptographic principles. Explain distributed consensus and how transactions are verified."}, {"role": "assistant", "content": "Bitcoin uses a distributed ledger, proof of work, signed transactions, and independently validating nodes."}, {"role": "user", "content": "Now explain ethereum in similar detail. Include smart contracts, the EVM, gas fees, and how it differs from bitcoin."}, {"role": "assistant", "content": "Ethereum is a programmable blockchain whose EVM executes smart contracts and charges gas for computation."}, {"role": "user", "content": "Explain blockchain technology in general, including immutability, decentralization, consensus mechanisms, and uses beyond cryptocurrencies."}, {"role": "assistant", "content": "Blockchains replicate an append-only history across participants that agree on updates through a consensus protocol."}, {"role": "user", "content": "Compare proof of work and proof of stake, including their advantages and disadvantages."}, {"role": "assistant", "content": "Proof of work commits computation and energy, while proof of stake commits slashable capital."}, {"role": "user", "content": "Describe decentralized finance applications, including exchanges, lending protocols, yield farming, and their risks."}])",
         large_cache_path,
         true);
   });
@@ -1168,11 +1194,10 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
   }
 
   EXPECT_NO_THROW({
-    processPromptWithCacheOptions(
-        model,
-        R"([{"role": "user", "content": "What is bitcoin?"}])",
-        "",
-        true);
+    LlamaModel::Prompt prompt;
+    prompt.input = R"([{"role": "user", "content": "What is bitcoin?"}])";
+    prompt.saveCacheToDisk = true;
+    model->processPrompt(prompt);
   });
 
   EXPECT_FALSE(fs::exists(session1_path));
@@ -1267,7 +1292,7 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
   // state) and force a reload from disk, leading to a valid completion.
   std::string response2 = processPromptWithCacheOptions(
       model,
-      R"([{"role": "user", "content": "What color did I say the sky was?"}])",
+      R"([{"role": "user", "content": "The sky is blue. What color is the sky?"}, {"role": "assistant", "content": "Blue."}, {"role": "user", "content": "What color did I say the sky was?"}])",
       cacheFile,
       false);
 
@@ -1276,13 +1301,12 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
     fs::remove(cacheFile);
   }
 
-  // Assert response is valid and correctly remembers the context from the
-  // loaded cache.
   EXPECT_FALSE(response2.empty())
+      << "a reloaded cache must still yield a completion";
+  EXPECT_GT(getStatValue(model->runtimeStats(), "CacheTokens"), 0.0)
       << "STALE CACHE RESIDENCY BUG: CacheManager believed the cache was "
-         "resident in seq 0 "
-         "even though the batch scheduler occupied and wiped seq 0. "
-         "processPrompt returned empty output.";
+         "resident in seq 0 even though the batch scheduler occupied and "
+         "wiped seq 0.";
 }
 
 // GGSQ unification (sub-task 1): the single-prompt CacheManager path must write
@@ -1322,4 +1346,1052 @@ TEST_F(CacheManagementTest, SinglePromptCacheUsesSeqStateFormat) {
       << static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC)
       << "); CacheManager still uses the whole-session GGSN format instead of "
          "the per-sequence GGSQ format shared with the batch path.";
+}
+
+namespace {
+
+std::unique_ptr<LlamaModel>
+loadSlidingWindowModel(const test_common::TestModelPath& modelPath) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "24";
+  config["temp"] = "0";
+  config["seed"] = "7";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+std::string slidingWindowBrief(int editedFact) {
+  std::string text = "Read this brief carefully. ";
+  for (int i = 0; i < 220; ++i) {
+    text +=
+        i == editedFact
+            ? "Fact " + std::to_string(i) + " was corrected: the lamp is red. "
+            : "Fact " + std::to_string(i) + " says the harbor lamp stays " +
+                  "lit until dawn. ";
+  }
+  return R"([{"role":"user","content":")" + text +
+         R"( What colour is the lamp?"}])";
+}
+
+} // namespace
+
+// Sliding-window layers keep only the last `n_swa` positions resident (the
+// default `swa_full=false`). A cached turn that diverges far behind the KV
+// head cannot be served by a tail trim: the window in front of the divergence
+// was evicted, so the suffix would attend to a truncated window. It must be
+// reprocessed, which makes it exactly the same computation as a cold run.
+TEST(CacheSlidingWindowTest, DivergenceBehindTheWindowMatchesAColdRun) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_cache.bin";
+  fs::remove(cacheFile);
+
+  // ~2.5k tokens, so the 512-position window has evicted most of the prompt;
+  // the edit lands near the middle, far behind the window.
+  auto cached = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(cached->isLoaded());
+  LlamaModel::Prompt primer;
+  primer.input = slidingWindowBrief(-1);
+  primer.prefill = true;
+  primer.cacheKey = cacheFile.string();
+  primer.saveCacheToDisk = true;
+  EXPECT_TRUE(cached->processPrompt(primer).empty());
+
+  LlamaModel::Prompt edited;
+  edited.input = slidingWindowBrief(110);
+  edited.cacheKey = cacheFile.string();
+  const std::string fromCache = cached->processPrompt(edited);
+
+  auto cold = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = edited.input;
+  const std::string fromScratch = cold->processPrompt(fresh);
+
+  ASSERT_FALSE(fromScratch.empty());
+  EXPECT_EQ(fromCache, fromScratch)
+      << "a cached turn diverging behind the sliding window must be "
+         "reprocessed, not trimmed onto an evicted window";
+
+  fs::remove(cacheFile);
+}
+
+namespace {
+
+test_common::TestModelPath hybridModelPath() {
+  return test_common::TestModelPath(
+      "Qwen3.5-0.8B-Q8_0.gguf",
+      "QWEN35_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+}
+
+std::unique_ptr<LlamaModel> loadHybridChatModel(
+    const test_common::TestModelPath& modelPath, const char* parallel,
+    const char* checkpoints = nullptr, const char* storage = nullptr) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "48";
+  config["temp"] = "0";
+  config["seed"] = "11";
+  if (parallel != nullptr) {
+    config["parallel"] = parallel;
+  }
+  if (checkpoints != nullptr) {
+    config["cache_checkpoints"] = checkpoints;
+  }
+  if (storage != nullptr) {
+    config["cache_checkpoint_storage"] = storage;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+std::string
+chatInput(const std::vector<std::pair<std::string, std::string>>& messages) {
+  nlohmann::json array = nlohmann::json::array();
+  for (const auto& [role, content] : messages) {
+    array.push_back({{"role", role}, {"content", content}});
+  }
+  return array.dump();
+}
+
+} // namespace
+
+// Qwen3.5's template drops a previous answer's thinking from history, so the
+// next turn diverges right after that answer's assistant header. Neither the
+// pre-request state (it holds the raw answer) nor one at the end of the
+// prompt (it holds the generation prompt) is a prefix of that turn; only the
+// end-of-history checkpoint is. Without it every turn re-prefills the whole
+// conversation on a hybrid model.
+TEST(CacheHistoryCheckpointTest, HybridThinkingChatReusesTheHistory) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr);
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+
+  const fs::path cacheFile = "history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+  const auto run = [&](const std::string& input) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheFile.string();
+    return model->processPrompt(prompt);
+  };
+
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const std::string first = run(chatInput(chat));
+  ASSERT_FALSE(first.empty());
+  EXPECT_EQ(text->lastCacheReuseForTesting(), 0u);
+
+  const std::vector<std::string> followUps = {
+      "Which of them is warmest?", "And which is coolest?"};
+  std::string last;
+  size_t previousReuse = 0;
+  chat.emplace_back("assistant", first);
+  for (const std::string& followUp : followUps) {
+    chat.emplace_back("user", followUp);
+    last = run(chatInput(chat));
+    ASSERT_FALSE(last.empty());
+    EXPECT_GT(text->lastCacheReuseForTesting(), previousReuse)
+        << "turn restored no end-of-history checkpoint and re-prefilled the "
+           "whole conversation";
+    previousReuse = text->lastCacheReuseForTesting();
+    chat.emplace_back("assistant", last);
+  }
+
+  // Same conversation, no cache: the reused turns must answer the same.
+  chat.pop_back();
+  auto cold = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = chatInput(chat);
+  EXPECT_EQ(last, cold->processPrompt(fresh));
+
+  fs::remove(cacheFile);
+}
+
+namespace {
+
+// DeepSeek V4 is too large for the unit-test model set; point
+// `DSV4_MODEL_PATH` at a (first-shard) GGUF to run its checkpoint tests.
+test_common::TestModelPath deepSeekV4ModelPath() {
+  return test_common::TestModelPath(
+      "DeepSeek-V4-Flash-0731-UD-IQ1_M-00001-of-00003.gguf",
+      "DSV4_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF");
+}
+
+std::unique_ptr<LlamaModel> loadDeepSeekV4ChatModel(
+    const test_common::TestModelPath& modelPath, const char* checkpoints) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "32";
+  config["temp"] = "0";
+  config["seed"] = "11";
+  // Bigger than one GPU: spread the layers over every visible device.
+  config["split_mode"] = "layer";
+  if (checkpoints != nullptr) {
+    config["cache_checkpoints"] = checkpoints;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+struct NextEditRegenerateRun {
+  std::vector<size_t> reuse; ///< Per turn: next turn, edit, regenerate.
+  std::string next;          ///< The ordinary next turn's answer.
+};
+
+// Turn 1, an ordinary next turn, an edit of that turn's user message, then a
+// regenerate of the edited turn. Records each turn's prefix reuse.
+NextEditRegenerateRun
+runNextEditRegenerate(LlamaModel& model, const fs::path& key) {
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(model));
+  EXPECT_NE(text, nullptr);
+  const auto run = [&](const std::string& input) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = key.string();
+    return model.processPrompt(prompt);
+  };
+  NextEditRegenerateRun result;
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const std::string first = run(chatInput(chat));
+  EXPECT_FALSE(first.empty());
+  EXPECT_EQ(text->lastCacheReuseForTesting(), 0u);
+  chat.emplace_back("assistant", first);
+  chat.emplace_back("user", "Which of them is warmest?");
+  result.next = run(chatInput(chat));
+  result.reuse.push_back(text->lastCacheReuseForTesting());
+  chat.back().second = "Which of them is coolest?";
+  run(chatInput(chat));
+  result.reuse.push_back(text->lastCacheReuseForTesting());
+  run(chatInput(chat));
+  result.reuse.push_back(text->lastCacheReuseForTesting());
+  std::cerr << "[checkpoints] reuse next=" << result.reuse[0]
+            << " edit=" << result.reuse[1] << " regenerate=" << result.reuse[2]
+            << "\n";
+  return result;
+}
+
+// Checks a model against `runNextEditRegenerate` with two checkpoints and
+// with the default one. The last end-of-history checkpoint serves the
+// next turn and the regenerate; the one before it serves the edit, which with
+// a single checkpoint is a cold prefill. The previous answer's rewrite (both
+// models drop the reasoning) is why the turn-old checkpoint, not the
+// pre-request state, is the one an edit can restore.
+void expectSecondCheckpointServesTheEdit(
+    const NextEditRegenerateRun& two, const NextEditRegenerateRun& one) {
+  ASSERT_EQ(two.reuse.size(), 3u);
+  ASSERT_EQ(one.reuse.size(), 3u);
+  EXPECT_GT(two.reuse[0], 0u) << "next turn restored no checkpoint";
+  EXPECT_GT(two.reuse[1], 0u) << "edit restored no checkpoint";
+  EXPECT_GT(two.reuse[2], 0u) << "regenerate restored no checkpoint";
+  EXPECT_EQ(two.reuse[0], one.reuse[0]);
+  EXPECT_EQ(two.next, one.next);
+  EXPECT_EQ(one.reuse[1], 0u)
+      << "one checkpoint: the edit diverges before the last one";
+}
+
+} // namespace
+
+TEST(
+    CacheHistoryCheckpointTest,
+    HybridEditOfLastUserMessageRestoresTheTurnBefore) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "hybrid_edit_checkpoint_cache.bin";
+  NextEditRegenerateRun two;
+  NextEditRegenerateRun one;
+  for (const char* checkpoints : {"2", static_cast<const char*>(nullptr)}) {
+    fs::remove(cacheFile);
+    auto model = loadHybridChatModel(modelPath, nullptr, checkpoints);
+    ASSERT_TRUE(model->isLoaded());
+    (checkpoints != nullptr ? two : one) =
+        runNextEditRegenerate(*model, cacheFile);
+  }
+  fs::remove(cacheFile);
+  expectSecondCheckpointServesTheEdit(two, one);
+}
+
+// Snapshots and checkpoints live in host RAM unless the config asks for temp
+// files: the same chat writes none by default and some with `disk`.
+TEST(CacheHistoryCheckpointTest, HybridCheckpointsStayInMemoryByDefault) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "hybrid_checkpoint_storage_cache.bin";
+  for (const char* storage : {static_cast<const char*>(nullptr), "disk"}) {
+    fs::remove(cacheFile);
+    auto model = loadHybridChatModel(modelPath, nullptr, nullptr, storage);
+    ASSERT_TRUE(model->isLoaded());
+    const uint64_t filesBefore = qvac_lib_inference_addon_llama::utils::
+        sequenceStateSnapshotFilesWritten();
+    const NextEditRegenerateRun run = runNextEditRegenerate(*model, cacheFile);
+    ASSERT_GT(run.reuse[0], 0u) << "the chat never restored a checkpoint";
+    const uint64_t written = qvac_lib_inference_addon_llama::utils::
+                                 sequenceStateSnapshotFilesWritten() -
+                             filesBefore;
+    if (storage == nullptr) {
+      EXPECT_EQ(written, 0u) << "the default must keep snapshots in RAM";
+    } else {
+      EXPECT_GT(written, 0u) << "`disk` must write snapshots to temp files";
+    }
+  }
+  fs::remove(cacheFile);
+}
+
+// Changing the user message k-th from the end needs k + 1 checkpoints: after
+// three turns, an edit of the second user message (k = 2) restores the end of
+// the first one with 3 and is a cold prefill with 2.
+TEST(CacheHistoryCheckpointTest, HybridEditKTurnsBackNeedsKPlusOneCheckpoints) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "hybrid_edit_k_back_cache.bin";
+  size_t reuseWithThree = 0;
+  size_t reuseWithTwo = 0;
+  for (const char* checkpoints : {"3", "2"}) {
+    fs::remove(cacheFile);
+    auto model = loadHybridChatModel(modelPath, nullptr, checkpoints);
+    ASSERT_TRUE(model->isLoaded());
+    auto* text =
+        dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+    ASSERT_NE(text, nullptr);
+    const auto run = [&](const std::string& input) {
+      LlamaModel::Prompt prompt;
+      prompt.input = input;
+      prompt.cacheKey = cacheFile.string();
+      return model->processPrompt(prompt);
+    };
+    std::vector<std::pair<std::string, std::string>> chat;
+    for (const char* user :
+         {"Name three colours of the rainbow.",
+          "Which of them is warmest?",
+          "And which is coolest?"}) {
+      chat.emplace_back("user", user);
+      chat.emplace_back("assistant", run(chatInput(chat)));
+    }
+    // Back to the second user message, changed.
+    chat.resize(3);
+    chat.back().second = "Which of them is the darkest?";
+    run(chatInput(chat));
+    (std::string(checkpoints) == "3" ? reuseWithThree : reuseWithTwo) =
+        text->lastCacheReuseForTesting();
+  }
+  fs::remove(cacheFile);
+  EXPECT_GT(reuseWithThree, 0u)
+      << "3 checkpoints keep the end of the first user message";
+  EXPECT_EQ(reuseWithTwo, 0u)
+      << "2 checkpoints keep only the last two user messages' ends";
+}
+
+// The same on DeepSeek V4, whose partial checkpoints hold the sliding window
+// and the compressor states.
+TEST(CacheHistoryCheckpointTest, DeepSeekV4SecondCheckpointServesTheEdit) {
+  const test_common::TestModelPath modelPath = deepSeekV4ModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "dsv4_history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+
+  NextEditRegenerateRun two;
+  {
+    auto model = loadDeepSeekV4ChatModel(modelPath, "2");
+    ASSERT_TRUE(model->isLoaded());
+    ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr);
+    two = runNextEditRegenerate(*model, cacheFile);
+  }
+  fs::remove(cacheFile);
+  NextEditRegenerateRun one;
+  {
+    auto model = loadDeepSeekV4ChatModel(modelPath, nullptr);
+    ASSERT_TRUE(model->isLoaded());
+    EXPECT_EQ(LlamaModelTestPeer::checkpointPolicy(*model).maxCount, 1u);
+    one = runNextEditRegenerate(*model, cacheFile);
+  }
+  fs::remove(cacheFile);
+  expectSecondCheckpointServesTheEdit(two, one);
+}
+
+// The JSON parser hands the template an assistant turn's reasoning in
+// `reasoning_content`: split out of an inline `content` on a model with a
+// reasoning channel, or taken from the message's own field.
+TEST(PromptParsingTest, AssistantReasoningMovesOutOfContent) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"role":"user","content":"<think>mine</think>Hi"},)"
+      R"({"role":"assistant","content":"<think>\nPlan.\n</think>\n\nHello."},)"
+      R"({"role":"assistant","content":"Bye.","reasoning_content":"Given."},)"
+      R"({"role":"user","content":"Again"}])");
+  ASSERT_EQ(parsed.chatMsgs.size(), 4u);
+  EXPECT_EQ(parsed.chatMsgs[0].content, "<think>mine</think>Hi");
+  EXPECT_EQ(parsed.chatMsgs[1].reasoning_content, "Plan.");
+  EXPECT_EQ(parsed.chatMsgs[1].content, "Hello.");
+  EXPECT_EQ(parsed.chatMsgs[2].reasoning_content, "Given.");
+  EXPECT_EQ(parsed.chatMsgs[2].content, "Bye.");
+}
+
+// A model without a reasoning channel keeps assistant text as it came.
+TEST(PromptParsingTest, ModelWithoutReasoningChannelKeepsContent) {
+  const std::string path =
+      test_common::BaseTestModelPath::get("Llama-3.2-1B-Instruct-Q4_0.gguf");
+  if (!fs::exists(path)) {
+    GTEST_SKIP() << "Llama-3.2-1B-Instruct-Q4_0.gguf not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string modelPath = path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"role":"user","content":"Hi"},)"
+      R"({"role":"assistant","content":"<think>x</think>Hello."}])");
+  ASSERT_EQ(parsed.chatMsgs.size(), 2u);
+  EXPECT_EQ(parsed.chatMsgs[1].content, "<think>x</think>Hello.");
+  EXPECT_TRUE(parsed.chatMsgs[1].reasoning_content.empty());
+}
+
+// A prompt that is fully cached is re-decoded for its last token only, to get
+// fresh logits. llama books a one-token decode as generation, so stats read
+// from its perf counters reported no prompt work (TTFT 0, ppTPS 0). The
+// addon counts and times its own prefill.
+TEST(CacheRuntimeStatsTest, FullyCachedPromptReportsItsPromptWork) {
+  const std::string path =
+      test_common::BaseTestModelPath::get("Qwen3-0.6B-Q8_0.gguf");
+  if (!fs::exists(path)) {
+    GTEST_SKIP() << "Qwen3-0.6B-Q8_0.gguf not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "8";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string modelPath = path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path cacheFile = "fully_cached_prompt_stats.bin";
+  fs::remove(cacheFile);
+  const std::string input =
+      R"([{"role":"user","content":"Name one colour of the rainbow."}])";
+  LlamaModel::Prompt warm;
+  warm.input = input;
+  warm.cacheKey = cacheFile.string();
+  warm.prefill = true;
+  ASSERT_NO_THROW((void)model->processPrompt(warm));
+
+  LlamaModel::Prompt repeat;
+  repeat.input = input;
+  repeat.cacheKey = cacheFile.string();
+  ASSERT_NO_THROW((void)model->processPrompt(repeat));
+  const auto stats = model->runtimeStats();
+  EXPECT_EQ(test_common::getStatValue(stats, "promptTokens"), 1.0)
+      << "only the last prompt token is re-decoded";
+  EXPECT_GT(test_common::getStatValue(stats, "TTFT"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "ppTPS"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "TPS"), 0.0);
+  fs::remove(cacheFile);
+}
+
+// Batch mode gives every request a fresh slot driver, so the checkpoints
+// must outlive it in the scheduler to reach the next turn on the same
+// cacheKey. The prefill stops at the end of the history for the capture.
+TEST(CacheHistoryCheckpointTest, BatchedHybridThinkingChatReusesTheHistory) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+
+  TextLlmContext* driver = nullptr;
+  const auto original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original, &driver](
+          const common_params& params, uint32_t seqId, llama_pos ceiling) {
+        std::unique_ptr<SequenceDriver> built =
+            original(params, seqId, ceiling);
+        driver = dynamic_cast<TextLlmContext*>(built.get());
+        return built;
+      });
+
+  const fs::path cacheFile = "batched_history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+  // Read while the request's driver is alive: it is freed with its slot.
+  size_t reuse = 0;
+  const auto run = [&](const std::string& input) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheFile.string();
+    prompt.saveCacheToDisk = true;
+    bool read = false;
+    prompt.outputCallback = [&](const std::string&) {
+      if (!read && driver != nullptr) {
+        reuse = driver->lastCacheReuseForTesting();
+        read = true;
+      }
+    };
+    const auto outputs = model->processPromptBatch({prompt});
+    return outputs.empty() ? std::string() : outputs.front();
+  };
+
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const std::string first = run(chatInput(chat));
+  ASSERT_FALSE(first.empty());
+  EXPECT_EQ(reuse, 0u);
+
+  std::string last;
+  size_t previousReuse = 0;
+  chat.emplace_back("assistant", first);
+  for (const char* followUp :
+       {"Which of them is warmest?", "And which is coolest?"}) {
+    chat.emplace_back("user", followUp);
+    last = run(chatInput(chat));
+    ASSERT_FALSE(last.empty());
+    EXPECT_GT(reuse, previousReuse)
+        << "batched turn restored no end-of-history checkpoint";
+    previousReuse = reuse;
+    chat.emplace_back("assistant", last);
+  }
+
+  // Batched output omits the force-opened `<think>` the single-prompt path
+  // echoes, so compare against a cold batched run.
+  chat.pop_back();
+  auto cold = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = chatInput(chat);
+  const auto coldOutputs = cold->processPromptBatch({fresh});
+  ASSERT_EQ(coldOutputs.size(), 1u);
+  EXPECT_EQ(last, coldOutputs.front());
+
+  fs::remove(cacheFile);
+}
+
+namespace {
+
+std::unique_ptr<LlamaModel>
+loadBatchedModel(const char* cacheRamMib = nullptr) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["parallel"] = "2";
+  config["n_predict"] = "16";
+  config["temp"] = "0";
+  config["seed"] = "5";
+  if (cacheRamMib != nullptr) {
+    config["cache_ram_mib"] = cacheRamMib;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = test_common::BaseTestModelPath::get();
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+// Runs one keyed batch request and returns its output plus the prompt
+// entries its driver reused (read while the driver is alive).
+struct BatchedTurn {
+  std::string output;
+  size_t reuse = 0;
+};
+
+class BatchedCacheHarness {
+public:
+  explicit BatchedCacheHarness(LlamaModel& model)
+      : model_(model), scheduler_(LlamaModelTestPeer::scheduler(model)) {
+    const auto original =
+        ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler_);
+    ContinuousBatchSchedulerTestPeer::setDriverFactory(
+        *scheduler_,
+        [original,
+         this](const common_params& params, uint32_t seqId, llama_pos ceiling) {
+          std::unique_ptr<SequenceDriver> built =
+              original(params, seqId, ceiling);
+          driver_ = dynamic_cast<TextLlmContext*>(built.get());
+          return built;
+        });
+  }
+
+  BatchedTurn
+  run(const std::string& input, const std::string& cacheKey,
+      bool saveCacheToDisk = false) {
+    BatchedTurn turn;
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheKey;
+    prompt.saveCacheToDisk = saveCacheToDisk;
+    bool read = false;
+    prompt.outputCallback = [&](const std::string&) {
+      if (!read && driver_ != nullptr) {
+        turn.reuse = driver_->lastCacheReuseForTesting();
+        read = true;
+      }
+    };
+    const auto outputs = model_.processPromptBatch({prompt});
+    turn.output = outputs.empty() ? std::string() : outputs.front();
+    return turn;
+  }
+
+  qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler&
+  scheduler() {
+    return *scheduler_;
+  }
+
+private:
+  LlamaModel& model_;
+  qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler*
+      scheduler_;
+  TextLlmContext* driver_ = nullptr;
+};
+
+std::string userTurns(const std::vector<std::string>& turns) {
+  std::vector<std::pair<std::string, std::string>> chat;
+  for (size_t i = 0; i < turns.size(); ++i) {
+    chat.emplace_back(i % 2 == 0 ? "user" : "assistant", turns[i]);
+  }
+  return chatInput(chat);
+}
+
+} // namespace
+
+// Without saveCacheToDisk the batch path used to wipe the slot after every
+// request, so a follow-up re-prefilled the whole conversation. The committed
+// state now stays parked in its sequence for the next request on its key.
+TEST(BatchedCacheResidencyTest, FollowUpReusesTheParkedSlotWithoutAFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::string key = "resident_batch_cache.bin";
+  fs::remove(key);
+
+  const BatchedTurn first =
+      harness.run(userTurns({"Name a colour of the sky."}), key);
+  ASSERT_FALSE(first.output.empty());
+  EXPECT_EQ(harness.scheduler().parkedSeqIds().size(), 1u);
+
+  const BatchedTurn second = harness.run(
+      userTurns({"Name a colour of the sky.", first.output, "And of grass?"}),
+      key);
+  ASSERT_FALSE(second.output.empty());
+  EXPECT_GT(second.reuse, 0u) << "the follow-up re-prefilled the conversation";
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), 1u);
+  EXPECT_FALSE(fs::exists(key)) << "nothing asked for the file to be written";
+}
+
+// With every sequence parked, a request on a new key evicts the least
+// recently used conversation. Its unsaved turns are written to its cacheKey
+// file first, so its next request loads them instead of starting cold.
+TEST(BatchedCacheResidencyTest, EvictionWritesUnsavedTurnsToTheCacheFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::vector<std::string> keys = {
+      "evict_a.bin", "evict_b.bin", "evict_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+
+  const BatchedTurn a =
+      harness.run(userTurns({"Say one word: apple."}), keys[0]);
+  harness.run(userTurns({"Say one word: banana."}), keys[1]);
+  EXPECT_FALSE(fs::exists(keys[0]));
+  harness.run(userTurns({"Say one word: cherry."}), keys[2]);
+  EXPECT_TRUE(fs::exists(keys[0])) << "evicted unsaved turns were not saved";
+  EXPECT_FALSE(fs::exists(keys[1]))
+      << "only the least recently used is evicted";
+
+  const BatchedTurn followUp = harness.run(
+      userTurns({"Say one word: apple.", a.output, "Again."}), keys[0]);
+  EXPECT_GT(followUp.reuse, 0u) << "the evicted conversation was not reloaded";
+  EXPECT_EQ(harness.scheduler().ramTierHitsForTesting(), 0u);
+
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// With `cache_ram_mib`, an evicted conversation is also copied to the RAM
+// tier and its next request restores it from there. A budget too small for
+// one state leaves it on disk only.
+TEST(BatchedCacheResidencyTest, RamTierRestoresAnEvictedConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  for (const auto& [budget, expectRamHit] :
+       std::vector<std::pair<const char*, bool>>{{"512", true}, {"1", false}}) {
+    auto model = loadBatchedModel(budget);
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    const std::vector<std::string> keys = {
+        "ram_a.bin", "ram_b.bin", "ram_c.bin"};
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+    std::string history;
+    for (int i = 0; i < 30; ++i) {
+      history += "Remember fact " + std::to_string(i) + ". ";
+    }
+    const BatchedTurn a =
+        harness.run(userTurns({history + "Say apple."}), keys[0]);
+    harness.run(userTurns({"Say banana."}), keys[1]);
+    harness.run(userTurns({"Say cherry."}), keys[2]);
+
+    const BatchedTurn followUp = harness.run(
+        userTurns({history + "Say apple.", a.output, "Again."}), keys[0]);
+    EXPECT_GT(followUp.reuse, 0u) << "budget " << budget;
+    EXPECT_EQ(
+        harness.scheduler().ramTierHitsForTesting(), expectRamHit ? 1u : 0u)
+        << "budget " << budget << " MiB";
+    // Unload first: with the tier on it writes unsaved turns out.
+    model.reset();
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+  }
+}
+
+// Requests without a cacheKey have nothing to be found by, so they are never
+// parked.
+TEST(BatchedCacheResidencyTest, KeylessRequestsAreNotParked) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  harness.run(userTurns({"Say hello."}), "");
+  EXPECT_TRUE(harness.scheduler().parkedSeqIds().empty());
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0), -1);
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 1), -1);
+}
+
+// Deleting the file a parked conversation was loaded from drops the
+// conversation, like the single-prompt path does for its active session.
+TEST(BatchedCacheResidencyTest, DeletedBackingFileDropsTheParkedState) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::string key = "dropped_batch_cache.bin";
+  fs::remove(key);
+
+  const BatchedTurn first =
+      harness.run(userTurns({"Name a fruit."}), key, /*saveCacheToDisk=*/true);
+  ASSERT_TRUE(fs::exists(key));
+  fs::remove(key);
+
+  const BatchedTurn second =
+      harness.run(userTurns({"Name a fruit.", first.output, "Another."}), key);
+  EXPECT_EQ(second.reuse, 0u);
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), 0u);
+  fs::remove(key);
+}
+
+// Two prompts on one cacheKey in the same batch run one after the other, so
+// the second continues from what the first committed instead of forking it.
+TEST(BatchedCacheResidencyTest, SameKeyPromptsRunInOrder) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::string key = "same_key_batch_cache.bin";
+  fs::remove(key);
+
+  LlamaModel::Prompt prompt;
+  prompt.input = userTurns({"Name a planet."});
+  prompt.cacheKey = key;
+  const auto outputs = model->processPromptBatch({prompt, prompt});
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_FALSE(outputs[1].empty());
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), 1u)
+      << "the second prompt did not start from the first one's state";
+  fs::remove(key);
+}
+
+namespace {
+
+std::unique_ptr<LlamaModel> loadSinglePromptModel(const char* cacheRamMib) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "12";
+  config["temp"] = "0";
+  config["seed"] = "5";
+  if (cacheRamMib != nullptr) {
+    config["cache_ram_mib"] = cacheRamMib;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = test_common::BaseTestModelPath::get();
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+struct SingleTurn {
+  std::string output;
+  size_t reuse = 0;
+};
+
+SingleTurn
+runSingle(LlamaModel& model, const std::string& input, const std::string& key) {
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  prompt.cacheKey = key;
+  SingleTurn turn;
+  turn.output = model.processPrompt(prompt);
+  if (auto* text = dynamic_cast<TextLlmContext*>(
+          LlamaModelTestPeer::llmContext(model))) {
+    turn.reuse = text->lastCacheReuseForTesting();
+  }
+  return turn;
+}
+
+} // namespace
+
+// With `cache_ram_mib`, switching the single-prompt path between chats moves
+// the outgoing one to host RAM instead of writing its file, and switching
+// back restores it from there. Unsaved turns reach the files when the model
+// is unloaded.
+TEST(SinglePromptRamTierTest, KeySwitchesStayOffDiskUntilUnload) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string a = "single_ram_a.bin";
+  const std::string b = "single_ram_b.bin";
+  fs::remove(a);
+  fs::remove(b);
+  std::string firstA;
+  {
+    auto model = loadSinglePromptModel("512");
+    ASSERT_TRUE(model->isLoaded());
+    firstA = runSingle(*model, userTurns({"Say one word: apple."}), a).output;
+    runSingle(*model, userTurns({"Say one word: banana."}), b);
+    EXPECT_FALSE(fs::exists(a)) << "the switch wrote the file instead of RAM";
+
+    const SingleTurn back = runSingle(
+        *model, userTurns({"Say one word: apple.", firstA, "Again."}), a);
+    EXPECT_GT(back.reuse, 0u) << "switching back did not restore from RAM";
+    EXPECT_FALSE(fs::exists(a));
+    EXPECT_FALSE(fs::exists(b));
+  }
+  EXPECT_TRUE(fs::exists(a)) << "unload did not flush the active chat";
+  EXPECT_TRUE(fs::exists(b)) << "unload did not flush the RAM tier";
+
+  // The flushed files are ordinary cache files.
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const SingleTurn reloaded =
+      runSingle(*model, userTurns({"Say one word: banana.", "x", "Again."}), b);
+  EXPECT_GT(reloaded.reuse, 0u);
+  model.reset();
+  fs::remove(a);
+  fs::remove(b);
+}
+
+// Without the tier the old behaviour stays: a key switch writes the file.
+TEST(SinglePromptRamTierTest, WithoutTheTierAKeySwitchWritesTheFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string a = "single_noram_a.bin";
+  fs::remove(a);
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, userTurns({"Say one word: apple."}), a);
+  runSingle(*model, userTurns({"Say one word: banana."}), "single_noram_b.bin");
+  EXPECT_TRUE(fs::exists(a));
+  model.reset();
+  fs::remove(a);
+  fs::remove("single_noram_b.bin");
+}
+
+// A full budget pushes the oldest conversation out of RAM; its unsaved turns
+// are written to its file first, so it is never lost.
+TEST(SinglePromptRamTierTest, AFullBudgetWritesTheDroppedChatToItsFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "full_ram_a.bin", "full_ram_b.bin", "full_ram_c.bin"};
+  const auto removeKeys = [&] {
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+  };
+  // Long enough that one state spans a few MiB, so the budget can be sized
+  // for exactly one of them.
+  std::string filler;
+  for (int i = 0; i < 80; ++i) {
+    filler += "Note " + std::to_string(i) + " is kept. ";
+  }
+  const auto chat = [&](const char* word) {
+    return userTurns({filler + "Say one word: " + word + "."});
+  };
+
+  // Measure one stored conversation, then size the budget for one, not two.
+  removeKeys();
+  uint64_t oneEntry = 0;
+  {
+    auto probe = loadSinglePromptModel("512");
+    ASSERT_TRUE(probe->isLoaded());
+    runSingle(*probe, chat("apple"), keys[0]);
+    runSingle(*probe, chat("banana"), keys[1]);
+    ASSERT_EQ(LlamaModelTestPeer::ramTier(*probe)->size(), 1u);
+    oneEntry = LlamaModelTestPeer::ramTier(*probe)->totalBytes();
+  }
+  removeKeys();
+  const uint64_t mib = 1024ULL * 1024ULL;
+  const std::string budget = std::to_string((oneEntry * 3 / 2 + mib - 1) / mib);
+  ASSERT_LT((oneEntry * 3 / 2 + mib - 1) / mib * mib, oneEntry * 2)
+      << "entries too small to separate one from two at MiB granularity";
+
+  auto model = loadSinglePromptModel(budget.c_str());
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, chat("apple"), keys[0]);
+  runSingle(*model, chat("banana"), keys[1]);
+  EXPECT_FALSE(fs::exists(keys[0]));
+  runSingle(*model, chat("cherry"), keys[2]);
+  EXPECT_TRUE(fs::exists(keys[0])) << "the dropped chat was not written";
+  EXPECT_FALSE(fs::exists(keys[1])) << "the newer chat should still be in RAM";
+  model.reset();
+  removeKeys();
+}
+
+// Batch counterpart: with the tier on, an evicted conversation keeps its
+// unsaved turns in RAM instead of writing its file; unload writes them.
+TEST(BatchedCacheResidencyTest, RamTierDefersTheFileUntilUnload) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "defer_a.bin", "defer_b.bin", "defer_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadBatchedModel("512");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    const BatchedTurn a =
+        harness.run(userTurns({"Say one word: apple."}), keys[0]);
+    harness.run(userTurns({"Say one word: banana."}), keys[1]);
+    harness.run(userTurns({"Say one word: cherry."}), keys[2]);
+    EXPECT_FALSE(fs::exists(keys[0])) << "the eviction wrote through";
+    const BatchedTurn back = harness.run(
+        userTurns({"Say one word: apple.", a.output, "Again."}), keys[0]);
+    EXPECT_GT(back.reuse, 0u);
+    EXPECT_EQ(harness.scheduler().ramTierHitsForTesting(), 1u);
+    for (const auto& key : keys) {
+      EXPECT_FALSE(fs::exists(key)) << key;
+    }
+  }
+  for (const auto& key : keys) {
+    EXPECT_TRUE(fs::exists(key)) << key << " was not flushed at unload";
+    fs::remove(key);
+  }
+}
+
+// Finetuning reloads the model before training (and training clears every
+// sequence). The reload must first write a parked batch conversation's
+// unsaved turns to its file, so nothing kept in memory is lost.
+TEST(BatchedCacheResidencyTest, ReloadWritesParkedConversationsToTheirFiles) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  const std::string key = "reload_parked.bin";
+  fs::remove(key);
+  {
+    BatchedCacheHarness harness(*model);
+    harness.run(userTurns({"Say one word: apple."}), key);
+    ASSERT_EQ(harness.scheduler().parkedSeqIds().size(), 1u);
+    ASSERT_FALSE(fs::exists(key));
+  }
+  model->reload();
+  model->waitForLoadInitialization();
+  EXPECT_TRUE(fs::exists(key)) << "the reload dropped the parked conversation";
+  model.reset();
+  fs::remove(key);
 }

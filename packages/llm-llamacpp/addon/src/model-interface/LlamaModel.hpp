@@ -17,6 +17,7 @@
 #include <picojson/picojson.h>
 
 #include "AsyncWeightsLoader.hpp"
+#include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
 #include "LlamaFinetuner.hpp"
@@ -79,7 +80,7 @@ public:
    * Members are destroyed in reverse order of declaration, ensuring
    * llmContext_ is destroyed before backendsHandle_.
    */
-  ~LlamaModel() override = default;
+  ~LlamaModel() override;
 
   std::string getName() const final { return "LlamaModel"; }
   void setWeightsForFile(
@@ -245,6 +246,10 @@ public:
       const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
 
 private:
+  /// Writes every conversation with unsaved turns to its `cacheKey` file:
+  /// the active single-prompt session, parked batch conversations and the
+  /// RAM tier. Run before a reload, and at unload when the RAM tier is on.
+  void flushResidentCaches() noexcept;
   friend class LlamaFinetuner;
   // Unit tests reach internals (scheduler, single-prompt context) through this
   // peer instead of public `*ForTesting()` accessors. See
@@ -350,6 +355,17 @@ private:
     /// Set when llama_n_seq_max > 1, null otherwise.
     std::unique_ptr<batching::ContinuousBatchScheduler> batchScheduler_;
 
+    /// Checkpoint policy from the load config (`cache_checkpoints`,
+    /// `cache_checkpoints_max_bytes`, `cache_checkpoint_storage`), applied to
+    /// the single-prompt context and to every batch driver.
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+        cacheCheckpointPolicy_;
+    /// RAM tier budget for conversation states (`cache_ram_mib`).
+    uint64_t cacheRamBytes_ = 0;
+    /// The RAM tier itself, shared by the single-prompt cache and the batch
+    /// scheduler.
+    std::shared_ptr<batching::SlotStateCache> ramTier_;
+
     // configuration values parsed from configFilemap
     std::optional<load_fit_normalization::NormalizedFitSnapshot>
         normalizedFitSnapshot_;
@@ -384,6 +400,9 @@ private:
   /// decoding via `n_parallel >= 2` (which llama.cpp maps directly to
   /// `n_seq_max`); applies to text and multimodal models alike.
   static bool isMultiBatchActivated(ReloadableState& state);
+  /// Fails the load early when `cache_checkpoints_max_bytes` cannot hold
+  /// `cache_checkpoints` checkpoints of the largest size this context allows.
+  static void validateCheckpointBudget(ReloadableState& state);
 
   static std::unique_ptr<batching::ContinuousBatchScheduler>
   initBatchScheduler(ReloadableState& state);

@@ -1,5 +1,161 @@
 # Changelog
 
+## [0.56.0] - 2026-10-02
+
+### Breaking
+
+- Cached requests now use addon-owned full-prompt reconciliation. Every request
+  with `cacheKey` must resend the complete message history and complete tool
+  list. The addon persists a versioned token/media ledger in the sequence-state
+  file, reuses the longest matching prefix, and treats pre-ledger cache files as
+  cold misses. Generated reasoning is retained until the next authoritative
+  render omits it; `generationParams.remove_thinking_from_context` has therefore
+  been removed from the addon API, together with the obsolete
+  `RuntimeStats.thinkingBlockDiscards` counter. Current SDK releases still send
+  delta prompts/tools and still expose that option, so they are intentionally
+  incompatible with this addon until the SDK migration lands.
+
+### Added
+
+- `cache_checkpoints` load-config field (also `cache-checkpoints`): per-sequence
+  cap on the process-local full-state checkpoints kept for cached requests on
+  hybrid / recurrent models and DeepSeek V4, one per committed request at the
+  end of its history. The default, 1, keeps the last one, which serves an
+  ordinary next turn and a regenerate; `2` also serves an edit of the last
+  user message. `0` disables them and their capture, maximum 1024.
+- `cache_checkpoints_max_bytes`: byte budget for those checkpoints, enforced
+  before the count. The load fails early with `InvalidArgument` when the budget
+  cannot hold `cache_checkpoints` checkpoints of the largest size the context
+  allows, measured on the loaded model.
+- `cache_ram_mib` load-config field (also `cache-ram-mib`): host-RAM budget
+  in MiB for conversations that are not running, shared by both paths. A
+  single-prompt key switch (or a request without `cacheKey`) moves the
+  active conversation there instead of writing its file, and a batch slot
+  eviction moves its conversation there. Switching back restores from RAM.
+  It is write-back: a conversation's unsaved turns reach its `cacheKey` file
+  on `saveCacheToDisk`, when the budget evicts it, or at unload. Default `0`
+  (off).
+- `cache_checkpoint_storage`: `memory` (default) or `disk`. With `memory` the
+  checkpoints and the per-request rollback snapshot stay in host RAM, so a
+  cached chat on a hybrid / recurrent model never touches the disk; `disk`
+  writes them to the OS temp directory.
+
+### Changed
+
+- With `parallel >= 2`, a keyed request's committed state now stays in its
+  scheduler slot, and the next request with the same `cacheKey` continues
+  from it without `saveCacheToDisk` or a file round-trip, as on the
+  single-prompt path. When a slot is needed for another key, the least
+  recently used conversation is evicted: into the `cache_ram_mib` tier when
+  enabled, otherwise its unsaved turns are written to its `cacheKey` file.
+  Requests on the same `cacheKey` now run one at a time instead of
+  concurrently, so a conversation's state is never forked.
+- Reloading the model (finetuning does), and unloading it with
+  `cache_ram_mib` set, writes every conversation with unsaved turns to its
+  `cacheKey` file: the active single-prompt session, resident batch
+  conversations and the RAM tier. Without the tier an unload writes
+  nothing, as before.
+- A single-prompt key switch no longer rewrites the old session's file when
+  nothing ran since it was last written or loaded.
+- Assistant messages may carry `reasoning_content`. An answer sent back with
+  its reasoning inline is split into `content` and `reasoning_content` before
+  rendering, like llama-server's OpenAI-compatible input, using the reasoning
+  markers the chat template reports (family table as fallback; gpt-oss is
+  left whole). Templates that read only `reasoning_content` (DeepSeek V4,
+  Gemma 4) therefore drop it from earlier turns instead of printing it as
+  part of the answer.
+
+### Removed
+
+- The built-in Qwen3 chat template override. Dense Qwen3 models (`qwen3`
+  architecture) now render with the template embedded in their GGUF, like
+  every other model; a `chat_template` in the load config still wins. Unlike
+  the override, Qwen's template drops an earlier answer's reasoning before the
+  last user message.
+- The EOS-inside-reasoning recovery. When a Qwen3-family model sampled an
+  end-of-generation token inside its reasoning block, the addon replaced it
+  with the closing `</think>` (plus two newlines on the text path) and kept
+  generating. That EOS now ends the response, with `stopReason: 'eos'`, as it
+  does on every other model.
+
+### Fixed
+
+- A hybrid or recurrent request that diverged, restored a checkpoint and was
+  then rolled back (cancel during prefill, decode error, context overflow)
+  restored only the recurrent state of the pre-request snapshot. The KV cache
+  stayed trimmed to the checkpoint while the ledger went back to the old
+  cursor, so the next request continuing the old conversation decoded on top
+  of missing cells. The rollback now lands on the restored checkpoint.
+- A multimodal request cancelled while its reconciled text suffix was being
+  decoded no longer runs its whole prefill first: the stop is checked before
+  every chunk.
+- A cached request whose prompt failed part-way (an image that failed to
+  encode, a failed decode) left the KV cells it had already decoded past the
+  rolled-back cursor on attention models: the multimodal context had not yet
+  published them. The rollback now trims to its target whatever the cursor
+  says.
+- Single-prompt runtime stats for a fully cached prompt reported `TTFT`,
+  `promptTokens` and `ppTPS` as 0, and a low `TPS`: the prefill re-decodes
+  only the last prompt token, which llama's perf counters book as generation.
+  The contexts now count and time their own prefill and generation, as
+  llama-server and the batch path do.
+- A single-prompt cache load on a parallel model no longer trims every
+  sequence to the loaded length (`llama_memory_seq_rm` on seq `-1`), which
+  truncated the batch slots' conversations; it trims its own sequence.
+
+- The multimodal context now decides whether a model needs full-state
+  snapshots through the same `needsFullStateSnapshot` policy as the text
+  context, so DeepSeek V4 vision models get transactional rollback and
+  divergent-history checkpoints instead of an unsafe tail trim.
+- A cached generation that stops at `n_predict`, or answers with an immediate
+  EOS, now commits its cache transaction instead of rolling back. Truncated
+  turns no longer re-prefill their own output on the next turn, and their
+  `CacheTokens` and `stopReason` stats reflect what was generated.
+- Cancelling a request after prefill completed now keeps its state like a
+  prediction-limit stop: the prompt and every streamed token stay resident,
+  a cached request commits and is persisted with `saveCacheToDisk`, and the
+  next full-history turn resumes from there. A cancel during prefill still
+  rolls back to the state before the prompt was sent, as do decode errors and
+  context overflow. The rule is the same with or without `cacheKey`; without
+  one it only changes `CacheTokens`, which now reports the tokens that were
+  actually decoded instead of the pre-request cursor. On hybrid models the
+  cached cancel path reuses the transaction's own snapshot instead of taking
+  a separate prefill-entry dump on every turn.
+- Hybrid and recurrent models take a checkpoint at the end of the chat
+  history, just before the generation prompt, on every cached request (single
+  prompt and `parallel >= 2`). A follow-up turn whose template drops the
+  previous answer's reasoning restores it and prefills only the new part,
+  instead of re-prefilling the whole conversation. Reconciliation restores the
+  longest matching checkpoint. With `parallel >= 2` the scheduler keeps
+  checkpoints per `cacheKey` between requests, which previously ended with
+  each slot.
+- Checkpoints and rollback snapshots hold only the state a tail trim cannot
+  rebuild: the recurrent state on hybrid and recurrent models, the
+  sliding-window cells and compressor states on DeepSeek V4. A restore trims
+  the rest back. Their size no longer grows with the context (about 20 MB
+  each on Qwen3.5-0.8B), and `cache_checkpoints_max_bytes` is validated
+  against that size.
+- With `parallel >= 2`, a cached request could save a `cacheKey` file that
+  every later load rejected with `UnableToLoadSessionFile` ("cache ledger
+  totals do not match cache state"). This happened when it was cancelled by
+  job id mid-generation, or on Qwen3-family models when an EOS inside the
+  reasoning block was replaced by the closing tag. The ledger now records a
+  batch token only once the scheduler has decoded it. A cancel that lands
+  while a decode is in flight is applied only after that decode is counted,
+  so the saved `nPast` matches the memory.
+- With `parallel >= 2`, a prefill-only request whose prompt is already fully
+  cached no longer fails with `InvalidArgument` (`ErrEmptyTokens`); it commits
+  immediately.
+- On sliding-window models (Gemma 3/4, gpt-oss) a cached turn that diverges
+  behind the attention window is reprocessed instead of trimmed onto evicted
+  window cells, which made the model answer from a truncated context.
+- Pure-attention models never write a full-state temp-file snapshot any more.
+  A rolled-back request drops what it added with a tail trim; when
+  reconciliation had trimmed a diverging history first, the rollback lands on
+  the prefix shared with the request's prompt rather than restoring the old
+  tail. A chat with one `cacheKey` and no `saveCacheToDisk` therefore keeps
+  everything in memory on these models.
+
 ## [0.55.1] - 2026-09-30
 
 ### Changed

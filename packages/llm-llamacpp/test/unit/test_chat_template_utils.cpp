@@ -10,10 +10,10 @@
 #include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
+#include "qwen3_chat_template.hpp"
 #include "test_common.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LogSafeString.hpp"
-#include "utils/QwenTemplate.hpp"
 
 namespace fs = std::filesystem;
 using namespace qvac_lib_inference_addon_llama::utils;
@@ -38,28 +38,6 @@ protected:
 
   bool hasValidModel() { return fs::exists(test_model_path); }
 };
-
-TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
-  EXPECT_FALSE(isQwen3Model(nullptr));
-}
-
-// `isQwen3Architecture` is the exact-match predicate that drives fixed Qwen3
-// chat-template selection (via isQwen3Model -> getChatTemplateForModel). It
-// must stay strictly `qwen3`: `qwen35` and other family members must NOT match
-// (they are covered separately by isQwen3ReasoningFamilyArchitecture for
-// reasoning-tag purposes only).
-TEST_F(ChatTemplateUtilsTest, IsQwen3ArchitectureExactMatch) {
-  EXPECT_TRUE(isQwen3Architecture("qwen3"));
-  EXPECT_TRUE(isQwen3Architecture("Qwen3")); // case-insensitive (normalized)
-  EXPECT_FALSE(isQwen3Architecture("qwen35"));
-  EXPECT_FALSE(isQwen3Architecture("qwen3moe"));
-  EXPECT_FALSE(isQwen3Architecture("llama"));
-  EXPECT_FALSE(isQwen3Architecture(""));
-}
-
-TEST_F(ChatTemplateUtilsTest, IsMedPsyModelWithNullptr) {
-  EXPECT_FALSE(isMedPsyModel(nullptr));
-}
 
 TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameEmpty) {
   EXPECT_FALSE(isMedPsyBasename(std::string_view{}));
@@ -123,17 +101,6 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureQwen3Family) {
   }
 }
 
-TEST_F(ChatTemplateUtilsTest, DefaultsThinkingCompactionToQwen3FamilyOnly) {
-  for (std::string_view arch :
-       {"qwen3", "qwen3moe", "qwen35", "qwen35moe", "qwen36", "qwen36moe"}) {
-    EXPECT_TRUE(usesThinkingCompactionByDefault(arch)) << "arch=" << arch;
-  }
-
-  EXPECT_FALSE(usesThinkingCompactionByDefault("deepseek4"));
-  EXPECT_FALSE(usesThinkingCompactionByDefault("gemma4"));
-  EXPECT_FALSE(usesThinkingCompactionByDefault("llama"));
-}
-
 TEST_F(ChatTemplateUtilsTest, IdentifiesDeepSeekV4Architecture) {
   EXPECT_TRUE(isDeepSeekV4Architecture("deepseek4"));
   EXPECT_TRUE(isDeepSeekV4Architecture("DeepSeek4"));
@@ -172,7 +139,7 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureRejectsOthers) {
 
 // `selectReasoningTagSource` is the single source of truth for the
 // "template-first, family-fallback" policy used by
-// `remove_thinking_from_context` detection. The tests below pin the
+// reasoning-channel detection. The tests below pin the
 // preference order so future refactors cannot silently drift back to
 // hardcoded family detection.
 TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourcePrefersTemplate) {
@@ -304,84 +271,6 @@ TEST_F(ChatTemplateUtilsTest, ReasoningBudgetAndDetectorAgreeOnSource) {
   }
 }
 
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateForModelWithManualOverride) {
-  std::string manual_override = "custom template";
-  std::string result = getChatTemplateForModel(nullptr, manual_override);
-  EXPECT_EQ(result, manual_override);
-}
-
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateForModelEmptyOverrideNullptr) {
-  std::string result = getChatTemplateForModel(nullptr, "");
-  EXPECT_EQ(result, "");
-}
-
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateWithNullptrModel) {
-  common_params params;
-  params.chat_template = "test template";
-  params.use_jinja = false;
-
-  std::string result = getChatTemplate(nullptr, params);
-  EXPECT_EQ(result, params.chat_template);
-}
-
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateJinjaDisabled) {
-  common_params params;
-  params.chat_template = "test template";
-  params.use_jinja = false;
-
-  std::string result = getChatTemplate(nullptr, params);
-  EXPECT_EQ(result, "test template");
-}
-
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateJinjaEnabledWithOverride) {
-  common_params params;
-  params.chat_template = "custom template";
-  params.use_jinja = true;
-
-  std::string result = getChatTemplate(nullptr, params);
-  EXPECT_EQ(result, "custom template");
-}
-
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateJinjaEnabledWithoutOverride) {
-  common_params params;
-  params.chat_template = "";
-  params.use_jinja = true;
-
-  std::string result = getChatTemplate(nullptr, params);
-  EXPECT_EQ(result, "");
-}
-
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateParamsNotModified) {
-  common_params params;
-  params.chat_template = "original template";
-  params.use_jinja = false;
-
-  std::string result = getChatTemplate(nullptr, params);
-
-  EXPECT_EQ(params.chat_template, "original template");
-  EXPECT_FALSE(params.use_jinja);
-  EXPECT_EQ(result, "original template");
-}
-
-TEST_F(ChatTemplateUtilsTest, GetChatTemplateForModelPreservesWhitespace) {
-  std::string overrideWithSpaces = "  template with spaces  ";
-  std::string result = getChatTemplateForModel(nullptr, overrideWithSpaces);
-  EXPECT_EQ(result, overrideWithSpaces);
-}
-
-TEST_F(
-    ChatTemplateUtilsTest, GetChatTemplateForModelPreservesSpecialCharacters) {
-  std::string overrideSpecial = "template\nwith\tspecial\rchars";
-  std::string result = getChatTemplateForModel(nullptr, overrideSpecial);
-  EXPECT_EQ(result, overrideSpecial);
-}
-
-TEST_F(ChatTemplateUtilsTest, GetFixedQwen3TemplateNotNull) {
-  const char* expectedTemplate = getFixedQwen3Template();
-  ASSERT_NE(expectedTemplate, nullptr);
-  EXPECT_GT(strlen(expectedTemplate), 0u);
-}
-
 namespace {
 
 common_chat_templates_inputs makeQwenInputs() {
@@ -432,8 +321,8 @@ constexpr const char* ALWAYS_RAISING_TEMPLATE =
 } // namespace
 
 TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
@@ -452,8 +341,8 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptExportsToolGrammarWhenToolsPresent) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
@@ -653,8 +542,8 @@ TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsUnknownOrToolless) {
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptRequiredToolChoiceMakesGrammarEager) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
@@ -667,8 +556,8 @@ TEST_F(ChatTemplateUtilsTest, GetPromptRequiredToolChoiceMakesGrammarEager) {
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptNoneToolChoiceKeepsToolsDropsGrammar) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
@@ -686,8 +575,8 @@ TEST_F(ChatTemplateUtilsTest, GetPromptNoneToolChoiceKeepsToolsDropsGrammar) {
 // response-format-only parser, so the rendered grammar excludes tool calls
 // rather than composing with them.
 TEST_F(ChatTemplateUtilsTest, TemplateResponseFormatExcludesToolCalls) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs plain = makeQwenInputs();
@@ -707,8 +596,8 @@ TEST_F(ChatTemplateUtilsTest, TemplateResponseFormatExcludesToolCalls) {
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptWithoutToolsExportsNoGrammar) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
@@ -957,8 +846,8 @@ TEST_F(ChatTemplateUtilsTest, GetPromptFlagsAConditionalOmissionForThisRender) {
 // tools request into a false positive, which is worse than the false negative
 // it was added to fix.
 TEST_F(ChatTemplateUtilsTest, GetPromptDoesNotFlagAToolsAwareTemplate) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
@@ -1192,3 +1081,89 @@ TEST(RequireToolChoiceHonouredTest, AutoAndNoneNeverThrow) {
 // `forLogMessage` and `toLowerAscii` are declared in `utils/LogSafeString.hpp`,
 // so their tests live in `test_log_safe_string.cpp` — one test file per header,
 // as elsewhere in this directory.
+
+// A template that reads an earlier answer's reasoning only from
+// `reasoning_content` (DeepSeek V4, Gemma 4) prints inline reasoning as part
+// of the answer. Moved out of `content`, it is the template's to drop.
+TEST_F(ChatTemplateUtilsTest, ReasoningMovedOutOfContentIsTheTemplatesToDrop) {
+  constexpr const char* REASONING_FIELD_TEMPLATE =
+      "{%- for m in messages -%}"
+      "<{{ m.role }}>{{ m.content }}"
+      "{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<assistant>{%- endif -%}";
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, REASONING_FIELD_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+  common_chat_templates_inputs inputs;
+  inputs.use_jinja = true;
+  inputs.add_generation_prompt = true;
+  inputs.messages.resize(3);
+  inputs.messages[0].role = "user";
+  inputs.messages[0].content = "Name three colours.";
+  inputs.messages[1].role = "assistant";
+  inputs.messages[1].content =
+      "<think>\nI reason here.\n</think>\n\nRed, green, blue.";
+  inputs.messages[2].role = "user";
+  inputs.messages[2].content = "Which is warmest?";
+
+  const std::string inline_ = getPrompt(tmpls.get(), inputs).prompt;
+  EXPECT_NE(inline_.find("I reason here."), std::string::npos);
+
+  moveReasoningOutOfContent(
+      inputs.messages, ReasoningTags{.open = "<think>", .close = "</think>"});
+  const std::string split = getPrompt(tmpls.get(), inputs).prompt;
+  EXPECT_EQ(split.find("I reason here."), std::string::npos) << split;
+  EXPECT_NE(split.find("<assistant>Red, green, blue."), std::string::npos)
+      << split;
+}
+
+// The markers for cutting an earlier answer's reasoning come from the
+// template itself, as llama-server reads them, so a template outside the
+// family table gets its own; the table is only the fallback.
+TEST_F(ChatTemplateUtilsTest, HistoryReasoningTagsComeFromTheTemplate) {
+  common_chat_templates_ptr qwen = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
+  const auto qwenTags = historyReasoningTags(qwen.get(), nullptr, true);
+  ASSERT_TRUE(qwenTags.has_value());
+  EXPECT_EQ(qwenTags->open, "<think>");
+  EXPECT_EQ(qwenTags->close, "</think>");
+
+  constexpr const char* CUSTOM_REASONING_TEMPLATE =
+      "{%- for m in messages -%}"
+      "{%- if m.role == 'assistant' -%}<|assistant|>"
+      "{%- if m.reasoning_content -%}"
+      "<reason>{{ m.reasoning_content }}</reason>"
+      "{%- endif -%}{{ m.content }}<|end|>"
+      "{%- else -%}<|{{ m.role }}|>{{ m.content }}<|end|>{%- endif -%}"
+      "{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<|assistant|>{%- endif -%}";
+  common_chat_templates_ptr custom =
+      common_chat_templates_init(nullptr, CUSTOM_REASONING_TEMPLATE);
+  const auto customTags = historyReasoningTags(custom.get(), nullptr, true);
+  ASSERT_TRUE(customTags.has_value());
+  EXPECT_EQ(customTags->open, "<reason>");
+  EXPECT_EQ(customTags->close, "</reason>");
+
+  // No reasoning in the template and no family entry: nothing to cut.
+  constexpr const char* PLAIN_TEMPLATE =
+      "{%- for m in messages -%}<|{{ m.role }}|>{{ m.content }}<|end|>"
+      "{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<|assistant|>{%- endif -%}";
+  common_chat_templates_ptr plain =
+      common_chat_templates_init(nullptr, PLAIN_TEMPLATE);
+  EXPECT_FALSE(historyReasoningTags(plain.get(), nullptr, true).has_value());
+  // Without Jinja the template reports nothing; only the table applies.
+  EXPECT_FALSE(historyReasoningTags(qwen.get(), nullptr, false).has_value());
+
+  // Harmony channels are not a block followed by the answer; left whole.
+  constexpr const char* HARMONY_STYLE_TEMPLATE =
+      "{%- for m in messages -%}<|start|>{{ m.role }}"
+      "{%- if m.role == 'assistant' and m.reasoning_content -%}"
+      "<|channel|>analysis<|message|>{{ m.reasoning_content }}<|end|>"
+      "<|start|>assistant{%- endif -%}"
+      "<|channel|>final<|message|>{{ m.content }}<|end|>{%- endfor -%}"
+      "{%- if add_generation_prompt -%}<|start|>assistant{%- endif -%}";
+  common_chat_templates_ptr harmony =
+      common_chat_templates_init(nullptr, HARMONY_STYLE_TEMPLATE);
+  EXPECT_FALSE(historyReasoningTags(harmony.get(), nullptr, true).has_value());
+}

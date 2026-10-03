@@ -314,8 +314,11 @@ safeTest(
 )
 
 // The other prefill guard. This one is only reachable with a non-zero `nPast_`,
-// so a cached turn has to fill the window first: the follow-up prompt would fit
-// in an empty context and is refused only because of what is already resident.
+// so a committed turn has to fill most of the window first: a prefill-only
+// turn, since a generation that runs into the full context rolls back and
+// caches nothing. The follow-up resends that turn, as every cached request
+// does; the cache reuses it, and the new turn, which would fit in an empty
+// window, is refused only because of what is already resident.
 // The two guards report different quantities and the SDK's overflow parser
 // matches each wording separately, so a change to either has to fail here.
 safeTest(
@@ -330,13 +333,14 @@ safeTest(
     cleanupIntegrationCacheFiles(cachePath)
     t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
 
-    // First turn fills the window and leaves it cached under `cachePath`.
+    // First turn fills most of the window and leaves it cached under
+    // `cachePath`.
     const first = await model.run([{ role: 'user', content: overflow.fillerPrompt() }], {
       cacheKey: cachePath,
       saveCacheToDisk: true,
-      generationParams: { reasoning_budget: 0, predict: overflow.PREDICT }
+      prefill: true
     })
-    await collectResponse(first)
+    await first.await()
     t.ok(
       toNumber(first?.stats?.CacheTokens) > 0,
       `first turn leaves tokens in cache (stats=${JSON.stringify(first?.stats)})`
@@ -344,7 +348,11 @@ safeTest(
 
     let followUpError = null
     try {
-      const rejected = await model.run([{ role: 'user', content: overflow.CACHED_FOLLOW_UP }], {
+      const history = [
+        { role: 'user', content: overflow.fillerPrompt() },
+        { role: 'user', content: overflow.cachedFollowUp() }
+      ]
+      const rejected = await model.run(history, {
         cacheKey: cachePath,
         saveCacheToDisk: true,
         generationParams: { reasoning_budget: 0 }
