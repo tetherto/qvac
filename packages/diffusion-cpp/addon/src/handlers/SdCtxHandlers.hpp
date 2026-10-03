@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <string>
@@ -7,6 +8,8 @@
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <stable-diffusion.h>
+
+#include "utils/ImageCodec.hpp"
 
 namespace qvac_lib_inference_addon_sd {
 
@@ -101,6 +104,8 @@ struct SdCtxConfig {
   // vae_decode_only), so this no longer saves memory; it is parsed for
   // config-surface stability and addon-side validation only.
   bool vaeDecodeOnly = false;
+  uint64_t maxImagePixels = image_codec::MAX_DECODED_PIXELS;
+  uint64_t maxJobPixels = image_codec::MAX_JOB_DECODED_PIXELS;
 
   // -- Precision -------------------------------------------------------------
   sd_type_t wtype =
