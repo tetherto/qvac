@@ -89,6 +89,11 @@
 - A multimodal request cancelled while its reconciled text suffix was being
   decoded no longer runs its whole prefill first: the stop is checked before
   every chunk.
+- A cached request whose prompt failed part-way (an image that failed to
+  encode, a failed decode) left the KV cells it had already decoded past the
+  rolled-back cursor on attention models: the multimodal context had not yet
+  published them. The rollback now trims to its target whatever the cursor
+  says.
 - A single-prompt cache load on a parallel model no longer trims every
   sequence to the loaded length (`llama_memory_seq_rm` on seq `-1`), which
   truncated the batch slots' conversations; it trims its own sequence.

@@ -1375,10 +1375,12 @@ bool TextLlmContext::restorePreRequestCacheState() {
   pendingHistoryCheckpoint_.reset();
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
-  } else if (nPast_ > preRequestNPast_) {
+  } else {
     // Pure-attention memory: everything this request added sits after the
     // rollback target (the pre-request cursor, or the divergence point when
-    // reconciliation trimmed), so dropping that tail restores it.
+    // reconciliation trimmed), so dropping that tail restores it. Trimmed
+    // whatever `nPast_` says, so a decode that fails part-way cannot leave
+    // cells past the cursor.
     try {
       clearSequenceMemory(modelCtx_.lctx, preRequestNPast_, -1);
     } catch (const std::exception& e) {

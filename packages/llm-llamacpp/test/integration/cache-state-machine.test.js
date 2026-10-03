@@ -86,9 +86,24 @@ function normalizeStats(rawStats = {}, extra = {}) {
   }
 }
 
+// Cached turns resend the whole conversation: the base prompt, the answer it
+// got, then the follow-up.
 function buildPrompt(options = {}) {
-  if (options.followUp) return [FOLLOW_UP_MESSAGE]
+  if (options.followUp) {
+    return [...BASE_PROMPT, { role: 'assistant', content: options.answer || '' }, FOLLOW_UP_MESSAGE]
+  }
   return [...BASE_PROMPT]
+}
+
+// A full-history follow-up decodes only what follows the prefix it shares with
+// the cache, so what it reused is what the cache holds beyond that.
+function assertFollowUpReusesCache(t, firstStats, followUpStats) {
+  const reused = followUpStats.CacheTokens - followUpStats.promptTokens - followUpStats.generatedTokens
+  t.ok(
+    reused > 0 && reused <= firstStats.CacheTokens,
+    `follow-up reused ${reused} cached tokens of ${firstStats.CacheTokens} (cache=${followUpStats.CacheTokens}, prompt=${followUpStats.promptTokens}, generated=${followUpStats.generatedTokens})`
+  )
+  t.ok(followUpStats.CacheTokens > firstStats.CacheTokens, 'the cache now holds the whole conversation')
 }
 
 function buildLongPrefillPrompt() {
@@ -154,9 +169,11 @@ async function runAndCollectStats(model, prompt, runOptions) {
   cleanupRunOptionsCache(runOptions)
   const response = await model.run(prompt, runOptions)
   let chunkCount = 0
+  const chunks = []
 
-  let chain = response.onUpdate(() => {
+  let chain = response.onUpdate((data) => {
     chunkCount++
+    chunks.push(data)
   })
 
   if (typeof response.onError === 'function') {
@@ -166,7 +183,7 @@ async function runAndCollectStats(model, prompt, runOptions) {
   }
 
   await chain.await()
-  return normalizeStats(response.stats, { _chunkCount: chunkCount })
+  return normalizeStats(response.stats, { _chunkCount: chunkCount, _output: chunks.join('') })
 }
 
 async function runAndCancelAfterFirstToken(model, prompt, runOptions) {
@@ -231,15 +248,13 @@ safeTest('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 
   const firstStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
   const secondStats = await runAndCollectStats(
     model,
-    buildPrompt({ followUp: true }),
+    buildPrompt({ followUp: true, answer: firstStats._output }),
     cacheOpts(sessionName)
   )
-  const delta = toNumber(secondStats.CacheTokens) - toNumber(firstStats.CacheTokens)
   t.ok(firstStats.CacheTokens > 0, 'session usage records cache tokens')
   assertCacheMatchesTokens(t, firstStats, 'session run caches prompt + generated tokens')
   t.ok(firstStats.ppTPS > 0, 'ppTPS reported on completed run')
-  const expectedDelta = secondStats.promptTokens + secondStats.generatedTokens
-  t.is(delta, expectedDelta, 'cache delta equals follow-up prompt + generations')
+  assertFollowUpReusesCache(t, firstStats, secondStats)
   t.ok(
     secondStats.generatedTokens <= Number(config.n_predict),
     'generated tokens respect n_predict limit'
@@ -390,16 +405,11 @@ safeTest(
 
     const reCachedStats = await runAndCollectStats(
       model,
-      buildPrompt({ followUp: true }),
+      buildPrompt({ followUp: true, answer: cachedStats._output }),
       cacheOpts(sessionName)
     )
     t.ok(reCachedStats.CacheTokens > 0, 'cache can be re-enabled with cacheKey')
-    const delta = toNumber(reCachedStats.CacheTokens) - toNumber(initialCacheTokens)
-    const expectedDelta = reCachedStats.promptTokens + reCachedStats.generatedTokens
-    t.ok(
-      Math.abs(delta - expectedDelta) <= 1,
-      `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`
-    )
+    assertFollowUpReusesCache(t, { CacheTokens: initialCacheTokens }, reCachedStats)
   }
 )
 
@@ -417,16 +427,11 @@ safeTest('Cache cleared when switching to different cacheKey', { timeout: 600_00
 
   const backToFirstStats = await runAndCollectStats(
     model,
-    buildPrompt({ followUp: true }),
+    buildPrompt({ followUp: true, answer: firstStats._output }),
     cacheOpts(session1)
   )
   t.ok(backToFirstStats.CacheTokens > 0, 'switching back to first cache works')
-  const delta = toNumber(backToFirstStats.CacheTokens) - toNumber(firstCacheInitial)
-  const expectedDelta = backToFirstStats.promptTokens + backToFirstStats.generatedTokens
-  t.ok(
-    Math.abs(delta - expectedDelta) <= 1,
-    `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`
-  )
+  assertFollowUpReusesCache(t, { CacheTokens: firstCacheInitial }, backToFirstStats)
 })
 
 safeTest(
@@ -466,16 +471,11 @@ safeTest(
 
     const reCachedStats = await runAndCollectStats(
       model,
-      buildPrompt({ followUp: true }),
+      buildPrompt({ followUp: true, answer: cachedStats._output }),
       cacheOpts(sessionName)
     )
     t.ok(reCachedStats.CacheTokens > 0, 'cache can be re-enabled after being cleared')
-    const delta = toNumber(reCachedStats.CacheTokens) - toNumber(initialCacheTokens)
-    const expectedDelta = reCachedStats.promptTokens + reCachedStats.generatedTokens
-    t.ok(
-      Math.abs(delta - expectedDelta) <= 1,
-      `cache delta (${delta}) approximately equals follow-up tokens (${expectedDelta})`
-    )
+    assertFollowUpReusesCache(t, { CacheTokens: initialCacheTokens }, reCachedStats)
   }
 )
 
@@ -541,13 +541,12 @@ safeTest('Options: follow-up with same cacheKey reuses cache', { timeout: 600_00
   })
   t.ok(firstStats.CacheTokens > 0, 'first run has CacheTokens')
 
-  const secondStats = await runAndCollectStats(model, [FOLLOW_UP_MESSAGE], {
-    cacheKey: sessionName,
-    saveCacheToDisk: true
-  })
-  const delta = toNumber(secondStats.CacheTokens) - toNumber(firstStats.CacheTokens)
-  const expectedDelta = secondStats.promptTokens + secondStats.generatedTokens
-  t.is(delta, expectedDelta, `cache delta (${delta}) equals follow-up tokens (${expectedDelta})`)
+  const secondStats = await runAndCollectStats(
+    model,
+    buildPrompt({ followUp: true, answer: firstStats._output }),
+    { cacheKey: sessionName, saveCacheToDisk: true }
+  )
+  assertFollowUpReusesCache(t, firstStats, secondStats)
 })
 
 safeTest(

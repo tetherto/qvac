@@ -1225,6 +1225,66 @@ TEST_F(
   EXPECT_NO_THROW({ (void)model->processPrompt(recovery); });
 }
 
+// A media chunk that fails after the reconciled text suffix was decoded by
+// hand rolls the request back. The rollback must drop the suffix's KV cells
+// too, although the context's cursor had not caught up with them yet.
+TEST_F(
+    MtmdLlmContextCancelTest,
+    FailedMediaChunkAfterReconciledSuffixDropsItsKvCells) {
+  const std::string smolvlmPath = test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+  const std::string smolvlmMmproj = test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
+  auto model = loadMtmdModel(smolvlmPath, smolvlmMmproj);
+  if (!model) {
+    GTEST_SKIP() << "SmolVLM pure-attention multimodal model not found";
+  }
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    GTEST_SKIP() << "Multimodal test image not found at " << imagePath;
+  }
+  auto* mtmd =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(mtmd, nullptr);
+  auto* mem = llama_get_memory(mtmd->getCtx());
+  ASSERT_NE(mem, nullptr);
+  const fs::path cacheFile =
+      fs::temp_directory_path() /
+      ("mtmd-failed-chunk-rollback-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".bin");
+  fs::remove(cacheFile);
+
+  LlamaModel::Prompt first;
+  first.input =
+      R"([{"role":"user","content":"Name three colours of the rainbow."}])";
+  first.cacheKey = cacheFile.string();
+  ASSERT_NO_THROW((void)model->processPrompt(first));
+  const llama_pos afterFirst = mtmd->getNPast();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, afterFirst);
+
+  // The replaced answer makes the history diverge inside the first text
+  // chunk, so the rest of it is decoded by hand before the image fails.
+  LlamaModel::Prompt second;
+  second.input =
+      R"([{"role":"user","content":"Name three colours of the rainbow."},)"
+      R"({"role":"assistant","content":"Red, green and blue."},)"
+      R"({"role":"user","type":"media","content":""},)"
+      R"({"role":"user","content":"What is in this image?"}])";
+  second.media.push_back(readBinaryFile(imagePath));
+  second.cacheKey = cacheFile.string();
+  mtmd->failNextMediaChunkForTesting();
+  EXPECT_THROW((void)model->processPrompt(second), qvac_errors::StatusError);
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, mtmd->getNPast())
+      << "the rollback left KV cells past the cursor (" << mtmd->getNPast()
+      << ")";
+  EXPECT_LE(mtmd->getNPast(), afterFirst);
+  fs::remove(cacheFile);
+}
+
 // ============================================================================
 // Layer 2c: end-to-end cancel during generation via the high-level API
 // ============================================================================

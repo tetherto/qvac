@@ -165,6 +165,12 @@ public:
   }
 
   /// Entries the last prompt reconciliation kept resident (0 = cold).
+  /// Makes the next media chunk fail before it is encoded, as an image
+  /// encode running out of memory would, so a test can drive the failure
+  /// rollback in the middle of a prompt.
+  void failNextMediaChunkForTesting() noexcept {
+    failNextMediaChunkForTesting_ = true;
+  }
   [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
     return pendingReuseEntries_;
   }
@@ -502,6 +508,7 @@ private:
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
   size_t pendingReuseEntries_ = 0;
+  bool failNextMediaChunkForTesting_ = false;
 
   // Generic request-entry snapshot for cancellation on memory that cannot
   // remove an arbitrary decoded tail.

@@ -757,7 +757,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     }
 
     int32_t res;
-    if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+    if (std::exchange(failNextMediaChunkForTesting_, false)) {
+      res = -1;
+    } else if (
+        mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
       // Inlined copy of the IMAGE branch of qvac-fabric's
       // mtmd_helper_eval_chunk_single (tools/mtmd/mtmd-helper.cpp): encode ->
       // get_output_embd -> decode_image_chunk, called with the SAME args the
@@ -1595,10 +1598,12 @@ bool MtmdLlmContext::restorePreRequestCacheState() {
   pendingHistoryCheckpoint_.reset();
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
-  } else if (current_.pos > preRequestCacheUsage_.pos) {
+  } else {
     // Pure-attention memory: everything this request added sits after the
     // rollback target (the pre-request cursor, or the divergence point when
-    // reconciliation trimmed), so dropping that tail restores it.
+    // reconciliation trimmed), so dropping that tail restores it. Trimmed
+    // whatever `current_` says: a chunk that throws mid-prompt leaves the
+    // cursor short of the cells already decoded.
     try {
       clearSequenceMemory(modelCtx_.lctx, preRequestCacheUsage_.pos, -1);
     } catch (const std::exception& e) {
