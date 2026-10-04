@@ -10,7 +10,7 @@
 - [Enabling it](#enabling-it)
 - [JS API](#js-api)
   - [Admission, job ids and `rejectWhenBusy`](#admission-job-ids-and-rejectwhenbusy)
-  - [Prefill rules (persistable vs live-only)](#prefill-rules-persistable-vs-live-only)
+  - [Prefill rules (keyed vs keyless)](#prefill-rules-keyed-vs-keyless)
 - [How a batch flows from JS to native slots](#how-a-batch-flows-from-js-to-native-slots)
 - [Components](#components)
   - [ContinuousBatchScheduler](#continuousbatchscheduler)
@@ -86,7 +86,7 @@ run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
 interface BatchPrompt {
   id?: string         // caller-supplied; the scheduler assigns one if omitted
   prompt: Message[]
-  runOptions?: RunOptions  // per-item generationParams, cacheKey, saveCacheToDisk
+  runOptions?: RunOptions  // per-item generationParams, cacheKey, ephemeral
 }
 ```
 
@@ -134,9 +134,9 @@ Capacity is measured in slots rather than jobs because a batch run of N prompts 
 
 The instance default follows `parallel` (`true` at `1`, `false` at `>= 2`); `opts.rejectWhenBusy` overrides it per instance and `runOptions.rejectWhenBusy` per call. A batch run derives ONE group policy from its items' `runOptions` — a batch is one native job, so items that disagree are refused with a `TypeError` before admission.
 
-### Prefill rules (persistable vs live-only)
+### Prefill rules (keyed vs keyless)
 
-A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly when its product survives the slot teardown: `saveCacheToDisk: true` plus a `cacheKey` (*persistable* prefill). A *live-only* prefill's product is warm state in a context that concurrent jobs can never reach, so on a parallel model it is rejected with `InvalidArgument` — both as a single `run()` and per batch item. Load with `parallel: 1` for live-only cache warming. See [cache-api.md](cache-api.md).
+A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly when its product survives the slot teardown: it has a `cacheKey`, so the warmed conversation stays parked in its sequence for the next request on that key (and can be written with `saveCache()`). A *keyless* prefill's product is warm state in a context that concurrent jobs can never reach, so on a parallel model it is rejected with `InvalidArgument` — both as a single `run()` and per batch item. Load with `parallel: 1` for keyless cache warming. See [cache-api.md](cache-api.md).
 
 ### Stats
 
@@ -184,7 +184,6 @@ MultiJobScheduler:
 LlamaModel::process(input, JobId) -> processConcurrentBatch():
   arm the job's cancel action, then processPromptBatchImpl():
     validateBitnetQuantization()
-    reserve saveCacheToDisk keys in inflightSaveKeys_ (InvalidArgument on clash)
     ContinuousBatchScheduler::processBatch(requests)
         |
         v
@@ -230,7 +229,7 @@ The scheduler owns the decode loop. It wraps `MultiRequestBatcher`, the shared `
 - `driver` — a `SequenceDriver`: `TextLlmContext`, or `MtmdLlmContext` when the model loaded an mmproj (the model layer's `buildDriverFactory` picks per slot, so the scheduler stays driver-agnostic)
 - `group` + `outputIndex` — back-pointer to the `BatchGroup` this slot belongs to
 - `streams` — per-sequence `onToken` / `onDone` callbacks wired to the JS streaming path
-- `cacheKey`, `saveCacheToDisk`, `prefillOnly`
+- `cacheKey`, `ephemeral`, `prefillOnly`
 
 **BatchGroup** is shared by all sequences admitted in one `processBatch` call. It accumulates outputs and stats, and carries three fields the rest of the machinery keys off:
 
@@ -299,7 +298,7 @@ Lifecycle methods in call order:
 | `onGenerationFinished` | Natural EOG | Flushes UTF-8 buffer |
 | `onCancel` | User cancel or decode error | Flushes UTF-8 buffer; called before KV clear |
 | `onSequenceEnd` | Every terminal path | Flushes remaining UTF-8 buffer |
-| `saveCache` | Before the slot is parked or cleared | Persists the sequence state to disk if the request committed with `saveCacheToDisk` (skipped, and the conversation dropped, when its loaded file was deleted). `drainFinishedLocked` calls `saveCacheForSlot` and only then parks the slot or calls `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
+| `residentStateTokens` | When the slot is parked | The ledger words that describe the committed state. `drainFinishedLocked` marks a committed keyed slot parkable and `freeSlot` parks it with these words instead of calling `clearSeqKv`. No file is written at the end of a request; the parked state is written later by an explicit `saveConversation` (the JS `saveCache()`), an eviction or a flush, all through `llama_state_seq_save_file` on the worker thread. |
 | `releaseCheckpoints` | When the slot is freed | Hands the driver's checkpoints back to the scheduler, keyed by `cacheKey`, for the next request on it |
 
 On the batch path a driver records a sampled token in its ledger only once the next `syncPosition` shows the scheduler decoded it. A sample that is never fed (a terminal token, or a cancel before the next step) therefore never reaches the ledger, and a committed or saved cache always describes exactly the memory it holds.
@@ -389,14 +388,11 @@ Streaming works as follows:
 
 ## Cache per slot
 
-Each `BatchPrompt` may carry its own `cacheKey` and `saveCacheToDisk`. The scheduler creates one driver per slot, so KV caches are isolated by slot index.
+Each `BatchPrompt` may carry its own `cacheKey` and `ephemeral`. The scheduler creates one driver per slot, so KV caches are isolated by slot index.
 
-Two restrictions apply in batch mode:
+**Same-key prompts are serialized.** Multiple prompts, in one batch or in concurrent `run()` calls, may use the same `cacheKey`, but only one runs at a time: a request whose key is held by a running slot waits in `keyDeferred_` until that slot is freed, then continues from its committed state. Prompts on other keys are not held up. Since no request writes the file, there is no write sharing to guard against.
 
-1. **Read sharing is serialized.** Multiple prompts in the same batch may use the same `cacheKey` without `saveCacheToDisk`, but only one runs at a time: a request whose key is held by a running slot waits in `keyDeferred_` until that slot is freed, then continues from its committed state. Prompts on other keys are not held up.
-2. **Write sharing is rejected.** Two prompts with the same `cacheKey` and `saveCacheToDisk: true` would clobber each other (last writer wins, no ordering guarantee). `processPromptBatchImpl` detects this before any admission and throws `InvalidArgument`.
-
-The write-sharing rule spans jobs, not just one batch. Each saving item reserves its `cacheKey` in a model-wide `inflightSaveKeys_` set for the length of the run, so a concurrent `run()` that tries to save a key another in-flight job already reserved is refused the same way — the error reads "already being saved by an in-flight request". This matters for cache-warming loops: give each save a distinct key, or await the previous run before reusing one. The reservation is released on every exit path, including cancellation and failure.
+**Explicit saves.** `saveConversation(key)` (the JS `saveCache()`) queues a `SaveJob` for the worker and blocks on its future. The worker runs pending saves at the top of its loop, after deferred teardowns and before admission, where no decode is in flight; a save whose key is in `busyKeys_` stays queued until that slot is freed, so it always writes a committed state, and a queued same-key request cannot slip in between. It writes the parked sequence (`llama_state_seq_save_file`) or the RAM-tier entry (`SlotStateCache::save`), or reports that nothing is kept. A failed write fails only that save; the conversation stays parked, still unsaved. Pending saves fail when the scheduler stops.
 
 ---
 
@@ -409,7 +405,9 @@ A committed keyed request no longer leaves an empty slot, though. `freeSlot` **p
 - **RAM tier:** with `cache_ram_mib` set, the full sequence state moves into `SlotStateCache`, unsaved turns included. The store is shared with the single-prompt path's key switches, follows llama-server's `--cache-ram` rules, and writes an entry's unsaved turns to its file before dropping it.
 - **No RAM tier:** unsaved turns are written to K's file (`llama_state_seq_save_file` through a temp file), the same auto-save the single-prompt path does on a key switch.
 
-`flushForUnload()` writes every parked conversation with unsaved turns to its file (it is skipped, with a warning, while a batch request is running). The model calls it, together with the single-prompt session and RAM tier flushes, before a reload, and before it is destroyed when the RAM tier is enabled.
+An ephemeral conversation (`SubmitRequest::ephemeral`, carried into `ParkedState` and `SlotStateCacheEntry`) is dropped at each of these points instead of written.
+
+`flushForUnload()` writes every parked, non-ephemeral conversation with unsaved turns to its file (it is skipped, with a warning, while a batch request is running). The model calls it, together with the single-prompt session and RAM tier flushes, before a reload and before it is destroyed.
 
 Every disk write on this path, and its failure behaviour, is listed in [How the `cacheKey` file is written](cache-lifecycle.md#how-the-cachekey-file-is-written).
 
@@ -419,7 +417,7 @@ At admission the driver takes the state from the first source that has it: the p
 - A single-prompt request first calls `evictParked(0)`, since it shares sequence 0.
 - `clear()` drops parked and RAM-tier state without writing it.
 
-On hybrid and recurrent models the checkpoints go with the parked state; a key with no resident or RAM-tier state keeps them in `checkpointStore_` for the next load of its file. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` with `saveCacheToDisk` therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
+On hybrid and recurrent models the checkpoints go with the parked state; a key with no resident or RAM-tier state keeps them in `checkpointStore_` for the next load of its file. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` whose state was evicted to its file therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
 
 ---
 
@@ -706,7 +704,7 @@ backend, not a slow model. Per-step accounting: see
 | Tools | Supported |
 | Per-prompt `cacheKey` | Supported (read sharing allowed; write sharing rejected) |
 | Concurrent top-level `run()` calls | Supported — each call is its own scheduler job and decodes alongside the others (see [Admission](#admission-job-ids-and-rejectwhenbusy)) |
-| Live-only prefill (`prefill: true` without `saveCacheToDisk` + `cacheKey`) | Rejected with `InvalidArgument`; persistable prefill is supported (see [Prefill rules](#prefill-rules-persistable-vs-live-only)) |
+| Keyless prefill (`prefill: true` without a `cacheKey`) | Rejected with `InvalidArgument`; keyed prefill is supported (see [Prefill rules](#prefill-rules-keyed-vs-keyless)) |
 | `parallel < 2` | Batch input throws `InvalidArgument` before admission |
 
 For the JS-side cancellation contract, see [README — Cancelling a batch](../README.md#cancelling-a-batch). For the cache API, see [cache-api.md](cache-api.md).

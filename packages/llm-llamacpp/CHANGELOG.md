@@ -14,8 +14,28 @@
   `RuntimeStats.thinkingBlockDiscards` counter. Current SDK releases still send
   delta prompts/tools and still expose that option, so they are intentionally
   incompatible with this addon until the SDK migration lands.
+- `runOptions.saveCacheToDisk` has been removed; passing it throws a
+  `TypeError`. A cached conversation stays in memory and is written to its
+  `cacheKey` file only when it would otherwise be lost with unsaved turns
+  (set aside for another key, evicted, reloaded or unloaded) or when the
+  caller asks with the new `saveCache(cacheKey)`. On `parallel >= 2` a
+  prefill now needs only a `cacheKey`, and same-key requests are no longer
+  rejected as write sharing: they run one at a time.
+- Unloading the model now writes every conversation with unsaved turns to its
+  `cacheKey` file, with or without `cache_ram_mib`, except ephemeral ones.
 
 ### Added
+
+- `saveCache(cacheKey)`: writes the conversation kept for a key to its file,
+  wherever it is kept (the single-prompt session, a resident batch slot or
+  the RAM tier), on both paths. It waits for a request running on that key
+  and writes its committed state, runs between decode steps on a parallel
+  model, does nothing when the file is current, and rejects when nothing is
+  cached under the key. A failed write keeps the conversation in memory,
+  still unsaved, so it can be retried.
+- `runOptions.ephemeral`: keeps a conversation in memory only. Every
+  automatic write (key switch, keyless request, eviction, RAM-tier eviction,
+  reload, unload) drops it instead; `saveCache()` still writes it.
 
 - `cache_checkpoints` load-config field (also `cache-checkpoints`): per-sequence
   cap on the process-local full-state checkpoints kept for cached requests on
@@ -33,8 +53,8 @@
   active conversation there instead of writing its file, and a batch slot
   eviction moves its conversation there. Switching back restores from RAM.
   It is write-back: a conversation's unsaved turns reach its `cacheKey` file
-  on `saveCacheToDisk`, when the budget evicts it, or at unload. Default `0`
-  (off).
+  on `saveCache()`, when the budget evicts it, or at reload or unload.
+  Default `0` (off).
 - `cache_checkpoint_storage`: `memory` (default) or `disk`. With `memory` the
   checkpoints and the per-request rollback snapshot stay in host RAM, so a
   cached chat on a hybrid / recurrent model never touches the disk; `disk`
@@ -44,17 +64,16 @@
 
 - With `parallel >= 2`, a keyed request's committed state now stays in its
   scheduler slot, and the next request with the same `cacheKey` continues
-  from it without `saveCacheToDisk` or a file round-trip, as on the
+  from it without a file round-trip, as on the
   single-prompt path. When a slot is needed for another key, the least
   recently used conversation is evicted: into the `cache_ram_mib` tier when
   enabled, otherwise its unsaved turns are written to its `cacheKey` file.
   Requests on the same `cacheKey` now run one at a time instead of
   concurrently, so a conversation's state is never forked.
-- Reloading the model (finetuning does), and unloading it with
-  `cache_ram_mib` set, writes every conversation with unsaved turns to its
-  `cacheKey` file: the active single-prompt session, resident batch
-  conversations and the RAM tier. Without the tier an unload writes
-  nothing, as before.
+- Reloading the model (finetuning does), and unloading it, writes every
+  non-ephemeral conversation with unsaved turns to its `cacheKey` file: the
+  active single-prompt session, resident batch conversations and the RAM
+  tier.
 - A single-prompt key switch no longer rewrites the old session's file when
   nothing ran since it was last written or loaded.
 - Assistant messages may carry `reasoning_content`. An answer sent back with
@@ -113,7 +132,7 @@
   `CacheTokens` and `stopReason` stats reflect what was generated.
 - Cancelling a request after prefill completed now keeps its state like a
   prediction-limit stop: the prompt and every streamed token stay resident,
-  a cached request commits and is persisted with `saveCacheToDisk`, and the
+  a cached request commits and keeps them, and the
   next full-history turn resumes from there. A cancel during prefill still
   rolls back to the state before the prompt was sent, as do decode errors and
   context overflow. The rule is the same with or without `cacheKey`; without
@@ -153,8 +172,8 @@
   A rolled-back request drops what it added with a tail trim; when
   reconciliation had trimmed a diverging history first, the rollback lands on
   the prefix shared with the request's prompt rather than restoring the old
-  tail. A chat with one `cacheKey` and no `saveCacheToDisk` therefore keeps
-  everything in memory on these models.
+  tail. A chat with one `cacheKey` therefore keeps everything in memory on
+  these models until it is saved, switched away from or unloaded.
 
 ## [0.55.1] - 2026-09-30
 

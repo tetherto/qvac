@@ -253,7 +253,7 @@ new LlmLlamacpp({
 - `files.model` is an array of absolute file paths. For single-file GGUFs, pass a one-element array. For sharded GGUFs the caller passes the `.tensors.txt` companion first, followed by every shard in numerical order.
 - `files.projectionModel`, when present, is forwarded as `projectionPath` for multimodal models.
 - `load()` takes no arguments. It constructs the native addon with the first shard-matching entry of `files.model` (via `pickPrimaryGgufPath`) as the primary model path, streams all entries via `bare-fs` + `loadWeights`, and finally calls `activate()`.
-- `run(messages, runOptions?)` forwards `prefill`, normalized `generationParams` (`grammar` and `json_schema` are mutually exclusive), optional `cacheKey`, and `saveCacheToDisk` into the native request path.
+- `run(messages, runOptions?)` forwards `prefill`, normalized `generationParams` (`grammar` and `json_schema` are mutually exclusive), optional `cacheKey`, and `ephemeral` into the native request path. `saveCache(cacheKey)` writes a cached conversation to its file through the native `saveCache` binding, off the JS thread.
 
 </details>
 
@@ -454,7 +454,7 @@ graph TB
 
 - Saves/loads llama.cpp KV cache to disk for conversation continuity
 - Handles cache invalidation on context changes
-- Connected to JS `runOptions.cacheKey` and `runOptions.saveCacheToDisk`, which select and persist per-request inference context.
+- Connected to JS `runOptions.cacheKey` and `runOptions.ephemeral`, which select the per-request inference context and whether it may be written automatically, and to `saveCache(cacheKey)`, which persists it.
 
 #### **Notable C++ modules**
 
@@ -919,7 +919,7 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Documents:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 - [multi-gpu.md](multi-gpu.md) - `device` / `split-mode` / `tensor-split` / `main-gpu` semantics for multi-GPU inference and finetuning
-- [cache-api.md](cache-api.md) - KV cache persistence (`cacheKey`, `saveCacheToDisk`)
+- [cache-api.md](cache-api.md) - KV cache persistence (`cacheKey`, `ephemeral`, `saveCache()`)
 - [finetuning.md](finetuning.md) - LoRA finetuning entrypoints and parameters
 - [continuous-batching.md](continuous-batching.md) - Continuous batching architecture (`parallel`, `ContinuousBatchScheduler`, slot lifecycle, cancellation)
 

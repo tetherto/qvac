@@ -350,7 +350,7 @@ Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy
 
 #### Prefill (cache warming) with `parallel >= 2`
 
-A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it is *persistable*: `saveCacheToDisk: true` plus a `cacheKey`. A live-only prefill (no persistence) warms context state that no concurrent job could ever reach, so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
+A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it has a `cacheKey`: the warmed conversation stays in its slot for the next request on that key. A keyless prefill warms context state that no concurrent job could ever reach, so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
 
 #### Cancelling a batch
 
