@@ -11,10 +11,11 @@
 //   MODEL=/path/to/Qwen3-1.7B-Q4_0.gguf bare warm-turn-grammar-repro.js
 //   VERBOSITY=3 shows the addon's own "tokenizeChat ... nTools=N" lines.
 
-const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const LlmLlamacpp = require('../index')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
+const process = require('bare-process')
 
 const MODEL =
   os.getEnv('MODEL') ||
@@ -129,5 +130,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('repro failed:', err && err.stack ? err.stack : err)
-  Bare.exit(1)
+  process.exit(1)
 })

@@ -741,8 +741,20 @@ private:
   /// Process-local checkpoints per `cacheKey`, kept between the requests
   /// that use it because each request gets a fresh slot driver. Moved into
   /// the driver at admission and back out when its slot is freed. Bounded
-  /// per key by the checkpoint policy; dropped on `clear()`.
-  std::unordered_map<std::string, cache::Checkpoints> checkpointStore_;
+  /// per key by the checkpoint policy, and to one key per slot overall: the
+  /// least recently stored key goes first (`storeCheckpointsLocked`), so a
+  /// long-lived server with many keys keeps at most as many checkpoint sets
+  /// as it has resident slots. Dropped on `clear()`.
+  struct StoredCheckpoints {
+    cache::Checkpoints checkpoints;
+    uint64_t storedAt = 0;
+  };
+  std::unordered_map<std::string, StoredCheckpoints> checkpointStore_;
+  uint64_t checkpointClock_ = 0;
+  /// Keeps `checkpoints` for `cacheKey`, evicting the oldest stored key when
+  /// the store already holds one set per slot.
+  void storeCheckpointsLocked(
+      const std::string& cacheKey, cache::Checkpoints&& checkpoints);
 
   /// A committed keyed conversation kept in its sequence after its request
   /// ended, for the next request on the same `cacheKey`. The sequence is free

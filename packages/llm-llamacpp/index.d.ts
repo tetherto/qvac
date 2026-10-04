@@ -492,7 +492,6 @@ declare namespace LlmLlamacpp {
         CacheTokens: number;
         generatedTokens: number;
         promptTokens: number;
-        /** Legacy counter retained for stats-shape compatibility; always 0. */
         /**
          * Number of prompt renders in this request that provably left the tool
          * definitions out — the template either rejected them, or supplying them

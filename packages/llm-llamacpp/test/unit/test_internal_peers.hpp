@@ -171,6 +171,12 @@ public:
     return scheduler.driverFactory_;
   }
 
+  /// How many keys currently have checkpoints kept between requests.
+  static size_t checkpointStoreSize(Scheduler& scheduler) {
+    std::scoped_lock lock(scheduler.mutex_);
+    return scheduler.checkpointStore_.size();
+  }
+
   static void setDriverFactory(
       Scheduler& scheduler,
       qvac_lib_inference_addon_llama::batching::DriverFactory factory) {

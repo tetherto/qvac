@@ -352,6 +352,10 @@ inline DecodedLedger deserialize(const llama_token* words, size_t count) {
   result.nPast = static_cast<llama_pos>(words[2]);
   result.cacheTokens = static_cast<llama_pos>(words[3]);
   result.ledger.entries.reserve(entryCount);
+  // Summed in 64 bits: a crafted file with spans near INT32_MAX must not
+  // overflow the int32 totals the ledger reports.
+  int64_t totalPositions = 0;
+  int64_t totalCacheTokens = 0;
   size_t cursor = LEDGER_HEADER_WORDS;
   for (size_t i = 0; i < entryCount; ++i) {
     const int32_t rawKind = words[cursor++];
@@ -366,17 +370,34 @@ inline DecodedLedger deserialize(const llama_token* words, size_t count) {
     if (positions <= 0 || kv <= 0) {
       throw std::runtime_error("cache ledger contains an invalid span");
     }
+    totalPositions += positions;
+    totalCacheTokens += kv;
+    if (totalPositions > result.nPast || totalCacheTokens > result.cacheTokens) {
+      throw std::runtime_error("cache ledger totals do not match cache state");
+    }
     result.ledger.entries.push_back(
         {.kind = static_cast<EntryKind>(rawKind),
          .identity = static_cast<int64_t>(lo | (hi << 32U)),
          .positions = positions,
          .cacheTokens = kv});
   }
-  if (result.ledger.positions() != result.nPast ||
-      result.ledger.cacheTokens() != result.cacheTokens) {
+  if (totalPositions != result.nPast ||
+      totalCacheTokens != result.cacheTokens) {
     throw std::runtime_error("cache ledger totals do not match cache state");
   }
   return result;
+}
+
+/// Rejects a ledger whose text entries name tokens outside the model's
+/// vocabulary `[0, nVocab)`: such a file was written by another model or is
+/// corrupt.
+inline void requireTokensInVocab(const Ledger& ledger, int32_t nVocab) {
+  for (const Entry& entry : ledger.entries) {
+    if (entry.kind == EntryKind::Token &&
+        (entry.identity < 0 || entry.identity >= nVocab)) {
+      throw std::runtime_error("cache ledger contains a token outside the vocab");
+    }
+  }
 }
 
 } // namespace qvac_lib_inference_addon_llama::cache

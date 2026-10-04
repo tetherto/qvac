@@ -2608,3 +2608,37 @@ TEST(ExplicitSaveTest, BatchEphemeralConversationIsDroppedOnEviction) {
     fs::remove(key);
   }
 }
+
+// Checkpoints of conversations evicted to their file are kept for the key's
+// next load, but at most one set per slot: a long-lived server cycling
+// through many keys must not accumulate them without bound.
+TEST(BatchedCheckpointStoreTest, KeepsAtMostOneCheckpointSetPerSlot) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  std::vector<std::string> keys;
+  for (int i = 0; i < 5; ++i) {
+    keys.push_back("checkpoint_store_" + std::to_string(i) + ".bin");
+    fs::remove(keys.back());
+  }
+  for (size_t i = 0; i < keys.size(); ++i) {
+    LlamaModel::Prompt prompt = keyedPrompt(
+        chatInput({{"user", "Name colour number " + std::to_string(i) + "."}}),
+        keys[i]);
+    prompt.generationParams.n_predict = 8;
+    ASSERT_EQ(model->processPromptBatch({prompt}).size(), 1u);
+    EXPECT_LE(ContinuousBatchSchedulerTestPeer::checkpointStoreSize(*scheduler), 2u)
+        << "after key " << i;
+  }
+  // Three keys were evicted; only the two most recent kept their checkpoints.
+  EXPECT_EQ(ContinuousBatchSchedulerTestPeer::checkpointStoreSize(*scheduler), 2u);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}

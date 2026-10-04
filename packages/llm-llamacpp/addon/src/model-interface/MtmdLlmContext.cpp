@@ -2024,6 +2024,8 @@ void MtmdLlmContext::restoreCacheStateTokens(
     const std::vector<llama_token>& tokens) {
   const cache::DecodedLedger decoded =
       cache::deserialize(tokens.data(), tokens.size());
+  cache::requireTokensInVocab(
+      decoded.ledger, llama_vocab_n_tokens(modelCtx_.vocab));
   residentLedger_ = decoded.ledger;
   current_ = {.pos = decoded.nPast, .cacheTokens = decoded.cacheTokens};
   cacheCheckpoints_.clear();

@@ -52,6 +52,36 @@ TEST(CacheLedger, RejectsMarkedCorruption) {
       std::runtime_error);
 }
 
+// Two spans near INT32_MAX must not wrap the int32 totals into a value that
+// matches the header: the sum is checked in 64 bits.
+TEST(CacheLedger, RejectsSpansThatOverflowTheTotals) {
+  cache::Ledger ledger;
+  for (const llama_pos span : {INT32_MAX - 10, 20}) {
+    ledger.entries.push_back(
+        {.kind = cache::EntryKind::Media,
+         .identity = 7,
+         .positions = span,
+         .cacheTokens = span});
+  }
+  const auto encoded = cache::serialize(ledger, INT32_MAX, INT32_MAX);
+  EXPECT_THROW(
+      (void)cache::deserialize(encoded.data(), encoded.size()),
+      std::runtime_error);
+}
+
+TEST(CacheLedger, RejectsTokensOutsideTheVocab) {
+  cache::Ledger ledger = cache::fromTokens({1, 5, 100});
+  ledger.entries.push_back(
+      {.kind = cache::EntryKind::Media,
+       .identity = 123456789,
+       .positions = 4,
+       .cacheTokens = 4});
+  EXPECT_NO_THROW(cache::requireTokensInVocab(ledger, 101));
+  EXPECT_THROW(cache::requireTokensInVocab(ledger, 100), std::runtime_error);
+  cache::Ledger negative = cache::fromTokens({-1});
+  EXPECT_THROW(cache::requireTokensInVocab(negative, 100), std::runtime_error);
+}
+
 TEST(CacheLedger, RecognizesLegacyPayloadAsUnmarked) {
   const llama_token legacy[] = {12, 12, 12, 12};
   EXPECT_FALSE(cache::hasMarker(legacy, std::size(legacy)));

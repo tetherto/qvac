@@ -524,7 +524,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   } else if (
       const auto kept = checkpointStore_.find(key);
       kept != checkpointStore_.end()) {
-    driver->adoptCheckpoints(std::move(kept->second));
+    driver->adoptCheckpoints(std::move(kept->second.checkpoints));
     checkpointStore_.erase(kept);
   }
 
@@ -1800,7 +1800,7 @@ void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
       writeStateToFileLocked(seqId, parked.cacheKey, parked.ledgerWords);
     }
     if (!dropped && !inRam && !parked.checkpoints.empty()) {
-      checkpointStore_[parked.cacheKey] = std::move(parked.checkpoints);
+      storeCheckpointsLocked(parked.cacheKey, std::move(parked.checkpoints));
     }
   } catch (...) {
     logTeardownFailureNoexcept(
@@ -1985,6 +1985,27 @@ void ContinuousBatchScheduler::notifyDoneNoexcept(uint32_t seqId) noexcept {
   }
 }
 
+void ContinuousBatchScheduler::storeCheckpointsLocked(
+    const std::string& cacheKey, cache::Checkpoints&& checkpoints) {
+  checkpointStore_.erase(cacheKey);
+  while (!checkpointStore_.empty() &&
+         checkpointStore_.size() >= std::max<size_t>(1, slots_.size())) {
+    auto oldest = checkpointStore_.begin();
+    for (auto it = checkpointStore_.begin(); it != checkpointStore_.end();
+         ++it) {
+      if (it->second.storedAt < oldest->second.storedAt) {
+        oldest = it;
+      }
+    }
+    checkpointStore_.erase(oldest);
+  }
+  checkpointStore_.emplace(
+      cacheKey,
+      StoredCheckpoints{
+          .checkpoints = std::move(checkpoints),
+          .storedAt = ++checkpointClock_});
+}
+
 void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   if (seqId < slots_.size()) {
     auto& slot = slots_[seqId];
@@ -2015,7 +2036,7 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
             clearSeqKv(seqId);
           }
           if (!checkpoints.empty()) {
-            checkpointStore_[slot->cacheKey] = std::move(checkpoints);
+            storeCheckpointsLocked(slot->cacheKey, std::move(checkpoints));
           }
         }
       } catch (...) {

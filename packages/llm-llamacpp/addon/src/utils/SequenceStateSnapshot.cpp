@@ -12,6 +12,7 @@
 #ifdef _WIN32
 #include <process.h>
 #else
+#include <cstdlib>
 #include <unistd.h>
 #endif
 
@@ -32,21 +33,58 @@ uint64_t currentProcessId() noexcept {
 #endif
 }
 
+// Directory the snapshots of this process go to. Snapshots hold conversation
+// state, so on POSIX they live in a private directory `mkdtemp` creates with
+// mode 0700 under the temp dir, unreadable by other users whatever the umask
+// or the predictable file names. Windows' temp dir is already per user. The
+// directory is removed at exit once its files are gone.
+class SnapshotDirectory {
+public:
+  SnapshotDirectory() {
+    std::error_code ec;
+    std::filesystem::path base = std::filesystem::temp_directory_path(ec);
+    if (ec) {
+      // Falling back to "." keeps the snapshot machinery functional on
+      // systems where the temp dir lookup fails; the file is still
+      // cleaned up on destruct / clear.
+      base = ".";
+    }
+#ifndef _WIN32
+    std::string pattern = (base / "qvac_llamacpp_XXXXXX").string();
+    if (::mkdtemp(pattern.data()) != nullptr) {
+      path_ = pattern;
+      owned_ = true;
+      return;
+    }
+#endif
+    path_ = base;
+  }
+  ~SnapshotDirectory() {
+    if (owned_) {
+      std::error_code ec;
+      std::filesystem::remove(path_, ec);
+    }
+  }
+  SnapshotDirectory(const SnapshotDirectory&) = delete;
+  SnapshotDirectory& operator=(const SnapshotDirectory&) = delete;
+  [[nodiscard]] const std::filesystem::path& path() const noexcept {
+    return path_;
+  }
+
+private:
+  std::filesystem::path path_;
+  bool owned_ = false;
+};
+
 // Produce a per-process unique temp file path for a snapshot. PID
 // disambiguates across processes, `seqId` disambiguates concurrent
 // per-slot snapshots in continuous batching, and the monotonic
 // counter disambiguates back-to-back captures within the same slot.
 std::string makeUniqueSnapshotPath(llama_seq_id seqId) {
   static std::atomic<uint64_t> counter{0};
+  static const SnapshotDirectory directory;
   const auto id = counter.fetch_add(1, std::memory_order_relaxed);
-  std::error_code ec;
-  auto base = std::filesystem::temp_directory_path(ec);
-  if (ec) {
-    // Falling back to "." keeps the snapshot machinery functional on
-    // systems where the temp dir lookup fails; the file is still
-    // cleaned up on destruct / clear.
-    base = ".";
-  }
+  const std::filesystem::path& base = directory.path();
   const std::string filename = "qvac_llamacpp_seq_" +
                                std::to_string(currentProcessId()) + "_" +
                                std::to_string(static_cast<int>(seqId)) + "_" +

@@ -1153,6 +1153,8 @@ void TextLlmContext::restoreCacheStateTokens(
   if (decoded.nPast != decoded.cacheTokens) {
     throw std::runtime_error("text cache has divergent position/KV totals");
   }
+  cache::requireTokensInVocab(
+      decoded.ledger, llama_vocab_n_tokens(modelCtx_.vocab));
   residentLedger_ = decoded.ledger;
   nPast_ = decoded.nPast;
   cacheCheckpoints_.clear();
