@@ -14,8 +14,11 @@
 
 #include <llama.h>
 
+#include <inference-addon-cpp/Errors.hpp>
+
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
+#include "addon/LlmErrors.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
 
@@ -32,6 +35,9 @@ struct SlotStateCacheEntry {
   bool dirty = false;
   /// The state was loaded from, or last written to, its `cacheKey` file.
   bool activeCacheSavedToDisk = false;
+  /// Its last request set `ephemeral`: never written automatically, dropped
+  /// when the tier lets it go.
+  bool ephemeral = false;
 
   [[nodiscard]] uint64_t bytes() const noexcept {
     uint64_t total = state.size() + ledgerWords.size() * sizeof(llama_token);
@@ -51,7 +57,8 @@ struct SlotStateCacheEntry {
 /// eviction does). It is a write-back cache: a conversation with unsaved turns
 /// stays in RAM, and reaches its `cacheKey` file only when the budget forces
 /// it out or on `flushDirty()`, which the model runs when it is unloaded.
-/// Insert and eviction follow llama-server's `server_prompt_cache::alloc`: an
+/// Ephemeral entries are never written automatically: the budget or an unload
+/// drops them. Insert and eviction follow llama-server's `server_prompt_cache::alloc`: an
 /// entry larger than the whole budget is not kept, a newer entry for the same
 /// key replaces the older one, and the oldest entries are evicted until a new
 /// one fits. Thread-safe.
@@ -93,19 +100,48 @@ public:
     return std::nullopt;
   }
 
-  /// Writes every dirty entry to its `cacheKey` file and marks it clean.
-  /// Entries stay in RAM. Returns how many were written.
+  /// Writes every dirty, non-ephemeral entry to its `cacheKey` file and marks
+  /// it clean. Entries stay in RAM. Returns how many were written.
   size_t flushDirty() {
     std::scoped_lock lock(mutex_);
     size_t written = 0;
     for (auto& [key, entry] : entries_) {
-      if (entry.dirty && writeBack(key, entry)) {
+      if (entry.dirty && !entry.ephemeral && writeBack(key, entry)) {
         entry.dirty = false;
         entry.activeCacheSavedToDisk = true;
         ++written;
       }
     }
     return written;
+  }
+
+  enum class SaveOutcome { NotHere, Written, Current };
+
+  /// The caller's explicit save (`saveCache`): writes the entry for `key` to
+  /// its file unless the file already holds it. Ephemeral entries and entries
+  /// whose file was deleted are written too: the caller asked. Throws
+  /// `UnableToSaveSessionFile` when the write fails; the entry stays, dirty.
+  SaveOutcome save(const std::string& key) {
+    std::scoped_lock lock(mutex_);
+    for (auto& [entryKey, entry] : entries_) {
+      if (entryKey != key) {
+        continue;
+      }
+      if (!entry.dirty && entry.activeCacheSavedToDisk &&
+          !CacheManager::persistedBackingStoreMissing(key)) {
+        return SaveOutcome::Current;
+      }
+      if (!writeStateFile(key, entry)) {
+        throw qvac_errors::StatusError(
+            errors::ADDON_ID,
+            errors::toString(errors::UnableToSaveSessionFile),
+            "failed to save the cache state kept in RAM to '" + key + "'");
+      }
+      entry.dirty = false;
+      entry.activeCacheSavedToDisk = true;
+      return SaveOutcome::Written;
+    }
+    return SaveOutcome::NotHere;
   }
 
   /// Drops everything without writing it (a reset).
@@ -192,7 +228,7 @@ private:
 
   void dropOldestLocked() {
     auto& [key, entry] = entries_.front();
-    if (entry.dirty) {
+    if (entry.dirty && !entry.ephemeral) {
       writeBack(key, entry);
     }
     entries_.pop_front();

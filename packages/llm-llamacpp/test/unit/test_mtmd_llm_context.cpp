@@ -440,7 +440,6 @@ TEST_F(
       R"([{"role": "user", "type": "media", "content": ""},)"
       R"( {"role": "user", "content": "Describe this image in one sentence."}])";
   prompt.cacheKey = cachePath.string();
-  prompt.saveCacheToDisk = true;
   prompt.media.push_back(readBinaryFile(imagePath));
   // This test validates that cacheKey keeps generated multimodal memory
   // resident after generation. The fixture's small n_predict can stop Qwen3.5
@@ -605,7 +604,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalRetainsReasoningLazily) {
       R"( {"role": "user", "type": "media", "content": ""},)"
       R"( {"role": "user", "content": "Is there fruit in this image?"}])";
   prompt.cacheKey = cachePath.string();
-  prompt.saveCacheToDisk = true;
   prompt.media.push_back(readBinaryFile(imagePath));
 
   std::string output;
@@ -677,7 +675,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalFullHistoryReconcilesReasoning) {
       R"( {"role": "user", "type": "media", "content": ""},)"
       R"( {"role": "user", "content": "Is there fruit in this image?"}])";
   first.cacheKey = cachePath.string();
-  first.saveCacheToDisk = true;
   first.media.push_back(readBinaryFile(imagePath));
 
   std::string firstOutput;
@@ -692,7 +689,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalFullHistoryReconcilesReasoning) {
       R"( {"role": "assistant", "content": "yes"},)"
       R"( {"role": "user", "content": "Is the plate empty?"}])";
   second.cacheKey = cachePath.string();
-  second.saveCacheToDisk = true;
   second.media.push_back(readBinaryFile(imagePath));
 
   std::string secondOutput;
@@ -735,9 +731,13 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
     FAIL() << "Model failed to load";
   }
 
+  // Ephemeral: the unload must not leave a file other tests could load.
+  const std::string cacheKey = "test_mtmd_session.bin";
+  fs::remove(cacheKey);
   LlamaModel::Prompt prompt1;
   prompt1.input = R"([{"role": "user", "content": "Hello"}])";
-  prompt1.cacheKey = "test_session.bin";
+  prompt1.cacheKey = cacheKey;
+  prompt1.ephemeral = true;
   EXPECT_NO_THROW({
     std::string output1 = model->processPrompt(prompt1);
     EXPECT_GE(output1.length(), 0);
@@ -747,7 +747,8 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
 
   LlamaModel::Prompt prompt2;
   prompt2.input = R"([{"role": "user", "content": "Follow up message"}])";
-  prompt2.cacheKey = "test_session.bin";
+  prompt2.cacheKey = cacheKey;
+  prompt2.ephemeral = true;
   EXPECT_NO_THROW({
     std::string output2 = model->processPrompt(prompt2);
     EXPECT_GE(output2.length(), 0);
@@ -782,7 +783,6 @@ TEST_F(MtmdLlmContextTest, ExactCachedMultimodalPromptRefreshesLogits) {
         R"([{"role": "user", "type": "media", "content": ""},)"
         R"( {"role": "user", "content": "Describe this image briefly."}])";
     prompt.cacheKey = cachePath.string();
-    prompt.saveCacheToDisk = true;
     prompt.media.push_back(readBinaryFile(imagePath));
     return prompt;
   };

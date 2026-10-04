@@ -1395,9 +1395,9 @@ TEST(
 }
 
 // A cancelled cached request commits what the caller already received: the
-// prompt suffix and every streamed token stay resident and, with
-// `saveCacheToDisk`, are persisted. On a hybrid model that means the cancel
-// path must not restore the pre-request snapshot.
+// prompt suffix and every streamed token stay resident, and an explicit
+// `saveCache` persists them. On a hybrid model that means the cancel path
+// must not restore the pre-request snapshot.
 TEST(
     TextLlmContextCancelDuringGenerationTest,
     SinglePromptHybridCancelCommitsAndSavesCache) {
@@ -1432,8 +1432,8 @@ TEST(
   seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   ASSERT_TRUE(fs::exists(cachePath));
   ASSERT_GT(fs::file_size(cachePath), 0u);
 
@@ -1451,7 +1451,6 @@ TEST(
       R"([{"role":"user","content":"Remember the clean baseline."},)"
       R"({"role":"user","content":"Start answering, then cancel."}])";
   cancellable.cacheKey = cachePath.string();
-  cancellable.saveCacheToDisk = true;
   cancellable.outputCallback = [&](const std::string&) {
     if (cancelled.exchange(true)) {
       return;
@@ -1466,10 +1465,11 @@ TEST(
   EXPECT_GT(baseCtx->getNPast(), preRequestNPast)
       << "cancel must keep the decoded prompt suffix and streamed tokens "
          "resident instead of restoring the pre-request snapshot";
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   const std::vector<uint8_t> after = readBinaryFile(cachePath);
   EXPECT_NE(after, before)
-      << "a cancelled cached request commits, so saveCacheToDisk must "
-         "persist the committed state";
+      << "a cancelled cached request commits, so saveCache must persist the "
+         "committed state";
 
   // The committed state is a valid prefix for the next authoritative turn.
   LlamaModel::Prompt followup;
@@ -1525,8 +1525,8 @@ TEST(
   seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   ASSERT_TRUE(fs::exists(cachePath));
 
   const std::vector<uint8_t> before = readBinaryFile(cachePath);
@@ -1549,7 +1549,6 @@ TEST(
       longBody + R"("}])";
   cancellable.prefill = true;
   cancellable.cacheKey = cachePath.string();
-  cancellable.saveCacheToDisk = true;
 
   std::atomic<bool> done{false};
   std::thread worker([&] {
@@ -1693,7 +1692,7 @@ namespace {} // namespace
 
 TEST(
     TextLlmContextCancelDuringGenerationTest,
-    ExplicitSaveFailureInvalidatesActiveCacheSession) {
+    ExplicitSaveFailureKeepsTheConversationForARetry) {
   const std::string modelPath = qwen3PureAttentionModelPath();
   if (!fs::exists(modelPath)) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -1725,16 +1724,27 @@ TEST(
   LlamaModel::Prompt failing;
   failing.input = R"([{"role":"user","content":"This save should fail."}])";
   failing.cacheKey = badCachePath.string();
-  failing.saveCacheToDisk = true;
-  EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
+  ASSERT_NO_THROW(model->processPrompt(failing));
+  EXPECT_THROW(
+      model->saveCache(badCachePath.string()), qvac_errors::StatusError);
   EXPECT_FALSE(fs::exists(badCachePath));
 
-  LlamaModel::Prompt uncached;
-  uncached.input =
-      R"([{"role":"user","content":"Run after explicit save failure."}])";
-  ASSERT_NO_THROW(model->processPrompt(uncached))
-      << "explicit save failure must invalidate the active cache session; "
-         "otherwise a later prompt without cacheKey retries the stale save";
+  // The conversation stays active and unsaved, so the same save succeeds
+  // once the directory exists, and the key still continues from memory.
+  fs::create_directories(missingParent);
+  ASSERT_NO_THROW(model->saveCache(badCachePath.string()));
+  EXPECT_TRUE(fs::exists(badCachePath));
+
+  LlamaModel::Prompt followup;
+  followup.input =
+      R"([{"role":"user","content":"This save should fail."},)"
+      R"({"role":"assistant","content":"Ok."},)"
+      R"({"role":"user","content":"Continue."}])";
+  followup.cacheKey = badCachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(followup));
+  EXPECT_GT(
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0.0);
+  fs::remove_all(missingParent);
 }
 
 // A pure-attention model needs no full-state temp-file dump for an
@@ -1776,8 +1786,8 @@ TEST(
   seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   ASSERT_TRUE(fs::exists(cachePath));
 
   LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
@@ -1796,7 +1806,6 @@ TEST(
       R"([{"role":"user","content":"Remember the clean baseline."},)"
       R"({"role":"user","content":"Start answering, then cancel."}])";
   cancellable.cacheKey = cachePath.string();
-  cancellable.saveCacheToDisk = true;
   cancellable.outputCallback = [&](const std::string&) {
     if (observed.exchange(true)) {
       return;

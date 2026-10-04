@@ -360,7 +360,6 @@ TEST_F(ToolGrammarModelTest, WarmCacheRearmsRequiredToolGrammar) {
   auto model = createModel();
   LlamaModel::Prompt first = makePrompt(TOOL_PROMPT);
   first.cacheKey = cacheKey;
-  first.saveCacheToDisk = true;
   first.generationParams.tool_choice = "required";
   EXPECT_TRUE(hasToolCallBlock(model->processPrompt(first)));
 
@@ -411,7 +410,6 @@ TEST_F(
                    firstUsers.back() + R"("}])";
     prompt.cacheKey =
         (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
-    prompt.saveCacheToDisk = true;
     prompt.generationParams.tool_choice = "required";
     prompt.generationParams.reasoning_budget = 0;
     firstPrompts.push_back(std::move(prompt));
@@ -435,7 +433,6 @@ TEST_F(
         R"("},{"role":"tool","content":"{\"ok\":true}"},{"role":"user","content":"Set the same room to 21 degrees using the tool."}])";
     prompt.cacheKey =
         (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
-    prompt.saveCacheToDisk = true;
     prompt.generationParams.tool_choice = "required";
     prompt.generationParams.reasoning_budget = 0;
     warmPrompts.push_back(std::move(prompt));
@@ -645,7 +642,6 @@ TEST_F(ToolGrammarModelTest, BatchCancelMidGenerationKeepsCacheLoadable) {
   std::atomic<int> pieces{0};
   LlamaModel::Prompt cancelled = makePrompt(THINKING_PLAIN_PROMPT);
   cancelled.cacheKey = cacheKey;
-  cancelled.saveCacheToDisk = true;
   cancelled.outputCallback = [&](const std::string&) { pieces.fetch_add(1); };
 
   std::thread canceller([&] {
@@ -666,7 +662,8 @@ TEST_F(ToolGrammarModelTest, BatchCancelMidGenerationKeepsCacheLoadable) {
   canceller.join();
   ASSERT_GE(pieces.load(), kPiecesBeforeCancel)
       << "generation never reached the cancel point";
-  ASSERT_TRUE(fs::exists(cacheKey)) << "the cancelled turn saved no cache";
+  model->saveCache(cacheKey);
+  ASSERT_TRUE(fs::exists(cacheKey)) << "the cancelled turn kept no cache";
 
   LlamaModel::Prompt followup = makePrompt(PLAIN_PROMPT);
   followup.cacheKey = cacheKey;
@@ -823,8 +820,8 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt primed = makePrompt(TOOL_PROMPT);
   primed.cacheKey = cacheKey;
-  primed.saveCacheToDisk = true;
   EXPECT_FALSE(model->processPrompt(primed).empty());
+  model->saveCache(cacheKey);
   ASSERT_TRUE(fs::exists(cacheKey)) << "the checkpoint must be on disk first";
   const auto checkpointSize = fs::file_size(cacheKey);
   const auto checkpointWrite = fs::last_write_time(cacheKey);
@@ -836,7 +833,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt rejected = makePrompt(TOOL_PROMPT);
   rejected.cacheKey = cacheKey;
-  rejected.saveCacheToDisk = true;
   rejected.generationParams.tool_choice = "notDeclared";
   EXPECT_THROW(model->processPrompt(rejected), qvac_errors::StatusError);
 
@@ -850,7 +846,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt followUp = makePrompt(TOOL_PROMPT);
   followUp.cacheKey = cacheKey;
-  followUp.saveCacheToDisk = true;
   EXPECT_FALSE(model->processPrompt(followUp).empty())
       << "the key must still be usable after the rejection";
   EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0)
@@ -867,7 +862,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt rejectedAfterLoad = makePrompt(TOOL_PROMPT);
   rejectedAfterLoad.cacheKey = cacheKey;
-  rejectedAfterLoad.saveCacheToDisk = true;
   rejectedAfterLoad.generationParams.tool_choice = "notDeclared";
   EXPECT_THROW(
       reloaded->processPrompt(rejectedAfterLoad), qvac_errors::StatusError);
@@ -879,7 +873,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt loadedFollowUp = makePrompt(TOOL_PROMPT);
   loadedFollowUp.cacheKey = cacheKey;
-  loadedFollowUp.saveCacheToDisk = true;
   EXPECT_FALSE(reloaded->processPrompt(loadedFollowUp).empty())
       << "a checkpoint loaded from disk must survive the rejection too";
   EXPECT_GT(

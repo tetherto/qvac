@@ -65,7 +65,7 @@ bool CacheManager::isParentDirectoryMissing(const std::filesystem::path& path) {
 bool CacheManager::handleCache(
     ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
     std::function<ParsedPromptPayload(const std::string&)> formatPrompt,
-    const std::string& cacheKey) {
+    const std::string& cacheKey, bool ephemeral) {
 
   parsedPrompt = formatPrompt(inputPrompt);
 
@@ -90,6 +90,7 @@ bool CacheManager::handleCache(
     } else {
       cacheUsedInLastPrompt_ = true;
       activeCacheDirty_ = true;
+      activeEphemeral_ = ephemeral;
       return false;
     }
   }
@@ -130,6 +131,7 @@ bool CacheManager::handleCache(
     cacheUsedInLastPrompt_ = true;
     // The request about to run adds turns the file does not have.
     activeCacheDirty_ = true;
+    activeEphemeral_ = ephemeral;
     return loaded;
   } catch (...) {
     resetStateCallback_(true);
@@ -303,9 +305,19 @@ void CacheManager::saveActiveCacheForTransition() {
   if (discardActiveCacheIfBackingStoreMissing()) {
     return;
   }
+  // Nothing committed (e.g. its only request rolled back): nothing to keep.
+  if (llmContext_->getNPast() == 0) {
+    resetStateCallback_(true);
+    return;
+  }
   // With the RAM tier on, the conversation moves there and its file is only
   // written when the tier has to let it go or the model is unloaded.
   if (moveActiveCacheToRamTier()) {
+    resetStateCallback_(true);
+    return;
+  }
+  // Never written automatically: dropped.
+  if (activeEphemeral_) {
     resetStateCallback_(true);
     return;
   }
@@ -351,6 +363,7 @@ bool CacheManager::moveActiveCacheToRamTier() {
     entry.ledgerWords = llmContext_->cacheStateTokens();
     entry.dirty = activeCacheDirty_;
     entry.activeCacheSavedToDisk = activeCacheSavedToDisk_;
+    entry.ephemeral = activeEphemeral_;
     auto* driver = dynamic_cast<SequenceDriver*>(llmContext_);
     if (driver != nullptr) {
       entry.checkpoints = driver->releaseCheckpoints();
@@ -413,7 +426,8 @@ bool CacheManager::restoreFromRamTier() {
 }
 
 void CacheManager::flushForUnload() {
-  if (!hasActiveCache() || !activeCacheDirty_ ||
+  if (!hasActiveCache() || !activeCacheDirty_ || activeEphemeral_ ||
+      llmContext_->getNPast() == 0 ||
       discardActiveCacheIfBackingStoreMissing()) {
     return;
   }
@@ -428,6 +442,19 @@ void CacheManager::flushForUnload() {
             sessionPath_.c_str(),
             ex.what()));
   }
+}
+
+CacheManager::SaveOutcome
+CacheManager::saveForCaller(const std::string& cacheKey) {
+  if (!hasActiveCache() || sessionPath_ != cacheKey) {
+    return SaveOutcome::NotHere;
+  }
+  if (!activeCacheDirty_ && activeCacheSavedToDisk_ &&
+      isFileInitialized(sessionPath_)) {
+    return SaveOutcome::Current;
+  }
+  saveCache();
+  return SaveOutcome::Written;
 }
 
 void CacheManager::setRamTier(
@@ -554,6 +581,7 @@ void CacheManager::invalidate() {
   cacheUsedInLastPrompt_ = false;
   activeCacheSavedToDisk_ = false;
   activeCacheDirty_ = false;
+  activeEphemeral_ = false;
 }
 
 bool CacheManager::isCacheDisabled() const { return cacheDisabled_; }

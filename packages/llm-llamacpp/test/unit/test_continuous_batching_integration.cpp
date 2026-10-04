@@ -815,7 +815,6 @@ TEST_F(
   LlamaModel::Prompt primer;
   primer.input = std::string("[") + systemMsg + "," + userTurn1 + "]";
   primer.cacheKey = cachePath.string();
-  primer.saveCacheToDisk = true;
   primer.generationParams.reasoning_budget = 0;
   primer.generationParams.n_predict = 16;
   auto primerOutputs =
@@ -823,7 +822,6 @@ TEST_F(
   ASSERT_EQ(primerOutputs.size(), 1u);
   ASSERT_TRUE(containsCaseInsensitive(primerOutputs[0], "Paris"))
       << "primer should answer from the clean cache seed: " << primerOutputs[0];
-  ASSERT_TRUE(fs::exists(cachePath));
   const double primeCacheTokens =
       test_common::getStatValue(model->runtimeStats(), "CacheTokens");
   ASSERT_GT(primeCacheTokens, 0.0) << "primer did not populate CacheTokens";
@@ -838,7 +836,6 @@ TEST_F(
 
   auto limit = makeLimitPrompt();
   limit.cacheKey = cachePath.string();
-  limit.saveCacheToDisk = true;
   auto limitOutputs =
       model->processPromptBatch(std::vector<LlamaModel::Prompt>{limit});
   ASSERT_EQ(limitOutputs.size(), 1u);
@@ -911,7 +908,6 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
   auto cachedPrompt = makePrompt("Remember this setup.");
   cachedPrompt.prefill = true;
   cachedPrompt.cacheKey = cachePath.string();
-  cachedPrompt.saveCacheToDisk = true;
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("Say plain text."), std::move(cachedPrompt)};
 
@@ -920,6 +916,8 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_TRUE(outputs[1].empty());
+  EXPECT_FALSE(fs::exists(cachePath)) << "nothing asked for the file yet";
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
   EXPECT_GT(fs::file_size(cachePath), 0u);
   EXPECT_FALSE(fs::exists(cachePath.string() + ".tmp"))
@@ -941,7 +939,7 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
 
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchDeletedPersistedCacheBackingStoreSkipsTerminalSave) {
+    BatchDeletedPersistedCacheBackingStoreDropsTheConversation) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -955,14 +953,13 @@ TEST_F(
   auto seed = makePrompt("Remember this batch cache setup.");
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
 
   std::atomic<bool> removedBackingStore = false;
   auto followup = makePrompt("Write several words about the cached setup.");
   followup.cacheKey = cachePath.string();
-  followup.saveCacheToDisk = true;
   followup.outputCallback = [&cacheDir,
                              &removedBackingStore](const std::string&) {
     if (!removedBackingStore.exchange(true)) {
@@ -977,13 +974,14 @@ TEST_F(
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_TRUE(removedBackingStore.load())
       << "test setup: generation did not reach the deletion callback";
+  model.reset();
   EXPECT_FALSE(fs::exists(cacheDir))
-      << "stale deleted cache directory must not be recreated at terminal save";
+      << "a deleted cache directory must not be recreated at unload";
 }
 
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchDeletedPersistedCacheFileSkipsTerminalSave) {
+    BatchDeletedPersistedCacheFileDropsTheConversation) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -997,15 +995,14 @@ TEST_F(
   auto seed = makePrompt("Remember this batch cache file setup.");
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
 
   std::atomic<bool> removedCacheFile = false;
   auto followup =
       makePrompt("Write several words about the cached file setup.");
   followup.cacheKey = cachePath.string();
-  followup.saveCacheToDisk = true;
   followup.outputCallback = [&cachePath,
                              &removedCacheFile](const std::string&) {
     if (!removedCacheFile.exchange(true)) {
@@ -1020,17 +1017,18 @@ TEST_F(
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_TRUE(removedCacheFile.load())
       << "test setup: generation did not reach the deletion callback";
+  model.reset();
   EXPECT_TRUE(fs::exists(cacheDir))
       << "test setup: parent directory should remain present";
   EXPECT_FALSE(fs::exists(cachePath))
-      << "stale deleted cache file must not be recreated at terminal save";
+      << "a deleted cache file must not be recreated at unload";
 
   fs::remove_all(cacheDir);
 }
 
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchEmptyPersistedCacheFileSkipsTerminalSave) {
+    BatchEmptyPersistedCacheFileDropsTheConversation) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -1044,15 +1042,14 @@ TEST_F(
   auto seed = makePrompt("Remember this batch empty cache setup.");
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
 
   std::atomic<bool> truncatedCacheFile = false;
   auto followup =
       makePrompt("Write several words about the cached empty file setup.");
   followup.cacheKey = cachePath.string();
-  followup.saveCacheToDisk = true;
   followup.outputCallback = [&cachePath,
                              &truncatedCacheFile](const std::string&) {
     if (!truncatedCacheFile.exchange(true)) {
@@ -1067,16 +1064,17 @@ TEST_F(
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_TRUE(truncatedCacheFile.load())
       << "test setup: generation did not reach the truncation callback";
+  model.reset();
   ASSERT_TRUE(fs::exists(cachePath));
   EXPECT_EQ(fs::file_size(cachePath), 0u)
-      << "stale empty cache file must not be rewritten at terminal save";
+      << "an emptied cache file must not be rewritten at unload";
 
   fs::remove_all(cacheDir);
 }
 
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchUnsavedMissingParentSaveStillThrows) {
+    BatchSaveToMissingParentThrows) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
   const fs::path badCacheDir =
@@ -1087,11 +1085,10 @@ TEST_F(
 
   auto prompt = makePrompt("Write a few words about batch cache failures.");
   prompt.cacheKey = badCachePath.string();
-  prompt.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(prompt)});
 
   try {
-    model->processPromptBatch(
-        std::vector<LlamaModel::Prompt>{std::move(prompt)});
+    model->saveCache(badCachePath.string());
     FAIL() << "expected UnableToSaveSessionFile throw";
   } catch (const qvac_errors::StatusError& e) {
     EXPECT_NE(
@@ -1117,15 +1114,14 @@ TEST_F(
   auto seed = makePrompt("Remember this directory replacement setup.");
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
 
   std::atomic<bool> replacedWithDirectory = false;
   auto followup =
       makePrompt("Write several words after loading the batch cache.");
   followup.cacheKey = cachePath.string();
-  followup.saveCacheToDisk = true;
   followup.outputCallback = [&cachePath,
                              &replacedWithDirectory](const std::string&) {
     if (!replacedWithDirectory.exchange(true)) {
@@ -1133,10 +1129,11 @@ TEST_F(
       fs::create_directory(cachePath);
     }
   };
+  model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(followup)});
 
   try {
-    model->processPromptBatch(
-        std::vector<LlamaModel::Prompt>{std::move(followup)});
+    model->saveCache(cachePath.string());
     FAIL() << "expected UnableToSaveSessionFile throw";
   } catch (const qvac_errors::StatusError& e) {
     EXPECT_NE(
@@ -1150,45 +1147,8 @@ TEST_F(
   fs::remove_all(cachePath);
 }
 
-/// Two prompts in ONE batch that save to the SAME non-empty `cacheKey`
-/// would clobber each other on disk (last-writer-wins, no per-prompt
-/// isolation). The scheduler cannot resolve which writer should win, so
-/// the batch must be rejected up front with `InvalidArgument` rather than
-/// silently corrupting one prompt's cache.
-TEST_F(
-    ContinuousBatchingIntegrationTest, DuplicateSaveCacheKeyInBatchIsRejected) {
-  REQUIRE_MODEL(model_);
-  auto model = loadModel();
-
-  const fs::path shared =
-      fs::temp_directory_path() / ("dupe-shared-" + uniqueTestId() + ".bin");
-
-  auto a = makePrompt("Remember this short setup.");
-  a.cacheKey = shared.string();
-  a.saveCacheToDisk = true;
-  auto b = makePrompt("Say several words about the sky.");
-  b.cacheKey = shared.string();
-  b.saveCacheToDisk = true;
-  std::vector<LlamaModel::Prompt> batch{std::move(a), std::move(b)};
-
-  try {
-    model->processPromptBatch(batch);
-    FAIL() << "expected processPromptBatch to reject duplicate save cacheKey";
-  } catch (const qvac_errors::StatusError& e) {
-    EXPECT_NE(
-        e.codeString().find(
-            toString(qvac_errors::general_error::InvalidArgument)),
-        std::string::npos);
-  }
-
-  // The guard runs before scheduling, so nothing is written to disk.
-  EXPECT_FALSE(fs::exists(shared));
-  fs::remove(shared);
-}
-
-/// Sharing the same non-empty `cacheKey` for READ-only prompts (no
-/// `saveCacheToDisk`) is a legitimate cache-warming pattern and must NOT
-/// be rejected: no writer means no clobber.
+/// Several prompts on the same `cacheKey` in one batch are allowed: they run
+/// one after the other, each continuing from what the previous committed.
 TEST_F(
     ContinuousBatchingIntegrationTest,
     DuplicateReadOnlyCacheKeyInBatchIsAllowed) {
@@ -1202,9 +1162,9 @@ TEST_F(
   auto seed = makePrompt("Remember this short setup.");
   seed.prefill = true;
   seed.cacheKey = shared.string();
-  seed.saveCacheToDisk = true;
   std::vector<LlamaModel::Prompt> seedBatch{std::move(seed)};
   model->processPromptBatch(seedBatch);
+  model->saveCache(shared.string());
   ASSERT_TRUE(fs::exists(shared));
 
   auto a = makePrompt("Say plain text.");
@@ -1233,7 +1193,6 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchCancelUsesPolicyAndSavesCache) {
       "Write several sentences about astronomy so cancellation happens during "
       "generation.");
   cachedPrompt.cacheKey = cachePath.string();
-  cachedPrompt.saveCacheToDisk = true;
   cachedPrompt.outputCallback = [&model, &cancelOnce](const std::string&) {
     bool expected = false;
     if (cancelOnce.compare_exchange_strong(expected, true)) {
@@ -1248,6 +1207,7 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchCancelUsesPolicyAndSavesCache) {
 
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_TRUE(cancelOnce.load());
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
   EXPECT_GT(fs::file_size(cachePath), 0u);
 
@@ -1371,9 +1331,8 @@ TEST_F(
       << "test setup: no token was emitted, so cancel never fired";
 }
 
-/// A live-only prefill (no saveCacheToDisk + cacheKey) inside a batch has no
-/// product that survives the slot teardown: the lane's KV is wiped and no
-/// cache file is written. The same policy that rejects it on the single
+/// A keyless prefill inside a batch has no product that survives the slot
+/// teardown: the lane's KV is wiped and nothing is kept. The same policy that rejects it on the single
 /// tagged path must reject it per batch item, before anything is scheduled.
 TEST_F(
     ContinuousBatchingIntegrationTest, TwoPromptBatchRejectsLiveOnlyPrefill) {
@@ -1400,13 +1359,12 @@ TEST_F(
 
 /// Two-stage batch test for prefill-only + cache lifecycle.
 /// Stage 1: a 2-prompt batch where both slots are `prefill=true` with
-/// distinct `saveCacheToDisk` cache keys. Asserts both outputs are
-/// empty and both cache files are written, exercising the
-/// `onSequenceEnd` -> `saveCache` path on prefill-only slots
-/// concurrently. Stage 2: a follow-up 2-prompt batch with generation
-/// slots keyed by those same cache files. Asserts both follow-ups
-/// produce the expected concrete answers ("Paris", "Moon"), proving
-/// the persisted KV-cache is loadable and usable per-slot.
+/// distinct cache keys, then an explicit `saveCache` of each. Asserts both
+/// outputs are empty and both cache files are written. Stage 2: a follow-up
+/// 2-prompt batch with generation slots keyed by those same
+/// cache files. Asserts both follow-ups produce the expected concrete answers
+/// ("Paris", "Moon"), proving the persisted KV-cache is loadable and usable
+/// per-slot.
 TEST_F(ContinuousBatchingIntegrationTest, PrefillOnlyBatchSavesAndLoadsCache) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
@@ -1420,14 +1378,12 @@ TEST_F(ContinuousBatchingIntegrationTest, PrefillOnlyBatchSavesAndLoadsCache) {
       "The capital of France is Paris. Remember this fact for later use.");
   prefillA.prefill = true;
   prefillA.cacheKey = cachePathA.string();
-  prefillA.saveCacheToDisk = true;
 
   auto prefillB = makePrompt(
       "Earth's natural satellite is the Moon. Remember this fact for later "
       "use.");
   prefillB.prefill = true;
   prefillB.cacheKey = cachePathB.string();
-  prefillB.saveCacheToDisk = true;
 
   std::vector<LlamaModel::Prompt> prefillBatch;
   prefillBatch.push_back(std::move(prefillA));
@@ -1437,6 +1393,8 @@ TEST_F(ContinuousBatchingIntegrationTest, PrefillOnlyBatchSavesAndLoadsCache) {
   ASSERT_EQ(prefillOutputs.size(), 2u);
   EXPECT_TRUE(prefillOutputs[0].empty()) << prefillOutputs[0];
   EXPECT_TRUE(prefillOutputs[1].empty()) << prefillOutputs[1];
+  model->saveCache(cachePathA.string());
+  model->saveCache(cachePathB.string());
   ASSERT_TRUE(fs::exists(cachePathA));
   ASSERT_TRUE(fs::exists(cachePathB));
   EXPECT_GT(fs::file_size(cachePathA), 0u);
@@ -1676,17 +1634,15 @@ TEST_F(
          "lock reacquisition.";
 }
 
-/// A per-slot cancel runs the slot's driver teardown -- onCancel + saveCache --
-/// from the noexcept StepUnlockGuard destructor (a cancel issued in the decode
-/// unlock window is applied on lock reacquisition). When saveCache throws --
-/// here forced by an unwritable cacheKey -- the throw must be swallowed in
-/// place: before the fix it escaped the noexcept destructor and
-/// std::terminate'd the whole process. The batch must instead survive: the
-/// cancelled slot is freed, its group completes, and the sibling sequence still
-/// finishes normally.
+/// A per-slot cancel runs the slot's driver teardown from the noexcept
+/// StepUnlockGuard destructor (a cancel issued in the decode unlock window is
+/// applied on lock reacquisition). A throw there once escaped the destructor
+/// and std::terminate'd the whole process. The batch must instead survive:
+/// the cancelled slot is freed, its keyed conversation is kept, its group
+/// completes, and the sibling sequence still finishes normally.
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    PerSlotCancelSwallowsThrowingDriverTeardown) {
+    PerSlotCancelInTheUnlockWindowKeepsTheBatchRunning) {
   REQUIRE_MODEL(model_);
   config_["parallel"] = "2";
   config_["n_predict"] = "64";
@@ -1726,25 +1682,17 @@ TEST_F(
         return llama_decode(ctx, batch);
       });
 
-  // cacheKey under a directory that does not exist: the atomic temp write
-  // cannot open cacheKey+".tmp", so TextLlmContext::saveCache throws on the
-  // cancel path.
-  const fs::path unwritable = fs::temp_directory_path() /
-                              ("no-such-dir-" + uniqueTestId()) / "cache.bin";
-  ASSERT_FALSE(fs::exists(unwritable.parent_path()))
-      << "precondition: the cacheKey's parent dir must be absent so saveCache "
-         "throws on the cancel path";
+  const fs::path cachePath = fs::temp_directory_path() /
+                             ("per-slot-cancel-" + uniqueTestId() + ".bin");
 
   auto promptA =
       makePrompt("Write a long, detailed paragraph about redwood forests.");
   auto promptB =
       makePrompt("Write a long, detailed paragraph about coral reefs.");
-  promptB.cacheKey = unwritable.string();
-  promptB.saveCacheToDisk = true;
+  promptB.cacheKey = cachePath.string();
   // Arm the cancel as soon as seqId 1 streams its first token: the cancel then
   // lands on the very next decode, leaving essentially no window for the slot
-  // to finish naturally first (which would instead hit the deliberately
-  // throwing normal-completion save path and fail the whole batch).
+  // to finish naturally first.
   promptB.outputCallback = [&seqBTokens, &readyToCancel](const std::string&) {
     seqBTokens.fetch_add(1);
     readyToCancel.store(true);
@@ -1752,7 +1700,7 @@ TEST_F(
 
   std::vector<LlamaModel::Prompt> prompts{
       std::move(promptA), std::move(promptB)};
-  // Returning from this call at all proves the throwing teardown did not
+  // Returning from this call at all proves the teardown did not
   // std::terminate the process.
   auto outputs = model->processPromptBatch(prompts);
 
@@ -1760,12 +1708,15 @@ TEST_F(
   ASSERT_TRUE(cancelIssued.load())
       << "test setup: seqId 1 never reached the cancel arming point";
   ASSERT_TRUE(cancelHitOccupied.load())
-      << "cancel must hit the still-occupied seqId 1 so the throwing saveCache "
-         "teardown actually runs; false means the slot finished first and the "
+      << "cancel must hit the still-occupied seqId 1 so the cancel teardown "
+         "actually runs; false means the slot finished first and the "
          "teardown path was never exercised";
   EXPECT_FALSE(outputs[0].empty())
-      << "sibling sequence (seqId 0) must finish normally despite the throwing "
+      << "sibling sequence (seqId 0) must finish normally despite the "
          "teardown on seqId 1";
+  EXPECT_NO_THROW(model->saveCache(cachePath.string()))
+      << "the cancelled request committed, so its conversation is kept";
+  fs::remove(cachePath);
 }
 
 /// SeqIds are recycled slot indices: when a request drains, the worker frees
@@ -1899,8 +1850,8 @@ std::vector<uint8_t> readFileBytes(const fs::path& path);
 /// A cancelled cached batch request commits what its caller received: the
 /// prompt suffix decoded on top of the warm baseline plus every streamed
 /// token stay resident, `CacheTokens` reports that committed cursor (not the
-/// admission cursor, and not zero from an over-rollback), and with
-/// `saveCacheToDisk` the cache file is rewritten with the committed state.
+/// admission cursor, and not zero from an over-rollback), and an explicit
+/// `saveCache` rewrites the cache file with the committed state.
 ///
 /// The scheduler resets its stats snapshot at admission whenever the queue
 /// is idle, so each `processPromptBatch` call reports CacheTokens for that
@@ -1922,9 +1873,9 @@ TEST_F(
   auto primer = makePrompt(primerInput);
   primer.prefill = true;
   primer.cacheKey = cachePath.string();
-  primer.saveCacheToDisk = true;
   std::vector<LlamaModel::Prompt> primeBatch{std::move(primer)};
   model->processPromptBatch(primeBatch);
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
   const double primeCacheTokens =
       test_common::getStatValue(model->runtimeStats(), "CacheTokens");
@@ -1941,7 +1892,6 @@ TEST_F(
   LlamaModel::Prompt cancelPrompt;
   cancelPrompt.input = continuationInput;
   cancelPrompt.cacheKey = cachePath.string();
-  cancelPrompt.saveCacheToDisk = true;
   cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
     bool expected = false;
     if (cancelIssued.compare_exchange_strong(expected, true)) {
@@ -1960,10 +1910,11 @@ TEST_F(
       << " <= warm baseline " << primeCacheTokens
       << "; the decoded suffix and streamed tokens were not committed";
 
+  model->saveCache(cachePath.string());
   EXPECT_NE(readFileBytes(cachePath), primedCacheBytes)
-      << "a cancelled cached request commits and must persist its state";
+      << "a cancelled cached request commits and saveCache must persist it";
   EXPECT_GT(fs::last_write_time(cachePath), primedCacheTime)
-      << "saveCacheToDisk did not rewrite the cache file after the cancel";
+      << "saveCache did not rewrite the cache file after the cancel";
 
   // The committed state serves the next authoritative turn.
   LlamaModel::Prompt followup;
@@ -2038,9 +1989,9 @@ TEST_F(
   auto primer = makePrompt("Remember these facts: the ocean is deep.");
   primer.prefill = true;
   primer.cacheKey = cachePath.string();
-  primer.saveCacheToDisk = true;
   std::vector<LlamaModel::Prompt> primeBatch{std::move(primer)};
   model->processPromptBatch(primeBatch);
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath))
       << "test setup: primer did not write the cache file";
   const auto primedBytes = readFileBytes(cachePath);
@@ -2064,32 +2015,35 @@ TEST_F(
 
   auto failing = makePrompt("Say two short sentences about the ocean.");
   failing.cacheKey = cachePath.string();
-  failing.saveCacheToDisk = true;
   std::vector<LlamaModel::Prompt> failingBatch{std::move(failing)};
 
   // The batch must surface the decode error rather than complete
-  // silently: if it does complete, `saveCacheForSlot` would fire on the
+  // silently: if it does complete, the slot keeps its state on the
   // graceful path and this test would degrade into checking rollback
-  // fidelity rather than the "no save on error" invariant.
+  // fidelity rather than the "nothing kept on error" invariant.
   EXPECT_ANY_THROW({ (void)model->processPromptBatch(failingBatch); })
       << "decode-error batch must propagate the failure; without the throw "
          "the error-recovery leg is not exercised";
 
-  // Primary invariant: `saveCacheForSlot` never ran on the error
-  // recovery leg. `llama_state_seq_save_file` truncates + rewrites,
-  // so a call — even one that writes the same bytes — bumps mtime.
+  // The error-recovery leg keeps nothing, so an explicit save afterwards has
+  // no unsaved state to write over the last known-good file.
+  EXPECT_NO_THROW(model->saveCache(cachePath.string()));
+
+  // Primary invariant: nothing rewrote the file on the error recovery leg.
+  // `llama_state_seq_save_file` truncates + rewrites, so a call — even one
+  // that writes the same bytes — bumps mtime.
   // GTest cannot stream `file_time_type` on the target SDK, so wrap
   // the comparison in `EXPECT_TRUE` and surface the mtime deltas
   // explicitly in the failure message.
   const auto postFailMtime = fs::last_write_time(cachePath);
   EXPECT_TRUE(postFailMtime == primedMtime)
-      << "CACHE FILE mtime CHANGED on error recovery: saveCacheForSlot ran "
-         "and rewrote the primed cache during a failed batch. mtime delta="
+      << "CACHE FILE mtime CHANGED on error recovery: the failed batch's "
+         "state was kept and rewrote the primed cache. mtime delta="
       << std::chrono::duration_cast<std::chrono::nanoseconds>(
              postFailMtime - primedMtime)
              .count()
       << "ns. cancelSlotLocked must pass SaveCachePolicy::Skip on the "
-         "error-recovery leg so the last known-good cache is preserved.";
+         "error-recovery leg so nothing is kept over the last good cache.";
 
   // Secondary regression guard: even if a future save ever became a
   // no-op-when-bytes-match, this still catches the class of bugs
@@ -2385,8 +2339,8 @@ TEST_F(
 }
 
 // GGSQ unification (sub-tasks 2 + 3): the batch multimodal path must support
-// prompt caching on GGSQ. Today MtmdLlmContext::saveCache throws, so a batched
-// media prompt with saveCacheToDisk writes no cache and this fails. The fixture
+// prompt caching on GGSQ: a batched media prompt's conversation must save and
+// reload. The fixture
 // is Qwen3.5 (M-RoPE, n_pos_per_embd()==4) so a successful save+reload round
 // trip actually exercises per-cell llama_kv_cell_ext (x/y) restore — SmolVLM
 // (n_pos_per_embd()==1) could not. Its image prefill commits far more KV cells
@@ -2443,7 +2397,6 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
   auto savePrompt = makeMediaPrompt();
   savePrompt.prefill = true;
   savePrompt.cacheKey = cachePath.string();
-  savePrompt.saveCacheToDisk = true;
   std::vector<LlamaModel::Prompt> savePrompts;
   savePrompts.push_back(std::move(savePrompt));
 
@@ -2451,6 +2404,7 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
   std::string saveErr;
   try {
     saveModel->processPromptBatch(savePrompts);
+    saveModel->saveCache(cachePath.string());
   } catch (const std::exception& e) {
     saveThrew = true;
     saveErr = e.what();
@@ -2579,7 +2533,7 @@ TEST_F(
 /// a cancelled cached batch request on an M-RoPE hybrid model commits what
 /// its caller received. The image primer, the decoded suffix and the
 /// streamed tokens stay resident, `CacheTokens` reports that committed cursor
-/// rather than the primer, `saveCacheToDisk` rewrites the file, and the next
+/// rather than the primer, `saveCache` rewrites the file, and the next
 /// full-history turn continues from it. (A cancel during prefill still rolls
 /// back; see `MtmdLlmContextCancelTest`.)
 TEST_F(
@@ -2622,9 +2576,9 @@ TEST_F(
   primer.media.push_back(image);
   primer.prefill = true;
   primer.cacheKey = cachePath.string();
-  primer.saveCacheToDisk = true;
   std::vector<LlamaModel::Prompt> primeBatch{std::move(primer)};
   model->processPromptBatch(primeBatch);
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath));
   const double primeCacheTokens =
       test_common::getStatValue(model->runtimeStats(), "CacheTokens");
@@ -2640,7 +2594,6 @@ TEST_F(
       R"({"role":"user","content":"Continue the description with a short sentence."}])";
   cancelPrompt.media.push_back(image);
   cancelPrompt.cacheKey = cachePath.string();
-  cancelPrompt.saveCacheToDisk = true;
   cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
     bool expected = false;
     if (cancelIssued.compare_exchange_strong(expected, true)) {
@@ -2658,8 +2611,9 @@ TEST_F(
       << "cancelled batch reported CacheTokens=" << cancelledCacheTokens
       << " <= image primer " << primeCacheTokens
       << "; the decoded suffix and streamed tokens were not committed";
+  model->saveCache(cachePath.string());
   EXPECT_NE(readFileBytes(cachePath), primedCacheBytes)
-      << "a cancelled cached request commits and must persist its state";
+      << "a cancelled cached request commits and saveCache must persist it";
 
   LlamaModel::Prompt followup;
   followup.input =
@@ -2694,8 +2648,8 @@ TEST_F(
   auto savePrompt = makePrompt("The capital of France is Paris.");
   savePrompt.prefill = true;
   savePrompt.cacheKey = cachePath.string();
-  savePrompt.saveCacheToDisk = true;
   ASSERT_NO_THROW(model->processPrompt(savePrompt));
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   ASSERT_TRUE(fs::exists(cachePath));
 
   // Batch text load of that same ledger-bearing file via the per-slot path.

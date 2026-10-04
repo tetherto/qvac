@@ -47,17 +47,6 @@ using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 
-/// @brief Persist the active KV cache to disk when the caller opted in via
-/// `saveCacheToDisk`. Shared by the prefill and post-generation paths so
-/// both honour the option identically. No-op when no cache is active.
-static void maybeSaveCacheToDisk(
-    bool saveCacheToDisk, std::optional<CacheManager>& cacheManager) {
-  if (saveCacheToDisk && cacheManager.has_value() &&
-      cacheManager->hasActiveCache()) {
-    cacheManager->saveCache();
-  }
-}
-
 void LlamaModel::resolveShardPaths(
     GGUFShards& shards, const std::string& modelPath) {
   if (shards.gguf_files.empty())
@@ -101,11 +90,9 @@ void LlamaModel::reload(
 LlamaModel::~LlamaModel() {
   cancelInference();
   std::unique_lock lock(stateMtx_);
-  // Writing unsaved conversations at unload is part of the RAM tier's
-  // write-back contract. Without the tier nothing is written at unload, as
-  // before: a conversation's file is only written by the saves the caller
-  // controls (saveCacheToDisk, a key switch, a keyless request).
-  if (state_ && state_->ramTier_ && state_->ramTier_->enabled()) {
+  // A clean unload writes every conversation with unsaved turns, except the
+  // ephemeral ones, so only a crash or a kill loses what was only in memory.
+  if (state_) {
     flushResidentCaches();
   }
 }
@@ -685,10 +672,10 @@ bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
     return false;
   }
   // A prefill earns a lane exactly when its product survives the slot
-  // teardown: the cache file persisted under its key. A live-only prefill's
-  // product is warm state in the shared single context, which a lane wipes.
-  return !prompt.prefill ||
-         (prompt.saveCacheToDisk && !prompt.cacheKey.empty());
+  // teardown: a keyed conversation stays in its sequence for the next request
+  // on that key. A keyless prefill's product is warm state in the shared
+  // single context, which a lane wipes.
+  return !prompt.prefill || !prompt.cacheKey.empty();
 }
 
 std::any LlamaModel::process(
@@ -780,9 +767,9 @@ std::any LlamaModel::process(
           throw qvac_errors::StatusError(
               ADDON_ID,
               toString(qvac_errors::general_error::InvalidArgument),
-              "prefill without saveCacheToDisk and a cacheKey cannot run on "
-              "a parallel model: its warmed context is unreachable by "
-              "concurrent jobs; persist the cache or load with parallel=1");
+              "prefill without a cacheKey cannot run on a parallel model: "
+              "its warmed context is unreachable by concurrent jobs; set a "
+              "cacheKey or load with parallel=1");
         }
       }
       return processSinglePath();
@@ -1119,7 +1106,8 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         [this](const std::string& inputPrompt) {
           return this->formatPrompt(inputPrompt);
         },
-        prompt.cacheKey);
+        prompt.cacheKey,
+        prompt.ephemeral);
     validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
@@ -1142,6 +1130,9 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 }
 
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
+  // Held for the whole request so an explicit `saveCache` waits for it and
+  // writes its committed result, never a request in progress.
+  std::scoped_lock singleRunLock(singleRunMtx_);
   activeSingleJobs_.fetch_add(1);
   ScopeGuard jobGuard([this] { activeSingleJobs_.fetch_sub(1); });
   state_->lastRun_.store(
@@ -1198,7 +1189,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     }
   };
 
-  bool shouldSaveCache = false;
   bool shouldResetAfterInference = false;
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
@@ -1262,7 +1252,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       // On prefill no logits are read, so nothing else waits for the queued
       // decodes before the caller reads runtimeStats() or the cache is saved.
       llama_synchronize(state_->llmContext_->getCtx());
-      shouldSaveCache = true;
     } else {
       std::ostringstream oss;
       auto callback = prompt.outputCallback;
@@ -1285,12 +1274,10 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       }
 
       if (generationResult.rollbackOk) {
-        shouldSaveCache = state_->llmContext_->shouldPersistAfterFinalize();
         shouldResetAfterInference = resolved.shouldResetAfterInference;
       } else {
         // The driver could not prove the live recurrent state was rolled back
-        // to the pre-request cursor. Skipping this prompt's save protects the
-        // file immediately, but the active cache session must also be dropped:
+        // to the pre-request cursor. The active cache session must be dropped:
         // otherwise a later same-key prompt could reuse dirty live state, or a
         // cache-key transition could save that dirty state under the old key.
         resetAndInvalidateActiveCache();
@@ -1307,22 +1294,69 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     throw;
   }
 
-  if (shouldSaveCache) {
-    try {
-      maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
-    } catch (...) {
-      // The request completed, but the active cache key could not be flushed.
-      // Drop both live state and the active cache session so the next prompt
-      // does not retry the same failing path or keep using an unsaved session.
-      resetAndInvalidateActiveCache();
-      throw;
-    }
-  }
-
   if (shouldResetAfterInference) {
     resetState(false);
   }
   return out;
+}
+
+void LlamaModel::saveCache(const std::string& cacheKey) {
+  if (cacheKey.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "saveCache: cacheKey must be a non-empty string");
+  }
+  std::shared_lock lock(stateMtx_);
+  if (!state_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "saveCache: the model is not loaded");
+  }
+  using Outcome = batching::SlotStateCache::SaveOutcome;
+  Outcome outcome = Outcome::NotHere;
+  if (state_->batchScheduler_) {
+    // Parked sequences and the RAM tier, written by the scheduler's worker
+    // between decode steps.
+    outcome = state_->batchScheduler_->saveConversation(cacheKey);
+  }
+  if (outcome == Outcome::NotHere) {
+    // The single-prompt session. On a parallel model it shares the context
+    // with the scheduler, so it is only read while no batch job runs (the
+    // first batch job invalidates it under the same lock).
+    std::scoped_lock singleRunLock(singleRunMtx_);
+    if (state_->cacheManager_.has_value() &&
+        (!state_->batchScheduler_ || activeBatchJobs_.load() == 0)) {
+      switch (state_->cacheManager_->saveForCaller(cacheKey)) {
+      case CacheManager::SaveOutcome::Written:
+        outcome = Outcome::Written;
+        break;
+      case CacheManager::SaveOutcome::Current:
+        outcome = Outcome::Current;
+        break;
+      case CacheManager::SaveOutcome::NotHere:
+        break;
+      }
+    }
+    // The scheduler already looked in the RAM tier it shares.
+    if (outcome == Outcome::NotHere && state_->ramTier_ &&
+        !state_->batchScheduler_) {
+      outcome = state_->ramTier_->save(cacheKey);
+    }
+  }
+  if (outcome != Outcome::NotHere) {
+    return;
+  }
+  // Nothing in memory: fine when the file already holds the conversation.
+  std::error_code ec;
+  if (std::filesystem::file_size(cacheKey, ec) > 0 && !ec) {
+    return;
+  }
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(qvac_errors::general_error::InvalidArgument),
+      "saveCache: no conversation is cached under '" + cacheKey + "'");
 }
 
 std::vector<std::string>
@@ -1372,6 +1406,8 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     // flight the scheduler owns the live KV slots, and an unconditional wipe
     // here would clear that active job's sequences before its own admission.
     if (priorBatchJobs == 0) {
+      // An explicit saveCache may be reading the single-prompt session.
+      std::scoped_lock singleRunLock(singleRunMtx_);
       if (state_->cacheManager_.has_value()) {
         state_->cacheManager_->invalidate();
       }
@@ -1418,35 +1454,8 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
 
   std::vector<batching::SubmitRequest> requests;
   requests.reserve(prompts.size());
-  // This call's cacheKey reservations, released when the run returns (any
-  // path). Reserving in the shared inflightSaveKeys_ set refuses both a
-  // duplicate inside this batch and a concurrent caller saving the same key —
-  // either would race two writers on one file.
-  std::unordered_set<std::string> saveCacheKeys;
-  ScopeGuard keysGuard([this, &saveCacheKeys] {
-    if (saveCacheKeys.empty()) {
-      return;
-    }
-    std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
-    for (const auto& key : saveCacheKeys) {
-      inflightSaveKeys_.erase(key);
-    }
-  });
   for (size_t i = 0; i < prompts.size(); i++) {
     const Prompt& prompt = prompts[i];
-    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty()) {
-      std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
-      if (!inflightSaveKeys_.insert(prompt.cacheKey).second) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            toString(qvac_errors::general_error::InvalidArgument),
-            "processPromptBatch: cacheKey '" + prompt.cacheKey +
-                "' is already being saved by an in-flight request; "
-                "concurrent saves would overwrite each other — use a "
-                "distinct key per save");
-      }
-      saveCacheKeys.insert(prompt.cacheKey);
-    }
     if (!prompt.media.empty() && state_->isTextLlm_) {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -1459,17 +1468,16 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: finetuning is not a batch processing operation");
     }
-    // Same live-only prefill policy as the single-prompt path: batch items
-    // always run in scheduler lanes, and a lane wipes its warmed KV at
-    // teardown, so a prefill without persistence produces nothing reachable.
+    // Same keyless prefill policy as the single-prompt path: batch items
+    // always run in scheduler lanes, and a lane wipes a keyless request's
+    // warmed KV at teardown, so it would produce nothing reachable.
     if (!isConcurrentEligible(prompt)) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
-          "processPromptBatch: prefill without saveCacheToDisk and a "
-          "cacheKey cannot run on a parallel model: its warmed context is "
-          "unreachable by concurrent jobs; persist the cache or load with "
-          "parallel=1");
+          "processPromptBatch: prefill without a cacheKey cannot run on a "
+          "parallel model: its warmed context is unreachable by concurrent "
+          "jobs; set a cacheKey or load with parallel=1");
     }
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {
@@ -1491,7 +1499,7 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     sr.mediaPlan = std::move(parsed.mediaPlan);
     sr.prefill = prompt.prefill;
     sr.cacheKey = prompt.cacheKey;
-    sr.saveCacheToDisk = prompt.saveCacheToDisk;
+    sr.ephemeral = prompt.ephemeral;
     sr.overrides = prompt.generationParams;
     // `seen` fires the seq observer exactly once per slot: at admission
     // (onAdmitted), with onToken/onDone as a fallback latch. Only the

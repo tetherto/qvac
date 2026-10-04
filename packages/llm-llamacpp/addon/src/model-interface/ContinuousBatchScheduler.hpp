@@ -7,6 +7,7 @@
 #include <deque>
 #include <exception>
 #include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -141,7 +142,9 @@ struct SubmitRequest {
   std::vector<PlannedMedia> mediaPlan;
   bool prefill = false;
   std::string cacheKey;
-  bool saveCacheToDisk = false;
+  /// Keep the conversation in memory only: an eviction or an unload drops it
+  /// instead of writing its `cacheKey` file. Only `saveCache` writes it.
+  bool ephemeral = false;
   /// Per-request sampling/generation overrides on top of the scheduler's
   /// baseline `common_params_sampling` + `n_predict`. When empty the
   /// slot reuses its pre-built base sampler; otherwise the scheduler
@@ -399,9 +402,18 @@ public:
   /// budget disables it. Resident slots do not depend on it.
   void setRamTier(std::shared_ptr<SlotStateCache> ramTier);
 
-  /// Writes every parked conversation with unsaved turns to its `cacheKey`
-  /// file. Run when the model is unloaded; skipped while a slot is decoding.
+  /// Writes every parked, non-ephemeral conversation with unsaved turns to
+  /// its `cacheKey` file. Run when the model is reloaded or unloaded; skipped
+  /// while a slot is decoding.
   void flushForUnload();
+
+  /// The caller's explicit save (`saveCache`): writes the conversation kept
+  /// for `cacheKey`, parked in a sequence or in the RAM tier, to its file
+  /// unless the file already holds it. Runs on the worker between decode
+  /// steps, after any request running on that key has finished, so it always
+  /// writes a committed state. Blocks until done; a failed write throws
+  /// `UnableToSaveSessionFile` and keeps the conversation, still unsaved.
+  SlotStateCache::SaveOutcome saveConversation(const std::string& cacheKey);
 
   /// Sequences that hold a parked conversation (a committed keyed request's
   /// state kept for the next request on its `cacheKey`).
@@ -536,17 +548,12 @@ private:
     std::string cacheKey;
     std::shared_ptr<BatchGroup> group;
     size_t outputIndex = 0;
-    bool saveCacheToDisk = false;
+    bool ephemeral = false;
     bool activeCacheSavedToDisk = false;
     bool prefillOnly = false;
     /// Set at finalize: the request committed coherent keyed state, so
     /// `freeSlot` parks the sequence instead of it being cleared.
     bool parkable = false;
-    /// This commit wrote the `cacheKey` file.
-    bool savedThisCommit = false;
-    /// The save found the file the state came from deleted; like the
-    /// single-prompt path, the caller's deletion drops the conversation.
-    bool backingStoreDropped = false;
     /// Carried from SubmitRequest so the drain can compute observed stats.
     std::chrono::steady_clock::time_point enqueuedAt{};
     /// Ownership token for this admission, strictly incrementing across the
@@ -620,18 +627,18 @@ private:
       std::exception_ptr error) noexcept;
   void cancelPendingLocked();
   void clearLocked() noexcept;
-  /// Persistence policy for `cancelSlotLocked`. `Save` is the default and
-  /// matches the graceful-cancel semantics that the drain path already
-  /// runs: on cancel during generation, `onCancel` commits the cached
-  /// request's prompt and streamed tokens and `saveCacheForSlot` persists
-  /// that committed state so the caller's `cacheKey` resumes from it.
+  /// Policy for `cancelSlotLocked`. `Save` is the default and matches the
+  /// graceful-cancel semantics that the drain path already runs: on cancel
+  /// during generation, `onCancel` commits the cached request's prompt and
+  /// streamed tokens, and the slot keeps that committed state for the
+  /// caller's `cacheKey`.
   ///
   /// `Skip` is the error-recovery variant: after an unexpected driver
   /// throw the slot's live memory and logical accounting are already
   /// unhealthy (for example after a refused recurrent-state restore).
-  /// Saving in that state would silently overwrite the user's previous
+  /// Keeping that state would let a later write overwrite the user's
   /// on-disk cache with an inconsistent/empty state, so error-recovery
-  /// callers pass `Skip` to preserve the last known-good file.
+  /// callers pass `Skip` and the sequence is cleared.
   enum class SaveCachePolicy { Save, Skip };
 
   /// Tear down a single slot (cancel path). `noexcept`: callers run it from
@@ -669,6 +676,15 @@ private:
   bool writeStateToFileLocked(
       uint32_t seqId, const std::string& cacheKey,
       const std::vector<llama_token>& ledgerWords) noexcept;
+  /// Throwing variant for the caller's explicit save.
+  void writeStateToFileOrThrowLocked(
+      uint32_t seqId, const std::string& cacheKey,
+      const std::vector<llama_token>& ledgerWords);
+  /// Runs the explicit saves whose key has no request in a slot.
+  void serviceSaveJobsLocked() noexcept;
+  [[nodiscard]] bool hasRunnableSaveJobLocked() const noexcept;
+  /// Fails every pending explicit save (the scheduler is being torn down).
+  void failSaveJobsLocked() noexcept;
   /// Fails every key-deferred request's group with a `Cancelled` error.
   void cancelKeyDeferredLocked() noexcept;
   /// Remove every KV-cache cell owned by `seqId` from the shared context.
@@ -678,7 +694,6 @@ private:
   std::function<void(const std::string&)>
   getOutputCallback(SlotState& slot, uint32_t seqId);
   std::function<bool(const Request&)> hasValidDriverF() const;
-  void saveCacheForSlot(uint32_t seqId, SlotState& slot);
   void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
 
   LlmModelContext shared_;
@@ -739,6 +754,7 @@ private:
     /// Has turns its `cacheKey` file does not hold yet.
     bool dirty = false;
     bool activeCacheSavedToDisk = false;
+    bool ephemeral = false;
     uint64_t lastUse = 0;
   };
   std::vector<std::optional<ParkedState>> parked_;
@@ -748,6 +764,12 @@ private:
   /// `keyDeferred_` so each key is served in order and never forks.
   std::unordered_set<std::string> busyKeys_;
   std::deque<QueuedRequest> keyDeferred_;
+  /// Explicit saves waiting for the worker (see `saveConversation`).
+  struct SaveJob {
+    std::string cacheKey;
+    std::promise<SlotStateCache::SaveOutcome> done;
+  };
+  std::deque<std::shared_ptr<SaveJob>> saveJobs_;
   uint64_t residentHits_ = 0;
   uint64_t ramTierHits_ = 0;
   bool teardownDeferred_ = false;

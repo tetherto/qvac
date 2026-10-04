@@ -1,6 +1,10 @@
 #include <any>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <future>
+#include <thread>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -233,8 +237,8 @@ TEST_F(CacheManagementTest, PredictionLimitGenerationCommitsCache) {
   seed.input = history;
   seed.prefill = true;
   seed.cacheKey = session1_path;
-  seed.saveCacheToDisk = true;
   ASSERT_TRUE(model->processPrompt(seed).empty());
+  model->saveCache(session1_path);
   ASSERT_TRUE(fs::exists(session1_path));
   const double seededTokens =
       getStatValue(model->runtimeStats(), "CacheTokens");
@@ -861,9 +865,9 @@ TEST_F(CacheManagementTest, SameKeyAfterCacheFileDeletedStartsFresh) {
   prompt.prefill = true;
   prompt.input = R"([{"role": "user", "content": "Hi."}])";
   prompt.cacheKey = deleted_cache_path;
-  prompt.saveCacheToDisk = true;
 
   EXPECT_NO_THROW({ model->processPrompt(prompt); });
+  EXPECT_NO_THROW({ model->saveCache(deleted_cache_path); });
 
   const llama_pos secondNPast = llama_memory_seq_pos_max(mem, 0) + 1;
   EXPECT_GT(secondNPast, 0);
@@ -1042,7 +1046,7 @@ TEST_F(CacheManagementTest, HandleCacheSwitchFailureInvalidatesState) {
   fs::create_directories(bad_path_b);
 
   // Prime the CacheManager with a directory path. No write yet
-  // (saveCacheToDisk=false) — this just registers sessionPath_.
+  // (no saveCache) — this just registers sessionPath_.
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
         model, R"([{"role": "user", "content": "hi"}])", bad_path_a, false);
@@ -1196,9 +1200,9 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
   EXPECT_NO_THROW({
     LlamaModel::Prompt prompt;
     prompt.input = R"([{"role": "user", "content": "What is bitcoin?"}])";
-    prompt.saveCacheToDisk = true;
     model->processPrompt(prompt);
   });
+  EXPECT_THROW(model->saveCache(""), qvac_errors::StatusError);
 
   EXPECT_FALSE(fs::exists(session1_path));
 
@@ -1407,7 +1411,6 @@ TEST(CacheSlidingWindowTest, DivergenceBehindTheWindowMatchesAColdRun) {
   primer.input = slidingWindowBrief(-1);
   primer.prefill = true;
   primer.cacheKey = cacheFile.string();
-  primer.saveCacheToDisk = true;
   EXPECT_TRUE(cached->processPrompt(primer).empty());
 
   LlamaModel::Prompt edited;
@@ -1885,7 +1888,6 @@ TEST(CacheHistoryCheckpointTest, BatchedHybridThinkingChatReusesTheHistory) {
     LlamaModel::Prompt prompt;
     prompt.input = input;
     prompt.cacheKey = cacheFile.string();
-    prompt.saveCacheToDisk = true;
     bool read = false;
     prompt.outputCallback = [&](const std::string&) {
       if (!read && driver != nullptr) {
@@ -1980,12 +1982,11 @@ public:
 
   BatchedTurn
   run(const std::string& input, const std::string& cacheKey,
-      bool saveCacheToDisk = false) {
+      bool saveAfter = false) {
     BatchedTurn turn;
     LlamaModel::Prompt prompt;
     prompt.input = input;
     prompt.cacheKey = cacheKey;
-    prompt.saveCacheToDisk = saveCacheToDisk;
     bool read = false;
     prompt.outputCallback = [&](const std::string&) {
       if (!read && driver_ != nullptr) {
@@ -1995,6 +1996,9 @@ public:
     };
     const auto outputs = model_.processPromptBatch({prompt});
     turn.output = outputs.empty() ? std::string() : outputs.front();
+    if (saveAfter) {
+      model_.saveCache(cacheKey);
+    }
     return turn;
   }
 
@@ -2020,7 +2024,7 @@ std::string userTurns(const std::vector<std::string>& turns) {
 
 } // namespace
 
-// Without saveCacheToDisk the batch path used to wipe the slot after every
+// The batch path used to wipe the slot after every
 // request, so a follow-up re-prefilled the whole conversation. The committed
 // state now stays parked in its sequence for the next request on its key.
 TEST(BatchedCacheResidencyTest, FollowUpReusesTheParkedSlotWithoutAFile) {
@@ -2152,7 +2156,7 @@ TEST(BatchedCacheResidencyTest, DeletedBackingFileDropsTheParkedState) {
   fs::remove(key);
 
   const BatchedTurn first =
-      harness.run(userTurns({"Name a fruit."}), key, /*saveCacheToDisk=*/true);
+      harness.run(userTurns({"Name a fruit."}), key, /*saveAfter=*/true);
   ASSERT_TRUE(fs::exists(key));
   fs::remove(key);
 
@@ -2394,4 +2398,213 @@ TEST(BatchedCacheResidencyTest, ReloadWritesParkedConversationsToTheirFiles) {
   EXPECT_TRUE(fs::exists(key)) << "the reload dropped the parked conversation";
   model.reset();
   fs::remove(key);
+}
+
+// ---------------------------------------------------------------------------
+// Explicit saveCache, ephemeral conversations, and the unload flush.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+LlamaModel::Prompt keyedPrompt(
+    const std::string& input, const std::string& key, bool ephemeral = false) {
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  prompt.cacheKey = key;
+  prompt.ephemeral = ephemeral;
+  return prompt;
+}
+
+} // namespace
+
+// A clean unload writes a conversation's unsaved turns, with or without the
+// RAM tier, so only a crash loses what was only in memory.
+TEST(ExplicitSaveTest, UnloadWritesUnsavedTurnsWithoutTheRamTier) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string key = "unload_flush_single.bin";
+  fs::remove(key);
+  {
+    auto model = loadSinglePromptModel(nullptr);
+    ASSERT_TRUE(model->isLoaded());
+    runSingle(*model, userTurns({"Say one word: apple."}), key);
+    EXPECT_FALSE(fs::exists(key)) << "nothing asked for the file yet";
+  }
+  EXPECT_TRUE(fs::exists(key)) << "the unload dropped the unsaved turns";
+  fs::remove(key);
+}
+
+// `saveCache` writes the active conversation, is a no-op when its file is
+// current, and refuses a key nothing is cached under.
+TEST(ExplicitSaveTest, SinglePromptSaveCacheWritesOnlyWhatIsUnsaved) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string key = "explicit_save_single.bin";
+  const std::string unknown = "explicit_save_unknown.bin";
+  fs::remove(key);
+  fs::remove(unknown);
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+
+  EXPECT_THROW(model->saveCache(unknown), qvac_errors::StatusError);
+  EXPECT_THROW(model->saveCache(""), qvac_errors::StatusError);
+
+  runSingle(*model, userTurns({"Say one word: apple."}), key);
+  ASSERT_NO_THROW(model->saveCache(key));
+  ASSERT_TRUE(fs::exists(key));
+  const auto written = fs::last_write_time(key);
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  ASSERT_NO_THROW(model->saveCache(key));
+  EXPECT_TRUE(fs::last_write_time(key) == written)
+      << "a conversation with no unsaved turns was written again";
+
+  // Only on disk now (another key is active): still a no-op, not an error.
+  runSingle(*model, userTurns({"Say one word: pear."}), unknown);
+  EXPECT_NO_THROW(model->saveCache(key));
+  model.reset();
+  fs::remove(key);
+  fs::remove(unknown);
+}
+
+// An ephemeral conversation is never written automatically: a key switch
+// drops it and an unload does not write it, but an explicit save still does.
+TEST(ExplicitSaveTest, SinglePromptEphemeralConversationIsNeverWritten) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string a = "ephemeral_single_a.bin";
+  const std::string b = "ephemeral_single_b.bin";
+  for (const auto& key : {a, b}) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadSinglePromptModel(nullptr);
+    ASSERT_TRUE(model->isLoaded());
+    const std::string first = userTurns({"Say one word: apple."});
+    ASSERT_FALSE(model->processPrompt(keyedPrompt(first, a, true)).empty());
+    ASSERT_FALSE(model->processPrompt(keyedPrompt(first, b, true)).empty());
+    EXPECT_FALSE(fs::exists(a)) << "the key switch wrote an ephemeral chat";
+
+    // Switching back starts cold: the ephemeral chat was dropped.
+    const SingleTurn back = runSingle(*model, first, a);
+    EXPECT_EQ(back.reuse, 0u);
+
+    // b stays active and ephemeral; an explicit save still writes it.
+    ASSERT_FALSE(model->processPrompt(keyedPrompt(first, b, true)).empty());
+    ASSERT_NO_THROW(model->saveCache(b));
+    EXPECT_TRUE(fs::exists(b));
+    fs::remove(b);
+    ASSERT_FALSE(model->processPrompt(keyedPrompt(first, b, true)).empty());
+  }
+  EXPECT_FALSE(fs::exists(b)) << "the unload wrote an ephemeral chat";
+  for (const auto& key : {a, b}) {
+    fs::remove(key);
+  }
+}
+
+// On the batch path `saveCache` writes the parked conversation, and a second
+// call is a no-op.
+TEST(ExplicitSaveTest, BatchSaveCacheWritesTheParkedConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::string key = "explicit_save_batch.bin";
+  fs::remove(key);
+
+  const BatchedTurn first = harness.run(userTurns({"Name a fruit."}), key);
+  ASSERT_EQ(harness.scheduler().parkedSeqIds().size(), 1u);
+  ASSERT_NO_THROW(model->saveCache(key));
+  ASSERT_TRUE(fs::exists(key));
+  const auto written = fs::last_write_time(key);
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  ASSERT_NO_THROW(model->saveCache(key));
+  EXPECT_TRUE(fs::last_write_time(key) == written)
+      << "a parked conversation with no unsaved turns was written again";
+
+  // The written file loads on another model and continues the chat.
+  auto other = loadBatchedModel();
+  BatchedCacheHarness otherHarness(*other);
+  const BatchedTurn followUp = otherHarness.run(
+      userTurns({"Name a fruit.", first.output, "Another one."}), key);
+  EXPECT_GT(followUp.reuse, 0u);
+  other.reset();
+  model.reset();
+  fs::remove(key);
+}
+
+// `saveCache` on a key whose request is still running waits for it to end
+// and writes what it committed.
+TEST(ExplicitSaveTest, BatchSaveCacheWaitsForTheRunningRequest) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  const std::string key = "explicit_save_waits.bin";
+  fs::remove(key);
+
+  std::atomic<bool> streaming{false};
+  std::atomic<int64_t> lastTokenNs{0};
+  LlamaModel::Prompt prompt =
+      keyedPrompt(userTurns({"Count from one to twenty."}), key);
+  prompt.outputCallback = [&](const std::string&) {
+    streaming.store(true);
+    lastTokenNs.store(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+  };
+  auto run = std::async(std::launch::async, [&] {
+    return model->processPromptBatch({prompt});
+  });
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(60);
+  while (!streaming.load() && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(streaming.load()) << "the request never streamed";
+  ASSERT_NO_THROW(model->saveCache(key));
+  const int64_t savedNs =
+      std::chrono::steady_clock::now().time_since_epoch().count();
+  EXPECT_LE(lastTokenNs.load(), savedNs)
+      << "saveCache returned before the request's last token";
+  ASSERT_EQ(run.wait_for(std::chrono::seconds(60)), std::future_status::ready);
+  EXPECT_FALSE(run.get().front().empty());
+  EXPECT_TRUE(fs::exists(key));
+  model.reset();
+  fs::remove(key);
+}
+
+// An ephemeral batch conversation is dropped when its slot is evicted,
+// instead of being written to its file.
+TEST(ExplicitSaveTest, BatchEphemeralConversationIsDroppedOnEviction) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "ephemeral_evict_a.bin", "ephemeral_evict_b.bin",
+      "ephemeral_evict_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadBatchedModel();
+    ASSERT_TRUE(model->isLoaded());
+    for (size_t i = 0; i < keys.size(); ++i) {
+      const auto outputs = model->processPromptBatch({keyedPrompt(
+          userTurns({"Say one word: " + std::to_string(i) + "."}),
+          keys[i],
+          true)});
+      ASSERT_EQ(outputs.size(), 1u);
+    }
+    EXPECT_FALSE(fs::exists(keys[0]))
+        << "the eviction wrote an ephemeral conversation";
+  }
+  for (const auto& key : keys) {
+    EXPECT_FALSE(fs::exists(key)) << key << " was written at unload";
+    fs::remove(key);
+  }
 }

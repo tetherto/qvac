@@ -39,7 +39,7 @@ public:
   bool handleCache(
       ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
       std::function<ParsedPromptPayload(const std::string&)> formatPrompt,
-      const std::string& cacheKey = "");
+      const std::string& cacheKey = "", bool ephemeral = false);
 
   bool loadCache();
   void saveCache();
@@ -60,9 +60,17 @@ public:
       std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
           ramTier);
 
-  /// Writes the active conversation to its file if it has unsaved turns. Run
-  /// when the model is unloaded.
+  /// Writes the active conversation to its file if it has unsaved turns and
+  /// is not ephemeral. Run when the model is reloaded or unloaded.
   void flushForUnload();
+
+  enum class SaveOutcome { NotHere, Written, Current };
+
+  /// The caller's explicit save (`saveCache`): writes the active conversation
+  /// to its file when it is `cacheKey` and the file does not already hold it,
+  /// ephemeral or not. A failed write throws `UnableToSaveSessionFile` and
+  /// keeps the conversation, still marked unsaved.
+  SaveOutcome saveForCaller(const std::string& cacheKey);
 
 private:
   void saveActiveCacheForTransition();
@@ -92,6 +100,10 @@ private:
   /// The active conversation has turns its file does not hold. Set whenever a
   /// keyed request runs on it, cleared by a save or a load.
   bool activeCacheDirty_ = false;
+  /// The active conversation's last request set `ephemeral`: it is never
+  /// written automatically, so setting it aside drops it (or moves it to the
+  /// RAM tier, which drops it in turn).
+  bool activeEphemeral_ = false;
   std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
       ramTier_;
 };
