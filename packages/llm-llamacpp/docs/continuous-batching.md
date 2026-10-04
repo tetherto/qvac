@@ -299,7 +299,7 @@ Lifecycle methods in call order:
 | `onGenerationFinished` | Natural EOG | Flushes UTF-8 buffer |
 | `onCancel` | User cancel or decode error | Flushes UTF-8 buffer; called before KV clear |
 | `onSequenceEnd` | Every terminal path | Flushes remaining UTF-8 buffer |
-| `saveCache` | Before KV clear | Persists KV cache to disk if `saveCacheToDisk` is set. `drainFinishedLocked` calls `saveCacheForSlot` and only then `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
+| `saveCache` | Before the slot is parked or cleared | Persists the sequence state to disk if the request committed with `saveCacheToDisk` (skipped, and the conversation dropped, when its loaded file was deleted). `drainFinishedLocked` calls `saveCacheForSlot` and only then parks the slot or calls `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
 | `releaseCheckpoints` | When the slot is freed | Hands the driver's checkpoints back to the scheduler, keyed by `cacheKey`, for the next request on it |
 
 On the batch path a driver records a sampled token in its ledger only once the next `syncPosition` shows the scheduler decoded it. A sample that is never fed (a terminal token, or a cancel before the next step) therefore never reaches the ledger, and a committed or saved cache always describes exactly the memory it holds.
@@ -409,7 +409,9 @@ A committed keyed request no longer leaves an empty slot, though. `freeSlot` **p
 - **RAM tier:** with `cache_ram_mib` set, the full sequence state moves into `SlotStateCache`, unsaved turns included. The store is shared with the single-prompt path's key switches, follows llama-server's `--cache-ram` rules, and writes an entry's unsaved turns to its file before dropping it.
 - **No RAM tier:** unsaved turns are written to K's file (`llama_state_seq_save_file` through a temp file), the same auto-save the single-prompt path does on a key switch.
 
-`flushForUnload()` writes every parked conversation with unsaved turns to its file. The model calls it, together with the single-prompt session and RAM tier flushes, before a reload, and before it is destroyed when the RAM tier is enabled.
+`flushForUnload()` writes every parked conversation with unsaved turns to its file (it is skipped, with a warning, while a batch request is running). The model calls it, together with the single-prompt session and RAM tier flushes, before a reload, and before it is destroyed when the RAM tier is enabled.
+
+Every disk write on this path, and its failure behaviour, is listed in [How the `cacheKey` file is written](cache-lifecycle.md#how-the-cachekey-file-is-written).
 
 At admission the driver takes the state from the first source that has it: the parked sequence (`adoptResidentState`, which runs the same validation as a file load), the RAM tier (`llama_state_seq_set_data_ext`, then `adoptResidentState`), or the file (`loadCache`). If admission fails after adopting a conversation with unsaved turns, the driver rolls back (`onFailure`) and the conversation is parked again. Model-level exceptions:
 

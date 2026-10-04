@@ -252,10 +252,17 @@ const model = new LlmLlamacpp({
 
 ## Save the cache to disk
 
-`saveCacheToDisk: true` writes the full in-memory KV cache state to the
-`cacheKey` file once the request commits (see [Commit and
+`saveCacheToDisk: true` writes the conversation's full in-memory state (KV
+cache, plus the recurrent state on hybrid and recurrent models) and its cache
+ledger to the `cacheKey` file once the request commits (see [Commit and
 rollback](#commit-and-rollback)). A request that rolls back leaves the file as
-it was.
+it was. Checkpoints are never written to the file.
+
+Every write goes to `<cacheKey>.tmp` first and then replaces `<cacheKey>` in
+one rename, so a crash or a failed write never leaves a half-written file.
+[How the `cacheKey` file is
+written](cache-lifecycle.md#how-the-cachekey-file-is-written) lists every
+write on both paths in detail.
 
 ```js
 await model.run(
@@ -264,20 +271,49 @@ await model.run(
 )
 ```
 
-Without `saveCacheToDisk`, the cache stays in RAM. Without the [RAM
-tier](#keep-switched-away-conversations-in-ram) it is only written to disk
-automatically in these cases:
+Without `saveCacheToDisk`, the cache stays in RAM. A conversation's file is
+written automatically only when the conversation would otherwise be lost and
+it has turns the file does not hold yet ("unsaved turns": a request ran on it
+since its file was last written or loaded).
 
-1. **Switching to a different `cacheKey`** — the old session is saved before loading the new one.
-2. **Omitting `cacheKey`** — the active session is saved and then cleared.
-3. **Reloading the model** (finetuning does) — a session with unsaved turns is saved.
+**Single prompt (`parallel = 1`).** Without the [RAM
+tier](#keep-switched-away-conversations-in-ram):
 
-Unloading the model without the RAM tier writes nothing, so turns sent without
-`saveCacheToDisk` since the last save are lost.
+1. **Switching to a different `cacheKey`**: the old conversation is saved,
+   then the new one is loaded.
+2. **Omitting `cacheKey`**: the active conversation is saved, then cleared.
+3. **Reloading the model** (finetuning does): the active conversation is
+   saved.
 
-A switch or an omitted `cacheKey` skips the write when nothing ran since the
-file was last written or loaded. With the RAM tier, the first two move the
-session into RAM instead; see that section for when its file is written.
+Sending the same `cacheKey` again writes nothing. With the RAM tier on, cases
+1 and 2 move the conversation into RAM instead of writing it, and an unload
+also writes it.
+
+**Batch (`parallel >= 2`).** Without the RAM tier:
+
+1. **A slot is needed for another key**: the least recently used resident
+   conversation is evicted; it is saved if it has unsaved turns.
+2. **A single-prompt request runs on the parallel model**: it uses sequence 0,
+   so the conversation resident there is evicted first, as in 1.
+3. **Reloading the model**: every resident conversation with unsaved turns is
+   saved. This is skipped, with a warning, while a batch request is running.
+
+A request that finishes leaves its conversation in its slot and writes
+nothing unless it set `saveCacheToDisk`. With the RAM tier on, an evicted
+conversation moves into RAM instead of being written, and an unload also
+writes every conversation with unsaved turns.
+
+**On both paths:**
+
+- Unloading the model without the RAM tier writes nothing, so turns sent
+  without `saveCacheToDisk` since the last save are lost. So are turns only in
+  memory when the process crashes.
+- A conversation with no unsaved turns is never written again: its file is
+  current.
+- A conversation whose loaded or saved file has been deleted (or its
+  directory removed, or the file emptied) is dropped instead of written back,
+  and its next request starts cold. Deleting the file is how a caller
+  discards a conversation.
 
 ### saveCacheToDisk on some turns, omitted on others
 
@@ -314,12 +350,12 @@ await model.run(history, { cacheKey: 'a.bin', saveCacheToDisk: true })
 
 ## Switch between cache files
 
-Passing a different `cacheKey` auto-saves the old session to disk, then loads the new one.
+On the single-prompt path, passing a different `cacheKey` saves the old conversation to its file if it has unsaved turns (or moves it into the RAM tier when that is on), then loads the new one.
 
 ```js
 await model.run([{ role: 'user', content: 'Topic A' }], { cacheKey: 'session1.bin' })
 
-// session1.bin is auto-saved, then session2.bin is loaded
+// session1.bin is saved (it has an unsaved turn), then session2.bin is loaded
 await model.run([{ role: 'user', content: 'Topic B' }], { cacheKey: 'session2.bin' })
 ```
 
@@ -398,8 +434,10 @@ checkpoints are never written into it.
 
 If a cache write fails (e.g. the disk is full, the path is unwritable, or `llama_state_save_file` returns false), a `StatusError` with code `UnableToSaveSessionFile` is thrown.
 
-- On the **explicit-save** path (`saveCacheToDisk: true`): the error propagates from `model.run()`. The in-memory KV state is still valid; the caller can retry or continue without saving.
-- On the **cache-switch** and **cache-clear** paths (automatic flush on key change or `cacheKey` omission): the error propagates from `model.run()` and the cache is left disabled. Subsequent calls without a `cacheKey` will proceed without attempting the flush again.
+- On the **explicit-save** path (`saveCacheToDisk: true`), single prompt: the error propagates from `model.run()`, and the conversation is dropped from memory (the generated output was already streamed). The next request on that `cacheKey` loads the last good file, or starts cold if there is none.
+- On the **explicit-save** path, batch: the request fails, together with the rest of its `runBatch()` group. Its slot is cleared, so the conversation is dropped the same way.
+- On the **cache-switch** and **cache-clear** paths (single prompt: automatic save on key change or `cacheKey` omission): the error propagates from `model.run()` and the old conversation is dropped. Subsequent calls proceed without attempting that save again.
+- **Automatic writes that no request asked for** (a batch eviction, a full RAM tier letting an entry go, the flush on reload or unload) never fail a request: the failure is logged and that conversation's unsaved turns are lost.
 - If the active cache's backing file or parent directory was externally removed before a switch or clear, the stale in-memory cache is discarded and the next request starts from a fresh context instead of throwing `UnableToSaveSessionFile`.
 - On same-key reuse, a removed backing file also starts from a fresh context. If the parent directory was removed and `saveCacheToDisk: true` is set, the fresh request can still throw `UnableToSaveSessionFile` during its explicit save.
 

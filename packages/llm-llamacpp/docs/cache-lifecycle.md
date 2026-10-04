@@ -316,7 +316,11 @@ round-trip while the process lives. After a restart there are none.
 stateDiagram-v2
     [*] --> Absent
     Absent --> Written: committed request with saveCacheToDisk
-    Resident --> Written: committed request with saveCacheToDisk<br/>switch to another cacheKey<br/>request without cacheKey
+    Resident --> Written: committed request with saveCacheToDisk<br/>single prompt: switch to another cacheKey or request without cacheKey<br/>batch: slot evicted with unsaved turns<br/>reload, or unload with the RAM tier on
+    Resident --> RAM: RAM tier on: set aside or evicted
+    RAM --> Written: RAM budget full and unsaved turns<br/>reload, or unload
+    RAM --> Resident: next request with the same cacheKey
+    Resident --> Dropped: its file was deleted by the caller
     Written --> Resident: next request with the same cacheKey<br/>while the process lives
     Written --> Loaded: request with the cacheKey<br/>after a restart or a key switch
     Loaded --> Resident
@@ -332,6 +336,131 @@ new slot the checkpoints the previous request on the same `cacheKey` left
 behind, and each is checked against the loaded ledger before use. The first
 diverging turn after a restart on a full-state model is a cold prefill until
 new checkpoints accumulate.
+
+Every edge into `Written` is detailed in the next section.
+
+## How the `cacheKey` file is written
+
+The `cacheKey` file is the only thing the cache ever writes to disk. This
+section describes every write, on both paths.
+
+### What the file holds
+
+The file is a standard llama.cpp sequence-state file
+(`llama_state_seq_save_file`) whose token list carries the addon's ledger:
+
+| Part | Contents |
+|---|---|
+| llama.cpp header | magic, format version, number of tokens that follow |
+| ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
+| sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
+
+The state is always written in full, unlike the partial snapshots and
+checkpoints, which are never written into the file. A load checks the ledger
+against the state it describes: a corrupt current-format file is an error
+(`UnableToLoadSessionFile`), and a file without a ledger is a cold miss.
+
+### How a write is done
+
+Every write, whichever path triggers it, does the same two steps:
+
+1. The state and the ledger are written to `<cacheKey>.tmp`. On failure the
+   temporary file is deleted and `UnableToSaveSessionFile` is raised.
+2. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
+   and macOS, `MoveFileExW` with replace and write-through on Windows. Until
+   that step succeeds the old file is untouched, so a crash never leaves a
+   half-written cache. A `cacheKey` that names a directory fails the write.
+
+The RAM tier writes the same file format from its copy of the state, so a
+file written from RAM loads exactly like one written from a sequence.
+
+### When it is written: single prompt (`parallel = 1`)
+
+One conversation is active at a time, in the context's sequence 0.
+
+1. **Before a request runs**, the conversation already in memory is dealt
+   with, based on the request's `cacheKey`:
+   - **same key**: nothing is written; the conversation continues in memory;
+   - **another key**, or **no key**: the conversation is set aside before the
+     request is served (with no key, it is then cleared). Setting aside goes
+     through these checks in order:
+     1. it was loaded from, or written to, its file and that file (or its
+        directory) is now missing or empty: the caller deleted it, so it is
+        dropped and nothing is written;
+     2. the RAM tier is on: it moves to RAM, and nothing is written yet;
+     3. no request ran on it since its file was last written or loaded, and
+        the file is still there: the file is current, so nothing is written;
+     4. otherwise its file is written.
+2. **After the request**, its file is written only if the request committed
+   (see [A cached request](#a-cached-request)) and set `saveCacheToDisk`. A
+   request that rolled back never writes.
+3. **On a reload** (finetuning reloads the model), and **on an unload with the
+   RAM tier on**, the active conversation is written if it has turns its file
+   does not hold. An unload without the RAM tier writes nothing.
+
+### When it is written: batch (`parallel >= 2`)
+
+Each of the `parallel` sequences ("slots") holds at most one conversation.
+
+1. **A request finishes.** If it committed, set `saveCacheToDisk` and has a
+   `cacheKey`, its slot's state is written to the file right away, unless the
+   file it was loaded from has since been deleted: then the conversation is
+   dropped, not written.
+2. **The conversation stays in its slot.** A committed request with a
+   `cacheKey` leaves its state in the slot ("resident") for the next request
+   on that key. Nothing is written. The scheduler records whether it has turns
+   its file does not hold (yes, unless step 1 just wrote it) and when it was
+   last used. Requests without a `cacheKey`, and requests that rolled back,
+   leave nothing: their slot is cleared.
+3. **A request picks a slot**: the free slot already holding its key's
+   conversation (nothing is read); otherwise an empty slot, filled from the RAM
+   tier, else from the file, else cold; otherwise the free slot whose resident
+   conversation was used least recently, which is evicted first.
+4. **A resident conversation is evicted**, through these checks in order:
+   1. its loaded or saved file is now missing or empty: it is dropped, nothing
+      is written;
+   2. the RAM tier is on: its state is copied to RAM with its ledger,
+      checkpoints and unsaved-turns mark, and nothing is written yet (unless
+      the copy is larger than the whole RAM budget, which falls through to
+      the next check);
+   3. it has unsaved turns: its file is written.
+
+   Then the slot is cleared. If it did not go to RAM, its checkpoints are kept
+   in memory per `cacheKey` for its next load.
+5. **The RAM tier is full.** To fit a new entry, the oldest entries are
+   removed; each one with unsaved turns is written to its file first.
+6. **A single-prompt request runs on a parallel model.** It uses sequence 0,
+   so a conversation resident there is evicted first, as in step 4.
+7. **On a reload, and on an unload with the RAM tier on**, every resident
+   conversation with unsaved turns is written, then every RAM entry with
+   unsaved turns. This is skipped, with a warning, while a batch request is
+   still running. An unload without the RAM tier writes nothing.
+
+### Rules common to both paths
+
+- **Only at the end of a request, or when a conversation is set aside.**
+  Nothing is written during prefill or generation, and a request that rolls
+  back leaves the file exactly as it was.
+- **No change, no write.** Each conversation carries a mark for turns its file
+  does not hold: set when a request runs on it (on the batch path, when it is
+  kept in its slot without having been saved), cleared when its file is
+  written. Automatic writes (switches, evictions, flushes) happen only when
+  the mark is set.
+- **A deleted file drops the conversation.** The cache remembers whether a
+  conversation came from, or was written to, its file. Before writing it back
+  it checks the file: missing (or its directory missing) or empty means the
+  caller deleted it, so the conversation is discarded instead of written
+  back. Deleting the `cacheKey` file is how a caller drops a conversation.
+- **Failures.** A failed write requested with `saveCacheToDisk`, or by a
+  single-prompt switch, is reported to the caller and the conversation is
+  dropped from memory, so its next request loads the last good file or starts
+  cold; on the batch path only the request (its group) that asked fails. A
+  failed write during an eviction, a RAM-tier eviction or a flush is logged
+  and never fails a request: that conversation's unsaved turns are lost.
+- **Without the RAM tier**, a file is written only by a committed request with
+  `saveCacheToDisk`, a single-prompt key switch or keyless request, a batch
+  eviction of a conversation with unsaved turns, and a reload. A crash always
+  loses turns that were only in memory.
 
 ## Batch mode: where a conversation lives between requests
 
@@ -387,4 +516,4 @@ stateDiagram-v2
 | Ledger | RAM | RAM | RAM |
 | Pre-request snapshot | none | temp file, one per running request | host RAM, one per running request |
 | Checkpoints | none | temp files | host RAM |
-| `cacheKey` file | only on the three saves | only on the three saves | only on the three saves |
+| `cacheKey` file | only on the writes in [How the `cacheKey` file is written](#how-the-cachekey-file-is-written) | same | same |
