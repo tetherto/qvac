@@ -70,6 +70,12 @@ function collectModelConstants(
   }
 }
 
+export interface LoadParams {
+  modelSrc?: ModelConstant | string
+  modelType: string
+  modelConfig?: ModelConfig
+}
+
 interface TrackedModel {
   modelId: string
   dep: string
@@ -235,6 +241,28 @@ export class ResourceManager {
     this.testCount++
   }
 
+  /**
+   * The parameters `ensureLoaded` hands `loadModel` for this dep, with any
+   * async config resolved. `assessModelFit` takes the same parameters, so a
+   * caller can assess the load this manager would run without running it.
+   */
+  async loadParams(dep: string): Promise<LoadParams> {
+    const def = this.definitions.get(dep)
+    if (!def) throw new Error(`Unknown dependency: ${dep}`)
+
+    const config = await this.resolveConfig(dep, def)
+
+    return {
+      ...(def.constant
+        ? { modelSrc: def.constant }
+        : def.modelSrc !== undefined
+          ? { modelSrc: def.modelSrc }
+          : {}),
+      modelType: def.type,
+      ...(config !== undefined && { modelConfig: config })
+    }
+  }
+
   async ensureLoaded(dep: string): Promise<string> {
     const existing = this.models.get(dep)
     if (existing) {
@@ -242,20 +270,7 @@ export class ResourceManager {
       return existing.modelId
     }
 
-    const def = this.definitions.get(dep)
-    if (!def) throw new Error(`Unknown dependency: ${dep}`)
-
-    const modelSrcOpts = def.constant
-      ? { modelSrc: def.constant as never }
-      : def.modelSrc !== undefined
-        ? { modelSrc: def.modelSrc }
-        : {}
-
-    const modelId = await loadModel({
-      ...modelSrcOpts,
-      modelType: def.type as never,
-      modelConfig: await this.resolveConfig(dep, def)
-    } as never)
+    const modelId = await loadModel((await this.loadParams(dep)) as never)
 
     this.models.set(dep, {
       modelId,

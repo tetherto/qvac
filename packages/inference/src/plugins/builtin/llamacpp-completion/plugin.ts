@@ -117,6 +117,7 @@ export const llmPlugin = definePlugin({
   displayName: 'LLM (llama.cpp)',
   addonPackage: ADDON_LLM,
   loadConfigSchema: llmConfigBaseSchema,
+  assessFit: LlmLlamacpp.assessFit,
 
   async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
     const { projectionModelSrc, ...llmConfig } = cfg
