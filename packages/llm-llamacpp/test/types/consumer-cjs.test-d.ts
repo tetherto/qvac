@@ -35,6 +35,8 @@ const logger = model.logger;
 void logger;
 const state: { configLoaded: boolean } = model.getState();
 void state;
+const saved: Promise<void> = model.saveCache("/abs/session.bin");
+void saved;
 
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
@@ -87,10 +89,14 @@ const runOptions: LlmLlamacpp.RunOptions = {
   prefill: false,
   generationParams,
   cacheKey: "k",
-  saveCacheToDisk: true,
+  ephemeral: false,
   rejectWhenBusy: true,
 };
 void runOptions;
+
+// @ts-expect-error - saveCacheToDisk was removed; use saveCache(cacheKey)
+const removedSave: LlmLlamacpp.RunOptions = { saveCacheToDisk: true };
+void removedSave;
 
 const messages: LlmLlamacpp.Message[] = [
   { role: "user", content: "hello" },

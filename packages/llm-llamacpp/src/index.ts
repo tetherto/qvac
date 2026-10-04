@@ -43,7 +43,7 @@ interface NormalizedRunOptions {
   prefill: boolean;
   generationParams: GenerationParams | undefined;
   cacheKey: string | undefined;
-  saveCacheToDisk: boolean;
+  ephemeral: boolean;
   rejectWhenBusy: boolean | undefined;
 }
 
@@ -69,7 +69,7 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
       prefill: false,
       generationParams: undefined,
       cacheKey: undefined,
-      saveCacheToDisk: false,
+      ephemeral: false,
       rejectWhenBusy: undefined,
     };
   }
@@ -97,8 +97,16 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     throw new TypeError("cacheKey must be a string when provided");
   }
 
-  if (options.saveCacheToDisk !== undefined && typeof options.saveCacheToDisk !== "boolean") {
-    throw new TypeError("saveCacheToDisk must be a boolean when provided");
+  if ((options as { saveCacheToDisk?: unknown }).saveCacheToDisk !== undefined) {
+    throw new TypeError(
+      "saveCacheToDisk was removed: a cached conversation stays in memory and is written to " +
+        "its cacheKey file when it is set aside, evicted or the model unloads; call " +
+        "saveCache(cacheKey) to write it now, or set ephemeral: true to never write it",
+    );
+  }
+
+  if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
+    throw new TypeError("ephemeral must be a boolean when provided");
   }
 
   if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
@@ -109,7 +117,7 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     prefill: options.prefill === true,
     generationParams: normalizeGenerationParams(options.generationParams),
     cacheKey: options.cacheKey,
-    saveCacheToDisk: options.saveCacheToDisk === true,
+    ephemeral: options.ephemeral === true,
     // Left undefined when unset so admission falls back to the instance default.
     rejectWhenBusy: options.rejectWhenBusy,
   };
@@ -123,7 +131,7 @@ function promptToAddonMessages(
     throw new TypeError("Prompt input must be Message[]");
   }
 
-  const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions);
+  const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
 
   const textMessages: Message[] = [];
   const mediaItems: Uint8Array[] = [];
@@ -150,7 +158,7 @@ function promptToAddonMessages(
     prefill,
     generationParams,
     cacheKey,
-    saveCacheToDisk,
+    ephemeral,
   });
 
   return promptMessages;
@@ -395,6 +403,13 @@ interface LlmLlamacpp {
   cancel(): Promise<void>;
   pause(): Promise<void>;
   unload(): Promise<void>;
+  /**
+   * Write the conversation kept in memory for `cacheKey` to that file now.
+   * Waits for a request running on that key, writes only when the file lacks
+   * turns, and rejects when nothing is cached under the key or the write
+   * fails (the conversation then stays in memory, still unsaved).
+   */
+  saveCache(cacheKey: string): Promise<void>;
   getState(): { configLoaded: boolean };
 }
 
@@ -977,6 +992,27 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     return (this.addon ? this.addon.activeJobs() : 0) > 0;
   }
 
+  /**
+   * Write the conversation kept in memory for `cacheKey` to that file now:
+   * the active single-prompt conversation, a batch conversation kept in its
+   * slot, or one in the RAM tier. Resolves once the file is written. When a
+   * request on that key is running it waits for it to finish, so the file
+   * always holds a committed state. Resolves without writing when the file
+   * already holds the conversation. Rejects when nothing is cached under the
+   * key and no file exists, or when the write fails (the conversation then
+   * stays in memory, still unsaved, so the call can be retried). Writes
+   * ephemeral conversations too.
+   */
+  async saveCache(cacheKey: string): Promise<void> {
+    if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+      throw new TypeError("saveCache(cacheKey) requires a non-empty string");
+    }
+    if (!this.addon) {
+      throw new Error("Model is not loaded");
+    }
+    await this.addon.saveCache(cacheKey);
+  }
+
   getState(): { configLoaded: boolean } {
     return this.state;
   }
@@ -1331,11 +1367,12 @@ namespace LlmLlamacpp {
   export interface RunOptions {
     /**
      * Run prefill only (cache warming): the prompt is evaluated but no tokens
-     * are generated. On a model loaded with `parallel >= 2` a prefill is
-     * admitted only when it is *persistable* (`saveCacheToDisk: true` plus a
-     * `cacheKey`) — a live-only prefill warms context state that no concurrent
-     * job could reach and is rejected with `InvalidArgument`; run live-only
-     * prefills on a `parallel: 1` model. The same rule applies per batch item.
+     * are generated. On a model loaded with `parallel >= 2` a prefill needs a
+     * `cacheKey` (the warmed conversation stays in its slot for the next
+     * request on that key) — a keyless prefill warms context state that no
+     * concurrent job could reach and is rejected with `InvalidArgument`; run
+     * keyless prefills on a `parallel: 1` model. The same rule applies per
+     * batch item.
      */
     prefill?: boolean;
     generationParams?: GenerationParams;
@@ -1347,21 +1384,16 @@ namespace LlmLlamacpp {
      */
     cacheKey?: string;
     /**
-     * When `true` and `cacheKey` is set, the driver persists the sequence's
-     * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
-     * later run keyed by the same string can resume without re-prefilling.
-     *
-     * The save is the commit of the request's cache transaction, so it runs
-     * whenever the caller received what was produced: end-of-sequence, an
-     * antiprompt hit, the caller's own `n_predict` limit, or a cancel after
-     * generation started. Such a cancel keeps the prompt and every streamed
-     * token resident, so the next full-history turn resumes from there. A
-     * cancel during prefill, a decode error and a context overflow roll the
-     * request back to the state before the prompt was sent, and on those legs
-     * the on-disk cache is left untouched so the last known-good file
-     * survives. Prefill-only requests commit as soon as prefill completes.
+     * Keep this conversation in memory only. By default a cached
+     * conversation is written to its `cacheKey` file whenever it would
+     * otherwise be lost with turns the file lacks: when it is set aside for
+     * another key, evicted from its batch slot or from the RAM tier, or the
+     * model is reloaded or unloaded. With `ephemeral: true` each of those
+     * drops it instead, so its next request starts cold. It still loads an
+     * existing file, and an explicit `saveCache(cacheKey)` still writes it.
+     * The flag belongs to the conversation's latest request.
      */
-    saveCacheToDisk?: boolean;
+    ephemeral?: boolean;
     /**
      * Admission policy when the worker pool is full. `true` rejects before
      * submitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the

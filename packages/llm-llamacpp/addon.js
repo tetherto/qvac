@@ -161,6 +161,15 @@ class LlamaInterface {
         await this._binding.cancelJob(this._handle, id);
     }
     /**
+     * Write the conversation kept in memory for `cacheKey` to its file (see
+     * `LlmLlamacpp.saveCache`).
+     */
+    saveCache(cacheKey) {
+        if (!this._handle)
+            return Promise.reject(new Error("Model is not loaded"));
+        return Promise.resolve(this._binding.saveCache(this._handle, cacheKey));
+    }
+    /**
      * Run finetuning when native binding provides support.
      */
     finetune(finetuningParams) {

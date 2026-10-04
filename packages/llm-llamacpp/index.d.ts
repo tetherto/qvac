@@ -55,6 +55,13 @@ interface LlmLlamacpp {
     cancel(): Promise<void>;
     pause(): Promise<void>;
     unload(): Promise<void>;
+    /**
+     * Write the conversation kept in memory for `cacheKey` to that file now.
+     * Waits for a request running on that key, writes only when the file lacks
+     * turns, and rejects when nothing is cached under the key or the write
+     * fails (the conversation then stays in memory, still unsaved).
+     */
+    saveCache(cacheKey: string): Promise<void>;
     getState(): {
         configLoaded: boolean;
     };
@@ -406,11 +413,12 @@ declare namespace LlmLlamacpp {
     interface RunOptions {
         /**
          * Run prefill only (cache warming): the prompt is evaluated but no tokens
-         * are generated. On a model loaded with `parallel >= 2` a prefill is
-         * admitted only when it is *persistable* (`saveCacheToDisk: true` plus a
-         * `cacheKey`) — a live-only prefill warms context state that no concurrent
-         * job could reach and is rejected with `InvalidArgument`; run live-only
-         * prefills on a `parallel: 1` model. The same rule applies per batch item.
+         * are generated. On a model loaded with `parallel >= 2` a prefill needs a
+         * `cacheKey` (the warmed conversation stays in its slot for the next
+         * request on that key) — a keyless prefill warms context state that no
+         * concurrent job could reach and is rejected with `InvalidArgument`; run
+         * keyless prefills on a `parallel: 1` model. The same rule applies per
+         * batch item.
          */
         prefill?: boolean;
         generationParams?: GenerationParams;
@@ -422,21 +430,16 @@ declare namespace LlmLlamacpp {
          */
         cacheKey?: string;
         /**
-         * When `true` and `cacheKey` is set, the driver persists the sequence's
-         * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
-         * later run keyed by the same string can resume without re-prefilling.
-         *
-         * The save is the commit of the request's cache transaction, so it runs
-         * whenever the caller received what was produced: end-of-sequence, an
-         * antiprompt hit, the caller's own `n_predict` limit, or a cancel after
-         * generation started. Such a cancel keeps the prompt and every streamed
-         * token resident, so the next full-history turn resumes from there. A
-         * cancel during prefill, a decode error and a context overflow roll the
-         * request back to the state before the prompt was sent, and on those legs
-         * the on-disk cache is left untouched so the last known-good file
-         * survives. Prefill-only requests commit as soon as prefill completes.
+         * Keep this conversation in memory only. By default a cached
+         * conversation is written to its `cacheKey` file whenever it would
+         * otherwise be lost with turns the file lacks: when it is set aside for
+         * another key, evicted from its batch slot or from the RAM tier, or the
+         * model is reloaded or unloaded. With `ephemeral: true` each of those
+         * drops it instead, so its next request starts cold. It still loads an
+         * existing file, and an explicit `saveCache(cacheKey)` still writes it.
+         * The flag belongs to the conversation's latest request.
          */
-        saveCacheToDisk?: boolean;
+        ephemeral?: boolean;
         /**
          * Admission policy when the worker pool is full. `true` rejects before
          * submitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the

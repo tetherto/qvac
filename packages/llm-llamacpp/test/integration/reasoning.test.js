@@ -238,10 +238,7 @@ safeTest(
     t.teardown(() => cleanupIntegrationCacheFiles(cacheKey))
 
     const initial = createInitialMessages()
-    const turn1 = await runCompletionWithStats(inference, initial, {
-      cacheKey,
-      saveCacheToDisk: true
-    })
+    const turn1 = await runCompletionWithStats(inference, initial, { cacheKey })
     verifyReasoningTags(t, turn1.response, 'turn 1')
 
     const visibleAnswer = stripReasoningForPrompt(turn1.response)

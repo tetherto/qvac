@@ -442,7 +442,7 @@ safeTest(
       }
     })
 
-    const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true }
+    const cacheOpts = { cacheKey: cachePath }
 
     const systemPrefill = await runAndCollect(addon, [SYSTEM_PROMPT], {
       ...cacheOpts,
@@ -455,6 +455,7 @@ safeTest(
       'system prefill reports zero generated tokens'
     )
     assertCachedStats(t, systemPrefill.stats, 'system prefill')
+    await addon.saveCache(cachePath)
     t.ok(fs.existsSync(cachePath), 'system prefill saved cache to disk')
     await runNoCacheSeparator(t, addon, 'after system prefill')
 
@@ -473,6 +474,7 @@ safeTest(
       `first turn cached Qwen3.5 image cells (${first.stats.CacheTokens})`
     )
     assertCachedStats(t, first.stats, 'first multimodal turn')
+    await addon.saveCache(cachePath)
     t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
     await runNoCacheSeparator(t, addon, 'after first multimodal turn')
 
@@ -613,7 +615,7 @@ safeTest(
       }
     })
 
-    const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true, prefill: true }
+    const cacheOpts = { cacheKey: cachePath, prefill: true }
 
     const first = await runAndCollect(
       addon,

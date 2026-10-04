@@ -337,7 +337,6 @@ safeTest(
     // `cachePath`.
     const first = await model.run([{ role: 'user', content: overflow.fillerPrompt() }], {
       cacheKey: cachePath,
-      saveCacheToDisk: true,
       prefill: true
     })
     await first.await()
@@ -354,7 +353,6 @@ safeTest(
       ]
       const rejected = await model.run(history, {
         cacheKey: cachePath,
-        saveCacheToDisk: true,
         generationParams: { reasoning_budget: 0 }
       })
       await rejected.await()

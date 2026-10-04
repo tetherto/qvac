@@ -89,7 +89,6 @@ async function main() {
     console.log('\n== Turn 1 (cold): complete history and tools')
     const t1 = await run(model, firstHistory, {
       cacheKey: cache,
-      saveCacheToDisk: true,
       generationParams: noThinking
     })
     row('turn 1: tools sent', t1)
