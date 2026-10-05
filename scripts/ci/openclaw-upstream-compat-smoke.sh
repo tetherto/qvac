@@ -7,7 +7,7 @@ VERIFY_PROMPT_SURFACE="$SCRIPT_DIR/verify-openclaw-prompt-surface.cjs"
 
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
-QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
+QVAC_MODEL="${QVAC_MODEL:-qwen3.5-2b}"
 # Must stay under OPENCLAW_AGENT_TIMEOUT_SECONDS: readiness is awaited inside
 # the agent run, so a longer value here is unreachable.
 QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-180000}"
