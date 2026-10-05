@@ -24,6 +24,13 @@ Configuration lives under `serve` in `qvac.config.*`. `serve.models`, `serve.loa
 `serve.cors` are server-wide and documented here; each extension reads its own
 `serve.<name>` block, documented in that extension's page.
 
+An SDK `ContextOverflowError` returns HTTP `400` with
+`error.type: "invalid_request_error"` and `error.code: "context_length_exceeded"`.
+Shorten the input, start a new conversation, or increase the model's `ctx_size`
+before retrying. If SSE headers have already been sent, the status stays `200`;
+the server emits the same error envelope as an SSE frame and closes the stream,
+using the extension's usual termination sentinel.
+
 ## Network security and CORS
 
 The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.

@@ -251,19 +251,20 @@ suffix insertion, multi-choice `n`) are not implemented.
 
 ### Errors
 
-| HTTP | `error.code`            | When                                                                           |
-| ---- | ----------------------- | ------------------------------------------------------------------------------ |
-| 400  | `invalid_json`          | Body is not valid JSON                                                         |
-| 400  | `missing_model`         | `model` field is missing                                                       |
-| 400  | `invalid_prompt`        | Prompt is missing, empty, has empty array entries, or is provided as token ids |
-| 400  | `unsupported_streaming` | Multi-prompt input combined with `"stream": true`                              |
-| 400  | `invalid_model_type`    | Alias is not a `chat` model                                                    |
-| 404  | `model_not_found`       | Unknown alias                                                                  |
-| 503  | `model_not_loaded`      | Model not loaded and lazy loading is disabled (`serve.load.lazy: false`)       |
-| 503  | `model_load_failed`     | Lazy load (cold start) of the model failed                                     |
-| 503  | `model_load_timeout`    | Lazy load exceeded `serve.load.timeoutMs`                                      |
-| 503  | `model_not_ready`       | Rare fallback: load reported done but the model is not READY                   |
-| 500  | `completion_error`      | SDK / engine failure                                                           |
+| HTTP | `error.code`              | When                                                                           |
+| ---- | ------------------------- | ------------------------------------------------------------------------------ |
+| 400  | `invalid_json`            | Body is not valid JSON                                                         |
+| 400  | `missing_model`           | `model` field is missing                                                       |
+| 400  | `invalid_prompt`          | Prompt is missing, empty, has empty array entries, or is provided as token ids |
+| 400  | `unsupported_streaming`   | Multi-prompt input combined with `"stream": true`                              |
+| 400  | `invalid_model_type`      | Alias is not a `chat` model                                                    |
+| 400  | `context_length_exceeded` | SDK reports that the request exceeds the model's effective context capacity    |
+| 404  | `model_not_found`         | Unknown alias                                                                  |
+| 503  | `model_not_loaded`        | Model not loaded and lazy loading is disabled (`serve.load.lazy: false`)       |
+| 503  | `model_load_failed`       | Lazy load (cold start) of the model failed                                     |
+| 503  | `model_load_timeout`      | Lazy load exceeded `serve.load.timeoutMs`                                      |
+| 503  | `model_not_ready`         | Rare fallback: load reported done but the model is not READY                   |
+| 500  | `completion_error`        | SDK / engine failure                                                           |
 
 ## `POST /v1/responses`
 
