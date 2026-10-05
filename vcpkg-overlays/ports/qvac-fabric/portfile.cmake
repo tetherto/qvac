@@ -28,10 +28,6 @@ vcpkg_check_features(
     rpc-rdma BUILD_RPC_RDMA
 )
 
-if(BUILD_CUDA_JETSON_BACKEND AND NOT BUILD_CUDA_BACKEND)
-  message(FATAL_ERROR "qvac-fabric: cuda-jetson-backend requires cuda-backend")
-endif()
-
 # gpu-backends is default-on via default-features in vcpkg.json. CPU-only
 # consumers (e.g. @qvac/classification-ggml) disable it with
 # default-features:false (and re-add 'llama' if needed).
@@ -100,7 +96,7 @@ else()
   set(DL_BACKENDS OFF)
 endif()
 
-if(VCPKG_TARGET_IS_WINDOWS AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
+if(VCPKG_TARGET_IS_WINDOWS AND BUILD_CUDA_BACKEND)
   set(DL_BACKENDS ON)
   list(APPEND PLATFORM_OPTIONS -DGGML_BACKEND_DL=ON)
 endif()
@@ -139,68 +135,23 @@ if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND BUILD_
     -DCMAKE_HIP_ARCHITECTURES=gfx1151)
 endif()
 
-# CUDA backend, opt-in via the 'cuda-backend' feature.
-# Mirrors hip-backend: builds libqvac-ggml-cuda.so as a standalone DL module
-# alongside Vulkan, so the addon dlopen's whichever GPU backend it picks at
-# runtime. Linux x64 and arm64 are in scope, unlike HIP which is x64-only.
-# The normal arm64 build uses CUDA 13 for DGX Spark. The cuda-jetson-backend
-# feature emits a separate CUDA 12 module for Jetson Orin. Windows x64 uses the
-# same hybrid layout, with CUDA and Vulkan as DLL modules beside the addon.
-#
-# DETERMINISTIC, same reasoning as hip-backend above: requesting cuda-backend
-# REQUIRES nvcc at build time. A host-dependent skip would produce a no-CUDA
-# package with the SAME vcpkg ABI as a real CUDA build, which the binary cache
-# then conflates. So nvcc present => CUDA; nvcc absent => hard error. With
-# QVAC_CUDA_TOOLKIT set, a wrong nvcc version is a hard error too.
-#
-# RUNTIME fail-safe: ggml handles a failed CUDA registration itself. An absent
-# or unloadable module, or a host with no NVIDIA driver, never reaches
-# ggml_backend_dev_count(), so device enumeration falls through to Vulkan and
-# then CPU with no addon involvement (verified on a Tesla T4, QVAC-23763).
-# DETERMINISTIC, continued: the block below only runs on Linux or Windows with
-# gpu-backends on, so a cuda-backend request that misses either condition would
-# silently install a package with no CUDA in it and the same vcpkg ABI as a real
-# CUDA build, which is the cache conflation this feature exists to avoid. Refuse
-# it up front rather than one condition lower.
-if(BUILD_CUDA_BACKEND AND NOT (VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS))
-  message(FATAL_ERROR "qvac-fabric: cuda-backend supports Linux and Windows only. Got ${VCPKG_TARGET_TRIPLET}.")
-endif()
-if(BUILD_CUDA_BACKEND AND NOT BUILD_GPU_BACKENDS)
-  message(FATAL_ERROR "qvac-fabric: cuda-backend requires the gpu-backends feature, which brings the GGML_BACKEND_DL setup the CUDA module is loaded through.")
-endif()
-
-if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND BUILD_CUDA_BACKEND)
-  if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_ARCHITECTURE STREQUAL "x64")
-    message(FATAL_ERROR "qvac-fabric: cuda-backend supports Windows x64 only, got ${VCPKG_TARGET_ARCHITECTURE}.")
-  endif()
-  if(VCPKG_TARGET_IS_LINUX AND NOT (VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" OR VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64"))
-    message(FATAL_ERROR "qvac-fabric: cuda-backend supports Linux x64 and arm64 only, got ${VCPKG_TARGET_ARCHITECTURE}.")
-  endif()
-
-  set(QVAC_CUDA_JETSON ${BUILD_CUDA_JETSON_BACKEND})
-  if(QVAC_CUDA_JETSON AND NOT (VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64"))
-    message(FATAL_ERROR "qvac-fabric: the CUDA 12 Jetson variant is Linux arm64-only.")
-  endif()
-
-  # ggml's own CUDA CMake calls enable_language(CUDA), which fails with "No
-  # CMAKE_CUDA_COMPILER could be found" whenever nvcc is off PATH. Routine
-  # under vcpkg, which does not inherit an interactive shell. Locate nvcc and
-  # pass it explicitly, the same way ports/ggml-speech does.
-  # Order matters. An explicitly provisioned toolkit wins over whatever the host
-  # happens to have at /usr/local/cuda: CI's setup-cuda assembles a pinned
-  # toolkit and exports CUDACXX and CUDA_PATH, so a GPU runner or dev box
-  # carrying another system toolkit must not silently shadow the pin. Searching
-  # /usr/local/cuda/bin first with NO_DEFAULT_PATH did exactly that.
-  #
-  # QVAC-24470: vcpkg does not hash the host nvcc. Keep the expected toolkit
-  # in the portfile so changing the pin changes the port hash.
-  if(QVAC_CUDA_JETSON)
+# CUDA backend, opt-in via 'cuda-backend': a runtime-loaded module beside Vulkan.
+# vcpkg.json limits it to Linux x64/arm64 and Windows x64 and pulls in
+# gpu-backends; 'cuda-jetson-backend' builds the CUDA 12.6 Jetson Orin variant.
+# Requesting it without nvcc is an error, never a silent skip: a no-CUDA package
+# would share the real CUDA build's binary-cache ABI.
+if(BUILD_CUDA_BACKEND)
+  # vcpkg does not hash the host nvcc, so the expected toolkit lives here and a
+  # new pin changes the port hash.
+  if(BUILD_CUDA_JETSON_BACKEND)
     set(QVAC_FABRIC_CUDA_TOOLKIT "12.6.3-jetson")
     set(QVAC_FABRIC_CUDA_VERSION_PATTERN "V12\\.6\\.85([^0-9]|$)")
   else()
     set(QVAC_FABRIC_CUDA_TOOLKIT "13.0.3-server")
     set(QVAC_FABRIC_CUDA_VERSION_PATTERN "V13\\.0\\.88([^0-9]|$)")
   endif()
+  # vcpkg does not inherit the shell PATH, so nvcc is located here. A
+  # provisioned toolkit, CUDACXX or CUDA_PATH, wins over /usr/local/cuda.
   if(DEFINED ENV{CUDACXX} AND EXISTS "$ENV{CUDACXX}")
     set(NVCC_EXECUTABLE "$ENV{CUDACXX}")
   endif()
@@ -221,10 +172,8 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
     RESULT_VARIABLE QVAC_NVCC_RESULT
     OUTPUT_VARIABLE QVAC_NVCC_VERSION_OUT
     ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
-  # QVAC_CUDA_TOOLKIT names the toolkit setup-cuda provisioned, and the qvac
-  # triplets hash it into this port's ABI. With it set, only the pinned
-  # toolkit may build. Without it, such as a lint job on a host toolkit, the
-  # build lands under a separate cache identity and only warns.
+  # setup-cuda sets QVAC_CUDA_TOOLKIT and the qvac triplets hash it into the
+  # ABI, so with it set only the pinned toolkit may build.
   set(QVAC_PROVISIONED_CUDA_TOOLKIT "$ENV{QVAC_CUDA_TOOLKIT}")
   if(NOT QVAC_NVCC_RESULT EQUAL 0)
     message(FATAL_ERROR "qvac-fabric: could not run ${NVCC_EXECUTABLE} --version")
@@ -242,21 +191,9 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
   string(REGEX MATCH "release [0-9]+\\.[0-9]+, V[0-9.]+" QVAC_NVCC_VERSION "${QVAC_NVCC_VERSION_OUT}")
   message(STATUS "qvac-fabric: cuda-backend using nvcc at ${NVCC_EXECUTABLE} (${QVAC_NVCC_VERSION}, port expects ${QVAC_FABRIC_CUDA_TOOLKIT})")
 
-  # x64 and the CUDA 13 arm64 module ship ggml's own default list for a CUDA 13
-  # toolkit, plus 80-real. Virtual entries JIT onto newer GPUs that have no
-  # cubin of their own. CUDA 13 cannot build 50, 61 or 70 at all. The fabric
-  # source probes a no-op kernel on each device and skips devices that cannot
-  # load the shipped code, so a module with no usable device falls through.
-  #
-  # The semicolons must stay backslash-escaped so vcpkg passes the architecture
-  # list to CMake as one argument.
-  #
-  # The Jetson module is built against the L4T toolkit, which runs only on
-  # Jetson Orin, so it carries only that GPU's arch.
-  set(QVAC_CUDA_NO_VMM OFF)
-  if(QVAC_CUDA_JETSON)
-    # The fabric VMM pool falls back to cudaMalloc if Tegra cannot reserve its
-    # fixed address space, so keep VMM enabled and exercise that runtime path.
+  # ggml's default CUDA 13 list plus 80-real; Jetson Orin needs only its own
+  # arch. The semicolons stay escaped so vcpkg passes one argument.
+  if(BUILD_CUDA_JETSON_BACKEND)
     set(QVAC_CUDA_ARCHS "87-real")
   else()
     set(QVAC_CUDA_ARCHS "75-virtual\;80-virtual\;80-real\;86-real\;89-real\;90-virtual\;120a-real\;121a-real")
@@ -264,22 +201,14 @@ if((VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_WINDOWS) AND BUILD_GPU_BACKENDS AND
   message(STATUS "qvac-fabric: cuda-backend ON, building GGML_CUDA (arch ${QVAC_CUDA_ARCHS}, nvcc ${NVCC_EXECUTABLE})")
   list(APPEND PLATFORM_OPTIONS
     -DGGML_CUDA=ON
-    -DGGML_CUDA_NO_VMM=${QVAC_CUDA_NO_VMM}
     "-DCMAKE_CUDA_ARCHITECTURES=${QVAC_CUDA_ARCHS}"
     -DCMAKE_CUDA_COMPILER=${NVCC_EXECUTABLE})
   if(VCPKG_TARGET_IS_LINUX)
     list(APPEND PLATFORM_OPTIONS
-    # The triplet compiles C++ with clang and -stdlib=libc++. nvcc defaults its
-    # host compiler to g++, which then chokes on the clang-only -stdlib flag it
-    # inherits from the link flags. Point it at clang++ so one toolchain drives
-    # everything. CUDA refuses libc++ outright on x86 ("libc++ is not supported
-    # on x86 system"), but that never bites: CUDA flags do not inherit
-    # CMAKE_CXX_FLAGS, so the .cu compile never sees -stdlib=libc++ and only
-    # the link does, where clang++ handles it.
+    # nvcc defaults to g++ as host compiler, which rejects the clang-only
+    # -stdlib=libc++ link flag the triplet sets.
     -DCMAKE_CUDA_HOST_COMPILER=clang++
-    # -allow-unsupported-compiler: neither pinned toolkit, CUDA 13.0 or the
-    # Jetson 12.6, accepts clang 22, which the monorepo standardises on
-    # (.github/actions/setup-llvm). Revisit when a CUDA release accepts it.
+    # Neither pinned toolkit accepts clang 22 yet.
     "-DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler")
   endif()
 endif()
@@ -400,7 +329,7 @@ if(BUILD_CUDA_BACKEND)
   endif()
 endif()
 
-if(BUILD_CUDA_BACKEND AND QVAC_CUDA_JETSON)
+if(BUILD_CUDA_JETSON_BACKEND)
   # Keep both CUDA majors in one prebuild directory. The loader scans every
   # CUDA module candidate and skips the one whose runtime is unavailable.
   set(QVAC_CUDA_JETSON_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda-jetson.so")

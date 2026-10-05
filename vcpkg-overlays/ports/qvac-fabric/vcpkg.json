@@ -24,10 +24,30 @@
   ],
   "features": {
     "cuda-backend": {
-      "description": "Build the NVIDIA CUDA GPU backend as a runtime-loaded module alongside Vulkan. Supports Linux x64 and arm64, and Windows x64. Requires a CUDA toolkit at build time. On Windows the CUDA 13 runtime is loaded from the user's CUDA install, %CUDA_PATH%\\bin\\x64. An absent or unloadable CUDA module is skipped so selection falls through to Vulkan and then CPU."
+      "description": "Build the NVIDIA CUDA GPU backend as a runtime-loaded module alongside Vulkan. Supports Linux x64 and arm64, and Windows x64. Requires a CUDA toolkit at build time. On Windows the CUDA 13 runtime is loaded from the user's CUDA install, %CUDA_PATH%\\bin\\x64. An absent or unloadable CUDA module is skipped so selection falls through to Vulkan and then CPU.",
+      "supports": "(linux & (x64 | arm64)) | (windows & x64)",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "gpu-backends"
+          ]
+        }
+      ]
     },
     "cuda-jetson-backend": {
-      "description": "Build the CUDA 12 Jetson arm64 variant as libqvac-ggml-cuda-jetson.so. Requires cuda-backend and gives the variant a distinct vcpkg binary-cache identity."
+      "description": "Build the CUDA 12 Jetson arm64 variant as libqvac-ggml-cuda-jetson.so, with a distinct vcpkg binary-cache identity.",
+      "supports": "linux & arm64",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "cuda-backend"
+          ]
+        }
+      ]
     },
     "force-profiler": {
       "description": "Force vk performance logging in ggml"
