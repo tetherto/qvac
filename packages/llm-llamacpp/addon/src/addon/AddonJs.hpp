@@ -1038,6 +1038,29 @@ inline js_value_t* saveCache(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+/// Drops the conversation kept for a `cacheKey` without writing it (see
+/// LlamaModel::discardCache). Off the JS thread, like saveCache.
+inline js_value_t* discardCache(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  std::string cacheKey =
+      js::String(env, args.get(1, "cacheKey")).as<std::string>(env);
+  auto addonCppRef = instance.addonCpp;
+  return js::JsAsyncTask::run(
+      env, [addonCppRef, cacheKey = std::move(cacheKey)]() {
+        LlamaModel* model = tryGetLlamaModel(*addonCppRef);
+        if (model == nullptr) {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "discardCache: the model is not loaded");
+        }
+        model->discardCache(cacheKey);
+      });
+}
+JSCATCH
+
 inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;

@@ -62,6 +62,13 @@ interface LlmLlamacpp {
      * fails (the conversation then stays in memory, still unsaved).
      */
     saveCache(cacheKey: string): Promise<void>;
+    /**
+     * Drop the conversation kept in memory for `cacheKey` without writing it,
+     * so no later eviction or unload writes it. Waits for a request running on
+     * that key. The file, if one was written, is left alone: delete it too to
+     * remove the conversation from disk.
+     */
+    discardCache(cacheKey: string): Promise<void>;
     getState(): {
         configLoaded: boolean;
     };

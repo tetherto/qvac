@@ -170,6 +170,15 @@ class LlamaInterface {
         return Promise.resolve(this._binding.saveCache(this._handle, cacheKey));
     }
     /**
+     * Drop the conversation kept in memory for `cacheKey` without writing it
+     * (see `LlmLlamacpp.discardCache`).
+     */
+    discardCache(cacheKey) {
+        if (!this._handle)
+            return Promise.reject(new Error("Model is not loaded"));
+        return Promise.resolve(this._binding.discardCache(this._handle, cacheKey));
+    }
+    /**
      * Run finetuning when native binding provides support.
      */
     finetune(finetuningParams) {

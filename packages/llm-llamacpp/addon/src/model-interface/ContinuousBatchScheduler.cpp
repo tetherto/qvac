@@ -1885,10 +1885,12 @@ void ContinuousBatchScheduler::writeStateToFileOrThrowLocked(
   CacheManager::atomicPromoteFile(tmp, cacheKey);
 }
 
-SlotStateCache::SaveOutcome
-ContinuousBatchScheduler::saveConversation(const std::string& cacheKey) {
+std::future<SlotStateCache::SaveOutcome>
+ContinuousBatchScheduler::enqueueSaveJob(
+    const std::string& cacheKey, bool discard) {
   auto job = std::make_shared<SaveJob>();
   job->cacheKey = cacheKey;
+  job->discard = discard;
   std::future<SlotStateCache::SaveOutcome> done = job->done.get_future();
   {
     std::scoped_lock lock(mutex_);
@@ -1897,13 +1899,38 @@ ContinuousBatchScheduler::saveConversation(const std::string& cacheKey) {
           ADDON_ID,
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
-          "saveCache: the model is being unloaded");
+          std::string(discard ? "discardCache" : "saveCache") +
+              ": the model is being unloaded");
     }
     ensureWorkerStartedLocked();
     saveJobs_.push_back(std::move(job));
   }
   workCv_.notify_all();
-  return done.get();
+  return done;
+}
+
+SlotStateCache::SaveOutcome
+ContinuousBatchScheduler::saveConversation(const std::string& cacheKey) {
+  return enqueueSaveJob(cacheKey, /*discard=*/false).get();
+}
+
+void ContinuousBatchScheduler::discardConversation(
+    const std::string& cacheKey) {
+  (void)enqueueSaveJob(cacheKey, /*discard=*/true).get();
+}
+
+void ContinuousBatchScheduler::discardKeyLocked(
+    const std::string& cacheKey) noexcept {
+  for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+    if (parked_[seqId].has_value() && parked_[seqId]->cacheKey == cacheKey) {
+      parked_[seqId].reset();
+      clearSeqKv(seqId);
+    }
+  }
+  checkpointStore_.erase(cacheKey);
+  if (ramTier_) {
+    (void)ramTier_->take(cacheKey);
+  }
 }
 
 bool ContinuousBatchScheduler::hasRunnableSaveJobLocked() const noexcept {
@@ -1923,6 +1950,11 @@ void ContinuousBatchScheduler::serviceSaveJobsLocked() noexcept {
     }
     it = saveJobs_.erase(it);
     try {
+      if (job->discard) {
+        discardKeyLocked(job->cacheKey);
+        job->done.set_value(SlotStateCache::SaveOutcome::NotHere);
+        continue;
+      }
       SlotStateCache::SaveOutcome outcome =
           SlotStateCache::SaveOutcome::NotHere;
       for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {

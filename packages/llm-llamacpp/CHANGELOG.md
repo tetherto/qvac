@@ -33,6 +33,10 @@
   model, does nothing when the file is current, and rejects when nothing is
   cached under the key. A failed write keeps the conversation in memory,
   still unsaved, so it can be retried.
+- `discardCache(cacheKey)`: drops the conversation kept for a key (session,
+  resident slot, RAM tier, checkpoints) without writing it, so no later
+  eviction or unload writes it. Ordered like `saveCache`; the file is left
+  alone. Deleting the file only discards a conversation already written.
 - `runOptions.ephemeral`: keeps a conversation in memory only. Every
   automatic write (key switch, keyless request, eviction, RAM-tier eviction,
   reload, unload) drops it instead; `saveCache()` still writes it.

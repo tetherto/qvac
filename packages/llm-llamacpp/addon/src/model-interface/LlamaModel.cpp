@@ -1359,6 +1359,34 @@ void LlamaModel::saveCache(const std::string& cacheKey) {
       "saveCache: no conversation is cached under '" + cacheKey + "'");
 }
 
+void LlamaModel::discardCache(const std::string& cacheKey) {
+  if (cacheKey.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "discardCache: cacheKey must be a non-empty string");
+  }
+  std::shared_lock lock(stateMtx_);
+  if (!state_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "discardCache: the model is not loaded");
+  }
+  if (state_->batchScheduler_) {
+    // Parked sequences, checkpoints and the RAM tier it shares.
+    state_->batchScheduler_->discardConversation(cacheKey);
+  }
+  // The single-prompt session shares the context with the scheduler on a
+  // parallel model, so it is only touched while no batch job runs (the first
+  // batch job invalidates it under the same lock).
+  std::scoped_lock singleRunLock(singleRunMtx_);
+  if (state_->cacheManager_.has_value() &&
+      (!state_->batchScheduler_ || activeBatchJobs_.load() == 0)) {
+    state_->cacheManager_->discard(cacheKey);
+  }
+}
+
 std::vector<std::string>
 LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
   std::shared_lock lock(stateMtx_);

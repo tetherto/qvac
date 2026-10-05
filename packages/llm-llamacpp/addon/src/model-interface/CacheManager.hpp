@@ -72,6 +72,11 @@ public:
   /// keeps the conversation, still marked unsaved.
   SaveOutcome saveForCaller(const std::string& cacheKey);
 
+  /// The caller's explicit discard (`discardCache`): drops the active
+  /// conversation when it is `cacheKey`, and its RAM-tier entry, without
+  /// writing either.
+  void discard(const std::string& cacheKey);
+
 private:
   void saveActiveCacheForTransition();
   /// Moves the active conversation into the RAM tier; false when the tier is

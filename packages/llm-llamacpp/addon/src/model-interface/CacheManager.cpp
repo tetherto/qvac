@@ -457,6 +457,16 @@ CacheManager::saveForCaller(const std::string& cacheKey) {
   return SaveOutcome::Written;
 }
 
+void CacheManager::discard(const std::string& cacheKey) {
+  if (hasActiveCache() && sessionPath_ == cacheKey) {
+    resetStateCallback_(true);
+    invalidate();
+  }
+  if (ramTier_) {
+    (void)ramTier_->take(cacheKey);
+  }
+}
+
 void CacheManager::setRamTier(
     std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
         ramTier) {

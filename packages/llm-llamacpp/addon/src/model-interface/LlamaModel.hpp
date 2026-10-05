@@ -188,6 +188,13 @@ public:
   /// (the conversation stays in memory, still unsaved).
   void saveCache(const std::string& cacheKey);
 
+  /// Drops the conversation kept in memory for @p cacheKey without writing
+  /// it: the single-prompt session, a parked batch sequence, the RAM tier and
+  /// its checkpoints. Waits for a request running on that key, like
+  /// `saveCache`. The file, if any, is left alone. A no-op when nothing is
+  /// kept for the key.
+  void discardCache(const std::string& cacheKey);
+
   /**
    * The Reset method.
    */

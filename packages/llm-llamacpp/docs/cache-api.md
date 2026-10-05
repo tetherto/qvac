@@ -300,6 +300,21 @@ Because it runs after `run()` returns, another request on the same key can be
 served first, and the file then holds that turn as well. It is always a
 committed state.
 
+### `discardCache(cacheKey)`
+
+```js
+await model.discardCache('session.bin') // nothing in memory for session.bin
+fs.rmSync('session.bin', { force: true }) // and nothing on disk
+```
+
+`discardCache` drops the conversation kept in memory for `cacheKey` without
+writing it: the active single-prompt conversation, a batch conversation
+resident in its slot, its RAM-tier entry and its checkpoints. No later
+eviction or unload writes it, so it is how an app deletes a chat. Like
+`saveCache`, it waits for a request running on that key. It leaves the file
+alone: delete the file as well to remove a conversation that was already
+written. It resolves when nothing is kept for the key.
+
 ### Automatic writes
 
 **Single prompt (`parallel = 1`).** Without the [RAM
@@ -335,8 +350,11 @@ of being written.
   request rolled back), is not written.
 - A conversation whose loaded or saved file has been deleted (or its
   directory removed, or the file emptied) is dropped instead of written back,
-  and its next request starts cold. Deleting the file is how a caller
-  discards a conversation.
+  and its next request starts cold. This covers only a conversation that was
+  already written: one that never was has no file to delete, and is written
+  at the next eviction or unload. Use
+  [`discardCache(cacheKey)`](#discardcachecachekey) to discard a conversation
+  either way.
 - A crash or a killed process loses the turns that were only in memory. On
   mobile, where the OS can kill a backgrounded app without an unload, call
   `saveCache()` when the app goes to the background or after the turns that

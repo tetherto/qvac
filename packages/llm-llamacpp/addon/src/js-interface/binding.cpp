@@ -29,6 +29,7 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("cancelJob", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("finetune", qvac_lib_inference_addon_llama::finetune)
   V("saveCache", qvac_lib_inference_addon_llama::saveCache)
+  V("discardCache", qvac_lib_inference_addon_llama::discardCache)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)

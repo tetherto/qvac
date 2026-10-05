@@ -801,6 +801,24 @@ const LlmLlamacpp = class LlmLlamacpp {
         }
         await this.addon.saveCache(cacheKey);
     }
+    /**
+     * Drop the conversation kept in memory for `cacheKey` — the active
+     * single-prompt conversation, a batch conversation kept in its slot, its
+     * RAM-tier entry and its checkpoints — without writing it, so no later
+     * eviction or unload writes it. When a request on that key is running it
+     * waits for it to finish. The file, if one was written, is left alone:
+     * delete it as well to remove the conversation from disk. Resolves when
+     * nothing is kept for the key.
+     */
+    async discardCache(cacheKey) {
+        if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+            throw new TypeError("discardCache(cacheKey) requires a non-empty string");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        await this.addon.discardCache(cacheKey);
+    }
     getState() {
         return this.state;
     }

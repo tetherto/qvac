@@ -37,6 +37,8 @@ const state: { configLoaded: boolean } = model.getState();
 void state;
 const saved: Promise<void> = model.saveCache("/abs/session.bin");
 void saved;
+const discarded: Promise<void> = model.discardCache("/abs/session.bin");
+void discarded;
 
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",

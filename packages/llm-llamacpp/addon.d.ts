@@ -75,6 +75,7 @@ export interface LlamaBinding {
     cancelJob(handle: unknown, id: number): Promise<void> | void;
     finetune?(handle: unknown, params: FinetuneOptions): Promise<number | false> | number | false;
     saveCache(handle: unknown, cacheKey: string): Promise<void>;
+    discardCache(handle: unknown, cacheKey: string): Promise<void>;
     runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
     runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
     destroyInstance(handle: unknown): void;
@@ -133,6 +134,11 @@ export declare class LlamaInterface {
      * `LlmLlamacpp.saveCache`).
      */
     saveCache(cacheKey: string): Promise<void>;
+    /**
+     * Drop the conversation kept in memory for `cacheKey` without writing it
+     * (see `LlmLlamacpp.discardCache`).
+     */
+    discardCache(cacheKey: string): Promise<void>;
     /**
      * Run finetuning when native binding provides support.
      */

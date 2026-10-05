@@ -493,8 +493,9 @@ evicts a conversation parked on sequence 0, as in step 3.
   conversation came from, or was written to, its file. Before writing it back
   automatically it checks the file: missing (or its directory missing) or
   empty means the caller deleted it, so the conversation is discarded instead
-  of written back. Deleting the `cacheKey` file is how a caller drops a
-  conversation.
+  of written back. That only works once the conversation has been written: a
+  conversation that never was is unaffected by deleting a file. `discardCache`
+  drops a conversation either way (`saveCache`'s ordering, no write).
 - **Failures.** A failed `saveCache()` rejects and keeps the conversation,
   still unsaved. A failed single-prompt switch save is reported by that
   `run()` and the old conversation is dropped. A failed write during an

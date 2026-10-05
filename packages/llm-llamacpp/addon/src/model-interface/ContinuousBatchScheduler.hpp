@@ -415,6 +415,12 @@ public:
   /// `UnableToSaveSessionFile` and keeps the conversation, still unsaved.
   SlotStateCache::SaveOutcome saveConversation(const std::string& cacheKey);
 
+  /// The caller's explicit discard (`discardCache`): drops the conversation
+  /// kept for `cacheKey` (parked sequence, RAM-tier entry, checkpoints)
+  /// without writing it. Ordered like `saveConversation`: it waits for a
+  /// request running on that key. Blocks until done.
+  void discardConversation(const std::string& cacheKey);
+
   /// Sequences that hold a parked conversation (a committed keyed request's
   /// state kept for the next request on its `cacheKey`).
   [[nodiscard]] std::vector<uint32_t> parkedSeqIds() const;
@@ -690,6 +696,11 @@ private:
       const std::vector<llama_token>& ledgerWords);
   /// Runs the explicit saves whose key has no request in a slot.
   void serviceSaveJobsLocked() noexcept;
+  /// Drops everything kept for `cacheKey` without writing it.
+  void discardKeyLocked(const std::string& cacheKey) noexcept;
+  /// Shared by `saveConversation` and `discardConversation`.
+  std::future<SlotStateCache::SaveOutcome>
+  enqueueSaveJob(const std::string& cacheKey, bool discard);
   [[nodiscard]] bool hasRunnableSaveJobLocked() const noexcept;
   /// Fails every pending explicit save (the scheduler is being torn down).
   void failSaveJobsLocked() noexcept;
@@ -788,6 +799,8 @@ private:
   struct SaveJob {
     std::string cacheKey;
     std::promise<SlotStateCache::SaveOutcome> done;
+    /// Drop the conversation instead of writing it (`discardConversation`).
+    bool discard = false;
   };
   std::deque<std::shared_ptr<SaveJob>> saveJobs_;
   uint64_t residentHits_ = 0;
