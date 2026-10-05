@@ -8,7 +8,7 @@ import vm from 'node:vm'
 test('H3 example creates an H3_OUTPUT parent before loading the model', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'h3-output-'))
   const output = path.join(root, 'new', 'nested', 'clip.avi')
-  const source = fs.readFileSync(new URL('../examples/h3-video-common.js', import.meta.url), 'utf8')
+  const source = fs.readFileSync(new URL('../../examples/h3-video-common.js', import.meta.url), 'utf8')
   const env = { H3_OUTPUT: output }
   const fakeProcess = { env, on() {}, off() {} }
   const fakeFs = {

@@ -11,7 +11,7 @@ const binary = fileURLToPath(
 const env = { ...process.env }
 
 if (process.platform === 'linux' && !/(^|:)suppressions=/.test(env.LSAN_OPTIONS || '')) {
-  const suppression = fileURLToPath(new URL('../test/unit/lsan-libdbus.supp', import.meta.url))
+  const suppression = fileURLToPath(new URL('./unit/lsan-libdbus.supp', import.meta.url))
   env.LSAN_OPTIONS = [env.LSAN_OPTIONS, `suppressions=${suppression}`].filter(Boolean).join(':')
 }
 
