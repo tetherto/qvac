@@ -688,6 +688,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .ephemeral = request.ephemeral,
           .activeCacheSavedToDisk = activeCacheSavedToDisk,
           .prefillOnly = request.prefill,
+          .adoptedState = isCacheLoaded,
+          .adoptedDirty = adoptedDirtyState,
+          .adoptedEphemeral = adoptedEphemeral,
           .enqueuedAt = request.enqueuedAt,
           .admissionId = admissionId});
   cacheGuard.dismiss();
@@ -988,9 +991,14 @@ void ContinuousBatchScheduler::drainFinishedLocked(
     // the file is only written when the conversation leaves memory or the
     // caller asks (`saveConversation`). A failed rollback leaves live state
     // that may not match `getNPast()`, so it is not kept: the loop below
-    // clears the sequence and the last known-good file stays as it was.
+    // clears the sequence and the last known-good file stays as it was. A
+    // coherent rollback lands back on the conversation the request started
+    // from, which is kept as it was before the request.
     if (rollbackOk && slot.driver->shouldPersistAfterFinalize()) {
       slot.parkable = !slot.cacheKey.empty();
+    } else if (rollbackOk && slot.adoptedState && slot.driver->getNPast() > 0) {
+      slot.parkable = !slot.cacheKey.empty();
+      slot.parkAsAdopted = true;
     }
   }
   for (const auto& req : finished) {
@@ -1449,11 +1457,17 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       }
       // A user cancel during generation commits the cached request, so the
       // slot keeps that progress. It is not kept when the driver could not
-      // leave live memory coherent (`rollbackOk == false`) or when the hook
-      // ended in a rollback (`shouldPersistAfterFinalize()` false).
-      if (savePolicy == SaveCachePolicy::Save && rollbackOk &&
-          slots_[seqId]->driver->shouldPersistAfterFinalize()) {
-        slots_[seqId]->parkable = !slots_[seqId]->cacheKey.empty();
+      // leave live memory coherent (`rollbackOk == false`). A cancel that
+      // ended in a rollback (`shouldPersistAfterFinalize()` false) keeps the
+      // conversation the request started from, as it was before it.
+      if (savePolicy == SaveCachePolicy::Save && rollbackOk) {
+        auto& cancelled = *slots_[seqId];
+        if (cancelled.driver->shouldPersistAfterFinalize()) {
+          cancelled.parkable = !cancelled.cacheKey.empty();
+        } else if (cancelled.adoptedState && cancelled.driver->getNPast() > 0) {
+          cancelled.parkable = !cancelled.cacheKey.empty();
+          cancelled.parkAsAdopted = true;
+        }
       }
     } catch (const std::exception& e) {
       logTeardownFailureNoexcept("cancel teardown failed", seqId, e.what());
@@ -2036,10 +2050,12 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
               .cacheKey = slot->cacheKey,
               .ledgerWords = std::move(words),
               .checkpoints = std::move(checkpoints),
-              // The request that just ran added turns the file lacks.
-              .dirty = true,
+              // A committed request added turns the file lacks; a rolled-back
+              // one left the conversation as it was adopted.
+              .dirty = slot->parkAsAdopted ? slot->adoptedDirty : true,
               .activeCacheSavedToDisk = slot->activeCacheSavedToDisk,
-              .ephemeral = slot->ephemeral,
+              .ephemeral = slot->parkAsAdopted ? slot->adoptedEphemeral
+                                               : slot->ephemeral,
               .lastUse = ++parkClock_};
         } else {
           if (slot->parkable) {

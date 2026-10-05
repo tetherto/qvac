@@ -554,6 +554,14 @@ private:
     /// Set at finalize: the request committed coherent keyed state, so
     /// `freeSlot` parks the sequence instead of it being cleared.
     bool parkable = false;
+    /// The request started from a kept conversation (resident, RAM tier or
+    /// file). A coherent rollback lands back on it, so it is parked again
+    /// with these flags instead of the request's.
+    bool adoptedState = false;
+    bool adoptedDirty = false;
+    bool adoptedEphemeral = false;
+    /// Set at finalize when the request rolled back onto the adopted state.
+    bool parkAsAdopted = false;
     /// Carried from SubmitRequest so the drain can compute observed stats.
     std::chrono::steady_clock::time_point enqueuedAt{};
     /// Ownership token for this admission, strictly incrementing across the
