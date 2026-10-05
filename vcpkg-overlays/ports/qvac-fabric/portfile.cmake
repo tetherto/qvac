@@ -195,6 +195,8 @@ if(BUILD_CUDA_BACKEND)
   # arch. The semicolons stay escaped so vcpkg passes one argument.
   if(BUILD_CUDA_JETSON_BACKEND)
     set(QVAC_CUDA_ARCHS "87-real")
+    # Ships beside the CUDA 13 module, so it needs its own file name.
+    list(APPEND PLATFORM_OPTIONS -DGGML_CUDA_MODULE_SUFFIX=-jetson)
   else()
     set(QVAC_CUDA_ARCHS "75-virtual\;80-virtual\;80-real\;86-real\;89-real\;90-virtual\;120a-real\;121a-real")
   endif()
@@ -324,25 +326,12 @@ if(BUILD_CUDA_BACKEND)
   else()
     set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda.so")
   endif()
+  if(BUILD_CUDA_JETSON_BACKEND)
+    set(QVAC_CUDA_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda-jetson.so")
+  endif()
   if(NOT EXISTS "${QVAC_CUDA_MODULE}")
     message(FATAL_ERROR "qvac-fabric: expected CUDA module was not installed at ${QVAC_CUDA_MODULE}")
   endif()
-endif()
-
-if(BUILD_CUDA_JETSON_BACKEND)
-  # Keep both CUDA majors in one prebuild directory. The loader scans every
-  # CUDA module candidate and skips the one whose runtime is unavailable.
-  set(QVAC_CUDA_JETSON_MODULE "${CURRENT_PACKAGES_DIR}/lib/libqvac-ggml-cuda-jetson.so")
-  file(RENAME "${QVAC_CUDA_MODULE}" "${QVAC_CUDA_JETSON_MODULE}")
-
-  set(QVAC_GGML_TARGETS "${CURRENT_PACKAGES_DIR}/share/ggml/ggml-targets-release.cmake")
-  if(NOT EXISTS "${QVAC_GGML_TARGETS}")
-    message(FATAL_ERROR "qvac-fabric: expected ggml target exports were not installed at ${QVAC_GGML_TARGETS}")
-  endif()
-  vcpkg_replace_string(
-    "${QVAC_GGML_TARGETS}"
-    "libqvac-ggml-cuda.so"
-    "libqvac-ggml-cuda-jetson.so")
 endif()
 
 if(BUILD_LLAMA)
