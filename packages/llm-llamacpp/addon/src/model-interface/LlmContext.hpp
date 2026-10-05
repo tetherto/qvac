@@ -57,9 +57,8 @@ struct GenerationParams {
   // (restricts the call to that function). Consumed at prompt render time,
   // not by the sampler, so it is deliberately absent from `hasOverrides()`.
   std::optional<std::string> tool_choice;
-  // OpenAI-style `parallel_tool_calls`: whether one response may carry more
-  // than one tool call. Render-time like `tool_choice`, so also absent from
-  // `hasOverrides()`.
+  // Whether one response may carry more than one tool call. Render-time like
+  // `tool_choice`, so also absent from `hasOverrides()`.
   std::optional<bool> parallel_tool_calls;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /

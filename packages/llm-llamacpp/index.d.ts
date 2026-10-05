@@ -350,9 +350,9 @@ declare namespace LlmLlamacpp {
          */
         tool_choice?: "auto" | "none" | "required" | (string & {});
         /**
-         * Whether one response may carry more than one tool call, in the OpenAI
-         * style. Defaults to `true`; `false` limits the template and the tool-call
-         * grammar to a single call. Ignored when the prompt carries no tools.
+         * Whether one response may carry more than one tool call. Defaults to
+         * `true`; `false` limits the template and the tool-call grammar to a
+         * single call. Ignored when the prompt carries no tools.
          */
         parallel_tool_calls?: boolean;
         /**
