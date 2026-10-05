@@ -1637,3 +1637,38 @@ test('detectToolDialectFromName: DeepSeek sizes and quants are not DSML versions
     t.is(detectToolDialectFromName(name, path), 'hermes', `name=${name} path=${path}`)
   }
 })
+
+// --- nullable and union parameter types ---
+
+const nullableTool: Tool = {
+  type: 'function',
+  name: 'search',
+  description: 'search',
+  parameters: {
+    type: 'object',
+    properties: {
+      limit: { type: ['integer', 'null'] },
+      offset: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      filter: { type: 'object', properties: { tag: { type: 'string' } } }
+    }
+  }
+}
+
+test('parseQwen35Format: nullable and anyOf types coerce to their non-null member', (t) => {
+  const text = `<tool_call><function=search><parameter=limit>7</parameter><parameter=offset>null</parameter><parameter=filter>{"tag":"a"}</parameter></function></tool_call>`
+  const result = parseQwen35Format(text, [nullableTool])
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { limit: 7, offset: null, filter: { tag: 'a' } })
+})
+
+test('parseDsmlFormat: nullable and anyOf types coerce to their non-null member', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="search">
+<｜DSML｜parameter name="limit">null</｜DSML｜parameter>
+<｜DSML｜parameter name="offset">3</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, [nullableTool])
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { limit: null, offset: 3 })
+})

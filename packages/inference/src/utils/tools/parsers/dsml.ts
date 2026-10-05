@@ -1,6 +1,8 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
   generateStableToolCallId,
+  parameterAllowsNull,
+  primaryParameterType,
   validateToolArguments,
   type ParserResult
 } from '@/utils/tools/shared'
@@ -46,9 +48,12 @@ function coerceBySchemaType(value: string, type?: string): unknown {
   }
 }
 
-function coerceParamValue(raw: string, isString: string | undefined, type?: string): unknown {
+function coerceParamValue(raw: string, isString: string | undefined, schema?: unknown): unknown {
   const trimmed = raw.trim()
-  if (isString === undefined) return coerceBySchemaType(trimmed, type)
+  if (isString === undefined) {
+    if (trimmed === 'null' && parameterAllowsNull(schema)) return null
+    return coerceBySchemaType(trimmed, primaryParameterType(schema))
+  }
   if (isString === 'true') return trimmed
   try {
     return JSON.parse(trimmed)
@@ -161,7 +166,7 @@ export function parseDsmlFormat(text: string, tools: Tool[]): ParserResult {
       }
       const isString = STRING_ATTR_REGEX.exec(attrs)?.[1]?.toLowerCase()
       try {
-        args[key] = coerceParamValue(param[2]!, isString, properties[key]?.type)
+        args[key] = coerceParamValue(param[2]!, isString, properties[key])
       } catch (err) {
         parseError = `${key}: ${err instanceof Error ? err.message : String(err)}`
         break

@@ -1,16 +1,20 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
   generateStableToolCallId,
+  parameterAllowsNull,
+  primaryParameterType,
   validateToolArguments,
   type ParserResult
 } from '@/utils/tools/shared'
 
 // Coerce raw parameter text to the type declared in the tool's JSON schema.
 // String values are raw (not JSON-quoted); arrays/objects are valid JSON.
-function coerceParamValue(raw: string, schema?: { type?: string }): unknown {
+function coerceParamValue(raw: string, schema?: unknown): unknown {
   const trimmed = raw.trim()
-  if (!schema?.type) return trimmed
-  switch (schema.type) {
+  if (trimmed === 'null' && parameterAllowsNull(schema)) return null
+  const type = primaryParameterType(schema)
+  if (!type) return trimmed
+  switch (type) {
     case 'number': {
       if (trimmed.length === 0) throw new Error(`invalid numeric value: ""`)
       const n = Number(trimmed)

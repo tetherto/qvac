@@ -6,6 +6,31 @@ export type ParserResult = {
   errors: ToolCallError[]
 }
 
+// The one type a parameter value is coerced to: a nullable `["string", "null"]`
+// or `anyOf` union resolves to its first non-null member.
+export function primaryParameterType(schema: unknown): string | undefined {
+  if (!schema || typeof schema !== 'object') return undefined
+  const { type, anyOf, oneOf } = schema as { type?: unknown; anyOf?: unknown; oneOf?: unknown }
+  if (typeof type === 'string') return type === 'null' ? undefined : type
+  if (Array.isArray(type)) {
+    return type.find((t): t is string => typeof t === 'string' && t !== 'null')
+  }
+  const branches = Array.isArray(anyOf) ? anyOf : Array.isArray(oneOf) ? oneOf : []
+  for (const branch of branches) {
+    const resolved = primaryParameterType(branch)
+    if (resolved !== undefined) return resolved
+  }
+  return undefined
+}
+
+export function parameterAllowsNull(schema: unknown): boolean {
+  if (!schema || typeof schema !== 'object') return false
+  const { type, anyOf, oneOf } = schema as { type?: unknown; anyOf?: unknown; oneOf?: unknown }
+  if (type === 'null' || (Array.isArray(type) && type.includes('null'))) return true
+  const branches = Array.isArray(anyOf) ? anyOf : Array.isArray(oneOf) ? oneOf : []
+  return branches.some(parameterAllowsNull)
+}
+
 export function stripThinkingBlocks(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '')
 }
