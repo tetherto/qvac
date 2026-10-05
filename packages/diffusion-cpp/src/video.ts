@@ -516,7 +516,9 @@ export default class VideoStableDiffusion {
       throw new Error('reference_images requires params.lora.')
     }
     if (params.reference_images != null && mode === 'img2vid') {
-      throw new Error('LTX IC-LoRA reference conditioning cannot be combined with img2vid/init_image.')
+      throw new Error(
+        'LTX IC-LoRA reference conditioning cannot be combined with img2vid/init_image.'
+      )
     }
     if (params.reference_images != null && this._config.vae_decode_only === true) {
       throw new Error(
@@ -546,8 +548,28 @@ export default class VideoStableDiffusion {
         params.reference_images[i] = coerced
       }
     } else if (hasReferenceConditioning) {
-      throw new Error('reference_attention_strength and reference_downscale_factor require reference_images.')
+      throw new Error(
+        'reference_attention_strength and reference_downscale_factor require reference_images.'
+      )
     }
+    let decodedInputPixels = 0
+    const maxJobPixels = Number(this._config.max_job_pixels ?? 128 * 1024 * 1024)
+    const countInputPixels = (image: Uint8Array): void => {
+      const dimensions = peekImageDims(image)
+      if (dimensions) {
+        decodedInputPixels += dimensions.w * dimensions.h
+        if (decodedInputPixels > maxJobPixels) {
+          const limit =
+            maxJobPixels % (1024 * 1024) === 0
+              ? `${maxJobPixels / (1024 * 1024)} Mi pixel`
+              : `${maxJobPixels} pixel`
+          throw new RangeError(`Video input images exceed the ${limit} decoded job limit`)
+        }
+      }
+    }
+    if (params.init_image instanceof Uint8Array) countInputPixels(params.init_image)
+    for (const frame of params.control_frames ?? []) countInputPixels(frame)
+    for (const image of params.reference_images ?? []) countInputPixels(image)
     if (
       params.reference_attention_strength != null &&
       (!Number.isFinite(params.reference_attention_strength) ||
@@ -560,16 +582,14 @@ export default class VideoStableDiffusion {
     }
     if (
       params.reference_downscale_factor != null &&
-      (!Number.isFinite(params.reference_downscale_factor) || params.reference_downscale_factor !== 1)
+      (!Number.isFinite(params.reference_downscale_factor) ||
+        params.reference_downscale_factor !== 1)
     ) {
       throw new RangeError(
         `reference_downscale_factor must be exactly 1. Got: ${params.reference_downscale_factor}`
       )
     }
-    if (
-      params.vae_extra_tiling_args != null &&
-      typeof params.vae_extra_tiling_args !== 'string'
-    ) {
+    if (params.vae_extra_tiling_args != null && typeof params.vae_extra_tiling_args !== 'string') {
       throw new TypeError(
         `vae_extra_tiling_args must be a string. Got: ${typeof params.vae_extra_tiling_args}`
       )
@@ -715,7 +735,6 @@ export default class VideoStableDiffusion {
   private _isLtx(): boolean {
     return !!this._files.embeddingsConnectors
   }
-
 }
 
 module.exports = VideoStableDiffusion
