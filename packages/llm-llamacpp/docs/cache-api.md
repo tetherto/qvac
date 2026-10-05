@@ -320,9 +320,7 @@ turns is written:
 
 1. **When a slot is needed for another key**: the least recently used resident
    conversation is evicted and saved.
-2. **When a single-prompt request runs on the parallel model**: it uses
-   sequence 0, so the conversation resident there is evicted first, as in 1.
-3. **When the model is reloaded or unloaded.** This is skipped, with a
+2. **When the model is reloaded or unloaded.** This is skipped, with a
    warning, while a batch request is running.
 
 A request that finishes leaves its conversation in its slot and writes

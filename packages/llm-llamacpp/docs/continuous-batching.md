@@ -414,7 +414,7 @@ Every disk write on this path, and its failure behaviour, is listed in [How the 
 At admission the driver takes the state from the first source that has it: the parked sequence (`adoptResidentState`, which runs the same validation as a file load), the RAM tier (`llama_state_seq_set_data_ext`, then `adoptResidentState`), or the file (`loadCache`). If admission fails after adopting a conversation with unsaved turns, the driver rolls back (`onFailure`) and the conversation is parked again. Model-level exceptions:
 
 - The batch entry wipe of single-prompt leftovers skips parked sequences (`parkedSeqIds()`).
-- A single-prompt request first calls `evictParked(0)`, since it shares sequence 0.
+- A direct call to the model's single-prompt context (`LlamaModel::processPrompt()`, used by C++ callers and tests; `run()` on a parallel model always goes through the scheduler) first calls `evictParked(0)`, since that context is fixed to sequence 0.
 - `clear()` drops parked and RAM-tier state without writing it.
 
 On hybrid and recurrent models the checkpoints go with the parked state; a key with no resident or RAM-tier state keeps them in `checkpointStore_` for the next load of its file. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` whose state was evicted to its file therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.

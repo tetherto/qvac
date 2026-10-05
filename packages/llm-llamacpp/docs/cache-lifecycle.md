@@ -466,12 +466,17 @@ Each of the `parallel` sequences ("slots") holds at most one conversation.
 4. **The RAM tier is full.** To fit a new entry, the oldest entries are
    removed; each one with unsaved turns that is not ephemeral is written to
    its file first.
-5. **A single-prompt request runs on a parallel model.** It uses sequence 0,
-   so a conversation resident there is evicted first, as in step 3.
-6. **On a reload and on an unload**, every resident conversation with unsaved
+5. **On a reload and on an unload**, every resident conversation with unsaved
    turns is written, then every RAM entry with unsaved turns, ephemeral ones
    excepted. This is skipped, with a warning, while a batch request is still
    running.
+
+Every `run()` on a parallel model, single prompts included, goes through the
+scheduler and takes any free slot by the rules in step 2; nothing is tied to
+sequence 0. The model's internal single-prompt context, which is fixed to
+sequence 0, is not reachable from `run()` there (only direct C++ calls to
+`LlamaModel::processPrompt()` use it). As a safety net, such a call first
+evicts a conversation parked on sequence 0, as in step 3.
 
 ### Rules common to both paths
 
@@ -531,8 +536,9 @@ stateDiagram-v2
   must match the memory it describes, or the state is dropped and the next
   source is tried.
 - The batch entry wipe of stale single-prompt state skips resident
-  conversations, and a single-prompt request on a parallel model first evicts
-  whatever is resident on sequence 0, which it shares.
+  conversations. A direct C++ call to the internal single-prompt context
+  (not reachable from `run()` on a parallel model) first evicts whatever is
+  resident on sequence 0, which that context shares.
 
 ## Configuration that shapes the machine
 
