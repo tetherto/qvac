@@ -405,7 +405,7 @@ importers:
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
       '@qvac/sdk':
-        specifier: ^0.20.0
+        specifier: ^0.21.0
         version: link:../sdk
       close-with-grace:
         specifier: ^2.1.0
