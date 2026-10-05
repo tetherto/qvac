@@ -342,6 +342,12 @@ A request that finishes leaves its conversation in its slot and writes
 nothing. With the RAM tier on, an evicted conversation moves into RAM instead
 of being written.
 
+Eviction and `saveCache()` copy the conversation's whole state off the
+device and write it on the scheduler's worker thread, so every slot pauses
+for the length of that write: up to hundreds of MB on a long context. Sizing
+`cache_ram_mib` to hold the conversations in use moves eviction writes from
+admission to unload.
+
 **On both paths:**
 
 - An ephemeral conversation is never written automatically: each of the

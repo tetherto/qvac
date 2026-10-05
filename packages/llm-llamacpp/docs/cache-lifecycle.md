@@ -164,6 +164,16 @@ single-prompt and batch paths alike.
 After every divergence, checkpoints that are no longer a prefix of the new
 prompt are deleted.
 
+**Cost.** Decoding is paid once per token, because the shared prefix is
+reused. Rendering and tokenizing are not: every cached turn renders and
+tokenizes the whole history, so that part grows with the conversation, and
+summed over a session it grows with the square of its length. On the batch
+path it runs on the scheduler's worker thread, so other slots wait for it. As
+a rough figure, on Qwen3-0.6B (Apple Silicon, prefill-only turns of about 27
+tokens) a turn took about 70 ms with 500 tokens of history and 180–260 ms
+with 3,200; the opt-in `KvCacheExtended.RenderCostPerTurn` test reproduces
+the measurement.
+
 ## Checkpoint lifecycle (full-state models)
 
 ```mermaid
