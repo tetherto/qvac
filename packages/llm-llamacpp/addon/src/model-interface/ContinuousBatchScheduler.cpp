@@ -530,6 +530,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     driver->adoptCheckpoints(std::move(kept->second.checkpoints));
     checkpointStore_.erase(kept);
   }
+  // A throw before the driver begins its cache request rolls back to this
+  // cursor, so it must describe the state just adopted. The call after
+  // `preparePrefill` below re-anchors it once preparation has run.
+  driver->snapshotPreRequestCursor();
 
   // A failed admission leaves the sequence as it found it: a conversation
   // adopted with unsaved turns is rolled back and parked again (its file
@@ -546,6 +550,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       try {
         if (driver->onFailure({})) {
           std::vector<llama_token> words = driver->residentStateTokens();
+          // Never park a ledger whose totals disagree with its header: a
+          // later write would replace the file with one that cannot load.
+          (void)cache::deserialize(words.data(), words.size());
           if (!words.empty()) {
             parked_[seqId] = ParkedState{
                 .cacheKey = key,

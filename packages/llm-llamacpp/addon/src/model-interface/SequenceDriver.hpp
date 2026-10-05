@@ -354,10 +354,11 @@ public:
 
   virtual void saveCache(const std::string& cacheKey) const = 0;
 
-  /// Capture the post-`preparePrefill` cursor for `onCancel` rollback. The
-  /// scheduler calls this after `preparePrefill` because prefill preparation
-  /// may mutate existing KV state; anchoring earlier would roll cancellation
-  /// back to a stale cursor. Cheap: bookkeeping only, no I/O.
+  /// Capture the cursor for a rollback outside a cache request. The scheduler
+  /// calls this once after adopting kept state, so a failure before
+  /// `preparePrefill` begins its cache request rolls back to that state, and
+  /// again after `preparePrefill`, which may mutate existing KV state. No-op
+  /// while a cache request is active. Cheap: bookkeeping only, no I/O.
   /// Default no-op for drivers whose cancel does not need it.
   virtual void snapshotPreRequestCursor() {}
 
