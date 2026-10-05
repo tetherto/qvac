@@ -1748,7 +1748,7 @@ importers:
         specifier: 0.1.0
         version: 0.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/inference':
-        specifier: ^0.20.0
+        specifier: ^0.21.0
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
