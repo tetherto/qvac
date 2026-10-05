@@ -82,7 +82,11 @@ public:
 
   [[nodiscard]] bool isLoaded() const;
 
-  /// @brief Throws InvalidConfiguration for a key a Laya load does not accept.
+  /// @brief Read-only access to the context, null until loaded.
+  [[nodiscard]] const llama_context* getCtx() const;
+
+  /// @brief Throws InvalidConfiguration for a key a Laya load does not
+  /// accept, or a thread count that is not a whole number up to the CPU count.
   static const std::unordered_map<std::string, std::string>&
   checkConfig(const std::unordered_map<std::string, std::string>& config);
 

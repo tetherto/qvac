@@ -89,7 +89,7 @@ class LayaDecisions {
     _job;
     _run;
     _hasActiveResponse;
-    constructor({ files, config = { device: "gpu" }, logger = null, opts = {} }) {
+    constructor({ files, config = {}, logger = null, opts = {} }) {
         if (!files || !Array.isArray(files.model) || files.model.length === 0) {
             throw new TypeError("files.model must be a non-empty array of absolute paths");
         }

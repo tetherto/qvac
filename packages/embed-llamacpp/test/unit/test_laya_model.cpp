@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <any>
 #include <chrono>
 #include <cstdlib>
@@ -10,6 +11,10 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <unistd.h>
+#endif
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -109,6 +114,8 @@ TEST(LayaModelConfigTest, AcceptsLayaLoadOptions) {
       {"main-gpu", "0"},
       {"split-mode", "none"},
       {"flash_attn", "auto"},
+      {"threads", "1"},
+      {"threads-batch", "0"},
       {"openclCacheDir", "/tmp"}};
   EXPECT_NO_THROW(LayaModel::checkConfig(config));
 }
@@ -135,6 +142,69 @@ TEST(LayaModelConfigTest, RejectsOptionsThatDoNotApply) {
   }
 }
 
+TEST(LayaModelConfigTest, ThreadsMustBeAWholeNumber) {
+  for (const char* key : {"threads", "threads-batch", "threads_batch"}) {
+    for (const char* value : {"abc", "4.5", "", "2x"}) {
+      try {
+        LayaModel::checkConfig({{"device", "cpu"}, {key, value}});
+        FAIL() << key << "=" << value << " must be rejected";
+      } catch (const qvac_errors::StatusError& error) {
+        EXPECT_EQ(error.codeString(), "[ GTE :: InvalidConfiguration ]");
+        EXPECT_NE(
+            std::string(error.what()).find("must be a whole number"),
+            std::string::npos)
+            << error.what();
+      }
+    }
+  }
+}
+
+TEST(LayaModelConfigTest, ThreadsOutOfRange) {
+  try {
+    LayaModel::checkConfig(
+        {{"device", "cpu"}, {"threads", "99999999999999999999"}});
+    FAIL() << "a value too large to parse must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(error.codeString(), "[ GTE :: InvalidConfiguration ]");
+    EXPECT_NE(
+        std::string(error.what()).find("is out of range"), std::string::npos)
+        << error.what();
+  }
+}
+
+TEST(LayaModelConfigTest, ThreadsAtMostTheCpuCount) {
+  // The device's CPUs, online or not, as LayaModel counts them.
+  unsigned cpus = std::thread::hardware_concurrency();
+#if defined(_SC_NPROCESSORS_CONF)
+  if (const long configured = sysconf(_SC_NPROCESSORS_CONF); configured > 0) {
+    cpus = std::max(cpus, static_cast<unsigned>(configured));
+  }
+#endif
+  if (cpus == 0) {
+    GTEST_SKIP() << "CPU count unknown";
+  }
+  const std::string over = std::to_string(cpus + 1);
+  for (const char* key : {"threads", "threads-batch"}) {
+    try {
+      LayaModel::checkConfig({{"device", "cpu"}, {key, over}});
+      FAIL() << key << "=" << over << " must be rejected";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_EQ(error.codeString(), "[ GTE :: InvalidConfiguration ]");
+      EXPECT_NE(
+          std::string(error.what())
+              .find("this device has " + std::to_string(cpus) + " CPUs"),
+          std::string::npos)
+          << error.what();
+    }
+    // Every CPU, and 0 or below (all CPUs), are accepted.
+    for (const std::string& ok :
+         {std::to_string(cpus), std::string("0"), std::string("-1")}) {
+      EXPECT_NO_THROW(LayaModel::checkConfig({{"device", "cpu"}, {key, ok}}))
+          << key << "=" << ok;
+    }
+  }
+}
+
 TEST(LayaModelConfigTest, ConstructorRejectsOptionsThatDoNotApply) {
   EXPECT_EQ(
       codeOf([] {
@@ -142,6 +212,25 @@ TEST(LayaModelConfigTest, ConstructorRejectsOptionsThatDoNotApply) {
             "unused.gguf", {{"device", "cpu"}, {"pooling", "mean"}}, "");
       }),
       "[ GTE :: InvalidConfiguration ]");
+}
+
+TEST(LayaModelLoadTest, MissingDeviceFailsAtLoad) {
+  const std::string path = findModel("models/unit-test/test-model.gguf");
+  if (path.empty()) {
+    FAIL() << "Test model not found: models/unit-test/test-model.gguf";
+  }
+  LayaModel model(path, {}, "");
+  model.initializeBackend(backendsDir());
+  try {
+    model.waitForLoadInitialization();
+    FAIL() << "a load without device must fail";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(
+        std::string(error.what()).find("must specify a device"),
+        std::string::npos)
+        << error.what();
+  }
+  EXPECT_FALSE(model.isLoaded());
 }
 
 TEST(LayaModelLoadTest, RejectsNonLayaModel) {
@@ -392,4 +481,27 @@ TEST(LayaModelCancelTest, CancelStopsARunningRequestOnGpu) {
   // callback is the only way to stop it; it must reach the GPU backend too.
   const auto [cancelled, elapsed] = cancelLongRequest(model);
   EXPECT_TRUE(cancelled) << "finished in " << elapsed.count() << " ms";
+}
+
+TEST(LayaModelThreadsTest, ThreadSettingsReachTheContext) {
+  const std::string path = layaModelPath();
+  if (path.empty()) {
+    GTEST_SKIP() << "Laya test model not found, see layaModelPath()";
+  }
+  if (std::thread::hardware_concurrency() < 2) {
+    GTEST_SKIP() << "needs at least 2 CPUs";
+  }
+  auto threadsOf = [&](std::unordered_map<std::string, std::string> config) {
+    LayaModel model(path, config, "");
+    model.initializeBackend(backendsDir());
+    model.waitForLoadInitialization();
+    auto* ctx = const_cast<llama_context*>(model.getCtx());
+    return std::pair{llama_n_threads(ctx), llama_n_threads_batch(ctx)};
+  };
+
+  EXPECT_EQ(
+      threadsOf({{"device", "cpu"}, {"threads", "1"}, {"threads-batch", "2"}}),
+      std::pair(1, 2));
+  // threads-batch falls back to threads.
+  EXPECT_EQ(threadsOf({{"device", "cpu"}, {"threads", "2"}}), std::pair(2, 2));
 }

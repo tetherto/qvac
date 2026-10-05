@@ -1,11 +1,18 @@
 #include "LayaModel.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
+#include <thread>
 #include <unordered_set>
 #include <utility>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <unistd.h>
+#endif
 
 #include <common/common.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -39,8 +46,72 @@ const std::unordered_set<std::string>& allowedConfigKeys() {
       "tensor_split",
       "flash_attn",
       "flash-attn",
+      "threads",
+      "threads-batch",
+      "threads_batch",
       "openclCacheDir"};
   return keys;
+}
+
+bool isThreadsKey(const std::string& key) {
+  return key == "threads" || key == "threads-batch" || key == "threads_batch";
+}
+
+// CPUs the device has. hardware_concurrency() counts the online ones, which
+// Android lowers when it parks cores, so take the configured count when larger.
+unsigned cpuCount() {
+  unsigned cpus = std::thread::hardware_concurrency();
+#if defined(_SC_NPROCESSORS_CONF)
+  const long configured = sysconf(_SC_NPROCESSORS_CONF);
+  if (configured > 0) {
+    cpus = std::max(cpus, static_cast<unsigned>(configured));
+  }
+#endif
+  return cpus;
+}
+
+// A whole number, at most the CPU count; 0 or below means every CPU. More
+// threads than CPUs only slows a pass down, because ggml's workers wait on
+// spinning barriers: on 10 CPUs, 16 threads took about 11x as long as 10, and
+// 128 did not finish within a minute.
+void checkThreads(const std::string& key, const std::string& value) {
+  long long threads = 0;
+  const char* end = value.data() + value.size();
+  const auto [ptr, ec] = std::from_chars(value.data(), end, threads);
+  if (ec == std::errc::result_out_of_range) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(InvalidConfiguration),
+        string_format(
+            "%s: '%s' is out of range: '%s'",
+            __func__,
+            key.c_str(),
+            value.c_str()));
+  }
+  if (ec != std::errc() || ptr != end) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(InvalidConfiguration),
+        string_format(
+            "%s: '%s' must be a whole number, got '%s'",
+            __func__,
+            key.c_str(),
+            value.c_str()));
+  }
+  const unsigned cpus = cpuCount();
+  if (threads > 0 && cpus > 0 && threads > static_cast<long long>(cpus)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(InvalidConfiguration),
+        string_format(
+            "%s: '%s' is %lld, but this device has %u CPUs; use at most %u, "
+            "or 0 for all of them",
+            __func__,
+            key.c_str(),
+            threads,
+            cpus,
+            cpus));
+  }
 }
 
 } // namespace
@@ -55,9 +126,13 @@ const std::unordered_map<std::string, std::string>& LayaModel::checkConfig(
           string_format(
               "%s: '%s' is not a Laya load option; accepted: device, "
               "gpu_layers, batch_size, verbosity, main-gpu, split-mode, "
-              "tensor-split, flash_attn, openclCacheDir",
+              "tensor-split, flash_attn, threads, threads-batch, "
+              "openclCacheDir",
               __func__,
               key.c_str()));
+    }
+    if (isThreadsKey(key)) {
+      checkThreads(key, value);
     }
   }
   return config;
@@ -233,6 +308,8 @@ void LayaModel::initializeBackend(
     const std::string& backendsDir, const std::string& openclCacheDir) {
   loader_.initializeBackend(backendsDir, openclCacheDir);
 }
+
+const llama_context* LayaModel::getCtx() const { return loader_.context(); }
 
 bool LayaModel::isLoaded() const {
   return loader_.isLoaded() && laya_ != nullptr;

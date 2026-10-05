@@ -41,7 +41,7 @@
     "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
-    "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json",
+    "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json && tsc -p test/types/tsconfig.interop.json",
     "test:dts": "npm run test:types",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
     "performance:install": "cd ./benchmarks/performance && npm install",

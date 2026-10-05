@@ -7,6 +7,7 @@ import { type AddonOutputCallback, type LoadWeightsData, type NumericLike } from
  * single-pass decision setup, and embedding options do not apply.
  */
 export interface LayaConfig {
+    /** Required: a missing device fails at load, as in GGMLBert. */
     device: "gpu" | "cpu";
     gpu_layers?: NumericLike;
     /**
@@ -17,6 +18,17 @@ export interface LayaConfig {
     batch_size?: NumericLike;
     verbosity?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
+    /**
+     * CPU threads, at most the device's CPU count (more only slow a pass down
+     * and are rejected at load). Unset uses one per physical core; `0` or below
+     * uses every logical CPU.
+     */
+    threads?: NumericLike;
+    /**
+     * CPU threads for batch processing, which is all of Laya's work. Same limit
+     * as `threads`; unset uses `threads`, `0` or below every logical CPU.
+     */
+    "threads-batch"?: NumericLike;
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
     "split-mode"?: "none" | "layer";
     "tensor-split"?: string;
@@ -136,7 +148,8 @@ export interface LayaDecisionsArgs {
     files: {
         model: string[];
     };
-    config?: LayaConfig;
+    /** Required, with at least `device`. */
+    config: LayaConfig;
     logger?: QvacLogger | Console | null;
     opts?: {
         stats?: boolean;
