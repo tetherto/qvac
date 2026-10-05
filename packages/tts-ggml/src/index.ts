@@ -758,7 +758,7 @@ interface MossSpeechFields {
   textReply?: boolean;
   /** Cut the spoken reply after this many seconds (0 = no cut). */
   maxReplySeconds?: number;
-  /** Bound on generated rows, 1..4096 (engine default 1000). */
+  /** Explicit bound on generated rows, 1..4096; omitted uses remaining model context. */
   maxNewTokens?: number;
   /** Greedy decoding instead of sampling. */
   greedy?: boolean;

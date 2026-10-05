@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-10-02`, the revision that ships the
+- Raise the `speech-cpp` floor to `2026-10-05`, the revision that ships the
   MOSS-SoundEffect and MOSS-Speech engines. It also runs Parler-TTS 1.6x to
   2.4x faster on the CPU backend (flash attention over the KV cache, a
   multi-threaded GELU, and on macOS/iOS the codec's convolutions on
@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MOSS-Speech calls that omit `maxNewTokens` use the remaining model context
+  after the prompt instead of an implicit 1000-token reply budget.
 - Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
   reports more free device memory than total once the process has allocated
   past the GPU's recommended working set, which made a model that does not fit
