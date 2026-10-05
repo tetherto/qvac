@@ -281,6 +281,8 @@
 /sdk/v0.19         /sdk/v0.19/                  301
 /sdk/v0.18/        /sdk/v0.18/index.html        200
 /sdk/v0.18         /sdk/v0.18/                  301
+/cli/v0.14/        /cli/v0.14/index.html        200
+/cli/v0.14         /cli/v0.14/                  301
 /cli/v0.13/        /cli/v0.13/index.html        200
 /cli/v0.13         /cli/v0.13/                  301
 /cli/v0.12/        /cli/v0.12/index.html        200
