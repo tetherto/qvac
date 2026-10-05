@@ -18,12 +18,14 @@ import {
   type TtsAudio8LoadConfig,
   type TtsChatterboxLoadConfig,
   type TtsCosyvoice3LoadConfig,
+  type TtsMossLoadConfig,
   type TtsParlerLoadConfig,
   type TtsSupertonicLoadConfig,
   type TtsRuntimeConfig,
   type TtsAudio8RuntimeConfig,
   type TtsChatterboxRuntimeConfig,
   type TtsCosyvoice3RuntimeConfig,
+  type TtsMossRuntimeConfig,
   type TtsParlerRuntimeConfig,
   type TtsSupertonicRuntimeConfig
 } from '@/schemas/index'
@@ -218,9 +220,62 @@ async function resolveAudio8Config(
   }
 }
 
+// Artifacts are a flat string map, so the per-speaker dialogue references ride
+// under indexed keys; createModel reads them back in order.
+const MOSS_DIALOGUE_REFERENCE_KEY = 'mossDialogueReferencePath'
+
+function mossDialogueReferencePaths(artifacts: Record<string, string | undefined>) {
+  const paths: string[] = []
+  for (let index = 0; ; index++) {
+    const path = artifacts[`${MOSS_DIALOGUE_REFERENCE_KEY}${index}`]
+    if (!path) return paths
+    paths.push(path)
+  }
+}
+
+async function resolveMossConfig(
+  config: TtsMossLoadConfig,
+  ctx: ResolveContext
+): Promise<ResolveResult<TtsRuntimeConfig>> {
+  const {
+    mossCodecDecoderModelSrc,
+    mossCodecEncoderModelSrc,
+    referenceAudioSrc,
+    dialogueReferenceSrcs,
+    ...runtime
+  } = config
+  if (!mossCodecDecoderModelSrc) {
+    throw new TtsArtifactsRequiredError()
+  }
+
+  const resolve = ctx.resolveModelPath
+  const [mossCodecDecoderPath, mossCodecEncoderPath, referenceAudioPath, dialogueReferencePaths] =
+    await Promise.all([
+      resolve(mossCodecDecoderModelSrc),
+      mossCodecEncoderModelSrc ? resolve(mossCodecEncoderModelSrc) : Promise.resolve(undefined),
+      referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
+      Promise.all((dialogueReferenceSrcs ?? []).map((src) => resolve(src)))
+    ])
+
+  return {
+    config: runtime,
+    artifacts: {
+      mossCodecDecoderPath,
+      ...(mossCodecEncoderPath ? { mossCodecEncoderPath } : {}),
+      ...(referenceAudioPath ? { referenceAudioPath } : {}),
+      ...Object.fromEntries(
+        dialogueReferencePaths.map((path, index) => [
+          `${MOSS_DIALOGUE_REFERENCE_KEY}${index}`,
+          path
+        ])
+      )
+    }
+  }
+}
+
 // The generic ggml backend-loading knobs, forwarded on `config` the same way
-// Supertonic's vulkanCacheDir already is. Parler and Audio8 configs carry no
-// `openclCacheDir` (their native builders do not read it), so it is simply
+// Supertonic's vulkanCacheDir already is. Parler, Audio8 and MOSS configs carry
+// no `openclCacheDir` (their native builders do not read it), so it is simply
 // absent for them.
 function ggmlBackendConfig(config: {
   backendsDir?: string | undefined
@@ -530,11 +585,60 @@ function createAudio8Model(
   return { model }
 }
 
+function createMossModel(
+  modelId: string,
+  config: TtsMossRuntimeConfig,
+  params: CreateModelParams,
+  artifacts: Record<string, string | undefined>
+): PluginModelResult {
+  const mossBackbone = params.modelPath
+  const mossCodecDecoder = artifacts['mossCodecDecoderPath']
+  const mossCodecEncoder = artifacts['mossCodecEncoderPath']
+  const referenceAudioPath = artifacts['referenceAudioPath']
+  const dialogueReferences = mossDialogueReferencePaths(artifacts)
+
+  if (!mossBackbone || !mossCodecDecoder) {
+    throw new TtsArtifactsRequiredError()
+  }
+
+  const logger = createStreamLogger(modelId, ModelType.ttsGgml)
+
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_MOSS,
+    files: {
+      mossBackbone,
+      mossCodecDecoder,
+      ...(mossCodecEncoder ? { mossCodecEncoder } : {})
+    },
+    ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
+    ...(dialogueReferences.length > 0 ? { dialogueReferences } : {}),
+    ...(config.durationTokens !== undefined ? { durationTokens: config.durationTokens } : {}),
+    ...(config.streamChunkTokens !== undefined
+      ? { streamChunkTokens: config.streamChunkTokens }
+      : {}),
+    ...(config.threads !== undefined ? { threads: config.threads } : {}),
+    ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
+    config: {
+      language: config.language ?? 'en',
+      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...ggmlBackendConfig(config)
+    },
+    logger,
+    opts: { stats: true },
+    exclusiveRun: true
+  })
+
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
+  return { model }
+}
+
 export const ttsPlugin = definePlugin({
   modelType: ModelType.ttsGgml,
   displayName: 'TTS (GGML)',
   addonPackage: ADDON_TTS,
   loadConfigSchema: ttsConfigSchema,
+  assessFit: TTSGgml.assessFit,
 
   async resolveConfig(cfg: Record<string, unknown>, ctx: ResolveContext) {
     const { ttsEngine } = cfg as { ttsEngine?: string }
@@ -548,6 +652,9 @@ export const ttsPlugin = definePlugin({
     }
     if (ttsEngine === 'audio8') {
       return resolveAudio8Config(cfg as TtsAudio8LoadConfig, ctx)
+    }
+    if (ttsEngine === 'moss') {
+      return resolveMossConfig(cfg as TtsMossLoadConfig, ctx)
     }
     if (ttsEngine === 'supertonic') {
       return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig, ctx)
@@ -567,6 +674,9 @@ export const ttsPlugin = definePlugin({
     }
     if (config.ttsEngine === 'audio8') {
       return createAudio8Model(params.modelId, config, params, artifacts)
+    }
+    if (config.ttsEngine === 'moss') {
+      return createMossModel(params.modelId, config, params, artifacts)
     }
     if (config.ttsEngine === 'supertonic') {
       return createSupertonicModel(params.modelId, config, params, artifacts)

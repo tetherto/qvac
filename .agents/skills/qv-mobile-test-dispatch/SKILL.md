@@ -248,7 +248,7 @@ failure is still reproducing, and when a leg was cancelled rather than run.
 | addon | note |
 |---|---|
 | `llm-llamacpp` | sharded — always pass `tests` |
-| `asr-ggml`, `audiogen-ggml` | `@qvac/*` publishes **no mobile prebuilds**, so an empty input cannot work. Use `prebuild_run_id` or the GPR `-mono` build. |
+| `asr-ggml`, `audiogen-ggml`, `tts-ggml` | split addons: an empty input or `@qvac` pin installs the matching `-android-arm64` / `-ios` package from npm at the same version. `@tetherto` `-mono` builds carry prebuilds inline. |
 | `audiogen-ggml` | pins its composite actions to the default branch, so `prebuild_run_id` only works once that support is on `main`; it fails loudly with instructions until then |
 | `vla` | package dir is `packages/vla-ggml`, workflow slug is `vla` |
 | `decoder-audio` | no native prebuild of its own (rides `bare-ffmpeg` from npm). `package` has no effect; use `ref`. |

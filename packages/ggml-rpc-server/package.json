@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ggml-rpc-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Managed ggml RPC server for QVAC LLM inference",
   "addon": true,
   "scripts": {
@@ -45,8 +45,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-rpc-server#readme",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.18.1",
-    "@qvac/fabric-ios": "0.18.1",
+    "@qvac/fabric-android-arm64": "0.19.0",
+    "@qvac/fabric-ios": "0.19.0",
     "@types/node": "^24.2.1",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
@@ -62,7 +62,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.18.1",
+    "@qvac/fabric": "^0.19.0",
     "bare-net": "^2.3.2",
     "bare-path": "^3.0.0"
   },

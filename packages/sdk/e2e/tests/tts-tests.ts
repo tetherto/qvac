@@ -401,6 +401,21 @@ export const ttsAudio8DuplexStreaming: TestDefinition = {
   metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 90000 }
 }
 
+// macOS / iOS only: loading the decoder stages its Core ML bundle beside it,
+// and the codec's synthesis stack then runs there instead of on ggml.
+export const ttsAudio8Coreml: TestDefinition = {
+  testId: 'tts-audio8-coreml',
+  params: {
+    text: 'Hello from Audio8 on Core ML.',
+    requireCoreml: true
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'codec=coreml', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 120000 }
+}
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -431,5 +446,6 @@ export const ttsTests = [
   ttsAudio8Default,
   ttsAudio8Streaming,
   ttsAudio8SentenceStreaming,
-  ttsAudio8DuplexStreaming
+  ttsAudio8DuplexStreaming,
+  ttsAudio8Coreml
 ]

@@ -37,7 +37,9 @@ export class RpcServerPortAllocationError extends Error {
 
 export class RpcServerNonLoopbackHostError extends Error {
   constructor(host: string) {
-    super(`ggml-rpc-server only supports loopback hosts in this package: ${host}`)
+    super(
+      `${host} is not a loopback host; pass allowNonLoopbackHost: true to bind it on a trusted network`
+    )
     this.name = 'RpcServerNonLoopbackHostError'
   }
 }
@@ -50,12 +52,85 @@ export class RpcServerInvalidHostError extends Error {
 }
 
 export class RpcServerRdmaUnavailableError extends Error {
-  readonly output: string
-
-  constructor(output: string) {
+  constructor() {
     super('RDMA is not available in the installed @qvac/fabric RPC backend')
     this.name = 'RpcServerRdmaUnavailableError'
-    this.output = output
+  }
+}
+
+/**
+ * A failure reported by the native server. The addon raises plain errors with a
+ * `code`; these classes let callers branch on `name` or `instanceof` as they do
+ * for the errors above. `code` equals `name`, and `cause` is the native error.
+ */
+export abstract class RpcServerNativeError extends Error {
+  readonly code: string
+
+  // Names are literals, not new.target.name, so they survive minification.
+  constructor(name: string, message: string, cause: unknown) {
+    super(message, { cause })
+    this.name = name
+    this.code = name
+  }
+}
+
+/** No requested device exists, or no device is available. */
+export class RpcServerDeviceError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerDeviceError', message, cause)
+  }
+}
+
+/** The RPC cache directory could not be resolved or created. */
+export class RpcServerCacheError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerCacheError', message, cause)
+  }
+}
+
+/** The server could not be created or bound, or the RPC backend is missing. */
+export class RpcServerStartError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerStartError', message, cause)
+  }
+}
+
+/** The Fabric backends directory is invalid or could not be inspected. */
+export class RpcServerBackendError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerBackendError', message, cause)
+  }
+}
+
+/** The server did not stop cleanly. */
+export class RpcServerStopError extends RpcServerNativeError {
+  constructor(message: string, cause: unknown) {
+    super('RpcServerStopError', message, cause)
+  }
+}
+
+const nativeErrorClasses = new Map<
+  string,
+  new (message: string, cause: unknown) => RpcServerNativeError
+>([
+  ['RpcServerDeviceError', RpcServerDeviceError],
+  ['RpcServerCacheError', RpcServerCacheError],
+  ['RpcServerStartError', RpcServerStartError],
+  ['RpcServerBackendError', RpcServerBackendError],
+  ['RpcServerStopError', RpcServerStopError]
+])
+
+function toTypedError(error: unknown): unknown {
+  const code = (error as { code?: unknown } | null)?.code
+  const ErrorClass = typeof code === 'string' ? nativeErrorClasses.get(code) : undefined
+  return ErrorClass === undefined ? error : new ErrorClass((error as Error).message, error)
+}
+
+async function callNative<T>(call: () => T | Promise<T>): Promise<T> {
+  try {
+    return await call()
+  } catch (error) {
+    throw toTypedError(error)
   }
 }
 
@@ -69,8 +144,7 @@ export interface StartRpcServerOptions {
   readonly allowNonLoopbackHost?: boolean
 }
 
-export interface RpcServerProcess {
-  readonly runtime: 'in-process'
+export interface RpcServer {
   readonly host: string
   readonly port: number
   readonly url: string
@@ -80,7 +154,6 @@ export interface RpcServerProcess {
    * negotiates RDMA with each RDMA-capable client and falls back to TCP otherwise.
    */
   readonly rdmaCapable: boolean
-  logs(): string
   stop(): Promise<void>
 }
 
@@ -130,8 +203,17 @@ function warnForTrustedLanHost(host: string, allowNonLoopbackHost = false): void
 }
 
 function normalizeDevice(device: string | readonly string[] | undefined): string | undefined {
-  if (typeof device === 'string' || device === undefined) return device
-  return device.join(',')
+  if (device === undefined) return undefined
+  // The native side splits on ',' or '/' and matches names exactly, so trim
+  // each name: 'Vulkan0, CPU' would otherwise look up ' CPU'.
+  const names = typeof device === 'string' ? device.split(/[,/]/) : device
+  const trimmed = names.map((name) => name.trim())
+  // A blank-only value must not collapse to '', which means "default devices".
+  // Pass it through untouched so the native side rejects it as unknown.
+  if (trimmed.every((name) => name === '') && names.some((name) => name !== '')) {
+    return names.join(',')
+  }
+  return trimmed.join(',')
 }
 
 function validatePort(port: number): void {
@@ -149,7 +231,11 @@ function validateThreads(threads: number | undefined): void {
 function rpcBackendSupportsRdma(backendsDir: string): boolean {
   let supported = rdmaSupportByBackendsDir.get(backendsDir)
   if (supported === undefined) {
-    supported = binding.rpcBackendSupportsRdma({ backendsDir })
+    try {
+      supported = binding.rpcBackendSupportsRdma({ backendsDir })
+    } catch (error) {
+      throw toTypedError(error)
+    }
     rdmaSupportByBackendsDir.set(backendsDir, supported)
   }
   return supported
@@ -176,7 +262,7 @@ export function allocateFreePort(
   })
 }
 
-export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServerProcess> {
+export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServer> {
   const host = normalizeHost(options.host ?? DEFAULT_RPC_SERVER_HOST)
   assertSupportedHost(host)
   assertLoopbackHost(host, options.allowNonLoopbackHost)
@@ -188,7 +274,7 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     fabricBackends.resolveBackendsDir() ?? path.join(__dirname, 'prebuilds')
   const rdmaCapable = rpcBackendSupportsRdma(backendsDir)
   if (options.expectRdma === true && !rdmaCapable) {
-    throw new RpcServerRdmaUnavailableError('')
+    throw new RpcServerRdmaUnavailableError()
   }
   const port =
     options.port ??
@@ -197,26 +283,26 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     }))
   validatePort(port)
   const device = normalizeDevice(options.device)
-  const handle = await binding.startServer({
-    endpoint: `${host}:${port}`,
-    device,
-    cache: options.cache ?? false,
-    threads: options.threads,
-    backendsDir
-  })
+  const handle = await callNative(() =>
+    binding.startServer({
+      endpoint: `${host}:${port}`,
+      device,
+      cache: options.cache ?? false,
+      threads: options.threads,
+      backendsDir
+    })
+  )
   activeServerHandles.add(handle)
   let stopPromise: Promise<void> | undefined
 
   return {
-    runtime: 'in-process',
     host,
     port,
     url: `${host}:${port}`,
     device,
     rdmaCapable,
-    logs: () => '',
     stop: () => {
-      stopPromise ??= binding.stopServer(handle).then(
+      stopPromise ??= callNative(() => binding.stopServer(handle)).then(
         () => {
           activeServerHandles.delete(handle)
         },

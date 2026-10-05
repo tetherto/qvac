@@ -1,3 +1,4 @@
+import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
@@ -12,6 +13,7 @@ import { translationBergamotTests } from './translation-bergamot-tests.js'
 import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
 import { translationLlmTests } from './translation-llm-tests.js'
 import { modelInfoTests } from './model-info-tests.js'
+import { modelFitTests } from './model-fit-tests.js'
 import { kvCacheTests } from './kv-cache-tests.js'
 import { kvCacheRestartTests } from './kv-cache-restart-tests.js'
 import { errorTests } from './error-tests.js'
@@ -299,6 +301,9 @@ export const tests = [
   // Model info tests (includes both registry-side and loaded-model introspection)
   ...modelInfoTests,
 
+  // Model fit tests (pre-download assessment, and the probe the load ran)
+  ...modelFitTests,
+
   // KV cache tests
   ...kvCacheTests,
   ...kvCacheRestartTests,
@@ -350,6 +355,7 @@ export const tests = [
   ...finetuneTests,
 
   // Lifecycle tests (suspend/resume)
+  ...rpcServerTests,
   ...lifecycleTests,
 
   // Registry-download config tests (retries + stream timeout)
