@@ -25,8 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships the
-  MOSS-SoundEffect and MOSS-Speech engines.
+- Raise the `speech-cpp` floor to `2026-10-02`, the revision that ships the
+  MOSS-SoundEffect and MOSS-Speech engines. It also runs Parler-TTS 1.6x to
+  2.4x faster on the CPU backend (flash attention over the KV cache, a
+  multi-threaded GELU, and on macOS/iOS the codec's convolutions on
+  Accelerate) and keeps the Audio8 Core ML codec on the Neural Engine. Same
+  models, same API.
 
 ### Fixed
 
