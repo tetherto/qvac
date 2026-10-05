@@ -8,6 +8,10 @@ Server-wide behavior — authentication, CORS, model loading and `serve.models` 
 described in [README.md](README.md) and applies here. This page covers the routes this
 extension adds and the `serve.openai` config block it reads.
 
+Warnings for ignored OpenAI parameters report their names without their values.
+Fields such as `user`, `instructions`, `suffix`, `stop`, and `reasoning` can contain
+private text or metadata; these warnings do not copy that content into server logs.
+
 ## Endpoints
 
 | Method   | Path                             | Notes                                                                                                       |
@@ -458,7 +462,7 @@ Transcribes audio in its source language using a transcription model.
   - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
 - `json` and `text` work with Whisper and Parakeet. The timed formats `srt`, `vtt`, and `verbose_json` require Whisper segment metadata. Requesting a timed format from Parakeet returns `400 unsupported_response_format`.
 - In partial `verbose_json`, `duration` is the end of the last transcribed segment, not the submitted audio length.
-- `language` is configured when the model loads; a per-request value is logged and ignored. `temperature` is also logged and ignored.
+- `language` is configured when the model loads; a per-request override is ignored with a warning. `temperature` is also ignored with a warning. These warnings report parameter names without values.
 
 ```bash
 curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
