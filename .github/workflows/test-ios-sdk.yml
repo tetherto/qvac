@@ -112,11 +112,7 @@ on:
       # AWS_OIDC_ROLE_ARN remains required:true because it is repo-level.
       NPM_TOKEN:
         required: false
-      MQTT_PROTOCOL:
-        required: false
       MQTT_HOST:
-        required: false
-      MQTT_PORT:
         required: false
       MQTT_USERNAME:
         required: false
@@ -138,6 +134,10 @@ on:
         required: false
 
 env:
+  # Unique: test-sdk.yml calls this workflow once per run. A UI re-run keeps
+  # run_id, so build, device-farm, wait-device-farm-running and run-producer
+  # reject re-runs.
+  E2E_RUN_ID: ios-pr${{ github.event.pull_request.number || '0' }}-${{ github.run_id }}
   APP_BUNDLE_ID: "io.tether.test.qvac"
 
 permissions:
@@ -178,20 +178,23 @@ jobs:
     runs-on: macos-14
     environment: release
     timeout-minutes: 60
-    outputs:
-      # GitHub drops a job output that contains a secret value, and a short
-      # one (e.g. a port) can turn up in the SHA or job id. Single chars
-      # can't match it; downstream jobs join them back into E2E_RUN_ID.
-      runIdChars: ${{ steps.runid.outputs.runIdChars }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -311,66 +314,6 @@ jobs:
 
           echo "Provisioning profile matches expected bundle ID"
 
-      - name: Generate runId
-        id: runid
-        shell: node {0}
-        env:
-          EXPECTED_JOB_NAME: "[ios] build"
-          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          const fs = require('fs');
-
-          (async () => {
-          async function fetchJobs(page) {
-            const url =
-              `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
-              `/actions/runs/${process.env.GITHUB_RUN_ID}` +
-              `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
-            const res = await fetch(url, {
-              headers: {
-                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-                Accept: 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-              },
-            });
-            if (!res.ok) {
-              throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
-            }
-            return res.json();
-          }
-
-          const jobs = [];
-          for (let page = 1; ; page++) {
-            const data = await fetchJobs(page);
-            jobs.push(...(data.jobs || []));
-            if (!data.jobs || data.jobs.length < 100) break;
-          }
-
-          const matches = jobs.filter(
-            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
-              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
-          );
-          const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
-          const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
-          if (!job) {
-            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
-          }
-
-          const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
-          const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
-          const jobIdEncoded = BigInt(job.id).toString(36);
-          const runId = `ios-${refPart}-${jobIdEncoded}`;
-
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runIdChars=${JSON.stringify([...runId])}\n`, 'utf8');
-          console.log(`Generated runId: ${runId}`);
-          })().catch((err) => {
-            console.error(err);
-            process.exit(1);
-          });
-
       - name: Configure npm registries
         shell: node {0}
         run: |
@@ -483,12 +426,12 @@ jobs:
           QVAC_IOS_EXPORT_METHOD: ${{ env.EXPORT_METHOD }}
         run: |
           echo "Building iOS consumer IPA..."
-          echo "   Run ID: ${{ steps.runid.outputs.runId }}"
+          echo "   Run ID: ${{ env.E2E_RUN_ID }}"
           echo "   Bundle ID: $QVAC_IOS_BUNDLE_ID"
           echo "   MQTT Host: $MQTT_HOST"
 
           npx qvac-test build:consumer:ios \
-            --runId "${{ steps.runid.outputs.runId }}" \
+            --runId "${{ env.E2E_RUN_ID }}" \
             --config .
 
           IPA_PATH="build/consumers/ios/consumer.ipa"
@@ -516,15 +459,12 @@ jobs:
     outputs:
       name: ${{ steps.select.outputs.name }}
       availability: ${{ steps.select.outputs.availability }}
-    env:
-      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
     steps:
-      - name: Check runId
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
         run: |
-          if [ -z "$E2E_RUN_ID" ]; then
-            echo "::error::The build job published no runId, so the producer cannot pair with the consumer on the device. Check the build job's \"Generate runId\" step."
-            exit 1
-          fi
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -727,9 +667,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: ${{ inputs.device-farm-start-timeout }}
-    env:
-      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           sparse-checkout: .github/actions/sdk-device-farm-wait-for-running
@@ -762,15 +706,22 @@ jobs:
     environment: release
     timeout-minutes: 120
     env:
-      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -1064,8 +1015,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 35
-    env:
-      E2E_RUN_ID: ${{ join(fromJSON(needs.build.outputs.runIdChars || '[]'), '') }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -1144,6 +1093,8 @@ jobs:
           name: device-farm-logs-ios-${{ env.E2E_RUN_ID }}
           path: ./device-farm-logs/
           retention-days: 30
+          # A cleanup re-run replaces the logs of the earlier attempt.
+          overwrite: true
 
   report-finalize:
     name: "[ios] report-finalize"

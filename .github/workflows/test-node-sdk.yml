@@ -108,11 +108,7 @@ on:
       # here so `secrets: inherit` from a caller with no repo-level values
       # does not fail at the workflow_call boundary; the jobs that consume
       # them have environment access.
-      MQTT_PROTOCOL:
-        required: false
       MQTT_HOST:
-        required: false
-      MQTT_PORT:
         required: false
       MQTT_USERNAME:
         required: false
@@ -189,9 +185,11 @@ jobs:
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       QVAC_TEST_SNAP_BUILD_MODE: ${{ startsWith(matrix.os, 'ubuntu-') && 'destructive' || 'lxd' }}
@@ -638,8 +636,6 @@ jobs:
 
           const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
           const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
-          // Keep runId a step output: GitHub drops a job output that contains a
-          // secret value, and a short one (e.g. a port) can turn up in the SHA.
           const jobIdEncoded = BigInt(job.id).toString(36);
           const runId = `${platformShort}-${refPart}-${jobIdEncoded}`;
 
