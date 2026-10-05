@@ -75,8 +75,8 @@ async function runH3Video({ mode, prompt, imagePath, outputPath }) {
     if (!fs.existsSync(filePath)) throw new Error(`Missing ${name}: ${filePath}`)
   }
   const initImage = mode === 'img2vid' ? requireImage(imagePath, width, height) : null
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true })
   const output = path.resolve(outputPath || path.join(OUTPUT_DIR, `minimax-h3-${mode}.avi`))
+  fs.mkdirSync(path.dirname(output), { recursive: true })
 
   const config = {
     device: process.env.H3_DEVICE || 'gpu',

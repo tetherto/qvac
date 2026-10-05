@@ -7,7 +7,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: $0 [destination] [--dry-run]" >&2
-  echo "Set HF_REVISION to a commit SHA for reproducible validation." >&2
+  echo "Set HF_REVISION to override the validated model commit." >&2
 }
 
 if ! command -v hf >/dev/null 2>&1; then
@@ -17,7 +17,7 @@ fi
 
 repo='Comfy-Org/MiniMax-H3'
 destination='packages/diffusion-cpp/models/minimax-h3-comfy-int8-convrot'
-revision="${HF_REVISION:-main}"
+revision="${HF_REVISION:-e5eb578a89295337b8ff433a035929ce0279e0b6}"
 dry_run=false
 
 if [[ $# -gt 0 && "$1" != '--dry-run' ]]; then

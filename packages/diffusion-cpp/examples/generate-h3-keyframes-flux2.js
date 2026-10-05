@@ -5,11 +5,19 @@ const path = require('bare-path')
 const process = require('bare-process')
 const ImgStableDiffusion = require('../index')
 
+// The committed boat frame was generated with the leejet/FLUX.2-klein-4B-GGUF
+// model at revision 3b1f5a9dc3abb32238b053aeb3d823c30afdacbd
+// (flux-2-klein-4b-Q8_0.gguf SHA-256:
+// 0bba6951258ec8f92d51114a8fa13e66828297bfff58a738f52729b3ef66fa28).
+// Text encoder: unsloth/Qwen3-4B-GGUF revision
+// 22c9fc8a8c7700b76a1789366280a6a5a1ad1120. The local VAE file SHA-256
+// was d64f3a68e1cc4f9f4e29b6e0da38a0204fe9a49f2d4053f0ec1fa1ca02f9c4b5.
+// Generation used 960x544, 20 steps, and guidance 3.5.
 const KEYFRAMES = {
   boat: {
-    seed: 42,
+    seed: 95,
     prompt:
-      'Photorealistic travel photograph of a single traditional wooden Thai long-tail boat floating on clear turquoise water near a tropical limestone island. The full weathered wooden hull, pointed bow, canopy, and long-tail motor are visible in the foreground, with gentle ripples, pale sand, lush cliffs and a blue sky behind it. Natural daylight, rich realistic color, sharp detail, cinematic wide composition, no people, no writing, no illustration.'
+      'Photorealistic travel photograph of one small traditional wooden passenger motorboat floating in a clear turquoise lagoon in Thailand. Broad side view from the beach, entire boat visible. The bow is a plain gently tapered wooden hull with no fittings projecting above it. A single modern outboard motor is attached to the stern and its propeller is submerged behind the boat. A low cream canvas awning covers the empty seats. Limestone islands and lush greenery in the distance, bright natural daylight, realistic nautical construction, no people, no text.'
   },
   balloon: {
     seed: 43,
@@ -46,7 +54,9 @@ async function main() {
     throw new Error('H3_WIDTH and H3_HEIGHT must be positive multiples of 32')
   }
 
-  const outputDir = path.resolve(process.env.H3_KEYFRAME_OUTPUT_DIR || path.join(__dirname, '../assets'))
+  const outputDir = path.resolve(
+    process.env.H3_KEYFRAME_OUTPUT_DIR || path.join(__dirname, '../assets')
+  )
   const config = {
     device: process.env.FLUX_DEVICE || 'gpu',
     diffusion_fa: true,

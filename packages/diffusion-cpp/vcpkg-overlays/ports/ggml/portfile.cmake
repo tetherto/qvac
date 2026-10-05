@@ -16,11 +16,9 @@
 #   cuda   -> GGML_CUDA=ON
 #   opencl -> GGML_OPENCL=ON
 
-# Pulls from the tetherto/qvac-ext-ggml GitHub branch 2026-08-11
-# (REF pinned to that branch's tip commit for reproducibility).
-#
-# 7d9ce11 is the 2026-08-11 head after merging the two QVAC-23767 fixes on
-# top of f31dab0:
+# Pins tetherto/qvac-ext-ggml commit
+# 9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb from the 2026-08-11 line.
+# It includes the merged H3 ConvRot work and the two QVAC-23767 fixes:
 # - PR #61: cmake-only, skips the x86 cpu-feats OBJECT helper in hybrid
 #   GGML_BACKEND_DL + GGML_CPU_STATIC builds, where the statically-linked CPU
 #   backend never consults the DL variant score and the un-exported helper

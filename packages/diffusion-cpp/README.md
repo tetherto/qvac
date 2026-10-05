@@ -519,19 +519,30 @@ weights for I2V (`vae_decode_only: false`, the default).
 From the repository root, install the Hugging Face CLI, read the [MiniMax-H3
 license](https://huggingface.co/Comfy-Org/MiniMax-H3), and download the four
 matching files. If access requires authentication, run `hf auth login` first.
-`--dry-run` lists the files and sizes without fetching the weights. For a
-reproducible run, set `HF_REVISION` to a model repository commit SHA.
+`--dry-run` lists the files and sizes without fetching the weights. The
+downloader defaults to the validated model repository commit
+`e5eb578a89295337b8ff433a035929ce0279e0b6`; set `HF_REVISION` to use
+another commit.
 
 ```sh
 python -m pip install -U huggingface_hub
 bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh --dry-run
-HF_REVISION=<model-revision-sha> bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh
+bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh
 ```
 
 The four files total about 55 GB. The package's vcpkg overlay pins
 `qvac-ext-stable-diffusion.cpp` to `107121df3ee9664cd47f80b19add495002d0232f`
 (merged PR #44) and its ggml submodule to
 `9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb`.
+
+At the validated model revision, the four checkpoint SHA-256 hashes are:
+
+| File | SHA-256 |
+| --- | --- |
+| `diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors` | `e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a` |
+| `text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors` | `bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923` |
+| `vae/minimax_h3_video_vae_fp16.safetensors` | `7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522` |
+| `vae/minimax_h3_audio_vae_fp32.safetensors` | `8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48` |
 
 From `packages/diffusion-cpp`, run the separate examples. Set `H3_MODELS_DIR`
 if the checkpoint is elsewhere, `H3_BACKEND` to select a backend, and

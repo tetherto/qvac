@@ -13,11 +13,10 @@
 # on Android and desktop Linux the GPU backends are dlopen'd modules
 # (hybrid GGML_BACKEND_DL, see the ggml port).
 #
-# Pulls from the tetherto/qvac-ext-stable-diffusion.cpp GitHub branch
-# 2026-08-11 (REF pinned to the branch tip for reproducibility).
-#
-# 4027059 is the 2026-08-11 tip after merging PR #29 (MiniMax-H3). Relative
-# to the 2026-07-03 line this brings the rebased upstream API: bool-returning
+# Pins tetherto/qvac-ext-stable-diffusion.cpp commit
+# 107121df3ee9664cd47f80b19add495002d0232f from the 2026-08-11 line,
+# including merged MiniMax-H3 and ConvRot support. Relative to the 2026-07-03
+# line this brings the rebased upstream API: bool-returning
 # generate_image()/upscale() with out-params, sd_cancel_generation(),
 # ref_image_args replacing the per-field reference knobs, param residency via
 # backend assignment specs (params_backend/max_vram strings) instead of the
