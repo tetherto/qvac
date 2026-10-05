@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.20.x (latest)
+title: API Summary — v0.21.x (latest)
 sidebarTitle: API
 icon: BookA
 description: One-page reference of all public functions and objects exported by @qvac/sdk
@@ -14,7 +14,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 57 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 60 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -26,11 +26,15 @@ Assesses, before anything is downloaded, whether the given models are likely
 to fit in this device's memory.
 
 Advisory only: it does not download weights, block `loadModel`, reserve
-memory, or make a performance claim. For a single candidate it reads the
-registry's weightless description of the load and runs the engine's own fitter
-against it. `unknown` is a real
-answer — it means the available evidence does not support a verdict either
-way, and callers should treat it as "cannot say", not "no".
+memory, or make a performance claim. `unknown` is a real answer — it means
+the available evidence does not support a verdict either way, and callers
+should treat it as "cannot say", not "no".
+
+For a single candidate it fetches the registry's weightless description of
+every source that load names — tens of KB each, never the weights — and runs
+the engine's own fitter against them, reported as `native-fit` evidence.
+Where that is unavailable, and for a set of candidates, the calibrated
+estimate stands.
 
 **Signature**:
 
@@ -533,6 +537,21 @@ const buffers = await outputs;
 
 ---
 
+### `discoverRpcServers`
+
+Find private-network candidates with device inventories and server RDMA availability.
+RDMA availability is a server-side offer, not a guarantee of the negotiated transport.
+Use getRpcDeviceMap with the chosen endpoint registration order before loadModel.
+Cancel a pending search with its promise.requestId.
+
+**Signature**:
+
+```ts
+function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<RpcServerCandidate[]> & { requestId: string };
+```
+
+---
+
 ### `downloadAsset`
 
 Downloads an asset (model file) without loading it into memory.
@@ -684,11 +703,18 @@ function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;
 
 ### `getSystemResources`
 
+Read the worker's system capabilities and optional resource sample.
+
 **Signature**:
 
 ```ts
 function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;
 ```
+
+**Throws**:
+
+- `InvalidResponseError` — If the worker returns a different response type.
+- `Error` — If the RPC request fails.
 
 ---
 
@@ -1393,6 +1419,19 @@ console.log(await state()); // "active"
 
 ---
 
+### `startRpcServer`
+
+Start a worker-owned native RPC server. Non-loopback binding and advertising require explicit opt-in.
+Cancel a pending start with its promise.requestId.
+
+**Signature**:
+
+```ts
+function startRpcServer(options: StartRpcServerOptions): Promise<RpcServerInfo> & { requestId: string };
+```
+
+---
+
 ### `state`
 
 Returns the current runtime lifecycle state.
@@ -1417,6 +1456,18 @@ const current = await state();
 if (current !== "active") {
   await resume();
 }
+```
+
+---
+
+### `stopRpcServer`
+
+Withdraw the announcement and await native stop. Bare stop has no deadline.
+
+**Signature**:
+
+```ts
+function stopRpcServer(options: StopRpcServerOptions): Promise<void>;
 ```
 
 ---
@@ -1505,6 +1556,15 @@ Three modes selected by `params.stream` and `params.sentenceStream`:
   metadata with the audio. Multiple consumers can iterate the response
   independently via the underlying `TtsMulticast`.
 
+MOSS models stream natively rather than by sentence: under `stream: true`
+the whole text is one synthesis whose audio arrives every
+`streamChunkTokens` codec frames (in one piece when that is unset), so
+`durationTokens` and a MOSS-TTSD dialogue's reference transcripts apply to
+the text as a whole. `sentenceStream: true` still splits a single-speaker
+text; a dialogue rejects it. `sentenceStreamLocale` and
+`sentenceStreamMaxChunkScalars` configure that splitting, so a MOSS request
+rejects them unless it sets `sentenceStream: true`.
+
 `result.done` resolves to `true` when synthesis completes cleanly, `false`
 if the consumer breaks out before the terminal frame, or rejects on a
 pipeline error. Awaiting `done` is safe even when no stream is iterated.
@@ -1557,23 +1617,17 @@ function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RP
 Has 2 overloads.
 
 #### Overload 1
-Transcribe audio and return the complete text. Accepts either a file
-path or an audio buffer.
-
 **Signature**:
 
 ```ts
-function transcribe(params: any, options?: RPCOptions): Promise<TranscribeSegment[]> & { requestId: string };
+function transcribe(params: any, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;
 ```
 
 #### Overload 2
-Transcribe audio and return the complete text. Accepts either a file
-path or an audio buffer.
-
 **Signature**:
 
 ```ts
-function transcribe(params: TranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };
+function transcribe(params: TranscribeClientParams, options?: RPCOptions): TranscribeCall<string>;
 ```
 
 ---
@@ -2370,6 +2424,8 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
 | `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
 | `BARE_RUNTIME_BINARY_NOT_FOUND` | 50614 | Could not load the Bare runtime binary for …-…. The platform package "bare-runtime-…-…" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \\ |
+| `HOST_PREBUILDS_INSTALL_REFUSED` | 50615 | Cannot install the addon platform packages automatically: …. |
+| `HOST_PREBUILDS_INSTALL_FAILED` | 50616 | Installing the addon platform packages failed: … |
 | `PROFILER_INVALID_CAPACITY` | 50800 | Profiler invalid capacity |
 
 ### Server errors
@@ -2390,6 +2446,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `TTS_REFERENCE_AUDIO_REQUIRED` | 52209 | TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning) |
 | `LEGACY_PARAKEET_MODEL_DEPRECATED` | 52210 | Legacy parakeet ONNX modelConfig fields are no longer supported (…). As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF metadata. Supply the GGUF via the top-level modelSrc (e.g. loadModel(\{ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" \})). |
 | `LEGACY_TTS_MODEL_DEPRECATED` | 52211 | Legacy ONNX TTS modelConfig fields are no longer supported (…). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel(\{ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: \{ ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX \} \})). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual. |
+| `RPC_SERVER_OPERATION_FAILED` | 52423 | …: … |
 | `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model… |
 | `EMBED_FAILED` | 52401 | Failed to generate embeddings… |
 | `EMBED_NO_EMBEDDINGS` | 52402 | No embeddings returned from model |
