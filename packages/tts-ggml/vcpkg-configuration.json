@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "9388f27348cb1057e38e51f8cf7a278265213d70",
+    "baseline": "e62c1bc3815e92e82eaf1725e2b6c6d26a48058c",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
     "reference": "QVAC-26394/moss-speech-generation-budgets"
   },
