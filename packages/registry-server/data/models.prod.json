@@ -9516,5 +9516,71 @@
     "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
     "notes": "Required for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
     "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-f16.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-Q8_0.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-f16.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "322M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-multilingual"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya-multilingual. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "322M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-multilingual"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya-multilingual. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-f16.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-typed-decisions"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya-typed-decisions. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-Q8_0.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-typed-decisions"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya-typed-decisions. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
   }
 ]
