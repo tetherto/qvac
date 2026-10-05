@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- `generationParams.parallel_tool_calls` (boolean, default `true`). Set it to
+  `false` to restrict a response to one tool call.
+
+### Changed
+
+- Tool-calling requests now allow more than one tool call per response.
+  Previously the chat template and its tool grammar were always rendered
+  for a single call, so a model could not return parallel calls.
+
 ### Fixed
 
 - The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`

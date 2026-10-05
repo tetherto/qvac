@@ -13,4 +13,6 @@
 struct RenderOverrides {
   // "auto" | "none" | "required" | <declared function name>.
   std::optional<std::string> toolChoice;
+  // Unset means parallel calls are allowed, matching OpenAI's default.
+  std::optional<bool> parallelToolCalls;
 };

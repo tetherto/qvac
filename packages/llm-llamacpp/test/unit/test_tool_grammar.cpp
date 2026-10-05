@@ -370,6 +370,33 @@ TEST_F(ToolGrammarModelTest, ToolChoiceUnknownFunctionIsRejected) {
   EXPECT_FALSE(model->processPrompt(makePrompt(PLAIN_PROMPT)).empty());
 }
 
+// Parallel calls are on unless the request turns them off: fabric's own
+// default is a single call, which caps the tool grammar at one call.
+TEST_F(ToolGrammarModelTest, ParallelToolCallsDefaultsOnAndCanBeTurnedOff) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  LlamaModel::Prompt prompt = makePrompt(TOOL_PROMPT);
+  prompt.generationParams.tool_choice = "required";
+
+  model->processPrompt(prompt);
+  const std::string byDefault = sampling(*model).grammar.grammar;
+
+  prompt.generationParams.parallel_tool_calls = true;
+  model->processPrompt(prompt);
+  const std::string parallel = sampling(*model).grammar.grammar;
+
+  prompt.generationParams.parallel_tool_calls = false;
+  model->processPrompt(prompt);
+  const std::string single = sampling(*model).grammar.grammar;
+
+  ASSERT_FALSE(byDefault.empty());
+  EXPECT_EQ(byDefault, parallel);
+  EXPECT_NE(parallel, single)
+      << "parallel_tool_calls=false must render a single-call grammar";
+}
+
 // json_schema + tools: the schema wins and the tool grammar is suppressed, so
 // the answer is schema-shaped rather than a tool call.
 TEST_F(ToolGrammarModelTest, JsonSchemaWithToolsSuppressesToolGrammar) {

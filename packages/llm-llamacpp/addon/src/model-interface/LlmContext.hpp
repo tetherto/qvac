@@ -57,6 +57,10 @@ struct GenerationParams {
   // (restricts the call to that function). Consumed at prompt render time,
   // not by the sampler, so it is deliberately absent from `hasOverrides()`.
   std::optional<std::string> tool_choice;
+  // OpenAI-style `parallel_tool_calls`: whether one response may carry more
+  // than one tool call. Render-time like `tool_choice`, so also absent from
+  // `hasOverrides()`.
+  std::optional<bool> parallel_tool_calls;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
   // common_params rebuild). Intentionally excludes
@@ -76,7 +80,8 @@ struct GenerationParams {
 
 /// The render-time subset of a request's `GenerationParams`.
 inline RenderOverrides renderOverridesFrom(const GenerationParams& p) {
-  return RenderOverrides{.toolChoice = p.tool_choice};
+  return RenderOverrides{
+      .toolChoice = p.tool_choice, .parallelToolCalls = p.parallel_tool_calls};
 }
 
 struct CommonSamplerDeleter {
