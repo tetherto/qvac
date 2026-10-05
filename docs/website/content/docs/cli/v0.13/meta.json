@@ -1,0 +1,9 @@
+{
+  "title": "CLI",
+  "description": "Install the CLI and use every function of the tool",
+  "root": true,
+  "pages": [
+    "index",
+    "...http-server"
+  ]
+}

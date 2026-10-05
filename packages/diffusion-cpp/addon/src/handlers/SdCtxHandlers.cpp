@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -281,6 +282,30 @@ static int parsePositiveInt(const std::string& v, const std::string& key) {
         key + " must be a positive integer, got: '" + v + "'");
   }
   return parsed;
+}
+
+static uint64_t parsePixelLimit(
+    const std::string& value, const std::string& key, uint64_t maximum) {
+  if (value.empty() ||
+      !std::all_of(value.begin(), value.end(), [](unsigned char c) {
+        return std::isdigit(c) != 0;
+      })) {
+    throw StatusError(
+        general_error::InvalidArgument, key + " must be a positive integer");
+  }
+  uint64_t pixels = 0;
+  try {
+    pixels = std::stoull(value);
+  } catch (...) {
+    throw StatusError(
+        general_error::InvalidArgument, key + " must be a positive integer");
+  }
+  if (pixels == 0 || pixels > maximum) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be in [1, " + std::to_string(maximum) + "]");
+  }
+  return pixels;
 }
 
 static int
@@ -590,6 +615,17 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
     {"upscaler_threads",
      [](SdCtxConfig& c, const std::string& v) {
        c.upscalerThreads = parseAutoOrPositiveInt(v, "upscaler_threads");
+     }},
+
+    {"max_image_pixels",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.maxImagePixels = parsePixelLimit(
+           v, "max_image_pixels", image_codec::MAX_CONFIGURED_IMAGE_PIXELS);
+     }},
+    {"max_job_pixels",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.maxJobPixels = parsePixelLimit(
+           v, "max_job_pixels", std::numeric_limits<int>::max());
      }},
 
     // -- Backend loading

@@ -136,7 +136,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Run AI models locally, without relying on third-party APIs, SaaS, or cloud infrastructure.',
     angle: 315,
-    href: '/js-ts-sdk#quickstart',
+    href: '/sdk/js-ts-sdk#quickstart',
   },
   {
     id: 'p2p',
@@ -144,7 +144,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Fetch models from peers and connect across NATs with blind relays over P2P networks.',
     angle: 45,
-    href: '/p2p-capabilities/blind-relays',
+    href: '/sdk/p2p-capabilities/blind-relays',
   },
   {
     id: 'cross-platform',
@@ -152,7 +152,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Consistent developer experience across hardware, operating systems, and JavaScript runtimes — write code once, run it everywhere.',
     angle: 90,
-    href: '/system-requirements#supported-environments',
+    href: '/sdk/system-requirements#supported-environments',
   },
   {
     id: 'pluggable',
@@ -160,7 +160,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Include only the capabilities your app needs, and extend the SDK with custom plugins.',
     angle: 135,
-    href: '/configuration/plugins',
+    href: '/sdk/configuration/plugins',
   },
   {
     id: 'open-source',
@@ -184,7 +184,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Use one JS/TS or Python SDK client to run multiple AI capabilities.',
     angle: 270,
-    href: '/introduction',
+    href: '/sdk',
   },
 ];
 
