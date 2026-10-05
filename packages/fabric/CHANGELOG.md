@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.19.1] - 2026-10-05
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `10549.5.1`:
+  - Added the Laya decision model: a ModernBERT encoder plus a typed
+    decision head that scores a question's option markers in one forward
+    pass.
+  - The Laya option-slot count is fixed when the graph is built, so the
+    reserve pass no longer sizes those tensors from the tokens in the batch.
+  - ggml-cpu now passes clang-cl the AMX and AVX-VNNI target flags. Without
+    them the Windows AVX-VNNI CPU variant fails to compile.
+
 ## [0.19.0] - 2026-09-30
 
 ### Changed
