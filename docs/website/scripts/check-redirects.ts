@@ -39,6 +39,7 @@
  *     it as a request for a file. A dot in the last segment costs the
  *     directory resolution too, which is why those sections need explicit
  *     `200` rewrites; a dot further up costs only the slash.
+ *   - On a bare path with a dot further up, only a splat rule matches.
  *   - First match wins, and a `200` rewrite pointing at a file that was never
  *     built keeps falling through to the catch-all 404.
  *
@@ -121,22 +122,31 @@ function segments(url: string): string[] {
   return url.split("/").filter((segment) => segment !== "");
 }
 
+const dotted = (segment: string): boolean => segment.includes(".");
+
 /**
  * Sevalla's matcher is lenient about a trailing slash in one direction only: a
  * source without it matches both `/a/x` and `/a/x/`, a source carrying it
  * matches only `/a/x/`. Production proves the asymmetry — `/sdk/v0.20` reaches
  * its `301` even though the `/sdk/v0.20/` rewrite is listed above it.
  * Placeholders match exactly one segment; a trailing `*` matches the rest.
+ *
+ * A bare request with a dot in a segment other than the last is matched by a
+ * splat alone. Neither a literal nor a placeholder reaches it — probed on
+ * production's configuration, both answered 404 while a splat served every
+ * page — which is why each documentation line carries one.
  */
 export function matchRule(
   rule: Rule,
   url: string,
 ): Record<string, string> | null {
-  if (rule.from.endsWith("/") && !url.split(/[#?]/)[0].endsWith("/")) {
-    return null;
-  }
+  const bare = !url.split(/[#?]/)[0].endsWith("/");
+  if (rule.from.endsWith("/") && bare) return null;
   const pattern = segments(rule.from);
   const actual = segments(url);
+  if (bare && !pattern.includes("*") && actual.slice(0, -1).some(dotted)) {
+    return null;
+  }
   const params: Record<string, string> = {};
 
   for (let i = 0; i < pattern.length; i++) {
@@ -161,8 +171,6 @@ function expand(target: string, params: Record<string, string>): string {
     token === "*" ? (params.splat ?? "") : (params[token.slice(1)] ?? token),
   );
 }
-
-const dotted = (segment: string): boolean => segment.includes(".");
 
 /**
  * Pretty URLs' bare-path normalization, modelled where the CDN applies it:

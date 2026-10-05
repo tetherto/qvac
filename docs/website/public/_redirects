@@ -254,22 +254,32 @@
 # DOCUMENTATION LINES
 # ----------------------------------------------------------------------
 # A line that is not the current one answers under its own version
-# segment, `/sdk/v0.18/…`. Every URL of the line carries a dot, so none
-# of them is normalized: Pretty URLs skips a path with a dot in ANY
-# segment, not only in the last one. Measured against production — bare
-# `/sdk/v0.18/how-it-works` 404s while its trailing-slash form serves.
+# segment, `/sdk/v0.18/…`, so every URL of the line carries a dot. Pretty
+# URLs skips any path with a dot in it, wherever the dot sits, so no bare
+# line URL gains its trailing slash on its own. Each line carries three
+# rules to make up for it.
 #
-# Only the index needs rules here, because it is the one URL of the line
-# whose dot sits in the last segment: it misses the directory resolution
-# as well, and nothing but an explicit rewrite naming the file can serve
-# it. The pages below it keep their directory resolution and want only
-# the trailing slash back, which the SLASH NORMALIZATION block at the
-# end of this file hands them.
+# The index pair serves the line's root, the one URL whose dot is in the
+# last segment. That costs it the directory resolution even with the
+# slash, so the `200` names the file; the `301` hands the bare form its
+# slash.
+#
+# The splat serves every page below the root addressed without the slash,
+# rewriting straight to its index.html. Only a splat reaches those
+# requests. Measured on production and on staging with Pretty URLs on, a
+# bare path with a dot in a segment other than the last is matched by
+# neither a literal nor a placeholder — both answered 404 under probe —
+# while a splat served all 77 pages of the lines that carried one. It
+# rewrites rather than redirects, so a page that was never built falls
+# through to the catch-all instead of looping, and the bare address serves
+# a page whose canonical names the slash form. With the slash, a page
+# resolves from its directory before any rule runs.
 #
 # ORDER MATTERS (first-match-wins), for the reason the archives above
 # document: Sevalla's matcher is lenient about a trailing slash in the
 # source, so the slash-less `301` would match the with-slash request too
-# and redirect it to itself. The `200` rewrite goes first.
+# and redirect it to itself. The `200` rewrite goes first, and the splat
+# after the pair, so the root is always answered by its own rules.
 #
 # The `301` is not just for inbound links. Next reads a dotted segment as a
 # file too, and strips the trailing slash off this URL whatever the page
@@ -281,19 +291,27 @@
 #
 # The segment is written out rather than matched by a placeholder. A
 # `/sdk/:version` pattern would claim every first-level SDK path to cover
-# one, and a literal line makes a cut visible in the diff.
+# one, it would not reach the bare form anyway, and a literal line makes a
+# cut visible in the diff. `scripts/cut-line.ts` writes all three rules of
+# the line a cut preserves.
 /sdk/v0.20/        /sdk/v0.20/index.html        200
 /sdk/v0.20         /sdk/v0.20/                  301
+/sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200
 /sdk/v0.19/        /sdk/v0.19/index.html        200
 /sdk/v0.19         /sdk/v0.19/                  301
+/sdk/v0.19/*       /sdk/v0.19/:splat/index.html 200
 /sdk/v0.18/        /sdk/v0.18/index.html        200
 /sdk/v0.18         /sdk/v0.18/                  301
+/sdk/v0.18/*       /sdk/v0.18/:splat/index.html 200
 /cli/v0.14/        /cli/v0.14/index.html        200
 /cli/v0.14         /cli/v0.14/                  301
+/cli/v0.14/*       /cli/v0.14/:splat/index.html 200
 /cli/v0.13/        /cli/v0.13/index.html        200
 /cli/v0.13         /cli/v0.13/                  301
+/cli/v0.13/*       /cli/v0.13/:splat/index.html 200
 /cli/v0.12/        /cli/v0.12/index.html        200
 /cli/v0.12         /cli/v0.12/                  301
+/cli/v0.12/*       /cli/v0.12/:splat/index.html 200
 
 # ======================================================================
 # SOFTWARE INVENTORY VERSIONS
@@ -404,62 +422,6 @@
 
 # Section rename: /http-server → /cli/http-server
 /http-server/   /cli/http-server/   301
-
-# ======================================================================
-# TEMPORARY PROBE — REMOVE BEFORE MERGE
-# ----------------------------------------------------------------------
-# Which rule form, if any, reaches a bare path whose dot sits in a
-# segment other than the last. Every URL below 404s in that form today,
-# so any other answer means the rule was reached. Nothing else new is
-# deployed alongside: the slash-normalization block these replace is
-# gone, so no rule of ours can produce the answer by accident.
-#
-# Established, on production and on staging with Pretty URLs on, which
-# agree on every probe:
-#
-#   - The rules ARE consulted. These paths answer with the site's own
-#     /404.html at status 404, which only the catch-all produces.
-#   - A splat reaches them: the catch-all `/*` is what answers.
-#   - A literal reaches a bare path whose LAST segment is dotted.
-#     `/sdk/v0.19` takes its `301`.
-#   - A single-segment placeholder did not reach `/reference/api/v0.7.x`,
-#     though `/reference/api/:version` is written for it.
-#
-# QVAC-19560 settled the dotted-tail case with a placeholder plus a `200`
-# rewrite naming index.html, not a redirect, after finding that Sevalla
-# mishandles splats. Each line below carries one of those forms, so a
-# single deploy measures all three against a dot in the middle:
-#
-#   /sdk/v0.18, /sdk/v0.20, /cli/v0.12, /cli/v0.14   splat
-#   /sdk/v0.19                                        placeholder, per depth
-#   /cli/v0.13, /zzz.probe                            literal
-#
-# Every form rewrites rather than redirects, so a target that was never
-# built falls through to the catch-all instead of looping.
-# ======================================================================
-
-/sdk/v0.18/*                /sdk/v0.18/:splat/index.html         200
-/sdk/v0.20/*                /sdk/v0.20/:splat/index.html         200
-/cli/v0.12/*                /cli/v0.12/:splat/index.html         200
-/cli/v0.14/*                /cli/v0.14/:splat/index.html         200
-
-/sdk/v0.19/:a               /sdk/v0.19/:a/index.html             200
-/sdk/v0.19/:a/:b            /sdk/v0.19/:a/:b/index.html          200
-/sdk/v0.19/:a/:b/:c         /sdk/v0.19/:a/:b/:c/index.html       200
-
-/cli/v0.13/http-server                 /cli/v0.13/http-server/index.html              200
-/cli/v0.13/http-server/connection      /cli/v0.13/http-server/connection/index.html   200
-/cli/v0.13/http-server/integration     /cli/v0.13/http-server/integration/index.html  200
-
-/zzz.probe/page             /sdk/                                301
-
-# ======================================================================
-
-/sdk/v0.18/*                     /sdk/v0.18/:splat/index.html               200
-/cli/v0.14/*                     /cli/v0.14/:splat/                         301
-/sdk/v0.19/:page                 /sdk/v0.19/:page/index.html                200
-/sdk/v0.20/how-it-works          /sdk/v0.20/how-it-works/index.html         200
-/zzz.probe/page                  /sdk/                                      301
 
 # ======================================================================
 # CATCH-ALL 404 — MUST BE THE LAST RULE

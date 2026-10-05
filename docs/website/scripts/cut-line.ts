@@ -120,13 +120,15 @@ export function cutManifest(
 }
 
 /**
- * Add the preserved line's index pair to the redirects.
+ * Add the preserved line's rules to the redirects.
  *
- * Every line whose folder is plain needs it: the last segment carries a dot,
- * so the CDN reads the URL as a file request and never normalizes the trailing
- * slash. The pair goes at the head of its collection's existing pairs, keeping
- * the block ordered newest first, which is the order a reader of the diff
- * expects.
+ * Every line whose folder is plain needs them, because every URL of it carries
+ * a dot and the CDN never normalizes the trailing slash of a dotted path. The
+ * index pair serves the root, whose dot in the last segment also costs it the
+ * directory resolution. The splat serves each page below it addressed without
+ * the slash: on a bare dotted path, it is the only rule form the CDN matches.
+ * The rules go at the head of their collection's existing ones, keeping the
+ * block ordered newest first, which is the order a reader of the diff expects.
  */
 export function cutRedirects(source: string, slug: string, preserved: string): string {
   const rule = (from: string, to: string, status: string) =>
@@ -134,23 +136,25 @@ export function cutRedirects(source: string, slug: string, preserved: string): s
     to.padEnd(REDIRECT_COLUMNS.destination) +
     status;
 
-  const pair = [
-    rule(`/${slug}/${preserved}/`, `/${slug}/${preserved}/index.html`, "200"),
-    rule(`/${slug}/${preserved}`, `/${slug}/${preserved}/`, "301"),
+  const line = `/${slug}/${preserved}`;
+  const rules = [
+    rule(`${line}/`, `${line}/index.html`, "200"),
+    rule(line, `${line}/`, "301"),
+    rule(`${line}/*`, `${line}/:splat/index.html`, "200"),
   ];
 
   const lines = source.split("\n");
-  const isIndexRule = (line: string) =>
-    /^\/\w[\w-]*\/v[\d.]+\/?\s+\/\w[\w-]*\/v[\d.]+/.test(line);
+  const isLineRule = (text: string) =>
+    /^\/\w[\w-]*\/v[\d.]+(\/\*?)?\s+\/\w[\w-]*\/v[\d.]+/.test(text);
 
   let at = lines.findIndex(
-    (line) => line.startsWith(`/${slug}/v`) && isIndexRule(line),
+    (text) => text.startsWith(`/${slug}/v`) && isLineRule(text),
   );
   if (at === -1) {
     // First cut for this collection: sit below the block rather than inside
-    // another collection's run of pairs.
+    // another collection's run of rules.
     const last = lines.reduce(
-      (found, line, index) => (isIndexRule(line) ? index : found),
+      (found, text, index) => (isLineRule(text) ? index : found),
       -1,
     );
     if (last === -1) {
@@ -162,11 +166,11 @@ export function cutRedirects(source: string, slug: string, preserved: string): s
     at = last + 1;
   }
 
-  if (lines.some((line) => line.startsWith(`/${slug}/${preserved}/ `))) {
-    throw new Error(`\`public/_redirects\` already carries /${slug}/${preserved}.`);
+  if (lines.some((text) => text.startsWith(`${line}/ `))) {
+    throw new Error(`\`public/_redirects\` already carries ${line}.`);
   }
 
-  lines.splice(at, 0, ...pair);
+  lines.splice(at, 0, ...rules);
   return lines.join("\n");
 }
 
