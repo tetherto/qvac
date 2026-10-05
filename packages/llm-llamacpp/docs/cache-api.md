@@ -40,8 +40,8 @@ disk](#save-the-cache-to-disk).
 | `prefill` | `boolean` | Evaluate prompt without generating a response. On a model loaded with `parallel >= 2`, needs a `cacheKey` — see below. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
 
-`saveCacheToDisk` was removed in 0.56.0; passing it throws a `TypeError` that
-points to `saveCache()`.
+`saveCacheToDisk` was removed; passing it throws a `TypeError` that points to
+`saveCache()`.
 
 ## Prefill on a parallel model (`parallel >= 2`)
 
