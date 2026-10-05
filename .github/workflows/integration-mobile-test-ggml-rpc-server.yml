@@ -42,6 +42,7 @@ on:
           - Google Pixel 9
           - Google Pixel 8
           - Samsung Galaxy S25 Ultra
+          - Samsung Galaxy S26 Ultra
         default: Google Pixel 9
       ios_device:
         description: iOS device used by a manual run
@@ -49,6 +50,7 @@ on:
         required: false
         options:
           - Apple iPhone 17
+          - Apple iPhone 17 Pro
           - Apple iPhone 16 Pro
           - Apple iPhone 15
         default: Apple iPhone 16 Pro
