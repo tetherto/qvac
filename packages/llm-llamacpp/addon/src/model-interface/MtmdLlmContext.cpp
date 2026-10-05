@@ -1407,12 +1407,13 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
     loadMedia(media);
   } catch (const qvac_errors::StatusError& error) {
     resetMedia();
+    std::string reason = error.what();
+    reason.erase(reason.find_last_not_of(" \t\r\n") + 1);
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
-        "[MtmdLlm] Failed to load media from file: " + fname + ": " +
-            error.what());
+        "[MtmdLlm] Failed to load media from file: " + fname + ": " + reason);
   }
 }
 

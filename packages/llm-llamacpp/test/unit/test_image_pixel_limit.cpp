@@ -8,6 +8,10 @@
 #include <unordered_map>
 #include <vector>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
+
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 
@@ -69,17 +73,20 @@ std::vector<uint8_t> topDownBmp() {
   return bmp;
 }
 
-void expectRejected(const std::function<void()>& check) {
+void expectRejected(
+    const std::function<void()>& check,
+    const std::string& expected = "image-max-megapixels") {
   try {
     check();
-    FAIL() << "Expected an oversized image to be rejected";
+    FAIL() << "Expected the image to be rejected";
   } catch (const qvac_errors::StatusError& error) {
     EXPECT_NE(error.codeString().find("InvalidArgument"), std::string::npos);
-    EXPECT_NE(
-        std::string(error.what()).find("image-max-megapixels"),
-        std::string::npos);
+    EXPECT_NE(std::string(error.what()).find(expected), std::string::npos)
+        << error.what();
   }
 }
+
+constexpr const char* UNKNOWN_DIMENSIONS = "cannot determine dimensions";
 } // namespace
 
 TEST(ImagePixelLimit, DefaultAndConfigOverride) {
@@ -130,10 +137,12 @@ TEST(ImagePixelLimit, RejectsPicWhenStbInfoCannotReportDimensions) {
   const auto oversized = picHeader(65'535, 4'097);
   EXPECT_NO_THROW(
       image_pixel_limit::checkBuffer(small.data(), small.size(), 50'000'000));
-  expectRejected([&] {
-    image_pixel_limit::checkBuffer(
-        oversized.data(), oversized.size(), 300'000'000);
-  });
+  expectRejected(
+      [&] {
+        image_pixel_limit::checkBuffer(
+            oversized.data(), oversized.size(), 300'000'000);
+      },
+      UNKNOWN_DIMENSIONS);
 }
 
 TEST(ImagePixelLimit, AcceptsTopDownBmpWithinPixelLimit) {
@@ -223,7 +232,8 @@ TEST(ImagePixelLimit, FileIsRejectedBeforeDecode) {
         static_cast<std::streamsize>(pic.size()));
   }
   expectRejected(
-      [&] { image_pixel_limit::checkFile(path.string(), 300'000'000); });
+      [&] { image_pixel_limit::checkFile(path.string(), 300'000'000); },
+      UNKNOWN_DIMENSIONS);
   std::filesystem::remove(path);
 }
 
@@ -236,6 +246,21 @@ TEST(ImagePixelLimit, RejectsNonRegularFileBeforeOpening) {
   EXPECT_THROW(
       image_pixel_limit::readRegularFile("/dev/zero"),
       qvac_errors::StatusError);
+  // Opening a FIFO without a writer would block a reader that skipped the
+  // type check.
+  const auto fifo =
+      std::filesystem::temp_directory_path() /
+      ("qvac25639-fifo-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()));
+  ASSERT_EQ(::mkfifo(fifo.c_str(), 0600), 0);
+  EXPECT_THROW(
+      image_pixel_limit::checkFile(fifo.string(), 50'000'000),
+      qvac_errors::StatusError);
+  EXPECT_THROW(
+      image_pixel_limit::readRegularFile(fifo.string()),
+      qvac_errors::StatusError);
+  std::filesystem::remove(fifo);
 #endif
 }
 

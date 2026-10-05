@@ -402,6 +402,21 @@ TEST_F(MtmdLlmContextTest, ImageLimitRejectsBatchPrompt) {
       std::move(modelPath), std::move(projectionPath), std::move(config));
   model.waitForLoadInitialization();
   ASSERT_TRUE(model.isLoaded());
+  auto* scheduler = LlamaModelTestPeer::scheduler(model);
+  ASSERT_NE(scheduler, nullptr) << "parallel=2 must build the scheduler";
+
+  // The per-slot loadMedia check throws the same error, so only the slot
+  // count shows the batch preflight rejected before admission.
+  size_t slotsBuilt = 0;
+  qvac_lib_inference_addon_llama::batching::DriverFactory original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original, &slotsBuilt](
+          const common_params& params, uint32_t seqId, llama_pos ceiling) {
+        ++slotsBuilt;
+        return original(params, seqId, ceiling);
+      });
 
   LlamaModel::Prompt oversized;
   oversized.input =
@@ -413,6 +428,7 @@ TEST_F(MtmdLlmContextTest, ImageLimitRejectsBatchPrompt) {
   } catch (const qvac_errors::StatusError& error) {
     EXPECT_NE(std::string(error.what()).find("1 MP limit"), std::string::npos);
   }
+  EXPECT_EQ(slotsBuilt, 0u);
 }
 
 TEST_F(MtmdLlmContextTest, ResetState) {

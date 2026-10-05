@@ -4,21 +4,30 @@
 #include <array>
 #include <charconv>
 #include <climits>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <limits>
+#include <memory>
 #include <string_view>
 #include <system_error>
+
+#include <sys/stat.h>
+#include <sys/types.h>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/LlmErrors.hpp"
-#include "inference-addon-cpp/Logger.hpp"
+#include "utils/LoggingMacros.hpp"
 
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
-#define STBI_WINDOWS_UTF8
 // Keep this header in sync with fabric's vendor/stb/stb_image.h.
 #include <stb_image.h>
 
@@ -44,7 +53,19 @@ std::filesystem::path utf8FilePath(const std::string& path) {
   }
 }
 
-size_t regularFileSize(const std::string& path) {
+struct FileCloser {
+  void operator()(FILE* file) const { std::fclose(file); }
+};
+
+struct RegularFile {
+  std::unique_ptr<FILE, FileCloser> file;
+  size_t size = 0;
+};
+
+// The path checks give clear errors; the type check on the opened descriptor
+// is the one that counts, so a path swapped to a FIFO or device after the
+// path checks cannot block the read.
+RegularFile openRegularFile(const std::string& path) {
   const auto filePath = utf8FilePath(path);
   std::error_code ec;
   if (!std::filesystem::exists(filePath, ec)) {
@@ -54,13 +75,35 @@ size_t regularFileSize(const std::string& path) {
   if (!std::filesystem::is_regular_file(filePath, ec) || ec) {
     throw invalidFile(path, "Media path is not a regular file");
   }
-  const auto size = std::filesystem::file_size(filePath, ec);
-  if (ec || size > std::numeric_limits<size_t>::max() ||
-      size >
-          static_cast<uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
+#ifdef _WIN32
+  std::unique_ptr<FILE, FileCloser> file(_wfopen(filePath.c_str(), L"rb"));
+  if (!file) {
+    throw invalidFile(path, "Failed to open media file");
+  }
+  struct _stat64 info{};
+  const bool regular = _fstat64(_fileno(file.get()), &info) == 0 &&
+                       (info.st_mode & _S_IFMT) == _S_IFREG;
+#else
+  const int fd = ::open(filePath.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+  if (fd < 0) {
+    throw invalidFile(path, "Failed to open media file");
+  }
+  std::unique_ptr<FILE, FileCloser> file(::fdopen(fd, "rb"));
+  if (!file) {
+    ::close(fd);
+    throw invalidFile(path, "Failed to open media file");
+  }
+  struct stat info{};
+  const bool regular = ::fstat(fd, &info) == 0 && S_ISREG(info.st_mode);
+#endif
+  if (!regular) {
+    throw invalidFile(path, "Media path is not a regular file");
+  }
+  if (info.st_size < 0 || static_cast<uintmax_t>(info.st_size) >
+                              std::numeric_limits<size_t>::max()) {
     throw invalidFile(path, "Cannot read media file size");
   }
-  return static_cast<size_t>(size);
+  return {std::move(file), static_cast<size_t>(info.st_size)};
 }
 
 bool isMtmdAudio(const uint8_t* data, size_t size) {
@@ -78,12 +121,11 @@ bool isMtmdAudio(const uint8_t* data, size_t size) {
 [[noreturn]] void rejectUnknownDimensions(const std::string& path = {}) {
   std::string message =
       "[ImagePixelLimit] Unsupported or corrupt image: cannot determine "
-      "dimensions before decoding. "
-      "Input was rejected to enforce image-max-megapixels.";
+      "dimensions before decoding.";
   if (!path.empty()) {
     message += " File: " + path;
   }
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, message);
+  QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, message);
   throw qvac_errors::StatusError(
       qvac_lib_inference_addon_llama::errors::ADDON_ID,
       qvac_errors::general_error::toString(
@@ -108,7 +150,7 @@ void checkDimensions(int width, int height, uint64_t maxPixels) {
       std::to_string(absHeight) + " exceeds the " +
       std::to_string(maxPixels / PIXELS_PER_MEGAPIXEL) +
       " MP limit. Increase image-max-megapixels to allow larger images.";
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, message);
+  QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, message);
   throw qvac_errors::StatusError(
       qvac_lib_inference_addon_llama::errors::ADDON_ID,
       qvac_errors::general_error::toString(
@@ -174,21 +216,19 @@ void checkBuffer(const uint8_t* data, size_t size, uint64_t maxPixels) {
 }
 
 void checkFile(const std::string& path, uint64_t maxPixels) {
-  regularFileSize(path);
-  std::ifstream stream(utf8FilePath(path), std::ios::binary);
-  if (!stream) {
-    throw invalidFile(path, "Failed to open media file");
-  }
+  const auto opened = openRegularFile(path);
   std::array<uint8_t, 12> magic{};
-  stream.read(reinterpret_cast<char*>(magic.data()), magic.size());
-  if (isMtmdAudio(magic.data(), static_cast<size_t>(stream.gcount()))) {
+  const auto magicSize =
+      std::fread(magic.data(), 1, magic.size(), opened.file.get());
+  if (isMtmdAudio(magic.data(), magicSize)) {
     return;
   }
+  std::rewind(opened.file.get());
 
   int width = 0;
   int height = 0;
   int channels = 0;
-  if (stbi_info(path.c_str(), &width, &height, &channels) != 0) {
+  if (stbi_info_from_file(opened.file.get(), &width, &height, &channels) != 0) {
     checkDimensions(width, height, maxPixels);
   } else {
     rejectUnknownDimensions(path);
@@ -196,16 +236,10 @@ void checkFile(const std::string& path, uint64_t maxPixels) {
 }
 
 std::vector<uint8_t> readRegularFile(const std::string& path) {
-  const auto size = regularFileSize(path);
-  std::ifstream stream(utf8FilePath(path), std::ios::binary);
-  if (!stream) {
-    throw invalidFile(path, "Failed to open media file");
-  }
-  std::vector<uint8_t> media(size);
-  stream.read(
-      reinterpret_cast<char*>(media.data()),
-      static_cast<std::streamsize>(media.size()));
-  if (stream.gcount() != static_cast<std::streamsize>(size)) {
+  const auto opened = openRegularFile(path);
+  std::vector<uint8_t> media(opened.size);
+  if (std::fread(media.data(), 1, media.size(), opened.file.get()) !=
+      media.size()) {
     throw invalidFile(path, "Failed to read complete media file");
   }
   return media;
