@@ -875,6 +875,9 @@ importers:
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
+      brittle:
+        specifier: ^3.17.0
+        version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       cmake-bare:
         specifier: ^1.7.5
         version: 1.8.0
@@ -1748,7 +1751,7 @@ importers:
         specifier: 0.1.0
         version: 0.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/inference':
-        specifier: ^0.20.0
+        specifier: ^0.21.0
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
