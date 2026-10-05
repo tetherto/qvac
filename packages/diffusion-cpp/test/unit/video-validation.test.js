@@ -775,7 +775,10 @@ test('run | H3 img2vid accepts a first-frame image without Wan CLIP vision', asy
 
 test('run | H3 img2vid still requires an image', async (t) => {
   const m = makeH3Model()
-  await t.exception.all(m.run({ mode: 'img2vid', prompt: 'A slow camera move' }), /img2vid requires init_image/)
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'A slow camera move' }),
+    /img2vid requires init_image/
+  )
 })
 
 // ─────────────────────────────────────────────────────────────────────
