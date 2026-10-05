@@ -3,7 +3,8 @@
  * Replays every URL the site owes a reader against the built output, and
  * fails if any of them stops resolving.
  *
- * Two sets are replayed, one per reorganization:
+ * Three sets are replayed — one per reorganization, plus every page the build
+ * emits, addressed the way an outside caller may address it:
  *
  *   - `tests/fixtures/pre-move-urls.json` — what production serves today. The
  *     collections reorganization puts a collection name in front of all 69
@@ -17,6 +18,10 @@
  *     are expected to resolve on their own, and the fixture is here to prove
  *     that they still do. The exception is the sixteen retired patch-series
  *     archives, which leave the published set and redirect.
+ *   - The bare form of every built page. The site links the trailing-slash
+ *     form, so these arrive only from outside — typed, from an external link,
+ *     or from a crawler that normalizes the slash away. No fixture: the set is
+ *     derived from the build, so a page cannot be published without it.
  *
  * A missing or mis-ordered rule is invisible in the diff and only shows up as
  * a 404 in production, on a URL search engines and external links already
@@ -30,8 +35,10 @@
  *   - Static files resolve before the rules, which is why a rule needs the `!`
  *     flag to shadow an existing page.
  *   - Pretty URLs normalizes a bare path to its trailing-slash form, but skips
- *     paths whose last segment contains a dot (`v0.7.x`), which is why those
- *     sections need explicit `200` rewrites.
+ *     the path whenever any segment carries a dot (`v0.7.x`, `v0.18`), reading
+ *     it as a request for a file. A dot in the last segment costs the
+ *     directory resolution too, which is why those sections need explicit
+ *     `200` rewrites; a dot further up costs only the slash.
  *   - First match wins, and a `200` rewrite pointing at a file that was never
  *     built keeps falling through to the catch-all 404.
  *
@@ -115,14 +122,19 @@ function segments(url: string): string[] {
 }
 
 /**
- * Sevalla's placeholder matcher is lenient about a trailing slash in the
- * source pattern, so `/a/:v` matches both `/a/x` and `/a/x/`. Placeholders
- * match exactly one segment; a trailing `*` matches the rest of the path.
+ * Sevalla's matcher is lenient about a trailing slash in one direction only: a
+ * source without it matches both `/a/x` and `/a/x/`, a source carrying it
+ * matches only `/a/x/`. Production proves the asymmetry — `/sdk/v0.20` reaches
+ * its `301` even though the `/sdk/v0.20/` rewrite is listed above it.
+ * Placeholders match exactly one segment; a trailing `*` matches the rest.
  */
 export function matchRule(
   rule: Rule,
   url: string,
 ): Record<string, string> | null {
+  if (rule.from.endsWith("/") && !url.split(/[#?]/)[0].endsWith("/")) {
+    return null;
+  }
   const pattern = segments(rule.from);
   const actual = segments(url);
   const params: Record<string, string> = {};
@@ -150,10 +162,21 @@ function expand(target: string, params: Record<string, string>): string {
   );
 }
 
-/** True when the last path segment carries a dot, e.g. `v0.7.x` or `page.md`. */
-function hasDottedTail(url: string): boolean {
-  const tail = segments(url).at(-1);
-  return tail !== undefined && tail.includes(".");
+const dotted = (segment: string): boolean => segment.includes(".");
+
+/**
+ * Pretty URLs' bare-path normalization, modelled where the CDN applies it:
+ * ahead of static resolution and ahead of the rules. A dot in any segment
+ * turns the path into a request for a file and the normalization is skipped,
+ * which is what leaves a documentation line's URLs bare.
+ *
+ * It is deliberately not counted as a redirect. The budgets below measure
+ * detours the rules could have avoided, and this one no rule can.
+ */
+function prettyUrl(url: string): string {
+  const parts = segments(url);
+  if (url.endsWith("/") || parts.length === 0 || parts.some(dotted)) return url;
+  return `${url}/`;
 }
 
 /**
@@ -164,8 +187,14 @@ function staticFileFor(url: string, built: Set<string>): string | null {
   const clean = url.split(/[#?]/)[0];
   const direct = clean.replace(/^\//, "");
   if (built.has(direct)) return direct;
-  // Pretty URLs skips dotted tails, so they never gain a directory index.
-  if (hasDottedTail(clean)) return null;
+  // Only a directory request resolves to an index, and only the slash makes
+  // the request one. A bare path arrives here either already normalized or
+  // carrying a dot that denied it the slash.
+  if (!clean.endsWith("/")) return null;
+  const tail = segments(clean).at(-1);
+  // A dotted last segment reads as a file request even with the slash, so it
+  // never gains the index — the line and archive indexes, hence their rewrite.
+  if (tail !== undefined && dotted(tail)) return null;
   const index = path.posix.join(direct, "index.html");
   return built.has(index) ? index : null;
 }
@@ -185,10 +214,11 @@ export function resolve(
   let current = url;
 
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
+    const request = prettyUrl(current);
     const forced = rules.some(
-      (rule) => rule.force && !rule.conditional && matchRule(rule, current),
+      (rule) => rule.force && !rule.conditional && matchRule(rule, request),
     );
-    if (!forced && staticFileFor(current, built)) return { ok: true, chain };
+    if (!forced && staticFileFor(request, built)) return { ok: true, chain };
 
     let served = false;
     let redirectTo: string | null = null;
@@ -196,7 +226,7 @@ export function resolve(
 
     for (const rule of rules) {
       if (rule.conditional) continue;
-      const params = matchRule(rule, current);
+      const params = matchRule(rule, request);
       if (!params) continue;
       const target = expand(rule.to, params);
 
@@ -246,6 +276,21 @@ async function builtFiles(): Promise<Set<string>> {
 }
 
 /**
+ * Every page the build emits, addressed without its trailing slash. The home
+ * page has no bare form and is left out.
+ */
+function barePageUrls(built: Set<string>): string[] {
+  const index = "index.html";
+  const urls: string[] = [];
+  for (const file of built) {
+    const posix = file.split(path.sep).join("/");
+    if (!posix.endsWith(`/${index}`)) continue;
+    urls.push(`/${posix.slice(0, -`/${index}`.length)}`);
+  }
+  return urls.sort();
+}
+
+/**
  * A non-forced rule whose source is answered by a static file can never fire.
  * That is how a stale rule turns into a redirect away from a page that now
  * lives at exactly that URL.
@@ -258,7 +303,7 @@ function shadowedRules(rules: Rule[], built: Set<string>): Rule[] {
       rule.status !== 404 &&
       !rule.from.includes(":") &&
       !rule.from.includes("*") &&
-      staticFileFor(rule.from, built) !== null,
+      staticFileFor(prettyUrl(rule.from), built) !== null,
   );
 }
 
@@ -302,6 +347,13 @@ async function main() {
       `${urls.length} ${fixture.label} URLs (${inventory.pages.length} pages + ${inventory.markdown.length} Markdown twins)`,
     );
   }
+
+  const bare = barePageUrls(built);
+  for (const url of bare) {
+    const resolution = resolve(url, rules, built);
+    if (!resolution.ok) failures.push({ url, resolution });
+  }
+  replayed.push(`${bare.length} bare page URLs`);
 
   // The rules predating this fixture — the older IA still linked from
   // qvac.tether.io — get the same treatment: a rule whose target no longer
