@@ -79,13 +79,13 @@ describe('contentPathsOfLink', () => {
   })
 
   it('resolves a link from the current line inside the group', () => {
-    expect(contentPathsOfLink('/sdk/quickstart', 'sdk/(v0.20)/index.mdx')[0])
-      .toBe('sdk/(v0.20)/quickstart')
+    expect(contentPathsOfLink('/sdk/quickstart', 'sdk/(v0.21)/index.mdx')[0])
+      .toBe('sdk/(v0.21)/quickstart')
   })
 
   it('resolves a link arriving from another collection in the current line', () => {
     expect(contentPathsOfLink('/sdk/quickstart', 'ecosystem/index.mdx')[0])
-      .toBe('sdk/(v0.20)/quickstart')
+      .toBe('sdk/(v0.21)/quickstart')
   })
 
   it('leaves a link that names its version alone', () => {
