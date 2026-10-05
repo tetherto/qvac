@@ -282,7 +282,7 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 | **Transcription** | Speech-to-text via a [Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml), [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), or [MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize) (speaker-labelled transcripts with hotwords). |
 | **Speaker diarization** | Whisper tinydiarize speaker turns, four-speaker Sortformer, up to eight-speaker [Nemotron 3 Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization), and speaker-labelled MOSS-Transcribe-Diarize transcripts through [`@qvac/asr-ggml`](packages/asr-ggml/README.md). |
 | **Audio decoding** | [FFmpeg audio decoder](packages/decoder-audio/README.md) with streaming PCM output and a default 64 MiB decoded-output limit. |
-| **Text-to-Speech** | Speech synthesis, speech-to-speech replies and text-to-sound-effects generation via a GGML backend. |
+| **Text-to-Speech** | Speech synthesis, speech-to-speech replies and text-to-sound-effects generation via a GGML backend; [metadata-only memory fit](packages/tts-ggml/README.md#assessing-fit) for MOSS-TTS and MOSS-TTSD. |
 | **Translation** | Neural machine translation, via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |

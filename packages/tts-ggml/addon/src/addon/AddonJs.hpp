@@ -3,6 +3,7 @@
 #include <any>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -24,6 +25,7 @@
 #include <tts-cpp/chatterbox/fit.h>
 #include <tts-cpp/cosyvoice/fit.h>
 #include <tts-cpp/log.h>
+#include <tts-cpp/moss/fit.h>
 #include <tts-cpp/parler/fit.h>
 #include <tts-cpp/supertonic/fit.h>
 
@@ -691,9 +693,43 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         tts_cpp::cosyvoice::fit_params(options),
         lavasrFileBytes(cfg.enhancerGgufPath, cfg.denoiserGgufPath));
   }
-  case EngineType::Moss:
-    // speech-cpp ships a fitter for every voice but MOSS.
-    return unsupportedEngineResult(env, "moss");
+  case EngineType::Moss: {
+    const auto cfg = adapter.buildMossConfig(request, env);
+    MossModel::validateFitConfig(cfg);
+    auto options = MossModel::toEngineOptions(cfg);
+    options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
+    constexpr uint64_t fitMarginBytes = 256ull * 1024 * 1024;
+    auto requiredCount = [&](const char* name) -> int {
+      const auto value = number(name);
+      if (!value || std::floor(*value) != *value ||
+          *value > std::numeric_limits<int>::max()) {
+        throw StatusError(
+            general_error::InvalidArgument,
+            std::string("assessFit: ") + name + " must be an integer count");
+      }
+      return static_cast<int>(*value);
+    };
+    auto streaming = request.getOptionalProperty<js::Boolean>(env, "streaming");
+    if (!streaming) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "assessFit: streaming is required for MOSS");
+    }
+    uint64_t marginBytes = fitMarginBytes;
+    if (const auto value = number("marginBytes")) {
+      if (*value >= static_cast<double>(std::numeric_limits<uint64_t>::max())) {
+        marginBytes = std::numeric_limits<uint64_t>::max();
+      } else {
+        marginBytes = static_cast<uint64_t>(*value);
+      }
+    }
+    const tts_cpp::moss::FitWorkload workload(
+        requiredCount("promptRows"),
+        requiredCount("referenceSamples"),
+        streaming->as<bool>(env),
+        marginBytes);
+    return fitResultToJs(env, tts_cpp::moss::fit_params(options, workload));
+  }
   case EngineType::MossSoundEffect:
     return unsupportedEngineResult(env, "moss-sfx");
   case EngineType::MossSpeech:
