@@ -406,6 +406,45 @@
 /http-server/   /cli/http-server/   301
 
 # ======================================================================
+# TEMPORARY PROBE — REMOVE BEFORE MERGE
+# ----------------------------------------------------------------------
+# Measures one thing the CDN does not document and no offline replay can
+# answer: whether a rule reaches a bare path that carries a dot in a
+# segment other than the last.
+#
+# What is already known, measured on production and on the staging env
+# with Pretty URLs on, which agree on every probe:
+#
+#   - A literal rule reaches a bare path whose LAST segment is dotted.
+#     `/sdk/v0.19` takes its `301`.
+#   - A placeholder rule reaches neither. `/reference/api/v0.7.x` 404s on
+#     both, though `/reference/api/:version` is written for it, and so
+#     does the forced Markdown rule, which is the first rule in the file.
+#
+# So the open question is the middle segment. Each probe below answers a
+# different part of it; read them against `/sdk/v0.19/system-requirements`
+# and friends, which 404 today:
+#
+#   P1-P3  does a literal `301` reach it, at one, two and three segments
+#          below the line root?
+#   P4     does a literal `200` rewrite reach it, as the line indexes
+#          prove it does for a dotted last segment?
+#   P5     is the answer about the dot alone, or about the page? Nothing
+#          is built under `/zzz.probe/`, so a `301` here means rules run.
+#
+# If the literals fire, the fix is one generated literal per versioned
+# URL and the SLASH NORMALIZATION block below goes away. If they do not,
+# no rule can serve these URLs and the fix is to stop putting a dot in
+# the version segment.
+# ======================================================================
+
+/sdk/v0.19/system-requirements                        /sdk/v0.19/system-requirements/                        301
+/sdk/v0.18/ai-capabilities/bci                        /sdk/v0.18/ai-capabilities/bci/                        301
+/sdk/v0.18/configuration/plugins/write-custom-plugin  /sdk/v0.18/configuration/plugins/write-custom-plugin/  301
+/cli/v0.14/http-server/connection                     /cli/v0.14/http-server/connection/index.html           200
+/zzz.probe/page                                       /sdk/                                                  301
+
+# ======================================================================
 # SLASH NORMALIZATION — MUST BE THE LAST BLOCK BEFORE THE CATCH-ALL
 # ----------------------------------------------------------------------
 # Puts back the trailing slash Pretty URLs declines to add. It normalizes
