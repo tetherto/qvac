@@ -14,6 +14,7 @@ add_executable(
   test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
   test_cache_ledger.cpp
+  test_kv_cache_extended.cpp
   test_text_llm_context.cpp
   test_addon_cpp.cpp
   test_cancel_stale_flag.cpp
