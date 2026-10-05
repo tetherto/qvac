@@ -76,6 +76,7 @@ export const registry: Record<string, HandlerEntry> = {
     handler: handleUnloadModel
   },
   embed: { type: 'reply', pluginOp: true, handler: pluginReply('embed') },
+  decide: { type: 'reply', pluginOp: true, handler: pluginReply('decide') },
   cancel: {
     type: 'reply',
     handler: cancelHandler

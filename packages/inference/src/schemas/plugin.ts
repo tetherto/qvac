@@ -359,6 +359,13 @@ export const PLUGIN_LLM = '@qvac/inference/llamacpp-completion/plugin' as const
 export const PLUGIN_EMBEDDING = '@qvac/inference/llamacpp-embedding/plugin' as const
 
 /**
+ * Decision-model plugin (llama.cpp System One).
+ * Provides: unary `decide` for noul, choice, and score questions.
+ * The native addon is not linked in this package.
+ */
+export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
+
+/**
  * Speech-to-text transcription plugin (whisper.cpp).
  * Provides: audio transcription, language detection.
  */
@@ -431,6 +438,7 @@ export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin
 export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_PARAKEET,

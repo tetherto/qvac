@@ -113,6 +113,7 @@ export {
   type ModelRegistryEntryAddon,
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_NMT,

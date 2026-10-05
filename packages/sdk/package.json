@@ -76,6 +76,10 @@
       "types": "./dist/src/worker/plugins/llamacpp-embedding.d.ts",
       "import": "./dist/src/worker/plugins/llamacpp-embedding.js"
     },
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/src/worker/plugins/llamacpp-decision.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-decision.js"
+    },
     "./whispercpp-transcription/plugin": {
       "types": "./dist/src/worker/plugins/whispercpp-transcription.d.ts",
       "import": "./dist/src/worker/plugins/whispercpp-transcription.js"
@@ -224,7 +228,7 @@
     "@qvac/embed-llamacpp": "0.43.0",
     "@qvac/error": "^0.1.1",
     "@qvac/ggml-rpc-server": "0.1.0",
-    "@qvac/inference": "^0.21.0",
+    "@qvac/inference": "file:../inference",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "0.55.0",
     "@qvac/logging": "^0.1.0",

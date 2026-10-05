@@ -3,6 +3,7 @@
     "audiogen": "audiogen-ggml",
     "bci": "bci-whispercpp-transcription",
     "classification": "ggml-classification",
+    "decision": "llamacpp-decision",
     "diffusion": "sdcpp-generation",
     "embeddings": "llamacpp-embedding",
     "llm": "llamacpp-completion",

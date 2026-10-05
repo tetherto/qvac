@@ -18,6 +18,7 @@ import { audioGenConfigSchema } from '@/schemas/audio-gen'
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: 'llm',
   [ModelType.llamacppEmbedding]: 'embeddings',
+  [ModelType.llamacppDecision]: 'decision',
   [ModelType.whispercppTranscription]: 'whisper',
   [ModelType.bciWhispercppTranscription]: 'bci',
   [ModelType.parakeetTranscription]: 'parakeet',

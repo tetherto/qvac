@@ -1,0 +1,65 @@
+---
+title: Decision models
+icon: Scale
+description: Score a state with typed noul, choice, and score questions in one call.
+schemaType: HowTo
+---
+
+## Overview
+
+`decide()` scores typed questions against a `state`. It follows the llama.cpp `POST /v1/systemone` contract: `choice`, `score`, and `noul`. The call is unary. `usage.output_tokens` is always 0.
+
+`images` is accepted on the request as an extension hook. A text-only model rejects it with a typed error. This package does not decode images.
+
+The native addon that runs a GGUF such as Laya is not linked in this change. `loadModel({ modelType: "llamacpp-decision" })` fails with `DECIDE_FAILED` until that addon is published. Tests call the handler with a fixture addon.
+
+## Functions
+
+1. [`loadModel()`](/sdk/reference/api#loadmodel) with `modelType: "llamacpp-decision"` or `"decision"`
+2. [`decide()`](/sdk/reference/api#decide)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+## Question types
+
+- `noul`: `instructions` required. `criteria` optional. The answer is `{ type, noul }` and has no `confidence`.
+- `choice`: `criteria` is a non-empty object of option id to description. One option is valid. The answer is `{ type, choice, probabilities, confidence }`.
+- `score`: `criteria` is an array of 2 to 10 level descriptions, lowest first. The answer is `{ type, score, legend, probabilities, confidence }`. `score` is an expected index and can fall between levels.
+
+`state` is required and must not be null. It can be a string, an object, or an array. `questions` is a non-empty object.
+
+## Example
+
+```js
+import { decide, loadModel, unloadModel } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/Laya-Q8_0.gguf",
+  modelType: "llamacpp-decision",
+});
+
+const result = await decide({
+  modelId,
+  state:
+    "Customer message: I was charged twice for my order last week and nobody has replied.",
+  questions: {
+    route: {
+      type: "choice",
+      instructions: "Which team should handle this?",
+      criteria: {
+        billing: "payments and refunds",
+        shipping: null,
+        technical: null,
+      },
+    },
+    angry: {
+      type: "noul",
+      instructions: "Is the customer angry?",
+    },
+  },
+});
+
+console.log(result.answers.route.choice, result.answers.angry.noul);
+await unloadModel({ modelId });
+```
+
+Loading the GGUF in the snippet requires the native addon. Until that addon ships, the call fails at `loadModel` and does not score the state.

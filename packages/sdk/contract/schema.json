@@ -41,6 +41,9 @@
           "$ref": "#/$defs/completionStream.request"
         },
         {
+          "$ref": "#/$defs/decide.request"
+        },
+        {
           "$ref": "#/$defs/deleteCache.request"
         },
         {
@@ -183,6 +186,9 @@
         },
         {
           "$ref": "#/$defs/completionStream.response"
+        },
+        {
+          "$ref": "#/$defs/decide.response"
         },
         {
           "$ref": "#/$defs/deleteCache.response"
@@ -372,6 +378,7 @@
                               "whispercpp-transcription",
                               "bci-whispercpp-transcription",
                               "llamacpp-embedding",
+                              "llamacpp-decision",
                               "nmtcpp-translation",
                               "onnx-tts",
                               "tts-ggml",
@@ -385,6 +392,7 @@
                               "whisper",
                               "bci",
                               "embeddings",
+                              "decision",
                               "nmt",
                               "parakeet",
                               "tts",
@@ -416,6 +424,7 @@
                   "whispercpp-transcription",
                   "bci-whispercpp-transcription",
                   "llamacpp-embedding",
+                  "llamacpp-decision",
                   "nmtcpp-translation",
                   "onnx-tts",
                   "tts-ggml",
@@ -429,6 +438,7 @@
                   "whisper",
                   "bci",
                   "embeddings",
+                  "decision",
                   "nmt",
                   "parakeet",
                   "tts",
@@ -3099,6 +3109,7 @@
                 "completion",
                 "batchCompletion",
                 "embeddings",
+                "decision",
                 "transcribe",
                 "translate",
                 "diffusion",
@@ -4467,6 +4478,7 @@
         "whispercpp-transcription",
         "bci-whispercpp-transcription",
         "llamacpp-embedding",
+        "llamacpp-decision",
         "nmtcpp-translation",
         "onnx-tts",
         "tts-ggml",
@@ -4482,6 +4494,7 @@
         "whispercppTranscription",
         "bciWhispercppTranscription",
         "llamacppEmbedding",
+        "llamacppDecision",
         "nmtcppTranslation",
         "onnxTts",
         "ttsGgml",
@@ -4774,6 +4787,241 @@
       "type": "number",
       "enum": [0, 1, 2, 3],
       "x-enum-varnames": ["ERROR", "WARN", "INFO", "DEBUG"]
+    },
+    "decide.request": {
+      "title": "DecideRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The identifier of the loaded decision model"
+        },
+        "state": {
+          "description": "Content to score. A string, object, or array. Null is rejected."
+        },
+        "questions": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "noul"
+                  },
+                  "instructions": {
+                    "description": "The question. A string, object, or array."
+                  },
+                  "criteria": {
+                    "description": "Optional descriptions for the `false` and `true` labels.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "title": "DecideRequestQuestionsValueNoulCriteria"
+                  }
+                },
+                "required": ["type", "instructions"],
+                "title": "DecideRequestQuestionsValueNoul"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "choice"
+                  },
+                  "instructions": {
+                    "description": "The question. A string, object, or array."
+                  },
+                  "criteria": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "description": "Option id to description. One option is valid. An empty object is not.",
+                    "title": "DecideRequestQuestionsValueChoiceCriteria"
+                  }
+                },
+                "required": ["type", "instructions", "criteria"],
+                "title": "DecideRequestQuestionsValueChoice"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "score"
+                  },
+                  "instructions": {
+                    "description": "The question. A string, object, or array."
+                  },
+                  "criteria": {
+                    "minItems": 2,
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {},
+                    "description": "Level descriptions, lowest first. Length 2 to 10."
+                  }
+                },
+                "required": ["type", "instructions", "criteria"],
+                "title": "DecideRequestQuestionsValueScore"
+              }
+            ]
+          },
+          "description": "Question id to a noul, choice, or score question.",
+          "title": "DecideRequestQuestions"
+        },
+        "images": {
+          "description": "Optional image data URLs. Text-only decision models reject this. The field is the extension hook; this package does not decode images.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "const": "decide"
+        },
+        "requestId": {
+          "description": "Stable identifier for this in-flight decide, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["modelId", "state", "questions", "type"]
+    },
+    "decide.response": {
+      "title": "DecideResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "decide"
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "answers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "noul"
+                  },
+                  "noul": {
+                    "type": "number",
+                    "description": "Probability that the answer is true. No confidence field."
+                  }
+                },
+                "required": ["type", "noul"],
+                "additionalProperties": false,
+                "title": "DecideResponseAnswersValueNoul"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "choice"
+                  },
+                  "choice": {
+                    "type": "string"
+                  },
+                  "probabilities": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "title": "DecideResponseAnswersValueChoiceProbabilities"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  }
+                },
+                "required": ["type", "choice", "probabilities", "confidence"],
+                "additionalProperties": false,
+                "title": "DecideResponseAnswersValueChoice"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "score"
+                  },
+                  "score": {
+                    "type": "number",
+                    "description": "Expected level index. It can fall between two levels."
+                  },
+                  "legend": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "title": "DecideResponseAnswersValueScoreLegend"
+                  },
+                  "probabilities": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "title": "DecideResponseAnswersValueScoreProbabilities"
+                  },
+                  "confidence": {
+                    "type": "number"
+                  }
+                },
+                "required": ["type", "score", "legend", "probabilities", "confidence"],
+                "additionalProperties": false,
+                "title": "DecideResponseAnswersValueScore"
+              }
+            ]
+          },
+          "title": "DecideResponseAnswers"
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "input_tokens": {
+              "type": "number"
+            },
+            "output_tokens": {
+              "type": "number",
+              "const": 0
+            }
+          },
+          "required": ["input_tokens", "output_tokens"],
+          "additionalProperties": false,
+          "title": "DecideResponseUsage"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "success", "answers", "usage"],
+      "additionalProperties": false
     },
     "deleteCache.request": {
       "title": "DeleteCacheRequest",
@@ -10529,6 +10777,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -10542,6 +10791,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -10944,6 +11194,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -10957,6 +11208,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -11217,6 +11469,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -11230,6 +11483,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -11610,6 +11864,70 @@
                 },
                 "modelType": {
                   "type": "string",
+                  "const": "llamacpp-decision"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "description": "Device to run on. Default is left to the addon.",
+                      "type": "string",
+                      "enum": ["cpu", "gpu"],
+                      "title": "LoadModelSrcRequestLlamacppDecisionModelConfigDevice"
+                    },
+                    "verbosity": {
+                      "description": "Native log verbosity: 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3
+                    }
+                  },
+                  "title": "LoadModelSrcRequestLlamacppDecisionModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestLlamacppDecision"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requestId": {
+                  "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelType": {
+                  "type": "string",
                   "const": "nmtcpp-translation"
                 },
                 "modelConfig": {
@@ -11841,6 +12159,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -11854,6 +12173,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -11936,6 +12256,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -11949,6 +12270,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -12076,6 +12398,7 @@
                                             "whispercpp-transcription",
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
+                                            "llamacpp-decision",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -12089,6 +12412,7 @@
                                             "whisper",
                                             "bci",
                                             "embeddings",
+                                            "decision",
                                             "nmt",
                                             "parakeet",
                                             "tts",
@@ -12172,6 +12496,7 @@
                                             "whispercpp-transcription",
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
+                                            "llamacpp-decision",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -12185,6 +12510,7 @@
                                             "whisper",
                                             "bci",
                                             "embeddings",
+                                            "decision",
                                             "nmt",
                                             "parakeet",
                                             "tts",
@@ -12267,6 +12593,7 @@
                                             "whispercpp-transcription",
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
+                                            "llamacpp-decision",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -12280,6 +12607,7 @@
                                             "whisper",
                                             "bci",
                                             "embeddings",
+                                            "decision",
                                             "nmt",
                                             "parakeet",
                                             "tts",
@@ -12661,6 +12989,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -12674,6 +13003,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -12756,6 +13086,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -12769,6 +13100,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -12851,6 +13183,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -12864,6 +13197,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -12946,6 +13280,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -12959,6 +13294,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -13041,6 +13377,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -13054,6 +13391,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -13136,6 +13474,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -13149,6 +13488,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -13359,6 +13699,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -13372,6 +13713,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -13454,6 +13796,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -13467,6 +13810,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -13726,6 +14070,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -13739,6 +14084,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -13821,6 +14167,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -13834,6 +14181,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14048,6 +14396,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14061,6 +14410,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14143,6 +14493,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14156,6 +14507,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14238,6 +14590,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14251,6 +14604,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14333,6 +14687,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14346,6 +14701,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14428,6 +14784,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14441,6 +14798,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14600,6 +14958,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14613,6 +14972,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14696,6 +15056,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14709,6 +15070,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14791,6 +15153,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14804,6 +15167,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -14942,6 +15306,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14955,6 +15320,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -15038,6 +15404,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15051,6 +15418,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -15133,6 +15501,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15146,6 +15515,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -15232,6 +15602,7 @@
                                           "whispercpp-transcription",
                                           "bci-whispercpp-transcription",
                                           "llamacpp-embedding",
+                                          "llamacpp-decision",
                                           "nmtcpp-translation",
                                           "onnx-tts",
                                           "tts-ggml",
@@ -15245,6 +15616,7 @@
                                           "whisper",
                                           "bci",
                                           "embeddings",
+                                          "decision",
                                           "nmt",
                                           "parakeet",
                                           "tts",
@@ -15438,6 +15810,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -15451,6 +15824,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -15725,6 +16099,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -15738,6 +16113,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -15820,6 +16196,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -15833,6 +16210,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -15915,6 +16293,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -15928,6 +16307,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16010,6 +16390,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16023,6 +16404,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16105,6 +16487,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16118,6 +16501,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16200,6 +16584,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16213,6 +16598,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16295,6 +16681,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16308,6 +16695,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16390,6 +16778,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16403,6 +16792,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16485,6 +16875,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16498,6 +16889,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16580,6 +16972,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16593,6 +16986,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16675,6 +17069,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16688,6 +17083,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16770,6 +17166,7 @@
                                     "whispercpp-transcription",
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
+                                    "llamacpp-decision",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -16783,6 +17180,7 @@
                                     "whisper",
                                     "bci",
                                     "embeddings",
+                                    "decision",
                                     "nmt",
                                     "parakeet",
                                     "tts",
@@ -16971,6 +17369,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16984,6 +17383,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -17188,6 +17588,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17201,6 +17602,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -17283,6 +17685,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17296,6 +17699,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -17378,6 +17782,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17391,6 +17796,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -17473,6 +17879,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17486,6 +17893,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -17608,6 +18016,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17621,6 +18030,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -17703,6 +18113,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17716,6 +18127,7 @@
                                         "whisper",
                                         "bci",
                                         "embeddings",
+                                        "decision",
                                         "nmt",
                                         "parakeet",
                                         "tts",
@@ -18318,6 +18730,7 @@
                                 "whispercpp-transcription",
                                 "bci-whispercpp-transcription",
                                 "llamacpp-embedding",
+                                "llamacpp-decision",
                                 "nmtcpp-translation",
                                 "onnx-tts",
                                 "tts-ggml",
@@ -18331,6 +18744,7 @@
                                 "whisper",
                                 "bci",
                                 "embeddings",
+                                "decision",
                                 "nmt",
                                 "parakeet",
                                 "tts",

@@ -11,6 +11,7 @@ export const ModelType = {
   whispercppTranscription: 'whispercpp-transcription',
   bciWhispercppTranscription: 'bci-whispercpp-transcription',
   llamacppEmbedding: 'llamacpp-embedding',
+  llamacppDecision: 'llamacpp-decision',
   nmtcppTranslation: 'nmtcpp-translation',
   onnxTts: 'onnx-tts',
   ttsGgml: 'tts-ggml',
@@ -28,6 +29,7 @@ const AliasKeys = {
   whisper: 'whisper',
   bci: 'bci',
   embeddings: 'embeddings',
+  decision: 'decision',
   nmt: 'nmt',
   parakeet: 'parakeet',
   tts: 'tts',
@@ -48,6 +50,7 @@ export const ModelTypeAliases = {
   [AliasKeys.whisper]: ModelType.whispercppTranscription,
   [AliasKeys.bci]: ModelType.bciWhispercppTranscription,
   [AliasKeys.embeddings]: ModelType.llamacppEmbedding,
+  [AliasKeys.decision]: ModelType.llamacppDecision,
   [AliasKeys.nmt]: ModelType.nmtcppTranslation,
   [AliasKeys.parakeet]: ModelType.parakeetTranscription,
   [AliasKeys.tts]: ModelType.ttsGgml,
@@ -264,3 +267,13 @@ export const classificationModelTypeSchema = modelTypeInputSchema
     'Classification model type: "classification" (alias) or "ggml-classification" (canonical)'
   )
 export type ClassificationModelTypeInput = z.infer<typeof classificationModelTypeSchema>
+
+/**
+ * Decision model type schema.
+ * - Alias: `"decision"` → resolves to `"llamacpp-decision"`
+ * - Canonical: `"llamacpp-decision"`
+ */
+export const decisionModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.decision, ModelType.llamacppDecision])
+  .describe('Decision model type: "decision" (alias) or "llamacpp-decision" (canonical)')
+export type DecisionModelTypeInput = z.infer<typeof decisionModelTypeSchema>

@@ -34,6 +34,7 @@ import {
   bciModelTypeSchema,
   parakeetModelTypeSchema,
   embeddingsModelTypeSchema,
+  decisionModelTypeSchema,
   nmtModelTypeSchema,
   ttsModelTypeSchema,
   ocrModelTypeSchema,
@@ -51,6 +52,7 @@ import { sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
 import { classificationConfigSchema } from './classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
+import { decideConfigBaseSchema } from '@/schemas/decide'
 
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([...Object.values(ModelType), ...Object.keys(ModelTypeAliases)])
@@ -97,6 +99,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.bciWhispercppTranscription, configKeys(bciConfigSchema)],
   [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
   [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
+  [ModelType.llamacppDecision, configKeys(decideConfigBaseSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
     ModelType.ttsGgml,
@@ -185,6 +188,13 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: embeddingsModelTypeSchema,
       modelConfig: embedConfigBaseSchema.strict().optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: decisionModelTypeSchema,
+      modelConfig: decideConfigBaseSchema.strict().optional()
     })
     .strict(),
   z
@@ -597,6 +607,13 @@ export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
+export const loadDecisionModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.llamacppDecision),
+    modelConfig: decideConfigBaseSchema.optional()
+  })
+  .strict()
+
 export const loadNmtModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.nmtcppTranslation),
@@ -664,6 +681,7 @@ export const loadModelSrcRequestSchema = z
     loadBciModelRequestSchema,
     loadParakeetModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
+    loadDecisionModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
