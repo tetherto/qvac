@@ -158,7 +158,7 @@ jobs:
         run: npm install
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare bare-make@1.8.0
 
       - run: mkdir -p "${{ runner.temp }}/audiogen-ggml"
         shell: bash
@@ -167,7 +167,7 @@ jobs:
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: tetherto/qvac/.github/actions/download-artifact-retry@3cff82f19ea62235ddf2963124610bed239e49f8
         with:
           path: ${{ runner.temp }}/audiogen-ggml
           merge-multiple: true
@@ -180,10 +180,32 @@ jobs:
         if: ${{ inputs.prebuild_package }}
         working-directory: ${{ runner.temp }}/audiogen-ggml
         shell: bash
+        env:
+          PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
         run: |
-          npm pack ${{ inputs.prebuild_package }}
+          npm pack "$PREBUILD_PACKAGE"
           tar -xzf *.tgz
-          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
+          # meta tarball; split releases ship them in the per-host platform
+          # package under addon/prebuilds/.
+          if [ -d ./package/prebuilds ]; then
+            cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          else
+            SPEC="$PREBUILD_PACKAGE"
+            REST="${SPEC#?}"
+            if [ "${REST#*@}" != "$REST" ]; then
+              VERSION="${SPEC##*@}"
+              NAME="${SPEC%@"$VERSION"}"
+            else
+              VERSION=""
+              NAME="$SPEC"
+            fi
+            HOST_SPEC="${NAME}-${{ matrix.platform }}-${{ matrix.arch }}${VERSION:+@$VERSION}"
+            rm -rf ./package ./*.tgz
+            npm pack "$HOST_SPEC"
+            tar -xzf *.tgz
+            cp -r ./package/addon/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+          fi
 
       - name: Rename prebuilds from tetherto_ to qvac_ prefix
         if: ${{ inputs.prebuild_package }}
@@ -225,6 +247,15 @@ jobs:
       # A benchmark run needs every DiT variant, the functional suite only
       # turbo-q4. They get separate cache entries so the bigger set neither
       # displaces the smaller one nor gets mistaken for it on a key hit.
+      #
+      # Both suffixes are non-empty on purpose. An empty one made this leg's
+      # restore-key prefix `models-audiogen-ggml-v1-`, a strict prefix of the
+      # all-dit-variants key -- and both legs hash the same download script, so
+      # they miss their exact keys together. The functional leg would then
+      # prefix-match the benchmark entry (the server returns the most recently
+      # written), find every file present, skip its download and save the whole
+      # sweep back under its own key. Absorbing: from then on both entries hold
+      # the superset and this leg never restores just turbo-q4 again.
       - name: Cache AudioGen GGML GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
@@ -233,7 +264,7 @@ jobs:
           package: audiogen-ggml
           paths: packages/audiogen-ggml/models
           hash-files-glob: packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js
-          cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || '' }}
+          cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || 'turbo-q4' }}
           enable-cross-os: 'true'
 
       - name: Download GGUF models from registry

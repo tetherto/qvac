@@ -5,12 +5,24 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
+      - ".agents/skills/**"
+      - "scripts/agent-setup.sh"
+      - ".claude/skills/setup/**"
       - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
+      - ".github/actions/run-mobile-integration-tests/setup/**"
       - "scripts/perf-report/**"
+      - "scripts/ci/**"
+      - "packages/ocr-ggml/.agent/setup.sh"
+      - "packages/ocr-ggml/.agent/skills/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
+      # The rtf-expected-devices guard test asserts this workflow's matrix row
+      # count against its rtf_expected_devices output, so a matrix-only edit
+      # must trigger the perf-report unit tests too. tts-ggml and
+      # bci-whispercpp moved to integration-test-nx and are no longer guarded.
+      - ".github/workflows/integration-test-asr-ggml.yml"
   workflow_dispatch:
 
 permissions:
@@ -36,6 +48,12 @@ jobs:
         run: node --test .github/actions/cache-models/test/*.test.mjs
       - name: Run seed-and-presign action unit tests
         run: node --test .github/actions/run-mobile-integration-tests/seed-and-presign-models/test/*.test.mjs
+      # The prebuild_run_id resolver decides which native binary reaches a
+      # device. Nothing else runs it pre-merge: the mobile workflows are
+      # dispatch-only, so a broken resolver would first surface as a failed
+      # manual run, or worse as a run that installed the wrong build.
+      - name: Run mobile setup prebuild-run resolver unit tests
+        run: node --test .github/actions/run-mobile-integration-tests/setup/test/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without
@@ -54,6 +72,28 @@ jobs:
           node-version: lts/*
       - name: Run perf-report unit tests
         run: node --test scripts/perf-report/__tests__/*.test.js
+
+  # The upstream-compat smoke verifiers are plain Node modules driven by the
+  # *-upstream-compat.yml workflows, which run on a schedule — so without this
+  # job a broken verifier would not surface until the next nightly tick, and
+  # the smoke it guards would go green or red for the wrong reason.
+  ci-script-unit-tests:
+    name: CI script unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Run CI script unit tests
+        run: node --test scripts/ci/__tests__/*.test.cjs
+      - name: Validate shared agent configuration
+        run: node scripts/ci/validate-agent-config.mjs
+      - name: Test agent setup migration safety
+        run: bash scripts/ci/test-agent-setup.sh
 
   model-availability:
     name: Model availability (${{ matrix.package }})

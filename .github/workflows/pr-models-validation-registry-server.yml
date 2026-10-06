@@ -34,11 +34,12 @@ permissions:
 
 # Serialize deploy-capable runs (push / workflow_dispatch) under one fixed group
 # so two runs can never roll the staging cluster at the same time — max-parallel
-# only serializes nodes within a single run. PR-validation runs stay grouped
-# per-ref so different PRs still run in parallel. Never cancel an in-flight
-# deploy.
+# only serializes nodes within a single run. The group name is shared with
+# fill-fit-blobs-registry-server.yml, which writes to the same cluster.
+# PR-validation runs stay grouped per-ref so different PRs still run in
+# parallel. Never cancel an in-flight deploy.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request_target' && github.ref || 'deploy' }}
+  group: ${{ github.event_name == 'pull_request_target' && format('{0}-{1}', github.workflow, github.ref) || 'registry-server-staging-write' }}
   cancel-in-progress: false
 
 jobs:
@@ -390,6 +391,7 @@ jobs:
       - fork-approval
       - sync-staging
     runs-on: ubuntu-latest
+    environment: release
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
     steps:

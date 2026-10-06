@@ -74,7 +74,12 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/translation-nmtcpp@<ver> (published) or @tetherto/translation-nmtcpp-mono@<dev> (GPR) to force-install a specific build."
+        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/translation-nmtcpp@<ver> (published) or @tetherto/translation-nmtcpp-mono@<dev> (GPR) to force-install a specific build. Prefer `prebuild_run_id` for your own PR: it installs the prebuilds your on-pr run already built, with no publish step."
+        type: string
+        required: false
+        default: ""
+      prebuild_run_id:
+        description: "Run id whose `prebuilds` artifact to install — the route for testing YOUR OWN PR on a device. Point it at the on-pr-translation-nmtcpp run that already built your prebuilds (the number at the end of that run's URL); no tmp-* branch, no publish, no hand-assembled package name. Takes precedence over `package`, and fails the run if that artifact is missing or expired rather than falling back to @latest. Mutually exclusive with `package`."
         type: string
         required: false
         default: ""
@@ -167,6 +172,8 @@ jobs:
     # silently turns failed runs green.
     permissions:
       contents: read
+      # prebuild_run_id reads another run and downloads its artifact.
+      actions: read
       packages: read
       pull-requests: write
       id-token: write
@@ -222,6 +229,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/translation-nmtcpp' }}
           addon-npm-name: '@qvac/translation-nmtcpp'
+          prebuild-artifact-prefix: 'prebuild-translation-nmtcpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Manual dispatch (inputs.platform set). An empty `package` does NOT test
           # this branch's native code: a standalone dispatch produces no prebuild
@@ -231,6 +239,9 @@ jobs:
           # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call is untouched (artifact-first).
           package-version: ${{ inputs.platform != '' && inputs.package || '' }}
           force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
+          # Dispatch-only: under workflow_call this input does not exist and
+          # resolves empty, leaving the artifact-first path untouched.
+          prebuild-run-id: ${{ inputs.prebuild_run_id }}
 
       - name: Build mobile app
         id: build

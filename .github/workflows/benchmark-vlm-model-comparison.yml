@@ -72,6 +72,7 @@ permissions:
   packages: read
   pull-requests: write
   id-token: write
+  actions: read
 
 jobs:
   # ── Context ────────────────────────────────────────────────────────
@@ -385,7 +386,7 @@ jobs:
 
   # A2: build the addon from the dispatched ref so addon@candidate can be compared
   # against the published addon@baseline. Uses the standard reusable prebuild workflow,
-  # which uploads per-platform `llama-cpp-<platform>-<arch>` artifacts the desktop legs
+  # which uploads per-platform `prebuild-llm-llamacpp-<platform>-<arch>` artifacts the desktop legs
   # (and the mobile candidate session) consume. Only runs when a candidate is requested.
   prebuild-candidate:
     needs: context
@@ -394,10 +395,12 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
     with:
       ref: ${{ needs.context.outputs.ref }}
       repository: ${{ needs.context.outputs.repository }}
+      packages: '["llm-llamacpp"]'
     secrets: inherit
 
   matrix-desktop:
@@ -445,7 +448,7 @@ jobs:
 
       - name: Install bare tooling
         shell: bash
-        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
+        run: npm install -g --force bare bare-make@1.8.0 bare-runtime bare-https brittle
 
       # Branch JS + published native prebuild: pull the host's prebuild
       # (linux-x64 / darwin-arm64) from the public npm package into the
@@ -473,7 +476,7 @@ jobs:
         if: contains(inputs.matrix_sources, 'addon@candidate')
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: llama-cpp-${{ (matrix.host == 'linux' && 'linux-x64') || (matrix.host == 'windows' && 'win32-x64') || 'darwin-arm64' }}
+          name: prebuild-llm-llamacpp-${{ (matrix.host == 'linux' && 'linux-x64') || (matrix.host == 'windows' && 'win32-x64') || 'darwin-arm64' }}
           path: ${{ env.WORKDIR }}/builds/candidate/prebuilds
 
       # addon@baseline (A2): the pinned published version (config.defaultBaseline.npm).

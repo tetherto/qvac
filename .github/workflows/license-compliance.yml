@@ -22,7 +22,7 @@ name: License compliance
 # job (run before releases / on a schedule). See
 # tetherto/qvac-actions/docs/license-compliance-ci.md "Known limitation".
 #
-# The compliance SKILL (`.cursor/skills/qv-notice-generate`) is the human
+# The compliance SKILL (`.agents/skills/qv-notice-generate`) is the human
 # fallback for the long tail this deterministic gate cannot classify.
 
 on:

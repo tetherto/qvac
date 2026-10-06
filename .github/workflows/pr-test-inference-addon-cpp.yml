@@ -36,7 +36,7 @@ jobs:
       # Gating self-hosted fork runs on this status (not a stale label) is what stops
       # a draft->ready / close->reopen flip — or any later push — from running a new,
       # unapproved SHA. Read-only: no secrets, `statuses: read` only. See
-      # .cursor/rules/devops/github-actions.mdc "CI trust policy for fork PRs".
+      # .github/AGENTS.md and docs/ci/LABELS.md define the trust policy for fork PRs.
       - name: Resolve SHA-bound fork approval
         id: approved
         env:
@@ -245,5 +245,4 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: cmake --preset default -D BUILD_TESTING=ON -D CMAKE_BUILD_TYPE=Debug -S . -B build && cmake --build build
-
 

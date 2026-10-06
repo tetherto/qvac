@@ -39,7 +39,7 @@ jobs:
     # tied to the head SHA at approval time) or a manual dispatch runs the
     # self-hosted GPU suite. A later fork push must be re-approved — a stale label
     # must not authorise a new, unreviewed SHA. See
-    # .cursor/rules/devops/github-actions.mdc "CI trust policy for fork PRs".
+    # .github/AGENTS.md and docs/ci/LABELS.md define the trust policy for fork PRs.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.action == 'labeled' && github.event.label.name == 'test-e2e-full')
@@ -73,27 +73,13 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
-      # Use the runner's own Python. actions/setup-python doesn't work on these
-      # self-hosted GPU runners: its python-versions tarball ships a setup.sh
-      # that hardcodes `mkdir /Users/runner/hostedtoolcache`, which isn't
-      # writable here (the runner user's home is /Users/actions-runner-*). The
-      # runners already have Python; make a venv from it so installs don't touch
-      # the system interpreter. Fails loudly if the system Python is < 3.10.
-      # Per infra, don't run actions/setup-python on these runners: Python is
-      # already provisioned, and setup-python hard-fails anyway (its
-      # python-versions tarball hardcodes an unwritable /Users/runner toolcache
-      # path). Use the present Python via a venv (keeps installs out of the
-      # system interpreter). Fails loudly if the system Python is < 3.10.
+      # The runner's own Python through a venv; the action carries the reason
+      # actions/setup-python is not used on these runners.
       - name: Set up Python (runner's system Python)
-        run: |
-          set -e
-          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
-          echo "System Python: $("$PY" --version) at $(command -v "$PY")"
-          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
-          "$PY" -m venv .venv
-          if [ -x ".venv/bin/python" ]; then PYBIN="$(pwd)/.venv/bin/python"; else PYBIN="$(pwd)/.venv/Scripts/python"; fi
-          echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
-          "$PYBIN" -m pip install --upgrade pip
+        uses: ./.github/actions/sdk-python-venv
+        with:
+          extras: gen,dev,vla,notebook
+          export-python-bin: "true"
       # node/bun are needed to build the worker. Unlike setup-python these
       # actions work on the runners (they find the pre-cached tool, no download),
       # and bun in particular is not otherwise on PATH. Same actions the SDK's
@@ -119,10 +105,6 @@ jobs:
           restore-keys: |
             qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
           enableCrossOsArchive: true
-
-      - name: Install (with transport + optional extras)
-        run: |
-          "$PYBIN" -m pip install -e ".[gen,dev,vla,notebook]"
 
       - name: Build worker
         run: |

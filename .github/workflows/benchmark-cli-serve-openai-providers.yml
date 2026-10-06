@@ -69,7 +69,7 @@ jobs:
 
       - name: Install CLI deps
         working-directory: ${{ env.CLI_DIR }}
-        run: npm install --include=dev --no-fund --no-audit
+        run: npm install --include=dev --no-fund --no-audit --ignore-scripts
 
       - name: Typecheck benchmark harness
         working-directory: ${{ env.CLI_DIR }}
@@ -125,7 +125,7 @@ jobs:
 
       - name: Install CLI deps
         working-directory: ${{ env.CLI_DIR }}
-        run: npm install --include=dev --no-fund --no-audit
+        run: npm install --include=dev --no-fund --no-audit --ignore-scripts
 
       - name: Typecheck benchmark harness
         working-directory: ${{ env.CLI_DIR }}
@@ -156,7 +156,7 @@ jobs:
 
       - name: Install CLI deps
         working-directory: ${{ env.CLI_DIR }}
-        run: npm install --include=dev --no-fund --no-audit
+        run: npm install --include=dev --no-fund --no-audit --ignore-scripts
 
       - name: Generate provider-free coverage report
         working-directory: ${{ env.CLI_DIR }}
@@ -256,7 +256,7 @@ jobs:
 
       - name: Install CLI deps
         working-directory: ${{ env.CLI_DIR }}
-        run: npm install --include=dev --no-fund --no-audit
+        run: npm install --include=dev --no-fund --no-audit --ignore-scripts
 
       - name: Run live mode
         working-directory: ${{ env.BENCH_DIR }}

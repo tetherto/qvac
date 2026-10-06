@@ -1,0 +1,176 @@
+name: On Merge Model Cache (Translation)
+
+# Seeds `models-translation-nmtcpp-v1-*`. The integration workflow is only
+# reachable from a pull_request_target caller, where cache-models takes its
+# restore-only branch, so nothing writes the entry.
+#
+# The model set is defined once, in packages/translation-nmtcpp/project.json,
+# and resolved through stage-integration-models by this seed, the per-addon
+# lane and the nx lane alike. One definition, one cache key input, so the
+# seeded set and the set the tests need cannot drift.
+
+on:
+  push:
+    branches:
+      - main
+    # Also the cache key's hash input, so this is the only file whose change can
+    # invalidate the entry.
+    paths:
+      - "packages/translation-nmtcpp/project.json"
+      # And the code that lays the models out. project.json says WHAT to fetch;
+      # these decide where it lands. A fix to the destdir handling that is not
+      # in any key and not in any filter would never re-seed: the old layout
+      # keeps being restored, and every nmtcpp entry is skipOnCacheHit so the
+      # lane downloads nothing and stays green on it.
+      - ".github/actions/stage-integration-models/**"
+      - ".github/actions/project-model-s3/**"
+      # `paths` is pinned at the call site, but cache-models still builds the key
+      # string and resolves the hash glob, so an edit there can still move this
+      # entry. A run that finds nothing moved costs seconds: the probe answers
+      # from a lookup.
+      - ".github/actions/cache-models/**"
+      # And this file. A commit that fixes the seed itself -- a corrected
+      # cache-key-suffix, say -- would otherwise sit dormant until the cron.
+      - ".github/workflows/on-merge-model-cache-translation.yml"
+  # Every two days. The cache server prunes at CACHE_CLEANUP_OLDER_THAN_DAYS=5,
+  # and Mon/Thu left a 4-day gap -- inside the window, but with no slack: ONE
+  # failed run stretched it to 7 days and the entry was gone. `*/2` caps the gap
+  # at 2 days, and at 4 after a missed run, so a single failure is survivable.
+  # The hour is offset per addon so the seeds do not contend for a runner.
+  schedule:
+    - cron: "17 16 */2 * *"
+  # No workflow_call. This job assumes the AWS OIDC role and runs repo-local
+  # composites from `github.sha`, which under a `pull_request` caller resolves
+  # to the merge commit -- PR-head code next to live credentials. Dispatch
+  # already covers on-demand runs.
+  workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore the archive even on a hit, exactly as the cron does. That download is what resets the cache server's prune clock; the probe alone does not."
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    # AWS_OIDC_ROLE_ARN's trust policy is scoped to this environment.
+    environment: release
+    timeout-minutes: 120
+    name: seed-model-cache
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      # cache-models shells out to `node` in its path-resolution step even when
+      # there is no manifest to warm.
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Must match integration-test-translation-nmtcpp.yml's "Cache NMT models"
+      # step exactly. Named, not line-numbered: line numbers rot.
+      - name: Cache NMT models
+        id: model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: translation-nmtcpp
+          paths: packages/translation-nmtcpp/model
+          hash-files-glob: packages/translation-nmtcpp/project.json
+          seed-probe: 'true'
+          force-refresh: ${{ inputs.force_refresh || false }}
+
+      - name: Resolve the S3 model set
+        id: model-s3
+        uses: ./.github/actions/project-model-s3
+        with:
+          package: translation-nmtcpp
+
+      - name: Download NMT models from S3
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: packages/translation-nmtcpp
+          s3-manifest: ${{ steps.model-s3.outputs.manifest }}
+          cache-hit: ${{ steps.model-cache.outputs.cache-hit }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+
+  # actions/cache only WARNS when the cache server rejects a reservation, so the
+  # seed job above reports success whether or not an entry was written. This
+  # turns that into a red run. It has to be a separate job: the save runs in the
+  # seed job's post-steps, after every step there has finished.
+  verify:
+    needs: [runner_names, seed]
+    # Not the default `success()`. The seed matrices are fail-fast: false, so one
+    # leg failing for an unrelated reason would skip this job outright -- and the
+    # silent write failure it exists to catch would go unreported on every other
+    # leg. Each leg asserts its own entry, so a genuinely failed seed leg just
+    # fails here too. runner_names is still required: without its outputs there
+    # is no runs-on.
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' }}
+    # No id-token: nothing here talks to AWS; the lookup needs the
+    # repository and nothing else.
+    permissions:
+      contents: read
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    timeout-minutes: 15
+    name: verify-model-cache
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # Inputs must stay identical to the seed step's: `path` feeds the cache
+      # version, so a different one silently probes a different entry.
+      - name: Assert the seeded entry exists
+        uses: ./.github/actions/cache-models
+        with:
+          package: translation-nmtcpp
+          paths: packages/translation-nmtcpp/model
+          hash-files-glob: packages/translation-nmtcpp/project.json
+          assert-exists: 'true'

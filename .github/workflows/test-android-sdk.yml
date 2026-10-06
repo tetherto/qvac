@@ -31,6 +31,11 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      include:
+        description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+        required: false
+        type: string
+        default: ""
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
@@ -107,27 +112,6 @@ on:
         required: false
         type: string
         default: ""
-      plugins:
-        description: >-
-          Optional comma-separated SDK plugin specifiers (e.g.
-          "@qvac/sdk/tts-ggml/plugin,@qvac/sdk/llamacpp-completion/plugin").
-          When set, a qvac.config.json is written into working-directory before
-          the consumer build so the mobile bundle includes ONLY this subset.
-          Used by the ggml multi-addon co-load smoke; empty = full plugin set.
-        required: false
-        type: string
-        default: ""
-      overlay-prebuild-addon:
-        description: >-
-          Optional addon short name (e.g. "tts-ggml"). When set, this run's
-          `prebuilds` artifact is downloaded and its android-arm64 build is
-          overlaid onto the installed @qvac/<addon> package before the consumer
-          APK is bundled, so the co-load exercises THIS PR's freshly-built addon
-          instead of the published npm baseline. Empty = published baseline
-          (unchanged; SDK e2e never sets this).
-        required: false
-        type: string
-        default: ""
     secrets:
       # MQTT_* and NPM_TOKEN are typically provided via the release environment
       # (see jobs with `environment: release`). They are declared required: false
@@ -138,11 +122,7 @@ on:
       # AWS_OIDC_ROLE_ARN remains required:true because it is repo-level.
       NPM_TOKEN:
         required: false
-      MQTT_PROTOCOL:
-        required: false
       MQTT_HOST:
-        required: false
-      MQTT_PORT:
         required: false
       MQTT_USERNAME:
         required: false
@@ -152,6 +132,12 @@ on:
         required: false
       AWS_OIDC_ROLE_ARN:
         required: true
+
+env:
+  # Unique: test-sdk.yml calls this workflow once per run. A UI re-run keeps
+  # run_id, so build, device-farm, wait-device-farm-running and run-producer
+  # reject re-runs.
+  E2E_RUN_ID: android-pr${{ github.event.pull_request.number || '0' }}-${{ github.run_id }}
 
 permissions:
   actions: read
@@ -191,17 +177,23 @@ jobs:
     runs-on: qvac-ubuntu2204-x64
     environment: release
     timeout-minutes: 30
-    outputs:
-      runId: ${{ steps.runid.outputs.runId }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
@@ -232,75 +224,10 @@ jobs:
           distribution: "temurin"
 
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
-
-      - name: Generate runId
-        id: runid
-        shell: node {0}
-        env:
-          EXPECTED_JOB_NAME: "[android] build"
-          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          const fs = require('fs');
-
-          (async () => {
-          async function fetchJobs(page) {
-            const url =
-              `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
-              `/actions/runs/${process.env.GITHUB_RUN_ID}` +
-              `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
-            const res = await fetch(url, {
-              headers: {
-                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-                Accept: 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-              },
-            });
-            if (!res.ok) {
-              throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
-            }
-            return res.json();
-          }
-
-          const jobs = [];
-          for (let page = 1; ; page++) {
-            const data = await fetchJobs(page);
-            jobs.push(...(data.jobs || []));
-            if (!data.jobs || data.jobs.length < 100) break;
-          }
-
-          const matches = jobs.filter(
-            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
-              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
-          );
-          const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
-          const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
-          if (!job) {
-            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
-          }
-
-          const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
-          const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
-          // Base36-encode the numeric job.id so the literal decimal digits
-          // no longer appear in the runId. GitHub's secret masker does a
-          // substring match against masked secret values; if a short numeric
-          // secret (e.g. `secrets.MQTT_PORT`) happens to appear as a
-          // substring of the decimal job.id, the masker will both redact
-          // the runId in logs and silently drop the job-level output with a
-          // "Skip output 'runId' since it may contain secret." warning,
-          // breaking every downstream `needs.build.outputs.runId` consumer.
-          // Encoding job.id as base36 keeps the value unique and stable
-          // while structurally eliminating numeric-substring collisions.
-          const jobIdEncoded = BigInt(job.id).toString(36);
-          const runId = `android-${refPart}-${jobIdEncoded}`;
-
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
-          console.log(`Generated runId: ${runId}`);
-          })().catch((err) => {
-            console.error(err);
-            process.exit(1);
-          });
+        with:
+          # Drops `tools` from the action's default: the obsolete SDK Tools
+          # package is gone from Google's repository and fails provisioning.
+          packages: platform-tools
 
       - name: Configure npm registries
         shell: node {0}
@@ -403,76 +330,17 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
-      # ggml co-load smoke (run from PR code): overlay THIS PR's freshly-built
-      # android-arm64 prebuild onto the installed @qvac/<addon> package so the
-      # bundled consumer co-loads the PR's addon, not the npm baseline. No-op for
-      # normal SDK e2e runs (overlay-prebuild-addon empty).
-      - name: Download this PR's freshly-built prebuilds (co-load overlay)
-        if: ${{ inputs.overlay-prebuild-addon != '' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ runner.temp }}/pr-prebuilds
-
-      - name: Overlay PR android-arm64 prebuild (co-load smoke)
-        if: ${{ inputs.overlay-prebuild-addon != '' }}
-        shell: bash
-        env:
-          ADDON: ${{ inputs.overlay-prebuild-addon }}
-          SRC: ${{ runner.temp }}/pr-prebuilds
-          PROJECT_DIR: ${{ inputs.project-directory }}
-          CONSUMER_DIR: ${{ inputs.working-directory }}
-        run: |
-          set -euo pipefail
-          if [ ! -d "$SRC/android-arm64" ]; then
-            echo "::error::PR prebuilds artifact has no android-arm64/ for $ADDON"
-            ls -R "$SRC" || true
-            exit 1
-          fi
-          # The addon can be hoisted into either the consumer or the project
-          # node_modules; overlay every install so the bundler cannot pick up a
-          # stale baseline copy.
-          mapfile -t PKG_DIRS < <(find "$CONSUMER_DIR" "$PROJECT_DIR" -type d -path "*/node_modules/@qvac/$ADDON" 2>/dev/null || true)
-          if [ "${#PKG_DIRS[@]}" -eq 0 ]; then
-            echo "::error::no installed @qvac/$ADDON found under $CONSUMER_DIR or $PROJECT_DIR to overlay"
-            exit 1
-          fi
-          for pkg in "${PKG_DIRS[@]}"; do
-            dest="$pkg/prebuilds/android-arm64"
-            mkdir -p "$dest"
-            cp -r "$SRC/android-arm64/." "$dest/"
-            # Published @qvac packages use the qvac_ prefix; a freshly-built
-            # prebuild may still carry the tetherto_ build prefix.
-            find "$pkg/prebuilds" -depth -name 'tetherto_*' | while read -r f; do
-              mv "$f" "$(dirname "$f")/$(basename "$f" | sed 's/^tetherto_/qvac_/')"
-            done
-            echo "Overlaid PR android-arm64 prebuild for $ADDON into $dest"
-          done
-
-      # ggml co-load smoke: restrict the mobile bundle to a subset of plugins so
-      # the consumer co-loads exactly those addons. No-op for normal SDK e2e
-      # runs (plugins input empty -> default full plugin bundle).
-      - name: Write plugin-subset config (co-load smoke)
-        if: ${{ inputs.plugins != '' }}
-        working-directory: ${{ inputs.working-directory }}
-        shell: bash
-        env:
-          PLUGINS: ${{ inputs.plugins }}
-        run: |
-          set -euo pipefail
-          node -e 'const fs=require("fs");const p=(process.env.PLUGINS||"").split(",").map(s=>s.trim()).filter(Boolean);fs.writeFileSync("qvac.config.json",JSON.stringify({plugins:p},null,2)+"\n");console.log("[co-load] wrote qvac.config.json plugins:",p.join(", "))'
-
       - name: Build mobile consumer APK
         working-directory: ${{ inputs.working-directory }}
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ inputs.working-directory }}/.npmrc
         run: |
           echo "Building Android consumer APK..."
-          echo "   Run ID: ${{ steps.runid.outputs.runId }}"
+          echo "   Run ID: ${{ env.E2E_RUN_ID }}"
           echo "   MQTT Host: $MQTT_HOST"
 
           npx qvac-test build:consumer:android \
-            --runId "${{ steps.runid.outputs.runId }}" \
+            --runId "${{ env.E2E_RUN_ID }}" \
             --config .
 
           APK_PATH="build/consumers/android/consumer.apk"
@@ -502,6 +370,12 @@ jobs:
       name: ${{ steps.select.outputs.name }}
       availability: ${{ steps.select.outputs.availability }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
@@ -538,7 +412,7 @@ jobs:
 
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "consumer-${{ needs.build.outputs.runId }}.apk" \
+            --name "consumer-${{ env.E2E_RUN_ID }}.apk" \
             --type "ANDROID_APP" \
             --output json)
 
@@ -608,7 +482,7 @@ jobs:
         run: |
           SPEC_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "qvac-test-spec-${{ needs.build.outputs.runId }}.yml" \
+            --name "qvac-test-spec-${{ env.E2E_RUN_ID }}.yml" \
             --type "APPIUM_NODE_TEST_SPEC" \
             --output json)
 
@@ -688,7 +562,7 @@ jobs:
       - name: Upload run ARN
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: device-farm-arn-${{ needs.build.outputs.runId }}-${{ steps.save-arn.outputs.safe-name }}
+          name: device-farm-arn-${{ env.E2E_RUN_ID }}-${{ steps.save-arn.outputs.safe-name }}
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
           retention-days: 1
 
@@ -699,6 +573,12 @@ jobs:
     environment: release
     timeout-minutes: ${{ inputs.device-farm-start-timeout }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           sparse-checkout: .github/actions/sdk-device-farm-wait-for-running
@@ -707,7 +587,7 @@ jobs:
       - name: Download run ARNs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
@@ -733,12 +613,20 @@ jobs:
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
@@ -855,9 +743,12 @@ jobs:
 
       - name: Run producer
         working-directory: ${{ inputs.working-directory }}
+        env:
+          # Read via env, not interpolation: the id list is derived from the PR diff.
+          INCLUDE_TESTS: ${{ inputs.include }}
         run: |
           echo "Starting producer..."
-          echo "   Run ID: ${{ needs.build.outputs.runId }}"
+          echo "   Run ID: ${{ env.E2E_RUN_ID }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
           echo "   Suite: ${{ inputs.suite || '(all)' }}"
@@ -878,11 +769,22 @@ jobs:
             EXCLUDE_SUITE_ARG="--exclude-suite=${{ inputs.exclude-suite }}"
           fi
 
+          # Omitted when empty rather than passed as an empty value: a producer
+          # from a framework build that predates --include would reject it.
+          INCLUDE_ARG=""
+          if [ -n "$INCLUDE_TESTS" ]; then
+            INCLUDE_ARG="--include=$INCLUDE_TESTS"
+          fi
+
+          # Word splitting is the point here, and the ids are restricted to
+          # [A-Za-z0-9._-] upstream, so there is nothing to split on.
+          # shellcheck disable=SC2086
           npx qvac-test run:producer \
-            --runId "${{ needs.build.outputs.runId }}" \
+            --runId "${{ env.E2E_RUN_ID }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
             --report-dir=./reports \
+            $INCLUDE_ARG \
             $FILTER_ARG \
             $SUITE_ARG \
             $EXCLUDE_SUITE_ARG
@@ -992,7 +894,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
@@ -1030,13 +932,13 @@ jobs:
       - name: Download run ARNs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
       - name: Stop Device Farm runs and download artifacts
         run: |
-          echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+          echo "Cleaning up Device Farm runs for runId: ${{ env.E2E_RUN_ID }}"
           mkdir -p ./device-farm-logs
 
           for arn_file in run-arns/*.txt; do
@@ -1095,9 +997,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: device-farm-logs-android-${{ needs.build.outputs.runId }}
+          name: device-farm-logs-android-${{ env.E2E_RUN_ID }}
           path: ./device-farm-logs/
           retention-days: 30
+          # A cleanup re-run replaces the logs of the earlier attempt.
+          overwrite: true
 
   report-finalize:
     name: "[android] report-finalize"
