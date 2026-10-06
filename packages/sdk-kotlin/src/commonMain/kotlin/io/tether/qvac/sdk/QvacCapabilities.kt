@@ -1,24 +1,37 @@
 package io.tether.qvac.sdk
 
-import io.tether.qvac.sdk.generated.CompletionStreamRequest
-import io.tether.qvac.sdk.generated.CompletionStreamResponse
-import io.tether.qvac.sdk.generated.DownloadAssetRequest
-import io.tether.qvac.sdk.generated.DownloadAssetResponse
-import io.tether.qvac.sdk.generated.GetSystemResourcesRequest
-import io.tether.qvac.sdk.generated.GetSystemResourcesResponse
-import io.tether.qvac.sdk.generated.LoadModelRequest
-import io.tether.qvac.sdk.generated.LoadModelResponse
 import io.tether.qvac.sdk.generated.ModelConstant
-import io.tether.qvac.sdk.generated.ModelProgressResponse
-import io.tether.qvac.sdk.generated.UnloadModelRequest
-import io.tether.qvac.sdk.generated.UnloadModelResponse
+import io.tether.qvac.sdk.generated.schema.AssessModelFitRequest
+import io.tether.qvac.sdk.generated.schema.AssessModelFitResponse
+import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.BatchCompletionStreamResponse
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponse
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
+import io.tether.qvac.sdk.generated.schema.DownloadAssetRequest
+import io.tether.qvac.sdk.generated.schema.DownloadAssetResponse
+import io.tether.qvac.sdk.generated.schema.GetLoadedModelInfoRequest
+import io.tether.qvac.sdk.generated.schema.GetLoadedModelInfoResponse
+import io.tether.qvac.sdk.generated.schema.GetModelInfoRequest
+import io.tether.qvac.sdk.generated.schema.GetModelInfoResponse
+import io.tether.qvac.sdk.generated.schema.GetSystemResourcesRequest
+import io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponse
+import io.tether.qvac.sdk.generated.schema.LoadModelCustomPluginRequest
+import io.tether.qvac.sdk.generated.schema.LoadModelRequest
+import io.tether.qvac.sdk.generated.schema.LoadModelResponse
+import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequest
+import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.generated.schema.ResumeRequest
+import io.tether.qvac.sdk.generated.schema.ResumeResponse
+import io.tether.qvac.sdk.generated.schema.StateRequest
+import io.tether.qvac.sdk.generated.schema.StateResponse
+import io.tether.qvac.sdk.generated.schema.SuspendRequest
+import io.tether.qvac.sdk.generated.schema.SuspendResponse
+import io.tether.qvac.sdk.generated.schema.UnloadModelRequest
+import io.tether.qvac.sdk.generated.schema.UnloadModelResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Capability-oriented entry points over the generated wire API.
@@ -43,16 +56,15 @@ class QvacModels internal constructor(
     private val client: QvacClient,
 ) {
     /** Fully typed load configuration, including engine-specific union arms. */
-    suspend fun load(request: io.tether.qvac.sdk.generated.schema.LoadModelRequest): io.tether.qvac.sdk.generated.schema.LoadModelResponse =
-        client.loadModel(request)
+    suspend fun load(request: LoadModelRequest): LoadModelResponse = client.loadModel(request)
 
-    suspend fun info(name: String): io.tether.qvac.sdk.generated.schema.GetModelInfoResponse =
-        client.getModelInfo(io.tether.qvac.sdk.generated.schema.GetModelInfoRequest(name = name))
+    suspend fun info(name: String): GetModelInfoResponse =
+        client.getModelInfo(GetModelInfoRequest(name = name))
 
-    suspend fun loadedInfo(modelId: String): io.tether.qvac.sdk.generated.schema.GetLoadedModelInfoResponse =
-        client.getLoadedModelInfo(io.tether.qvac.sdk.generated.schema.GetLoadedModelInfoRequest(modelId = modelId))
+    suspend fun loadedInfo(modelId: String): GetLoadedModelInfoResponse =
+        client.getLoadedModelInfo(GetLoadedModelInfoRequest(modelId = modelId))
 
-    suspend fun assessFit(request: io.tether.qvac.sdk.generated.schema.AssessModelFitRequest): io.tether.qvac.sdk.generated.schema.AssessModelFitResponse =
+    suspend fun assessFit(request: AssessModelFitRequest): AssessModelFitResponse =
         client.assessModelFit(request)
 
     suspend fun download(
@@ -65,7 +77,6 @@ class QvacModels internal constructor(
                 assetSrc = source,
                 requestId = requestId,
                 seed = seed,
-                type = "downloadAsset",
             ),
         )
     }
@@ -80,48 +91,34 @@ class QvacModels internal constructor(
                 assetSrc = source,
                 requestId = requestId,
                 seed = seed,
-                type = "downloadAsset",
                 withProgress = true,
             ),
         )
     }
 
+    /**
+     * Loads [source] with an untyped [modelConfig]. Use the [LoadModelRequest] overload
+     * for engine-specific typed configuration.
+     */
     suspend fun load(
         source: String,
-        modelType: String? = null,
+        modelType: String,
         modelName: String? = null,
         requestId: String? = null,
         modelConfig: JsonObject? = null,
     ): LoadModelResponse {
-        return client.loadModel(
-            LoadModelRequest(
-                modelName = modelName,
-                modelSrc = JsonPrimitive(source),
-                modelType = modelType,
-                modelConfig = modelConfig,
-                requestId = requestId,
-                type = "loadModel",
-            ),
-        )
+        return client.loadModel(sourceLoadRequest(source, modelType, modelName, requestId, modelConfig, null))
     }
 
     fun loadWithProgress(
         source: String,
-        modelType: String? = null,
+        modelType: String,
         modelName: String? = null,
         requestId: String? = null,
         modelConfig: JsonObject? = null,
     ): Flow<QvacProgressEvent<ModelProgressResponse, LoadModelResponse>> {
         return client.loadModelWithProgress(
-            LoadModelRequest(
-                modelName = modelName,
-                modelSrc = JsonPrimitive(source),
-                modelType = modelType,
-                modelConfig = modelConfig,
-                requestId = requestId,
-                type = "loadModel",
-                withProgress = JsonPrimitive(true),
-            ),
+            sourceLoadRequest(source, modelType, modelName, requestId, modelConfig, withProgress = true),
         )
     }
 
@@ -145,16 +142,35 @@ class QvacModels internal constructor(
             UnloadModelRequest(
                 clearStorage = clearStorage,
                 modelId = modelId,
-                type = "unloadModel",
             ),
         )
     }
 }
 
+private fun sourceLoadRequest(
+    source: String,
+    modelType: String,
+    modelName: String?,
+    requestId: String?,
+    modelConfig: JsonObject?,
+    withProgress: Boolean?,
+): LoadModelRequest = LoadModelRequest.LoadModelSrcRequest(
+    LoadModelSrcRequest.LoadModelCustomPluginRequest(
+        LoadModelCustomPluginRequest(
+            modelSrc = source,
+            modelName = modelName,
+            withProgress = withProgress,
+            requestId = requestId,
+            modelType = modelType,
+            modelConfig = modelConfig,
+        ),
+    ),
+)
+
 class QvacCompletion internal constructor(
     internal val client: QvacClient,
 ) {
-    fun batch(request: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.BatchCompletionStreamResponse> =
+    fun batch(request: BatchCompletionStreamRequest): Flow<BatchCompletionStreamResponse> =
         client.batchCompletionStream(request)
 
     fun stream(request: CompletionStreamRequest): Flow<CompletionStreamResponse> {
@@ -163,7 +179,10 @@ class QvacCompletion internal constructor(
 
     fun text(request: CompletionStreamRequest): Flow<String> {
         return stream(request).map { response ->
-            response.events.mapNotNull(JsonElement::textValue).joinToString(separator = "")
+            // rawDelta and thinkingDelta events also carry text; only the
+            // answer tokens live on contentDelta.
+            response.events.filterIsInstance<CompletionStreamResponseEventsItem.ContentDelta>()
+                .joinToString(separator = "") { it.value.text }
         }
     }
 }
@@ -171,22 +190,14 @@ class QvacCompletion internal constructor(
 class QvacSystem internal constructor(
     private val client: QvacClient,
 ) {
-    suspend fun pause(): io.tether.qvac.sdk.generated.schema.SuspendResponse =
-        client.`suspend`(io.tether.qvac.sdk.generated.schema.SuspendRequest())
+    suspend fun pause(): SuspendResponse = client.`suspend`(SuspendRequest())
 
-    suspend fun resume(): io.tether.qvac.sdk.generated.schema.ResumeResponse =
-        client.resume(io.tether.qvac.sdk.generated.schema.ResumeRequest())
+    suspend fun resume(): ResumeResponse = client.resume(ResumeRequest())
 
-    suspend fun state(): io.tether.qvac.sdk.generated.schema.StateResponse =
-        client.state(io.tether.qvac.sdk.generated.schema.StateRequest())
+    suspend fun state(): StateResponse = client.state(StateRequest())
 
     suspend fun resources(includeUsageSnapshot: Boolean = false): GetSystemResourcesResponse {
-        return client.getSystemResources(
-            GetSystemResourcesRequest(
-                sample = includeUsageSnapshot,
-                type = "getSystemResources",
-            ),
-        )
+        return client.getSystemResources(GetSystemResourcesRequest(sample = includeUsageSnapshot))
     }
 }
 
@@ -200,14 +211,4 @@ class QvacRaw internal constructor(
     fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> {
         return client.duplex(payload, input)
     }
-}
-
-private fun JsonElement.textValue(): String? {
-    val objectValue = this as? JsonObject ?: return null
-    // rawDelta and thinkingDelta events also carry a `text` field; only the
-    // answer tokens live on contentDelta.
-    if (objectValue["type"]?.jsonPrimitive?.contentOrNull != "contentDelta") {
-        return null
-    }
-    return objectValue["text"]?.jsonPrimitive?.contentOrNull
 }

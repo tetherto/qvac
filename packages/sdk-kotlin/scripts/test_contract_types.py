@@ -42,6 +42,7 @@ class ContractTypesTest(unittest.TestCase):
         self.assertGreater(len(graph.types), 400)
         methods = render_schema_methods(graph, json.loads((root / "manifest.json").read_text()))
         self.assertIn('progressType = "modelProgress"', methods)
+        self.assertIn("sealed interface QvacProgressEvent", methods)
         self.assertNotIn('progressType = "loadModel:progress"', methods)
 
     def test_forbidden_field_not_exposed(self):
