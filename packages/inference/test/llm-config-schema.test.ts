@@ -316,6 +316,34 @@ test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
   )
 })
 
+test('llmConfigBaseSchema: accepts a positive integer image-max-megapixels', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 20 })
+  t.is(result.success, true)
+  if (result.success) t.is(result.data['image-max-megapixels'], 20)
+})
+
+test('llmConfigBaseSchema: rejects invalid image-max-megapixels', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': 1.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-megapixels': '20' }).success, false)
+})
+
+test('llmConfigSchema: does not inject a default for image-max-megapixels', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.absent('image-max-megapixels' in result.data)
+})
+
+test('loadModelOptionsToRequestSchema: accepts image-max-megapixels for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { 'image-max-megapixels': 100 }
+    }).success,
+    true
+  )
+})
+
 test('llmConfigBaseSchema: accepts valid tensor-read-lazy values', (t) => {
   for (const value of ['on', 'auto', 'off']) {
     t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': value }).success, true)

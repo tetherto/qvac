@@ -9345,6 +9345,15 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
+    image_max_megapixels: Annotated[
+        int | None,
+        Field(
+            alias="image-max-megapixels",
+            description="Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
     threads: Annotated[
         int | None,
         Field(
