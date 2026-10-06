@@ -8,7 +8,6 @@
 #include <unordered_map>
 #include <utility>
 
-#include <common/fit.h>
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "CacheLedger.hpp"
@@ -151,70 +150,25 @@ void applySpeculativeConfig(
   }
 }
 
-void reserveSpeculativeFitMemory(common_params& params) {
-  if (!params.fit_params ||
-      !hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP)) {
-    return;
+std::unique_ptr<SpeculativeFitModel>
+SpeculativeFitModel::create(const common_params& params) {
+  if (!hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP)) {
+    return nullptr;
   }
-  // The MTP draft context lives on the target model: only its context and
-  // compute buffers are new.
-  common_params paramsDft = common_base_params_to_speculative(params);
-
-  auto mparamsDft = common_model_params_to_llama(paramsDft);
-  auto cparamsDft = common_context_params_to_llama(paramsDft);
-  cparamsDft.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
-  cparamsDft.n_rs_seq = 0;
-
-  std::vector<ggml_backend_dev_t> devs;
-  uint32_t hpNgl = 0;
-  uint32_t hpNct = 0;
-  uint32_t hpNex = 0;
-  try {
-    auto dmd = common_get_device_memory_data(
-        paramsDft.model.path.c_str(),
-        &mparamsDft,
-        &cparamsDft,
-        devs,
-        hpNgl,
-        hpNct,
-        hpNex,
-        GGML_LOG_LEVEL_ERROR);
-
-    if (params.fit_params_target.empty()) {
-      return;
-    }
-    std::vector<ggml_backend_dev_t> tgtDevices = params.devices;
-    if (tgtDevices.empty()) {
-      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
-        tgtDevices.push_back(ggml_backend_dev_get(i));
-      }
-    }
-
-    size_t total = 0;
-    for (size_t j = 0; j < devs.size(); ++j) {
-      const size_t bytes = dmd[j].context + dmd[j].compute;
-      total += bytes;
-      for (size_t i = 0;
-           i < tgtDevices.size() && i < params.fit_params_target.size();
-           i++) {
-        if (tgtDevices[i] == devs[j]) {
-          params.fit_params_target[i] += bytes;
-          break;
-        }
-      }
-    }
-    QLOG_IF(
-        Priority::DEBUG,
-        string_format(
-            "[Speculative] reserved %.2f MiB for the MTP context\n",
-            static_cast<double>(total) / (1024.0 * 1024.0)));
-  } catch (const std::exception& e) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[Speculative] failed to measure MTP context memory: %s\n",
-            e.what()));
-  }
+  // Same construction as fabric's common_init_from_params fit.
+  std::unique_ptr<SpeculativeFitModel> model(new SpeculativeFitModel());
+  model->params_ = common_base_params_to_speculative(params);
+  model->mparams_ = common_model_params_to_llama(model->params_);
+  model->cparams_ = common_context_params_to_llama(model->params_);
+  model->cparams_.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+  model->cparams_.n_rs_seq = 0;
+  model->extra_ = {
+      /*.path_model   =*/model->params_.model.path.c_str(),
+      /*.mparams      =*/&model->mparams_,
+      /*.cparams      =*/&model->cparams_,
+      /*.shares_model =*/true, // the MTP context runs on the target's weights
+  };
+  return model;
 }
 
 std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
@@ -309,7 +263,7 @@ SpeculativeRuntime* SpeculativeRuntime::forTarget(llama_context* ctxTgt) {
 }
 
 int32_t SpeculativeRuntime::nDraftMax() const {
-  return common_speculative_n_max(&params_);
+  return common_speculative_n_max(spec_.get());
 }
 
 void SpeculativeRuntime::resetSequence(llama_seq_id seqId) const {

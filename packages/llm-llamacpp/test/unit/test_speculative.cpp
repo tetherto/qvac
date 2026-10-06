@@ -140,6 +140,23 @@ TEST(SpeculativeConfigTest, ApplyLeavesParamsAloneWhenOff) {
   EXPECT_EQ(params.n_outputs_max_per_seq, outputsPerSeq);
 }
 
+TEST(SpeculativeConfigTest, FitCountsTheMtpContextLikeTheLoad) {
+  common_params params;
+  EXPECT_EQ(SpeculativeFitModel::create(params), nullptr);
+
+  params.model.path = "/models/target.gguf";
+  applySpeculativeConfig(
+      SpeculativeConfig{.type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP}, params);
+  const auto fit = SpeculativeFitModel::create(params);
+  ASSERT_NE(fit, nullptr);
+  const common_fit_extra_model* extra = fit->extra();
+  // The MTP context runs on the target's own weights.
+  EXPECT_TRUE(extra->shares_model);
+  EXPECT_STREQ(extra->path_model, "/models/target.gguf");
+  EXPECT_EQ(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
+  EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
+}
+
 TEST(SpeculativeSequenceTest, MaxDraftLeavesRoomAndRespectsBudget) {
   // Window: two positions stay free (the sample and one spare).
   EXPECT_EQ(SpeculativeSequence::maxDraft(100, 90, -1), 8);

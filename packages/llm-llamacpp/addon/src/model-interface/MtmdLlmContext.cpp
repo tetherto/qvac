@@ -631,6 +631,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                                    ? reconciledPlan.totalPositions()
                                    : mtmd_helper_get_n_pos(chunksPtr);
   throwIfOverflows(current_.pos, current_.cacheTokens, nPositions, nTokens);
+  spec_.setPromptEnd(current_.pos + nPositions);
 
   snapshotPreRequestCursor();
 
@@ -1830,6 +1831,8 @@ PrefillPlan MtmdLlmContext::preparePrefill(
   }
 
   throwIfOverflows(plan.totalPositions(), plan.totalKvTokens());
+
+  spec_.setPromptEnd(current_.pos + plan.totalPositions());
 
   // mtmd::input_chunks has a user-declared destructor and therefore no
   // move assignment; transfer the owning pointer directly.

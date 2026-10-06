@@ -301,8 +301,6 @@ void LlamaModel::init(bool acquireLock) {
   const bool isStreaming = snap->asyncWeightsLoader_.isStreaming();
   qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
       speculativeConfig, params);
-  qvac_lib_inference_addon_llama::speculative::reserveSpeculativeFitMemory(
-      params);
 
   // Match llama-server for every on-disk GGUF. llama_model_load_from_file
   // discovers the remaining split files from shard 0, while

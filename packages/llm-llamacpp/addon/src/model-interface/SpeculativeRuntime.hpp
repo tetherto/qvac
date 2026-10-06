@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "common/common.h"
+#include "common/fit.h"
 #include "common/speculative.h"
 #include "llama.h"
 
@@ -60,11 +61,23 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 void applySpeculativeConfig(
     const SpeculativeConfig& config, common_params& params);
 
-/// When automatic fit is on, adds the MTP context and compute buffers to
-/// `params.fit_params_target` so the target is fitted with room for them.
-/// Port of llama-server's reservation in `load_model`; a failed measurement
-/// is logged and ignored, as there.
-void reserveSpeculativeFitMemory(common_params& params);
+/// The MTP draft context as fabric fits it next to the target model
+/// (`common_init_from_params`): an extra model sharing the target's weights.
+/// Lets a fit projection count the draft context like the load does.
+class SpeculativeFitModel {
+public:
+  /// Null when `params` has no MTP speculative decoding.
+  static std::unique_ptr<SpeculativeFitModel>
+  create(const common_params& params);
+  [[nodiscard]] const common_fit_extra_model* extra() const { return &extra_; }
+
+private:
+  SpeculativeFitModel() = default;
+  common_params params_;
+  llama_model_params mparams_{};
+  llama_context_params cparams_{};
+  common_fit_extra_model extra_{};
+};
 
 /// The draft side of one sequence's state: the MTP draft context's memory
 /// for the sequence and the speculative implementation's own carry-over

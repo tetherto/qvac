@@ -767,6 +767,7 @@ PrefillPlan TextLlmContext::preparePrefill(
 
   throwIfOverflows(nPast_, inputTokens.size());
 
+  spec_.setPromptEnd(nPast_ + static_cast<llama_pos>(inputTokens.size()));
   return PrefillPlan{
       .tokens = std::move(inputTokens), .checkpointAtTextTokens = checkpointAt};
 }

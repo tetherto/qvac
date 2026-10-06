@@ -55,6 +55,12 @@ void SpeculativeSequence::reset() {
   ckpt_.clear();
 }
 
+void SpeculativeSequence::setPromptEnd(llama_pos posEnd) const {
+  if (runtime_ != nullptr) {
+    common_speculative_set_prompt_end(runtime_->spec(), seqId_, posEnd);
+  }
+}
+
 void SpeculativeSequence::begin(const std::vector<llama_token>& prompt) const {
   if (runtime_ != nullptr) {
     common_speculative_begin(runtime_->spec(), seqId_, prompt);
@@ -103,7 +109,7 @@ bool SpeculativeSequence::prepareDraft(
   common_speculative_get_draft_params(runtime_->spec(), seqId_) = {
       /* .drafting = */ true,
       /* .n_max    = */ nDraftMax,
-      /* .n_past   = */ nTokens,
+      /* .pos0     = */ nTokens,
       /* .id_last  = */ sampled,
       /* .prompt   = */ &prompt_,
       /* .result   = */ &draft_,

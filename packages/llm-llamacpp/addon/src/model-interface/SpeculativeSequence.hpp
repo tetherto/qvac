@@ -71,6 +71,10 @@ public:
   /// Drops the per-generation state (`server_slot::reset`).
   void reset();
 
+  /// Announces where the prompt about to be decoded ends (the first draft's
+  /// position), before it is decoded (`common_speculative_set_prompt_end`).
+  void setPromptEnd(llama_pos posEnd) const;
+
   /// Starts a generation once its prompt is decoded
   /// (`common_speculative_begin`).
   void begin(const std::vector<llama_token>& prompt) const;
