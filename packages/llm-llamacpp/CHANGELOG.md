@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Chat messages accept past tool calls: `tool_calls` (`id`, `name`,
+  `arguments` as an object or JSON text) on an assistant turn, and
+  `tool_call_id` / `name` on a tool turn. The chat template renders them in
+  the model's own format instead of the caller writing them into `content`.
+  A malformed tool turn fails with `InvalidInputFormat`.
+
 ## [0.58.0] - 2026-10-09
 
 ### Breaking

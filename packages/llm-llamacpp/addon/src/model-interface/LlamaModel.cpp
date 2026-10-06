@@ -1669,6 +1669,75 @@ LlamaModel::singleRuntimeStatsLocked() const {
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
+namespace {
+
+[[noreturn]] void throwInvalidToolTurn(const char* what) {
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(InvalidInputFormat),
+      string_format("formatPrompt: %s\n", what));
+}
+
+std::string optionalString(
+    const picojson::object& obj, const char* key, const char* typeError) {
+  auto it = obj.find(key);
+  if (it == obj.end()) {
+    return "";
+  }
+  if (!it->second.is<std::string>()) {
+    throwInvalidToolTurn(typeError);
+  }
+  return it->second.get<std::string>();
+}
+
+// Past tool calls on an assistant turn, and the call a tool result answers, so
+// the chat template renders them in the model's own format instead of the
+// caller flattening them into `content`.
+void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
+  auto calls = obj.find("tool_calls");
+  if (calls != obj.end()) {
+    if (msg.role != "assistant") {
+      throwInvalidToolTurn("tool_calls is only valid on assistant messages");
+    }
+    if (!calls->second.is<picojson::array>()) {
+      throwInvalidToolTurn("tool_calls must be an array");
+    }
+    for (const picojson::value& entry : calls->second.get<picojson::array>()) {
+      if (!entry.is<picojson::object>()) {
+        throwInvalidToolTurn("each tool_calls entry must be an object");
+      }
+      const picojson::object& call = entry.get<picojson::object>();
+      common_chat_tool_call toolCall;
+      toolCall.name =
+          optionalString(call, "name", "tool_calls name must be a string");
+      if (toolCall.name.empty()) {
+        throwInvalidToolTurn("each tool_calls entry needs a name");
+      }
+      toolCall.id =
+          optionalString(call, "id", "tool_calls id must be a string");
+      auto args = call.find("arguments");
+      if (args == call.end()) {
+        toolCall.arguments = "{}";
+      } else if (args->second.is<std::string>()) {
+        toolCall.arguments = args->second.get<std::string>();
+      } else if (args->second.is<picojson::object>()) {
+        toolCall.arguments = args->second.serialize();
+      } else {
+        throwInvalidToolTurn(
+            "tool_calls arguments must be an object or a JSON string");
+      }
+      msg.tool_calls.push_back(std::move(toolCall));
+    }
+  }
+  if (msg.role == "tool") {
+    msg.tool_call_id =
+        optionalString(obj, "tool_call_id", "tool_call_id must be a string");
+    msg.tool_name = optionalString(obj, "name", "name must be a string");
+  }
+}
+
+} // namespace
+
 ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (input.empty()) {
     state_->llmContext_->resetMedia();
@@ -1762,6 +1831,12 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
               reasoning->second.is<std::string>()) {
             newMsg.reasoning_content = reasoning->second.get<std::string>();
           }
+        }
+        try {
+          readToolTurnFields(jsonObj, newMsg);
+        } catch (...) {
+          state_->llmContext_->resetMedia();
+          throw;
         }
         chatMsgs.push_back(newMsg);
       }

@@ -340,6 +340,36 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
   EXPECT_FALSE(rendered.toolDefinitionsDropped);
 }
 
+// A past call and its result render as the template's own tool-call and
+// tool-response blocks, not as text the caller pasted into `content`.
+TEST_F(ChatTemplateUtilsTest, GetPromptRendersPastToolCallsNatively) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  common_chat_msg call;
+  call.role = "assistant";
+  call.tool_calls = {{"get_weather", R"({"city":"Paris"})", "call_1"}};
+  common_chat_msg result;
+  result.role = "tool";
+  result.content = R"({"temp_c":18})";
+  result.tool_call_id = "call_1";
+  result.tool_name = "get_weather";
+  inputs.messages.push_back(call);
+  inputs.messages.push_back(result);
+
+  const std::string prompt = getPrompt(tmpls.get(), inputs).prompt;
+  const size_t callAt = prompt.find("<tool_call>");
+  ASSERT_NE(callAt, std::string::npos) << prompt;
+  EXPECT_NE(prompt.find("\"get_weather\"", callAt), std::string::npos)
+      << prompt;
+  EXPECT_NE(prompt.find("Paris", callAt), std::string::npos) << prompt;
+  EXPECT_NE(prompt.find("<tool_response>", callAt), std::string::npos)
+      << prompt;
+}
+
 TEST_F(ChatTemplateUtilsTest, GetPromptExportsToolGrammarWhenToolsPresent) {
   common_chat_templates_ptr tmpls = common_chat_templates_init(
       nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
