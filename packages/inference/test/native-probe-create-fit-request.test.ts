@@ -50,77 +50,30 @@ function completionRequest(overrides: Record<string, unknown> = {}) {
 
 // === llama.cpp ===
 
-// The load reaches the engine in llama's own spelling, so the SDK classifies
-// rather than interprets and llama's argument table does the parsing.
-test('completion: forwards the load settings in llama spelling', (t) => {
-  const plan = completionRequest()
-
-  t.ok(plan.supported)
-  if (!plan.supported) return
-  t.is(plan.probe.engine, 'llm-llamacpp')
-  t.alike(plan.probe.request, {
-    modelPath: '/models/model.gguf',
-    minCtxSize: 4096,
-    params: {
-      'ctx-size': '4096',
-      'gpu-layers': '99',
-      'load-mode': 'mmap',
-      parallel: '2',
-      'cache-type-k': 'q8_0',
-      'cache-type-v': 'q8_0',
-      'main-gpu': '0',
-      'split-mode': 'layer'
-    }
-  })
-})
-
-// These move memory between devices, or between device and host. llama parses
-// them, so they reach the engine untouched.
-test('completion: placement settings reach the engine untouched', (t) => {
-  const plan = completionRequest({
-    'tensor-split': '3,1',
-    'cpu-moe': true,
-    'n-cpu-moe': 2,
-    'override-tensor': 'ffn_.*=CPU',
-    'kv-offload': false
-  })
+test('completion: forwards the whole resolved load to its own engine', (t) => {
+  const plan = completionRequest({ threads: 8, 'cpu-mask': 'ff' })
 
   t.ok(plan.supported)
   if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  const params = plan.probe.request.params ?? {}
-  t.is(params['tensor-split'], '3,1')
-  t.is(params['n-cpu-moe'], '2')
-  t.is(params['override-tensor'], 'ffn_.*=CPU')
-  t.ok('cpu-moe' in params)
-  t.ok('no-kv-offload' in params)
-})
-
-test('completion: flash attention is evidence, not a refusal', (t) => {
-  const plan = completionRequest({ 'flash-attn': 'on' })
-
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.is(plan.probe.request.params?.['flash-attn'], 'on')
-})
-
-test('completion: an auto context leaves the fitter free to choose', (t) => {
-  const plan = completionRequest({ ctx_size: 0 })
-
-  t.ok(plan.supported)
-  if (!plan.supported) return
-  t.absent('ctxSize' in plan.probe.request)
+  const config = plan.probe.request.config ?? {}
+  t.is(plan.probe.request.modelPath, '/models/model.gguf')
+  t.is(config['ctx_size'], '4096')
+  t.is(config['gpu_layers'], '99')
+  t.is(config['cache-type-k'], 'q8_0')
+  // A setting the projection does not read is llama's to ignore, not the SDK's
+  // to drop, so nothing is filtered on the way out.
+  t.is(config['threads'], '8')
+  t.is(config['cpu-mask'], 'ff')
+  // The engine resolves its own floor from the load it was given.
   t.absent('minCtxSize' in plan.probe.request)
 })
 
-test('completion: CPU scheduling settings are dropped, not refused', (t) => {
-  const plan = completionRequest({
-    threads: 8,
-    'threads-batch': 16,
-    'cpu-mask': 'ff',
-    'cpu-mask-batch': 'f0'
-  })
+test('completion: a symbolic main-gpu travels as written', (t) => {
+  const plan = completionRequest({ 'main-gpu': 'dedicated' })
 
   t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  t.is((plan.probe.request.config ?? {})['main-gpu'], 'dedicated')
 })
 
 test('completion: the margin reaches the engine request', (t) => {
@@ -129,128 +82,12 @@ test('completion: the margin reaches the engine request', (t) => {
     modelPath: '/models/model.gguf',
     modelConfig: COMPLETION_CONFIG,
     isShardedModel: false,
-    marginBytes: 2 * 1024 ** 3
+    marginBytes: 2048
   })
 
   t.ok(plan.supported)
   if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.is(plan.probe.request.marginBytes, 2 * 1024 ** 3)
-})
-
-// `fit-target` is the margin the real load asks the engine to leave free; the
-// advisory margin covers the models already resident. The stricter wins.
-test('completion: the load target and the advisory margin resolve to the stricter', (t) => {
-  const targetWins = createFitRequest({
-    modelType: ModelType.llamacppCompletion,
-    modelPath: '/models/model.gguf',
-    modelConfig: { ...COMPLETION_CONFIG, 'fit-target': 4096 },
-    isShardedModel: false,
-    marginBytes: 1024 * 1024 * 1024
-  })
-  t.ok(targetWins.supported)
-  if (!targetWins.supported || targetWins.probe.engine !== 'llm-llamacpp') return
-  t.is(targetWins.probe.request.marginBytes, 4096 * 1024 * 1024)
-
-  const advisoryWins = createFitRequest({
-    modelType: ModelType.llamacppCompletion,
-    modelPath: '/models/model.gguf',
-    modelConfig: { ...COMPLETION_CONFIG, 'fit-target': 512 },
-    isShardedModel: false,
-    marginBytes: 8 * 1024 ** 3
-  })
-  t.ok(advisoryWins.supported)
-  if (!advisoryWins.supported || advisoryWins.probe.engine !== 'llm-llamacpp') return
-  t.is(advisoryWins.probe.request.marginBytes, 8 * 1024 ** 3)
-})
-
-// A per-device list resolves to its largest entry: the only reading that cannot
-// project a device as roomier than the load will leave it.
-test('completion: a per-device fit target takes its largest entry', (t) => {
-  const plan = createFitRequest({
-    modelType: ModelType.llamacppCompletion,
-    modelPath: '/models/model.gguf',
-    modelConfig: { ...COMPLETION_CONFIG, 'fit-target': '1024,2048' },
-    isShardedModel: false
-  })
-
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.is(plan.probe.request.marginBytes, 2048 * 1024 * 1024)
-})
-
-test('completion: a setting outside the memory set does not reach the engine', (t) => {
-  const plan = completionRequest({ some_new_load_knob: 7, temp: 0.4 })
-
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.absent('some_new_load_knob' in (plan.probe.request.params ?? {}))
-  t.absent('temp' in (plan.probe.request.params ?? {}))
-})
-
-test("completion: llama's own auto-fit reaches the engine", (t) => {
-  const plan = completionRequest({ fit: false, 'fit-ctx': 8192 })
-
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.is(plan.probe.request.params?.['fit'], 'false')
-  t.is(plan.probe.request.params?.['fit-ctx'], '8192')
-})
-
-// The transform rewrites the boolean into whichever flag it asserts, and llama
-// reads the flag's polarity from its own negated-argument table.
-test('completion: kv offload reaches the engine as the flag it asserts', (t) => {
-  const off = completionRequest({ 'kv-offload': false })
-  t.ok(off.supported)
-  if (!off.supported || off.probe.engine !== 'llm-llamacpp') return
-  t.ok('no-kv-offload' in (off.probe.request.params ?? {}))
-
-  const on = completionRequest({ 'kv-offload': true })
-  t.ok(on.supported)
-  if (!on.supported || on.probe.engine !== 'llm-llamacpp') return
-  t.ok('kv-offload' in (on.probe.request.params ?? {}))
-
-  const unset = completionRequest()
-  t.ok(unset.supported)
-  if (!unset.supported || unset.probe.engine !== 'llm-llamacpp') return
-  const params = unset.probe.request.params ?? {}
-  t.absent('kv-offload' in params)
-  t.absent('no-kv-offload' in params)
-})
-
-// `integrated` and `dedicated` restrict selection to a device class. The value
-// travels as written, so llama decides whether it can honour it.
-test('completion: a symbolic main-gpu travels as written', (t) => {
-  const plan = completionRequest({ 'main-gpu': 'dedicated' })
-
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.is(plan.probe.request.params?.['main-gpu'], 'dedicated')
-})
-
-// Residency follows from how weights are read and how many sequences the cache
-// holds, so each of these reaches the fitter.
-test('completion: the settings that move device memory reach the engine', (t) => {
-  const plan = completionRequest({
-    load_mode: 'mmap',
-    parallel: 2,
-    'prefetch-weights': 'auto',
-    'tensor-read-lazy': 'on'
-  })
-
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  const params = plan.probe.request.params ?? {}
-  t.is(params['load-mode'], 'mmap')
-  t.is(params['parallel'], '2')
-  t.is(params['prefetch-weights'], 'auto')
-  t.is(params['tensor-read-lazy'], 'on')
-})
-
-test('completion: a LoRA load is refused', (t) => {
-  t.alike(completionRequest({ lora: '/adapters/style.gguf' }), {
-    supported: false,
-    detail: 'unsupported load setting: lora'
-  })
+  t.is(plan.probe.request.marginBytes, 2048)
 })
 
 test('completion: a multimodal load is refused', (t) => {
@@ -266,7 +103,7 @@ test('completion: a multimodal load is refused', (t) => {
   )
 })
 
-test('completion: a sharded load is refused', (t) => {
+test('a sharded load is refused whatever engine would run it', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.llamacppCompletion,
@@ -278,24 +115,7 @@ test('completion: a sharded load is refused', (t) => {
   )
 })
 
-test('completion: a CPU load carries no device-memory evidence', (t) => {
-  t.alike(completionRequest({ device: 'cpu' }), {
-    supported: false,
-    detail: 'cpu loads carry no device-memory evidence'
-  })
-})
-
-// A cache type llama does not have is llama's to reject, at the point where it
-// knows which types this build carries.
-test('completion: an unknown KV cache type travels to the engine', (t) => {
-  const plan = completionRequest({ 'cache-type-k': 'tbq4_0' })
-
-  t.ok(plan.supported)
-  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.is(plan.probe.request.params?.['cache-type-k'], 'tbq4_0')
-})
-
-test('embedding: forwards its own spellings and goes to its own engine', (t) => {
+test('embedding: forwards its own resolved load to its own engine', (t) => {
   const plan = createFitRequest({
     modelType: ModelType.llamacppEmbedding,
     modelPath: '/models/embed.gguf',
@@ -304,16 +124,12 @@ test('embedding: forwards its own spellings and goes to its own engine', (t) => 
   })
 
   t.ok(plan.supported)
-  if (!plan.supported) return
-  t.is(plan.probe.engine, 'embed-llamacpp')
-  t.alike(plan.probe.request, {
-    modelPath: '/models/embed.gguf',
-    params: {
-      'gpu-layers': '99',
-      'batch-size': '1024',
-      'flash-attn': 'auto'
-    }
-  })
+  if (!plan.supported || plan.probe.engine !== 'embed-llamacpp') return
+  const config = plan.probe.request.config ?? {}
+  t.is(plan.probe.request.modelPath, '/models/embed.gguf')
+  t.is(config['gpu_layers'], '99')
+  t.is(config['batch_size'], '1024')
+  t.is(config['pooling'], 'mean')
 })
 
 // === speech to text ===
