@@ -378,8 +378,9 @@ bool CacheManager::moveActiveCacheToRamTier() {
         size) {
       return false;
     }
-    entry.draft = qvac_lib_inference_addon_llama::speculative::
-        captureDraftSequenceState(ctx, seq, 0);
+    entry.draft =
+        qvac_lib_inference_addon_llama::speculative::captureDraftSequenceState(
+            ctx, seq, 0);
     entry.ledgerWords = llmContext_->cacheStateTokens();
     entry.dirty = activeCacheDirty_;
     entry.activeCacheSavedToDisk = activeCacheSavedToDisk_;

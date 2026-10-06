@@ -125,8 +125,8 @@ public:
   /// fails to initialize: llama-server keeps serving without speculation in
   /// both cases. Throws when the MTP draft context cannot be created, which
   /// llama-server treats as a load failure.
-  static std::unique_ptr<SpeculativeRuntime> create(
-      common_params& params, llama_model* modelTgt, llama_context* ctxTgt);
+  static std::unique_ptr<SpeculativeRuntime>
+  create(common_params& params, llama_model* modelTgt, llama_context* ctxTgt);
 
   SpeculativeRuntime(const SpeculativeRuntime&) = delete;
   SpeculativeRuntime& operator=(const SpeculativeRuntime&) = delete;

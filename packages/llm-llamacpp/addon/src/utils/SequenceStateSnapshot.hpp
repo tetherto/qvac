@@ -99,8 +99,7 @@ public:
   // The speculative draft side captured with the target state (see
   // `speculative::DraftSequenceState`); uncaptured when speculative decoding
   // is off or for a captured-empty snapshot.
-  [[nodiscard]] const speculative::DraftSequenceState&
-  draft() const noexcept {
+  [[nodiscard]] const speculative::DraftSequenceState& draft() const noexcept {
     return draft_;
   }
   void adoptDraft(speculative::DraftSequenceState draft) noexcept {

@@ -383,8 +383,8 @@ bool snapshotSequenceState(
   // The draft side always stays in memory: the MTP draft context holds one
   // attention layer, a small fraction of the target state.
   if (nPastAt > 0) {
-    out.adoptDraft(speculative::captureDraftSequenceState(
-        lctx, seqId, flagsFor(scope)));
+    out.adoptDraft(
+        speculative::captureDraftSequenceState(lctx, seqId, flagsFor(scope)));
   }
   return true;
 }

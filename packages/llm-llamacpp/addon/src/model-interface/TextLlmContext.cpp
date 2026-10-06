@@ -942,9 +942,9 @@ void TextLlmContext::generateSpeculative(
   const auto& runtime = *spec_.runtime();
   LlamaBatch batch(std::max(1, runtime.nDraftMax() + 1), 0, 1);
   const auto budgetLeft = [&]() -> int32_t {
-    return params_.n_predict > 0 ? params_.n_predict -
-                                       static_cast<int32_t>(generatedAfterAccept)
-                                 : -1;
+    return params_.n_predict > 0
+               ? params_.n_predict - static_cast<int32_t>(generatedAfterAccept)
+               : -1;
   };
   const auto finish = [this](const SequenceStepResult& step) {
     generationStopReason_ = step.contextOverflow

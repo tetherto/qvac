@@ -45,8 +45,8 @@ struct SlotStateCacheEntry {
   bool ephemeral = false;
 
   [[nodiscard]] uint64_t bytes() const noexcept {
-    uint64_t total = state.size() + draft.bytes() +
-                     ledgerWords.size() * sizeof(llama_token);
+    uint64_t total =
+        state.size() + draft.bytes() + ledgerWords.size() * sizeof(llama_token);
     for (const cache::Checkpoint& checkpoint : checkpoints) {
       // Disk-stored checkpoints hold a temp-file path, not RAM.
       if (checkpoint.state.hasBuffer()) {

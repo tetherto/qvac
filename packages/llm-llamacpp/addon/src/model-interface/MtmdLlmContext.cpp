@@ -2058,11 +2058,9 @@ void MtmdLlmContext::generateSpeculative(
       step = emit(ids[i]);
       if (step.contextOverflow || step.finished) {
         // See TextLlmContext::generateSpeculative.
-        if (!isLast && !llama_memory_seq_rm(
-                           llama_get_memory(modelCtx_.lctx),
-                           seqId_,
-                           current_.pos,
-                           -1)) {
+        if (!isLast &&
+            !llama_memory_seq_rm(
+                llama_get_memory(modelCtx_.lctx), seqId_, current_.pos, -1)) {
           for (size_t j = i; j + 1 < ids.size(); ++j) {
             ++current_.pos;
             ++current_.cacheTokens;

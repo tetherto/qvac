@@ -566,6 +566,11 @@ async function runReasoningTest (options = {}) { // eslint-disable-line no-unuse
   return runIntegrationModule('../integration/reasoning.test.js', options)
 }
 
+async function runSpeculativeDecodingTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runSpeculativeDecodingTest')) return __FILTERED
+  return runIntegrationModule('../integration/speculative-decoding.test.js', options)
+}
+
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolCallingTest')) return __FILTERED
   return runIntegrationModule('../integration/tool-calling.test.js', options)

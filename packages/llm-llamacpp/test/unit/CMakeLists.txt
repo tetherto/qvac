@@ -47,6 +47,7 @@ add_executable(
   test_media_load_order.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
+  test_speculative.cpp
   test_continuous_batching_integration.cpp
   test_concurrent_process_by_id.cpp
   test_single_path_cancel_ownership.cpp

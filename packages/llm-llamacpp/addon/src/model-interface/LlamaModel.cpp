@@ -336,7 +336,8 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
-  std::unique_ptr<qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+  std::unique_ptr<
+      qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
       speculative;
   if (llamaInit && llamaInit->model() != nullptr &&
       llamaInit->context() != nullptr) {
@@ -1720,8 +1721,9 @@ LlamaModel::singleRuntimeStatsLocked() const {
   appendSpeculativeStats(
       stats,
       state_->llmContext_->getSpeculative() != nullptr,
-      wasPrefill ? qvac_lib_inference_addon_llama::speculative::SpeculativeStats{}
-                 : state_->llmContext_->speculativeStats());
+      wasPrefill
+          ? qvac_lib_inference_addon_llama::speculative::SpeculativeStats{}
+          : state_->llmContext_->speculativeStats());
   return stats;
 }
 
@@ -1859,7 +1861,8 @@ void LlamaModel::resetState(bool resetStats) {
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
     common_init_result_ptr llamaInit,
-    std::unique_ptr<qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+    std::unique_ptr<
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
         speculative) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);

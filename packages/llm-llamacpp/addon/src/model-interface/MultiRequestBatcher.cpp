@@ -363,8 +363,8 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
     const auto chunk = static_cast<llama_pos>(granted);
     const bool wantLogitsOnLast = req.chunkConsumesAllUnfed(granted);
     // Verification reads logits at the sample and at every draft token.
-    const bool feedsDraft = req.isPrefillComplete() &&
-                            !req.draftTokens.empty() && wantLogitsOnLast;
+    const bool feedsDraft =
+        req.isPrefillComplete() && !req.draftTokens.empty() && wantLogitsOnLast;
     if (feedsDraft) {
       req.draftLogitStart = static_cast<int>(batchIdx);
       req.draftBasePos = req.currentPos;
@@ -372,7 +372,8 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
 
     for (llama_pos i = 0; i < chunk; i++) {
       const int idx = static_cast<int>(batchIdx);
-      const bool wantLogits = feedsDraft || (wantLogitsOnLast && i == chunk - 1);
+      const bool wantLogits =
+          feedsDraft || (wantLogitsOnLast && i == chunk - 1);
 
       lBatch.token[idx] = req.tokenToFeedAt(i);
       lBatch.pos[idx] = req.currentPos + i;

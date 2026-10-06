@@ -95,9 +95,7 @@ public:
   void afterDraft();
 
   [[nodiscard]] bool hasDraft() const { return !draft_.empty(); }
-  [[nodiscard]] const std::vector<llama_token>& draft() const {
-    return draft_;
-  }
+  [[nodiscard]] const std::vector<llama_token>& draft() const { return draft_; }
 
   /// Step 4. Appends `sampled` at `pos` and the draft after it, recording
   /// their batch indices for `verify`.

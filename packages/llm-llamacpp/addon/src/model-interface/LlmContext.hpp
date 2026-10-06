@@ -174,8 +174,8 @@ struct LlmModelContext {
   const llama_vocab* vocab = nullptr;
   /// Speculative decoding for this model; null when it is off. Owned by the
   /// context that owns `lctx`, which outlives every sequence driver.
-  qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
-      speculative = nullptr;
+  qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime* speculative =
+      nullptr;
 };
 
 /// Canonical layout of the per-session cache metadata that every cache

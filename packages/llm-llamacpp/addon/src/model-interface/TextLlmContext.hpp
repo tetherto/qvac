@@ -375,7 +375,8 @@ private:
   common_init_result_ptr llamaInit_;
   /// Owned speculative state of the single-prompt context; declared after
   /// `llamaInit_` so the draft context goes before the target context.
-  std::unique_ptr<qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+  std::unique_ptr<
+      qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
       speculative_;
   LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;

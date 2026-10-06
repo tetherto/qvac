@@ -205,6 +205,10 @@ const config = {
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
 | mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
+| spec-type         | `"none"` or `"draft-mtp"`                   | `"none"`                     | Speculative decoding with the model's own multi-token-prediction head, as llama-server's `--spec-type draft-mtp` (see [Speculative decoding](#speculative-decoding-mtp) below). Also accepted as `spec_type` |
+| spec-draft-n-max  | 1 – 64                                      | 3                            | Longest draft per step. Also accepted as `spec_draft_n_max` |
+| spec-draft-n-min  | 0 – `spec-draft-n-max`                      | 0                            | Drafts shorter than this are not verified. Also accepted as `spec_draft_n_min` |
+| spec-draft-p-min  | 0 – 1                                       | 0                            | Minimum draft-head probability for a token to extend the draft. Also accepted as `spec_draft_p_min` |
 
 
 #### KV-cache type & auto-default
@@ -248,6 +252,17 @@ An explicit `mmproj-use-gpu` value always wins over the auto-default, in either 
 itself runs on the CPU backend (`device: "cpu"` or GPU fallback), the key is ignored with a warning and the
 projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
 `[LlamaModel] multimodal projector backend: …`.
+
+
+#### Speculative decoding (MTP)
+
+`spec-type: 'draft-mtp'` turns on llama-server's multi-token-prediction speculative decoding for models that ship their MTP layers (`blk.N.nextn.*`, e.g. Qwen3.5 / Qwen3.6 GGUFs that keep them; quantizations that strip them fail to load with this option). Every step the MTP head drafts up to `spec-draft-n-max` tokens from the model's own hidden states, the model verifies the sampled token and the draft in one decode, and the longest matching prefix plus one new token is kept. The sampler decides every kept token, so sampling settings, grammars and stop conditions behave as without speculation. The implementation follows llama-server step by step: the same draft limits, rollback by trimming or by a checkpoint for memory that cannot trim, and the same replay.
+
+It works on single prompts, multimodal prompts and continuous batching (`parallel >= 2`), together with `cacheKey` conversations: the draft context's state travels with checkpoints and the RAM tier, and a `cacheKey` file (target state only, like llama-server's slot files) restarts drafting from the next decoded token.
+
+- Runtime stats gain `draftTokens` and `draftAcceptedTokens` (llama-server's `draft_n` / `draft_n_accepted`).
+- Greedy output can differ from plain decoding where two tokens are nearly tied: the verification batch evaluates several positions at once, which changes floating-point rounding.
+- The gain depends on the device being bandwidth bound. On a Radeon 8060S, Qwen3.6-27B-MTP Q4_K_M decodes a single prompt at about 30 t/s instead of 13 t/s with 80% of the drafts accepted; with four concurrent sequences the larger verification batches cost more than they save, as they do in llama-server.
 
 ### 4. Create Model Instance
 

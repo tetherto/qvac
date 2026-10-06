@@ -4,8 +4,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <mutex>
-#include <unordered_map>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 
 #include <common/fit.h>
@@ -139,8 +139,9 @@ void applySpeculativeConfig(
 
   // server_output_limits: a verification step reads one output per drafted
   // token plus the sampled one, for every sequence.
-  if (!params.embedding && (params.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED ||
-                            params.pooling_type == LLAMA_POOLING_TYPE_NONE)) {
+  if (!params.embedding &&
+      (params.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED ||
+       params.pooling_type == LLAMA_POOLING_TYPE_NONE)) {
     auto limits = common_speculative_get_output_limits(
         params.n_batch,
         params.n_parallel,

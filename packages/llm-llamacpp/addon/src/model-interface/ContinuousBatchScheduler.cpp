@@ -1380,8 +1380,8 @@ void RuntimeStatsSnapshot::recordSpeculativeStep(
   decodeTimeMs_ +=
       std::chrono::duration<double, std::milli>(draftDuration).count();
   const auto delta = static_cast<int64_t>(decodeTokenCount_) + tokenDelta;
-  decodeTokenCount_ = static_cast<decltype(decodeTokenCount_)>(
-      std::max<int64_t>(0, delta));
+  decodeTokenCount_ =
+      static_cast<decltype(decodeTokenCount_)>(std::max<int64_t>(0, delta));
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
@@ -2395,8 +2395,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     observed.toolDefinitionsDropped = toolsDropped;
     if (slot.driver) {
       const auto speculativeStats = slot.driver->speculativeStats();
-      observed.draftTokens =
-          static_cast<int64_t>(speculativeStats.draftTokens);
+      observed.draftTokens = static_cast<int64_t>(speculativeStats.draftTokens);
       observed.draftAcceptedTokens =
           static_cast<int64_t>(speculativeStats.draftAccepted);
     }

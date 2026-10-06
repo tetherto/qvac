@@ -37,6 +37,14 @@
 - `backend` load-config field: comma-separated GPU backend priority list
   (`cuda`, `vulkan`, `metal`, `opencl`, or `auto`), e.g. `'cuda,vulkan'`.
 
+- MTP speculative decoding, ported from llama-server: `spec-type: 'draft-mtp'`
+  (with `spec-draft-n-max`, `spec-draft-n-min`, `spec-draft-p-min`, also in
+  underscore spelling) drafts with the model's own multi-token-prediction head
+  and verifies each draft in one decode, on single prompts, multimodal prompts
+  and continuous batching, with `cacheKey` conversations. Runtime stats report
+  `draftTokens` and `draftAcceptedTokens`. Qwen3.6-27B-MTP decodes about 2.3x
+  faster on a single sequence on a Radeon 8060S.
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.20.2`, the first release
