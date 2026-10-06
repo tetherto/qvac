@@ -160,10 +160,10 @@ bool inspectMiniMaxH3Safetensors(std::istream& input) {
   for (const auto& [name, value] : parsed.get<picojson::object>()) {
     if (!value.is<picojson::object>())
       continue;
-    hasAudioPatchProjection |= name.find("audio_patch_proj.weight") !=
-                               std::string::npos;
-    hasVideoPatchProjection |= name.find("video_patch_proj.weight") !=
-                               std::string::npos;
+    hasAudioPatchProjection |=
+        name.find("audio_patch_proj.weight") != std::string::npos;
+    hasVideoPatchProjection |=
+        name.find("video_patch_proj.weight") != std::string::npos;
   }
   return hasAudioPatchProjection && hasVideoPatchProjection;
 }
