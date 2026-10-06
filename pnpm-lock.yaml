@@ -1064,7 +1064,7 @@ importers:
         specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.26.0
+        specifier: ^0.27.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: 0.43.0
@@ -1739,7 +1739,7 @@ importers:
         specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.26.0
+        specifier: ^0.27.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: 0.43.0
@@ -12400,7 +12400,7 @@ snapshots:
       node-forge: 1.4.0
       npm-package-arg: 11.0.3
       ora: 3.4.0
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       pretty-bytes: 5.6.0
       pretty-format: 29.7.0
       progress: 2.0.3
@@ -12562,7 +12562,7 @@ snapshots:
       hermes-parser: 0.29.1
       jsc-safe-url: 0.2.4
       lightningcss: 1.33.0
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
