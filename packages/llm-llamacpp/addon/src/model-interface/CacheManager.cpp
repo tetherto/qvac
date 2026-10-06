@@ -196,6 +196,9 @@ bool CacheManager::loadCache() {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
   }
+  // Session files hold the target state only.
+  qvac_lib_inference_addon_llama::speculative::resetDraftSequence(
+      ctx, llmContext_->getSeqId());
 
   QLOG_IF(Priority::DEBUG, string_format("%s: loaded a session\n", __func__));
 
@@ -375,6 +378,8 @@ bool CacheManager::moveActiveCacheToRamTier() {
         size) {
       return false;
     }
+    entry.draft = qvac_lib_inference_addon_llama::speculative::
+        captureDraftSequenceState(ctx, seq, 0);
     entry.ledgerWords = llmContext_->cacheStateTokens();
     entry.dirty = activeCacheDirty_;
     entry.activeCacheSavedToDisk = activeCacheSavedToDisk_;
@@ -416,6 +421,8 @@ bool CacheManager::restoreFromRamTier(
         sessionPath_, *entry, /*stateApplied=*/false);
     return false;
   }
+  qvac_lib_inference_addon_llama::speculative::restoreDraftSequenceState(
+      ctx, seq, entry->draft, 0);
   try {
     if (!acceptLoadedState(entry->ledgerWords, sessionPath_ + " (RAM)")) {
       qvac_lib_inference_addon_llama::batching::SlotStateCache::saveUnrestored(

@@ -1593,6 +1593,8 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
         toString(UnableToLoadSessionFile),
         "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
   }
+  // Cache files hold the target state only, like llama-server's slot files.
+  speculative::resetDraftSequence(modelCtx_.lctx, seqId_);
 
   // load already wrote KV; roll back unless we accept
   ScopeGuard restoredKvGuard([this]() noexcept {

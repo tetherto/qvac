@@ -2210,6 +2210,8 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
         toString(UnableToLoadSessionFile),
         "MtmdLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
   }
+  // Cache files hold the target state only, like llama-server's slot files.
+  speculative::resetDraftSequence(modelCtx_.lctx, seqId_);
 
   // `llama_state_seq_load_file` has already restored this sequence's KV cells.
   // Every validation below runs after that restore, and the scheduler installs

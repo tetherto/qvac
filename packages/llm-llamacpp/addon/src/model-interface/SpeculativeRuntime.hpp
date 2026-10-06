@@ -66,6 +66,50 @@ void applySpeculativeConfig(
 /// is logged and ignored, as there.
 void reserveSpeculativeFitMemory(common_params& params);
 
+/// The draft side of one sequence's state: the MTP draft context's memory
+/// for the sequence and the speculative implementation's own carry-over
+/// (`common_speculative_get_state`). Travels with every in-memory copy of the
+/// target sequence state (rollback snapshots, checkpoints, the RAM tier), as
+/// llama-server keeps `data_dft` / `data_spec` next to the target state in
+/// its prompt cache and checkpoints. Empty when speculative decoding is off.
+struct DraftSequenceState {
+  std::vector<uint8_t> draft;
+  std::vector<uint8_t> spec;
+  bool captured = false;
+
+  [[nodiscard]] uint64_t bytes() const noexcept {
+    return draft.size() + spec.size();
+  }
+  void clear() noexcept {
+    draft.clear();
+    draft.shrink_to_fit();
+    spec.clear();
+    spec.shrink_to_fit();
+    captured = false;
+  }
+};
+
+/// Captures the draft side of `seqId` for the target context `ctxTgt`.
+/// `flags` selects the same scope as the target capture
+/// (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY` for a partial snapshot). Returns an
+/// uncaptured state when `ctxTgt` has no speculative runtime.
+[[nodiscard]] DraftSequenceState captureDraftSequenceState(
+    llama_context* ctxTgt, llama_seq_id seqId, llama_state_seq_flags flags);
+
+/// Restores the draft side of `seqId` after the target sequence state was
+/// restored. An uncaptured `state` resets the draft sequence instead: the
+/// target now holds a state the draft context never saw, so drafting starts
+/// over from the next decoded batch. With `trimTo >= 0` the draft memory is
+/// trimmed to that position afterwards, matching a partial target restore.
+void restoreDraftSequenceState(
+    llama_context* ctxTgt, llama_seq_id seqId, const DraftSequenceState& state,
+    llama_state_seq_flags flags, llama_pos trimTo = -1);
+
+/// Drops the draft side of `seqId`: called whenever the target sequence is
+/// replaced by a state that carries no draft side (a `cacheKey` file, which
+/// like llama-server's slot files holds the target state only).
+void resetDraftSequence(llama_context* ctxTgt, llama_seq_id seqId);
+
 /// Model-wide speculative-decoding state: the MTP draft context created
 /// against the target model, and the `common_speculative` that drafts for
 /// every sequence of the target context. One per loaded model; sequence
@@ -111,6 +155,12 @@ public:
   /// llama-server does after each decode. Returns false on a draft-context
   /// decode failure.
   [[nodiscard]] bool process(const llama_batch& batch) const;
+
+  /// The runtime whose target context is `ctxTgt`, or null.
+  [[nodiscard]] static SpeculativeRuntime* forTarget(llama_context* ctxTgt);
+
+  /// Clears the draft memory and the speculative carry-over of `seqId`.
+  void resetSequence(llama_seq_id seqId) const;
 
 private:
   SpeculativeRuntime() = default;

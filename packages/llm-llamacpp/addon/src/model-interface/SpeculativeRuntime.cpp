@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <mutex>
+#include <unordered_map>
 #include <stdexcept>
 #include <utility>
 
@@ -45,6 +47,32 @@ bool hasType(
     }
   }
   return false;
+}
+
+// Target context -> its speculative runtime, so the sequence-state helpers
+// (snapshots, the RAM tier, cache files) reach the draft context without
+// threading it through every call. Written at load and unload only.
+struct RuntimeRegistry {
+  std::mutex mutex;
+  std::unordered_map<llama_context*, SpeculativeRuntime*> byTarget;
+};
+
+RuntimeRegistry& runtimeRegistry() {
+  static RuntimeRegistry registry;
+  return registry;
+}
+
+// M-RoPE models accept a batch that starts past the last stored position
+// (positions may jump forward), others reject any gap.
+bool allowsPositionGaps(const llama_model* model) {
+  switch (llama_model_rope_type(model)) {
+  case LLAMA_ROPE_TYPE_MROPE:
+  case LLAMA_ROPE_TYPE_IMROPE:
+  case LLAMA_ROPE_TYPE_VISION:
+    return true;
+  default:
+    return false;
+  }
 }
 
 } // namespace
@@ -243,6 +271,11 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
   }
   runtime->dftSeqRmType_ = common_context_can_seq_rm(runtime->ctxDft_);
   runtime->params_ = params.speculative;
+  {
+    auto& registry = runtimeRegistry();
+    const std::scoped_lock lock(registry.mutex);
+    registry.byTarget[ctxTgt] = runtime.get();
+  }
 
   QLOG_IF(
       Priority::INFO,
@@ -255,14 +288,120 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
   return runtime;
 }
 
-SpeculativeRuntime::~SpeculativeRuntime() = default;
+SpeculativeRuntime::~SpeculativeRuntime() {
+  auto& registry = runtimeRegistry();
+  const std::scoped_lock lock(registry.mutex);
+  const auto it = registry.byTarget.find(ctxTgt_);
+  if (it != registry.byTarget.end() && it->second == this) {
+    registry.byTarget.erase(it);
+  }
+}
+
+SpeculativeRuntime* SpeculativeRuntime::forTarget(llama_context* ctxTgt) {
+  if (ctxTgt == nullptr) {
+    return nullptr;
+  }
+  auto& registry = runtimeRegistry();
+  const std::scoped_lock lock(registry.mutex);
+  const auto it = registry.byTarget.find(ctxTgt);
+  return it != registry.byTarget.end() ? it->second : nullptr;
+}
 
 int32_t SpeculativeRuntime::nDraftMax() const {
   return common_speculative_n_max(&params_);
 }
 
+void SpeculativeRuntime::resetSequence(llama_seq_id seqId) const {
+  llama_memory_seq_rm(llama_get_memory(ctxDft_), seqId, -1, -1);
+  common_speculative_set_state(spec_.get(), seqId, {});
+}
+
 bool SpeculativeRuntime::process(const llama_batch& batch) const {
+  // llama-server mirrors every target memory edit onto the draft context
+  // (`common_memory`). The addon edits the target sequence in many places
+  // (cache reconciliation, rollbacks, checkpoint restores), so instead the
+  // draft sequence is brought in line here, right before it receives the
+  // batch: a draft tail at or past the batch start is stale and trimmed, and
+  // a draft that stops short of it (the target was extended without the
+  // draft context) restarts from this batch.
+  if (batch.n_tokens > 0 && batch.token != nullptr && batch.embd == nullptr) {
+    llama_memory_t memDft = llama_get_memory(ctxDft_);
+    const bool gapsAllowed = allowsPositionGaps(llama_get_model(ctxDft_));
+    std::unordered_map<llama_seq_id, llama_pos> firstPos;
+    for (int32_t k = 0; k < batch.n_tokens; ++k) {
+      firstPos.try_emplace(batch.seq_id[k][0], batch.pos[k]);
+    }
+    for (const auto& [seqId, pos] : firstPos) {
+      const llama_pos posMax = llama_memory_seq_pos_max(memDft, seqId);
+      if (posMax >= pos) {
+        if (!llama_memory_seq_rm(memDft, seqId, pos, -1)) {
+          resetSequence(seqId);
+        }
+      } else if (posMax >= 0 && posMax + 1 < pos && !gapsAllowed) {
+        resetSequence(seqId);
+      }
+    }
+  }
   return common_speculative_process(spec_.get(), batch);
+}
+
+DraftSequenceState captureDraftSequenceState(
+    llama_context* ctxTgt, llama_seq_id seqId, llama_state_seq_flags flags) {
+  DraftSequenceState state;
+  const SpeculativeRuntime* runtime = SpeculativeRuntime::forTarget(ctxTgt);
+  if (runtime == nullptr) {
+    return state;
+  }
+  llama_context* ctxDft = runtime->ctxDft();
+  const size_t size = llama_state_seq_get_size_ext(ctxDft, seqId, flags);
+  if (size > 0) {
+    state.draft.resize(size);
+    if (llama_state_seq_get_data_ext(
+            ctxDft, state.draft.data(), size, seqId, flags) != size) {
+      state.draft.clear();
+      return state;
+    }
+  }
+  common_speculative_get_state(runtime->spec(), seqId, state.spec);
+  state.captured = true;
+  return state;
+}
+
+void restoreDraftSequenceState(
+    llama_context* ctxTgt, llama_seq_id seqId, const DraftSequenceState& state,
+    llama_state_seq_flags flags, llama_pos trimTo) {
+  const SpeculativeRuntime* runtime = SpeculativeRuntime::forTarget(ctxTgt);
+  if (runtime == nullptr) {
+    return;
+  }
+  if (!state.captured) {
+    runtime->resetSequence(seqId);
+    return;
+  }
+  llama_context* ctxDft = runtime->ctxDft();
+  if (state.draft.empty()) {
+    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+      llama_memory_seq_rm(llama_get_memory(ctxDft), seqId, -1, -1);
+    }
+  } else if (
+      llama_state_seq_set_data_ext(
+          ctxDft, state.draft.data(), state.draft.size(), seqId, flags) == 0) {
+    runtime->resetSequence(seqId);
+    return;
+  }
+  if (trimTo >= 0 &&
+      !llama_memory_seq_rm(llama_get_memory(ctxDft), seqId, trimTo, -1)) {
+    runtime->resetSequence(seqId);
+    return;
+  }
+  common_speculative_set_state(runtime->spec(), seqId, state.spec);
+}
+
+void resetDraftSequence(llama_context* ctxTgt, llama_seq_id seqId) {
+  if (const SpeculativeRuntime* runtime =
+          SpeculativeRuntime::forTarget(ctxTgt)) {
+    runtime->resetSequence(seqId);
+  }
 }
 
 } // namespace qvac_lib_inference_addon_llama::speculative

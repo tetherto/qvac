@@ -534,6 +534,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
                                static_cast<llama_seq_id>(seqId),
                                0) != 0;
       if (applied && driver->adoptResidentState(kept->ledgerWords)) {
+        speculative::restoreDraftSequenceState(
+            shared_.lctx, static_cast<llama_seq_id>(seqId), kept->draft, 0);
         isCacheLoaded = true;
         activeCacheSavedToDisk = kept->activeCacheSavedToDisk;
         adoptedDirtyState = kept->dirty;
@@ -1836,6 +1838,8 @@ void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
       if (size > 0 && entry.state.size() == size &&
           llama_state_seq_get_data_ext(
               shared_.lctx, entry.state.data(), size, seq, 0) == size) {
+        entry.draft =
+            speculative::captureDraftSequenceState(shared_.lctx, seq, 0);
         entry.ledgerWords = parked.ledgerWords;
         entry.checkpoints = std::move(parked.checkpoints);
         entry.dirty = parked.dirty;
