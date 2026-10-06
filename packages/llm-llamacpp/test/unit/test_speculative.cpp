@@ -127,6 +127,8 @@ TEST(SpeculativeConfigTest, ApplySizesOutputsLikeLlamaServer) {
   EXPECT_EQ(params.n_outputs_max, 16);
   // MTP keeps recurrent-state snapshots for rolling back rejected drafts.
   EXPECT_EQ(params.speculative.need_n_rs_seq(), 3u);
+  // Draft sampling stays on the CPU (see applySpeculativeConfig).
+  EXPECT_FALSE(params.speculative.draft.backend_sampling);
 }
 
 TEST(SpeculativeConfigTest, ApplyLeavesParamsAloneWhenOff) {

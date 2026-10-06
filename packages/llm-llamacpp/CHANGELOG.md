@@ -42,7 +42,7 @@
   underscore spelling) drafts with the model's own multi-token-prediction head
   and verifies each draft in one decode, on single prompts, multimodal prompts
   and continuous batching, with `cacheKey` conversations. Runtime stats report
-  `draftTokens` and `draftAcceptedTokens`. Qwen3.6-27B-MTP decodes about 2.3x
+  `draftTokens` and `draftAcceptedTokens`. Qwen3.6-27B-MTP decodes about 2.4x
   faster on a single sequence on a Radeon 8060S.
 
 ### Changed
