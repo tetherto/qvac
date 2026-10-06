@@ -2303,10 +2303,10 @@ importers:
         specifier: ^3.0.0
         version: 3.0.14(zod@4.4.3)
       '@qvac/ai-sdk-provider':
-        specifier: ^0.8.0
+        specifier: ^0.9.0
         version: link:../../packages/ai-sdk-provider
       '@qvac/cli':
-        specifier: ^0.14.0
+        specifier: ^0.15.0
         version: link:../../packages/cli
       ai:
         specifier: ^7.0.0
