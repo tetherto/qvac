@@ -23,7 +23,7 @@ export const checkNodeVersion: Check = (ctx) => {
       status: 'warn',
       severity: 'required',
       value: version,
-      hint: `Could not parse Node.js version; expected ${BARE_PACK_NODE_ENGINES}.`
+      hint: `Could not parse Node.js version; expected 22.21+ or 24.9+ (${BARE_PACK_NODE_ENGINES}).`
     }
   }
   const display = version.startsWith('v') ? version : `v${version}`
@@ -34,7 +34,7 @@ export const checkNodeVersion: Check = (ctx) => {
       status: 'fail',
       severity: 'required',
       value: display,
-      hint: `Upgrade Node.js to ${BARE_PACK_NODE_ENGINES} (current: ${display}); bare-pack's bare-module-lexer addon aborts on older Node.`
+      hint: `Upgrade Node.js to 22.21+ or 24.9+ (current: ${display}); bundling requires it.`
     }
   }
   return {

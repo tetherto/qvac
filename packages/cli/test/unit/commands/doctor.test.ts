@@ -106,8 +106,8 @@ describe('checkNodeVersion', () => {
       const r = checkNodeVersion(makeCtx({ nodeVersion }))
       assert.equal(r.status, 'fail', nodeVersion)
       assert.equal(r.severity, 'required')
-      assert.match(r.hint ?? '', /\^22\.21\.0 \|\| >=24\.9\.0/)
-      assert.match(r.hint ?? '', /bare-pack/)
+      assert.match(r.hint ?? '', /22\.21\+ or 24\.9\+/)
+      assert.match(r.hint ?? '', /bundling/)
     }
   })
 
