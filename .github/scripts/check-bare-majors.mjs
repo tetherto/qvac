@@ -3,8 +3,7 @@
  * Fail when a package touched by a diff still pins `bare` or a `bare-*`
  * dependency (including devDependencies) to an older major than npm latest.
  *
- * Reads manifests from a git tree so the check can run the trusted script
- * against a pull request head without executing that head.
+ * Reads package.json blobs from `--tree`. It does not import those packages.
  *
  * Usage:
  *   node .github/scripts/check-bare-majors.mjs --base <sha> --tree <sha>
