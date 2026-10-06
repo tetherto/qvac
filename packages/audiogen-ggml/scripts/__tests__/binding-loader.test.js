@@ -8,12 +8,11 @@ const vm = require('node:vm')
 
 const packageRoot = path.resolve(__dirname, '../..')
 const bindingPath = path.join(packageRoot, 'binding.js')
+const publishedBindingPath = path.join(packageRoot, 'binding-published.js')
 const bindingSource = fs.readFileSync(bindingPath, 'utf8')
+const publishedBindingSource = fs.readFileSync(publishedBindingPath, 'utf8')
 
-// The shipped entry is `module.exports = loadAddon()`, so the only way to drive
-// its branches is to evaluate the real file against a controlled `require`.
-// Everything below therefore tests the exact source that gets published.
-function loadBinding({ addon, hostAddon }) {
+function loadBinding({ addon, hostAddon, published = false }) {
   const calls = { addon: 0, hostAddon: 0 }
 
   const fakeRequire = (specifier) => {
@@ -30,12 +29,14 @@ function loadBinding({ addon, hostAddon }) {
   }
 
   const module_ = { exports: {} }
+  const source = published ? publishedBindingSource : bindingSource
+  const filename = published ? publishedBindingPath : bindingPath
   const wrapper = vm.compileFunction(
-    bindingSource,
+    source,
     ['exports', 'require', 'module', '__filename', '__dirname'],
-    { filename: bindingPath }
+    { filename }
   )
-  wrapper(module_.exports, fakeRequire, module_, bindingPath, packageRoot)
+  wrapper(module_.exports, fakeRequire, module_, filename, packageRoot)
 
   return { exports: module_.exports, calls }
 }
@@ -136,5 +137,40 @@ test('a non-binding from the platform package is reported, never exported', () =
       assert.match(err.message, /createInstance/)
       return true
     }
+  )
+})
+
+test('the published loader resolves the platform package without probing locally', () => {
+  const { exports, calls } = loadBinding({
+    published: true,
+    addon: notCalled,
+    hostAddon: () => nativeBinding('platform-package')
+  })
+
+  assert.equal(exports.tag, 'platform-package')
+  assert.equal(calls.addon, 0)
+  assert.equal(calls.hostAddon, 1)
+  assert.doesNotMatch(publishedBindingSource, /\brequire\.addon\s*\(/)
+})
+
+test('the published loader preserves host package errors', () => {
+  const hostError = new Error('platform package is not installed')
+  assert.throws(
+    () =>
+      loadBinding({
+        published: true,
+        addon: notCalled,
+        hostAddon: () => {
+          throw hostError
+        }
+      }),
+    (err) => err === hostError
+  )
+})
+
+test('the published loader rejects a non-binding platform package', () => {
+  assert.throws(
+    () => loadBinding({ published: true, addon: notCalled, hostAddon: packageEntry }),
+    /not the native binding.*createInstance/
   )
 })
