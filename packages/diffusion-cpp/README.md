@@ -530,10 +530,12 @@ bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh --dry-run
 bash packages/diffusion-cpp/scripts/download-minimax-h3-convrot.sh
 ```
 
-The four files total about 55 GB. The package's vcpkg overlay pins
-`qvac-ext-stable-diffusion.cpp` to `107121df3ee9664cd47f80b19add495002d0232f`
-(merged PR #44) and its ggml submodule to
-`9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb`.
+The four files total about 55 GB. The QVAC vcpkg registry pins
+`stable-diffusion-cpp 2026-08-11#4` to
+`qvac-ext-stable-diffusion.cpp` commit
+`107121df3ee9664cd47f80b19add495002d0232f` (merged PR #44) and
+`ggml 2026-08-11#1` to
+`qvac-ext-ggml` commit `9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb`.
 
 At the validated model revision, the four checkpoint SHA-256 hashes are:
 

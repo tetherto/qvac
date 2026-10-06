@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "reference": "main",
+    "reference": "feat/h3-convrot-registry-pins",
     "baseline": "18fd55a0288f492346964fe780fb8c7c8789c351",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
