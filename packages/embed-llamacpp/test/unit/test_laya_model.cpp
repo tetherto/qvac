@@ -297,7 +297,22 @@ TEST_F(LayaModelTest, BatchRequestReturnsOneResultPerState) {
   EXPECT_EQ(res[1].at("answers").at("department").at("choice"), "billing");
 }
 
-TEST_F(LayaModelTest, SameAnswerAloneAndInBatch) {
+// As fabric's test-laya: kernels are chosen by batch size, and flash attention
+// rounds K and V to f16, which turns their small differences into visible
+// steps (a 0.005 score drift on x86 CPU, 0.0015 on Vulkan). On the CPU without
+// flash attention a sequence answers the same alone and packed.
+TEST(LayaModelBatchTest, SameAnswerAloneAndInBatch) {
+  const std::string path = layaModelPath();
+  if (path.empty()) {
+    GTEST_SKIP() << "Laya test model not found, see layaModelPath()";
+  }
+  LayaModel model(path, {{"device", "cpu"}, {"flash_attn", "off"}}, "");
+  model.initializeBackend(backendsDir());
+  model.waitForLoadInitialization();
+  auto predict = [&](const std::string& request) {
+    return json::parse(model.predict(request).json);
+  };
+
   const json alone = predict(kTicketRequest);
   json batch = json::parse(kTicketRequest);
   batch["states"] = json::array(
