@@ -110,6 +110,19 @@ public:
   speculativeStats() const override {
     return spec_.stats();
   }
+  [[nodiscard]] bool speculativeEnabled() const override {
+    return spec_.enabled();
+  }
+  bool prepareSpeculativeDraft(
+      llama_pos pos, llama_token sampled, unsigned generatedTokens) override;
+  void finishSpeculativeDraft() override { spec_.afterDraft(); }
+  [[nodiscard]] std::vector<llama_token> speculativeDraft() const override {
+    return spec_.draft();
+  }
+  void discardSpeculativeDraft() override { spec_.discardDraft(); }
+  DraftStepResult onDraftLogitsReady(
+      int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   /**
    * Access the mutable common parameters associated with this context.

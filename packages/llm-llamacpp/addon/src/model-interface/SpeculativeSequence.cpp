@@ -155,6 +155,19 @@ void SpeculativeSequence::addToBatch(
   }
 }
 
+void SpeculativeSequence::setBatchStart(int32_t first) {
+  iBatch_.clear();
+  for (int32_t i = 0; i <= static_cast<int32_t>(draft_.size()); ++i) {
+    iBatch_.push_back(first + i);
+  }
+}
+
+void SpeculativeSequence::discardDraft() {
+  draft_.clear();
+  iBatch_.clear();
+  isReplay_ = false;
+}
+
 bool SpeculativeSequence::useTargetCheckpoint(size_t nRollback) const {
   const auto type = runtime_->tgtSeqRmType();
   return type == COMMON_CONTEXT_SEQ_RM_TYPE_FULL ||

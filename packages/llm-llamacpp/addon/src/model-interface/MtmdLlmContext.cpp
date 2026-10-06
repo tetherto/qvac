@@ -2081,6 +2081,84 @@ void MtmdLlmContext::generateSpeculative(
   }
 }
 
+bool MtmdLlmContext::prepareSpeculativeDraft(
+    llama_pos pos, llama_token sampled, unsigned generatedTokens) {
+  using qvac_lib_inference_addon_llama::speculative::SpeculativeSequence;
+  syncPosition(pos);
+  const int32_t nRemaining =
+      params_.n_predict > 0
+          ? params_.n_predict - static_cast<int32_t>(generatedTokens)
+          : -1;
+  return spec_.prepareDraft(
+      SpeculativeSequence::maxDraft(
+          ctxCeiling(),
+          std::max(current_.pos, current_.cacheTokens),
+          nRemaining),
+      current_.pos,
+      sampled,
+      {});
+}
+
+DraftStepResult MtmdLlmContext::onDraftLogitsReady(
+    int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+    const std::function<void(const std::string&)>& outputCallback) {
+  DraftStepResult out;
+  advanceTextSpan(posBefore);
+  spec_.setBatchStart(firstLogitIdx);
+  const auto verified = spec_.verify(smpl_.get(), posBefore);
+  if (verified.replay) {
+    advanceTextSpan(verified.keepTokens);
+    out.replay = true;
+    out.newPos = current_.pos;
+    return out;
+  }
+  // The sampled token is decoded now; record it.
+  syncPosition(posBefore + 1);
+  const auto& ids = verified.ids;
+  for (size_t i = 0; i < ids.size(); ++i) {
+    const bool isLast = i + 1 == ids.size();
+    SequenceStepResult step;
+    if (contextWindowFull(current_.pos, ctxCeiling()) ||
+        contextWindowFull(current_.cacheTokens, ctxCeiling())) {
+      step = {
+          .finished = true,
+          .contextOverflow = true,
+          .stopReason = GenerationStopReason::ContextOverflow};
+      generationStopReason_ = GenerationStopReason::ContextOverflow;
+    } else {
+      step = emitSampledToken(
+          ids[i],
+          generatedBefore + static_cast<unsigned>(i) + 1,
+          outputCallback,
+          nullptr);
+      out.tokens.push_back(ids[i]);
+    }
+    if (step.finished) {
+      // See TextLlmContext::generateSpeculative.
+      if (!isLast &&
+          !llama_memory_seq_rm(
+              llama_get_memory(modelCtx_.lctx), seqId_, current_.pos, -1)) {
+        for (size_t j = i; j + 1 < ids.size(); ++j) {
+          appendResidentToken(ids[j]);
+          advanceTextSpan(current_.pos + 1);
+        }
+      }
+      out.finished = true;
+      out.contextOverflow = step.contextOverflow;
+      out.stopReason = step.stopReason;
+      break;
+    }
+    if (isLast) {
+      holdPendingResidentToken(ids[i], current_.pos);
+    } else {
+      appendResidentToken(ids[i]);
+      advanceTextSpan(current_.pos + 1);
+    }
+  }
+  out.newPos = current_.pos;
+  return out;
+}
+
 SequenceStepResult MtmdLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,

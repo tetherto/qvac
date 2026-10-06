@@ -1075,6 +1075,80 @@ void TextLlmContext::generateSpeculative(
   }
 }
 
+bool TextLlmContext::prepareSpeculativeDraft(
+    llama_pos pos, llama_token sampled, unsigned generatedTokens) {
+  using qvac_lib_inference_addon_llama::speculative::SpeculativeSequence;
+  syncPosition(pos);
+  const int32_t nRemaining =
+      params_.n_predict > 0
+          ? params_.n_predict - static_cast<int32_t>(generatedTokens)
+          : -1;
+  return spec_.prepareDraft(
+      SpeculativeSequence::maxDraft(ctxCeiling(), nPast_, nRemaining),
+      nPast_,
+      sampled,
+      {});
+}
+
+DraftStepResult TextLlmContext::onDraftLogitsReady(
+    int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+    const std::function<void(const std::string&)>& outputCallback) {
+  DraftStepResult out;
+  nPast_ = posBefore;
+  spec_.setBatchStart(firstLogitIdx);
+  const auto verified = spec_.verify(smpl_.get(), posBefore);
+  if (verified.replay) {
+    nPast_ = verified.keepTokens;
+    out.replay = true;
+    out.newPos = nPast_;
+    return out;
+  }
+  // The sampled token is decoded now; record it.
+  syncPosition(posBefore + 1);
+  const auto& ids = verified.ids;
+  for (size_t i = 0; i < ids.size(); ++i) {
+    const bool isLast = i + 1 == ids.size();
+    SequenceStepResult step;
+    if (contextWindowFull(nPast_, ctxCeiling())) {
+      step = {
+          .finished = true,
+          .contextOverflow = true,
+          .stopReason = GenerationStopReason::ContextOverflow};
+      generationStopReason_ = GenerationStopReason::ContextOverflow;
+    } else {
+      step = emitSampledToken(
+          ids[i],
+          generatedBefore + static_cast<unsigned>(i) + 1,
+          outputCallback,
+          nullptr);
+      out.tokens.push_back(ids[i]);
+    }
+    if (step.finished) {
+      // See generateSpeculative: the stop token is never decoded.
+      if (!isLast &&
+          !llama_memory_seq_rm(
+              llama_get_memory(modelCtx_.lctx), seqId_, nPast_, -1)) {
+        for (size_t j = i; j + 1 < ids.size(); ++j) {
+          ++nPast_;
+          appendResidentToken(ids[j]);
+        }
+      }
+      out.finished = true;
+      out.contextOverflow = step.contextOverflow;
+      out.stopReason = step.stopReason;
+      break;
+    }
+    if (isLast) {
+      holdPendingResidentToken(ids[i], nPast_);
+    } else {
+      appendResidentToken(ids[i]);
+      ++nPast_;
+    }
+  }
+  out.newPos = nPast_;
+  return out;
+}
+
 SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,

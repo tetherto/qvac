@@ -85,6 +85,10 @@ struct ObservedRequestStats {
   /// user-message heuristic (QVAC-23460), so an aggregate cannot stand in for
   /// it.
   int64_t toolDefinitionsDropped = 0;
+  /// Speculative draft tokens proposed for / accepted by this request, read
+  /// off the slot driver at drain; summed across a group.
+  int64_t draftTokens = 0;
+  int64_t draftAcceptedTokens = 0;
   /// Why this request's generation stopped. Per-sequence, so it is honest for
   /// a single request; `nullopt` when unknown (never finalized) or when a
   /// group's requests disagree, since one reason cannot describe many.
@@ -197,6 +201,16 @@ struct RuntimeStatsSnapshot {
   /// counter is required: a defaulted one would let a future caller drop a
   /// stat silently, with no compile error.
   void accumulateSlot(int64_t nPast, int64_t toolsDropped, const Request& req);
+
+  /// Speculative steps feed the sample plus a draft but stream only the
+  /// accepted tokens, and spend time drafting outside `llama_decode`.
+  /// `tokenDelta` (streamed minus fed, <= 0) and `draftDuration` correct
+  /// the decode bucket so `TPS` stays streamed tokens per second.
+  void recordSpeculativeStep(
+      int64_t tokenDelta, std::chrono::nanoseconds draftDuration);
+
+  /// Speculative counters of every slot folded in this epoch.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeStats speculative;
 
   /// How busy the shared backend was, NOT a property of any one request: the
   /// mean number of sequences decoded together, averaged over the epoch's
@@ -599,6 +613,14 @@ private:
   /// Capture every slot stopped at its end-of-history checkpoint and let it
   /// resume. A capture that throws fails that slot only.
   void serviceCheckpointStopsLocked();
+  /// Speculative decoding: asks every generating slot for a draft, drafts
+  /// for all of them in one go, and attaches the drafts to the batcher so
+  /// the next `fillBatch` feeds them (llama-server's draft phase of
+  /// `update_slots`). No-op without a speculative runtime.
+  void prepareSpeculativeDraftsLocked(std::unique_lock<std::mutex>* lock);
+  /// Verifies the drafts the last step fed (llama-server's `post_decode`
+  /// speculative branch), streaming the accepted tokens.
+  void verifySpeculativeDraftsLocked();
   /// Evaluate the head media barrier of one awaiting slot (lowest seqId)
   /// via its driver, unlocking around the embedded `llama_decode`. A
   /// media failure only fails that slot's request, never the whole

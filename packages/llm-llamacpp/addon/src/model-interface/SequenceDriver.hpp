@@ -14,6 +14,7 @@
 
 #include "CacheLedger.hpp"
 #include "MediaLoadOrder.hpp"
+#include "SpeculativeSequence.hpp"
 #include "RenderOverrides.hpp"
 #include "addon/LlmErrors.hpp"
 
@@ -74,6 +75,23 @@ stopReasonAfterRequestRollback(GenerationStopReason reason) {
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 struct SequenceStepResult {
   llama_token token = LLAMA_TOKEN_NULL;
+  bool finished = false;
+  bool contextOverflow = false;
+  GenerationStopReason stopReason = GenerationStopReason::None;
+};
+
+/// Outcome of verifying a speculative draft under the scheduler
+/// (`SequenceDriver::onDraftLogitsReady`).
+struct DraftStepResult {
+  /// The draft could not be rolled back by trimming: the sequence was
+  /// restored to `newPos` and the next step feeds the sampled token and
+  /// `speculativeDraft()` again. Nothing was streamed.
+  bool replay = false;
+  /// Live memory of the sequence ends here after the step.
+  llama_pos newPos = 0;
+  /// Tokens streamed to the caller, in order. Unless the sequence finished,
+  /// the last one is the new unfed sample.
+  std::vector<llama_token> tokens;
   bool finished = false;
   bool contextOverflow = false;
   GenerationStopReason stopReason = GenerationStopReason::None;
@@ -287,6 +305,45 @@ public:
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch = nullptr) = 0;
+
+  /// Speculative decoding under the scheduler, one step per generating
+  /// sequence (see `speculative::SpeculativeSequence`): before the batch is
+  /// filled, `prepareSpeculativeDraft` asks for a draft continuing the unfed
+  /// `sampled` token at `pos`; the scheduler drafts for every sequence that
+  /// asked at once, then calls `finishSpeculativeDraft` on them. The batch
+  /// then carries `sampled` followed by `speculativeDraft()` with logits on
+  /// every entry, and `onDraftLogitsReady` verifies it. A draft the batch
+  /// had no room for is dropped with `discardSpeculativeDraft`. Drivers
+  /// without speculative decoding keep the defaults.
+  [[nodiscard]] virtual bool speculativeEnabled() const { return false; }
+  virtual bool prepareSpeculativeDraft(
+      llama_pos pos, llama_token sampled, unsigned generatedTokens) {
+    (void)pos;
+    (void)sampled;
+    (void)generatedTokens;
+    return false;
+  }
+  virtual void finishSpeculativeDraft() {}
+  [[nodiscard]] virtual std::vector<llama_token> speculativeDraft() const {
+    return {};
+  }
+  virtual void discardSpeculativeDraft() {}
+  /// `firstLogitIdx` is the batch index of the sampled token, `posBefore`
+  /// its position, `generatedBefore` the tokens streamed before this step.
+  virtual DraftStepResult onDraftLogitsReady(
+      int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+      const std::function<void(const std::string&)>& outputCallback) {
+    (void)firstLogitIdx;
+    (void)generatedBefore;
+    (void)outputCallback;
+    return {.newPos = posBefore};
+  }
+  /// Speculative counters of the sequence's current request.
+  [[nodiscard]] virtual qvac_lib_inference_addon_llama::speculative::
+      SpeculativeStats
+      speculativeStats() const {
+    return {};
+  }
 
   /// Final-token / clean-shutdown hook. Implementations should flush any
   /// pending UTF-8 buffer state and close streams. Called exactly once

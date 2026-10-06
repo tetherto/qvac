@@ -103,6 +103,14 @@ public:
   /// their batch indices for `verify`.
   void addToBatch(llama_batch& batch, llama_token sampled, llama_pos pos);
 
+  /// Step 4 when someone else fills the batch: `sampled` sits at batch index
+  /// `first` and the draft right after it.
+  void setBatchStart(int32_t first);
+
+  /// Drops a draft that never reached the target (no room in the batch).
+  /// The sampler and both contexts are still at the pre-draft state.
+  void discardDraft();
+
   /// Step 6. `nTokens` is the resident token count before step 4. Samples
   /// with `smpl` (accepting the tokens into it) and rewinds the target and
   /// draft sequences.
