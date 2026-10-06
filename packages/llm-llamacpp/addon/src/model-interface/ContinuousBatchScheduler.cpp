@@ -198,7 +198,10 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
         "ContinuousBatchScheduler: ctxTotalTokens / batchSize underflowed "
         "to 0; reduce batchSize or grow n_ctx");
   }
-  parked_.resize(batchSize);
+  // Built at its final size: `resize` may relocate elements by copy where the
+  // standard library's deque move can throw (MSVC), and checkpoints are
+  // move-only.
+  parked_ = std::vector<std::optional<ParkedState>>(batchSize);
 }
 
 ContinuousBatchScheduler::~ContinuousBatchScheduler() {

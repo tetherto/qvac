@@ -1912,7 +1912,9 @@ TEST_F(
   model->saveCache(cachePath.string());
   EXPECT_NE(readFileBytes(cachePath), primedCacheBytes)
       << "a cancelled cached request commits and saveCache must persist it";
-  EXPECT_GT(fs::last_write_time(cachePath), primedCacheTime)
+  // GTest cannot print file_time_type on the macOS 13 SDK (std::format of a
+  // float needs macOS 13.3), so compare inside EXPECT_TRUE.
+  EXPECT_TRUE(fs::last_write_time(cachePath) > primedCacheTime)
       << "saveCache did not rewrite the cache file after the cancel";
 
   // The committed state serves the next authoritative turn.
