@@ -15421,6 +15421,23 @@ class LoadModelSrcRequestGgmlOcrModelConfigBackendDevice(Enum):
     opencl = "opencl"
 
 
+class OcrMainGpuIndex(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
+            ge=0,
+            le=2147483647,
+            title="OcrMainGpuIndex",
+        ),
+    ]
+
+
+class LoadModelSrcRequestGgmlOcrModelConfigMainGpu(Enum):
+    integrated = "integrated"
+    dedicated = "dedicated"
+
+
 class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -15605,6 +15622,13 @@ class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
         Field(
             alias="gpuDevice",
             description="0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
+        ),
+    ] = None
+    main_gpu: Annotated[
+        OcrMainGpuIndex | LoadModelSrcRequestGgmlOcrModelConfigMainGpu | None,
+        Field(
+            alias="mainGpu",
+            description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
         ),
     ] = None
     detector_model_src: Annotated[
