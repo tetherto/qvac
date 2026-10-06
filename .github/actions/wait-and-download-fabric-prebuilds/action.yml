@@ -1,0 +1,165 @@
+name: 'Wait and download fabric-prebuilds'
+description: >
+  Polls the on-pr-fabric workflow for a fabric-prebuilds artifact on the current
+  PR head SHA, then downloads it into the runner workspace. Used by npm-runtime
+  consumer workflows that run in parallel with on-pr-fabric. A head SHA alone
+  does not identify a run — any run reachable under the same workflow can carry
+  that SHA — so the selected run is bound to this PR's build by provenance
+  before its artifact is trusted.
+
+inputs:
+  github-token:
+    description: 'Token with actions:read'
+    required: true
+  head-sha:
+    description: 'PR head SHA to match'
+    required: true
+  head-repo:
+    description: 'Head repository the producing run must belong to (defaults to the PR head repo)'
+    required: false
+    default: ''
+  pr-number:
+    description: 'PR number the producing run must be associated with, when the API reports one'
+    required: false
+    default: ''
+  workflow-file:
+    description: 'Workflow file that publishes fabric-prebuilds'
+    required: false
+    default: 'on-pr-fabric.yml'
+  artifact-name:
+    description: 'Artifact name to download'
+    required: false
+    default: 'fabric-prebuilds'
+  download-dir:
+    description: 'Directory to extract the artifact into'
+    required: false
+    default: 'fabric-prebuilds-staging'
+  timeout-minutes:
+    description: 'Maximum time to wait for the artifact'
+    required: false
+    default: '120'
+  poll-seconds:
+    description: 'Seconds between poll attempts'
+    required: false
+    default: '60'
+
+outputs:
+  source-run-id:
+    description: 'Workflow run id the artifact was downloaded from'
+    value: ${{ steps.wait.outputs.source_run_id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for fabric-prebuilds artifact
+      id: wait
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        HEAD_REPO: ${{ inputs.head-repo || github.event.pull_request.head.repo.full_name }}
+        PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
+        WORKFLOW_FILE: ${{ inputs.workflow-file }}
+        ARTIFACT: ${{ inputs.artifact-name }}
+        DOWNLOAD_DIR: ${{ inputs.download-dir }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        POLL_SECONDS: ${{ inputs.poll-seconds }}
+        RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        if [ -z "$HEAD_SHA" ]; then
+          echo "::error::head-sha must not be empty"
+          exit 1
+        fi
+
+        mkdir -p "$DOWNLOAD_DIR"
+        deadline=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
+        found=false
+
+        while [ "$(date +%s)" -lt "$deadline" ]; do
+          # Status and conclusion are deliberately not filtered on. The producer
+          # only publishes fabric-prebuilds behind a successful prebuild, so the
+          # artifact's existence already proves the bundle is good — while the
+          # run's own conclusion also carries everything downstream of the
+          # publish (consumer smoke, lint). Rejecting a red run would strand
+          # this consumer for its full timeout over a failure that happened
+          # after the bundle it needs was uploaded. Provenance below, plus the
+          # artifact lookup, are the real gates.
+          RUNS=$(gh api "repos/$REPO/actions/workflows/${WORKFLOW_FILE}/runs?head_sha=${HEAD_SHA}&per_page=20" \
+            --jq '.workflow_runs[] | .id' 2>/dev/null || true)
+          for rid in $RUNS; do
+            [ "$rid" = "$RUN_ID" ] && continue
+
+            # Bind the run to this PR's build before trusting its artifact.
+            # pull_requests[] is empty for fork PRs, where head_repository is
+            # the discriminating field instead; the two are complementary.
+            RUN_JSON=$(gh api "repos/$REPO/actions/runs/$rid" 2>/dev/null || true)
+            if [ -z "$RUN_JSON" ]; then
+              continue
+            fi
+            MISMATCH=$(printf '%s' "$RUN_JSON" | node -e '
+              const chunks = []
+              process.stdin.on("data", (chunk) => chunks.push(chunk))
+              process.stdin.on("end", () => {
+                const [expectedSha, expectedPath, expectedRepo, expectedPr] =
+                  process.argv.slice(1)
+
+                let run
+                try {
+                  run = JSON.parse(chunks.join(""))
+                } catch {
+                  process.stdout.write("unparseable run payload")
+                  process.exitCode = 1
+                  return
+                }
+
+                const headRepo = run.head_repository && run.head_repository.full_name
+                const pullRequests = Array.isArray(run.pull_requests) ? run.pull_requests : []
+                const mismatches = []
+
+                if (run.head_sha !== expectedSha) mismatches.push(`head_sha=${run.head_sha}`)
+                if (run.path !== expectedPath) mismatches.push(`path=${run.path}`)
+                if (run.event !== "pull_request_target") mismatches.push(`event=${run.event}`)
+                if (expectedRepo && headRepo !== expectedRepo) {
+                  mismatches.push(`head_repository=${headRepo}`)
+                }
+                if (
+                  expectedPr &&
+                  pullRequests.length > 0 &&
+                  !pullRequests.some((entry) => String(entry.number) === expectedPr)
+                ) {
+                  mismatches.push(`pull_requests=${pullRequests.map((entry) => entry.number)}`)
+                }
+
+                if (mismatches.length > 0) {
+                  process.stdout.write(mismatches.join(" "))
+                  process.exitCode = 1
+                }
+              })
+            ' "$HEAD_SHA" ".github/workflows/${WORKFLOW_FILE}" "$HEAD_REPO" "$PR_NUMBER") || {
+              echo "Skipping run $rid — provenance does not match this PR: $MISMATCH"
+              continue
+            }
+
+            NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
+              --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
+            if echo "$NAMES" | grep -qx "$ARTIFACT"; then
+              echo "Found $ARTIFACT in run $rid — downloading"
+              rm -rf "$DOWNLOAD_DIR"
+              mkdir -p "$DOWNLOAD_DIR"
+              if gh run download "$rid" --repo "$REPO" --name "$ARTIFACT" --dir "$DOWNLOAD_DIR"; then
+                echo "source_run_id=$rid" >> "$GITHUB_OUTPUT"
+                found=true
+                break 2
+              fi
+            fi
+          done
+          echo "fabric-prebuilds not ready yet — retrying in ${POLL_SECONDS}s"
+          sleep "$POLL_SECONDS"
+        done
+
+        if [ "$found" != "true" ]; then
+          echo "::error::Timed out waiting for $ARTIFACT from $WORKFLOW_FILE on head $HEAD_SHA"
+          exit 1
+        fi

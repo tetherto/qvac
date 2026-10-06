@@ -8,7 +8,7 @@ description: >
 
 inputs:
   artifact-pattern:
-    description: 'Download-artifact pattern (e.g. perf-report-qvac-ocr-onnx-*)'
+    description: 'Download-artifact pattern (e.g. perf-report-qvac-llm-llamacpp-*)'
     required: true
   report-title:
     description: 'Heading for the GitHub Step Summary (e.g. "OCR Performance Report (All Platforms)")'

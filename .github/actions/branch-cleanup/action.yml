@@ -1,0 +1,73 @@
+name: Branch cleanup
+description: >-
+  Flags stale branches into a tracking issue and deletes them after a grace
+  period, per docs/branch-retention.md. Assumes the target repository is already
+  checked out (with branch history fetchable from origin).
+
+inputs:
+  dry_run:
+    description: "Report only; do not delete branches"
+    default: "false"
+  single_package:
+    description: "true for single-package repos (release-<x.y.z> / v<x.y.z>)"
+    default: "false"
+  grace_period_days:
+    description: "Days a branch must stay flagged before deletion"
+    default: "7"
+  keep_majors:
+    description: "Major release lines retained per package"
+    default: "2"
+  keep_minors:
+    description: "Minor release lines retained per kept major"
+    default: "3"
+  keep_patches:
+    description: "Patch release lines retained per kept minor"
+    default: "1"
+  feature_inactivity_days:
+    description: "feature-* inactivity threshold (days)"
+    default: "60"
+  tmp_inactivity_days:
+    description: "tmp-* inactivity threshold (days)"
+    default: "60"
+  adhoc_inactivity_days:
+    description: "ad-hoc branch inactivity threshold (days)"
+    default: "30"
+  max_deletions_per_run:
+    description: "Hard cap on deletions in a single run"
+    default: "10"
+
+runs:
+  using: composite
+  steps:
+    - name: Collect branch timestamps
+      shell: bash
+      env:
+        BRANCH_TIMESTAMPS_FILE: ${{ runner.temp }}/branch-timestamps.json
+      run: |
+        set -euo pipefail
+        git config --global --add safe.directory "$PWD"
+        git fetch --no-tags --prune --depth=1 --quiet origin '+refs/heads/*:refs/remotes/origin/*'
+        git for-each-ref --format='%(refname:lstrip=3) %(committerdate:unix)' refs/remotes/origin \
+          | jq -R -s 'split("\n") | map(select(length > 0) | split(" ")) | map({ (.[0]): (.[1] | tonumber) }) | add // {}' \
+          > "$BRANCH_TIMESTAMPS_FILE"
+        echo "Collected timestamps for $(jq 'length' "$BRANCH_TIMESTAMPS_FILE") branch(es)"
+
+    - name: Run branch cleanup
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        BRANCH_TIMESTAMPS_FILE: ${{ runner.temp }}/branch-timestamps.json
+        DRY_RUN: ${{ inputs.dry_run }}
+        SINGLE_PACKAGE: ${{ inputs.single_package }}
+        GRACE_PERIOD_DAYS: ${{ inputs.grace_period_days }}
+        KEEP_MAJORS: ${{ inputs.keep_majors }}
+        KEEP_MINORS: ${{ inputs.keep_minors }}
+        KEEP_PATCHES: ${{ inputs.keep_patches }}
+        FEATURE_INACTIVITY_DAYS: ${{ inputs.feature_inactivity_days }}
+        TMP_INACTIVITY_DAYS: ${{ inputs.tmp_inactivity_days }}
+        ADHOC_INACTIVITY_DAYS: ${{ inputs.adhoc_inactivity_days }}
+        MAX_DELETIONS_PER_RUN: ${{ inputs.max_deletions_per_run }}
+      with:
+        script: |
+          const { processBranchCleanup } = await import(`${process.env.ACTION_PATH}/branch-cleanup.mjs`)
+          await processBranchCleanup({ github, context, core })

@@ -1,0 +1,156 @@
+name: Deploy registry-server (single node)
+description: >
+  Deploys the registry-server package onto a single registry node.
+  Authenticates to Google Cloud via Workload Identity Federation (keyless
+  OIDC), then runs the remote update script over an IAP-tunnelled SSH session:
+  checkout the pinned commit, reinstall dependencies, regenerate spec
+  artifacts, gracefully reload the pm2 process, and block until the node
+  reports indexer status. No long-lived SSH key and no inbound public SSH are
+  required (IAP manages ephemeral keys).
+inputs:
+  instance:
+    description: "GCE instance name of the target registry node"
+    required: true
+  zone:
+    description: "GCE zone of the target node"
+    required: true
+  project:
+    description: "GCP project id hosting the node"
+    required: true
+  workload-identity-provider:
+    description: "Full resource name of the Workload Identity provider"
+    required: true
+  service-account:
+    description: "Service account email CI impersonates for deploy"
+    required: true
+  repo-path:
+    description: "Path of the git checkout on the node (absolute, or relative to the run-as-user's home)"
+    required: true
+  run-as-user:
+    description: "User that owns the git checkout and the per-user pm2 process; the login session sudo's to this user"
+    required: true
+  deploy-sha:
+    description: "Exact commit SHA to deploy"
+    required: true
+  pkg-subdir:
+    description: "Package directory within the repo"
+    required: false
+    default: "packages/registry-server"
+  pm2-process:
+    description: "pm2 process name to reload"
+    required: false
+    default: "registry"
+  metrics-port:
+    description: "Local Prometheus metrics port to health-check on the node"
+    required: false
+    default: "9210"
+  health-timeout-seconds:
+    description: "How long to wait for indexer status after reload"
+    required: false
+    default: "120"
+  mode:
+    description: "live (checkout + reload) or dry-run (preflight only, no mutation)"
+    required: false
+    default: "live"
+
+runs:
+  using: composite
+  steps:
+    # OIDC -> Workload Identity Federation. Keyless; no service-account JSON
+    # stored. OS Login is off on these nodes, so gcloud manages an ephemeral SSH
+    # key in instance metadata; the guest agent provisions the login user in the
+    # google-sudoers group (passwordless sudo), which the step below uses to drop
+    # to the run-as-user. Least-privilege SA roles: iap.tunnelResourceAccessor,
+    # compute.viewer, iam.serviceAccountUser on the VMs' attached compute SA, and
+    # a custom role limited to compute.instances.get + setMetadata (preferred
+    # over project-wide compute.instanceAdmin.v1). The WIF trust is scoped to
+    # this workflow on the default branch. Setup steps live in a private runbook,
+    # not committed to this public repo.
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+      with:
+        workload_identity_provider: ${{ inputs.workload-identity-provider }}
+        service_account: ${{ inputs.service-account }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+    - name: Deploy to ${{ inputs.instance }} via IAP
+      shell: bash
+      env:
+        INSTANCE: ${{ inputs.instance }}
+        ZONE: ${{ inputs.zone }}
+        PROJECT: ${{ inputs.project }}
+        RUN_AS_USER: ${{ inputs.run-as-user }}
+        REPO_PATH: ${{ inputs.repo-path }}
+        DEPLOY_SHA: ${{ inputs.deploy-sha }}
+        PKG_SUBDIR: ${{ inputs.pkg-subdir }}
+        PM2_PROCESS: ${{ inputs.pm2-process }}
+        METRICS_PORT: ${{ inputs.metrics-port }}
+        HEALTH_TIMEOUT_SECONDS: ${{ inputs.health-timeout-seconds }}
+        MODE: ${{ inputs.mode }}
+        SCRIPT_PATH: ${{ github.workspace }}/${{ inputs.pkg-subdir }}/scripts/deploy/remote-update.sh
+      run: |
+        set -euo pipefail
+
+        if [ ! -f "$SCRIPT_PATH" ]; then
+          echo "::error::remote-update.sh not found at $SCRIPT_PATH"
+          exit 1
+        fi
+
+        # Validate every maintainer-supplied value before it is interpolated into
+        # the remote shell command below. These come from repo vars/inputs, but a
+        # malformed value must never become shell injection on the deploy host.
+        _check() {
+          printf '%s' "$2" | grep -qE "$3" || { echo "::error::invalid $1 value: '$2'"; exit 1; }
+        }
+        _check instance       "$INSTANCE"               '^[a-z]([-a-z0-9]*[a-z0-9])?$'
+        _check zone           "$ZONE"                    '^[a-z0-9-]+$'
+        _check project        "$PROJECT"                 '^[a-z][-a-z0-9]*[a-z0-9]$'
+        _check run-as-user    "$RUN_AS_USER"             '^[a-z_][a-z0-9_-]*$'
+        _check repo-path      "$REPO_PATH"               '^[A-Za-z0-9._/-]+$'
+        _check pkg-subdir     "$PKG_SUBDIR"              '^[A-Za-z0-9._/-]+$'
+        _check pm2-process    "$PM2_PROCESS"             '^[A-Za-z0-9._-]+$'
+        _check deploy-sha     "$DEPLOY_SHA"              '^[0-9a-f]{7,40}$'
+        _check metrics-port   "$METRICS_PORT"            '^[0-9]+$'
+        _check health-timeout "$HEALTH_TIMEOUT_SECONDS"  '^[0-9]+$'
+        _check mode           "$MODE"                    '^(live|dry-run)$'
+
+        # Short-lived SSH material on this persistent (and possibly shared)
+        # self-hosted runner: generate the keypair in a per-job temp dir that is
+        # removed when the step exits, instead of the reused ~/.ssh default. The
+        # public key pushed to instance metadata also self-expires (below), so a
+        # leaked private key is useless shortly after the job and metadata does
+        # not accumulate stale keys. Auth itself stays keyless via WIF.
+        SSH_KEYDIR="$(mktemp -d)"
+        trap 'rm -rf "$SSH_KEYDIR"' EXIT
+
+        echo "::group::Deploy $DEPLOY_SHA to $INSTANCE as $RUN_AS_USER (mode=$MODE)"
+
+        # Deploy parameters are passed as env assignments prefixed to the remote
+        # command. None of these are secrets, so plain interpolation is safe.
+        INNER="DEPLOY_SHA='${DEPLOY_SHA}'"
+        INNER="${INNER} REPO_PATH='${REPO_PATH}'"
+        INNER="${INNER} PKG_SUBDIR='${PKG_SUBDIR}'"
+        INNER="${INNER} PM2_PROCESS='${PM2_PROCESS}'"
+        INNER="${INNER} METRICS_PORT='${METRICS_PORT}'"
+        INNER="${INNER} HEALTH_TIMEOUT_SECONDS='${HEALTH_TIMEOUT_SECONDS}'"
+        INNER="${INNER} MODE='${MODE}'"
+        INNER="${INNER} bash -s"
+
+        # gcloud authenticates as the SA and (OS Login being off) pushes an
+        # ephemeral SSH key to instance metadata; the guest agent provisions the
+        # login user with passwordless sudo. We then sudo to the run-as-user to
+        # operate on its checkout and its per-user pm2 daemon. remote-update.sh
+        # is streamed on stdin and passes through gcloud ssh -> sudo -> su to the
+        # inner `bash -s`.
+        gcloud compute ssh "$INSTANCE" \
+          --zone "$ZONE" \
+          --project "$PROJECT" \
+          --tunnel-through-iap \
+          --quiet \
+          --ssh-key-file="$SSH_KEYDIR/google_compute_engine" \
+          --ssh-key-expire-after=300s \
+          --command "sudo -n su - ${RUN_AS_USER} -c \"${INNER}\"" < "$SCRIPT_PATH"
+
+        echo "::endgroup::"

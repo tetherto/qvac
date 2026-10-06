@@ -20,6 +20,8 @@
 //   __ENABLE_CRASH_MONITOR__        'true' | 'false' — gates the 15s background crash poller
 //   __QVAC_PERF_RUNS__             Override for QVAC_PERF_RUNS (empty = test default)
 //   __QVAC_PERF_WARMUP_RUNS__      Override for QVAC_PERF_WARMUP_RUNS (empty = test default)
+//   __QVAC_EXTRA_ENV__             Extra KEY=VALUE lines (\n-separated, may be empty)
+//                                  appended to the pushed device config file
 //   __ENABLES_PERF__                'true' | 'false' — gates perf-report extraction in after:
 //   __AFTER_HOOK_EXTRA__            Optional consumer-supplied JS spliced into the after: hook
 //
@@ -48,7 +50,10 @@ exports.config = {
   mochaOpts: {
     ui: 'bdd',
     timeout: __MOCHA_TIMEOUT_MS__,
-    grep: '__MOCHA_GREP__',
+    // __MOCHA_GREP__ is substituted as a JSON-encoded string literal (with its
+    // own quotes) by action.yml, so it is safe against config injection even
+    // when the value originates from a manual dispatch `tests` input.
+    grep: __MOCHA_GREP__,
   },
 
   before: async function (capabilities, specs, browser) {
@@ -85,11 +90,47 @@ exports.config = {
     // runs on crash paths where the WDIO command queue may have a pending
     // command stuck behind a long timeout (e.g. waitForDisplayed 60s on an
     // element that will never appear). Raw HTTP bypasses the queue.
+    // iOS reads bare_console.log from the app container. Android cannot: the app
+    // writes it to its private data dir, which adb cannot read and run-as
+    // refuses on a release-signed APK. Android's app output is in logcat under
+    // the `bare` tag instead, so this is not a gap. The one candidate below is
+    // the world-readable path an app could be changed to write to.
+    global.bareLogCandidates = function (isAndroid, bundleId) {
+      if (!isAndroid) return ['@' + bundleId + ':documents/bare_console.log'];
+      return ['/sdcard/Android/data/' + bundleId + '/files/bare_console.log'];
+    };
+
     global.flushBareLog = async function (reason) {
       if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
-      try {
+      var isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
+      var candidates = global.bareLogCandidates(isAndroid, BUNDLE_ID);
+      var lastError = null;
+      for (var ci = 0; ci < candidates.length; ci++) {
+        try {
+          await global.pullBareLog(reason, candidates[ci]);
+          return;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      if (isAndroid) {
+        console.log(
+          '[bare-log] ' + reason + ': no bare_console.log on Android; app-side output is in ' +
+          'logcat_full.txt under the `bare` tag. Last error: ' +
+          (lastError ? lastError.message : 'none')
+        );
+        return;
+      }
+      console.log(
+        '[bare-log] ' + reason + ' flush failed: ' +
+        (lastError ? lastError.message : 'no candidate path')
+      );
+    };
+
+    global.pullBareLog = async function (reason, devicePath) {
+      {
         var http = require('http');
-        var body = JSON.stringify({ path: '@' + BUNDLE_ID + ':documents/bare_console.log' });
+        var body = JSON.stringify({ path: devicePath });
         var b64 = await new Promise(function (resolve, reject) {
           var req = http.request({
             hostname: '127.0.0.1', port: 4723,
@@ -107,12 +148,51 @@ exports.config = {
           req.write(body);
           req.end();
         });
+        // Appium returns a base64 string on success, an error object on failure.
+        // Passing the object to Buffer.from threw a type error that replaced
+        // Appium's real reason.
+        if (typeof b64 !== 'string') {
+          var why = (b64 && (b64.message || b64.error)) || JSON.stringify(b64);
+          throw new Error('pull_file returned no base64 payload — ' + why);
+        }
         var text = Buffer.from(b64, 'base64').toString();
         var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
         require('fs').writeFileSync(logDir + '/bare_console.log', text);
-        console.log('[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes)');
+        console.log(
+          '[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes) from ' + devicePath
+        );
+      }
+    };
+
+    // Android: synchronously dump the full device logcat to
+    // $DEVICEFARM_LOG_DIR/logcat_full.txt. The testspec post_test phase writes
+    // the same file, but Device Farm skips post_test when the test phase exits
+    // non-zero OR the app crashes — so we also capture here on the failure and
+    // crash paths (test phase). Kept synchronous so the crash path finishes the
+    // dump before the queued process.exit(1) fires. Writes only when adb
+    // produced output, so a dead/offline device leaves no misleading empty file.
+    // Mirrors the post_test dump in generate-testspec.sh — keep buffer flags and
+    // filename in sync. No-op on iOS (which has no logcat; it uses flushBareLog).
+    global.isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
+    global.dumpAndroidLogcat = function (reason) {
+      if (!global.isAndroid) return;
+      try {
+        var cp = require('child_process');
+        var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
+        var udid = process.env.DEVICEFARM_DEVICE_UDID || '';
+        var sel = udid ? ('-s ' + udid + ' ') : '';
+        var out = cp.execSync('adb ' + sel + 'logcat -d -b all', {
+          maxBuffer: 512 * 1024 * 1024,
+          timeout: 120000,
+        });
+        if (out && out.length) {
+          require('fs').writeFileSync(logDir + '/logcat_full.txt', out);
+          console.log('[logcat] ' + reason + ' dump ok (' + out.length + ' bytes)');
+        } else {
+          console.log('[logcat] ' + reason + ' produced no output; left existing file untouched');
+        }
       } catch (e) {
-        console.log('[bare-log] ' + reason + ' flush failed: ' + e.message);
+        console.log('[logcat] ' + reason + ' dump failed: ' + e.message);
       }
     };
 
@@ -134,6 +214,10 @@ exports.config = {
             global.testResults.crashed = true;
             global.flushTestResults();
           }
+          // Android: grab logcat NOW — post_test won't run on a crashed shard.
+          // Synchronous, so it completes before the process.exit(1) timer below
+          // can fire. iOS relies on the flushBareLog pull further down.
+          global.dumpAndroidLogcat('crash-' + stage);
           setTimeout(function () { process.exit(1); }, 5000);
           try {
             await browser.pause(1500);
@@ -171,7 +255,8 @@ exports.config = {
     // Push test filter + perf config BEFORE clicking the Run button so the
     // on-device test code can read them when it starts processing.
     var isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
-    var testFilter = '__MOCHA_GREP__';
+    // JSON-encoded string literal (quotes included) — see mochaOpts.grep above.
+    var testFilter = __MOCHA_GREP__;
     if (testFilter.length > 0) {
       try {
         var filterPath = isAndroid
@@ -185,12 +270,16 @@ exports.config = {
     }
     var perfRuns = '__QVAC_PERF_RUNS__';
     var perfWarmup = '__QVAC_PERF_WARMUP_RUNS__';
-    if (perfRuns.length > 0 || perfWarmup.length > 0) {
+    // Extra consumer-supplied KEY=VALUE lines (\n-separated) appended to the
+    // same config file — the on-device loader os.setEnv()s every key it finds.
+    var extraEnv = '__QVAC_EXTRA_ENV__';
+    if (perfRuns.length > 0 || perfWarmup.length > 0 || extraEnv.length > 0) {
       try {
         var configPath = isAndroid
           ? '/data/local/tmp/qvacPerfConfig.txt'
           : '@' + BUNDLE_ID + ':documents/qvacPerfConfig.txt';
         var configBody = 'QVAC_PERF_RUNS=' + perfRuns + '\nQVAC_PERF_WARMUP_RUNS=' + perfWarmup + '\n';
+        if (extraEnv.length > 0) configBody += extraEnv + '\n';
         await browser.pushFile(configPath, Buffer.from(configBody).toString('base64'));
         console.log('[pushFile] qvacPerfConfig -> ' + configPath);
       } catch (e) {
@@ -222,6 +311,16 @@ exports.config = {
     console.log('[bare-log] Waiting for log flush...');
     await browser.pause(3000);
     if (global.flushBareLog) await global.flushBareLog('after');
+
+    // Android: on FAILURE, dump logcat here (test phase) so the bare runtime
+    // TAP output survives — Device Farm skips the post_test dump when the test
+    // phase exits non-zero. On a clean pass (result === 0) we skip it and let
+    // post_test write the file, so the happy path does no redundant work.
+    // `result !== 0` also fires on an undefined/ambiguous result (fail-safe).
+    // Crashes are already covered in checkAppCrash above.
+    if (result !== 0) {
+      global.dumpAndroidLogcat('after-fail');
+    }
 
     // Perf extraction — pull perf-report.json from the device while the
     // Appium session is still alive. See perf-extract.js for the full

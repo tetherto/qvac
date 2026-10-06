@@ -1,5 +1,5 @@
 name: Verify qvac-fabric lockstep
-description: Ensures qvac-fabric dependency version is identical across selected vcpkg manifests.
+description: Ensures qvac-fabric dependency version is identical across all package vcpkg manifests that declare it.
 
 outputs:
   version:
@@ -14,19 +14,56 @@ runs:
       run: |
         set -euo pipefail
 
-        files=(
-          "packages/llm-llamacpp/vcpkg.json"
-          "packages/embed-llamacpp/vcpkg.json"
-          "packages/translation-nmtcpp/vcpkg.json"
+        mapfile -t mentions < <(
+          for file in packages/*/vcpkg.json; do
+            if jq -e '
+              [.. | strings, (objects | .name?) | select(. == "qvac-fabric")]
+              | length > 0
+            ' "${file}" >/dev/null 2>&1; then
+              echo "${file}"
+            fi
+          done | sort
         )
+
+        mapfile -t files < <(
+          for file in packages/*/vcpkg.json; do
+            if jq -e '
+              [
+                .dependencies[]?
+                | objects
+                | select(.name == "qvac-fabric" and (.["version>="] != null))
+              ] | length > 0
+            ' "${file}" >/dev/null; then
+              echo "${file}"
+            fi
+          done | sort
+        )
+
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "No packages/*/vcpkg.json manifests declare qvac-fabric with version>="
+          exit 1
+        fi
+
+        declare -A verified=()
+        for file in "${files[@]}"; do
+          verified["${file}"]=1
+        done
+
+        unverified=()
+        for file in "${mentions[@]}"; do
+          if [ -z "${verified[${file}]+x}" ]; then
+            unverified+=("${file}")
+          fi
+        done
+
+        if [ "${#unverified[@]}" -gt 0 ]; then
+          echo "qvac-fabric is referenced but not lockstep-verified (missing top-level dependency with version>=):"
+          printf '  %s\n' "${unverified[@]}"
+          exit 1
+        fi
 
         versions=()
         for file in "${files[@]}"; do
-          if [ ! -f "${file}" ]; then
-            echo "Missing file: ${file}"
-            exit 1
-          fi
-
           version="$(jq -r '
             [
               .dependencies[]
@@ -55,5 +92,5 @@ runs:
           fi
         done
 
-        echo "qvac-fabric lockstep verified: ${baseline}"
+        echo "qvac-fabric lockstep verified across ${#files[@]} manifests: ${baseline}"
         echo "version=${baseline}" >> "${GITHUB_OUTPUT}"

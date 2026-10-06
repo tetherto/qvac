@@ -1,0 +1,241 @@
+name: SDK Device Farm - Wait For Running
+description: Wait for a scheduled SDK Device Farm run to enter RUNNING before starting the producer.
+
+inputs:
+  platform:
+    description: "Human-readable platform name for logs (android or ios)."
+    required: true
+  run-arns-directory:
+    description: "Directory containing one .txt file per scheduled Device Farm run ARN."
+    required: true
+  start-timeout-minutes:
+    description: "Maximum minutes to wait for at least one run to enter RUNNING."
+    required: false
+    default: "90"
+  poll-interval-seconds:
+    description: "Seconds between get-run polling attempts."
+    required: false
+    default: "15"
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for Device Farm runs
+      shell: node {0}
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        RUN_ARNS_DIRECTORY: ${{ inputs.run-arns-directory }}
+        START_TIMEOUT_MINUTES: ${{ inputs.start-timeout-minutes }}
+        POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}
+      run: |
+        const fs = require('fs');
+        const path = require('path');
+        const { execFileSync } = require('child_process');
+
+        const pendingStatuses = new Set([
+          'PENDING',
+          'PENDING_CONCURRENCY',
+          'PENDING_DEVICE',
+          'PROCESSING',
+          'SCHEDULING',
+          'PREPARING',
+          'UNKNOWN',
+        ]);
+        const terminalStatuses = new Set([
+          'COMPLETED',
+          'STOPPED',
+          'ERRORED',
+          'FAILED',
+        ]);
+
+        function parsePositiveInteger(rawValue, fallback, label) {
+          const parsed = Number.parseInt(String(rawValue ?? ''), 10);
+          if (Number.isFinite(parsed) && parsed > 0) {
+            return parsed;
+          }
+          console.log(`[device-farm-wait] Invalid ${label}=${rawValue}; using ${fallback}`);
+          return fallback;
+        }
+
+        function sleep(ms) {
+          return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function appendSummary(line) {
+          if (!process.env.GITHUB_STEP_SUMMARY) {
+            return;
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`, 'utf8');
+        }
+
+        function readRunArns(directory) {
+          if (!fs.existsSync(directory)) {
+            throw new Error(`Run ARN directory does not exist: ${directory}`);
+          }
+
+          const files = fs.readdirSync(directory)
+            .filter((fileName) => fileName.endsWith('.txt'))
+            .sort();
+
+          const runs = [];
+          for (const fileName of files) {
+            const filePath = path.join(directory, fileName);
+            const arn = fs.readFileSync(filePath, 'utf8').trim();
+            if (!arn) {
+              console.log(`[device-farm-wait] Ignoring empty ARN file: ${filePath}`);
+              continue;
+            }
+            runs.push({
+              name: path.basename(fileName, '.txt'),
+              arn,
+              status: 'UNKNOWN',
+              result: 'UNKNOWN',
+              message: '',
+              finishedBeforeProducer: false,
+            });
+          }
+
+          if (runs.length === 0) {
+            throw new Error(`No Device Farm run ARN files found in ${directory}`);
+          }
+
+          return runs;
+        }
+
+        function awsJson(args) {
+          const stdout = execFileSync('aws', args, {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          return JSON.parse(stdout);
+        }
+
+        function getRun(run) {
+          const response = awsJson([
+            'devicefarm',
+            'get-run',
+            '--arn',
+            run.arn,
+            '--query',
+            'run',
+            '--output',
+            'json',
+          ]);
+
+          return {
+            status: response.status ?? 'UNKNOWN',
+            result: response.result ?? 'UNKNOWN',
+            message: response.message ?? '',
+          };
+        }
+
+        function stopRun(run, reason) {
+          if (terminalStatuses.has(run.status)) {
+            console.log(
+              `[device-farm-wait] Not stopping ${run.name}; status=${run.status} reason=${reason}`,
+            );
+            return;
+          }
+
+          try {
+            console.log(`[device-farm-wait] Stopping ${run.name}: status=${run.status} reason=${reason}`);
+            execFileSync('aws', ['devicefarm', 'stop-run', '--arn', run.arn], {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe'],
+            });
+          } catch (error) {
+            const stderr = error.stderr ? String(error.stderr).trim() : '';
+            console.log(
+              `[device-farm-wait] stop-run failed for ${run.name}: ${error.message}${stderr ? ` stderr=${stderr}` : ''}`,
+            );
+          }
+        }
+
+        function stopActiveRuns(runs, reason) {
+          for (const run of runs) {
+            stopRun(run, reason);
+          }
+        }
+
+        function statusSummary(runs) {
+          return runs
+            .map((run) => `${run.name}:${run.status}${run.result !== 'UNKNOWN' ? `/${run.result}` : ''}`)
+            .join(', ');
+        }
+
+        async function main() {
+          const platform = process.env.PLATFORM || 'mobile';
+          const runArnsDirectory = process.env.RUN_ARNS_DIRECTORY || './run-arns';
+          const timeoutMinutes = parsePositiveInteger(process.env.START_TIMEOUT_MINUTES, 90, 'START_TIMEOUT_MINUTES');
+          const pollIntervalSeconds = parsePositiveInteger(process.env.POLL_INTERVAL_SECONDS, 15, 'POLL_INTERVAL_SECONDS');
+          const timeoutMs = timeoutMinutes * 60 * 1000;
+          const pollIntervalMs = pollIntervalSeconds * 1000;
+          const startedAt = Date.now();
+          const runs = readRunArns(runArnsDirectory);
+
+          console.log(`[device-farm-wait] Waiting for ${runs.length} ${platform} Device Farm run(s); producer starts when the first run enters RUNNING`);
+          console.log(`[device-farm-wait] timeout=${timeoutMinutes}m pollInterval=${pollIntervalSeconds}s`);
+          appendSummary(`### ${platform} Device Farm readiness`);
+          appendSummary(`Waiting up to ${timeoutMinutes} minute(s) for at least one of ${runs.length} run(s) to enter \`RUNNING\`.`);
+
+          while (true) {
+            for (const run of runs) {
+              try {
+                const latest = getRun(run);
+                run.status = latest.status;
+                run.result = latest.result;
+                run.message = latest.message;
+              } catch (error) {
+                console.log(`[device-farm-wait] get-run failed for ${run.name}: ${error.message}`);
+                run.result = 'UNKNOWN';
+                run.message = error.message;
+              }
+            }
+
+            const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+            console.log(`[device-farm-wait] ${elapsedSeconds}s status: ${statusSummary(runs)}`);
+
+            const runningRun = runs.find((run) => run.status === 'RUNNING');
+            if (runningRun) {
+              console.log(`[device-farm-wait] ${runningRun.name} entered RUNNING after ${elapsedSeconds}s; starting producer`);
+              appendSummary(`${runningRun.name} reached \`RUNNING\` after ${elapsedSeconds}s; producer can start.`);
+              return;
+            }
+
+            for (const run of runs) {
+              if (terminalStatuses.has(run.status) && !run.finishedBeforeProducer) {
+                const message = run.message ? ` message=${run.message}` : '';
+                run.finishedBeforeProducer = true;
+                console.log(
+                  `[device-farm-wait] ${run.name} reached ${run.status} before producer start; result=${run.result}${message}`,
+                );
+              }
+            }
+
+            const hasPendingRun = runs.some((run) => pendingStatuses.has(run.status));
+            if (!hasPendingRun) {
+              console.log(
+                `[device-farm-wait] All Device Farm runs finished before any RUNNING state was observed: ${statusSummary(runs)}`,
+              );
+              appendSummary(`Device Farm readiness failed: all runs finished before a \`RUNNING\` state was observed.`);
+              process.exit(1);
+            }
+
+            const elapsedMs = Date.now() - startedAt;
+            if (elapsedMs >= timeoutMs) {
+              console.log(
+                `[device-farm-wait] Timed out after ${timeoutMinutes}m before any run entered RUNNING: ${statusSummary(runs)}`,
+              );
+              stopActiveRuns(runs, `did not enter RUNNING within ${timeoutMinutes}m`);
+              appendSummary(`Device Farm readiness timed out after ${timeoutMinutes} minute(s): ${statusSummary(runs)}.`);
+              process.exit(1);
+            }
+
+            await sleep(pollIntervalMs);
+          }
+        }
+
+        main().catch((error) => {
+          console.error(`[device-farm-wait] ${error.stack || error.message}`);
+          process.exit(1);
+        });

@@ -17,9 +17,8 @@ inputs:
     description: "Required only for firewall-enterprise"
     required: false
     default: ""
-  workdir: 
+  workdir:
     default: "."
-    type: string
 
 runs:
   using: "composite"

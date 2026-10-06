@@ -4,8 +4,30 @@ description: |
 
   Frees up disk space (Linux runners), checks out the qvac-test-addon-mobile
   framework into ./test-framework, sets up Node.js, installs the Expo CLI,
-  resolves the addon's prebuilds (PR artifacts -> npm fallback -> committed),
+  resolves the addon's prebuilds (named run id -> PR artifacts -> npm fallback
+  -> committed),
   and prunes desktop prebuilds to keep the runner from running out of disk.
+
+  Prebuild precedence: CI artifacts win by default (artifact-first). A caller
+  that needs a PINNED published version instead (e.g. the baseline session of a
+  candidate-vs-baseline benchmark) MUST set force-npm-prebuild=true alongside
+  package-version — artifact presence alone would otherwise silently shadow the
+  pin with binaries built in the same run (QVAC-21879). Any addon workflow that
+  adds a pinned-npm session must wire this input the way
+  integration-mobile-test-llm-llamacpp.yml does.
+
+  The pinned-package path resolves BOTH registries: @qvac/* from npmjs.org and
+  @tetherto/<addon>-mono from GitHub Packages. That is how a build from ANOTHER
+  branch, or a published release, gets onto a device.
+
+  To test YOUR OWN PR, prefer `prebuild-run-id`: it installs the prebuilds
+  artifact of a named run. It takes precedence over every other source and never
+  falls back — a run id that cannot be honoured fails the run.
+
+  It also resolves BOTH package layouts: addons split by QVAC-24574 ship a
+  JS-only @qvac meta package, so a tarball with no prebuilds/ is followed by a
+  second resolve of the per-platform package its #host-addon map names.
+  Unsplit addons and every @tetherto dev build still ship prebuilds/ inline.
 
   Pre-condition: the consumer has already checked out the addon repository
   at ./addon/. We do NOT check the addon out here so the consumer can run
@@ -35,7 +57,10 @@ inputs:
     required: false
     default: "false"
   pat-token:
-    description: "GitHub PAT used to clone qvac-test-addon-mobile"
+    description: |
+      Token used to clone the public qvac-test-addon-mobile AND to authenticate
+      against GitHub Packages when `package-version` names a @tetherto/* dev
+      build (GITHUB_TOKEN suffices for both; the job needs 'packages: read').
     required: true
   test-framework-ref:
     description: "Branch/tag of qvac-test-addon-mobile to check out"
@@ -43,13 +68,75 @@ inputs:
     default: "main"
   package-version:
     description: |
-      NPM dist-tag or version pulled when the consumer triggers via
-      workflow_dispatch (e.g. "1.4.0", "@my-tag", "latest"). Defaults to
-      "latest" when empty. Whisper / TTS / Parakeet wire their dispatch
-      `version` (or `package_spec`) input through here so manual runs can
-      pin a specific published version.
+      NPM dist-tag / version, OR a full scoped package spec pulled when the
+      consumer pins a published build (e.g. "1.4.0", "latest", or
+      "@qvac/transcription-parakeet@1.0.0"). A value starting with "@scope/" is
+      treated as a complete name@version spec and passed to `npm pack` verbatim;
+      a bare version/tag is prefixed with `addon-npm-name`. Defaults to "latest"
+      when empty. Whisper / TTS / Parakeet / benchmark callers wire their
+      dispatch `version` or `prebuild_package` input through here so runs can pin
+      a specific published version.
+
+      Two registries are supported and picked from the spec's scope:
+        @qvac/<addon>@<version>        -> npmjs.org (published release)
+        @tetherto/<addon>-mono@<dev>   -> GitHub Packages (branch build)
+      The @tetherto form is how an UNMERGED native change gets onto a device;
+      note the '-mono' name suffix, which is what publish-library-to-gpr
+      actually publishes. Requires `pat-token` + 'packages: read'.
     required: false
     default: ""
+  force-npm-prebuild:
+    description: |
+      When "true", ignore ALL CI prebuild artifacts (per-matrix and the merged
+      `prebuilds` artifact) and pull the native prebuild from npm at
+      `package-version`. Used by the baseline leg of a candidate-vs-baseline
+      benchmark: without this, the merged `prebuilds` artifact (built from the
+      candidate in the same run) is pulled in when the per-matrix artifact is
+      absent, so the baseline session would silently run the candidate binary.
+      Defaults to "false" so existing artifact-first callers are unchanged.
+    required: false
+    default: "false"
+  allow-npm-fallback:
+    description: |
+      Whether the npm fallback (npm pack <addon>@<version>) is allowed when
+      no CI prebuild artifacts are present. Defaults to "false" so that
+      PR-triggered runs (pull_request / pull_request_target) NEVER silently
+      test the published release instead of the PR's own binaries — a missing
+      artifact hard-fails in the "Verify and prepare prebuilds" step instead.
+      Regardless of this input, the fallback is implicitly enabled for every
+      NON-PR event (workflow_dispatch, schedule, push/on-merge, benchmarks),
+      where testing a published package is the intended behaviour. Set to
+      "true" to force-enable the fallback in a PR context.
+    required: false
+    default: "false"
+  prebuild-run-id:
+    description: |
+      A run id whose `prebuilds-<pkg>` artifact holds the native binaries to
+      install (falls back to the legacy `prebuilds` name). The route for testing
+      your own PR on a device.
+
+      Highest precedence of every prebuild source: when set, the same-run
+      artifact downloads and the npm/GPR fallback are skipped, and resolution
+      fails closed rather than sliding back to @latest. Mutually exclusive with
+      `package-version` / `force-npm-prebuild`.
+
+      The provenance line names the head SHA and the repository the binaries came
+      from; a fork-built run warns but is not refused. `ref` and the prebuild run
+      are independent, so check the printed head SHA is the one you meant.
+
+      Needs `actions: read` on the calling job; `pat-token` carries it. Empty
+      (default) leaves every existing path unchanged.
+    required: false
+    default: ""
+
+outputs:
+  prebuild-source-run-id:
+    description: |
+      The run id the prebuilds were installed from, or empty when another source
+      was used. A caller that passed `prebuild-run-id` can assert this matches:
+      an older copy of this action silently ignores the input (GitHub only warns
+      on an unknown input), which would install @latest instead.
+    value: ${{ steps.prebuild_run.outputs.source_run_id }}
 
 runs:
   using: composite
@@ -80,6 +167,12 @@ runs:
         repository: tetherto/qvac-test-addon-mobile
         ref: ${{ inputs.test-framework-ref }}
         token: ${{ inputs.pat-token }}
+        # Do not persist the PAT into test-framework/.git/config: the build phase
+        # runs fork-controlled code (addon npm install, expo/gradle/xcode) in the
+        # same workspace and could otherwise read the credential from disk. The
+        # token is still used for the clone itself. Applies to every mobile addon
+        # that consumes this composite.
+        persist-credentials: false
         path: test-framework
         fetch-depth: 0
 
@@ -94,8 +187,103 @@ runs:
         echo "Installing global dependencies..."
         npm install -g --force @expo/cli@latest
 
+    # Resolution happens before anything is downloaded, so a bad run id costs
+    # nothing and no branch below can rescue it into an @latest run. Node rather
+    # than `gh`, which is not guaranteed on the self-hosted runners.
+    - name: Resolve prebuilds from a run id
+      id: prebuild_run
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id != ''
+      shell: bash
+      env:
+        PREBUILD_RUN_ID: ${{ inputs.prebuild-run-id }}
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+        PLATFORM: ${{ inputs.platform }}
+        PACKAGE_VERSION: ${{ inputs.package-version }}
+        FORCE_NPM_PREBUILD: ${{ inputs.force-npm-prebuild }}
+        GITHUB_TOKEN: ${{ inputs.pat-token }}
+        REPO: ${{ github.repository }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        node "$ACTION_PATH/resolve-prebuild-run.mjs"
+        # download-artifact overwrites the files it carries but leaves the rest,
+        # so a committed prebuilds/ dir or a leftover from an earlier job on the
+        # same self-hosted runner could shadow the resolved run. Runs only after
+        # resolution succeeds, so a rejected run id deletes nothing.
+        rm -rf "addon/$ADDON_WORKDIR/prebuilds"
+
+    # No continue-on-error: the run id is an explicit instruction, so a failed
+    # download must fail the run.
+    - name: Download prebuilds (from the resolved run)
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id != ''
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        # By id, not name: a re-run can leave two live `prebuilds-<pkg>` rows
+        # under one run id. A single artifact-ids value extracts straight into
+        # `path`, exactly as `name` does.
+        artifact-ids: ${{ steps.prebuild_run.outputs.artifact_id }}
+        run-id: ${{ steps.prebuild_run.outputs.source_run_id }}
+        github-token: ${{ inputs.pat-token }}
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+
+    # A partial prebuild matrix (a cancelled leg) still publishes a bundle, just
+    # without this platform's dir — which the generic "Verify and prepare
+    # prebuilds" step below would accept, since it only checks non-emptiness.
+    - name: Verify the resolved run's prebuilds cover this platform
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id != ''
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      env:
+        EXPECTED_DIRS: ${{ steps.prebuild_run.outputs.expected_dirs }}
+        SOURCE_RUN_ID: ${{ steps.prebuild_run.outputs.source_run_id }}
+        SOURCE_HEAD_SHA: ${{ steps.prebuild_run.outputs.head_sha }}
+        SOURCE_ARTIFACT: ${{ steps.prebuild_run.outputs.artifact_name }}
+        PLATFORM: ${{ inputs.platform }}
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+      run: |
+        MISSING=""
+        for dir in $EXPECTED_DIRS; do
+          if [ ! -d "prebuilds/$dir" ] || [ -z "$(ls -A "prebuilds/$dir" 2>/dev/null)" ]; then
+            MISSING="$MISSING $dir"
+          fi
+        done
+        if [ -n "$MISSING" ]; then
+          echo "::error::Run $SOURCE_RUN_ID's '$SOURCE_ARTIFACT' artifact has no$MISSING, so it cannot build for $PLATFORM."
+          echo "That run's prebuild matrix did not produce this platform — a cancelled or"
+          echo "filtered leg publishes a bundle without it. Pick a run whose $PLATFORM"
+          echo "prebuild leg succeeded, or re-run that leg and use the new run id."
+          echo "Directories the artifact does contain:"
+          ls -A prebuilds 2>/dev/null || echo "  (none)"
+          exit 1
+        fi
+        # Identity, the equivalent of the npm route's PACKED_ADDON assertion: a
+        # bundle can only be trusted if it is a build of THIS addon. Matters most
+        # for the legacy bare `prebuilds` name, which carries no addon in it.
+        # Flag a foreign stem rather than a missing expected one, so an addon
+        # whose binary is named differently is not failed for that alone.
+        EXPECTED="qvac__$(basename "$ADDON_WORKDIR")"
+        for dir in $EXPECTED_DIRS; do
+          FOREIGN=""
+          for f in "prebuilds/$dir"/qvac__*; do
+            [ -e "$f" ] || continue
+            stem="$(basename "$f")"; stem="${stem%%.*}"
+            [ "$stem" = "$EXPECTED" ] && { FOREIGN=""; break; }
+            FOREIGN="$stem"
+          done
+          if [ -n "$FOREIGN" ]; then
+            echo "::error::Run $SOURCE_RUN_ID's '$SOURCE_ARTIFACT' contains $FOREIGN, not $EXPECTED — it is not a build of this addon."
+            echo "A bundle named plainly 'prebuilds' carries no addon identity, so a run that"
+            echo "built a different addon can resolve here. Use a run that built this addon;"
+            echo "the failure message on a missing bundle lists which addons a run did build."
+            ls -A "prebuilds/$dir"
+            exit 1
+          fi
+        done
+
+        echo "Using prebuilds from run $SOURCE_RUN_ID (head $SOURCE_HEAD_SHA), artifact '$SOURCE_ARTIFACT':"
+        ls -la prebuilds/
+
     - name: Download Android prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'Android'
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'Android'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -104,7 +292,7 @@ runs:
       continue-on-error: true
 
     - name: Download iOS prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'iOS'
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'iOS'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -112,34 +300,368 @@ runs:
         merge-multiple: true
       continue-on-error: true
 
-    - name: Download prebuilds (from npm — fallback when no artifacts found)
+    # Did the per-matrix `<prefix><platform>-*` artifacts populate prebuilds/?
+    # On a prebuild CACHE HIT the build matrix is skipped, so those per-matrix
+    # artifacts do not exist this run — only the merged `prebuilds` artifact
+    # (re-published by the cache-restore job) does. Detect that here so the
+    # next step can recover the real PR binaries from the merged artifact
+    # instead of letting the npm fallback silently pull the published release.
+    - name: Check whether per-matrix prebuilds were found
+      id: check_prebuilds
       if: inputs.skip-prebuilds != 'true'
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      env:
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+      run: |
+        if [ -d prebuilds ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "present=false" >> "$GITHUB_OUTPUT"
+        fi
+        # reusable-prebuilds derives the merged bundle from basename(workdir).
+        echo "merged=prebuilds-$(basename "$ADDON_WORKDIR")" >> "$GITHUB_OUTPUT"
+
+    # Fallback for the cache-hit path: pull the merged `prebuilds` artifact
+    # (well-known name produced by reusable-prebuilds.yml; contains every
+    # platform dir, including android-*/ios-*). This keeps mobile E2E running
+    # against the PR's own binaries on JS-only pushes instead of @latest from
+    # npm. No-op for addons / runs that never produced this artifact (e.g.
+    # genuine workflow_dispatch), where the npm fallback below still applies.
+    - name: Download merged prebuilds artifact (fallback when per-matrix artifacts absent)
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && inputs.force-npm-prebuild != 'true' && steps.check_prebuilds.outputs.present != 'true'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: ${{ steps.check_prebuilds.outputs.merged }}
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+      continue-on-error: true
+
+    # npm fallback — DISABLED for PR-triggered runs.
+    # On a PR (pull_request / pull_request_target) the only acceptable
+    # prebuild sources are CI artifacts (per-matrix `<prefix><platform>-*`
+    # or the merged `prebuilds` artifact handled above). If neither is
+    # present the run must hard-fail in "Verify and prepare prebuilds"
+    # below rather than silently `npm pack`-ing the PUBLISHED release and
+    # going green against the wrong binaries. For every non-PR event
+    # (workflow_dispatch, schedule, push/on-merge, benchmarks) testing a
+    # published package is the intended behaviour, so the fallback stays on.
+    # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
+    - name: Download prebuilds (from npm — fallback when no artifacts found)
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:
         ADDON_NPM_NAME: ${{ inputs.addon-npm-name }}
         PACKAGE_VERSION: ${{ inputs.package-version }}
+        FORCE_NPM_PREBUILD: ${{ inputs.force-npm-prebuild }}
+        GPR_TOKEN: ${{ inputs.pat-token }}
+        # Selects which per-platform prebuild package to resolve when the addon
+        # is split (QVAC-24574) and the meta tarball carries no prebuilds/.
+        PLATFORM: ${{ inputs.platform }}
       run: |
         if [ -d "prebuilds" ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
-          echo "Prebuilds already present from artifacts — skipping npm fallback"
-          ls -la prebuilds/
-          exit 0
+          if [ "$FORCE_NPM_PREBUILD" = "true" ]; then
+            # force-npm-prebuild guarantees the npm prebuild at package-version.
+            # Anything already in prebuilds/ (an artifact that slipped past the
+            # gated download steps, committed prebuilds, a future step reordering)
+            # would silently shadow the pin — the exact failure mode this input
+            # exists to prevent (QVAC-21879: the benchmark's mobile baseline
+            # session ran the candidate binary under a npm:<pin> label). Discard
+            # it and install the pinned version.
+            echo "force-npm-prebuild: discarding pre-existing prebuilds/ so the pinned npm version cannot be shadowed:"
+            ls -la prebuilds/
+            rm -rf prebuilds
+          else
+            echo "Prebuilds already present from artifacts — skipping npm fallback"
+            ls -la prebuilds/
+            exit 0
+          fi
         fi
-        VERSION="${PACKAGE_VERSION:-latest}"
-        echo "No prebuilds from artifacts — downloading $ADDON_NPM_NAME@$VERSION from npm..."
-        if ! npm pack "$ADDON_NPM_NAME@$VERSION"; then
-          echo "ERROR: Failed to download version $VERSION from npm"
-          echo "Please check that the version exists at https://www.npmjs.com/package/$ADDON_NPM_NAME"
+        # package-version may be either a bare version / dist-tag (e.g. "1.4.0",
+        # "latest") OR a full scoped package spec (e.g.
+        # "@qvac/transcription-parakeet@1.0.0") — the desktop benchmark leg forwards
+        # the same `prebuild_package` name@version spec here. A full scoped spec
+        # always starts with "@scope/"; a bare version/tag never contains "/", so
+        # detect the spec form and pass it verbatim instead of re-prefixing the name.
+        case "$PACKAGE_VERSION" in
+          @*/*) SPEC="$PACKAGE_VERSION" ;;
+          "")   SPEC="$ADDON_NPM_NAME@latest" ;;
+          *)    SPEC="$ADDON_NPM_NAME@$PACKAGE_VERSION" ;;
+        esac
+        # Only a plain registry package@version may reach npm. `npm pack` also
+        # accepts file:/git:/https:/github:/npm: specs, and a git spec RUNS
+        # prepare scripts — unacceptable in a step holding a GPR credential,
+        # especially as several workflows forward a dispatch input straight into
+        # `package-version`. The workflow gate is prefix-only, so it lets all of
+        # those through; this is the one that closes it.
+        # Scope is optional because inference-addon-cpp uses an unscoped name.
+        if ! printf '%s' "$SPEC" | grep -Eq '^(@(qvac|tetherto)/)?[a-z0-9][a-z0-9._-]*(@[~^]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$'; then
+          echo "::error::Refusing to npm pack '$SPEC' — not a plain registry spec."
+          echo "Expected @qvac/<addon>@<version|tag> or @tetherto/<addon>-mono@<version|tag>."
+          echo "file:/git:/https:/github:/npm: specs and other scopes are rejected."
           exit 1
         fi
-        tar -xzf *.tgz
-        if [ ! -d "package/prebuilds" ]; then
-          echo "ERROR: No prebuilds directory found in package"
+        # Registry routing. @qvac/* is published to npmjs.org; @tetherto/* is a
+        # branch/dev build published to GitHub Packages by
+        # .github/actions/publish-library-to-gpr. A bare `npm pack` only ever
+        # talks to registry.npmjs.org, so every @tetherto spec used to 404 there
+        # — which silently made the "test an unmerged native build"
+        # path advertised by the dispatch `package`/`package_spec` inputs
+        # unusable once mobile became dispatch-only. Pack inside a throwaway dir
+        # holding a PROJECT-level .npmrc: project config merges with (rather than
+        # replaces) the runner's ~/.npmrc, so @qvac auth on the self-hosted
+        # runners keeps working, and the token never lands in the addon checkout
+        # that later gets bundled into the Device Farm app.
+        PACK_DIR="${RUNNER_TEMP:-/tmp}/gpr-prebuild-pack"
+        # Two tarballs can be packed here (meta, then its per-platform package),
+        # so each gets its own subdir to keep the `*.tgz` globs unambiguous.
+        # Both sit UNDER $PACK_DIR so npm's localPrefix — and therefore the
+        # .npmrc written below — still applies.
+        META_DIR="$PACK_DIR/meta"
+        PLATFORM_DIR="$PACK_DIR/platform"
+        rm -rf "$PACK_DIR"
+        mkdir -p "$META_DIR" "$PLATFORM_DIR"
+        trap 'rm -rf "$PACK_DIR"' EXIT
+        # npm reads project config from its localPrefix — the nearest ANCESTOR dir
+        # with a package.json/node_modules — NOT from cwd. Without this file, one
+        # above $RUNNER_TEMP would silently shadow the .npmrc below and send
+        # @tetherto to npmjs. This pins localPrefix here.
+        echo '{"name":"qvac-gpr-prebuild-pack","version":"0.0.0","private":true}' \
+          > "$PACK_DIR/package.json"
+        # Package name without the version. A scoped spec starts with '@', so
+        # stripping at the LAST '@' only works when a version is actually present
+        # ("@tetherto/foo-mono@1.0.0" -> "@tetherto/foo-mono", but bare
+        # "@tetherto/foo-mono" -> ""). A versionless scoped spec is legal here (the
+        # @*/* case passes it through and npm resolves @latest), and an empty name
+        # would produce a nonsense -mono warning and truncated failure hints.
+        case "${SPEC#@*/}" in
+          *@*) SPEC_NAME="${SPEC%@*}" ;;
+          *)   SPEC_NAME="$SPEC" ;;
+        esac
+        case "$SPEC" in
+          @tetherto/*)
+            REGISTRY_DESC="GitHub Packages (npm.pkg.github.com)"
+            if [ -z "$GPR_TOKEN" ]; then
+              echo "ERROR: $SPEC is a GitHub Packages spec but no token was supplied."
+              echo "The calling workflow must pass pat-token (secrets.GITHUB_TOKEN is enough)"
+              echo "and grant the job 'packages: read'."
+              exit 1
+            fi
+            # Dev builds are published with a '-mono' name suffix (name-suffix in
+            # every on-merge-*.yml). The un-suffixed @tetherto/<addon> packages are
+            # abandoned leftovers from early 2026 or absent entirely, so a spec
+            # without the suffix is almost always a copy/paste of the old docs.
+            case "$SPEC_NAME" in
+              *-mono) ;;
+              *) echo "::warning::$SPEC_NAME has no '-mono' suffix. GitHub Packages dev builds are published as ${SPEC_NAME}-mono — if this resolve fails, that is why." ;;
+            esac
+            # 0600 before the token is written, on this file only: a global umask
+            # would also hit the extracted prebuilds that get bundled into the
+            # app. $RUNNER_TEMP persists between jobs on self-hosted runners and a
+            # SIGKILL skips the EXIT trap, so a leak must not be world-readable.
+            : > "$PACK_DIR/.npmrc"
+            chmod 600 "$PACK_DIR/.npmrc"
+            printf '%s\n' \
+              '@tetherto:registry=https://npm.pkg.github.com' \
+              "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" \
+              > "$PACK_DIR/.npmrc"
+            # Ask npm where @tetherto actually resolves rather than assuming it
+            # from the scope, so a shadowed .npmrc fails loudly here instead of
+            # 404ing later under a "GitHub Packages" label.
+            EFFECTIVE_REGISTRY=$(cd "$PACK_DIR" && npm config get @tetherto:registry 2>/dev/null || echo "unknown")
+            case "$EFFECTIVE_REGISTRY" in
+              https://npm.pkg.github.com*) ;;
+              *)
+                echo "::error::@tetherto is resolving to '$EFFECTIVE_REGISTRY', not GitHub Packages."
+                echo "The .npmrc in $PACK_DIR is not being applied. npm reads project config from"
+                echo "its localPrefix (nearest ancestor with package.json/node_modules), so a"
+                echo "package.json or node_modules above \$RUNNER_TEMP can shadow it."
+                exit 1
+                ;;
+            esac
+            ;;
+          *)
+            REGISTRY_DESC="npm (registry.npmjs.org)"
+            ;;
+        esac
+        echo "No prebuilds from artifacts — downloading $SPEC from $REGISTRY_DESC..."
+        # --ignore-scripts is a no-op when packing a registry tarball, and
+        # neuters the `prepare` a git spec would run if one slipped past the
+        # validation above.
+        if ! (cd "$PACK_DIR" && npm pack "$SPEC" --ignore-scripts --pack-destination "$META_DIR"); then
+          echo "ERROR: Failed to download $SPEC from $REGISTRY_DESC"
+          case "$SPEC" in
+            @tetherto/*)
+              echo "Check the package and version exist at https://github.com/orgs/tetherto/packages?tab=packages&q=$SPEC_NAME"
+              echo "Dev builds are named @tetherto/<addon>-mono@<version>-tmp.runid-<run id>;"
+              echo "the version is produced by the On Merge Trigger run for your branch."
+              echo "For an addon, only a release-* push starts that run; pushing any"
+              echo "other branch does not. Push your code to a tmp-* or feature-* branch"
+              echo "and dispatch it there (other branches publish nothing; release-*"
+              echo "publishes to public npm):"
+              echo "  gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref <tmp-branch> -f package=<pkg>"
+              echo "model-fit and ggml-rpc-server publish from their own on-merge-*.yml;"
+              echo "see docs/ci/MOBILE-ON-DEMAND.md."
+              ;;
+            *)
+              echo "Please check that it exists at https://www.npmjs.com/package/$SPEC_NAME"
+              ;;
+          esac
           exit 1
         fi
-        mv package/prebuilds ./prebuilds
-        rm -rf package *.tgz
-        echo "Prebuilds downloaded from npm:"
+        tar -xzf "$META_DIR"/*.tgz -C "$META_DIR"
+        # Whether this tarball carries its own prebuilds/ is resolved AFTER the
+        # provenance checks below, because the per-platform lookup keys off the
+        # packed manifest and must not run on a package that failed provenance.
+        # Provenance assertion: when the caller pinned a version, prove the packed
+        # tarball IS that version before its prebuilds are used. npm pack of an
+        # exact spec cannot legitimately resolve elsewhere, so a mismatch means the
+        # pin was not honored — fail loudly instead of measuring the wrong binary.
+        # The pin may arrive as a bare version or a full name@version spec; the
+        # version to assert against is the segment after the last '@' in either
+        # form ("@qvac/foo@1.0.0" -> "1.0.0", "1.0.0" -> "1.0.0"). Only assert
+        # provenance for an EXACT semver pin — a dist-tag or range (latest, next,
+        # ^1.2.0) legitimately resolves to a different concrete version, so
+        # comparing the packed version to the tag string would false-fail.
+        PACKED_MANIFEST="$META_DIR/package/package.json"
+        PACKED_NAME=$(node -p "require('$PACKED_MANIFEST').name" 2>/dev/null || echo "unknown")
+        PACKED_VERSION=$(node -p "require('$PACKED_MANIFEST').version" 2>/dev/null || echo "unknown")
+
+        # NAME provenance, asserted on every resolve. The version check alone
+        # catches neither the registry returning a different package, nor a caller
+        # pinning the WRONG ADDON's package (e.g. embed's spec in the llm
+        # workflow) — which used to exit 0 and put embed's .bare on the device.
+        if [ "$PACKED_NAME" != "$SPEC_NAME" ]; then
+          echo "ERROR: resolved to $PACKED_NAME but the spec named $SPEC_NAME"
+          exit 1
+        fi
+        # Tie the package to the addon under test. The GPR dev build carries a
+        # '-mono' suffix that the published @qvac name does not, so compare the
+        # unscoped names with that suffix removed:
+        #   @qvac/vla-ggml  vs  @tetherto/vla-ggml-mono  ->  vla-ggml == vla-ggml
+        PACKED_ADDON="${PACKED_NAME##*/}"
+        PACKED_ADDON="${PACKED_ADDON%-mono}"
+        EXPECTED_ADDON="${ADDON_NPM_NAME##*/}"
+        EXPECTED_ADDON="${EXPECTED_ADDON%-mono}"
+        if [ "$PACKED_ADDON" != "$EXPECTED_ADDON" ]; then
+          echo "::error::$PACKED_NAME is not a build of $ADDON_NPM_NAME."
+          echo "The pinned package must be the addon this workflow tests; '$PACKED_ADDON'"
+          echo "!= '$EXPECTED_ADDON'. Check the package name — the GPR dev build is"
+          echo "@tetherto/$EXPECTED_ADDON-mono (note that a few addons' workflow slug and"
+          echo "package name differ, e.g. the 'vla' workflow ships @qvac/vla-ggml)."
+          exit 1
+        fi
+
+        # VERSION provenance: only assert for an EXACT semver pin — a dist-tag or
+        # range (latest, next, ^1.2.0) legitimately resolves to a different
+        # concrete version, so comparing the packed version to the tag string
+        # would false-fail. Non-registry specs can no longer reach this point (the
+        # spec is validated before npm runs), so the case below can no longer be
+        # skipped by a URL or git spec smuggling itself past ${PACKAGE_VERSION##*@}.
+        if [ "$FORCE_NPM_PREBUILD" = "true" ] && [ -n "$PACKAGE_VERSION" ]; then
+          EXPECTED_VERSION="${PACKAGE_VERSION##*@}"
+          case "$EXPECTED_VERSION" in
+            [0-9]*.[0-9]*.[0-9]*)
+              if [ "$PACKED_VERSION" != "$EXPECTED_VERSION" ]; then
+                echo "ERROR: forced npm prebuild resolved to $PACKED_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
+                exit 1
+              fi
+              echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION (pinned, $REGISTRY_DESC)"
+              ;;
+            *)
+              echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION ($REGISTRY_DESC); '$EXPECTED_VERSION' is a dist-tag/range so the exact version is not asserted"
+              ;;
+          esac
+        else
+          echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION ($REGISTRY_DESC)"
+        fi
+        # Fall through to the per-platform package when the meta tarball ships
+        # no prebuilds of its own. QVAC-24574 sliced asr/tts/audiogen into a
+        # JS-only meta package plus per-platform ones
+        # (scripts/ci/slice-platform-packages.mjs); only the @qvac npmjs release
+        # is sliced, so @tetherto -mono dev builds never reach this branch.
+        # The slice is named by the meta's `#host-addon` imports map, the same
+        # lookup build-mobile-app/overlay-platform-prebuilds.mjs uses. Mobile
+        # slices are cross-built, so they are not in optionalDependencies.
+        if [ ! -d "$META_DIR/package/prebuilds" ]; then
+          case "$PACKED_NAME" in
+            @tetherto/*)
+              echo "::error::$PACKED_NAME@$PACKED_VERSION ships no prebuilds/."
+              echo "GPR dev builds are published unsliced, so this one was published without"
+              echo "its prebuild artifacts. There is no per-platform package to fall back to."
+              exit 1
+              ;;
+          esac
+          # Suffixes mirror SLICE_DEFINITIONS: all three iOS host dirs ship in
+          # one 'ios' slice, Android arm64 in its own.
+          case "$PLATFORM" in
+            iOS|ios)         PLATFORM_SUFFIX="ios" ;;
+            Android|android) PLATFORM_SUFFIX="android-arm64" ;;
+            *)
+              echo "::error::No per-platform prebuild package mapping for platform '$PLATFORM'."
+              exit 1
+              ;;
+          esac
+          PLATFORM_PKG="$PACKED_NAME-$PLATFORM_SUFFIX"
+          MAPPED_PKG=$(node -e '
+            const [manifestPath, suffix] = process.argv.slice(1)
+            const map = (require(manifestPath).imports || {})["#host-addon"] || {}
+            let entry = suffix === "ios" ? map.ios : (map.android || {}).arm64
+            if (Array.isArray(entry)) entry = entry[0]
+            process.stdout.write(typeof entry === "string" ? entry : "")
+          ' "$PACKED_MANIFEST" "$PLATFORM_SUFFIX" 2>/dev/null || echo "")
+          # The map is registry-controlled, so it may only confirm the name the
+          # slicer writes, never choose a different package.
+          if [ "$MAPPED_PKG" != "$PLATFORM_PKG" ]; then
+            echo "::error::No prebuilds in $PACKED_NAME@$PACKED_VERSION, and its #host-addon map does not name $PLATFORM_PKG (got '${MAPPED_PKG:-nothing}')."
+            echo "A split addon routes each platform to its slice there; an unsplit one ships"
+            echo "prebuilds/ in the tarball. This package has neither, so there is no $PLATFORM binary to test."
+            exit 1
+          fi
+          # Slices are published at the meta's exact version. For a dist-tag or
+          # empty spec that version came from the registry, and `name@<spec>` is
+          # an npm alias, so anything but exact semver ("evil/repo", a git URL)
+          # could make the pack below clone and run a prepare script in a step
+          # holding a GPR credential. =~ matches the whole string, newlines too.
+          PLATFORM_PKG_VERSION="$PACKED_VERSION"
+          if [[ ! "$PLATFORM_PKG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9._-]+)*$ ]]; then
+            echo "::error::$PACKED_NAME resolved to version '$PLATFORM_PKG_VERSION', which is not an exact version."
+            echo "The slicer only ever publishes exact semver. A dist-tag, a range, or a"
+            echo "git/file/https/github/npm alias is refused rather than resolved."
+            exit 1
+          fi
+          PLATFORM_SPEC="$PLATFORM_PKG@$PLATFORM_PKG_VERSION"
+          echo "$PACKED_NAME@$PACKED_VERSION ships no prebuilds/ (split addon) — resolving $PLATFORM_SPEC from $REGISTRY_DESC..."
+          if ! (cd "$PACK_DIR" && npm pack "$PLATFORM_SPEC" --ignore-scripts --pack-destination "$PLATFORM_DIR"); then
+            echo "::error::Failed to download $PLATFORM_SPEC from $REGISTRY_DESC."
+            echo "The meta package declares it at that exact version, so the usual cause is a"
+            echo "publish that shipped the meta package without its slices."
+            exit 1
+          fi
+          tar -xzf "$PLATFORM_DIR"/*.tgz -C "$PLATFORM_DIR"
+          # Same provenance rule as the meta package: an exact spec cannot
+          # legitimately resolve elsewhere.
+          PLATFORM_MANIFEST="$PLATFORM_DIR/package/package.json"
+          PLATFORM_PACKED_NAME=$(node -p "require('$PLATFORM_MANIFEST').name" 2>/dev/null || echo "unknown")
+          PLATFORM_PACKED_VERSION=$(node -p "require('$PLATFORM_MANIFEST').version" 2>/dev/null || echo "unknown")
+          if [ "$PLATFORM_PACKED_NAME" != "$PLATFORM_PKG" ] || [ "$PLATFORM_PACKED_VERSION" != "$PLATFORM_PKG_VERSION" ]; then
+            echo "::error::$PLATFORM_SPEC resolved to $PLATFORM_PACKED_NAME@$PLATFORM_PACKED_VERSION."
+            echo "Refusing to put binaries from a different build on the device."
+            exit 1
+          fi
+          # Slice layout puts prebuilds under addon/prebuilds/<host>, one level
+          # deeper than the meta package's own prebuilds/.
+          if [ ! -d "$PLATFORM_DIR/package/addon/prebuilds" ] || [ -z "$(ls -A "$PLATFORM_DIR/package/addon/prebuilds" 2>/dev/null)" ]; then
+            echo "::error::$PLATFORM_SPEC contains no addon/prebuilds — nothing to install."
+            exit 1
+          fi
+          mv "$PLATFORM_DIR/package/addon/prebuilds" ./prebuilds
+          echo "Verified: $PLATFORM prebuilds come from $PLATFORM_PACKED_NAME@$PLATFORM_PACKED_VERSION ($REGISTRY_DESC)"
+        else
+          mv "$META_DIR/package/prebuilds" ./prebuilds
+        fi
+        rm -rf "$PACK_DIR"
+        echo "Prebuilds downloaded from $REGISTRY_DESC:"
         ls -la prebuilds/
 
     - name: Verify and prepare prebuilds
