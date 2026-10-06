@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
-import { platform, execPath, versions } from 'node:process'
+import { execPath, versions } from 'node:process'
 import semver from 'semver'
 import {
   BarePackNotInstalledError,
@@ -23,10 +23,14 @@ export function isBarePackNodeSupported(version: string): boolean {
   return semver.satisfies(version, BARE_PACK_NODE_ENGINES)
 }
 
-// Under Bun, process.versions.node is Bun's emulated value and bare-pack runs
-// in the `node` from PATH, so only a real Node process can be checked here.
+// On Node, bare-pack is spawned with this process's execPath, so checking
+// process.versions.node checks the Node that will load the lexer. Under Bun,
+// process.versions.node is Bun's emulated value and bare-pack runs through its
+// shebang in the `node` from PATH, which cannot be checked here.
+const runsOnBun = versions['bun'] !== undefined
+
 function assertNodeCanRunBarePack(): void {
-  if (versions['bun'] !== undefined) return
+  if (runsOnBun) return
   if (isBarePackNodeSupported(versions.node)) return
   throw new BarePackNodeUnsupportedError(versions.node, BARE_PACK_NODE_ENGINES)
 }
@@ -74,9 +78,8 @@ export async function runBarePack(options: RunBarePackOptions): Promise<void> {
       entryPath
     ]
 
-    const isWindows = platform === 'win32'
-    const command = isWindows ? execPath : barePackBin
-    const spawnArgs = isWindows ? [barePackBin, ...args] : args
+    const command = runsOnBun ? barePackBin : execPath
+    const spawnArgs = runsOnBun ? args : [barePackBin, ...args]
 
     logger.debug(`\n📦 Running: ${command} ${spawnArgs.join(' ')}`)
 
