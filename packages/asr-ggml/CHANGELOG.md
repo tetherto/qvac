@@ -16,6 +16,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- `assessFit` supports `engine: 'moss-transcribe'` with an explicit audio duration and the existing prompt, hotword and token options. It projects weights, encoder/decoder graphs, KV cache and host memory without loading model weights.
+
 - MOSS-Transcribe-Diarize engine (`engine: 'moss-transcribe'`, OpenMOSS
   MOSS-Transcribe-Diarize): one pass over a whole recording returns
   timestamped segments with the speaker label (`speaker: 'S01'`) and a 0-based
