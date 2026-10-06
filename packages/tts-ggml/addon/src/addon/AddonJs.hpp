@@ -3,6 +3,7 @@
 #include <any>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -24,6 +25,7 @@
 #include <tts-cpp/chatterbox/fit.h>
 #include <tts-cpp/cosyvoice/fit.h>
 #include <tts-cpp/log.h>
+#include <tts-cpp/moss/sound_effect_fit.h>
 #include <tts-cpp/parler/fit.h>
 #include <tts-cpp/supertonic/fit.h>
 
@@ -694,8 +696,32 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   case EngineType::Moss:
     // speech-cpp ships a fitter for every voice but MOSS.
     return unsupportedEngineResult(env, "moss");
-  case EngineType::MossSoundEffect:
-    return unsupportedEngineResult(env, "moss-sfx");
+  case EngineType::MossSoundEffect: {
+    const auto cfg = adapter.buildMossSoundEffectConfig(request, env);
+    MossSoundEffectModel::validateFitConfig(cfg);
+    auto options = MossSoundEffectModel::toEngineOptions(cfg);
+    options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
+    MossSoundEffectModel::AnyInput input;
+    input.text = text("prompt");
+    input.call = adapter.readMossSoundEffectCall(request, env);
+    if (input.text.empty() || !input.call.seconds.has_value()) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "assessFit: prompt and seconds are required for MOSS-SoundEffect");
+    }
+    constexpr uint64_t fitMarginBytes = 256ull * 1024 * 1024;
+    uint64_t marginBytes = fitMarginBytes;
+    if (const auto value = number("marginBytes")) {
+      marginBytes =
+          *value >= static_cast<double>(std::numeric_limits<uint64_t>::max())
+              ? std::numeric_limits<uint64_t>::max()
+              : static_cast<uint64_t>(*value);
+    }
+    return fitResultToJs(
+        env,
+        tts_cpp::moss::fit_params(
+            options, MossSoundEffectModel::toRequest(cfg, input), marginBytes));
+  }
   case EngineType::MossSpeech:
     return unsupportedEngineResult(env, "moss-speech");
   }
