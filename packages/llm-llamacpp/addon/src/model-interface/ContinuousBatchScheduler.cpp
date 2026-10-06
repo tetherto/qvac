@@ -550,10 +550,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       try {
         if (driver->onFailure({})) {
           std::vector<llama_token> words = driver->residentStateTokens();
-          // Never park a ledger whose totals disagree with its header: a
-          // later write would replace the file with one that cannot load.
-          (void)cache::deserialize(words.data(), words.size());
           if (!words.empty()) {
+            // Never park a ledger whose totals disagree with its header: a
+            // later write would replace the file with one that cannot load.
+            (void)cache::deserialize(words.data(), words.size());
             parked_[seqId] = ParkedState{
                 .cacheKey = key,
                 .ledgerWords = std::move(words),
@@ -1996,7 +1996,8 @@ void ContinuousBatchScheduler::failSaveJobsLocked() noexcept {
                   ADDON_ID,
                   qvac_errors::general_error::toString(
                       qvac_errors::general_error::InvalidArgument),
-                  "saveCache: the model was unloaded before the save ran")));
+                  std::string(job->discard ? "discardCache" : "saveCache") +
+                      ": the model was unloaded before it ran")));
     } catch (...) {
     }
   }
