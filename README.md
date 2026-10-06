@@ -310,6 +310,19 @@ Explore and use QVAC:
 | [**Research**](https://huggingface.co/qvac) | Papers, datasets, and models optimized for edge devices. |
 | [**Our vision**](https://docs.qvac.tether.io/about/vision/) | Learn why Tether built QVAC. |
 
+## Patch release CI
+
+This historical release branch has a pnpm workspace scoped to `packages/translation-nmtcpp`.
+The publishing workflow reads that package's `project.json` to select its build and test jobs.
+Use Node.js 24 and the pnpm version pinned in the root `package.json`:
+
+```sh
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run test:ci
+```
+
+Package build and test commands remain documented in the [package README](packages/translation-nmtcpp/README.md).
+
 ## Contributing
 
 We welcome contributions! Feel free to open a pull request, report bugs, or share ideas through issues.

@@ -1091,6 +1091,13 @@ npm run test:all           # Run both JavaScript and C++ tests
 - **IndicTrans2 Model** – Pretrained multilingual translation models. [AI4Bharat/IndicTrans2](https://github.com/AI4Bharat/IndicTrans2)
 - **Translation App Example** – QVAC-based translation application. [qvac-examples/translation-app](https://github.com/tetherto/qvac-examples/tree/main/translation-app)
 
+## Patch release CI
+
+The root pnpm workspace on this release branch includes only this package.
+Run `pnpm install --frozen-lockfile --ignore-scripts` and `pnpm run test:ci`
+from the repository root to validate the publishing metadata. See the
+[root README](../../README.md#patch-release-ci) for the required tooling.
+
 ## Contributing
 
 We welcome contributions! Here's how to get started:

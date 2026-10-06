@@ -1,0 +1,12 @@
+{
+  "name": "qvac",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "test:ci": "node --test scripts/ci/release-publishing.test.cjs"
+  },
+  "devDependencies": {
+    "nx": "23.1.0"
+  }
+}
