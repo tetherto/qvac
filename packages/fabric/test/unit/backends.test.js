@@ -110,6 +110,30 @@ test('resolveBackendsDir consults Bare for the local runtime and the platform pa
   assert.equal(exports.resolveBackendsDir(), '/n/@qvac/fabric-darwin-arm64/addon/prebuilds')
 })
 
+test('the published backends loader uses the platform package without probing locally', () => {
+  let localResolutions = 0
+  const { exports } = evaluate('backends-published.js', () => {
+    const fakeRequire = (specifier) => {
+      throw new Error(`unexpected require(${specifier})`)
+    }
+    fakeRequire.resolve = (specifier) => {
+      if (specifier === '@qvac/fabric-darwin-arm64/package') return '/n/@qvac/fabric-darwin-arm64/package.json'
+      throw new Error('MODULE_NOT_FOUND')
+    }
+    fakeRequire.addon = () => notCalled()
+    fakeRequire.addon.host = 'darwin-arm64'
+    fakeRequire.addon.resolve = () => {
+      localResolutions += 1
+      return '/n/@qvac/fabric/prebuilds/darwin-arm64/qvac__fabric.bare'
+    }
+    return fakeRequire
+  })
+
+  assert.deepEqual(exports.PREBUILT_HOSTS, PREBUILT_HOSTS)
+  assert.equal(exports.resolveBackendsDir(), '/n/@qvac/fabric-darwin-arm64/addon/prebuilds')
+  assert.equal(localResolutions, 0)
+})
+
 function notCalled () {
   throw new Error('should not have been reached')
 }

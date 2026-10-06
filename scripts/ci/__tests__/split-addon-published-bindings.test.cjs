@@ -18,7 +18,9 @@ function makeFixture(t, manifest, sourceDir, hosts) {
   fs.mkdirSync(prebuilds, { recursive: true })
   fs.writeFileSync(path.join(workdir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
 
-  for (const name of ['binding.js', 'binding-published.js']) {
+  const files = ['binding.js', 'binding-published.js']
+  if (manifest.name === '@qvac/fabric') files.push('backends.js', 'backends-published.js')
+  for (const name of files) {
     fs.copyFileSync(path.join(sourceDir, name), path.join(workdir, name))
   }
   for (const host of hosts) {
@@ -40,23 +42,26 @@ function packedFiles(workdir) {
   return JSON.parse(result.stdout)[0].files.map((file) => file.path)
 }
 
-test('release slicing selects both published addon loaders', async (t) => {
+test('release slicing selects published addon modules', async (t) => {
   const { slicePlatformPackages, SLICE_DEFINITIONS } = await slicerPromise
   const hosts = SLICE_DEFINITIONS.flatMap((definition) => definition.hosts)
 
-  for (const name of ['audiogen-ggml', 'tts-ggml']) {
+  for (const name of ['audiogen-ggml', 'tts-ggml', 'fabric']) {
     const sourceDir = path.join(repoRoot, 'packages', name)
     const manifest = require(path.join(sourceDir, 'package.json'))
     const { workdir, outDir } = makeFixture(t, manifest, sourceDir, hosts)
-    const publishedBinding = fs.readFileSync(path.join(sourceDir, 'binding-published.js'), 'utf8')
+    const modules = name === 'fabric' ? ['binding', 'backends'] : ['binding']
 
     slicePlatformPackages({ workdir, outDir })
 
     assert.equal(fs.existsSync(path.join(workdir, 'prebuilds')), false)
-    assert.equal(fs.readFileSync(path.join(workdir, 'binding.js'), 'utf8'), publishedBinding)
+    for (const module of modules) {
+      const published = fs.readFileSync(path.join(sourceDir, module + '-published.js'), 'utf8')
+      assert.equal(fs.readFileSync(path.join(workdir, module + '.js'), 'utf8'), published)
+    }
     assert.deepEqual(
-      packedFiles(workdir).filter((file) => file.includes('binding')),
-      ['binding.js']
+      packedFiles(workdir).filter((file) => modules.some((module) => file.includes(module))).sort(),
+      modules.map((module) => module + '.js').sort()
     )
   }
 })

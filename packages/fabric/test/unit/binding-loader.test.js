@@ -4,9 +4,9 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { evaluate } = require('./helpers')
 
-function loadBinding ({ addon, hostAddon }) {
+function loadBinding ({ addon, hostAddon, published = false }) {
   const calls = { hostAddon: 0 }
-  const { exports } = evaluate('binding.js', (module_) => {
+  const { exports } = evaluate(published ? 'binding-published.js' : 'binding.js', (module_) => {
     const fakeRequire = (specifier) => {
       if (specifier !== '#host-addon') {
         throw new Error(`unexpected require(${JSON.stringify(specifier)})`)
@@ -114,5 +114,23 @@ test('a non-object from the platform package is reported, never exported', () =>
       assert.match(err.cause.message, /no prebuild in this package/)
       return true
     }
+  )
+})
+
+test('the published binding loads the platform package without probing locally', () => {
+  const { exports, calls } = loadBinding({
+    published: true,
+    addon: notCalled,
+    hostAddon: () => nativeRuntime('platform-package')
+  })
+
+  assert.equal(exports.tag, 'platform-package')
+  assert.equal(calls.hostAddon, 1)
+})
+
+test('the published binding rejects a non-runtime platform package', () => {
+  assert.throws(
+    () => loadBinding({ published: true, addon: notCalled, hostAddon: () => null }),
+    /not the native runtime/
   )
 })

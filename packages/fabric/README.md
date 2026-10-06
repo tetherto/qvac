@@ -48,9 +48,10 @@ filtered `optionalDependencies`:
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
 the platform package and fail at require time with an error naming the missing
-package; a runtime in the package's own `prebuilds/<host>` (source builds,
-fabric 0.17 and earlier) always takes precedence. Consumer addons locate the
-runtime with the CMake template and the ggml backends with
+package. Source builds and fabric 0.17 and earlier still prefer a local runtime
+in `prebuilds/<host>`; release-sliced meta packages use the platform package
+directly. Consumer addons locate the runtime with the CMake template and the
+ggml backends with
 `require('@qvac/fabric/backends').resolveBackendsDir()`; see
 [INTEGRATION.md](./INTEGRATION.md).
 
