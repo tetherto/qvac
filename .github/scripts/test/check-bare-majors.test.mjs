@@ -34,7 +34,7 @@ test('only dependencies and devDependencies of bare packages are collected', () 
   const rows = bareDeps({
     dependencies: { 'bare-signals': '^4.2.0', zod: '^4.0.0' },
     devDependencies: { 'bare-module': '^6.2.0' },
-    peerDependencies: { 'bare-link': '>=3.0.0' },
+    peerDependencies: { 'bare-peer': '>=3.0.0' },
     optionalDependencies: { 'bare-fs': '^4.0.0' },
   })
   assert.deepEqual(rows, [

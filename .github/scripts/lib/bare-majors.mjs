@@ -1,9 +1,9 @@
 /**
- * Decide whether a package.json direct dependency is still pinned to an older
- * major of `bare` or a `bare-*` module.
+ * Decide whether a package.json dependency is still pinned to an older major
+ * of `bare` or a `bare-*` module.
  *
- * Only `dependencies` and `devDependencies` count. Optional peers such as
- * `bare-link` are not installed with the package and are out of scope.
+ * Only `dependencies` and `devDependencies` count. Peer and optional
+ * dependencies are out of scope.
  */
 
 'use strict'
