@@ -69,8 +69,8 @@ runs:
         echo "prefix=/opt/rocm" >> "$GITHUB_OUTPUT"
 
     # Restore on every trigger (including fork PRs). Cache writes from fork-PR
-    # code are the poisoning risk .cursor/rules/devops/github-actions.mdc
-    # § Caching guards against — save is a separate step below.
+    # code are the poisoning risk described by .github/AGENTS.md — save is a
+    # separate step below.
     - name: Restore ROCm SDK cache (TheRock dist)
       if: steps.preinstalled.outputs.hit != 'true'
       id: cache-rocm

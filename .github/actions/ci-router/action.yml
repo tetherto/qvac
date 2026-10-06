@@ -24,14 +24,10 @@ outputs:
   # device(s), optional test filter). The on-pr callers' standalone mobile lanes
   # no longer auto-run on PRs, so the `run-mobile-addon-tests` label no longer
   # launches those Device Farm runs (the label + flag are kept for a future
-  # re-enable; do not rely on the label). This flag is STILL used to gate the
-  # on-device (Device Farm) co-load smoke, so it is intentionally left wired.
+  # re-enable; do not rely on the label).
   run_mobile:
-    description: 'Gates the on-device co-load smoke (run-mobile-addon-tests label). Standalone per-addon mobile suites are dispatch-only and no longer auto-run on PRs.'
+    description: 'Kept for a future re-enable (run-mobile-addon-tests label). Standalone per-addon mobile suites are dispatch-only and no longer auto-run on PRs.'
     value: ${{ steps.route.outputs.run_mobile }}
-  run_coload:
-    description: 'Run the multi-addon co-load smoke (run-coload-tests label). Desktop co-load runs on this flag alone; the on-device (Device Farm) co-load additionally requires run_mobile.'
-    value: ${{ steps.route.outputs.run_coload }}
 
 runs:
   using: composite
@@ -50,7 +46,7 @@ runs:
            [ "$EVENT_NAME" = "push" ] || \
            [ "$EVENT_NAME" = "schedule" ]; then
           echo "Trusted event ($EVENT_NAME) — enabling all CI stages"
-          for out in run_verified_checks run_prebuilds run_cpp_tests run_desktop run_mobile run_coload; do
+          for out in run_verified_checks run_prebuilds run_cpp_tests run_desktop run_mobile; do
             echo "$out=true" >> "$GITHUB_OUTPUT"
           done
           exit 0
@@ -59,7 +55,6 @@ runs:
         HAS_CPP=false
         HAS_DESKTOP=false
         HAS_MOBILE=false
-        HAS_COLOAD=false
         if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
           for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
             case "$label" in
@@ -67,7 +62,6 @@ runs:
               run-cpp-addon-tests)      HAS_CPP=true ;;
               run-desktop-addon-tests)  HAS_DESKTOP=true ;;
               run-mobile-addon-tests)   HAS_MOBILE=true ;;
-              run-coload-tests)         HAS_COLOAD=true ;;
             esac
           done
         fi
@@ -77,7 +71,6 @@ runs:
         CPP_TESTS=false
         DESKTOP=false
         MOBILE=false
-        COLOAD=false
 
         # Routing is deliberately NOT a trust decision — it only selects which
         # stages a PR is eligible for. Fork and same-repo PRs route identically
@@ -96,13 +89,11 @@ runs:
           [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
           [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
           [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
-          [ "$HAS_COLOAD" = "true" ]   && { COLOAD=true; PREBUILDS=true; }
           [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
         fi
-        echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE coload=$COLOAD"
+        echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
         echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
         echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
         echo "run_cpp_tests=$CPP_TESTS" >> "$GITHUB_OUTPUT"
         echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
         echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"
-        echo "run_coload=$COLOAD" >> "$GITHUB_OUTPUT"
