@@ -314,7 +314,7 @@ importers:
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -739,7 +739,7 @@ importers:
   packages/embed-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -857,7 +857,7 @@ importers:
   packages/ggml-rpc-server:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       bare-net:
         specifier: ^2.3.2
@@ -1152,7 +1152,7 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -1262,7 +1262,7 @@ importers:
   packages/model-fit:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       bare-fs:
         specifier: ^4.5.1
@@ -1332,7 +1332,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -2020,7 +2020,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -2190,7 +2190,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
