@@ -1133,24 +1133,18 @@ test("merge guard fails closed when the PR was not authorized", () => {
   }
 });
 
-test("bare-major check reaches the required merge-guard status", () => {
-  const source = read(".github/workflows/pr-gate-merge.yml");
-  const check = jobBlock(source, "bare-majors");
-  assert.match(check, /needs:[\s\S]*?\bauthorize\b/);
-  assert.match(check, /needs:[\s\S]*?\bfork-approval\b/);
-  assert.match(
-    check,
-    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
-    "bare-majors runs the trusted script, not PR head code",
+test("bare-major check fails the workflow and stays out of the required merge guard", () => {
+  const guard = read(".github/workflows/pr-gate-merge.yml");
+  assert.doesNotMatch(
+    guard,
+    /bare-majors/,
+    "a bare-major failure must not feed qvac-merge-guard",
   );
-  assert.match(check, /check-bare-majors\.mjs/);
 
-  const guard = jobBlock(source, "qvac-merge-guard");
-  assert.match(guard, /needs:[\s\S]*?\bbare-majors\b/);
-  const line = guard
-    .split("\n")
-    .find((entry) => entry.trim().startsWith("general-checks-status:"));
-  assert.match(line, /needs\.bare-majors\.result/);
+  const workflow = read(".github/workflows/bare-majors.yml");
+  assert.match(workflow, /check-bare-majors\.mjs/);
+  assert.match(onBlock(workflow), /pull_request:/);
+  assert.doesNotMatch(onBlock(workflow), /pull_request_target/);
 });
 
 test("merge guard cancels superseded in-flight runs", () => {

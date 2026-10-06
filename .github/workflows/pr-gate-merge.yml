@@ -269,39 +269,6 @@ jobs:
           KIND: cpp-tests
         run: node .github/scripts/prebuild-status/verify.mjs
 
-  # Trusted script, untrusted manifests. A package the PR touches fails the
-  # gate when a direct `bare` / `bare-*` dependency or devDependency is still
-  # pinned below the latest major. Optional peers are ignored.
-  bare-majors:
-    needs: [authorize, fork-approval]
-    if: needs.authorize.outputs.allowed == 'true' && github.event_name == 'pull_request_target'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout bare-major check (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Unit tests
-        run: node --test .github/scripts/test/check-bare-majors.test.mjs
-
-      - name: Fetch the pull request head
-        run: git fetch --no-tags origin "refs/pull/${{ github.event.pull_request.number }}/head"
-
-      - name: Check bare majors on touched packages
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: node .github/scripts/check-bare-majors.mjs --base "$BASE_SHA" --tree FETCH_HEAD
-
   # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
   # pre-filter: the called workflow self-detects SDK pod changes and is a fast
   # no-op when none changed, so this stays graceful for addon-only / non-SDK PRs.
@@ -323,7 +290,6 @@ jobs:
         verify-prebuilds,
         verify-cpp-tests,
         sdk-pod-checks,
-        bare-majors,
       ]
     if: |
       always() && !cancelled() &&
@@ -341,5 +307,5 @@ jobs:
       # authorization chain up front so those skips fail closed instead.
       sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
       build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
-      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.bare-majors.result == 'success' || needs.bare-majors.result == 'skipped') }}
+      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
       cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}

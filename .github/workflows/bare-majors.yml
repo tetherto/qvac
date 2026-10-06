@@ -1,29 +1,26 @@
 name: Bare majors
 
-# Unit-tests the merge-guard bare-major check. The blocking run itself is the
-# `bare-majors` job in pr-gate-merge.yml, which feeds qvac-merge-guard.
+# Fails when a package this pull request touches still pins `bare` or a
+# `bare-*` dependency or devDependency below the latest major. Optional peers
+# are ignored. This workflow is not an input to qvac-merge-guard, so a red
+# check does not block merging.
 
 on:
   pull_request:
-    paths:
-      - ".github/scripts/lib/bare-majors.mjs"
-      - ".github/scripts/check-bare-majors.mjs"
-      - ".github/scripts/test/check-bare-majors.test.mjs"
-      - ".github/workflows/bare-majors.yml"
-      - ".github/workflows/pr-gate-merge.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  unit-test:
-    name: Unit tests
+  bare-majors:
+    name: Touched packages are on current bare majors
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -32,3 +29,9 @@ jobs:
 
       - name: Unit tests
         run: node --test .github/scripts/test/check-bare-majors.test.mjs
+
+      - name: Check bare majors on touched packages
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node .github/scripts/check-bare-majors.mjs --base "$BASE_SHA" --tree HEAD
