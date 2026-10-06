@@ -11,6 +11,7 @@ const handwrittenPaths = [
   'addon-unavailable.js',
   'benchmarks/',
   'binding.js',
+  'binding-published.js',
   'build/',
   'examples/',
   'node_modules/',
