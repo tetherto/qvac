@@ -199,6 +199,17 @@ resources.define('doctr', {
   type: 'ggml-ocr'
 })
 
+resources.define('ocr-main-gpu', {
+  constant: OCR_LATIN,
+  type: 'ggml-ocr',
+  config: {
+    langList: ['en'],
+    detectorModelSrc: OCR_CRAFT,
+    backendDevice: process.platform === 'darwin' ? 'metal' : 'vulkan',
+    mainGpu: 0
+  }
+})
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
 // so no registry constant / pre-download is required.
 resources.define('classification', {

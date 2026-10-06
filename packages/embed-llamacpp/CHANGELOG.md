@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
+  and `mlock` keep working with qvac-fabric 11018, which no longer accepts
+  them. The addon maps them to `load-mode` for both loads and `assessFit`.
+
 ## [0.43.1] - 2026-09-30
 
 ### Changed
