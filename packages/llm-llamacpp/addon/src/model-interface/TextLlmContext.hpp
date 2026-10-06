@@ -16,6 +16,7 @@
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
 #include "SpeculativeRuntime.hpp"
+#include "SpeculativeSequence.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
 
@@ -104,6 +105,10 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
   getSpeculative() const override {
     return modelCtx_.speculative;
+  }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeStats
+  speculativeStats() const override {
+    return spec_.stats();
   }
 
   /**
@@ -336,6 +341,23 @@ private:
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch);
+  /// Streams a token the sampler already accepted and applies the stop
+  /// conditions; the part of `sampleFromLogits` after sampling, shared with
+  /// speculative verification, which samples several tokens at once.
+  SequenceStepResult emitSampledToken(
+      llama_token tokenId, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch);
+  /// Single-prompt generation loop with speculative decoding: llama-server's
+  /// draft / verify / accept cycle on top of the same per-token streaming and
+  /// stop handling as the plain loop. Sets `generationStopReason_` like the
+  /// plain loop and leaves cancels and the prediction budget to the caller.
+  void generateSpeculative(
+      const std::function<void(const std::string&)>& outputCallback,
+      unsigned& generatedAfterAccept);
+  /// Feeds a decoded target batch to the speculative state; throws when the
+  /// draft context fails to decode it.
+  void processSpeculativeBatch(const llama_batch& batch);
 
   common_init_result_ptr llamaInit_;
   /// Owned speculative state of the single-prompt context; declared after
@@ -375,6 +397,10 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  /// Speculative draft / verify state of this sequence; disabled when the
+  /// model has no speculative runtime.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeSequence spec_;
 
   // Reasoning channel detection state (Qwen3 / Gemma 4 / ...). Empty
   // tags when the active model has no recognised channel.

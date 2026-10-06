@@ -48,6 +48,25 @@ using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 
+namespace {
+
+// llama-server's `draft_n` / `draft_n_accepted` timings, reported only when
+// the model decodes speculatively.
+void appendSpeculativeStats(
+    qvac_lib_inference_addon_cpp::RuntimeStats& stats, bool enabled,
+    const qvac_lib_inference_addon_llama::speculative::SpeculativeStats&
+        speculative) {
+  if (!enabled) {
+    return;
+  }
+  stats.emplace_back(
+      "draftTokens", static_cast<int64_t>(speculative.draftTokens));
+  stats.emplace_back(
+      "draftAcceptedTokens", static_cast<int64_t>(speculative.draftAccepted));
+}
+
+} // namespace
+
 void LlamaModel::resolveShardPaths(
     GGUFShards& shards, const std::string& modelPath) {
   if (shards.gguf_files.empty())
@@ -1658,7 +1677,7 @@ LlamaModel::singleRuntimeStatsLocked() const {
                              static_cast<double>(promptTokenCount)
                        : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
-  return {
+  qvac_lib_inference_addon_cpp::RuntimeStats stats{
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"ppTPS", promptProcessingTPS},
@@ -1689,6 +1708,12 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
+  appendSpeculativeStats(
+      stats,
+      state_->llmContext_->getSpeculative() != nullptr,
+      wasPrefill ? qvac_lib_inference_addon_llama::speculative::SpeculativeStats{}
+                 : state_->llmContext_->speculativeStats());
+  return stats;
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)

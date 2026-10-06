@@ -16,6 +16,7 @@
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
 #include "SpeculativeRuntime.hpp"
+#include "SpeculativeSequence.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Positional span paired with the KV-cell count it occupies. The two diverge
@@ -123,6 +124,10 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
   getSpeculative() const override {
     return modelCtx_.speculative;
+  }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeStats
+  speculativeStats() const override {
+    return spec_.stats();
   }
 
   /**
@@ -395,6 +400,22 @@ private:
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch);
+  /// The part of `sampleFromLogits` after sampling; see
+  /// `TextLlmContext::emitSampledToken`.
+  SequenceStepResult emitSampledToken(
+      llama_token tokenId, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch);
+  /// Single-prompt speculative generation loop; see
+  /// `TextLlmContext::generateSpeculative`. `nRemain` follows the plain
+  /// loop's prediction budget.
+  void generateSpeculative(
+      const std::function<void(const std::string&)>& outputCallback,
+      int& nRemain);
+  /// See `TextLlmContext::processSpeculativeBatch`.
+  void processSpeculativeBatch(const llama_batch& batch);
+  /// Advances both cursors over one decoded text token.
+  void advanceDecodedTextToken(llama_token token);
 
   // Cancel-during-generation cleanup. On recurrent / hybrid memory, restores
   // the request-entry snapshot; pure-attention memory removes the decoded
@@ -461,6 +482,10 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  /// Speculative draft / verify state of this sequence; disabled when the
+  /// model has no speculative runtime.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeSequence spec_;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

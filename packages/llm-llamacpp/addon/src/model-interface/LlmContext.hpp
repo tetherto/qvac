@@ -12,6 +12,7 @@
 #include "CacheLedger.hpp"
 #include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
+#include "SpeculativeSequence.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
@@ -390,6 +391,16 @@ public:
    */
   [[nodiscard]] virtual int32_t lastGeneratedTokenCount() const {
     return lastGeneratedTokenCount_;
+  }
+
+  /**
+   * Speculative-decoding counters of the most recent generation; empty when
+   * speculative decoding is off.
+   */
+  [[nodiscard]] virtual qvac_lib_inference_addon_llama::speculative::
+      SpeculativeStats
+      speculativeStats() const {
+    return {};
   }
 
   /**
