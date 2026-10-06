@@ -210,6 +210,15 @@ function removeEmptiedPrebuildsDir (prebuildsDir, keepDirs) {
   if (keepDirs.length === 0) fs.rmdirSync(prebuildsDir)
 }
 
+function selectPublishedBinding (workdir) {
+  const published = path.join(workdir, 'binding-published.js')
+  if (!fs.existsSync(published)) return
+
+  const binding = path.join(workdir, 'binding.js')
+  if (!fs.existsSync(binding)) throw new Error('No binding.js to replace in ' + workdir)
+  fs.copyFileSync(published, binding)
+}
+
 function directorySizeBytes (dir) {
   let total = 0
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -245,6 +254,7 @@ export function slicePlatformPackages (options) {
   const sliceDirs = stageAllSlices(context, maxSliceMb, log)
 
   removeEmptiedPrebuildsDir(prebuildsDir, keepDirs)
+  selectPublishedBinding(workdir)
   metaManifest.optionalDependencies = buildOptionalDependencies(metaManifest, SLICE_DEFINITIONS)
   writeManifest(metaManifestPath, metaManifest)
   log(
