@@ -62,7 +62,7 @@
     "example:moss-sfx": "bare examples/moss-sound-effect.js \"Heavy rain falling on a tin roof with distant thunder.\" 5",
     "example:moss-speech": "bare examples/moss-speech.js test/reference-audio/jfk.wav",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\"",
+    "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"binding-published.js\" \"addon-unavailable.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"binding-published.js\" \"addon-unavailable.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\"",

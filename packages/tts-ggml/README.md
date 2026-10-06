@@ -150,8 +150,9 @@ package selected at install time through `os`/`cpu` filtered
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
 the platform package and fail at require time with an error naming the missing
-package; a locally built `prebuilds/` directory in the package root always
-takes precedence. Use `require('@qvac/tts-ggml').resolveBackendsDir()` to
+package. A locally built `prebuilds/` directory takes precedence in a source
+checkout; release-sliced npm meta-packages load the platform package directly.
+Use `require('@qvac/tts-ggml').resolveBackendsDir()` to
 locate the directory holding the host's prebuilt binaries and dynamically
 loaded ggml backends. Unsupported targets must
 [build from source](#build-from-source); installation does not automatically
