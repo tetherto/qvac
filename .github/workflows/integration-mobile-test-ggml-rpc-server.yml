@@ -26,6 +26,16 @@ on:
         type: string
         required: false
         default: ""
+      android_devices:
+        description: "Comma-separated Device Farm models the Android leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
+        type: string
+        required: false
+        default: ""
+      ios_devices:
+        description: "Comma-separated Device Farm models the iOS leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       platform:
@@ -42,6 +52,7 @@ on:
           - Google Pixel 9
           - Google Pixel 8
           - Samsung Galaxy S25 Ultra
+          - Samsung Galaxy S26 Ultra
         default: Google Pixel 9
       ios_device:
         description: iOS device used by a manual run
@@ -49,6 +60,7 @@ on:
         required: false
         options:
           - Apple iPhone 17
+          - Apple iPhone 17 Pro
           - Apple iPhone 16 Pro
           - Apple iPhone 15
         default: Apple iPhone 16 Pro
@@ -205,7 +217,7 @@ jobs:
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
         with:
-          # Dispatch-only, like prebuild_run_id: empty under workflow_call.
+          # Empty keeps the published @qvac/fabric runtime.
           fabric-prebuild-run-id: ${{ inputs.fabric_prebuild_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           platform: ${{ matrix.platform }}
@@ -241,8 +253,8 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
-          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'single-pool' }}
-          device-models: ${{ inputs.platform == 'Android' && inputs.android_device || (inputs.platform == 'iOS' && inputs.ios_device || '') }}
+          scheduling-mode: ${{ (inputs.platform != '' || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '') && 'manual-devices' || 'single-pool' }}
+          device-models: ${{ inputs.platform == 'Android' && inputs.android_device || (inputs.platform == 'iOS' && inputs.ios_device || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || ''))) }}
           device-model-operator: EQUALS
 
       - name: Monitor Device Farm test run
