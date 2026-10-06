@@ -10,6 +10,9 @@ const MODEL = {
   url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf'
 }
 
+// Every load names a device, so every projection of one does too.
+const GPU = { device: 'gpu' }
+
 async function modelPath() {
   const [name, dir] = await ensureModel({
     modelName: MODEL.name,
@@ -18,10 +21,14 @@ async function modelPath() {
   return path.join(dir, name)
 }
 
+function assess(modelPath, config = {}, rest = {}) {
+  return LlmLlamacpp.assessFit({ modelPath, config: { ...GPU, ...config }, ...rest })
+}
+
 // The figures depend on what the runner has free, so the assertions are the
 // relationships that hold on any machine.
 test('a projection is internally consistent', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({ modelPath: await modelPath() })
+  const fit = assess(await modelPath())
 
   t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
   t.ok(fit.devices.length > 0, 'at least the host row')
@@ -34,7 +41,7 @@ test('a projection is internally consistent', { timeout: 600_000 }, async (t) =>
 })
 
 test('a fitting projection resolves a usable context', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({ modelPath: await modelPath() })
+  const fit = assess(await modelPath())
 
   t.comment(`status=${fit.status} ctxSize=${fit.ctxSize} gpuLayers=${fit.gpuLayers}`)
   if (fit.status !== 'fits') {
@@ -47,32 +54,19 @@ test('a fitting projection resolves a usable context', { timeout: 600_000 }, asy
 })
 
 test('a pinned layer count survives into the projection', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'gpu-layers': '0' }
-  })
+  const fit = assess(await modelPath(), { 'gpu-layers': '0' })
 
   t.is(fit.gpuLayers, 0, 'the fitter rewrites defaults, not a value the load pinned')
 })
 
-test('a host-only placement offloads nothing', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { device: 'none' }
-  })
+test('a pinned context survives into the projection', { timeout: 600_000 }, async (t) => {
+  const fit = assess(await modelPath(), { 'ctx-size': '4096' })
 
-  t.comment(`status=${fit.status} gpuLayers=${fit.gpuLayers}`)
-  if (fit.status === 'error') {
-    t.pass('this runner could not project the model')
-    return
-  }
-  t.is(fit.gpuLayers, 0, 'no device in the placement, so no layer is offloaded')
-  t.is(fit.devices.at(-1).name, 'host', 'the host row is the only row')
-  t.is(fit.devices.length, 1, 'no device rows')
+  t.is(fit.ctxSize, 4096, 'the fitter reports the context the load asked for')
 })
 
 test('a full offload counts the output layer', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({ modelPath: await modelPath() })
+  const fit = assess(await modelPath())
 
   if (fit.status !== 'fits' || fit.devices.length <= 1) {
     t.pass('this runner placed nothing on a device')
@@ -85,10 +79,7 @@ test('a full offload counts the output layer', { timeout: 600_000 }, async (t) =
 })
 
 test('the context floor is honoured', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    minCtxSize: 4096
-  })
+  const fit = assess(await modelPath(), {}, { minCtxSize: 4096 })
 
   if (fit.status !== 'fits') {
     t.pass('the runner cannot hold this model at the floor')
@@ -98,49 +89,91 @@ test('the context floor is honoured', { timeout: 600_000 }, async (t) => {
 })
 
 test('a model that cannot be read is an outcome, not a throw', (t) => {
-  const fit = LlmLlamacpp.assessFit({ modelPath: '/nonexistent/model.gguf' })
+  const fit = assess('/nonexistent/model.gguf')
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'model-unreadable')
   t.alike(fit.devices, [])
 })
 
-test('an option that would end the process is refused', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'list-devices': '' }
-  })
+// A setting the engine accepts is a setting the projection accepts.
+const EVERY_SETTING = {
+  'ctx-size': '4096',
+  'gpu-layers': '8',
+  load_mode: 'mmap',
+  parallel: '2',
+  'batch-size': '256',
+  'ubatch-size': '128',
+  'cache-type-k': 'q8_0',
+  'cache-type-v': 'q8_0',
+  'main-gpu': 'dedicated',
+  'split-mode': 'layer',
+  'tensor-split': '1',
+  'flash-attn': 'auto',
+  'cpu-moe': '',
+  'n-cpu-moe': '1',
+  'n-cpu-ffn': '1',
+  'override-tensor': 'ffn_.*=CPU',
+  'prefetch-weights': 'auto',
+  'fit-ctx': '2048'
+}
 
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
-})
+test('every setting a load carries reaches the fitter', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
 
-test('a boolean value llama does not define is refused', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'no-kv-offload': 'garbage' }
-  })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
-})
-
-test('contradictory spellings of one option are refused', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'kv-offload': 'on', 'no-kv-offload': 'on' }
-  })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
+  for (const [key, value] of Object.entries(EVERY_SETTING)) {
+    const fit = assess(file, { [key]: value })
+    t.not(fit.reason, 'unsupported-config', `${key} is a shape the engine accepts`)
+  }
 })
 
 test('a context floor that is not a count is refused', { timeout: 600_000 }, async (t) => {
-  const fit = LlmLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    minCtxSize: -1
-  })
+  const fit = assess(await modelPath(), {}, { minCtxSize: -1 })
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-config')
+})
+
+test(
+  'a load the engine cannot parse is an outcome, not a throw',
+  { timeout: 600_000 },
+  async (t) => {
+    const fit = assess(await modelPath(), { 'ctx-size': 'not-a-number' })
+
+    t.is(fit.status, 'error')
+    t.is(fit.reason, 'unsupported-config')
+  }
+)
+
+test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
+  const fit = assess(await modelPath(), { device: 'cpu' })
+
+  t.is(fit.status, 'error')
+  t.is(fit.reason, 'unsupported-config')
+})
+
+// A margin is free memory the projection may not place into, so one that
+// reaches most of what the device has leaves no room to offload.
+test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
+  const base = assess(file)
+
+  if (base.status !== 'fits' || base.gpuLayers === 0) {
+    t.pass('this runner offloads nothing, so no margin can reduce the placement')
+    return
+  }
+
+  const free = base.devices
+    .filter((device) => device.name !== 'host')
+    .reduce((total, device) => total + device.freeBytes, 0)
+  const nearlyAll = free - 256 * 1024 * 1024
+  const nearlyAllMib = `${Math.floor(nearlyAll / (1024 * 1024))}`
+
+  t.is(assess(file, {}, { marginBytes: nearlyAll }).gpuLayers, 0, 'the caller margin binds')
+  t.is(assess(file, { 'fit-target': nearlyAllMib }).gpuLayers, 0, 'the load target binds')
+  t.is(
+    assess(file, { 'fit-target': nearlyAllMib }, { marginBytes: 0 }).gpuLayers,
+    0,
+    'a slack caller margin does not loosen the load target'
+  )
 })

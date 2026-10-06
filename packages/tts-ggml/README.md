@@ -706,7 +706,7 @@ published model set yet; supply your own to opt in.
 | Model | Sidecar next to the GGUF | Stage on Core ML | Runs on ggml instead | Force ggml |
 | --- | --- | --- | --- | --- |
 | Supertonic 1 / 2 / 3 | `<model>-vocoder.mlmodelc` | vocoder, in 64-latent-frame windows | GGUFs whose vocoder weights are stored below 8 bits (`q4_0`) | `SUPERTONIC_COREML_DISABLE=1` |
-| Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
+| Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows synthesised while the language model is still generating, so only the last one is left after it; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
 | Chatterbox, Parler, CosyVoice3, MOSS, MOSS-SoundEffect, MOSS-Speech, LavaSR | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
@@ -1186,7 +1186,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `voice` / `voiceName`     | string     | —          | Supertonic voice id (e.g. `'F1'`, `'M1'`); Parler template speaker name (e.g. `'Laura'`, `'Rohit'`) |
 | `voiceJsonPath`           | string     | —          | Supertonic-only: external voice JSON (`{ style_ttl, style_dp }`, e.g. a cloned voice) that overrides `voice`; the engine checks the tensor sizes against the model |
 | `prewarmText`             | string     | —          | Supertonic-only: text synthesized once at load so GPU pipelines compile, and a Core ML vocoder sidecar specializes, before the first `run()` (skipped on a plain CPU run); use a representative length. Wins over the `vulkanCacheDir` default pre-warm |
-| `vulkanDevice`            | number     | 0          | Supertonic / CosyVoice3 Vulkan adapter, also used by their LavaSR enhancer: `0` = first, `N` = the Nth, `-1` = auto-pick by free VRAM preferring a discrete GPU |
+| `vulkanDevice`            | number     | 0          | Supertonic / CosyVoice3 Vulkan adapter, also used by their LavaSR enhancer: `0` = first, `N` = the Nth, `-1` = auto-pick by free VRAM preferring a discrete GPU. Audio8 always auto-picks |
 | `flowCutPrompt`           | boolean    | `false`    | CosyVoice3-only: attention-only prompt frames in the flow — faster, with output that deviates slightly from the reference |
 | `steps` / `numInferenceSteps` | number | GGUF default | Supertonic vector-estimator CFM steps (`0` = GGUF default) |
 | `noiseNpyPath`            | string     | —          | Supertonic: optional fixed CFM noise `.npy` for reproducibility |

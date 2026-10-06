@@ -20,7 +20,7 @@ import {
   ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
 } from './text-to-speech'
-import { ocrConfigSchema } from './ocr'
+import { ocrConfigSchema, refineOcrMainGpuSelector } from './ocr'
 import {
   modelSrcInputSchema,
   modelInputToSrcSchema,
@@ -205,7 +205,11 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
     .object({
       ...loadModelCommonFields,
       modelType: ocrModelTypeSchema,
-      modelConfig: ocrConfigSchema.partial().strict().optional()
+      modelConfig: ocrConfigSchema
+        .partial()
+        .strict()
+        .superRefine(refineOcrMainGpuSelector)
+        .optional()
     })
     .strict(),
   z
@@ -413,7 +417,11 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
     .object({
       ...loadModelRequestCommonFields,
       modelType: ocrModelTypeSchema,
-      modelConfig: ocrConfigSchema.partial().strict().optional()
+      modelConfig: ocrConfigSchema
+        .partial()
+        .strict()
+        .superRefine(refineOcrMainGpuSelector)
+        .optional()
     })
     .strict()
     .transform((data) => ({
@@ -614,7 +622,7 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema
 export const loadOcrModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.ggmlOcr),
-    modelConfig: ocrConfigSchema
+    modelConfig: ocrConfigSchema.superRefine(refineOcrMainGpuSelector)
   })
   .strict()
 
