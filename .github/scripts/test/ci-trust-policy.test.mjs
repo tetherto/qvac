@@ -1133,6 +1133,26 @@ test("merge guard fails closed when the PR was not authorized", () => {
   }
 });
 
+test("bare-major check reaches the required merge-guard status", () => {
+  const source = read(".github/workflows/pr-gate-merge.yml");
+  const check = jobBlock(source, "bare-majors");
+  assert.match(check, /needs:[\s\S]*?\bauthorize\b/);
+  assert.match(check, /needs:[\s\S]*?\bfork-approval\b/);
+  assert.match(
+    check,
+    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
+    "bare-majors runs the trusted script, not PR head code",
+  );
+  assert.match(check, /check-bare-majors\.mjs/);
+
+  const guard = jobBlock(source, "qvac-merge-guard");
+  assert.match(guard, /needs:[\s\S]*?\bbare-majors\b/);
+  const line = guard
+    .split("\n")
+    .find((entry) => entry.trim().startsWith("general-checks-status:"));
+  assert.match(line, /needs\.bare-majors\.result/);
+});
+
 test("merge guard cancels superseded in-flight runs", () => {
   const source = read(".github/workflows/pr-gate-merge.yml");
   // verify-prebuilds uses a static per-run freshness threshold, so an older
