@@ -17,6 +17,7 @@ npx qvac-test run:local:electron --filter completion-
 npx qvac-test run:local:snap --filter snap-
 npx qvac-test run:local:android
 npx qvac-test run:local:ios
+npx qvac-test run:local:python
 ```
 
 **MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
@@ -37,6 +38,17 @@ full list.
 - iOS: Xcode + connected device trusted in Xcode. Team ID auto-detected; override with `QVAC_IOS_TEAM_ID`.
 - Android: `adb` + USB-debuggable device.
 - Desktop: Node 22+.
+- Python: Node 22+, plus a virtualenv the config expects at
+  `packages/sdk-python/.venv` with the client installed from source:
+
+  ```bash
+  python3 -m venv packages/sdk-python/.venv
+  packages/sdk-python/.venv/bin/python -m pip install -e "packages/sdk-python[dev]"
+  ```
+
+  The leg runs the same worker bundle the desktop leg does, so
+  `npm run bundle:sdk` (part of `install:build:full`) has to have run.
+
 - Electron: Node 22+, Electron Forge dependencies, and a desktop runner capable of launching packaged Electron
   apps. The config declares `macos`, `windows`, and `linux`; local runs package the current host target unless
   `--platform` / `--arch` are supplied.
