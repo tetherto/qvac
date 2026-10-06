@@ -1,6 +1,7 @@
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
+import { applyPlatformSkips } from './platform-skips.js'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
@@ -437,7 +438,7 @@ export const modelLifecycleNmt: TestDefinition = {
 }
 
 // Export all tests as array
-export const tests = [
+const catalog: TestDefinition[] = [
   // Model tests (first section)
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
@@ -544,7 +545,7 @@ export const tests = [
   // ABot-World interactive world sessions (desktop GPU only)
   ...worldTests,
 
-  // Audio generation tests (desktop-only; mobile skips via SkipExecutor)
+  // Audio generation tests (desktop-only)
   ...audioGenTests,
 
   // Finetuning tests
@@ -569,9 +570,8 @@ export const tests = [
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
 
-  // VLA (SmolVLA + π₀.₅) — runs on desktop; mobile skips via SkipExecutor
-  // (see mobile/consumer.ts) because the GGUFs are too large for the
-  // Device Farm infra (see note there).
+  // VLA (SmolVLA + π₀.₅) — the π₀.₅ GGUF is too large for the Device Farm
+  // infra, so the catalog keeps it off mobile; see tests/platform-skips.ts.
   ...vlaTests,
 
   // Custom plugin system tests (custom-echo-plugin, error paths)
@@ -592,3 +592,9 @@ export const tests = [
   // NMT model lifecycle test
   modelLifecycleNmt
 ]
+
+// Platform policy is data on the definitions, not a registration inside each consumer entry -- see
+// `platform-skips.ts` for why, and for the rules.
+applyPlatformSkips(catalog)
+
+export const tests = catalog
