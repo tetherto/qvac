@@ -4,7 +4,7 @@ import {
   ocrStreamRequestSchema,
   ocrStreamResponseSchema,
   ModelType,
-  ocrConfigSchema,
+  ocrLoadConfigSchema,
   ADDON_OCR,
   type CreateModelParams,
   type PluginModelResult,
@@ -13,11 +13,13 @@ import {
   type ResolveResult
 } from '@/schemas/index'
 import { ModelLoadFailedError } from '@/errors/index'
-import { createStreamLogger, registerAddonLogger } from '@/logging/index'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
 import { OcrGgml } from '@qvac/ocr-ggml'
 import { ocr } from '@/plugins/builtin/ggml-ocr/ops/ocr-stream'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { resolveOcrConfig } from '@/plugins/builtin/ggml-ocr/resolve-config'
+import { isMobile } from '@/runtime/state'
+import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 
 function createOCRModel(
   modelId: string,
@@ -59,7 +61,17 @@ function createOCRModel(
     }),
     ...(ocrConfig.gpuDevice !== undefined && {
       gpuDevice: ocrConfig.gpuDevice
-    })
+    }),
+    ...(ocrConfig.mainGpu !== undefined && { 'main-gpu': ocrConfig.mainGpu })
+  }
+
+  if (isMobile()) {
+    const stripped = stripMultiGpuKeys(params)
+    if (stripped.length > 0) {
+      getEngineLogger().warn(
+        `[${ModelType.ggmlOcr}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
+      )
+    }
   }
 
   const args = {
@@ -77,7 +89,7 @@ export const ocrPlugin = definePlugin({
   modelType: ModelType.ggmlOcr,
   displayName: 'OCR (GGML)',
   addonPackage: ADDON_OCR,
-  loadConfigSchema: ocrConfigSchema,
+  loadConfigSchema: ocrLoadConfigSchema,
 
   async resolveConfig(
     cfg: OCRConfig,

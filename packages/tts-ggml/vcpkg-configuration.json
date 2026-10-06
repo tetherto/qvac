@@ -1,9 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "6cf045c521f8c1b98e7a34f3e577a76b86ef8a3d",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "QVAC-26487/moss-tts-model-fit"
+    "baseline": "0b9bd9efbccb8dca48cd0c29246bf43be3e9c9bb",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {

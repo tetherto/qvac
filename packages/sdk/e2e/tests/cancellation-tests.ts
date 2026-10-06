@@ -1,3 +1,4 @@
+// Cancellation, and why this whole file stays on its executors.
 import type { TestDefinition } from '@qvac/test-suite'
 
 export const cancelMidStreamCompletion: TestDefinition = {
@@ -7,6 +8,7 @@ export const cancelMidStreamCompletion: TestDefinition = {
     cancelAfterTokens: 3
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'completion',
     dependency: 'llm',
@@ -20,6 +22,7 @@ export const cancelBeforeBeginCompletion: TestDefinition = {
     prompt: 'Write a paragraph about the history of cryptography.'
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'completion',
     dependency: 'llm',
@@ -37,6 +40,7 @@ export const cancelThenResumeKvCache: TestDefinition = {
     cancelAfterTokens: 3
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'completion',
     dependency: 'llm',
@@ -57,6 +61,7 @@ export const cancelBroadEmbeddings: TestDefinition = {
     settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'embeddings',
@@ -76,6 +81,7 @@ export const cancelBroadTranslateLlm: TestDefinition = {
     maxTokensAfterCancel: 30
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm',
@@ -89,7 +95,10 @@ export const serializeConcurrentCompletion: TestDefinition = {
     prompt: 'Reply with one short sentence naming your favourite colour.'
   },
   expectation: { validation: 'function', fn: () => true },
-  suites: ['smoke'],
+  // Imperative for the same reason as its cancel-* neighbours: it issues several completions at
+  // once and asserts how they are ordered, which is where language runtimes differ and which the
+  // step vocabulary cannot say.
+  suites: ['smoke', 'imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm',
@@ -107,6 +116,7 @@ export const cancelIsolatesConcurrentBatches: TestDefinition = {
     survivorPredict: 256
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm-batch',
@@ -122,6 +132,7 @@ export const cancelQueuedNativeBatch: TestDefinition = {
     predict: 256
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm-batch',
@@ -142,6 +153,7 @@ export const cancelByRequestIdEmbed: TestDefinition = {
     settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'embeddings',
@@ -155,6 +167,7 @@ export const cancelByRequestIdTranscribe: TestDefinition = {
     audioFileName: 'transcription-short-wav.wav'
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'whisper',
@@ -174,6 +187,7 @@ export const cancelByRequestIdRagIngest: TestDefinition = {
     registryBeginGraceMs: 200
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'embeddings',
@@ -194,3 +208,6 @@ export const cancellationTests = [
   cancelByRequestIdTranscribe,
   cancelByRequestIdRagIngest
 ]
+
+// The tests without steps cancel at a point inside a running call, which steps cannot time, so
+// each client needs its own body.
