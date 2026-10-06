@@ -228,14 +228,24 @@ async function runAndCollect(addon, prompt, runOptions = {}) {
   }
 }
 
-async function measurePrefillCacheCells(t, addon, prompt, cacheKey, baselineStats, label) {
+// Cached turns resend the whole conversation, so a turn's physical size is the
+// difference between prefilling the history with and without it, both rendered
+// the same way.
+async function measurePrefillCacheCells(t, addon, history, turn, cacheKey, label) {
   const probeCacheKey = `${cacheKey}.${label.replace(/ /g, '-')}.probe`
   cleanupIntegrationCacheFiles(probeCacheKey)
   fs.copyFileSync(cacheKey, probeCacheKey)
 
   try {
-    const result = await runAndCollect(addon, prompt, { cacheKey: probeCacheKey, prefill: true })
-    const baselineCacheTokens = toNumber(baselineStats.CacheTokens)
+    const baseline = await runAndCollect(addon, history, {
+      cacheKey: probeCacheKey,
+      prefill: true
+    })
+    const result = await runAndCollect(addon, [...history, ...turn], {
+      cacheKey: probeCacheKey,
+      prefill: true
+    })
+    const baselineCacheTokens = toNumber(baseline.stats.CacheTokens)
     const cacheCells = toNumber(result.stats.CacheTokens) - baselineCacheTokens
 
     t.is(result.text, '', `${label}: cache-cell probe emits no text`)
@@ -265,6 +275,7 @@ async function applyControlledPrefillPressure(
   t,
   addon,
   cacheOpts,
+  history,
   initialStats,
   targetCacheTokens,
   coarseCacheCells,
@@ -286,7 +297,8 @@ async function applyControlledPrefillPressure(
       ? CONTROLLED_PREFILL_COARSE_WORDS
       : CONTROLLED_PREFILL_FINE_WORDS
     const measuredCacheCells = useCoarseChunk ? coarseCacheCells : fineCacheCells
-    const result = await runAndCollect(addon, makeControlledPrefillTurn(wordCount), {
+    history.push(...makeControlledPrefillTurn(wordCount))
+    const result = await runAndCollect(addon, history, {
       ...cacheOpts,
       prefill: true
     })
@@ -443,8 +455,11 @@ safeTest(
     })
 
     const cacheOpts = { cacheKey: cachePath }
+    // Every cached turn resends the whole conversation (the addon reuses the
+    // prefix it shares with the cache), so the history grows turn by turn.
+    const history = [SYSTEM_PROMPT]
 
-    const systemPrefill = await runAndCollect(addon, [SYSTEM_PROMPT], {
+    const systemPrefill = await runAndCollect(addon, history, {
       ...cacheOpts,
       prefill: true
     })
@@ -459,10 +474,12 @@ safeTest(
     t.ok(fs.existsSync(cachePath), 'system prefill saved cache to disk')
     await runNoCacheSeparator(t, addon, 'after system prefill')
 
-    const first = await runAndCollect(addon, makeImageTurn(imageBytes), {
+    history.push(...makeImageTurn(imageBytes))
+    const first = await runAndCollect(addon, history, {
       ...cacheOpts,
       generationParams: { predict: 64 }
     })
+    history.push({ role: 'assistant', content: first.text })
     t.ok(first.text.length > 0, 'first multimodal turn generated output')
     t.ok(
       toNumber(first.stats.generatedTokens) > 0 && toNumber(first.stats.generatedTokens) <= 64,
@@ -478,9 +495,10 @@ safeTest(
     t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
     await runNoCacheSeparator(t, addon, 'after first multimodal turn')
 
+    // A cancelled prefill rolls back, so the history does not keep its turn.
     const canceledPrefillResult = await runAndCancelDuringPrefill(
       addon,
-      makeCancelPrefillTurn(imageBytes),
+      [...history, ...makeCancelPrefillTurn(imageBytes)],
       {
         ...cacheOpts,
         prefill: true
@@ -489,38 +507,41 @@ safeTest(
     assertCanceledPrefillRolledBack(t, first.stats, canceledPrefillResult)
     await runNoCacheSeparator(t, addon, 'after canceled prefill')
 
-    const afterPrefillCancel = await runAndCollect(
-      addon,
-      [{ role: 'user', content: 'After the canceled prefill, answer with one short sentence.' }],
-      {
-        ...cacheOpts,
-        generationParams: { predict: 64 }
-      }
-    )
+    history.push({
+      role: 'user',
+      content: 'After the canceled prefill, answer with one short sentence.'
+    })
+    const afterPrefillCancel = await runAndCollect(addon, history, {
+      ...cacheOpts,
+      generationParams: { predict: 64 }
+    })
+    history.push({ role: 'assistant', content: afterPrefillCancel.text })
     t.ok(afterPrefillCancel.text.length > 0, 'chat recovered after cancel during prefill')
     assertCachedStats(t, afterPrefillCancel.stats, 'after prefill cancel')
     await runNoCacheSeparator(t, addon, 'after prefill-cancel recovery')
 
-    const canceledDecode = await runAndCancelAfterFirstChunk(addon, makeShortDecodeTurn(), {
-      ...cacheOpts,
-      generationParams: { predict: 256 }
-    })
+    // The next turn leaves the cancelled exchange out of its history, so it
+    // diverges from the cache where that exchange began.
+    const canceledDecode = await runAndCancelAfterFirstChunk(
+      addon,
+      [...history, ...makeShortDecodeTurn()],
+      {
+        ...cacheOpts,
+        generationParams: { predict: 256 }
+      }
+    )
     t.ok(canceledDecode.chunkCount > 0, 'cancel during decoding happened after at least one chunk')
     await runNoCacheSeparator(t, addon, 'after canceled decode')
 
-    const afterDecodeCancel = await runAndCollect(
-      addon,
-      [
-        {
-          role: 'user',
-          content: 'After the canceled decode, continue normally with a concise answer.'
-        }
-      ],
-      {
-        ...cacheOpts,
-        generationParams: { predict: 64 }
-      }
-    )
+    history.push({
+      role: 'user',
+      content: 'After the canceled decode, continue normally with a concise answer.'
+    })
+    const afterDecodeCancel = await runAndCollect(addon, history, {
+      ...cacheOpts,
+      generationParams: { predict: 64 }
+    })
+    history.push({ role: 'assistant', content: afterDecodeCancel.text })
     t.ok(afterDecodeCancel.text.length > 0, 'chat recovered after cancel during decoding')
     assertCachedStats(t, afterDecodeCancel.stats, 'after decode cancel')
     await runNoCacheSeparator(t, addon, 'after decode-cancel recovery')
@@ -529,31 +550,30 @@ safeTest(
     // evicted to make room any more, so once the cached conversation reaches
     // the window every later turn on this cache key is refused too, and any
     // cancel-recovery step placed after this point could never run.
-    // `afterDecodeCancel` is the baseline because it is the newest cached
-    // state on disk; probing against an older snapshot measures the wrong
-    // delta.
+    // Each probe measures a turn against the current history, so it measures
+    // the delta that turn adds to it.
     const decodePromptCacheCells = await measurePrefillCacheCells(
       t,
       addon,
+      history,
       makeShortDecodeTurn(),
       cachePath,
-      afterDecodeCancel.stats,
       'decode prompt'
     )
     const coarsePrefillCacheCells = await measurePrefillCacheCells(
       t,
       addon,
+      history,
       makeControlledPrefillTurn(CONTROLLED_PREFILL_COARSE_WORDS),
       cachePath,
-      afterDecodeCancel.stats,
       'coarse controlled prefill'
     )
     const finePrefillCacheCells = await measurePrefillCacheCells(
       t,
       addon,
+      history,
       makeControlledPrefillTurn(CONTROLLED_PREFILL_FINE_WORDS),
       cachePath,
-      afterDecodeCancel.stats,
       'fine controlled prefill'
     )
     const decodeOverflowThreshold = CTX_SIZE - decodePromptCacheCells + 1
@@ -561,6 +581,7 @@ safeTest(
       t,
       addon,
       cacheOpts,
+      history,
       afterDecodeCancel.stats,
       decodeOverflowThreshold,
       coarsePrefillCacheCells,
@@ -570,7 +591,7 @@ safeTest(
 
     let decodeOverflowError = null
     try {
-      await runAndCollect(addon, makeShortDecodeTurn(), {
+      await runAndCollect(addon, [...history, ...makeShortDecodeTurn()], {
         ...cacheOpts,
         generationParams: { predict: 64 }
       })
@@ -616,12 +637,10 @@ safeTest(
     })
 
     const cacheOpts = { cacheKey: cachePath, prefill: true }
+    // Each prefill resends every earlier image turn, so the cache keeps them.
+    const history = [...makeFixedImagePrefillTurn(imageBytes, 'one')]
 
-    const first = await runAndCollect(
-      addon,
-      makeFixedImagePrefillTurn(imageBytes, 'one'),
-      cacheOpts
-    )
+    const first = await runAndCollect(addon, history, cacheOpts)
     t.is(first.text, '', 'first image prefill emits no text')
     t.is(
       toNumber(first.stats.generatedTokens),
@@ -633,11 +652,8 @@ safeTest(
       `first image prefill cached image cells (${first.stats.CacheTokens})`
     )
 
-    const second = await runAndCollect(
-      addon,
-      makeFixedImagePrefillTurn(imageBytes, 'two'),
-      cacheOpts
-    )
+    history.push(...makeFixedImagePrefillTurn(imageBytes, 'two'))
+    const second = await runAndCollect(addon, history, cacheOpts)
     t.is(second.text, '', 'second image prefill emits no text')
     t.is(
       toNumber(second.stats.generatedTokens),
@@ -655,7 +671,12 @@ safeTest(
 
     await assertContextOverflow(
       t,
-      () => runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'three'), cacheOpts),
+      () =>
+        runAndCollect(
+          addon,
+          [...history, ...makeFixedImagePrefillTurn(imageBytes, 'three')],
+          cacheOpts
+        ),
       'third image prefill overflows physical cache-token capacity'
     )
   }
