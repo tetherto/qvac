@@ -13,11 +13,15 @@
     "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "lint-cpp": "clang-tidy -p build addon/binding.cpp",
+    "lint-cpp": "clang-tidy -p build addon/binding.cpp addon/rpc-server-core.cpp",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "test": "npm run build:ts && npm run test:node",
     "test:node": "node --test test/node/*.test.cjs",
     "test:unit": "npm run test:node",
+    "test:integration": "bare test/integration/rpc-server.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:run": "node scripts/run-cpp-tests.js",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:dts": "npm run test:types"
   },
@@ -44,6 +48,7 @@
     "@qvac/fabric-android-arm64": "0.19.0",
     "@qvac/fabric-ios": "0.19.0",
     "@types/node": "^24.2.1",
+    "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
@@ -57,7 +62,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.19.0",
+    "@qvac/fabric": "^0.20.0",
     "bare-net": "^2.3.2",
     "bare-path": "^3.0.0"
   },
