@@ -32,6 +32,7 @@ const REQUIRED_FILES = [
 const OPTIONAL_MODULES = ['bare-fetch', '@qvac/registry-client']
 const LAZY_DEV_OPTIONAL_MODULES = new Set(['@qvac/registry-client'])
 const TRANSITIVE_MISSING_MODULE = 'translation-nmtcpp-transitive-missing'
+const PACKED_TEST_PREFIX = 'test/'
 const NODE_BARE_MODULE_SHIM = `
 const Module = require('node:module')
 const nodePath = require('node:path')
@@ -117,9 +118,19 @@ function assertDeclaredImports(packageRoot, packageJson, packedFiles) {
     ...Object.keys(packageJson.dependencies || {}),
     ...optionalPeerModules(packageJson)
   ])
+  const declaredTestModules = new Set([
+    ...declaredModules,
+    ...Object.keys(packageJson.devDependencies || {})
+  ])
   packedFiles
     .filter((filePath) => JAVASCRIPT_FILE_PATTERN.test(filePath))
-    .forEach((filePath) => assertFileImportsDeclared(packageRoot, filePath, declaredModules))
+    .forEach((filePath) =>
+      assertFileImportsDeclared(
+        packageRoot,
+        filePath,
+        filePath.startsWith(PACKED_TEST_PREFIX) ? declaredTestModules : declaredModules
+      )
+    )
 }
 
 function assertRuntimeProbe(consumerRoot, installedRoot) {
@@ -266,6 +277,12 @@ function assertOptionalDependencyErrors(consumerRoot) {
   assertTransitiveMissingDependencies(consumerRoot)
 }
 
+test('the test runner is only a development dependency', () => {
+  const packageJson = require('../../package.json')
+  assert.equal(packageJson.dependencies.brittle, undefined)
+  assert.equal(packageJson.devDependencies.brittle, '^3.4.0')
+})
+
 test('packed tarball preserves the public package contract', () => {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'translation-package-'))
 
@@ -292,10 +309,11 @@ test('packed tarball preserves the public package contract', () => {
     assert.equal(packageJson.dependencies['bare-os'], '^3.9.3')
     assert.equal(packageJson.dependencies['bare-process'], '^4.2.2')
     assert.equal(packageJson.dependencies['bare-url'], '^2.1.6')
-    assert.equal(packageJson.dependencies.brittle, '^3.4.0')
+    assert.equal(packageJson.dependencies.brittle, undefined)
     assert.equal(packageJson.devDependencies['bare-os'], undefined)
     assert.equal(packageJson.devDependencies['bare-process'], undefined)
-    assert.equal(packageJson.devDependencies.brittle, undefined)
+    assert.equal(packageJson.devDependencies.brittle, '^3.4.0')
+    assert.equal(fs.existsSync(path.join(consumerRoot, 'node_modules', 'brittle')), false)
     assert.equal(packageJson.peerDependencies['bare-fetch'], '^3.0.1')
     assert.equal(packageJson.peerDependencies['@qvac/registry-client'], undefined)
     assert.equal(packageJson.dependencies['@qvac/registry-client'], undefined)
