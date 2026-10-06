@@ -24,7 +24,9 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 **On a release train** (`qv-release-train`), run it once for the whole train:
 read `release-train-<train>-<x.y.z>` wherever this skill says
 `release-<pkg>-<x.y.z>`. The source carries several manifests, changelogs and
-`pnpm-lock.yaml`; that is release metadata for Step 2's sanity check.
+`pnpm-lock.yaml`; that is release metadata for Step 2's sanity check. Never
+carry a `.nx/version-plans/` file to `main`: if the cherry-pick brings one,
+`git rm` it before committing, or the next train applies it again.
 
 ## Inputs (resolve in priority order)
 

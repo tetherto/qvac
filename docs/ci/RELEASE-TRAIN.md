@@ -63,9 +63,14 @@ dependent.
    pnpm exec nx release version
    ```
 
-   This writes versions, dependency ranges and `pnpm-lock.yaml`. Delete the plan
-   file before committing; nx leaves it in place. Do not pass `--groups`,
-   `--projects` or a version specifier.
+   This writes versions, dependency ranges and `pnpm-lock.yaml`. nx leaves the
+   plan file in place and applies every plan on disk on its next run, so delete
+   it now. `.nx/` is git-ignored, and the checks fail a commit that tracks a
+   plan. Do not pass `--groups`, `--projects` or a version specifier.
+
+   ```bash
+   rm .nx/version-plans/<ticket>.md
+   ```
 
 3. Write a changelog section for each package that moved (`qv-sdk-changelog`).
 4. Cut `release-train-sdk-<engine version>` from `upstream/main`. Open the
@@ -88,6 +93,7 @@ every push:
 - each `anchorGroup` package is at the branch version
 - each moved package has notes under `## [<version>]` in its `CHANGELOG.md`
 - each train package nx counts as affected since the last train release moves
+- no `.nx/version-plans/` file is committed
 - on the PR only: npm does not have any moved version yet
 
 The build also fails when the train links a workspace package from outside the

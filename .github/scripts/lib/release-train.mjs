@@ -71,8 +71,10 @@ export function changelogSection (changelog, version) {
 
 // Everything nx counts as affected since the last train release must move in
 // this one: the train releases its packages as a set.
-export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt, affected }) {
-  const errors = []
+export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt, affected, versionPlans = [] }) {
+  // nx applies every plan file on disk, so a committed plan would bump the
+  // next train again.
+  const errors = versionPlans.map((path) => `${path} is committed; delete it, nx would apply it again`)
   for (const project of train.anchorProjects) {
     const version = versionAtHead(project)
     if (version !== branch.version) {

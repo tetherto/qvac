@@ -213,7 +213,6 @@ changelog sections and that every affected train package moved (see
   means a range stopped matching the workspace and pnpm fetched the old version
   from npm.
 - The changelog sections describe the changes since the last release.
-- No `.nx/version-plans/*.md` file is committed.
 
 ### 4. Read applicable repository instructions for the touched paths
 

@@ -121,6 +121,19 @@ test('rejects a release that leaves out a train package nx counts as affected', 
   assert.deepEqual(errors, ['@qvac/cli changed since the last train release but this release does not move it'])
 })
 
+test('rejects a committed version plan, which nx would apply to the next train', () => {
+  const errors = checkRelease({
+    branch: { train: 'sdk', version: '0.21.0' },
+    train: TRAIN,
+    moved: ENGINE,
+    versionAtHead: () => '0.21.0',
+    changelogAt: (project) => `## [${project.version}]\n\n- notes\n`,
+    affected: [],
+    versionPlans: ['.nx/version-plans/qvac-1.md'],
+  })
+  assert.deepEqual(errors, ['.nx/version-plans/qvac-1.md is committed; delete it, nx would apply it again'])
+})
+
 test('picks dist-tags by the npm-dist-tag-determination rule', () => {
   assert.equal(resolveDistTag({ version: '0.21.0', latest: '0.20.3' }), 'latest')
   assert.equal(resolveDistTag({ version: '0.21.0', latest: '0.21.0' }), 'latest')

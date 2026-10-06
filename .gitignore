@@ -65,7 +65,5 @@ docs/website/scripts/api-docs/api-data.json
 # Local perf-report sim output (sim-*.js scripts)
 /tmp/
 
-# nx cache and daemon state; version plans are release input.
-.nx/*
-!.nx/version-plans/
+.nx/
 .quality/

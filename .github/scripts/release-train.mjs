@@ -134,6 +134,7 @@ function resolveTrain ([ref, base, head], options) {
       versionAtHead: (name) => versionAtHead({ name, dir: roots[name] }),
       changelogAt: (project) => gitShow(head, `${project.dir}/CHANGELOG.md`),
       affected,
+      versionPlans: capture('git', ['ls-tree', '-r', '--name-only', head, '--', '.nx/version-plans']).split('\n').filter(Boolean),
     })
     if (options['check-npm']) {
       for (const project of moved) {
