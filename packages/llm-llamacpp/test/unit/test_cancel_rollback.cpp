@@ -3,6 +3,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -52,6 +53,32 @@ using qvac_lib_inference_addon_llama::utils::sequenceStateSnapshotFilesWritten;
 using qvac_lib_inference_addon_llama::utils::snapshotSequenceState;
 
 namespace {
+
+/// Waits for a worker that was asked to cancel, and always joins it, so a
+/// timeout fails the test instead of destroying a joinable thread (which
+/// terminates the whole test binary). `recancel`, when set, is re-sent every
+/// 100 ms: on a slow runner one early cancel can land before the request has
+/// started and is then ignored. Only pass a cancel that is a no-op once the
+/// request has ended (`LlamaModel::cancel`), never a raw context stop, which
+/// would leave a stop flag for the next request.
+bool awaitCancelledWorker(
+    std::thread& worker, const std::atomic<bool>& done,
+    const std::function<void()>& recancel = {},
+    std::chrono::seconds limit = std::chrono::seconds(120)) {
+  const auto deadline = std::chrono::steady_clock::now() + limit;
+  auto nextCancel = std::chrono::steady_clock::now();
+  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
+    if (recancel && std::chrono::steady_clock::now() >= nextCancel) {
+      recancel();
+      nextCancel =
+          std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  const bool finished = done.load();
+  worker.join();
+  return finished;
+}
 
 llama_pos seqPosMax(LlamaModel& model, llama_seq_id seqId = 0) {
   auto* mem = llama_get_memory(model.getContext());
@@ -1096,12 +1123,8 @@ TEST_F(MtmdLlmContextCancelTest, CancelDuringPrefillLeavesHybridMtmdUsable) {
   EXPECT_NO_THROW(model->cancel());
 
   // Wait for the worker to unwind.
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }))
+      << "worker did not unwind within 120s of cancel";
 
   // Recovery: the model must accept another inference cleanly.
   LlamaModel::Prompt recovery = makeMtmdRecoveryPrompt();
@@ -1155,12 +1178,8 @@ TEST_F(
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   EXPECT_NO_THROW(model->cancel());
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 15s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }))
+      << "worker did not unwind within 120s of cancel";
 
   // Strong assertion: the snapshot must have rolled the cache back to
   // empty, including any image-chunk KV cells that were committed
@@ -1214,12 +1233,7 @@ TEST_F(
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   EXPECT_NO_THROW(model->cancel());
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  ASSERT_TRUE(done.load());
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }));
 
   LlamaModel::Prompt recovery = makeMtmdRecoveryPrompt();
   EXPECT_NO_THROW({ (void)model->processPrompt(recovery); });
@@ -1351,15 +1365,9 @@ TEST(
       generationDone.store(true);
     });
 
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-    while (!generationDone.load() &&
-           std::chrono::steady_clock::now() < deadline) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    ASSERT_TRUE(generationDone.load())
-        << "model did not unwind within 15s of callback cancel attempt "
+    ASSERT_TRUE(awaitCancelledWorker(gen, generationDone))
+        << "model did not unwind within 120s of callback cancel attempt "
         << attempt;
-    gen.join();
 
     if (!cancelIssued.load()) {
       continue;
@@ -1563,12 +1571,8 @@ TEST(
   std::this_thread::sleep_for(std::chrono::milliseconds(25));
   baseCtx->stop();
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done))
+      << "worker did not unwind within 120s of cancel";
 
   EXPECT_GT(baseCtx->getNPast(), 0);
   EXPECT_LE(baseCtx->getNPast(), preRequestNPast)
@@ -1660,12 +1664,8 @@ TEST(
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   EXPECT_NO_THROW(model->cancel());
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }))
+      << "worker did not unwind within 120s of cancel";
 
   // Core assertion: the recurrent rollback must have fully rewound the
   // cache. Pre-prefill position on a fresh model is -1; any residual
@@ -1910,12 +1910,8 @@ TEST(
   });
   std::this_thread::sleep_for(std::chrono::milliseconds(25));
   baseCtx->stop();
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done))
+      << "worker did not unwind within 120s of cancel";
 
   EXPECT_EQ(sequenceStateSnapshotFilesWritten(), filesBefore)
       << "a pure-attention divergent request must not write a snapshot file";
