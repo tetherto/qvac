@@ -1473,11 +1473,11 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/embed-llamacpp':
-        specifier: ^0.43.0
-        version: 0.43.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.44.0
+        version: link:../embed-llamacpp
       '@qvac/llm-llamacpp':
-        specifier: ^0.55.0
-        version: 0.55.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.56.0
+        version: link:../llm-llamacpp
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
