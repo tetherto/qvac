@@ -7,7 +7,7 @@ description: >
 
 inputs:
   family:
-    description: "SDK e2e family: desktop | electron | android | ios"
+    description: "SDK e2e family: desktop | electron | snap | python | android | ios"
     required: true
   platforms:
     description: >
