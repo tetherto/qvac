@@ -1790,19 +1790,46 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueT
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem(
+    Enum
+):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
     GeneratedBaseModel
 ):
-    type: Annotated[
-        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType,
-        Field(
-            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType"
-        ),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType
+        | list[
+            BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem
+        ]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[
+    str, Any
+]
+BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue.model_rebuild(
+    force=True
+)
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
@@ -1825,6 +1852,9 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties,
@@ -1833,6 +1863,12 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseMo
         ),
     ]
     required: list[str] | None = None
+
+
+BatchCompletionStreamRequestPromptsItemToolsItemParameters.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+BatchCompletionStreamRequestPromptsItemToolsItemParameters.model_rebuild(force=True)
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItem(GeneratedBaseModel):
@@ -2896,19 +2932,38 @@ class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType(Enum):
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
     GeneratedBaseModel
 ):
-    type: Annotated[
-        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType,
-        Field(
-            title="CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
-        ),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType
+        | list[CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+CompletionOrchestrateRequestToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionOrchestrateRequestToolsItemParametersPropertiesValue.model_rebuild(force=True)
 
 
 class CompletionOrchestrateRequestToolsItemParametersProperties(
@@ -2921,12 +2976,21 @@ class CompletionOrchestrateRequestToolsItemParametersProperties(
 
 
 class CompletionOrchestrateRequestToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         CompletionOrchestrateRequestToolsItemParametersProperties,
         Field(title="CompletionOrchestrateRequestToolsItemParametersProperties"),
     ]
     required: list[str] | None = None
+
+
+CompletionOrchestrateRequestToolsItemParameters.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionOrchestrateRequestToolsItemParameters.model_rebuild(force=True)
 
 
 class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
@@ -3467,15 +3531,36 @@ class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValue(GeneratedBaseModel):
-    type: Annotated[
-        CompletionStreamRequestToolsItemParametersPropertiesValueType,
-        Field(title="CompletionStreamRequestToolsItemParametersPropertiesValueType"),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CompletionStreamRequestToolsItemParametersPropertiesValueType
+        | list[CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+CompletionStreamRequestToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionStreamRequestToolsItemParametersPropertiesValue.model_rebuild(force=True)
 
 
 class CompletionStreamRequestToolsItemParametersProperties(
@@ -3488,12 +3573,21 @@ class CompletionStreamRequestToolsItemParametersProperties(
 
 
 class CompletionStreamRequestToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         CompletionStreamRequestToolsItemParametersProperties,
         Field(title="CompletionStreamRequestToolsItemParametersProperties"),
     ]
     required: list[str] | None = None
+
+
+CompletionStreamRequestToolsItemParameters.__annotations__["__pydantic_extra__"] = dict[
+    str, Any
+]
+CompletionStreamRequestToolsItemParameters.model_rebuild(force=True)
 
 
 class CompletionStreamRequestToolsItem(GeneratedBaseModel):
