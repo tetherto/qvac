@@ -2,7 +2,6 @@
   {
     "package": "sdk",
     "path": "packages/sdk",
-    "pkg_manager": "bun",
     "needs_bare": true,
     "tests_bare": true,
     "sdk_sources": ["workspace"],
@@ -12,7 +11,6 @@
   {
     "package": "inference",
     "path": "packages/inference",
-    "pkg_manager": "bun",
     "needs_bare": true,
     "tests_bare": true
   },

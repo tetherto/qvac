@@ -152,8 +152,8 @@ function resolveRegistryVersion(requestedVersion) {
 
 function packBranch(inferenceDirectory, artifactDirectory) {
   fs.mkdirSync(artifactDirectory, { recursive: true });
-  run("bun", ["install", "--ignore-scripts"], { cwd: inferenceDirectory });
-  run("bun", ["run", "build"], { cwd: inferenceDirectory });
+  run("npm", ["install", "--ignore-scripts"], { cwd: inferenceDirectory });
+  run("npm", ["run", "build"], { cwd: inferenceDirectory });
   const output = run(
     "npm",
     [

@@ -10,7 +10,7 @@
  * PowerShell player) for chunk playback.
  *
  * Usage:
- *   bun run examples/tts/llm-to-tts-streaming.ts
+ *   npx tsx examples/tts/llm-to-tts-streaming.ts
  */
 
 import {

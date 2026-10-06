@@ -58,8 +58,8 @@ function packInference() {
   clearConsumerInferencePin()
   fs.rmSync(ARTIFACT_DIR, { recursive: true, force: true })
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true })
-  run('bun', ['install', '--ignore-scripts'], INFERENCE_DIR)
-  run('bun', ['run', 'build'], INFERENCE_DIR)
+  run('npm', ['install', '--ignore-scripts'], INFERENCE_DIR)
+  run('npm', ['run', 'build'], INFERENCE_DIR)
   const output = run(
     'npm',
     ['pack', '--ignore-scripts', '--json', '--pack-destination', ARTIFACT_DIR],
@@ -120,8 +120,8 @@ try {
   console.log(`\n📦 ${DEPENDENCY}: ${previousSpec} -> ${path.relative(E2E_DIR, tarball)}`)
 
   step('Building packages/sdk')
-  run('bun', ['install'], SDK_DIR)
-  run('bun', ['run', 'build'], SDK_DIR)
+  run('npm', ['install', '--ignore-scripts'], SDK_DIR)
+  run('npm', ['run', 'build'], SDK_DIR)
 
   step('Installing and building e2e')
   // npm install alone won't notice the manifest swap above; see reconcile-e2e-inference.mjs.
