@@ -185,10 +185,10 @@ public:
         // tokens). Drop that prefix when present.
         size_t offset = 0;
         uint32_t marker = 0;
-        if (entry.state.size() >= kGetDataPrefixBytes) {
+        if (entry.state.size() >= K_GET_DATA_PREFIX_BYTES) {
           std::memcpy(&marker, entry.state.data(), sizeof(marker));
-          if (marker == kGetDataMarker) {
-            offset = kGetDataPrefixBytes;
+          if (marker == K_GET_DATA_MARKER) {
+            offset = K_GET_DATA_PREFIX_BYTES;
           }
         }
         out.write(
@@ -210,8 +210,8 @@ public:
 private:
   /// Marker `llama_state_seq_get_data` writes first (llama-context.cpp
   /// `io_magic`), followed by the source `llama_seq_id`.
-  static constexpr uint32_t kGetDataMarker = 0xaf143cd8;
-  static constexpr size_t kGetDataPrefixBytes =
+  static constexpr uint32_t K_GET_DATA_MARKER = 0xaf143cd8;
+  static constexpr size_t K_GET_DATA_PREFIX_BYTES =
       sizeof(uint32_t) + sizeof(llama_seq_id);
 
   /// A caller that deleted the file this state came from dropped the

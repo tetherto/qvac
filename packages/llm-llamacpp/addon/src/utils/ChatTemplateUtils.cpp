@@ -1018,12 +1018,12 @@ std::optional<ReasoningTags> historyReasoningTags(
     return fallback;
   }
   const auto trim = [](const std::string& text) {
-    constexpr const char* WHITESPACE = " \t\r\n";
-    const size_t first = text.find_first_not_of(WHITESPACE);
+    constexpr const char* whitespace = " \t\r\n";
+    const size_t first = text.find_first_not_of(whitespace);
     return first == std::string::npos
                ? std::string()
                : text.substr(
-                     first, text.find_last_not_of(WHITESPACE) - first + 1);
+                     first, text.find_last_not_of(whitespace) - first + 1);
   };
   const std::string open = trim(rendered.thinkingStartTag);
   // Harmony (gpt-oss) answers are channels, not a block then the answer:

@@ -20,12 +20,12 @@ bool initializeReasoningState(
 namespace {
 
 std::string trimmed(const std::string& text) {
-  constexpr const char* WHITESPACE = " \t\r\n";
-  const size_t first = text.find_first_not_of(WHITESPACE);
+  constexpr const char* whitespace = " \t\r\n";
+  const size_t first = text.find_first_not_of(whitespace);
   if (first == std::string::npos) {
     return "";
   }
-  const size_t last = text.find_last_not_of(WHITESPACE);
+  const size_t last = text.find_last_not_of(whitespace);
   return text.substr(first, last - first + 1);
 }
 
