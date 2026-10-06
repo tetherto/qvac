@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
+  the ggml changes of the QVAC LLM stack, so both build from the same backend
+  code. Same models, same backends, no API change.
 - Raise the `speech-cpp` floor to `2026-10-01` and the `ggml-speech` floor to
   `2026-09-30#1`. MiniMax-Music3 generates faster on CUDA and Vulkan: a
   2-minute f16 song on an RTX 5090 takes about 74 s on CUDA (was 102 s) and
