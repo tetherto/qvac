@@ -40,11 +40,11 @@ function packedFiles(workdir) {
   return JSON.parse(result.stdout)[0].files.map((file) => file.path)
 }
 
-test('release slicing selects the audiogen published loader', async (t) => {
+test('release slicing selects both published addon loaders', async (t) => {
   const { slicePlatformPackages, SLICE_DEFINITIONS } = await slicerPromise
   const hosts = SLICE_DEFINITIONS.flatMap((definition) => definition.hosts)
 
-  for (const name of ['audiogen-ggml']) {
+  for (const name of ['audiogen-ggml', 'tts-ggml']) {
     const sourceDir = path.join(repoRoot, 'packages', name)
     const manifest = require(path.join(sourceDir, 'package.json'))
     const { workdir, outDir } = makeFixture(t, manifest, sourceDir, hosts)
