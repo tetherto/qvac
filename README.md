@@ -114,6 +114,19 @@ node quickstart.js
 > For comprehensive QVAC documentation, see [https://docs.qvac.tether.io](https://docs.qvac.tether.io).
 > There, you'll find [the compatibility matrix, installation instructions per environment/platform](https://docs.qvac.tether.io/sdk/getting-started/installation/), [reference with code examples for using each functionality](https://docs.qvac.tether.io/sdk/getting-started/), and much more.
 
+## Patch release CI
+
+This historical release branch has a pnpm workspace scoped to `packages/decoder-audio`.
+The publishing workflow reads that package's `project.json` to select its build and test jobs.
+Use Node.js 24 and the pnpm version pinned in the root `package.json`:
+
+```sh
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run test:ci
+```
+
+Package build and test commands remain documented in the [package README](packages/decoder-audio/README.md).
+
 ## Contributing
 
 ### Repository layout

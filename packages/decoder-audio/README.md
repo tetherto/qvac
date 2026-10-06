@@ -232,6 +232,13 @@ npm run coverage
 
 Coverage reports are generated in the 'coverage/unit/' directory. Open the corresponding `index.html` file in your browser to view the detailed report.
 
+## Patch release CI
+
+The root pnpm workspace on this release branch includes only this package.
+Run `pnpm install --frozen-lockfile --ignore-scripts` and `pnpm run test:ci`
+from the repository root to validate the publishing metadata. See the
+[root README](../../README.md#patch-release-ci) for the required tooling.
+
 ## Glossary
 
 * [**Bare** ](https://bare.pears.com/) – A lightweight, modular JavaScript runtime for desktop and mobile.

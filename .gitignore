@@ -8,6 +8,7 @@
 sync-monorepo.sh
 reset_history.sh
 confirmed.txt
+/.nx/
 /node_modules
 packages/**/node_modules/
 packages/**/package-lock.json

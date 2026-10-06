@@ -1,0 +1,5 @@
+packages:
+  - "packages/decoder-audio"
+
+linkWorkspacePackages: false
+resolvePeersFromWorkspaceRoot: false
