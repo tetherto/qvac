@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -584,6 +585,18 @@ inline std::optional<std::string> applyLlamaLoadParams(
             .as<std::string>(env);
     const std::string arg = "--" + key;
 
+    // No longer in llama's argument table, so applied here.
+    try {
+      const std::optional<llama_load_mode> deprecatedMode =
+          load_fit_normalization::deprecatedLoadFlagMode(key, value);
+      if (deprecatedMode.has_value()) {
+        params.load_mode = deprecatedMode.value();
+        continue;
+      }
+    } catch (const std::invalid_argument&) {
+      return "unsupported-config";
+    }
+
     const auto found = options.find(arg);
     if (found == options.end()) {
       return "unsupported-config";
@@ -782,6 +795,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         buftOverrides.data(),
         margins.data(),
         minCtx,
+        nullptr,
         false,
         GGML_LOG_LEVEL_INFO,
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the

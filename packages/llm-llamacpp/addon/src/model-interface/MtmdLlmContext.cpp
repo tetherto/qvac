@@ -1220,7 +1220,8 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
                        visionContext(),
                        media.data(),
                        media.size(),
-                       /*placeholder=*/false)
+                       /*placeholder=*/false,
+                       mtmd_helper_init_opt_default())
                        .bitmap);
   if (!bmp.ptr) {
     resetMedia();
@@ -1259,7 +1260,8 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
   mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_file(
                        visionContext(),
                        fname.c_str(),
-                       /*placeholder=*/false)
+                       /*placeholder=*/false,
+                       mtmd_helper_init_opt_default())
                        .bitmap);
   if (!bmp.ptr) {
     resetMedia();

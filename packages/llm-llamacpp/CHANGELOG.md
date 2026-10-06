@@ -99,6 +99,9 @@
 
 ### Fixed
 
+- The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
+  and `mlock` keep working with qvac-fabric 11018, which no longer accepts
+  them. The addon maps them to `load-mode` for both loads and `assessFit`.
 - A hybrid or recurrent request that diverged, restored a checkpoint and was
   then rolled back (cancel during prefill, decode error, context overflow)
   restored only the recurrent state of the pre-request snapshot. The KV cache
