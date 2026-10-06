@@ -14,7 +14,6 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/diagnostics/**"
       - "packages/langdetect-text/**"
       - "packages/qvac-ci/**"
   workflow_dispatch:
@@ -24,7 +23,6 @@ on:
         required: true
         type: choice
         options:
-          - diagnostics
           - langdetect-text
           - qvac-ci
 
@@ -56,7 +54,6 @@ jobs:
           # diverged feature/tmp branch matches every lib and over-publishes.
           base: ${{ github.ref_name }}
           filters: |
-            diagnostics: packages/diagnostics/**
             langdetect-text: packages/langdetect-text/**
             qvac-ci: packages/qvac-ci/**
       - name: Resolve package matrix
