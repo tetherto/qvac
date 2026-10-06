@@ -1,7 +1,9 @@
 package io.tether.qvac.sdk
 
-import io.tether.qvac.sdk.generated.HeartbeatRequest
-import io.tether.qvac.sdk.generated.LoadModelRequest
+import io.tether.qvac.sdk.generated.schema.HeartbeatRequest
+import io.tether.qvac.sdk.generated.schema.LoadModelCustomPluginRequest
+import io.tether.qvac.sdk.generated.schema.LoadModelRequest
+import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
@@ -24,7 +26,7 @@ class TypedMethodsTest {
         )
         val client = QvacClient(transport)
 
-        val response = client.heartbeat(HeartbeatRequest(type = "heartbeat"))
+        val response = client.heartbeat(HeartbeatRequest())
 
         assertEquals("heartbeat", transport.lastPayload?.get("type")?.toString()?.trim('"'))
         assertEquals(7.0, response.number)
@@ -50,7 +52,13 @@ class TypedMethodsTest {
         )
         val client = QvacClient(transport)
 
-        val events = client.loadModelWithProgress(LoadModelRequest(type = "loadModel")).toList()
+        val events = client.loadModelWithProgress(
+            LoadModelRequest.LoadModelSrcRequest(
+                LoadModelSrcRequest.LoadModelCustomPluginRequest(
+                    LoadModelCustomPluginRequest(modelSrc = "registry://model", modelType = "custom-plugin", withProgress = true),
+                ),
+            ),
+        ).toList()
 
         assertIs<QvacProgressEvent.Progress<*>>(events[0])
         assertIs<QvacProgressEvent.Result<*>>(events[1])

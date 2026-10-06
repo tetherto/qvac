@@ -2,8 +2,38 @@ package io.tether.qvac.sdk
 
 import io.tether.qvac.sdk.generated.schema.CancelRequest
 import io.tether.qvac.sdk.generated.schema.CancelRequestRequest
-import io.tether.qvac.sdk.generated.CompletionOrchestrateRequest
-import io.tether.qvac.sdk.generated.CompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequest
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestGenerationParams
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestKvCache
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormat
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatJsonObject
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatJsonSchema
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatText
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolDialect
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItem
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParameters
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParametersPropertiesValue
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParametersPropertiesValueType
+import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponseToolCallback
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormat
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonObject
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonSchema
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonSchemaJsonSchema
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatText
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolDialect
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParameters
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParametersPropertiesValue
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParametersPropertiesValueType
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItemCompletionStatsStats
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.channels.Channel
@@ -11,38 +41,29 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import kotlin.random.Random
 
-data class QvacAttachment(val path: String) {
-    internal fun toJson() = buildJsonObject { put("path", path) }
-}
+data class QvacAttachment(val path: String)
 
 data class QvacMessage(
     val role: String,
     val content: String,
     val attachments: List<QvacAttachment> = emptyList(),
 ) {
-    internal fun toJson() = buildJsonObject {
-        put("role", role)
-        put("content", content)
-        if (attachments.isNotEmpty()) {
-            putJsonArray("attachments") { attachments.forEach { add(it.toJson()) } }
-        }
-    }
-
     companion object {
         fun system(content: String) = QvacMessage("system", content)
         fun user(content: String, attachments: List<QvacAttachment> = emptyList()) =
@@ -64,53 +85,34 @@ data class QvacGenerationOptions(
     val repeatPenalty: Double? = null,
     val reasoningBudget: Long? = null,
     val removeThinkingFromContext: Boolean? = null,
-) {
-    internal fun toJson(): JsonObject = buildJsonObject {
-        temperature?.let { put("temp", it) }
-        topP?.let { put("top_p", it) }
-        topK?.let { put("top_k", it) }
-        predict?.let { put("predict", it) }
-        seed?.let { put("seed", it) }
-        frequencyPenalty?.let { put("frequency_penalty", it) }
-        presencePenalty?.let { put("presence_penalty", it) }
-        repeatPenalty?.let { put("repeat_penalty", it) }
-        reasoningBudget?.let { put("reasoning_budget", it) }
-        removeThinkingFromContext?.let { put("remove_thinking_from_context", it) }
-    }
-}
+)
 
 sealed interface QvacResponseFormat {
-    fun toJson(): JsonObject
+    data object Text : QvacResponseFormat
 
-    data object Text : QvacResponseFormat {
-        override fun toJson() = buildJsonObject { put("type", "text") }
-    }
-
-    data object JsonValue : QvacResponseFormat {
-        override fun toJson() = buildJsonObject { put("type", "json_object") }
-    }
+    data object JsonValue : QvacResponseFormat
 
     data class JsonSchema(
         val name: String,
         val schema: JsonObject,
         val description: String? = null,
         val strict: Boolean? = null,
-    ) : QvacResponseFormat {
-        override fun toJson() = buildJsonObject {
-            put("type", "json_schema")
-            putJsonObject("json_schema") {
-                put("name", name)
-                put("schema", schema)
-                description?.let { put("description", it) }
-                strict?.let { put("strict", it) }
-            }
+    ) : QvacResponseFormat
+}
+
+/** Per-request KV cache selection: on/off, or a named cache. */
+sealed interface QvacKvCache {
+    data class Enabled(val enabled: Boolean) : QvacKvCache
+
+    data class Key(val key: String) : QvacKvCache {
+        init {
+            require(key.isNotEmpty()) { "KV cache key cannot be empty" }
         }
     }
 }
 
-enum class QvacToolParameterType(val wireName: String) {
-    STRING("string"), NUMBER("number"), INTEGER("integer"), BOOLEAN("boolean"),
-    OBJECT("object"), ARRAY("array"),
+enum class QvacToolParameterType {
+    STRING, NUMBER, INTEGER, BOOLEAN, OBJECT, ARRAY,
 }
 
 data class QvacToolParameter(
@@ -127,35 +129,15 @@ data class QvacTool(
     val parameters: Map<String, QvacToolParameter> = emptyMap(),
     val required: Set<String> = emptySet(),
     val handler: QvacToolHandler? = null,
-) {
-    internal fun toJson(): JsonObject = buildJsonObject {
-        put("type", "function")
-        put("name", name)
-        put("description", description)
-        putJsonObject("parameters") {
-            put("type", "object")
-            putJsonObject("properties") {
-                parameters.forEach { (parameterName, parameter) ->
-                    putJsonObject(parameterName) {
-                        put("type", parameter.type.wireName)
-                        parameter.description?.let { put("description", it) }
-                        parameter.enumValues?.let { put("enum", JsonArray(it)) }
-                    }
-                }
-            }
-            if (required.isNotEmpty()) {
-                putJsonArray("required") { required.forEach { add(JsonPrimitive(it)) } }
-            }
-        }
-    }
-}
+)
 
 data class QvacCompletionOptions(
     val generation: QvacGenerationOptions = QvacGenerationOptions(predict = -1),
     val stream: Boolean = true,
-    val kvCache: JsonElement? = null,
+    val kvCache: QvacKvCache? = null,
     val captureThinking: Boolean? = null,
     val emitRawDeltas: Boolean? = null,
+    /** Worker tool-call dialect name, e.g. "hermes" or "qwen35". */
     val toolDialect: String? = null,
     val responseFormat: QvacResponseFormat? = null,
     val requestId: String = qvacRequestId(),
@@ -181,6 +163,7 @@ sealed interface QvacCompletionEvent {
         val error: String? = null,
         val rawFullText: String? = null,
     ) : QvacCompletionEvent
+    /** An event this client version does not know; [payload] is the event as received. */
     data class Unknown(override val sequence: Long, val payload: JsonObject) : QvacCompletionEvent
 }
 
@@ -248,11 +231,7 @@ class QvacCompletionRun internal constructor(
 
     suspend fun cancel(clearCache: Boolean = false): Boolean {
         val response = client.cancel(
-            CancelRequest.Request(CancelRequestRequest(
-                clearCache = clearCache,
-                requestId = requestId,
-                type = "cancel",
-            )),
+            CancelRequest.Request(CancelRequestRequest(clearCache = clearCache, requestId = requestId)),
         )
         return response.success && (response.cancelled ?: 0) > 0
     }
@@ -271,26 +250,25 @@ fun QvacCompletion.run(
     val request = CompletionStreamRequest(
         captureThinking = options.captureThinking,
         emitRawDeltas = options.emitRawDeltas,
-        generationParams = options.generation.toJson(),
-        history = history.map(QvacMessage::toJson),
-        kvCache = options.kvCache,
+        generationParams = options.generation.toStreamParams(),
+        history = history.map { it.toStreamItem() },
+        kvCache = options.kvCache?.toWire(),
         modelId = modelId,
         requestId = options.requestId,
-        responseFormat = options.responseFormat?.toJson(),
+        responseFormat = options.responseFormat?.toStreamFormat(),
         stream = options.stream,
-        toolDialect = options.toolDialect,
-        tools = tools.takeIf { it.isNotEmpty() }?.map(QvacTool::toJson),
-        type = "completionStream",
+        toolDialect = options.toolDialect?.let { wireEnum<CompletionStreamRequestToolDialect>("toolDialect", it) },
+        tools = tools.takeIf { it.isNotEmpty() }?.map { it.toStreamTool() },
     )
     return startRun(options.requestId, handlers) { emit ->
         val events = mutableListOf<QvacCompletionEvent>()
         var terminal: QvacCompletionFinal? = null
-        client.completionStream(request).collect { response ->
-            response.events.map(::parseCompletionEvent).forEach { event ->
+        client.streamEncoded(request).collect { frame ->
+            frame.events().map { client.parseCompletionEvent(it) }.forEach { event ->
                 events += event
                 emit(event)
             }
-            if (response.done == true) {
+            if (frame["done"]?.jsonPrimitive?.booleanOrNull == true) {
                 terminal = finishCompletion(options.requestId, events, handlers)
             }
         }
@@ -318,17 +296,16 @@ fun QvacCompletion.orchestrate(
     val request = CompletionOrchestrateRequest(
         captureThinking = options.captureThinking,
         emitRawDeltas = options.emitRawDeltas,
-        generationParams = options.generation.toJson(),
-        history = history.map(QvacMessage::toJson),
-        kvCache = options.kvCache,
+        generationParams = options.generation.toOrchestrateParams(),
+        history = history.map { it.toOrchestrateItem() },
+        kvCache = options.kvCache?.toWire(),
         maxToolTurns = maxToolTurns.toLong(),
         modelId = modelId,
         requestId = options.requestId,
-        responseFormat = options.responseFormat?.toJson(),
+        responseFormat = options.responseFormat?.toOrchestrateFormat(),
         stream = options.stream,
-        toolDialect = options.toolDialect,
-        tools = tools.map(QvacTool::toJson),
-        type = "completionOrchestrate",
+        toolDialect = options.toolDialect?.let { wireEnum<CompletionOrchestrateRequestToolDialect>("toolDialect", it) },
+        tools = tools.map { it.toOrchestrateTool() },
     )
     val upstream = Channel<ByteArray>(Channel.UNLIMITED)
     return startRun(options.requestId, handlers) { emit ->
@@ -336,37 +313,39 @@ fun QvacCompletion.orchestrate(
         var turnEvents = mutableListOf<QvacCompletionEvent>()
         var terminalStopReason: String? = null
         try {
-            client.completionOrchestrate(request, upstream.receiveAsFlow()).collect { frame ->
-                frame.turn?.let { turn ->
+            client.duplexEncoded(request, upstream.receiveAsFlow()).collect { frame ->
+                frame["turn"]?.jsonPrimitive?.longOrNull?.let { turn ->
                     if (currentTurn != turn) {
                         currentTurn = turn
                         turnEvents = mutableListOf()
                     }
                 }
-                frame.events.orEmpty().map(::parseCompletionEvent).forEach { event ->
+                frame.events().map { client.parseCompletionEvent(it) }.forEach { event ->
                     turnEvents += event
                     emit(event)
                 }
-                frame.toolCallback?.let { callback ->
-                    val callId = callback["callId"]?.jsonPrimitive?.content
-                        ?: throw QvacCompletionException("Worker tool callback omitted callId")
-                    val name = callback["name"]?.jsonPrimitive?.content
-                        ?: throw QvacCompletionException("Worker tool callback omitted name")
-                    val arguments = callback["arguments"]?.jsonObject ?: JsonObject(emptyMap())
+                frame["toolCallback"]?.let { element ->
+                    val callback = try {
+                        client.json.decodeFromJsonElement<CompletionOrchestrateResponseToolCallback>(element)
+                    } catch (error: SerializationException) {
+                        throw QvacCompletionException("Worker sent a malformed tool callback", error)
+                    }
                     val reply = try {
                         buildJsonObject {
-                            put("callId", callId)
-                            put("result", handlers.getValue(name)(arguments))
+                            put("callId", callback.callId)
+                            put("result", handlers.getValue(callback.name)(JsonObject(callback.arguments)))
                         }
                     } catch (error: Throwable) {
                         buildJsonObject {
-                            put("callId", callId)
+                            put("callId", callback.callId)
                             put("error", error.message ?: error::class.simpleName ?: "Tool failed")
                         }
                     }
                     upstream.send((reply.toString() + "\n").encodeToByteArray())
                 }
-                if (frame.done == true) terminalStopReason = frame.stopReason
+                if (frame["done"]?.jsonPrimitive?.booleanOrNull == true) {
+                    terminalStopReason = frame["stopReason"]?.jsonPrimitive?.content
+                }
             }
         } finally {
             upstream.close()
@@ -451,61 +430,200 @@ private fun finishCompletion(
     return final
 }
 
-private fun parseCompletionEvent(element: JsonElement): QvacCompletionEvent {
+private fun JsonObject.events(): List<JsonElement> = (get("events") as? JsonArray).orEmpty()
+
+// completionOrchestrate events use the completionStream event schema; the
+// contract types differ only in their generated names.
+private fun QvacClient.parseCompletionEvent(element: JsonElement): QvacCompletionEvent {
     val payload = element.jsonObject
-    val sequence = payload["seq"]?.jsonPrimitive?.longOrNull ?: 0L
-    return when (payload["type"]?.jsonPrimitive?.contentOrNull) {
-        "contentDelta" -> QvacCompletionEvent.ContentDelta(sequence, payload.text())
-        "rawDelta" -> QvacCompletionEvent.RawDelta(sequence, payload.text())
-        "thinkingDelta" -> QvacCompletionEvent.ThinkingDelta(sequence, payload.text())
-        "toolCall" -> {
-            val call = payload["call"]?.jsonObject ?: JsonObject(emptyMap())
-            QvacCompletionEvent.ToolCallEvent(
-                sequence,
-                QvacToolCall(
-                    id = call["id"]?.jsonPrimitive?.content.orEmpty(),
-                    name = call["name"]?.jsonPrimitive?.content.orEmpty(),
-                    arguments = call["arguments"]?.jsonObject ?: JsonObject(emptyMap()),
-                    raw = call["raw"]?.jsonPrimitive?.contentOrNull,
-                ),
-            )
-        }
-        "toolError" -> {
-            val error = payload["error"]?.jsonObject ?: JsonObject(emptyMap())
-            QvacCompletionEvent.ToolError(
-                sequence = sequence,
-                code = error["code"]?.jsonPrimitive?.content.orEmpty(),
-                message = error["message"]?.jsonPrimitive?.content.orEmpty(),
-                raw = error["raw"]?.jsonPrimitive?.contentOrNull,
-            )
-        }
-        "completionStats" -> {
-            val stats = payload["stats"]?.jsonObject ?: JsonObject(emptyMap())
-            QvacCompletionEvent.Stats(sequence, stats.toCompletionStats())
-        }
-        "completionDone" -> QvacCompletionEvent.Done(
-            sequence = sequence,
-            stopReason = payload["stopReason"]?.jsonPrimitive?.contentOrNull,
-            error = payload["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull,
-            rawFullText = payload["raw"]?.jsonObject?.get("fullText")?.jsonPrimitive?.contentOrNull,
+    val event = try {
+        json.decodeFromJsonElement<CompletionStreamResponseEventsItem>(payload)
+    } catch (_: SerializationException) {
+        return QvacCompletionEvent.Unknown(payload["seq"]?.jsonPrimitive?.longOrNull ?: 0L, payload)
+    }
+    return when (event) {
+        is CompletionStreamResponseEventsItem.ContentDelta ->
+            QvacCompletionEvent.ContentDelta(event.value.seq, event.value.text)
+        is CompletionStreamResponseEventsItem.RawDelta ->
+            QvacCompletionEvent.RawDelta(event.value.seq, event.value.text)
+        is CompletionStreamResponseEventsItem.ThinkingDelta ->
+            QvacCompletionEvent.ThinkingDelta(event.value.seq, event.value.text)
+        is CompletionStreamResponseEventsItem.ToolCall -> QvacCompletionEvent.ToolCallEvent(
+            event.value.seq,
+            QvacToolCall(
+                id = event.value.call.id,
+                name = event.value.call.name,
+                arguments = JsonObject(event.value.call.arguments),
+                raw = event.value.call.raw,
+            ),
         )
-        else -> QvacCompletionEvent.Unknown(sequence, payload)
+        is CompletionStreamResponseEventsItem.ToolError -> QvacCompletionEvent.ToolError(
+            sequence = event.value.seq,
+            code = json.wireName(event.value.error.code),
+            message = event.value.error.message,
+            raw = event.value.error.raw,
+        )
+        is CompletionStreamResponseEventsItem.CompletionStats -> QvacCompletionEvent.Stats(
+            event.value.seq,
+            event.value.stats.toCompletionStats(json, payload.getValue("stats").jsonObject),
+        )
+        is CompletionStreamResponseEventsItem.CompletionDoneError -> QvacCompletionEvent.Done(
+            sequence = event.value.seq,
+            stopReason = event.value.stopReason,
+            error = event.value.error.message,
+            rawFullText = event.value.raw?.fullText,
+        )
+        is CompletionStreamResponseEventsItem.CompletionDone -> QvacCompletionEvent.Done(
+            sequence = event.value.seq,
+            stopReason = event.value.stopReason?.let { json.wireName(it) },
+            rawFullText = event.value.raw?.fullText,
+        )
     }
 }
 
-private fun JsonObject.text() = get("text")?.jsonPrimitive?.content.orEmpty()
+private fun CompletionStreamResponseEventsItemCompletionStatsStats.toCompletionStats(json: Json, raw: JsonObject) =
+    QvacCompletionStats(
+        timeToFirstToken = timeToFirstToken,
+        tokensPerSecond = tokensPerSecond,
+        cacheTokens = cacheTokens,
+        promptTokens = promptTokens,
+        generatedTokens = generatedTokens,
+        emittedTokens = emittedTokens,
+        averageConcurrentSequences = avgConcurrentSeq,
+        backendDevice = backendDevice?.let { json.wireName(it) },
+        raw = raw,
+    )
 
-private fun JsonObject.toCompletionStats() = QvacCompletionStats(
-    timeToFirstToken = get("timeToFirstToken")?.jsonPrimitive?.doubleOrNull,
-    tokensPerSecond = get("tokensPerSecond")?.jsonPrimitive?.doubleOrNull,
-    cacheTokens = get("cacheTokens")?.jsonPrimitive?.doubleOrNull,
-    promptTokens = get("promptTokens")?.jsonPrimitive?.doubleOrNull,
-    generatedTokens = get("generatedTokens")?.jsonPrimitive?.doubleOrNull,
-    emittedTokens = get("emittedTokens")?.jsonPrimitive?.doubleOrNull,
-    averageConcurrentSequences = get("avgConcurrentSeq")?.jsonPrimitive?.doubleOrNull,
-    backendDevice = get("backendDevice")?.jsonPrimitive?.contentOrNull,
-    raw = this,
+private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
+    role = role,
+    content = content,
+    attachments = attachments.takeIf { it.isNotEmpty() }
+        ?.map { CompletionStreamRequestHistoryItemAttachmentsItem(path = it.path) },
 )
+
+private fun QvacMessage.toOrchestrateItem() = CompletionOrchestrateRequestHistoryItem(
+    role = role,
+    content = content,
+    attachments = attachments.takeIf { it.isNotEmpty() }
+        ?.map { CompletionOrchestrateRequestHistoryItemAttachmentsItem(path = it.path) },
+)
+
+private fun QvacGenerationOptions.toStreamParams() = CompletionStreamRequestGenerationParams(
+    temp = temperature,
+    top_p = topP,
+    top_k = topK,
+    predict = predict?.toDouble(),
+    seed = seed?.toDouble(),
+    frequency_penalty = frequencyPenalty,
+    presence_penalty = presencePenalty,
+    repeat_penalty = repeatPenalty,
+    reasoning_budget = reasoningBudget,
+    remove_thinking_from_context = removeThinkingFromContext,
+)
+
+private fun QvacGenerationOptions.toOrchestrateParams() = CompletionOrchestrateRequestGenerationParams(
+    temp = temperature,
+    top_p = topP,
+    top_k = topK,
+    predict = predict?.toDouble(),
+    seed = seed?.toDouble(),
+    frequency_penalty = frequencyPenalty,
+    presence_penalty = presencePenalty,
+    repeat_penalty = repeatPenalty,
+    reasoning_budget = reasoningBudget,
+    remove_thinking_from_context = removeThinkingFromContext,
+)
+
+private fun QvacKvCache.toWire(): CompletionOrchestrateRequestKvCache = when (this) {
+    is QvacKvCache.Enabled -> CompletionOrchestrateRequestKvCache.Variant1(enabled)
+    is QvacKvCache.Key -> CompletionOrchestrateRequestKvCache.Variant2(key)
+}
+
+private fun QvacResponseFormat.toStreamFormat(): CompletionStreamRequestResponseFormat = when (this) {
+    QvacResponseFormat.Text -> CompletionStreamRequestResponseFormat.Text(CompletionStreamRequestResponseFormatText())
+    QvacResponseFormat.JsonValue ->
+        CompletionStreamRequestResponseFormat.JsonObject(CompletionStreamRequestResponseFormatJsonObject())
+    is QvacResponseFormat.JsonSchema -> CompletionStreamRequestResponseFormat.JsonSchema(
+        CompletionStreamRequestResponseFormatJsonSchema(
+            json_schema = CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(
+                name = name,
+                description = description,
+                schema = schema,
+                strict = strict,
+            ),
+        ),
+    )
+}
+
+private fun QvacResponseFormat.toOrchestrateFormat(): CompletionOrchestrateRequestResponseFormat = when (this) {
+    QvacResponseFormat.Text ->
+        CompletionOrchestrateRequestResponseFormat.Text(CompletionOrchestrateRequestResponseFormatText())
+    QvacResponseFormat.JsonValue ->
+        CompletionOrchestrateRequestResponseFormat.JsonObject(CompletionOrchestrateRequestResponseFormatJsonObject())
+    is QvacResponseFormat.JsonSchema -> CompletionOrchestrateRequestResponseFormat.JsonSchema(
+        CompletionOrchestrateRequestResponseFormatJsonSchema(
+            json_schema = CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema(
+                name = name,
+                description = description,
+                schema = schema,
+                strict = strict,
+            ),
+        ),
+    )
+}
+
+private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
+    name = name,
+    description = description,
+    parameters = CompletionStreamRequestToolsItemParameters(
+        properties = parameters.mapValues { (_, parameter) ->
+            CompletionStreamRequestToolsItemParametersPropertiesValue(
+                type = when (parameter.type) {
+                    QvacToolParameterType.STRING -> CompletionStreamRequestToolsItemParametersPropertiesValueType.STRING
+                    QvacToolParameterType.NUMBER -> CompletionStreamRequestToolsItemParametersPropertiesValueType.NUMBER
+                    QvacToolParameterType.INTEGER -> CompletionStreamRequestToolsItemParametersPropertiesValueType.INTEGER
+                    QvacToolParameterType.BOOLEAN -> CompletionStreamRequestToolsItemParametersPropertiesValueType.BOOLEAN
+                    QvacToolParameterType.OBJECT -> CompletionStreamRequestToolsItemParametersPropertiesValueType.OBJECT
+                    QvacToolParameterType.ARRAY -> CompletionStreamRequestToolsItemParametersPropertiesValueType.ARRAY
+                },
+                description = parameter.description,
+                enum = parameter.enumValues,
+            )
+        },
+        required = required.takeIf { it.isNotEmpty() }?.toList(),
+    ),
+)
+
+private fun QvacTool.toOrchestrateTool() = CompletionOrchestrateRequestToolsItem(
+    name = name,
+    description = description,
+    parameters = CompletionOrchestrateRequestToolsItemParameters(
+        properties = parameters.mapValues { (_, parameter) ->
+            CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
+                type = when (parameter.type) {
+                    QvacToolParameterType.STRING -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.STRING
+                    QvacToolParameterType.NUMBER -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.NUMBER
+                    QvacToolParameterType.INTEGER -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.INTEGER
+                    QvacToolParameterType.BOOLEAN -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.BOOLEAN
+                    QvacToolParameterType.OBJECT -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.OBJECT
+                    QvacToolParameterType.ARRAY -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.ARRAY
+                },
+                description = parameter.description,
+                enum = parameter.enumValues,
+            )
+        },
+        required = required.takeIf { it.isNotEmpty() }?.toList(),
+    ),
+)
+
+/** Maps a wire string onto a generated enum, rejecting values the contract does not list. */
+internal inline fun <reified T> wireEnum(field: String, value: String): T = try {
+    Json.decodeFromJsonElement<T>(JsonPrimitive(value))
+} catch (error: SerializationException) {
+    throw IllegalArgumentException("Unknown $field '$value'", error)
+}
+
+internal inline fun <reified T> Json.wireName(value: T): String = encodeToJsonElement(value).jsonPrimitive.content
 
 private fun String.normalizeAssistantCacheContent(): String {
     return replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")

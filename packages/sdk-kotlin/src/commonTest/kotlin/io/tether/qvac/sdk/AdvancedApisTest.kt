@@ -18,7 +18,7 @@ class AdvancedApisTest {
             // run's background stream pump can't race it on the shared `last`.
             assertEquals("request", transport.lastCall!!.getValue("operation").jsonPrimitive.content)
             assertEquals(completion.requestId, transport.lastCall!!.getValue("requestId").jsonPrimitive.content)
-            val translation = client.translation.run("model", "hello", "llamacpp-completion")
+            val translation = client.translation.run("model", "hello", "llamacpp-completion", to = "es")
             assertTrue(translation.cancel())
             assertEquals("request", transport.lastCall!!.getValue("operation").jsonPrimitive.content)
         } finally { client.close() }

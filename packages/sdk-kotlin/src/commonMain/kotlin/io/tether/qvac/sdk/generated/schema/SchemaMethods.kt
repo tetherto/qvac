@@ -4,6 +4,11 @@ package io.tether.qvac.sdk
 import io.tether.qvac.sdk.generated.schema.*
 import kotlinx.coroutines.flow.Flow
 
+sealed interface QvacProgressEvent<out Progress, out Result> {
+    data class Progress<out Progress>(val value: Progress) : QvacProgressEvent<Progress, Nothing>
+    data class Result<out Result>(val value: Result) : QvacProgressEvent<Nothing, Result>
+}
+
 suspend fun QvacClient.`assessModelFit`(request: io.tether.qvac.sdk.generated.schema.AssessModelFitRequest): io.tether.qvac.sdk.generated.schema.AssessModelFitResponse = callTyped(request)
 
 fun QvacClient.`audioEditStream`(request: io.tether.qvac.sdk.generated.schema.AudioEditStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.AudioEditStreamResponse> = streamTyped(request)
