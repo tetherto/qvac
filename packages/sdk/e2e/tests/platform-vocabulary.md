@@ -41,6 +41,7 @@ inherit its skips.
 
 ## Equivalence
 
-Moving platform policy into the catalog must not change what any leg runs.
-The rule above was checked against every definition times every label a leg
-registers with today, and no decision changed.
+Moving platform policy into the catalog must not change what any leg runs, so
+the skip set each leg resolves is recorded in
+`tests/resources/skip-matrix.json` and compared against the catalog by
+`npm run check:skip-matrix`.

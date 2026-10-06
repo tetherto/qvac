@@ -524,9 +524,8 @@
     "config": {}
   },
   "bci": {
-    "on": [
-      "desktop",
-      "electron"
+    "skipPreDownloadOn": [
+      "mobile"
     ],
     "constant": {
       "$const": "BCI_WINDOWED"
@@ -586,8 +585,10 @@
     }
   },
   "diffusion": {
-    "on": [
-      "desktop"
+    "skipPreDownloadOn": [
+      "electron",
+      "snap",
+      "mobile"
     ],
     "constant": {
       "$const": "FLUX_2_KLEIN_4B_Q4_0"
@@ -632,8 +633,10 @@
     }
   },
   "audiogen-turbo": {
-    "on": [
-      "desktop"
+    "skipPreDownloadOn": [
+      "electron",
+      "snap",
+      "mobile"
     ],
     "type": "audiogen-ggml",
     "config": {
