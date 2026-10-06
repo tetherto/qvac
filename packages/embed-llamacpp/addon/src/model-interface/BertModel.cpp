@@ -487,6 +487,8 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
   return splitMode;
 }
 
+} // namespace
+
 BertModelSetup setupParams(
     const std::string& modelGgufPath,
     std::unordered_map<std::string, std::string> configFilemap) {
@@ -709,8 +711,6 @@ BertModelSetup setupParams(
 
   return result;
 }
-} // namespace
-
 void BertModel::resolveShardPaths(
     GGUFShards& shards, const std::string& modelPath) {
   if (shards.gguf_files.empty()) {
