@@ -141,7 +141,8 @@ test('every documented generationParams key is accepted', async (t) => {
       repeat_penalty: 1,
       json_schema: { type: 'object' },
       reasoning_budget: 0,
-      remove_thinking_from_context: true
+      remove_thinking_from_context: true,
+      parallel_tool_calls: false
     }
   })
   t.is(model.addon.runJob.callCount, 1, 'a fully populated params object must be admitted')
@@ -151,4 +152,22 @@ test('every documented generationParams key is accepted', async (t) => {
     generationParams: { grammar: 'root ::= "a"' }
   })
   t.is(grammarModel.addon.runJob.callCount, 1, 'grammar must be admitted on its own')
+})
+
+test('parallel_tool_calls must be a boolean', async (t) => {
+  const model = createModel()
+  await t.exception.all(
+    () =>
+      model.run([{ role: 'user', content: 'a' }], {
+        generationParams: { parallel_tool_calls: 'false' }
+      }),
+    /parallel_tool_calls must be a boolean/
+  )
+  t.is(model.addon.runJob.called, false, 'it must not reach native admission')
+
+  const ok = createModel()
+  await ok.run([{ role: 'user', content: 'a' }], {
+    generationParams: { parallel_tool_calls: false }
+  })
+  t.is(ok.addon.runJob.lastArgs[0][0].generationParams.parallel_tool_calls, false)
 })
