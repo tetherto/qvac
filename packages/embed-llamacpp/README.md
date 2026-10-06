@@ -476,7 +476,7 @@ Results are continuously updated with new releases to ensure up-to-date performa
 
 ## Tests
 
-Integration tests are located in [`test/integration/`](./test/integration/) and cover core embed functionality: single-file model load → embed → unload, multi-instance concurrency (two embed instances running simultaneously, repeated load/unload cycles, unloading one instance while another processes), and the public `run()` / `cancel()` lifecycle. These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
+Integration tests are located in [`test/integration/`](./test/integration/) and cover core embed functionality: single-file model load → embed → unload, multi-instance concurrency (two embed instances running simultaneously, repeated load/unload cycles, unloading one instance while another processes), and the public `run()` / `cancel()` lifecycle. `laya.test.js` covers `LayaDecisions` end to end: every question type, batches, CPU and GPU, request errors, cancel, and load errors. It runs when `LAYA_TEST_MODEL` points at a Laya GGUF and is skipped otherwise, since no Laya GGUF is pinned in `models.manifest.json` yet. These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
 
 C++ unit tests live under [`test/unit/`](./test/unit/) and exercise the native components at a lower level, including backend selection, single-step inference, end-to-end embedding generation, pooling, and Laya decisions. These tests validate the native implementation and help catch issues early in development. The Laya tests that run a model need a Laya GGUF, from `LAYA_TEST_MODEL` or at `models/unit-test/laya-test.gguf`, and are skipped without one.
 
