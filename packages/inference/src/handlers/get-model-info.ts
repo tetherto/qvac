@@ -13,11 +13,11 @@ import { getShardPath, getModelsCacheDir, getSingleFileCachePath } from '@/utils
 import { validateAndJoinPath } from '@/utils/path-security'
 import { ModelNotFoundError } from '@/errors/index'
 import {
-  findParakeetCoremlCompanionSet,
-  findLocallyCachedParakeetCoremlCompanionSet,
-  getParakeetCoremlBundleSpecs,
-  getParakeetCoremlSetKey
-} from '@/handlers/load-model/parakeet-coreml'
+  findCoremlCompanionSet,
+  findLocallyCachedCoremlCompanionSet,
+  getCoremlSidecarSpec,
+  getCoremlSetKey
+} from '@/handlers/load-model/coreml-sidecars'
 import { getRegistryClient } from '@/runtime/registry-client'
 import { getRuntimeContext } from '@/runtime/state'
 
@@ -116,8 +116,9 @@ export async function handleGetModelInfo(
 
 async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStatusResult> {
   const platform = getRuntimeContext().platform
-  if (getParakeetCoremlBundleSpecs(model.registryPath, model.registrySource, platform)) {
-    const cachedSet = await findLocallyCachedParakeetCoremlCompanionSet(model, platform)
+  const spec = getCoremlSidecarSpec(model.registryPath, model.registrySource, platform)
+  if (spec) {
+    const cachedSet = await findLocallyCachedCoremlCompanionSet(model, platform)
     if (cachedSet) {
       const cachedStatus = await handleCompanionSetModel(cachedSet, model.registryPath, model.addon)
       if (cachedStatus.isCached) return cachedStatus
@@ -128,11 +129,11 @@ async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStat
       const primaryPath = validateAndJoinPath(
         getModelsCacheDir(),
         'sets',
-        getParakeetCoremlSetKey(model),
+        getCoremlSetKey(model, spec),
         filename
       )
       await fsPromises.access(primaryPath)
-      const set = await findParakeetCoremlCompanionSet(await getRegistryClient(), model, platform)
+      const set = await findCoremlCompanionSet(await getRegistryClient(), model, platform)
       if (set) {
         const status = await handleCompanionSetModel(set, model.registryPath, model.addon)
         if (status.isCached) return status

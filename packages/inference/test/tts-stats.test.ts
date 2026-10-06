@@ -59,6 +59,18 @@ test('collectTtsStats: preserves zero-valued backend codes', (t) => {
   t.alike(stats, { backendDevice: 0, backendId: 0, gpuUnsupported: 0 })
 })
 
+test('collectTtsStats: forwards the Audio8 Core ML codec flags, zero included', (t) => {
+  // 0 is a real report (no sidecar, or this call fell back to ggml), not absence.
+  t.alike(collectTtsStats({ stats: { codecSidecarLoaded: 1, codecOnCoreml: 1 } }), {
+    codecSidecarLoaded: 1,
+    codecOnCoreml: 1
+  })
+  t.alike(collectTtsStats({ stats: { codecSidecarLoaded: 1, codecOnCoreml: 0 } }), {
+    codecSidecarLoaded: 1,
+    codecOnCoreml: 0
+  })
+})
+
 test('collectTtsStats: returns an empty object when the addon reported nothing', (t) => {
   t.alike(collectTtsStats({}), {})
 })

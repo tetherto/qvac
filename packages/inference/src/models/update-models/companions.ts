@@ -35,6 +35,12 @@ import { BERGAMOT_MODEL_RE } from '../../surface'
  *     `voice-en.gguf` is written as `voice.gguf` so the addon finds it next to the LLM.
  *     Companion files stay as standalone catalog entries (same as the original
  *     hand-patch); only the LLM primary carries `companionSet` for directory load.
+ *
+ *   Apple Core ML bundles:
+ *     Every file under a `<name>.mlmodelc/` directory is one component of a
+ *     compiled bundle the loader stages beside its GGUF on macOS and iOS
+ *     (`handlers/load-model/coreml-sidecars.ts`). No component is a model on
+ *     its own, so all of them are companion-only.
  */
 export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   const bySourcePath = new Map<string, ProcessedModel>()
@@ -49,17 +55,7 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   groupBciCompanions(models, bySourcePath, companionKeys)
   groupMecabCompanions(models, bySourcePath, companionKeys)
   groupCosyvoiceCompanions(models, bySourcePath)
-
-  // Compiled Core ML bundles are fetched as optional files for an existing
-  // Parakeet GGUF. Their individual components are not public model constants.
-  for (const model of models) {
-    if (
-      model.registrySource === 's3' &&
-      /\/ggml\/parakeet\/\d{4}-\d{2}-\d{2}\/[^/]+\.mlmodelc\//.test(model.registryPath)
-    ) {
-      companionKeys.add(sourceKey(model.registrySource, model.registryPath))
-    }
-  }
+  markCoremlBundleComponents(models, companionKeys)
 
   return models.map((model) => {
     const key = sourceKey(model.registrySource, model.registryPath)
@@ -68,6 +64,16 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
     }
     return model
   })
+}
+
+const COREML_BUNDLE_COMPONENT_RE = /(?:^|\/)[^/]+\.mlmodelc\//
+
+function markCoremlBundleComponents(models: ProcessedModel[], companionKeys: Set<string>): void {
+  for (const model of models) {
+    if (COREML_BUNDLE_COMPONENT_RE.test(model.registryPath)) {
+      companionKeys.add(sourceKey(model.registrySource, model.registryPath))
+    }
+  }
 }
 
 function groupOnnxCompanions(

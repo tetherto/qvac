@@ -15,11 +15,12 @@ operations over its worker transport.
 - Update schemas, both in-process and SDK transport callers, and focused tests when
   changing a cache-management response.
 
-Apple Parakeet loads with available Core ML encoder bundles use the existing
-`sets/<setKey>/` cache layout. The GGUF and each `.mlmodelc` directory live in
-that set with companion metadata used to reopen the set without registry access,
-so `clearStorage` removes them together. When a sidecar is absent or unavailable,
-the GGUF uses its ordinary single-file cache path.
+A GGUF downloaded with its Core ML bundle on macOS or iOS uses the
+`sets/<setKey>/` companion-set layout: the GGUF and the `.mlmodelc` directory sit
+side by side, with a metadata file that lets a later load reopen the set without
+registry access. When that GGUF is the loaded model's primary file,
+`clearStorage` removes the whole set, bundle included. A GGUF loaded without a
+bundle uses its ordinary single-file cache path.
 
 The current schemas and handlers are authoritative for supported fields and model
 types. Do not maintain a second field inventory here.

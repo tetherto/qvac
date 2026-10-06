@@ -85,6 +85,7 @@ import { ConfigReloadExecutor } from '../shared/executors/node/config-reload-exe
 import { NodeLoggingExecutor } from '../shared/executors/node/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
 import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
+import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
@@ -706,6 +707,9 @@ export const executor = createExecutor({
       /^snap-storage-/,
       'Snap storage tests require the strict-confined Snap consumer'
     ),
+    ...(process.platform === 'darwin'
+      ? []
+      : [new SkipExecutor(/^tts-audio8-coreml$/, 'Core ML runs on macOS and iOS only')]),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
@@ -717,6 +721,7 @@ export const executor = createExecutor({
     new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
+    new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
