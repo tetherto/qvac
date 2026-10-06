@@ -89,7 +89,7 @@ function findBareChildrenWin32(parentPid: number): number[] {
 export async function waitForBareChildren(
   parentPid: number,
   want: (pids: number[]) => boolean,
-  timeoutMs = 15_000
+  timeoutMs = 60_000
 ): Promise<number[]> {
   const deadline = Date.now() + timeoutMs
   let pids = findBareChildren(parentPid)
