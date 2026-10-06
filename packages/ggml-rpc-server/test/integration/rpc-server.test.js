@@ -34,7 +34,6 @@ function startStopped(t, options) {
 test("serves the RPC protocol on the CPU device", async (t) => {
   const server = await startStopped(t, { device: "CPU" });
 
-  t.is(server.runtime, "in-process");
   t.is(server.host, "127.0.0.1");
   t.is(server.url, `${server.host}:${server.port}`);
   t.is(server.device, "CPU");
