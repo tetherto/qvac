@@ -1,8 +1,9 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "b9ca3b07a85cd88fdd30730c662b4c138ede1ca3",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+    "baseline": "c958dda6d4744f88e5d629532cd8317c155bb18e",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
+    "reference": "QVAC-26492/moss-sfx-model-fit"
   },
   "registries": [
     {
