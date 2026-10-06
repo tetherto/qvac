@@ -1,8 +1,9 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
   generateStableToolCallId,
+  coerceByParameterTypes,
   parameterAllowsNull,
-  primaryParameterType,
+  parameterTypes,
   validateToolArguments,
   type ParserResult
 } from '@/utils/tools/shared'
@@ -20,7 +21,7 @@ const NAME_ATTR_REGEX = /(?:^|\s)name="([^"]*)"/
 const STRING_ATTR_REGEX = /(?:^|\s)string="(true|false)"/i
 const FALLBACK_DIALECT_REGEX = /<tool_call>|"name"\s*:/
 
-function coerceBySchemaType(value: string, type?: string): unknown {
+function coerceBySchemaType(value: string, type: string): unknown {
   switch (type) {
     case 'number': {
       const n = Number(value)
@@ -52,7 +53,7 @@ function coerceParamValue(raw: string, isString: string | undefined, schema?: un
   const trimmed = raw.trim()
   if (isString === undefined) {
     if (trimmed === 'null' && parameterAllowsNull(schema)) return null
-    return coerceBySchemaType(trimmed, primaryParameterType(schema))
+    return coerceByParameterTypes(trimmed, parameterTypes(schema), coerceBySchemaType)
   }
   if (isString === 'true') return trimmed
   try {

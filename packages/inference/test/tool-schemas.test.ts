@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { toolSchema, type Tool } from '@/schemas'
 import { convertToolInput } from '@/utils/tool-helpers'
 import { getMcpTools } from '@/utils/mcp-adapter'
-import { parameterAllowsNull, primaryParameterType } from '@/utils/tools/shared'
+import { parameterAllowsNull, parameterTypes } from '@/utils/tools/shared'
 import type { McpClient } from '@/schemas/mcp-adapter'
 
 test('toolSchema keeps nested parameter keywords', (t) => {
@@ -63,7 +63,7 @@ test('convertToolInput keeps nested Zod structure', (t) => {
   t.alike(stops.items.required, ['name', 'at'])
   // Zod versions differ between `anyOf` and a type array for nullables.
   const at = stops.items.properties['at']
-  t.is(primaryParameterType(at), 'string')
+  t.alike(parameterTypes(at), ['string'])
   t.ok(parameterAllowsNull(at))
   t.alike(properties['days'], { type: 'integer' }, 'safe-integer bounds are dropped')
   t.alike(properties['unit'], { type: 'string', enum: ['km', 'mi'], description: 'Distance unit' })

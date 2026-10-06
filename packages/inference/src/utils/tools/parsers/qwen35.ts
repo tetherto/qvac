@@ -1,8 +1,9 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
   generateStableToolCallId,
+  coerceByParameterTypes,
   parameterAllowsNull,
-  primaryParameterType,
+  parameterTypes,
   validateToolArguments,
   type ParserResult
 } from '@/utils/tools/shared'
@@ -12,8 +13,10 @@ import {
 function coerceParamValue(raw: string, schema?: unknown): unknown {
   const trimmed = raw.trim()
   if (trimmed === 'null' && parameterAllowsNull(schema)) return null
-  const type = primaryParameterType(schema)
-  if (!type) return trimmed
+  return coerceByParameterTypes(trimmed, parameterTypes(schema), coerceToType)
+}
+
+function coerceToType(trimmed: string, type: string): unknown {
   switch (type) {
     case 'number': {
       if (trimmed.length === 0) throw new Error(`invalid numeric value: ""`)

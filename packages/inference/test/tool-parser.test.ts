@@ -1672,3 +1672,83 @@ test('parseDsmlFormat: nullable and anyOf types coerce to their non-null member'
   t.is(result.errors.length, 0)
   t.alike(result.toolCalls[0]?.arguments, { limit: null, offset: 3 })
 })
+
+// Unions try each branch in declaration order with `string` last.
+const unionCases: Array<[string, Record<string, unknown>, string, unknown]> = [
+  [
+    'anyOf [integer, string] with text',
+    { anyOf: [{ type: 'integer' }, { type: 'string' }] },
+    'abc',
+    'abc'
+  ],
+  [
+    'anyOf [integer, string] with a number',
+    { anyOf: [{ type: 'integer' }, { type: 'string' }] },
+    '42',
+    42
+  ],
+  ["type ['string', 'object'] with JSON", { type: ['string', 'object'] }, '{"a":1}', { a: 1 }],
+  ["type ['string', 'object'] with text", { type: ['string', 'object'] }, 'hello', 'hello'],
+  [
+    'oneOf [boolean, integer] with a boolean',
+    { oneOf: [{ type: 'boolean' }, { type: 'integer' }] },
+    'true',
+    true
+  ],
+  [
+    'oneOf [boolean, integer] with a number',
+    { oneOf: [{ type: 'boolean' }, { type: 'integer' }] },
+    '7',
+    7
+  ],
+  [
+    'enum-only branch beside integer',
+    { anyOf: [{ enum: ['auto', 'off'] }, { type: 'integer' }] },
+    'auto',
+    'auto'
+  ],
+  [
+    'enum-only branch beside integer with a number',
+    { anyOf: [{ enum: ['auto', 'off'] }, { type: 'integer' }] },
+    '3',
+    3
+  ],
+  ["type ['object', 'array'] with an array", { type: ['object', 'array'] }, '[1,2]', [1, 2]]
+]
+
+function unionTool(schema: Record<string, unknown>): Tool {
+  return {
+    type: 'function',
+    name: 'pick',
+    description: 'pick',
+    parameters: { type: 'object', properties: { v: schema } }
+  }
+}
+
+for (const [label, schema, raw, expected] of unionCases) {
+  test(`union coercion (qwen35): ${label}`, (t) => {
+    const text = `<tool_call><function=pick><parameter=v>${raw}</parameter></function></tool_call>`
+    const result = parseQwen35Format(text, [unionTool(schema)])
+    t.is(result.errors.length, 0)
+    t.alike(result.toolCalls[0]?.arguments, { v: expected })
+  })
+
+  test(`union coercion (dsml): ${label}`, (t) => {
+    const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="pick">
+<｜DSML｜parameter name="v">${raw}</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+    const result = parseDsmlFormat(text, [unionTool(schema)])
+    t.is(result.errors.length, 0)
+    t.alike(result.toolCalls[0]?.arguments, { v: expected })
+  })
+}
+
+test('union coercion: no branch accepts the value → PARSE_ERROR', (t) => {
+  const tool = unionTool({ anyOf: [{ type: 'integer' }, { type: 'boolean' }] })
+  const text = `<tool_call><function=pick><parameter=v>abc</parameter></function></tool_call>`
+  const result = parseQwen35Format(text, [tool])
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
+})
