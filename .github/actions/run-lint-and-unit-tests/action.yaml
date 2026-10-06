@@ -26,7 +26,7 @@ runs:
       with:
         # check-bundler-requires.mjs runs on this node and loads bare-pack's
         # bare-module-lexer addon, which needs the Node range in
-        # packages/sdk/package.json engines.node (^22.21.0 || >=24.9.0).
+        # packages/cli/package.json engines.node (^22.21.0 || >=24.9.0).
         node-version: "22.x"
 
     - name: Restore npm cache

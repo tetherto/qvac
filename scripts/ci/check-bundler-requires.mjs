@@ -21,9 +21,10 @@ const LEXER_PACKAGE = 'bare-module-lexer'
 // on, so the lexer has to be the one that bare-pack resolves. Reading it out of
 // an ambient `node_modules` picks up whatever version happens to be hoisted
 // nearby, and the desync this check hunts for differs between lexer releases.
-// The SDK's engines.node is the Node floor that lexer's native addon needs;
+// @qvac/cli's engines.node is the Node floor that lexer's native addon needs;
 // below it the addon aborts the process instead of throwing.
 const SDK_MANIFEST_PATH = fileURLToPath(new URL('../../packages/sdk/package.json', import.meta.url))
+const CLI_MANIFEST_PATH = fileURLToPath(new URL('../../packages/cli/package.json', import.meta.url))
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
 // and fixtures under `test/` embed require-looking strings in output text
@@ -69,11 +70,14 @@ function collectScripts(directory) {
   })
 }
 
-function readSdkManifest() {
-  const manifest = JSON.parse(fs.readFileSync(SDK_MANIFEST_PATH, 'utf8'))
+function readManifest(manifestPath) {
+  return JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+}
+
+function readBundlerRequirements() {
   return {
-    bundlerSpec: `bare-pack@${manifest.dependencies['bare-pack']}`,
-    nodeRange: manifest.engines.node
+    bundlerSpec: `bare-pack@${readManifest(SDK_MANIFEST_PATH).dependencies['bare-pack']}`,
+    nodeRange: readManifest(CLI_MANIFEST_PATH).engines.node
   }
 }
 
@@ -104,7 +108,7 @@ function assertNodeCanLoadLexer(bundlerManifest, nodeRange) {
 }
 
 function loadLexer() {
-  const { bundlerSpec, nodeRange } = readSdkManifest()
+  const { bundlerSpec, nodeRange } = readBundlerRequirements()
   const bundlerManifest = installBundler(bundlerSpec)
   assertNodeCanLoadLexer(bundlerManifest, nodeRange)
   const lexerPath = createRequire(bundlerManifest).resolve(LEXER_PACKAGE)
