@@ -47,3 +47,55 @@ test('project targets reference scripts present in the historical release', () =
   assert.equal(Boolean(project.targets.build), Boolean(packageJson.addon))
   if (packageJson.addon) assert.ok(packageJson.files.includes('prebuilds'))
 })
+
+const { spawnSync } = require('node:child_process')
+const BASH_COMMAND = process.platform === 'win32' ? 'bash.exe' : 'bash'
+const DETECTION_PATTERN = /manifest_ref=\$CONFIG_REF[\s\S]*?has_check=\$\([\s\S]*?\|\| echo false\)/
+const WRAPPER_MANIFEST = JSON.stringify({ scripts: { 'check:generated': 'tsc' } })
+const HANDWRITTEN_MANIFEST = JSON.stringify({ scripts: {} })
+const MOCK_GIT = `git() {
+  case "$2" in
+    trusted:*) printf '%s' "$TRUSTED_MANIFEST" ;;
+    release:*) printf '%s' "$RELEASE_MANIFEST" ;;
+    *) return 1 ;;
+  esac
+}`
+
+function detectGeneratedWrappers (branchName, trustedManifest, releaseManifest) {
+  const workflow = readRepositoryFile('.github/workflows/on-merge-nx.yml')
+  const detection = workflow.match(DETECTION_PATTERN)
+  assert.ok(detection, 'generated wrapper detection is present')
+  const result = spawnSync(BASH_COMMAND, ['-c',
+    'set -euo pipefail\n' + MOCK_GIT + '\n' + detection[0] + '\nprintf "%s" "$has_check"'
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      REF_NAME: branchName,
+      CONFIG_REF: 'trusted',
+      GITHUB_SHA: 'release',
+      pkg: PACKAGE_NAME,
+      TRUSTED_MANIFEST: trustedManifest,
+      RELEASE_MANIFEST: releaseManifest
+    }
+  })
+  assert.equal(result.status, 0, result.stderr || result.error?.message)
+  return result.stdout
+}
+
+test('handwritten releases do not inherit the generated wrapper gate from main', () => {
+  assert.equal(detectGeneratedWrappers('release-' + PACKAGE_NAME + '-0.5.1',
+    WRAPPER_MANIFEST, HANDWRITTEN_MANIFEST), 'false')
+})
+
+test('generated releases verify wrappers even when main has no generated wrapper script', () => {
+  assert.equal(detectGeneratedWrappers('release-' + PACKAGE_NAME + '-0.13.2',
+    HANDWRITTEN_MANIFEST, WRAPPER_MANIFEST), 'true')
+})
+
+test('development branches retain the trusted generated wrapper gate', () => {
+  assert.equal(detectGeneratedWrappers('feature-' + PACKAGE_NAME,
+    WRAPPER_MANIFEST, HANDWRITTEN_MANIFEST), 'true')
+  assert.equal(detectGeneratedWrappers('tmp-' + PACKAGE_NAME,
+    HANDWRITTEN_MANIFEST, WRAPPER_MANIFEST), 'false')
+})

@@ -169,10 +169,8 @@ jobs:
               continue
             fi
 
-            # Config comes from CONFIG_REF, not the pushed commit. Every key below
-            # steers what gets built, tested and published, and a push to
-            # feature-*/tmp-* needs no review, so reading them from the commit they
-            # gate lets that push rewrite its own publish rules. Matches on-pr-nx.
+            # Publishing policy comes from CONFIG_REF, not the pushed commit.
+            # Feature and temp branches must not rewrite their own publish rules.
             if ! onmerge=$(git show "${CONFIG_REF}:${pj}" 2>/dev/null | jq -c '.targets["on-merge"].options.ci // {}'); then
               echo "::notice::packages/${pkg}/project.json is not on ${CONFIG_REF} yet, skipping. Land it on the default branch first."
               continue
@@ -181,10 +179,13 @@ jobs:
             root=$(git show "${CONFIG_REF}:${pj}" | jq -r '.root')
             has_build=$(git show "${CONFIG_REF}:${pj}" | jq -r 'if .targets.build then "true" else "false" end')
 
-            # Derived, not declared, like hasPrebuilds above. package.json is the
-            # only place that knows whether wrappers are generated, and two
-            # packages carry the script with no verifyGenerated flag today.
-            has_check=$(git show "${CONFIG_REF}:packages/${pkg}/package.json" 2>/dev/null \
+            # Release packages can predate generated wrappers on main. Inspect
+            # the published revision for releases; retain trusted config for dev builds.
+            manifest_ref=$CONFIG_REF
+            if [[ "$REF_NAME" == release-* ]]; then
+              manifest_ref=$GITHUB_SHA
+            fi
+            has_check=$(git show "${manifest_ref}:packages/${pkg}/package.json" 2>/dev/null \
               | jq -r 'if .scripts["check:generated"] then "true" else "false" end' || echo false)
 
             # After `+ $onmerge` so the derived value wins over a stale project.json key.
