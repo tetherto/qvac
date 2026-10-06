@@ -4,7 +4,7 @@ import {
   LLAMA_WEIGHTS_ASSUMPTION,
   kvCacheBytesForWidth,
   kvElementBytes
-} from '@/resources/model-fit/estimators/llm'
+} from '@/resources/model-fit/kv-cache'
 
 export const FLOOR_VERSION = 'floor-v1'
 
@@ -30,19 +30,19 @@ export interface FloorResult {
 }
 
 /**
- * The smallest resident footprint the catalog facts prove, with no coefficient
- * measured anywhere: artifact bytes, plus the KV cache for a llama.cpp model at
- * the cheapest element width the engine can default to.
+ * The smallest resident footprint the catalog facts prove: artifact bytes, plus
+ * the KV cache for a llama.cpp model at the cheapest element width the engine
+ * can default to.
  *
- * Every term a calibrated estimate adds on top — weight slack, engine overhead,
- * compute buffers, a completion's working peak — is non-negative, so a floor
- * with all of them at zero is unconditionally valid on any platform and any
- * backend. It can therefore refuse a model (`likely-too-large` when even the
- * floor is over budget) but never confirm one: how far above the floor the real
- * load lands is exactly what calibration exists to measure.
+ * Every term the real load adds on top — weight slack, engine overhead, compute
+ * buffers, a completion's working peak — is non-negative, so a floor with all of
+ * them at zero is unconditionally valid on any platform and any backend. It can
+ * therefore refuse a model (`likely-too-large` when even the floor is over
+ * budget) but never confirm one, since how far above the floor the real load
+ * lands is unmeasured here.
  *
  * This is the zero-fetch gate. It reads nothing but the catalog and stays the
- * fallback wherever no calibration or engine projection is available.
+ * fallback wherever no engine measurement is available.
  */
 export function computeFloor(input: FloorInput): FloorResult {
   const { profile, workload, extraArtifactBytes } = input

@@ -1,7 +1,5 @@
 import type { GgufFacts, KvLayerClass } from '@/schemas/model-resource-profile'
-import type { ByteRange, EstimatorInput, EstimatorResult } from '@/resources/model-fit/types'
-
-export const LLM_ESTIMATOR_VERSION = 'llm-v1'
+import type { ByteRange } from '@/resources/model-fit/types'
 
 /**
  * KV-cache element widths, in bytes per element.
@@ -30,105 +28,6 @@ function disablesFlashAttention(architecture: string): boolean {
 export const LLAMA_WEIGHTS_ASSUMPTION =
   'weights are counted at full artifact size; llama.cpp maps them by default, so those pages are file-backed and evictable rather than anonymous RAM'
 
-/**
- * Estimates memory for a llama.cpp completion or embedding model from catalog
- * metadata alone.
- *
- * Weights come from the artifact size; the KV cache is computed from the
- * transformer shape and the requested context. The estimate is a range, not a
- * number, because two things are genuinely undetermined before load: the
- * backend the engine will pick (which sets the default KV-cache type) and, for
- * some architectures, which blocks hold a full cache.
- */
-export function estimateLlm(input: EstimatorInput): EstimatorResult {
-  const { profile, workload, calibration, extraArtifactBytes, hasGpu } = input
-
-  if (workload.kind !== 'llm') {
-    return {
-      kind: 'unknown',
-      estimatorVersion: LLM_ESTIMATOR_VERSION,
-      reasons: [`workload kind '${workload.kind}' is not supported by ${LLM_ESTIMATOR_VERSION}`]
-    }
-  }
-
-  const facts = profile.ggufFacts
-  if (!facts) {
-    return {
-      kind: 'unknown',
-      estimatorVersion: LLM_ESTIMATOR_VERSION,
-      reasons: ['no GGUF metadata for this model in the catalog, so the KV cache cannot be sized']
-    }
-  }
-
-  const assumptions: string[] = []
-  const reasons: string[] = []
-
-  // Weights: mapped at file size by default, so artifact bytes are the floor.
-  // The upper coefficient covers the allocator's copy-on-write and alignment
-  // slack measured during calibration.
-  const artifactBytes = profile.artifactBytes + extraArtifactBytes
-  assumptions.push(LLAMA_WEIGHTS_ASSUMPTION)
-  if (extraArtifactBytes > 0) {
-    assumptions.push('companion artifacts passed in `artifacts` are counted at full size')
-  }
-
-  // Context: never more than the model was trained for — llama.cpp clamps.
-  let contextTokens = workload.contextTokens ?? facts.contextLength
-  if (contextTokens > facts.contextLength) {
-    assumptions.push(
-      `requested ${workload.contextTokens} tokens exceeds the trained context of ${facts.contextLength}; clamped to the trained context`
-    )
-    contextTokens = facts.contextLength
-  }
-
-  const element = kvElementBytes(facts, hasGpu)
-  assumptions.push(element.assumption)
-  const kv = kvCacheBytes(facts, contextTokens, element.bytes, assumptions, reasons)
-
-  // llama.cpp builds the context at load — KV cache, engine overhead, compute
-  // buffers — so all of it is resident for the model's lifetime. Parking any of
-  // it in `working` would let `sequential` count only the largest. What a
-  // completion adds on top is released afterwards, so that part is `working`.
-  const persistent: ByteRange = {
-    lower: Math.ceil(
-      artifactBytes +
-        kv.lower +
-        calibration.fixedOverheadBytes.lower +
-        calibration.computeBufferBytesPerToken.lower * contextTokens
-    ),
-    upper: Math.ceil(
-      artifactBytes * calibration.weightUpperCoeff +
-        kv.upper +
-        calibration.fixedOverheadBytes.upper +
-        calibration.computeBufferBytesPerToken.upper * contextTokens
-    )
-  }
-  assumptions.push(
-    'the KV cache, engine overhead and compute buffers count as resident for the model’s whole lifetime; llama.cpp allocates them when the model loads, not per operation'
-  )
-  if (calibration.workingPeakBytes && calibration.workingPeakBytes.upper > 0) {
-    assumptions.push(
-      'one operation is assumed in flight per model; the working peak is what a single completion was measured to add on top of the resident cost'
-    )
-  }
-
-  assumptions.push(
-    'default KV-cache types are assumed; an explicit `cache-type-k`/`cache-type-v` in `modelConfig` is not read here and would change these numbers'
-  )
-
-  return {
-    kind: 'estimate',
-    estimatorVersion: LLM_ESTIMATOR_VERSION,
-    persistent,
-    working: {
-      lower: calibration.workingPeakBytes?.lower ?? 0,
-      upper: calibration.workingPeakBytes?.upper ?? 0
-    },
-    reasons,
-    assumptions
-  }
-}
-
 /** A KV-cache element width range, with the reason it is that range. */
 export interface KvElementWidth {
   bytes: ByteRange
@@ -138,15 +37,8 @@ export interface KvElementWidth {
 /**
  * Picks the KV-cache element width range for this model on this device.
  *
- * Exported because the calibration harness has to subtract the cache the engine
- * *actually* allocated before it can fit the remaining overhead. Hard-coding a
- * width there would skew the fit by roughly 2× on a GPU backend — and because
- * the error scales with context, it would corrupt the per-token slope rather
- * than shifting the intercept. Sharing this rule keeps the two in step.
- *
  * @returns Lower/upper bytes per cache element, and the assumption that choice
- *   rests on. Side-effect free so the harness can call it without an
- *   assumptions array.
+ *   rests on.
  */
 export function kvElementBytes(facts: GgufFacts, hasGpu: boolean): KvElementWidth {
   if (disablesFlashAttention(facts.architecture)) {
@@ -173,13 +65,8 @@ export function kvElementBytes(facts: GgufFacts, hasGpu: boolean): KvElementWidt
 /**
  * KV-cache bytes at one fixed element width, clamped to the trained context.
  *
- * Exported for the calibration harness, which must subtract the cache the
- * engine actually allocated using the exact accounting the estimator uses —
- * a hand-rolled copy drifted once already (no sliding-window branch, `ceil`
- * where the estimator bounds with `floor`, no SSM state). A non-degenerate
- * range means part of the layout is engine-owned, so the allocation cannot be
- * known from the file alone and the model is unsuitable for calibration; the
- * harness aborts on it rather than guessing.
+ * A non-degenerate range means part of the layout is engine-owned, so the
+ * allocation cannot be known from the file alone.
  */
 export function kvCacheBytesForWidth(
   facts: GgufFacts,
