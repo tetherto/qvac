@@ -29,6 +29,16 @@ endif()
 include("${_qvac_vcpkg_scripts}/toolchains/windows.cmake")
 unset(_qvac_vcpkg_scripts)
 
+# windows.cmake sets CMAKE_RC_FLAGS to "/c65001 /DWIN32". cmake -E cmake_llvm_rc
+# forwards those flags to clang-cl -E and to llvm-rc. /c65001 is rc.exe's UTF-8
+# code page; clang-cl treats it as an input file ("no such file or directory").
+if(CMAKE_RC_FLAGS MATCHES "[/-]c65001")
+  string(REGEX REPLACE "(^|[ \t]+)[/-]c65001([ \t]+|$)" "\\1" _qvac_rc_flags "${CMAKE_RC_FLAGS}")
+  string(STRIP "${_qvac_rc_flags}" _qvac_rc_flags)
+  set(CMAKE_RC_FLAGS "${_qvac_rc_flags}" CACHE STRING "" FORCE)
+  unset(_qvac_rc_flags)
+endif()
+
 # windows.cmake writes CMAKE_<LANG>_FLAGS into the cache, which drops the
 # resource-dir and -B flags bare-make put in FLAGS_INIT. llvm-runtime does
 # not lay those out next to clang-cl, so put them back on the cache flags.
