@@ -220,7 +220,10 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
 }
 
 /** The engine fitter's verdict for one candidate, through that load's plugin. */
-async function resolveNativeFit(candidate: ModelFitCandidate): Promise<NativeCandidateFit> {
+async function resolveNativeFit(
+  candidate: ModelFitCandidate,
+  alreadyCounted: number
+): Promise<NativeCandidateFit> {
   const modelType = modelTypeOf(candidate)
   if (!isCanonicalModelType(modelType)) {
     return { unavailable: `no plugin handles model type ${modelType}` }
@@ -235,7 +238,10 @@ async function resolveNativeFit(candidate: ModelFitCandidate): Promise<NativeCan
       ...(candidate.modelConfig !== undefined && { modelConfig: candidate.modelConfig })
     },
     estimateTargetFor(candidate).model.name,
-    budgetMs === undefined ? {} : { stub: { budgetMs } }
+    {
+      ...(budgetMs !== undefined && { stub: { budgetMs } }),
+      ...(alreadyCounted > 0 && { fit: { extraResidentBytes: alreadyCounted } })
+    }
   )
 
   if (outcome.status === 'projected') return { fit: outcome.fit }
@@ -249,20 +255,45 @@ async function resolveNativeFit(candidate: ModelFitCandidate): Promise<NativeCan
   }
 }
 
+/** What a projection holds for the model's lifetime, the breakdown or the total. */
+function residentBytesOf(fit: NativeCandidateFit): number {
+  const projection = fit.fit?.projection
+  if (!projection) return 0
+
+  const { weightsBytes, contextBytes, deviceBytes, hostBytes } = projection
+  const resident =
+    weightsBytes === undefined || contextBytes === undefined
+      ? deviceBytes
+      : weightsBytes + contextBytes
+
+  return (resident ?? 0) + (hostBytes ?? 0)
+}
+
 /**
  * One verdict per candidate, in request order. Each probe measures its own
  * model against the whole machine, so the bytes compose where the verdicts do
  * not, and `assess` combines them under one budget.
  *
  * Run one at a time, so a set never holds several fitters open at once.
+ *
+ * Each probe holds back what the earlier ones projected, since none of them is
+ * registered in this worker and the fitter would otherwise place every
+ * candidate in the same free memory. Every model is resident under either
+ * execution mode, so the holdback does not read it. The answer follows the
+ * order the caller listed the models in.
  */
 async function resolveNativeFits(
   candidates: readonly ModelFitCandidate[]
 ): Promise<NativeCandidateFit[]> {
   const fits: NativeCandidateFit[] = []
+  let alreadyCounted = 0
+
   for (const candidate of candidates) {
-    fits.push(await resolveNativeFit(candidate))
+    const fit = await resolveNativeFit(candidate, alreadyCounted)
+    fits.push(fit)
+    alreadyCounted += residentBytesOf(fit)
   }
+
   return fits
 }
 

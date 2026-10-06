@@ -29,14 +29,14 @@ const UNIFIED_MEMORY_PLATFORMS: readonly ModelFitPlatform[] = [
 export type ProfileResolver = (sha256Checksum: string) => ModelResourceProfile | undefined
 
 /**
- * What one candidate came out as. `native` is what the engine measured;
- * `refused` is an engine saying no without figures to divide; `floor` is the
- * computed lower bound alone, taken when no engine answered but the model
- * still executes out of the memory the budget measures; `unknown` is neither.
+ * What one candidate came out as. `native` is what the engine measured; `bare`
+ * is an engine answering without figures to divide; `floor` is the computed
+ * lower bound alone, taken when no engine answered but the model still
+ * executes out of the memory the budget measures; `unknown` is neither.
  */
 type Evaluation =
   | NativeEvaluation
-  | RefusedEvaluation
+  | BareEvaluation
   | {
       kind: 'floor'
       bytes: number
@@ -46,20 +46,23 @@ type Evaluation =
   | { kind: 'unknown'; reasons: readonly string[]; assumptions?: readonly string[] }
 
 /**
- * An engine that will not run this load and reports no breakdown to compare —
- * audiogen gives a peak across pipeline phases, diffusion a per-module table.
- * The refusal is the whole answer, and needs no budget to stand.
+ * An engine's verdict with no breakdown to compare — audiogen reports a peak
+ * across pipeline phases, diffusion a per-module table. A refusal stands
+ * whatever else is in the set. A fit stands only for a lone candidate, since
+ * it carries nothing to add to another model's bytes.
  */
-interface RefusedEvaluation {
-  kind: 'refused'
+interface BareEvaluation {
+  kind: 'bare'
+  verdict: 'fit' | 'does-not-fit'
   estimatorVersion: string
   reasons: readonly string[]
 }
 
 /**
- * What one engine fitter measured, as bytes that compose. Only `deviceBytes`
- * divides into persistent and working, so a host figure is carried whole and
- * counted as resident, which errs toward refusing.
+ * What one engine fitter measured, as bytes that compose. Weights and the KV
+ * cache stay resident for the model's lifetime; the compute buffers are one
+ * operation's peak, and only that is shared between models that never run at
+ * once. A host figure carries no breakdown, so it counts as resident whole.
  */
 interface NativeEvaluation {
   kind: 'native'
@@ -74,34 +77,34 @@ interface NativeEvaluation {
 
 /**
  * What one fitter answered: its measurement where the figures divide, its bare
- * refusal where they do not, and `undefined` where it reached no verdict or
- * said yes without figures to carry into the set.
+ * verdict where they do not, and `undefined` where it reached no verdict.
  */
 function nativeEvaluation(
   native: NativeCandidateFit | undefined
-): NativeEvaluation | RefusedEvaluation | undefined {
+): NativeEvaluation | BareEvaluation | undefined {
   const fit = native?.fit
   if (!fit || fit.verdict === 'unknown') return undefined
 
   const reasons = fit.message === undefined ? [fit.reason] : [fit.reason, fit.message]
-  const refused: RefusedEvaluation = {
-    kind: 'refused',
+  const bare: BareEvaluation = {
+    kind: 'bare',
+    verdict: fit.verdict,
     estimatorVersion: fit.estimatorVersion,
     reasons
   }
 
   const projection = fit.projection
-  if (!projection) return fit.verdict === 'does-not-fit' ? refused : undefined
+  if (!projection) return bare
 
   const { weightsBytes, contextBytes, computeBytes, hostBytes } = projection
   if (weightsBytes === undefined || contextBytes === undefined || computeBytes === undefined) {
-    return fit.verdict === 'does-not-fit' ? refused : undefined
+    return bare
   }
 
   return {
     kind: 'native',
-    persistent: weightsBytes,
-    working: contextBytes + computeBytes,
+    persistent: weightsBytes + contextBytes,
+    working: computeBytes,
     hostBytes: hostBytes ?? 0,
     estimatorVersion: fit.estimatorVersion,
     verdict: fit.verdict,
@@ -204,7 +207,13 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   const floorApplies = !onDevice && boundBySystemMemory(resources, platform)
 
   const evaluated = models.map((candidate, index) =>
-    evaluate(candidate, resolveProfile, floorApplies, options.nativeFits?.[index])
+    evaluate(
+      candidate,
+      resolveProfile,
+      floorApplies,
+      options.nativeFits?.[index],
+      models.length === 1
+    )
   )
 
   const results = evaluated.map(({ result }) => result)
@@ -214,7 +223,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   }
 
   for (const { result } of evaluated) {
-    if (result.kind === 'refused') continue
+    if (result.kind === 'bare') continue
     for (const assumption of result.assumptions ?? []) {
       if (!assumptions.includes(assumption)) assumptions.push(assumption)
     }
@@ -227,26 +236,28 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   const natives = results.filter((result): result is NativeEvaluation => result.kind === 'native')
   const anyUnknown = results.some((result) => result.kind === 'unknown')
   const anyFloor = results.some((result) => result.kind === 'floor')
-  const anyRefused = results.some((result) => result.kind === 'refused')
+  const bares = results.filter((result): result is BareEvaluation => result.kind === 'bare')
   const allNative = natives.length === results.length && natives.length > 0
 
   // Measured bytes are exact, so a set of them can confirm a fit. Mixed with a
   // floor the total is a lower bound again, and `combinedFloor` carries it.
   const combinedNative = allNative ? aggregateNative(natives, execution) : undefined
-  const combinedFloor = anyUnknown || anyRefused ? undefined : aggregateFloor(results, execution)
+  const combinedFloor =
+    anyUnknown || bares.length > 0 ? undefined : aggregateFloor(results, execution)
 
-  // A refusal decides the set, so it names the evidence; otherwise the weakest
-  // candidate does. Absent when a candidate rests on nothing, so an `unknown`
-  // carrying `evidence` is a near-miss rather than a missing model.
-  const evidence: ModelFitEvidence | undefined = anyRefused
-    ? 'native-fit'
-    : anyUnknown
-      ? undefined
-      : anyFloor
-        ? 'computed-only'
-        : allNative
-          ? 'native-fit'
-          : undefined
+  // A bare verdict is the engine's own, so it names the evidence; otherwise the
+  // weakest candidate does. Absent when a candidate rests on nothing, so an
+  // `unknown` carrying `evidence` is a near-miss rather than a missing model.
+  const evidence: ModelFitEvidence | undefined =
+    bares.length > 0
+      ? 'native-fit'
+      : anyUnknown
+        ? undefined
+        : anyFloor
+          ? 'computed-only'
+          : allNative
+            ? 'native-fit'
+            : undefined
 
   if (anyUnknown) {
     reasons.push('at least one model could not be assessed, so the combined verdict is unknown')
@@ -255,17 +266,27 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   // An engine refuses for reasons its own figures do not carry — no device
   // could hold the placement, a load shape it will not run — so its refusal
   // stands whatever the arithmetic says.
-  const refused = anyRefused || natives.some((native) => native.verdict === 'does-not-fit')
+  const refused =
+    bares.some((bare) => bare.verdict === 'does-not-fit') ||
+    natives.some((native) => native.verdict === 'does-not-fit')
+
+  // The engine measured this model against this device, so its verdict stands
+  // where the arithmetic cannot run. A set still needs a budget, since each
+  // model was measured alone.
+  const engineAnswered =
+    bares.length > 0 || (!budget && models.length === 1 && natives.length === 1)
 
   const verdict: ModelFitVerdict = refused
     ? 'likely-too-large'
-    : !budget
-      ? 'unknown'
-      : combinedNative !== undefined
-        ? verdictAgainst(combinedNative, deviceBudgets ?? [budget], alsoBoundBy)
-        : combinedFloor !== undefined
-          ? floorVerdict(combinedFloor, deviceBudgets ?? [budget])
-          : 'unknown'
+    : engineAnswered
+      ? 'likely-fits'
+      : !budget
+        ? 'unknown'
+        : combinedNative !== undefined
+          ? verdictAgainst(combinedNative, deviceBudgets ?? [budget], alsoBoundBy)
+          : combinedFloor !== undefined
+            ? floorVerdict(combinedFloor, deviceBudgets ?? [budget], alsoBoundBy)
+            : 'unknown'
 
   if (onDevice && combinedNative !== undefined && alsoBoundBy) {
     reasons.push(
@@ -307,7 +328,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     execution,
     ...(evidence && { evidence }),
     ...(budget && { budget }),
-    ...(anyFloor && combinedFloor !== undefined && { floorBytes: combinedFloor }),
+    ...(anyFloor && combinedFloor !== undefined && { floorBytes: totalBytes(combinedFloor) }),
     models: modelResults,
     reasons,
     assumptions
@@ -373,10 +394,13 @@ function evaluate(
   candidate: ModelFitEstimateTarget,
   resolveProfile: ProfileResolver,
   floorApplies: boolean,
-  native: NativeCandidateFit | undefined
+  native: NativeCandidateFit | undefined,
+  sole: boolean
 ): { candidate: ModelFitEstimateTarget; result: Evaluation } {
   const measured = nativeEvaluation(native)
-  if (measured) return { candidate, result: measured }
+  if (measured && (measured.kind !== 'bare' || measured.verdict === 'does-not-fit' || sole)) {
+    return { candidate, result: measured }
+  }
 
   const profile = resolveProfile(candidate.model.sha256Checksum)
   if (!profile) {
@@ -618,28 +642,38 @@ function tightest(budgets: readonly NonNullable<AssessModelFitResult['budget']>[
 }
 
 /**
+ * What the candidate budgets have to hold. `alsoBoundBy` is present only where
+ * they are a card's own memory, which host bytes never come out of; without it
+ * they are system memory and everything lands there.
+ */
+function chargedToDevice(demand: Demand, alsoBoundBy: AssessModelFitResult['budget']): number {
+  return alsoBoundBy ? demand.deviceBytes : totalBytes(demand)
+}
+
+/**
  * `candidates` are alternatives — the engine pins the model to one of them, and
  * which one is not observable here — so a fit has to hold on the smallest and a
  * refusal on the largest. `alsoBoundBy` is a conjunction: a GPU load is paid
  * for in system RAM too, so both bounds apply.
  */
 function verdictAgainst(
-  bytes: number,
+  demand: Demand,
   candidates: readonly NonNullable<AssessModelFitResult['budget']>[],
   alsoBoundBy: AssessModelFitResult['budget']
 ): ModelFitVerdict {
   const room = candidates.map((budget) => budget.availableAfterReserveBytes)
+  const onDevice = chargedToDevice(demand, alsoBoundBy)
   const primary: ModelFitVerdict =
-    bytes <= Math.min(...room)
+    onDevice <= Math.min(...room)
       ? 'likely-fits'
-      : bytes > Math.max(...room)
+      : onDevice > Math.max(...room)
         ? 'likely-too-large'
         : 'unknown'
 
   if (!alsoBoundBy) return primary
   return worst(
     primary,
-    bytes > alsoBoundBy.availableAfterReserveBytes ? 'likely-too-large' : 'likely-fits'
+    totalBytes(demand) > alsoBoundBy.availableAfterReserveBytes ? 'likely-too-large' : 'likely-fits'
   )
 }
 
@@ -765,23 +799,35 @@ function reserveBytes(availableBytes: number, platform: ModelFitPlatform | undef
 function aggregateFloor(
   results: readonly Evaluation[],
   execution: ModelFitExecution
-): number | undefined {
+): Demand | undefined {
   let persistent = 0
   let working = 0
+  let hostBytes = 0
 
   for (const result of results) {
-    if (result.kind === 'unknown' || result.kind === 'refused') return undefined
+    if (result.kind === 'unknown' || result.kind === 'bare') return undefined
     if (result.kind === 'floor') {
       persistent += result.bytes
       continue
     }
 
-    persistent += result.persistent + result.hostBytes
+    persistent += result.persistent
+    hostBytes += result.hostBytes
     working =
       execution === 'concurrent' ? working + result.working : Math.max(working, result.working)
   }
 
-  return persistent + working
+  return { deviceBytes: persistent + working, hostBytes }
+}
+
+/** Where a load's demand lands: on the device the engine picked, or in host RAM. */
+interface Demand {
+  deviceBytes: number
+  hostBytes: number
+}
+
+function totalBytes(demand: Demand): number {
+  return demand.deviceBytes + demand.hostBytes
 }
 
 /**
@@ -789,23 +835,23 @@ function aggregateFloor(
  * Each fitter answered about one model against the whole machine, so only the
  * bytes compose: persistent is always resident, and the working peak is summed
  * under `concurrent` and maximised under `sequential`.
- *
- * A host figure carries no breakdown, so it counts as resident throughout.
  */
 function aggregateNative(
   natives: readonly NativeEvaluation[],
   execution: ModelFitExecution
-): number {
+): Demand {
   let persistent = 0
   let working = 0
+  let hostBytes = 0
 
   for (const native of natives) {
-    persistent += native.persistent + native.hostBytes
+    persistent += native.persistent
+    hostBytes += native.hostBytes
     working =
       execution === 'concurrent' ? working + native.working : Math.max(working, native.working)
   }
 
-  return persistent + working
+  return { deviceBytes: persistent + working, hostBytes }
 }
 
 /**
@@ -814,11 +860,16 @@ function aggregateNative(
  * the floor is unmeasured and could be anything.
  */
 function floorVerdict(
-  floorBytes: number,
-  candidates: readonly NonNullable<AssessModelFitResult['budget']>[]
+  floor: Demand,
+  candidates: readonly NonNullable<AssessModelFitResult['budget']>[],
+  alsoBoundBy: AssessModelFitResult['budget']
 ): ModelFitVerdict {
   const room = candidates.map((budget) => budget.availableAfterReserveBytes)
-  return floorBytes > Math.max(...room) ? 'likely-too-large' : 'unknown'
+  if (chargedToDevice(floor, alsoBoundBy) > Math.max(...room)) return 'likely-too-large'
+  if (alsoBoundBy && totalBytes(floor) > alsoBoundBy.availableAfterReserveBytes) {
+    return 'likely-too-large'
+  }
+  return 'unknown'
 }
 
 function toModelResult(
@@ -840,7 +891,13 @@ function toModelResult(
   }
 
   if (result.kind === 'floor') {
-    const verdict = budget ? floorVerdict(result.bytes, deviceBudgets ?? [budget]) : 'unknown'
+    const verdict = budget
+      ? floorVerdict(
+          { deviceBytes: result.bytes, hostBytes: 0 },
+          deviceBudgets ?? [budget],
+          alsoBoundBy
+        )
+      : 'unknown'
     return {
       name: candidate.model.name,
       verdict,
@@ -859,10 +916,10 @@ function toModelResult(
     }
   }
 
-  if (result.kind === 'refused') {
+  if (result.kind === 'bare') {
     return {
       name: candidate.model.name,
-      verdict: 'likely-too-large',
+      verdict: result.verdict === 'fit' ? 'likely-fits' : 'likely-too-large',
       evidence: 'native-fit',
       ...(candidate.device !== undefined && { device: candidate.device }),
       estimatorVersion: result.estimatorVersion,
@@ -876,7 +933,7 @@ function toModelResult(
       ? 'likely-too-large'
       : budget
         ? verdictAgainst(bytes, deviceBudgets ?? [budget], alsoBoundBy)
-        : 'unknown'
+        : 'likely-fits'
 
   return {
     name: candidate.model.name,

@@ -12,16 +12,16 @@ const GIB = 1024 * 1024 * 1024
 const F16 = 2
 const Q8_0 = 34 / 32
 
-/**
- * One engine verdict, with the figures a set is summed from. `persistent` is
- * what stays resident while the model is loaded, `working` the peak it holds
- * only while running.
- */
+/** One engine verdict, with the figures a set is summed from. */
 function measured(
-  persistent: number,
-  working: number,
-  verdict: 'fit' | 'does-not-fit' = 'fit'
+  weightsBytes: number,
+  computeBytes: number,
+  verdict: 'fit' | 'does-not-fit' = 'fit',
+  rest: { contextBytes?: number; hostBytes?: number } = {}
 ): NativeCandidateFit {
+  const contextBytes = rest.contextBytes ?? 0
+  const hostBytes = rest.hostBytes ?? 0
+
   return {
     fit: {
       verdict,
@@ -29,11 +29,11 @@ function measured(
       estimatorVersion: 'native-probe-v2',
       reason: verdict === 'fit' ? 'fits' : 'does-not-fit',
       projection: {
-        weightsBytes: persistent,
-        contextBytes: 0,
-        computeBytes: working,
-        deviceBytes: persistent + working,
-        hostBytes: 0
+        weightsBytes,
+        contextBytes,
+        computeBytes,
+        deviceBytes: weightsBytes + contextBytes + computeBytes,
+        hostBytes
       }
     }
   }
@@ -144,6 +144,12 @@ function resources(
   return value
 }
 
+function bareFit(verdict: 'fit' | 'does-not-fit' = 'fit'): NativeCandidateFit {
+  return {
+    fit: { verdict, basis: 'native-probe', estimatorVersion: 'native-probe-v2', reason: verdict }
+  }
+}
+
 function candidate(overrides: Partial<ModelFitEstimateTarget> = {}): ModelFitEstimateTarget {
   return {
     model: {
@@ -250,6 +256,55 @@ test('assess: android keeps the system basis with the mobile reserve, by explici
   t.ok(result.assumptions.some((a) => a.includes('android budgets deliberately use system memory')))
 })
 
+test('assess: a measured verdict stands where the host reports no memory', (t) => {
+  const base = resources()
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: { capabilities: base.capabilities },
+    platform: 'android-arm64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.models[0]?.verdict, 'likely-fits')
+  t.is(result.evidence, 'native-fit')
+  t.absent(result.budget)
+})
+
+test('assess: a refusal stands where the host reports no memory', (t) => {
+  const base = resources()
+
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: { capabilities: base.capabilities },
+    platform: 'android-arm64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0, 'does-not-fit')]
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+})
+
+// Each was measured alone, so nothing says they hold together.
+test('assess: a set with no budget stays unknown even when each was measured', (t) => {
+  const base = resources()
+
+  const result = assessModelFitFromResources({
+    models: [candidate(), candidate({ model: { name: 'second', sha256Checksum: 'b'.repeat(64) } })],
+    execution: 'sequential',
+    resources: { capabilities: base.capabilities },
+    platform: 'android-arm64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0), measured(1 * GIB, 0)]
+  })
+
+  t.is(result.verdict, 'unknown')
+})
+
 test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
   const base = resources()
 
@@ -344,6 +399,33 @@ test('assess: sequential takes the largest working peak, concurrent sums them', 
     })
 
   t.is(assess('sequential').verdict, 'likely-fits')
+  t.is(assess('concurrent').verdict, 'likely-too-large')
+})
+
+test('assess: every KV cache is counted, sequential or not', (t) => {
+  const models: ModelFitEstimateTarget[] = [
+    candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+    candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
+  ]
+  // 1 GiB of weights and a 1 GiB KV cache each, no compute buffers. Both caches
+  // are resident whether or not the models run at once, so the set needs 4 GiB.
+  const fits = [
+    measured(1 * GIB, 0, 'fit', { contextBytes: 1 * GIB }),
+    measured(1 * GIB, 0, 'fit', { contextBytes: 1 * GIB })
+  ]
+
+  // 4.5 GiB free, 20% reserved: a 3.6 GiB budget.
+  const assess = (execution: 'sequential' | 'concurrent') =>
+    assessModelFitFromResources({
+      models,
+      execution,
+      resources: resources({ totalBytes: 4.5 * GIB, usedBytes: 0 }),
+      platform: 'darwin-arm64',
+      resolveProfile: () => profile(),
+      nativeFits: fits
+    })
+
+  t.is(assess('sequential').verdict, 'likely-too-large')
   t.is(assess('concurrent').verdict, 'likely-too-large')
 })
 
@@ -949,6 +1031,41 @@ test('assess: a discrete GPU is budgeted against its own memory', (t) => {
   t.ok(result.assumptions.some((a) => a.includes('vulkan')))
 })
 
+test('assess: host bytes are charged to the system budget, not to the card', (t) => {
+  // 4 GiB on a card with 6 GiB free, 8 GiB in host RAM.
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({ vramTotalBytes: 8 * GIB, vramUsedBytes: 2 * GIB }),
+    platform: 'linux-x64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(4 * GIB, 0, 'fit', { hostBytes: 8 * GIB })]
+  })
+
+  t.is(result.basis, 'device-memory')
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.models[0]!.verdict, 'likely-fits')
+})
+
+test('assess: host bytes still refuse when the host itself has no room', (t) => {
+  // The card holds its 4 GiB, but 12 GiB does not fit a host with 10 GiB free.
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: discreteGpuResources({
+      vramTotalBytes: 8 * GIB,
+      vramUsedBytes: 2 * GIB,
+      systemTotalBytes: 16 * GIB,
+      systemUsedBytes: 6 * GIB
+    }),
+    platform: 'linux-x64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(4 * GIB, 0, 'fit', { hostBytes: 8 * GIB })]
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+})
+
 test('assess: a GPU with too little VRAM is too large even on a roomy host', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
@@ -1441,6 +1558,36 @@ test('assess: a refusal with no breakdown still refuses', (t) => {
   t.absent(result.floorBytes, 'a bare refusal contributes no floor')
 })
 
+test('assess: a fit with no breakdown stands for a lone candidate', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    resolveProfile: () => profile(),
+    nativeFits: [bareFit()]
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.evidence, 'native-fit')
+  t.is(result.models[0]?.verdict, 'likely-fits')
+  t.is(result.models[0]?.estimatorVersion, 'native-probe-v2')
+})
+
+test('assess: a fit with no breakdown falls back inside a set', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate(), candidate({ model: { name: 'second', sha256Checksum: 'b'.repeat(64) } })],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    resolveProfile: () => profile(),
+    nativeFits: [bareFit(), measured(1 * GIB, 0)]
+  })
+
+  t.is(result.evidence, 'computed-only')
+  t.not(result.verdict, 'likely-fits', 'a floor can never confirm the set')
+})
+
 test('assess: an undecided probe leaves the model to its floor', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
@@ -1482,29 +1629,6 @@ test('assess: a probe that never ran names why, beside the fallback', (t) => {
     result.reasons.some((r) => r.includes('no registry description (timed-out)')),
     'the cause travels with the result'
   )
-})
-
-// A projection with no byte breakdown has nothing a set can be summed from.
-test('assess: a verdict carrying no figures is not measured evidence', (t) => {
-  const result = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
-    platform: 'darwin-arm64',
-    resolveProfile: () => profile(),
-    nativeFits: [
-      {
-        fit: {
-          verdict: 'fit',
-          basis: 'native-probe',
-          estimatorVersion: 'native-probe-v2',
-          reason: 'fits'
-        }
-      }
-    ]
-  })
-
-  t.not(result.evidence, 'native-fit')
 })
 
 test('assess: the resolved device survives onto the model result', (t) => {
