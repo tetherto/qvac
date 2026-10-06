@@ -136,13 +136,6 @@ void applySpeculativeConfig(
   if (config.draftPMin.has_value()) {
     params.speculative.draft.p_min = *config.draftPMin;
   }
-  // Draft sampling stays on the CPU, unlike llama-server's default. On
-  // NVIDIA Vulkan the backend top-k sampler of the MTP draft context faults
-  // the GPU (device lost) when a process loads the model again with more
-  // sequences than before (`parallel` 1, then 2); llama-server never
-  // recreates its contexts. The draft only needs the top token of a small
-  // head, so the CPU path drafts the same tokens at no measurable cost.
-  params.speculative.draft.backend_sampling = false;
 
   // server_output_limits: a verification step reads one output per drafted
   // token plus the sampled one, for every sequence.
