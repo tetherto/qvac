@@ -1,14 +1,12 @@
 import type { GgufFacts, KvLayerClass } from '@/schemas/model-resource-profile'
-import type { ByteRange } from '@/resources/model-fit/types'
 
 /**
  * KV-cache element widths, in bytes per element.
  *
  * `f16` is the CPU default. On a Metal/Vulkan GPU backend with flash attention
  * on — the SDK's own defaults — `llm-llamacpp` defaults the cache to `q8_0`
- * instead (`addon/src/model-interface/LoadFitNormalization.cpp`, QVAC-21318),
- * which is why the bound is a range rather than a number. `q8_0` packs 32
- * elements into a 34-byte block.
+ * instead (`addon/src/model-interface/LoadFitNormalization.cpp`, QVAC-21318).
+ * `q8_0` packs 32 elements into a 34-byte block.
  */
 const F16_BYTES_PER_ELEMENT = 2
 const Q8_0_BYTES_PER_ELEMENT = 34 / 32
@@ -28,57 +26,17 @@ function disablesFlashAttention(architecture: string): boolean {
 export const LLAMA_WEIGHTS_ASSUMPTION =
   'weights are counted at full artifact size; llama.cpp maps them by default, so those pages are file-backed and evictable rather than anonymous RAM'
 
-/** A KV-cache element width range, with the reason it is that range. */
-export interface KvElementWidth {
-  bytes: ByteRange
-  assumption: string
-}
-
 /**
- * Picks the KV-cache element width range for this model on this device.
- *
- * @returns Lower/upper bytes per cache element, and the assumption that choice
- *   rests on.
+ * The narrowest KV-cache element width the engine can default to for this
+ * model, in bytes: q8_0 where flash attention allows it, f16 otherwise.
  */
-export function kvElementBytes(facts: GgufFacts, hasGpu: boolean): KvElementWidth {
-  if (disablesFlashAttention(facts.architecture)) {
-    return {
-      bytes: { lower: F16_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT },
-      assumption: `${facts.architecture} loads with flash attention off, so the KV cache stays f16 on every backend`
-    }
-  }
-
-  if (hasGpu) {
-    return {
-      bytes: { lower: Q8_0_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT },
-      assumption:
-        'a GPU is present, so the engine may default the KV cache to q8_0 (lower bound) or keep f16 on a CPU or OpenCL backend (upper bound)'
-    }
-  }
-
-  return {
-    bytes: { lower: F16_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT },
-    assumption: 'no GPU reported, so the CPU f16 KV-cache default applies'
-  }
+export function narrowestKvElementBytes(facts: GgufFacts): number {
+  return disablesFlashAttention(facts.architecture) ? F16_BYTES_PER_ELEMENT : Q8_0_BYTES_PER_ELEMENT
 }
 
 /**
- * KV-cache bytes at one fixed element width, clamped to the trained context.
- *
- * A non-degenerate range means part of the layout is engine-owned, so the
- * allocation cannot be known from the file alone.
- */
-export function kvCacheBytesForWidth(
-  facts: GgufFacts,
-  contextTokens: number,
-  bytesPerElement: number
-): ByteRange {
-  const tokens = Math.min(contextTokens, facts.contextLength)
-  return kvCacheBytes(facts, tokens, { lower: bytesPerElement, upper: bytesPerElement }, [], [])
-}
-
-/**
- * Sizes the KV cache for the requested context.
+ * The smallest KV cache the requested context can need, at a fixed element
+ * width and clamped to the trained context.
  *
  * Three cases, in order of how much the file actually tells us:
  *
@@ -86,65 +44,36 @@ export function kvCacheBytesForWidth(
  *    cache is summed exactly, with sliding-window blocks capped at their window.
  * 2. **Hybrid attention/recurrent** — `full_attention_interval` says how many
  *    blocks hold a cache at all; the rest hold a fixed-size SSM state. Which
- *    blocks are which is engine-owned, so the count is bounded, not fixed.
- * 3. **Flat** — every block holds the same cache. When the file declares a
- *    sliding window but no per-layer pattern, the pattern lives in the engine:
- *    the bound then spans "every block windowed" to "every block full", which is
- *    wide on purpose.
+ *    blocks are which is engine-owned, so the fewest full blocks are counted.
+ * 3. **Flat** — every block holds the same cache. A declared sliding window
+ *    with no per-layer pattern is engine-owned, so every block is counted
+ *    windowed.
  */
-function kvCacheBytes(
+export function kvCacheFloorBytes(
   facts: GgufFacts,
   contextTokens: number,
-  elementBytes: ByteRange,
-  assumptions: string[],
-  reasons: string[]
-): ByteRange {
+  elementBytes: number
+): number {
+  const tokens = Math.min(contextTokens, facts.contextLength)
+
   if (facts.kvLayerClasses && facts.kvLayerClasses.length > 0) {
-    reasons.push('KV cache summed per layer class from the file’s per-block attention metadata')
-    return {
-      lower: layerClassBytes(facts.kvLayerClasses, facts, contextTokens, elementBytes.lower),
-      upper: layerClassBytes(facts.kvLayerClasses, facts, contextTokens, elementBytes.upper)
-    }
+    return layerClassBytes(facts.kvLayerClasses, facts, tokens, elementBytes)
   }
 
   const perBlockPerToken = facts.headCountKv * (facts.keyLength + facts.valueLength)
 
   if (facts.fullAttentionInterval && facts.fullAttentionInterval > 1) {
-    const interval = facts.fullAttentionInterval
-    const fullBlocksLower = Math.floor(facts.blockCount / interval)
-    const fullBlocksUpper = Math.ceil(facts.blockCount / interval)
-    const ssm = ssmStateBytes(facts, facts.blockCount - fullBlocksLower)
-
-    assumptions.push(
-      `${facts.architecture} keeps full attention every ${interval} blocks; the remaining blocks hold a fixed-size recurrent state instead of a KV cache, and which blocks are which is engine-owned`
-    )
-    reasons.push(
-      `KV cache sized for ${fullBlocksLower}–${fullBlocksUpper} of ${facts.blockCount} blocks (hybrid attention)`
-    )
-
-    return {
-      lower: fullBlocksLower * perBlockPerToken * contextTokens * elementBytes.lower + ssm,
-      upper: fullBlocksUpper * perBlockPerToken * contextTokens * elementBytes.upper + ssm
-    }
+    const fullBlocks = Math.floor(facts.blockCount / facts.fullAttentionInterval)
+    const ssm = ssmStateBytes(facts, facts.blockCount - fullBlocks)
+    return fullBlocks * perBlockPerToken * tokens * elementBytes + ssm
   }
 
   if (facts.slidingWindow) {
-    const windowedTokens = Math.min(contextTokens, facts.slidingWindow)
-    assumptions.push(
-      `${facts.architecture} uses sliding-window attention with a ${facts.slidingWindow}-token window, but the file does not say which blocks are windowed; the bound spans every block windowed to every block full`
-    )
-    reasons.push('sliding-window layer pattern is engine-owned, so the KV bound is wide')
-    return {
-      lower: facts.blockCount * perBlockPerToken * windowedTokens * elementBytes.lower,
-      upper: facts.blockCount * perBlockPerToken * contextTokens * elementBytes.upper
-    }
+    const windowedTokens = Math.min(tokens, facts.slidingWindow)
+    return facts.blockCount * perBlockPerToken * windowedTokens * elementBytes
   }
 
-  reasons.push(`KV cache sized for all ${facts.blockCount} blocks at ${contextTokens} tokens`)
-  return {
-    lower: facts.blockCount * perBlockPerToken * contextTokens * elementBytes.lower,
-    upper: facts.blockCount * perBlockPerToken * contextTokens * elementBytes.upper
-  }
+  return facts.blockCount * perBlockPerToken * tokens * elementBytes
 }
 
 function layerClassBytes(

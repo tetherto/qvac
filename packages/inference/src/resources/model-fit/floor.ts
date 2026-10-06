@@ -2,8 +2,8 @@ import type { ModelFitWorkload } from '@/schemas/assess-model-fit'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
 import {
   LLAMA_WEIGHTS_ASSUMPTION,
-  kvCacheBytesForWidth,
-  kvElementBytes
+  kvCacheFloorBytes,
+  narrowestKvElementBytes
 } from '@/resources/model-fit/kv-cache'
 
 export const FLOOR_VERSION = 'floor-v1'
@@ -91,8 +91,8 @@ export function computeFloor(input: FloorInput): FloorResult {
   // The narrowest default the engine can pick on any backend, so the floor
   // holds whether the model lands on a GPU (q8_0 with flash attention) or on
   // the CPU (f16). Architectures that disable flash attention stay f16 anyway.
-  const element = kvElementBytes(facts, true).bytes.lower
-  const kv = kvCacheBytesForWidth(facts, contextTokens, element).lower
+  const element = narrowestKvElementBytes(facts)
+  const kv = kvCacheFloorBytes(facts, contextTokens, element)
   assumptions.push(
     element < 2
       ? 'the KV cache is floored at the q8_0 element width, the narrowest default the engine picks on any backend; a CPU load allocates an f16 cache above it'

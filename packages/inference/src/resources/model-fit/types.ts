@@ -1,9 +1,3 @@
-/** A memory bound. `lower` is the optimistic end, `upper` the conservative one. */
-export interface ByteRange {
-  lower: number
-  upper: number
-}
-
 /**
  * Platforms this assessment covers. A platform absent from this list assesses
  * as `unknown`, because nothing fixes the memory budget it would be judged

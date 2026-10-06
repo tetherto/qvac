@@ -12,7 +12,7 @@ import type { GPUResourceCapabilities, SystemResources } from '@/schemas/system-
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
 import { getModelResourceProfile } from '@/models/registry/resource-profiles'
 import { computeFloor, FLOOR_VERSION } from '@/resources/model-fit/floor'
-import type { ByteRange, ModelFitPlatform } from '@/resources/model-fit/types'
+import type { ModelFitPlatform } from '@/resources/model-fit/types'
 
 const GIB = 1024 * 1024 * 1024
 
@@ -262,11 +262,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     : !budget
       ? 'unknown'
       : combinedNative !== undefined
-        ? verdictAgainst(
-            { lower: combinedNative, upper: combinedNative },
-            deviceBudgets ?? [budget],
-            alsoBoundBy
-          )
+        ? verdictAgainst(combinedNative, deviceBudgets ?? [budget], alsoBoundBy)
         : combinedFloor !== undefined
           ? floorVerdict(combinedFloor, deviceBudgets ?? [budget])
           : 'unknown'
@@ -628,20 +624,23 @@ function tightest(budgets: readonly NonNullable<AssessModelFitResult['budget']>[
  * for in system RAM too, so both bounds apply.
  */
 function verdictAgainst(
-  estimate: ByteRange,
+  bytes: number,
   candidates: readonly NonNullable<AssessModelFitResult['budget']>[],
   alsoBoundBy: AssessModelFitResult['budget']
 ): ModelFitVerdict {
   const room = candidates.map((budget) => budget.availableAfterReserveBytes)
   const primary: ModelFitVerdict =
-    estimate.upper <= Math.min(...room)
+    bytes <= Math.min(...room)
       ? 'likely-fits'
-      : estimate.lower > Math.max(...room)
+      : bytes > Math.max(...room)
         ? 'likely-too-large'
         : 'unknown'
 
   if (!alsoBoundBy) return primary
-  return worst(primary, compare(estimate, alsoBoundBy.availableAfterReserveBytes))
+  return worst(
+    primary,
+    bytes > alsoBoundBy.availableAfterReserveBytes ? 'likely-too-large' : 'likely-fits'
+  )
 }
 
 /** The more pessimistic of two verdicts. */
@@ -822,12 +821,6 @@ function floorVerdict(
   return floorBytes > Math.max(...room) ? 'likely-too-large' : 'unknown'
 }
 
-function compare(estimate: ByteRange, budget: number): ModelFitVerdict {
-  if (estimate.lower > budget) return 'likely-too-large'
-  if (estimate.upper <= budget) return 'likely-fits'
-  return 'unknown'
-}
-
 function toModelResult(
   candidate: ModelFitEstimateTarget,
   result: Evaluation,
@@ -882,7 +875,7 @@ function toModelResult(
     result.verdict === 'does-not-fit'
       ? 'likely-too-large'
       : budget
-        ? verdictAgainst({ lower: bytes, upper: bytes }, deviceBudgets ?? [budget], alsoBoundBy)
+        ? verdictAgainst(bytes, deviceBudgets ?? [budget], alsoBoundBy)
         : 'unknown'
 
   return {
