@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
+  48 kHz sound effects of up to 30 seconds from a text description, from one
+  GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
+  takes per-call `seconds`, `negativePrompt`, `steps`, `guidance` and `shift`;
+  there is no streaming. Desktop, with a GPU recommended.
+- MOSS-Speech engine (`engine: 'moss-speech'`, fnlp MOSS-Speech): answers a
+  spoken question (`run({ audio, sampleRate })`, or a typed `input`) with a
+  24 kHz spoken reply and its text (`data.text`), from a language-model GGUF
+  plus a codec GGUF (`files.mossSpeechModel` / `files.mossSpeechCodec`, or
+  `moss-speech-*.gguf` in `modelDir`). Per call: earlier turns in `messages`,
+  `systemPrompt`, a reply voice (`replyVoice`), `maxReplySeconds`,
+  `maxNewTokens`, `textReply` and sampling controls; there is no streaming.
+  Desktop, with a GPU.
+
+### Changed
+
+- Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
+  the ggml changes of the QVAC LLM stack, so both build from the same backend
+  code. Same models, same backends, no API change.
+- Raise the `speech-cpp` floor to `2026-10-02#1`, the revision that ships the
+  MOSS-SoundEffect and MOSS-Speech engines. It also runs Parler-TTS 1.6x to
+  2.4x faster on the CPU backend (flash attention over the KV cache, a
+  multi-threaded GELU, and on macOS/iOS the codec's convolutions on
+  Accelerate) and keeps the Audio8 Core ML codec on the Neural Engine. Same
+  models, same API.
+- Audio8 is faster on Apple silicon: its language model's projections are
+  fused at load (1.24-1.28x end to end on Metal on an M3 Ultra, 1.04-1.06x
+  on an M4), and the Core ML codec now synthesises during generation rather
+  than after it (1.36-1.42x on an M3 Ultra, 1.06-1.16x on an M4). Output is
+  unchanged on Metal. With several Vulkan adapters, Audio8 now runs on a
+  discrete GPU rather than on the first adapter listed, which on a desktop
+  with an integrated GPU was the iGPU.
+
 ### Fixed
 
 - Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer

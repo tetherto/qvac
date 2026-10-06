@@ -104,7 +104,7 @@ export type AudioInput =
 
 export type AppendData =
   | { type: "audio"; data?: ArrayBufferLike }
-  | { type: typeof END_OF_INPUT };
+  | { type: typeof END_OF_INPUT; job?: Record<string, unknown> };
 
 export type ParakeetOutputCallback = (
   addon: unknown,
@@ -410,7 +410,7 @@ export class ParakeetInterface {
   append(data: AppendData): Promise<number> {
     try {
       if (data?.type === END_OF_INPUT) {
-        return Promise.resolve(this._submitBufferedJob());
+        return Promise.resolve(this._submitBufferedJob(data.job));
       }
       if (data?.type === "audio") {
         return Promise.resolve(this._bufferAudioChunk(data.data));
@@ -429,13 +429,13 @@ export class ParakeetInterface {
     }
   }
 
-  private _submitBufferedJob(): number {
+  private _submitBufferedJob(job: Record<string, unknown> = {}): number {
     const currentJobId = this._nextJobId;
     const input = this._concatBufferedAudio();
     const previousState = this._state;
     let accepted = false;
     try {
-      accepted = this._binding.runJob(this._handle, { type: "audio", input });
+      accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
     } catch (error) {
       this._setState(previousState);
       throw error;

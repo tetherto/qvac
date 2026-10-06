@@ -39,6 +39,7 @@ export const CPP_TEST_KEYS = [
   'classification-ggml',
   'diffusion-cpp',
   'embed-llamacpp',
+  'ggml-rpc-server',
   'llm-llamacpp',
   'model-fit',
   'translation-nmtcpp',
@@ -125,7 +126,6 @@ export const SDK_KOTLIN_PRODUCER = '.github/workflows/pr-checks-sdk-kotlin.yml'
 export const CARVED_OUT_PRODUCERS = {
   fabric: '.github/workflows/on-pr-fabric.yml',
   'classification-ggml': '.github/workflows/on-pr-classification-ggml.yml',
-  'ggml-rpc-server': '.github/workflows/on-pr-ggml-rpc-server.yml',
   vla: '.github/workflows/on-pr-vla.yml',
 }
 

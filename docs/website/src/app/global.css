@@ -429,3 +429,38 @@
   }
 }
 
+/* ===========================================
+   COLLECTION BAR — hover reads like a sidebar item
+   ===========================================
+   The collection entries in the second header row already take their
+   colours from the same tokens as the sidebar: `--color-fd-muted-foreground`
+   at rest, `--color-fd-accent-foreground` on hover, `--color-fd-primary`
+   when active. What they lack is the sidebar item's translucent fill, which
+   is what makes a hovered sidebar item read as shaded rather than merely
+   recoloured.
+
+   Reproduce that fill here from the SAME token at the SAME alpha the
+   sidebar's `hover:bg-fd-accent/50` resolves to, so the two surfaces stay
+   in step if the token is retuned. Nothing is hardcoded for the bar.
+
+   The padding and radius exist only so the fill has a shape: an entry has
+   no horizontal padding of its own, so a background would otherwise cling
+   to the text. Vertical padding is deliberately omitted — the row is
+   `items-end` and the entry's `pb-1.5` positions the active underline, so
+   adding it would lift the underline off the row's baseline.
+*/
+@layer utilities {
+  [data-header-tabs] a {
+    border-radius: var(--radius-lg);
+    padding-inline: --spacing(2);
+  }
+
+  [data-header-tabs] a:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-fd-accent) 50%,
+      transparent
+    );
+  }
+}
+

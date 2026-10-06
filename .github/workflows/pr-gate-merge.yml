@@ -115,7 +115,6 @@ jobs:
               - "packages/ggml-rpc-server/**"
               - "packages/fabric/**"
               - "cmake/qvac-addon/**"
-              - ".github/workflows/prebuilds-ggml-rpc-server.yml"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
             model-fit:

@@ -94,7 +94,7 @@ runs:
           function parseArtifactName(name) {
             let m = /^results-(android|ios)$/.exec(name);
             if (m) return { family: m[1], platform: m[1] };
-            m = /^results-(desktop|electron|snap)-(.+)$/.exec(name);
+            m = /^results-(desktop|electron|snap|python)-(.+)$/.exec(name);
             if (m) return { family: m[1], platform: m[2] };
             return null;
           }

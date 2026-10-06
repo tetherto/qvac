@@ -638,6 +638,7 @@ export const ttsPlugin = definePlugin({
   displayName: 'TTS (GGML)',
   addonPackage: ADDON_TTS,
   loadConfigSchema: ttsConfigSchema,
+  assessFit: TTSGgml.assessFit,
 
   async resolveConfig(cfg: Record<string, unknown>, ctx: ResolveContext) {
     const { ttsEngine } = cfg as { ttsEngine?: string }

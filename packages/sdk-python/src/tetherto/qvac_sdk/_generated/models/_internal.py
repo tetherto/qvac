@@ -172,13 +172,13 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
         ),
     ] = None
     model_type: Annotated[
-        AssessModelFitRequestModelsItemModelType,
+        AssessModelFitRequestModelsItemModelType | None,
         Field(
             alias="modelType",
-            description="Engine that would run the load.",
+            description="Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.",
             title="AssessModelFitRequestModelsItemModelType",
         ),
-    ]
+    ] = None
     model_config_: Annotated[
         AssessModelFitRequestModelsItemModelConfig | None,
         Field(
@@ -343,6 +343,12 @@ class AssessModelFitResponseModelsItem(GeneratedBaseModel):
         Field(
             alias="estimatorVersion",
             description="Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
+        ),
+    ] = None
+    device: Annotated[
+        str | None,
+        Field(
+            description="Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement."
         ),
     ] = None
     reasons: Annotated[list[str], Field(description="Why this model got this verdict.")]
@@ -1778,19 +1784,46 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueT
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem(
+    Enum
+):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
     GeneratedBaseModel
 ):
-    type: Annotated[
-        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType,
-        Field(
-            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType"
-        ),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType
+        | list[
+            BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem
+        ]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[
+    str, Any
+]
+BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue.model_rebuild(
+    force=True
+)
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
@@ -1813,6 +1846,9 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties,
@@ -1821,6 +1857,12 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseMo
         ),
     ]
     required: list[str] | None = None
+
+
+BatchCompletionStreamRequestPromptsItemToolsItemParameters.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+BatchCompletionStreamRequestPromptsItemToolsItemParameters.model_rebuild(force=True)
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItem(GeneratedBaseModel):
@@ -2884,19 +2926,38 @@ class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType(Enum):
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
     GeneratedBaseModel
 ):
-    type: Annotated[
-        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType,
-        Field(
-            title="CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
-        ),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType
+        | list[CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+CompletionOrchestrateRequestToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionOrchestrateRequestToolsItemParametersPropertiesValue.model_rebuild(force=True)
 
 
 class CompletionOrchestrateRequestToolsItemParametersProperties(
@@ -2909,12 +2970,21 @@ class CompletionOrchestrateRequestToolsItemParametersProperties(
 
 
 class CompletionOrchestrateRequestToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         CompletionOrchestrateRequestToolsItemParametersProperties,
         Field(title="CompletionOrchestrateRequestToolsItemParametersProperties"),
     ]
     required: list[str] | None = None
+
+
+CompletionOrchestrateRequestToolsItemParameters.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionOrchestrateRequestToolsItemParameters.model_rebuild(force=True)
 
 
 class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
@@ -3449,15 +3519,36 @@ class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValue(GeneratedBaseModel):
-    type: Annotated[
-        CompletionStreamRequestToolsItemParametersPropertiesValueType,
-        Field(title="CompletionStreamRequestToolsItemParametersPropertiesValueType"),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CompletionStreamRequestToolsItemParametersPropertiesValueType
+        | list[CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+CompletionStreamRequestToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionStreamRequestToolsItemParametersPropertiesValue.model_rebuild(force=True)
 
 
 class CompletionStreamRequestToolsItemParametersProperties(
@@ -3470,12 +3561,21 @@ class CompletionStreamRequestToolsItemParametersProperties(
 
 
 class CompletionStreamRequestToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         CompletionStreamRequestToolsItemParametersProperties,
         Field(title="CompletionStreamRequestToolsItemParametersProperties"),
     ]
     required: list[str] | None = None
+
+
+CompletionStreamRequestToolsItemParameters.__annotations__["__pydantic_extra__"] = dict[
+    str, Any
+]
+CompletionStreamRequestToolsItemParameters.model_rebuild(force=True)
 
 
 class CompletionStreamRequestToolsItem(GeneratedBaseModel):
@@ -5096,59 +5196,62 @@ class NativeProbeFitPlan(GeneratedBaseModel):
     ]
 
 
-class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    name: Annotated[
-        str, Field(description="Device name as the backend reports it, or `host`.")
-    ]
-    total_bytes: Annotated[
-        float,
-        Field(alias="totalBytes", description="Memory the device reports installed."),
-    ]
-    free_bytes: Annotated[
-        float,
-        Field(
-            alias="freeBytes",
-            description="Memory the device reports free, before the margin.",
-        ),
-    ]
-    margin_bytes: Annotated[
-        float,
-        Field(
-            alias="marginBytes",
-            description="Headroom the fitter withheld on this device.",
-        ),
-    ]
-    model_bytes: Annotated[
-        float,
-        Field(alias="modelBytes", description="Weights the load would place here."),
-    ]
-    context_bytes: Annotated[
-        float,
-        Field(
-            alias="contextBytes",
-            description="Context and cache the load would place here.",
-        ),
-    ]
-    compute_bytes: Annotated[
-        float,
-        Field(
-            alias="computeBytes",
-            description="Compute buffers the load would place here.",
-        ),
-    ]
-
-
 class NativeProbeFitProjection(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    devices: Annotated[
-        list[NativeProbeFitProjectionDevicesItem],
-        Field(description="Every device the load would touch."),
-    ]
+    device_name: Annotated[
+        str | None,
+        Field(
+            alias="deviceName", description="Device the projection was made against."
+        ),
+    ] = None
+    device_bytes: Annotated[
+        float | None,
+        Field(
+            alias="deviceBytes",
+            description="Peak the load would place on the device, under the workload the probe assumed.",
+        ),
+    ] = None
+    host_bytes: Annotated[
+        float | None,
+        Field(alias="hostBytes", description="Peak the load would place in host RAM."),
+    ] = None
+    weights_bytes: Annotated[
+        float | None,
+        Field(alias="weightsBytes", description="Model weights, within `deviceBytes`."),
+    ] = None
+    context_bytes: Annotated[
+        float | None,
+        Field(
+            alias="contextBytes",
+            description="Context, KV cache and decoder state, within `deviceBytes`.",
+        ),
+    ] = None
+    compute_bytes: Annotated[
+        float | None,
+        Field(
+            alias="computeBytes",
+            description="Compute buffers and graph arenas, within `deviceBytes`.",
+        ),
+    ] = None
+    device_free_bytes: Annotated[
+        float | None,
+        Field(
+            alias="deviceFreeBytes",
+            description="Device memory free when the probe ran.",
+        ),
+    ] = None
+    device_total_bytes: Annotated[
+        float | None,
+        Field(alias="deviceTotalBytes", description="Device memory installed."),
+    ] = None
+    report: Annotated[
+        str | None,
+        Field(
+            description="The engine's own per-module memory table, suitable for a log line."
+        ),
+    ] = None
 
 
 class NativeProbeFit(GeneratedBaseModel):
@@ -5158,21 +5261,27 @@ class NativeProbeFit(GeneratedBaseModel):
     verdict: Annotated[
         NativeProbeFitVerdict,
         Field(
-            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
             title="NativeProbeFitVerdict",
         ),
     ]
     basis: Annotated[
         Literal["native-probe"],
         Field(
-            description="Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+            description="Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
         ),
     ] = "native-probe"
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Engine package whose fitter produced this outcome. Absent when none ran."
+        ),
+    ] = None
     estimator_version: Annotated[
         str,
         Field(
             alias="estimatorVersion",
-            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve.",
+            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve, counting device memory only where it comes out of system RAM.",
         ),
     ]
     reason: Annotated[
@@ -15312,6 +15421,23 @@ class LoadModelSrcRequestGgmlOcrModelConfigBackendDevice(Enum):
     opencl = "opencl"
 
 
+class OcrMainGpuIndex(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
+            ge=0,
+            le=2147483647,
+            title="OcrMainGpuIndex",
+        ),
+    ]
+
+
+class LoadModelSrcRequestGgmlOcrModelConfigMainGpu(Enum):
+    integrated = "integrated"
+    dedicated = "dedicated"
+
+
 class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -15496,6 +15622,13 @@ class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
         Field(
             alias="gpuDevice",
             description="0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
+        ),
+    ] = None
+    main_gpu: Annotated[
+        OcrMainGpuIndex | LoadModelSrcRequestGgmlOcrModelConfigMainGpu | None,
+        Field(
+            alias="mainGpu",
+            description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
         ),
     ] = None
     detector_model_src: Annotated[
