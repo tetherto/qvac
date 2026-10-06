@@ -191,6 +191,16 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── the OCR GPU-selection check ──────────────────────────────────────────
+  {
+    match: /^ocr-main-gpu-/,
+    skip: {
+      reason:
+        'The plugin strips main-gpu on single-GPU devices, so index 0 selects nothing there; the ocr-main-gpu resource is desktop and Electron only',
+      platforms: ['mobile', 'desktop-python']
+    }
+  },
+
   // ── model fit ────────────────────────────────────────────────────────────
   // The assessment describes a load without running one, so it runs everywhere. The probe
   // reads the projection back off a resident model, so it only runs where that model loads.

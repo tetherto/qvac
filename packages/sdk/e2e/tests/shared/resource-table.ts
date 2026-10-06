@@ -97,6 +97,25 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { langList: ['en'], detectorModelSrc: { $const: 'OCR_CRAFT' } }
   },
 
+  // `mainGpu` reaches the addon as `main-gpu`; index 0 either selects a GPU or falls back to
+  // CPU, so the text is the same on every desktop host. The backend differs with the hardware,
+  // which is what `configOn` is for -- the table is resolved against `<family>-<os>`.
+  'ocr-main-gpu': {
+    on: ['desktop', 'electron'],
+    constant: { $const: 'OCR_LATIN' },
+    type: 'ggml-ocr',
+    config: {
+      langList: ['en'],
+      detectorModelSrc: { $const: 'OCR_CRAFT' },
+      backendDevice: 'vulkan',
+      mainGpu: 0
+    },
+    configOn: {
+      'desktop-macos': { backendDevice: 'metal' },
+      'electron-macos': { backendDevice: 'metal' }
+    }
+  },
+
   doctr: {
     on: ['desktop', 'electron'],
     constant: { $const: 'OCR_DOCTR' },
