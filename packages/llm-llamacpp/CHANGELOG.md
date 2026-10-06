@@ -33,6 +33,11 @@
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
   `@qvac/fabric-ios` to `0.20.0` together.
 
+### Added
+
+- `generationParams.parallel_tool_calls` (boolean). `true` lets one response
+  carry several tool calls; unset or `false` keeps one.
+
 ### Fixed
 
 - The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
