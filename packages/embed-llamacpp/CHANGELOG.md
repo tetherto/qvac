@@ -1,6 +1,37 @@
 # Changelog
 
-## [Unreleased]
+## [0.44.0] - 2026-10-06
+
+### Breaking
+
+- `assessFit` takes `config`, the map `loadModel` takes, in place of `params`,
+  and resolves it with the load's own code. `config` names a device, as every
+  load does ([#4841](https://github.com/tetherto/qvac/pull/4841)).
+
+  ```js
+  // before
+  EmbedLlamacpp.assessFit({ modelPath, params: { 'ctx-size': '4096', 'gpu-layers': '0' } })
+  // after
+  EmbedLlamacpp.assessFit({ modelPath, config: { device: 'gpu', 'ctx-size': '4096', 'gpu-layers': '0' } })
+  ```
+
+- `assessFit` byte figures can differ: with `flash-attn` unset the resolver
+  settles on `on`, which is what the load runs.
+- `main-gpu: 'dedicated'`, `rpc-servers`, `flash-attn: 'auto'`,
+  `prefetch-weights` and `tensor-read-lazy` now produce verdicts where they
+  answered `unsupported-config`, and a LoRA adapter or a `cpu` device is
+  refused.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
 
 ### Fixed
 
