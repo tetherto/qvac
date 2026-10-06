@@ -3,22 +3,12 @@ import { resolveBackendsDir } from './addon'
 export interface LlamaFitRequest {
   /** Absolute path to the GGUF, or to the registry's weightless copy. */
   modelPath: string
-  /**
-   * The load, in llama's own CLI spelling without the leading `--`, exactly as
-   * the loader takes it: `ctx-size`, `tensor-split`, `override-tensor`,
-   * `cpu-moe`, `no-kv-offload` and the rest. Each is dispatched through llama's
-   * argument table, so a placement pinned here reaches the projection.
-   *
-   * A setting llama does not recognise, or a flag asked to be off that can only
-   * assert itself, is `status: "error"` with `unsupported-config`.
-   */
-  params?: Record<string, string>
-  /** Floor the fitter may not reduce the context below. */
+  /** The load, as `loadModel` takes it, resolved by the same code that load runs. */
+  config?: Record<string, string>
+  /** Floor the fitter may not reduce an unpinned context below. */
   minCtxSize?: number
-  /** Memory to leave free on every device. */
+  /** Memory to leave free on every device, held to against the load's own `fit-target`. */
   marginBytes?: number
-  /** Where the dynamically-loaded ggml backends live. */
-  backendsDir?: string
 }
 
 export type LlamaFitStatus = 'fits' | 'does-not-fit' | 'error'
@@ -80,11 +70,10 @@ export function assessFit(request: LlamaFitRequest): LlamaFitResult {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
   const binding = require('./binding.js') as FitBinding
 
-  return binding.assessFit({
-    ...request,
-    backendsDir:
-      typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-        ? request.backendsDir
-        : resolveBackendsDir()
-  })
+  const config = { ...request.config }
+  if (config['backendsDir'] === undefined || config['backendsDir'] === '') {
+    config['backendsDir'] = resolveBackendsDir()
+  }
+
+  return binding.assessFit({ ...request, config })
 }
