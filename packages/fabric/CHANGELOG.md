@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.19.1] - 2026-10-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `10549.5.2`. No API change
+  for this package:
+  - Fixed RPC servers for backends that keep per-tensor state in
+    `tensor->extra`. An OpenCL device served over RPC (e.g. Adreno through
+    `@qvac/ggml-rpc-server`) aborted on its first weight upload with
+    `GGML_ASSERT(extra)`; the server now keeps those extras per buffer. CPU,
+    Metal and Vulkan are unaffected.
+  - Fixed the Windows CPU backend build under `clang-cl`, which failed to
+    compile the AVX-VNNI variant.
+  - Added Laya decision model support (`laya` arch) and `common_laya_predict`.
+
 ## [0.19.0] - 2026-09-30
 
 ### Changed
