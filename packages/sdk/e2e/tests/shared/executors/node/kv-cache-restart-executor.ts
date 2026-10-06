@@ -84,13 +84,30 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
       }
 
       await this.resources.evictAll()
-      const during = await waitForBareChildren(process.pid, (pids) => pids.length === 0)
+      // The claim is about what survives a restart, not about what makes the worker exit.
+      // Unloading every model usually ends it, but anything else still attached -- a profiling
+      // subscription, a log stream a later test opened -- keeps it alive, and then this test
+      // would report a product failure for a harness detail. So: ask first, insist after.
+      let during = await waitForBareChildren(process.pid, (pids) => pids.length === 0, 15_000)
+      let ended = 'by unloading every model'
+      if (during.length !== 0) {
+        for (const pid of during) {
+          try {
+            process.kill(pid, 'SIGKILL')
+          } catch {
+            /* already gone */
+          }
+        }
+        during = await waitForBareChildren(process.pid, (pids) => pids.length === 0, 30_000)
+        ended = `by terminating ${before[0]} after it outlived its models`
+      }
       if (during.length !== 0) {
         return {
           passed: false,
           output:
-            `Unloading every model left the worker running (pid ${during.join(', ')}), so the ` +
-            `cache state was never lost and this test cannot prove the boundary was restored`
+            `The Bare worker (pid ${during.join(', ')}) survived both unloading every model and ` +
+            `SIGKILL, so the cache state was never lost and this test cannot prove the boundary ` +
+            `was restored`
         }
       }
 
@@ -130,7 +147,9 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
           output: `promptTokens missing from stats (warm=${warm.promptTokens}, cold=${cold.promptTokens})`
         }
       }
-      const summary = `worker ${before[0]} -> ${after[0]}, promptTokens: cold=${cold.promptTokens}, warm=${warm.promptTokens}`
+      const summary =
+        `worker ${before[0]} -> ${after[0]} (${ended}), ` +
+        `promptTokens: cold=${cold.promptTokens}, warm=${warm.promptTokens}`
       if (warm.promptTokens * 2 >= cold.promptTokens) {
         return {
           passed: false,

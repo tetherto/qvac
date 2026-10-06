@@ -48,7 +48,11 @@ const DURING_INFERENCE_DRAIN_MS = 1_000
 const CONCURRENT_DRAIN_MS = 3_000
 const RELOAD_DRAIN_MS = 5_000
 // Bounded wait for a trigger to wind down so the next test doesn't inherit an in-flight job.
-const TRIGGER_JOIN_GRACE_MS = 8_000
+// Sized for the slowest trigger on the slowest leg -- a whisper transcription inside the packaged
+// Electron app -- rather than for the median: the claim here is that logs flow, and failing it
+// because a transcription took nine seconds reports a latency as a logging defect. The bound still
+// exists, so a trigger that never ends is still caught before it reaches the next test.
+const TRIGGER_JOIN_GRACE_MS = 30_000
 // Cap completion length — logging tests only need log flow, not a full response.
 const LOGGING_TRIGGER_PREDICT_TOKENS = 20
 

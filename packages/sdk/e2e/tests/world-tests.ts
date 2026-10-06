@@ -232,7 +232,11 @@ export const worldConcurrentStepRejected = createWorldTest(
 // deliver 12 and fail here.
 export const worldCancelThenReload = createWorldTest(
   'world-cancel-then-reload',
-  { image: 'elephant.jpg', keys: ['W'] },
+  // `cancelKeys` is one key per simulated step, so the step under test runs long enough that the
+  // cancel always reaches a call still in flight. With a single key a fast GPU finishes the block
+  // before the cancel lands, and the test then reports a product failure for a race of its own
+  // making -- which is how it failed on the Windows desktop leg.
+  { image: 'elephant.jpg', keys: ['W'], cancelKeys: Array.from({ length: 24 }, () => 'W') },
   { validation: 'function', fn: framesAre(9, 'post-cancel reload') }
 )
 
@@ -375,7 +379,7 @@ worldCancelThenReload.steps = [
     start: {
       method: 'worldStep',
       collect: 'all',
-      params: { modelId: '$model', keys: '$params.keys' },
+      params: { modelId: '$model', keys: '$params.cancelKeys' },
       as: 'inflight'
     }
   },

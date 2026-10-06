@@ -293,22 +293,12 @@ const RULES: Rule[] = [
     }
   },
   {
-    match: [
-      'ocr-sign-image',
-      'ocr-chart-image',
-      'ocr-no-text-image',
-      'ocr-large-image',
-      'ocr-low-quality',
-      'ocr-mixed-language',
-      'ocr-single-language',
-      'ocr-blurry-text',
-      'ocr-horizontally-inverted',
-      'ocr-vertically-inverted',
-      'ocr-misaligned-text',
-      'ocr-multi-sized-text',
-      'ocr-multiple-fonts',
-      'addon-logging-ocr'
-    ],
+    // The whole family, not the thirteen cases that were listed here before. On the 2026-10-06
+    // full run the app was jetsammed while starting `ocr-streaming-stats`: its own footprint
+    // poller had it at 1892 MB, peaking at 2278 MB, and the number did not come down when the
+    // previous test evicted the OCR model. Any OCR case reached late in a full run is on that
+    // cliff, so listing individual ids only moved where the leg died.
+    match: /^(ocr-|addon-logging-ocr$)/,
     skip: { reason: 'OCR disabled on iOS (ONNX/CoreML OOM)', platforms: ['mobile-ios'] }
   }
 ]

@@ -1,3 +1,4 @@
+import { hostPlatform } from '../utils/host-platform.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
@@ -152,7 +153,7 @@ export async function runConsumerElectron(options: ConsumerElectronOptions) {
       QVAC_TEST_RUN_ID: options.runId,
       QVAC_TEST_CONFIG_DIR: configDir,
       QVAC_TEST_CONSUMER_ENTRY: path.resolve(configDir, electron.entry),
-      QVAC_TEST_PLATFORM: 'electron'
+      QVAC_TEST_PLATFORM: hostPlatform('electron')
     }
 
     if (options.mqttBroker) {

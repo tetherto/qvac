@@ -207,7 +207,7 @@ export const executor = createExecutor({
 export async function startElectronConsumer() {
   const runId = process.env['QVAC_TEST_RUN_ID']
   const configDir = process.env['QVAC_TEST_CONFIG_DIR']
-  const platform = process.env['QVAC_TEST_PLATFORM'] ?? 'electron'
+  const platform = process.env['QVAC_TEST_PLATFORM'] ?? `electron-${HOST_OS}`
   const mqttBrokerOverride = process.env['QVAC_TEST_MQTT_BROKER']
 
   if (!runId) {

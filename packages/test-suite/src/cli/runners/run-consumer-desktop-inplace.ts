@@ -1,3 +1,4 @@
+import { hostPlatform } from '../utils/host-platform.js'
 import { config as loadDotenv } from 'dotenv'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -55,7 +56,7 @@ async function main() {
 
   const runId = requireArg(args, 'runId')
   const configDir = path.resolve(readArg(args, 'config') ?? process.cwd())
-  const platform = readArg(args, 'platform') ?? 'desktop'
+  const platform = readArg(args, 'platform') ?? hostPlatform('desktop')
   const mqttBrokerOverride = readArg(args, 'mqtt-broker')
 
   // Load .env from the config directory (mocha-like behavior)

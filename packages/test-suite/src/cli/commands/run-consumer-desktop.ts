@@ -1,3 +1,4 @@
+import { hostPlatform } from '../utils/host-platform.js'
 import * as path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +19,7 @@ export async function runConsumerDesktop(options: ConsumerOptions) {
       throw new Error('No desktop consumer configuration found')
     }
 
-    const platform = options.platform || 'desktop'
+    const platform = options.platform || hostPlatform('desktop')
     const configDir = path.resolve(options.config)
 
     console.log('🚀 Running consumer...\n')
