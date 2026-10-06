@@ -1,4 +1,73 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/**
+ * What a finished AudioGen run has to show for itself: audio with a described format, progress that
+ * actually ticked, and stats.
+ */
+const checkProducedAudio: Step[] = [
+  { project: { from: '$run', path: 'audio', as: 'audio' } },
+  { project: { from: '$audio', path: 'pcm', as: 'pcm' } },
+  { assert: { on: '$pcm', named: 'producedAudio', with: { minSamples: 1 } } },
+  {
+    assert: {
+      on: '$audio',
+      named: 'positiveIntegers',
+      with: { fields: ['sampleRate', 'channels', 'bitsPerSample'] }
+    }
+  },
+  { project: { from: '$run', path: 'events', as: 'progress' } },
+  { assert: { on: '$progress', named: 'lengthAtLeast', with: { length: 1 } } },
+  { project: { from: '$run', path: 'stats', as: 'stats' } },
+  { assert: { on: '$stats', named: 'fieldsPresent', with: { fields: ['backendId'] } } }
+]
+
+/** A generation, with only the parameters the test actually sets. */
+const generationSteps = (extra: Record<string, unknown> = {}): Step[] => [
+  { useModel: { deps: ['audiogen-turbo'], as: 'model' } },
+  {
+    call: {
+      method: 'audioGen',
+      collect: 'pcm',
+      params: {
+        modelId: '$model',
+        caption: '$params.caption',
+        lyrics: '$params.lyrics?',
+        seed: '$params.seed?',
+        duration: '$params.duration?',
+        bpm: '$params.bpm?',
+        keyscale: '$params.keyscale?',
+        timesignature: '$params.timesignature?',
+        augmentCaptionWithMetadata: '$params.augmentCaptionWithMetadata?',
+        audioCodes: '$params.audioCodes?',
+        taskType: '$params.taskType?',
+        audioCoverStrength: '$params.audioCoverStrength?',
+        coverNoiseStrength: '$params.coverNoiseStrength?',
+        ...extra
+      },
+      as: 'run'
+    }
+  },
+  ...checkProducedAudio
+]
+
+/** Client-side validation: the call must be refused before it reaches RPC. */
+const VALIDATION_MUST_PRECEDE_RPC_MODEL_ID = 'must-not-reach-audiogen-model-lookup'
+
+const validationErrorSteps = (
+  method: 'audioGen' | 'audioEdit',
+  params: Record<string, unknown>
+): Step[] => [
+  {
+    callError: {
+      method,
+      collect: 'pcm',
+      params: { modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID, ...params },
+      as: 'error'
+    }
+  },
+  { project: { from: '$error', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } }
+]
 
 export const audioGenHappy: TestDefinition = {
   testId: 'audio-gen-happy',
@@ -12,6 +81,7 @@ export const audioGenHappy: TestDefinition = {
     validation: 'contains-all',
     contains: ['generated', 'samples', 'progress', 'stats']
   },
+  steps: generationSteps(),
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -31,6 +101,7 @@ export const audioGenShortDuration: TestDefinition = {
     validation: 'contains-all',
     contains: ['generated', 'samples', 'progress', 'stats']
   },
+  steps: generationSteps(),
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -56,6 +127,10 @@ export const audioGenReferenceAudio: TestDefinition = {
     validation: 'contains-all',
     contains: ['generated', 'samples', 'progress', 'stats']
   },
+  steps: [
+    { asset: { kind: 'audio', file: '$params.referenceAudioFileName', form: 'path', as: 'ref' } },
+    ...generationSteps({ referenceAudio: '$ref' })
+  ],
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -77,12 +152,16 @@ export const audioGenCoverNofsq: TestDefinition = {
     taskType: 'cover-nofsq',
     audioCoverStrength: 1,
     coverNoiseStrength: 0.75,
-    sourceTone: { seconds: 1, frequency: 220 }
+    sourceTone: '1s-220hz'
   },
   expectation: {
     validation: 'contains-all',
     contains: ['generated', 'samples', 'progress', 'stats']
   },
+  steps: [
+    { asset: { kind: 'tone', file: '$params.sourceTone', as: 'source' } },
+    ...generationSteps({ sourceAudio: '$source' })
+  ],
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -110,6 +189,7 @@ export const audioGenAugmentedCaption: TestDefinition = {
     validation: 'contains-all',
     contains: ['generated', 'samples', 'progress', 'stats']
   },
+  steps: generationSteps(),
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -138,6 +218,7 @@ export const audioGenFrozenCodes: TestDefinition = {
     validation: 'contains-all',
     contains: ['generated', 'samples', 'progress', 'stats']
   },
+  steps: generationSteps(),
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -154,7 +235,7 @@ export const audioEditPipeline: TestDefinition = {
   testId: 'audio-edit-pipeline',
   params: {
     seed: 22883,
-    sourceTone: { seconds: 2, frequency: 220 },
+    sourceTone: '2s-220hz',
     operations: [
       {
         type: 'flow-edit',
@@ -176,6 +257,24 @@ export const audioEditPipeline: TestDefinition = {
     validation: 'contains-all',
     contains: ['edited', 'samples', 'progress', 'stats']
   },
+  steps: [
+    { asset: { kind: 'tone', file: '$params.sourceTone', as: 'source' } },
+    { useModel: { deps: ['audiogen-turbo'], as: 'model' } },
+    {
+      call: {
+        method: 'audioEdit',
+        collect: 'pcm',
+        params: {
+          modelId: '$model',
+          sourceAudio: '$source',
+          operations: '$params.operations',
+          seed: '$params.seed?'
+        },
+        as: 'run'
+      }
+    },
+    ...checkProducedAudio
+  ],
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -192,12 +291,28 @@ export const audioUnderstandClip: TestDefinition = {
   testId: 'audio-understand-clip',
   params: {
     seed: 11,
-    sourceTone: { seconds: 2, frequency: 220 }
+    sourceTone: '2s-220hz'
   },
   expectation: {
     validation: 'contains-all',
     contains: ['described', 'codes', 'progress', 'stats']
   },
+  steps: [
+    { asset: { kind: 'tone', file: '$params.sourceTone', as: 'source' } },
+    { useModel: { deps: ['audiogen-turbo'], as: 'model' } },
+    {
+      call: {
+        method: 'audioUnderstand',
+        collect: 'text',
+        params: { modelId: '$model', sourceAudio: '$source', seed: '$params.seed?' },
+        as: 'run'
+      }
+    },
+    { project: { from: '$run', path: 'text.caption', as: 'caption' } },
+    { assert: { on: '$caption', named: 'nonEmptyText' } },
+    { project: { from: '$run', path: 'text.audioCodes', as: 'codes' } },
+    { assert: { on: '$codes', named: 'lengthAtLeast', with: { length: 1 } } }
+  ],
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -216,6 +331,10 @@ export const audioGenLegoMissingTrackError: TestDefinition = {
     validation: 'throws-error',
     errorContains: 'track'
   },
+  steps: validationErrorSteps('audioGen', {
+    caption: '$params.caption',
+    taskType: '$params.taskType'
+  }),
   metadata: {
     category: 'audiogen',
     dependency: 'none',
@@ -235,6 +354,11 @@ export const audioGenSimpleModeConflictError: TestDefinition = {
     validation: 'throws-error',
     errorContains: 'rewriteQuery'
   },
+  steps: validationErrorSteps('audioGen', {
+    caption: '$params.caption',
+    simpleMode: '$params.simpleMode',
+    rewriteQuery: '$params.rewriteQuery'
+  }),
   metadata: {
     category: 'audiogen',
     dependency: 'none',
@@ -251,6 +375,7 @@ export const audioGenEmptyCaptionError: TestDefinition = {
     validation: 'throws-error',
     errorContains: 'caption'
   },
+  steps: validationErrorSteps('audioGen', { caption: '$params.caption' }),
   metadata: {
     category: 'audiogen',
     dependency: 'none',
@@ -269,6 +394,10 @@ export const audioGenCoverMissingSourceError: TestDefinition = {
     validation: 'throws-error',
     errorContains: 'sourceAudio'
   },
+  steps: validationErrorSteps('audioGen', {
+    caption: '$params.caption',
+    taskType: '$params.taskType'
+  }),
   metadata: {
     category: 'audiogen',
     dependency: 'none',
@@ -280,13 +409,20 @@ export const audioGenCoverMissingSourceError: TestDefinition = {
 export const audioEditEmptyPipelineError: TestDefinition = {
   testId: 'audio-edit-empty-pipeline-error',
   params: {
-    sourceTone: { seconds: 1, frequency: 220 },
+    sourceTone: '1s-220hz',
     operations: []
   },
   expectation: {
     validation: 'throws-error',
     errorContains: 'operations'
   },
+  steps: [
+    { asset: { kind: 'tone', file: '$params.sourceTone', as: 'source' } },
+    ...validationErrorSteps('audioEdit', {
+      sourceAudio: '$source',
+      operations: '$params.operations'
+    })
+  ],
   metadata: {
     category: 'audiogen',
     dependency: 'none',
