@@ -3,7 +3,9 @@ name: tmp QVAC-26572 fingerprint stress (throwaway)
 on:
   push:
     branches: [infra/QVAC-26572-win-vcpkg-fingerprint]
-    paths: [.github/workflows/tmp-qvac-26572-fingerprint-stress.yml]
+    paths:
+      - .github/workflows/tmp-qvac-26572-fingerprint-stress.yml
+      - .github/actions/vcpkg-toolchain-fingerprint/**
 
 permissions:
   contents: read
@@ -22,10 +24,7 @@ jobs:
       - name: Locate vcpkg
         shell: powershell
         run: |
-          $root = $env:VCPKG_ROOT
-          foreach ($c in @($root, 'C:/Users/actions-runner/vcpkg', $env:VCPKG_INSTALLATION_ROOT)) {
-            if ($c -and (Test-Path (Join-Path $c 'vcpkg.exe'))) { $root = $c; break }
-          }
+          $root = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
           echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
           Write-Output "runner=$env:RUNNER_NAME VCPKG_ROOT=$root"
           & (Join-Path $root 'vcpkg.exe') version
@@ -58,10 +57,16 @@ jobs:
 
       - name: Fingerprint (1)
         uses: ./.github/actions/vcpkg-toolchain-fingerprint
+      - shell: bash
+        run: echo "FP1=${TOOLCHAIN_FINGERPRINT}" >> "${GITHUB_ENV}"
       - name: Fingerprint (2)
         uses: ./.github/actions/vcpkg-toolchain-fingerprint
+      - shell: bash
+        run: echo "FP2=${TOOLCHAIN_FINGERPRINT}" >> "${GITHUB_ENV}"
       - name: Fingerprint (3)
         uses: ./.github/actions/vcpkg-toolchain-fingerprint
       - name: Report
         shell: bash
-        run: echo "RESULT runner=${RUNNER_NAME} fingerprint=${TOOLCHAIN_FINGERPRINT}"
+        run: |
+          echo "RESULT runner=${RUNNER_NAME} fp=${FP1} ${FP2} ${TOOLCHAIN_FINGERPRINT}"
+          [ "${FP1}" = "${FP2}" ] && [ "${FP2}" = "${TOOLCHAIN_FINGERPRINT}" ]
