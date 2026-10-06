@@ -226,6 +226,20 @@ export const ocrDoctrBlockStructure = createOcrTest(
   60000
 )
 
+// mainGpu reaches the addon as `main-gpu`. Registry index 0 either selects a
+// GPU or falls back to CPU, so the OCR text is the same on every desktop host.
+// Mobile strips main-gpu, so the test is skipped there.
+export const ocrMainGpuIndex0 = createOcrTest(
+  'ocr-main-gpu-index-0',
+  'ocr-simple-test-png.png',
+  {
+    validation: 'contains-any',
+    contains: ['OCR', 'text', 'testing', 'implementation', 'recognize', 'Type', 'enter']
+  },
+  { resource: 'ocr-main-gpu' },
+  60000
+)
+
 export const ocrTests = [
   ocrBasicPng,
   ocrBasicJpg,
@@ -255,5 +269,6 @@ export const ocrTests = [
   ocrParagraphBlockStructure,
   ocrParagraphStreaming,
   ocrDoctrBasicPng,
-  ocrDoctrBlockStructure
+  ocrDoctrBlockStructure,
+  ocrMainGpuIndex0
 ]

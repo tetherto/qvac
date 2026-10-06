@@ -510,6 +510,48 @@ test('tts: chatterbox carries both checkpoints and the cache type', (t) => {
   })
 })
 
+test('tts: the LavaSR stages reach the fitter when the load names them', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ttsGgml,
+    modelPath: '/models/t3.gguf',
+    modelConfig: { ttsEngine: 'chatterbox', useGPU: true, nGpuLayers: 99 },
+    artifacts: {
+      s3genPath: '/models/s3gen.gguf',
+      lavasrEnhancerPath: '/models/enhancer.gguf',
+      lavasrDenoiserPath: '/models/denoiser.gguf'
+    },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.alike(plan.probe.request, {
+    engineType: 'chatterbox',
+    t3ModelPath: '/models/t3.gguf',
+    s3genModelPath: '/models/s3gen.gguf',
+    nGpuLayers: 99,
+    lavasrEnhancerPath: '/models/enhancer.gguf',
+    lavasrDenoiserPath: '/models/denoiser.gguf'
+  })
+})
+
+test('tts: a load naming neither LavaSR stage sends neither path', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ttsGgml,
+    modelPath: '/models/supertonic.gguf',
+    modelConfig: { ttsEngine: 'supertonic', useGPU: true, nGpuLayers: 99 },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.alike(plan.probe.request, {
+    engineType: 'supertonic',
+    supertonicModelPath: '/models/supertonic.gguf',
+    nGpuLayers: 99
+  })
+})
+
 test('tts: chatterbox without its s3gen checkpoint is refused', (t) => {
   t.alike(
     createFitRequest({
