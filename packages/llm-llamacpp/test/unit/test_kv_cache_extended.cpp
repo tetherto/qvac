@@ -17,7 +17,9 @@
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 #include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaModel.hpp"
@@ -365,9 +367,13 @@ TEST(KvCacheExtended, KeySwitchKeepsIncomingInRamTier) {
 // C5: a RAM-tier write that fails is reported and keeps the entry unsaved.
 TEST(KvCacheExtended, TierWriteFailureIsLoggedAndEntryStaysDirty) {
   SKIP_UNLESS_KV_CACHE_EXTENDED();
+#ifdef _WIN32
+  GTEST_SKIP() << "relies on POSIX directory permissions";
+#else
   if (::geteuid() == 0) {
     GTEST_SKIP() << "root ignores directory permissions";
   }
+#endif
   const auto path = qwen3Model();
   REQUIRE_MODEL(path);
   ScratchDir dir("tier_write_failure");
@@ -546,6 +552,9 @@ TEST(KvCacheExtended, RenderCostPerTurn) {
 // static, so run this alone (`--gtest_filter=*SnapshotFallsBackToMemory*`).
 TEST(KvCacheExtended, SnapshotFallsBackToMemoryWithoutPrivateDir) {
   SKIP_UNLESS_KV_CACHE_EXTENDED();
+#ifdef _WIN32
+  GTEST_SKIP() << "the mkdtemp fallback is POSIX only";
+#else
   if (::geteuid() == 0) {
     GTEST_SKIP() << "root ignores directory permissions";
   }
@@ -588,4 +597,5 @@ TEST(KvCacheExtended, SnapshotFallsBackToMemoryWithoutPrivateDir) {
   EXPECT_TRUE(snapshot.hasBuffer());
   EXPECT_EQ(utils::sequenceStateSnapshotFilesWritten(), 0u);
   EXPECT_TRUE(utils::restoreSequenceState(model->getContext(), 0, snapshot));
+#endif
 }
