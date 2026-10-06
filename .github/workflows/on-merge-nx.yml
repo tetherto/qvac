@@ -10,6 +10,8 @@ on:
       # own PR ran the prebuild matrix and published a GPR build off it. Every
       # non-release build is a deliberate workflow_dispatch now.
       - release-*
+      # release-train-* branches publish from release-train.yml.
+      - "!release-train-*"
     paths:
       - "packages/asr-ggml/**"
       - "packages/audiogen-ggml/**"

@@ -105,6 +105,7 @@ jobs:
           .github/scripts/test/download-artifact-retry.test.mjs
           .github/scripts/test/asr-integration-budget.test.mjs
           .github/scripts/test/integration-test-script.test.mjs
+          .github/scripts/test/release-train.test.mjs
 
       # Guards the model-cache seeding scheme: a seed writing a key no consumer
       # asks for is silent otherwise -- the seed saves, and its verify job
