@@ -31,7 +31,8 @@
     "sync:test-suite": "./sync-test-suite.sh",
     "emit:resource-table": "node scripts/emit-resource-table.mjs",
     "check:resource-table": "node scripts/emit-resource-table.mjs --check",
-    "check:step-dependencies": "node scripts/check-step-dependencies.mjs"
+    "check:step-dependencies": "node scripts/check-step-dependencies.mjs",
+    "check:skip-matrix": "node scripts/check-skip-matrix.mjs"
   },
   "dependencies": {
     "@qvac/sdk": "file:..",
