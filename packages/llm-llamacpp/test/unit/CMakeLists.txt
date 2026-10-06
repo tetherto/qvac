@@ -64,6 +64,7 @@ add_executable(
   test_finetune_pending_pause.cpp
   test_whole_model_cancel_finetune.cpp
   backend_env.cpp
+  temp_dir_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
