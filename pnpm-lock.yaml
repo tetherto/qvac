@@ -43,7 +43,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.12(zod@4.4.3)
       '@qvac/cli':
-        specifier: ^0.14.0
+        specifier: ^0.15.0
         version: link:../cli
     devDependencies:
       '@ai-sdk/openai-compatible':
