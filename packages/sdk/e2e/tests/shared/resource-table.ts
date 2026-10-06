@@ -397,7 +397,9 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   bci: {
-    on: ['desktop', 'electron'],
+    // Defined on every leg: `model-fit-bci` assesses the load without running it. Mobile
+    // never loads it, so it must not pay for the weights.
+    skipPreDownloadOn: ['mobile'],
     constant: { $const: 'BCI_WINDOWED' },
     type: 'bci-whispercpp-transcription',
     config: {
@@ -440,7 +442,8 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   diffusion: {
-    on: ['desktop'],
+    // Every leg defines it for `model-fit-diffusion`; only desktop loads it.
+    skipPreDownloadOn: ['electron', 'snap', 'mobile'],
     constant: { $const: 'FLUX_2_KLEIN_4B_Q4_0' },
     type: 'sdcpp-generation',
     config: {
@@ -466,7 +469,8 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'audiogen-turbo': {
-    on: ['desktop'],
+    // Every leg defines it for `model-fit-audiogen`; only desktop loads it.
+    skipPreDownloadOn: ['electron', 'snap', 'mobile'],
     type: 'audiogen-ggml',
     config: {
       textEncModelSrc: { $const: 'AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0' },
