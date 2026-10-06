@@ -388,9 +388,9 @@ export default class VideoStableDiffusion {
     const { mode } = params
     const dimensionsImplicit = params.width == null && params.height == null
     const isLtx = this._isLtx()
-    // H3 uses an LLM and audio VAE companion. Native validation inspects the
-    // loaded checkpoint, including renamed safetensors.
-    const isH3Files = !!this._files.llm && !!this._files.audioVae && !isLtx
+    // H3 uses an LLM companion; the audio VAE is optional. Native validation
+    // inspects the loaded checkpoint, including renamed safetensors.
+    const isH3Files = !!this._files.llm && !isLtx
 
     const alignTo = isLtx || isH3Files ? 32 : 16
     const width = params.width

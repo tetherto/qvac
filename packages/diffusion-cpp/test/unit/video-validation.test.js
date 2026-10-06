@@ -75,13 +75,13 @@ function makeLtxModel(config = { threads: 1 }) {
   })
 }
 
-function makeH3Model() {
+function makeH3Model(withAudioVae = true) {
   return new VideoStableDiffusion({
     files: {
       model: '/tmp/minimax-h3.safetensors',
       llm: '/tmp/qwen3vl-h3.safetensors',
       vae: '/tmp/h3-video-vae.safetensors',
-      audioVae: '/tmp/h3-audio-vae.safetensors'
+      ...(withAudioVae && { audioVae: '/tmp/h3-audio-vae.safetensors' })
     },
     logger: makeQuiet()
   })
@@ -768,6 +768,21 @@ test('run | H3 img2vid accepts a first-frame image without Wan CLIP vision', asy
   const dispatches = recordNativeDispatch(m)
   await t.exception.all(
     m.run({ mode: 'img2vid', prompt: 'A slow camera move', init_image: H3_FAKE_PNG }),
+    /native dispatch reached/
+  )
+  t.is(dispatches(), 1)
+})
+
+test('run | H3 without audio VAE keeps image mode and 32-pixel alignment', async (t) => {
+  const m = makeH3Model(false)
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'A slow camera move', init_image: H3_FAKE_PNG, width: 48 }),
+    /positive multiples of 32/
+  )
+  t.is(dispatches(), 0)
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'A slow camera move', init_image: H3_FAKE_PNG, width: 64 }),
     /native dispatch reached/
   )
   t.is(dispatches(), 1)
