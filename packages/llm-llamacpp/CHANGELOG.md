@@ -103,9 +103,6 @@
 
 ### Fixed
 
-- The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
-  and `mlock` keep working with qvac-fabric 11018, which no longer accepts
-  them. The addon maps them to `load-mode` for both loads and `assessFit`.
 - A hybrid or recurrent request that diverged, restored a checkpoint and was
   then rolled back (cancel during prefill, decode error, context overflow)
   restored only the recurrent state of the pre-request snapshot. The KV cache
@@ -181,6 +178,50 @@
   the prefix shared with the request's prompt rather than restoring the old
   tail. A chat with one `cacheKey` therefore keeps everything in memory on
   these models until it is saved, switched away from or unloaded.
+
+## [0.56.0] - 2026-10-06
+
+### Breaking
+
+- `assessFit` takes `config`, the map `loadModel` takes, in place of `params`,
+  and resolves it with the load's own code. `config` names a device, as every
+  load does ([#4841](https://github.com/tetherto/qvac/pull/4841)).
+
+  ```js
+  // before
+  LlmLlamacpp.assessFit({ modelPath, params: { 'ctx-size': '4096', 'gpu-layers': '0' } })
+  // after
+  LlmLlamacpp.assessFit({ modelPath, config: { device: 'gpu', 'ctx-size': '4096', 'gpu-layers': '0' } })
+  ```
+
+- `assessFit` byte figures can differ: with `flash-attn` unset the resolver
+  settles on `on`, which is what the load runs.
+- `main-gpu: 'dedicated'`, `rpc-servers`, `flash-attn: 'auto'`,
+  `prefetch-weights` and `tensor-read-lazy` now produce verdicts where they
+  answered `unsupported-config`, and a LoRA adapter, an mmproj or a `cpu`
+  device is refused.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
+### Added
+
+- `generationParams.parallel_tool_calls` (boolean). `true` lets one response
+  carry several tool calls; unset or `false` keeps one.
+
+### Fixed
+
+- The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
+  and `mlock` keep working with qvac-fabric 11018, which no longer accepts
+  them. The addon maps them to `load-mode` for both loads and `assessFit`.
 
 ## [0.55.1] - 2026-09-30
 

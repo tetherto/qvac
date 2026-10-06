@@ -383,6 +383,9 @@ void MtmdLlmContext::tokenizeChat(
   if (!toolChoice.tools.empty()) {
     inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
+    if (renderOverrides_.parallelToolCalls) {
+      inputs.parallel_tool_calls = *renderOverrides_.parallelToolCalls;
+    }
   }
   // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
   // move out instead of being copied per request.

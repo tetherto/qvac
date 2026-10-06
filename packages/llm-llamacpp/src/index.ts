@@ -180,6 +180,7 @@ const GENERATION_PARAM_KEYS: ReadonlySet<string> = new Set([
   "grammar",
   "json_schema",
   "tool_choice",
+  "parallel_tool_calls",
   "reasoning_budget",
 ]);
 
@@ -233,6 +234,13 @@ function normalizeGenerationParams(
     throw new TypeError(
       'generationParams.tool_choice must be "auto", "none", "required" or a declared function name',
     );
+  }
+
+  if (
+    sanitized.parallel_tool_calls !== undefined &&
+    typeof sanitized.parallel_tool_calls !== "boolean"
+  ) {
+    throw new TypeError("generationParams.parallel_tool_calls must be a boolean when provided");
   }
 
   const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
@@ -1380,6 +1388,12 @@ namespace LlmLlamacpp {
     // `string & {}` keeps the three literals visible to autocomplete without
     // the union collapsing to plain `string`.
     tool_choice?: "auto" | "none" | "required" | (string & {});
+    /**
+     * Whether one response may carry more than one tool call. `true` lets the
+     * template and the tool-call grammar accept several; unset or `false`
+     * keeps one. Ignored when the prompt carries no tools.
+     */
+    parallel_tool_calls?: boolean;
     /**
      * Per-request reasoning channel budget. `-1` keeps the model's reasoning
      * channel on; `0` disables it for this request; any positive integer caps

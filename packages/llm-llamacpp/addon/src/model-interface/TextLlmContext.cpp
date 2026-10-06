@@ -367,6 +367,9 @@ void TextLlmContext::tokenizeChat(
   if (!toolChoice.tools.empty()) {
     inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
+    if (renderOverrides_.parallelToolCalls) {
+      inputs.parallel_tool_calls = *renderOverrides_.parallelToolCalls;
+    }
   }
   // Not const: `prompt` and `additionalStops` are moved out below. On base
   // `getPrompt` returned `std::string` and this assignment moved; binding the
