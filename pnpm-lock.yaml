@@ -43,7 +43,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.12(zod@4.4.3)
       '@qvac/cli':
-        specifier: ^0.14.0
+        specifier: ^0.15.0
         version: link:../cli
     devDependencies:
       '@ai-sdk/openai-compatible':
@@ -99,7 +99,7 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/registry-client':
         specifier: ^0.6.1
@@ -314,7 +314,7 @@ importers:
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -405,7 +405,7 @@ importers:
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
       '@qvac/sdk':
-        specifier: ^0.20.0
+        specifier: ^0.21.0
         version: link:../sdk
       close-with-grace:
         specifier: ^2.1.0
@@ -739,7 +739,7 @@ importers:
   packages/embed-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -857,7 +857,7 @@ importers:
   packages/ggml-rpc-server:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       bare-net:
         specifier: ^2.3.2
@@ -1061,7 +1061,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
@@ -1152,7 +1152,7 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -1262,7 +1262,7 @@ importers:
   packages/model-fit:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       bare-fs:
         specifier: ^4.5.1
@@ -1332,7 +1332,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -1736,7 +1736,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
@@ -2020,7 +2020,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -2190,7 +2190,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2

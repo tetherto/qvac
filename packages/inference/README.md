@@ -82,6 +82,8 @@ shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.1.0`.
 
 The engine resolves a `qvac.config.js` or `qvac.config.json` from the current working directory, or from the path in `QVAC_CONFIG_PATH`. The resolved config applies on the first API call.
 
+The `includeAudioDecoder` setting is read by the SDK bundler. Set it to `false` when packaging a worker that only receives raw PCM or streaming audio; `audiogen-ggml` can also use PCM or WAV output without FFmpeg. Compressed audio file decoding and compressed audiogen output formats require `bare-ffmpeg` to be bundled.
+
 ## System resource diagnostics
 
 Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Register a model plugin or RPC server provider before requesting diagnostics:
