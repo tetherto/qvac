@@ -1,7 +1,13 @@
 import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
 import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
-import { FaGithub, FaDiscord, FaGlobe, FaXTwitter } from 'react-icons/fa6';
+import {
+  FaGithub,
+  FaDiscord,
+  FaGlobe,
+  FaXTwitter,
+  FaRedditAlien,
+} from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { KeetIcon } from '@/components/keet-icon';
 import { ConnectMcpServer } from '@/components/for-ai-menu';
@@ -99,6 +105,14 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       label: 'X (Twitter)',
       text: 'X (Twitter)',
       icon: <FaXTwitter />,
+      external: true,
+    },
+    {
+      type: 'icon',
+      url: 'https://www.reddit.com/user/QVAC_Official/',
+      label: 'Reddit',
+      text: 'Reddit',
+      icon: <FaRedditAlien />,
       external: true,
     },
   ];
