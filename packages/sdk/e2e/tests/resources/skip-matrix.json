@@ -630,8 +630,17 @@
     "world-step-before-scene-fails"
   ],
   "desktop-python": [
+    "error-invalid-response-type",
+    "error-structured-error-code",
+    "no-lingering-bare-close",
+    "no-lingering-bare-ipc-disconnect",
+    "no-lingering-bare-sigterm",
     "parakeet-unified-coreml-ios",
+    "rpc-server-device-map",
+    "rpc-server-device-map-empty",
+    "rpc-server-device-map-invalid",
     "snap-storage-common-root",
-    "tts-audio8-coreml"
+    "tts-audio8-coreml",
+    "worker-restart-kv-cache-boundary"
   ]
 }
