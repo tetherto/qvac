@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Metadata-only `assessFit()` for MOSS-TTS and MOSS-TTSD, including reference
   encoding, batch or native streaming workloads, and host/device memory estimates.
+  MOSS fit requests require both backbone and codec decoder paths.
 
 - MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
   48 kHz sound effects of up to 30 seconds from a text description, from one

@@ -77,7 +77,7 @@ export interface CosyvoiceFitRequest extends TtsFitCommon {
 export interface MossFitRequest extends TtsFitCommon {
   engineType: 'moss'
   mossBackbonePath: string
-  mossCodecDecoderPath?: string
+  mossCodecDecoderPath: string
   mossCodecEncoderPath?: string
   /** Rows in the complete native prompt, including reference and dialogue rows. */
   promptRows: number
