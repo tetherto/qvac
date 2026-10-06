@@ -44,10 +44,15 @@ bool isFileInitialized(const std::filesystem::path& path) {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
-    common_params& commonParams, common_init_result_ptr llamaInit)
-    : llamaInit_(std::move(llamaInit)), params_(commonParams) {
+    common_params& commonParams, common_init_result_ptr llamaInit,
+    std::unique_ptr<
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+        speculative)
+    : llamaInit_(std::move(llamaInit)), speculative_(std::move(speculative)),
+      params_(commonParams) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
+  modelCtx_.speculative = speculative_.get();
   initializeCommonState();
 }
 

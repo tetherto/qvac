@@ -15,6 +15,7 @@
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
+#include "SpeculativeRuntime.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
 
@@ -31,7 +32,11 @@ public:
   TextLlmContext(TextLlmContext&&) = delete;
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
-  TextLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
+  TextLlmContext(
+      common_params& commonParams, common_init_result_ptr llamaInit,
+      std::unique_ptr<
+          qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+          speculative = nullptr);
   TextLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
       llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
@@ -96,6 +101,10 @@ public:
    * Access the underlying llama model pointer.
    */
   llama_model* getModel() override { return modelCtx_.model; }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
+  getSpeculative() const override {
+    return modelCtx_.speculative;
+  }
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -329,6 +338,10 @@ private:
       LlamaBatch* inlineDecodeBatch);
 
   common_init_result_ptr llamaInit_;
+  /// Owned speculative state of the single-prompt context; declared after
+  /// `llamaInit_` so the draft context goes before the target context.
+  std::unique_ptr<qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative_;
   LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
 

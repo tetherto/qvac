@@ -31,6 +31,7 @@
 #include "BatchEntryGuard.hpp"
 #include "MediaLoadOrder.hpp"
 #include "MtmdLlmContext.hpp"
+#include "SpeculativeRuntime.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 #include "handlers/LoadConfigHandlers.hpp"
@@ -234,13 +235,20 @@ void LlamaModel::init(bool acquireLock) {
   }
 
   // Addon-only knobs: consume them here so they are not forwarded to
-  // llama.cpp's argument parser, which would reject them as unknown.
+  // llama.cpp's argument parser, which would reject them as unknown. The
+  // speculative keys are llama-server flags that the parser only registers
+  // for the server and CLI examples.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeConfig
+      speculativeConfig;
   try {
     snap->cacheCheckpointPolicy_ =
         qvac_lib_inference_addon_llama::cache::parseCheckpointPolicy(
             configFilemap);
     snap->cacheRamBytes_ =
         qvac_lib_inference_addon_llama::cache::parseCacheRamBytes(
+            configFilemap);
+    speculativeConfig =
+        qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
@@ -272,6 +280,10 @@ void LlamaModel::init(bool acquireLock) {
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
   const bool isStreaming = snap->asyncWeightsLoader_.isStreaming();
+  qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
+      speculativeConfig, params);
+  qvac_lib_inference_addon_llama::speculative::reserveSpeculativeFitMemory(
+      params);
 
   // Match llama-server for every on-disk GGUF. llama_model_load_from_file
   // discovers the remaining split files from shard 0, while
@@ -305,11 +317,21 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
+  std::unique_ptr<qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative;
+  if (llamaInit && llamaInit->model() != nullptr &&
+      llamaInit->context() != nullptr) {
+    speculative =
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime::create(
+            params, llamaInit->model(), llamaInit->context());
+  }
+
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
-      std::move(llamaInit));
+      std::move(llamaInit),
+      std::move(speculative));
 
   if (snap->llmContext_) {
     snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
@@ -433,6 +455,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .model = mdl,
       .lctx = ctx,
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
+      .speculative = state.llmContext_->getSpeculative(),
   };
   // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
   // batchCapacity >= batchSize) with std::invalid_argument, which would escape
@@ -1801,12 +1824,16 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result_ptr llamaInit) {
+    common_init_result_ptr llamaInit,
+    std::unique_ptr<qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+        speculative) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
+    return std::make_unique<MtmdLlmContext>(
+        params, std::move(llamaInit), std::move(speculative));
   }
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
+  return std::make_unique<TextLlmContext>(
+      params, std::move(llamaInit), std::move(speculative));
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

@@ -15,6 +15,7 @@
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
+#include "SpeculativeRuntime.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Positional span paired with the KV-cell count it occupies. The two diverge
@@ -39,7 +40,11 @@ public:
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
    */
-  MtmdLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
+  MtmdLlmContext(
+      common_params& commonParams, common_init_result_ptr llamaInit,
+      std::unique_ptr<
+          qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+          speculative = nullptr);
 
   /// Per-slot driver constructor for the continuous-batching path. Does
   /// not own llama handles or the vision context; `sharedVision` must
@@ -115,6 +120,10 @@ public:
    * Access the underlying llama model pointer.
    */
   llama_model* getModel() override { return modelCtx_.model; }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
+  getSpeculative() const override {
+    return modelCtx_.speculative;
+  }
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -410,6 +419,10 @@ private:
       const std::function<void(const std::string&)>& outputCallback);
 
   common_init_result_ptr llamaInit_;
+  /// Owned speculative state of the single-prompt context; declared after
+  /// `llamaInit_` so the draft context goes before the target context.
+  std::unique_ptr<qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative_;
   mtmd::context_ptr ctxVision_;
   /// Non-owning vision context for per-slot batch drivers; null in
   /// single-prompt mode (where `ctxVision_` owns the mmproj).

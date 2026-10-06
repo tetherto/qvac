@@ -21,6 +21,10 @@ using namespace qvac_lib_inference_addon_llama::errors;
 
 struct mtmd_context;
 
+namespace qvac_lib_inference_addon_llama::speculative {
+class SpeculativeRuntime;
+} // namespace qvac_lib_inference_addon_llama::speculative
+
 struct GenerationParams {
   std::optional<int> n_predict;
   std::optional<float> temp;
@@ -167,6 +171,10 @@ struct LlmModelContext {
   llama_model* model = nullptr;
   llama_context* lctx = nullptr;
   const llama_vocab* vocab = nullptr;
+  /// Speculative decoding for this model; null when it is off. Owned by the
+  /// context that owns `lctx`, which outlives every sequence driver.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
+      speculative = nullptr;
 };
 
 /// Canonical layout of the per-session cache metadata that every cache
@@ -270,6 +278,14 @@ public:
    * associated with this context.
    */
   virtual common_params& getParams() = 0;
+
+  /**
+   * Speculative decoding state shared by every sequence of this context;
+   * null when speculative decoding is off.
+   */
+  [[nodiscard]] virtual qvac_lib_inference_addon_llama::speculative::
+      SpeculativeRuntime*
+      getSpeculative() const = 0;
 
   /**
    * The llama-side sequence id this context owns (0 for the single-prompt

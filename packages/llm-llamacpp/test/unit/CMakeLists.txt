@@ -81,6 +81,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SpeculativeRuntime.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp

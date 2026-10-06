@@ -44,6 +44,7 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SpeculativeRuntime.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
