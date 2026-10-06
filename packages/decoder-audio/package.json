@@ -1,6 +1,6 @@
 {
   "name": "@qvac/decoder-audio",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "",
   "license": "Apache-2.0",
   "author": "Tether",
@@ -8,8 +8,9 @@
   "main": "index.js",
   "scripts": {
     "test:dts": "tsc index.d.ts --noEmit --esModuleInterop --skipLibCheck",
+    "test:package": "node --test test/package/package-contract.test.js",
     "test:unit": "brittle-bare test/unit/*.test.js",
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run test:package && npm run test:unit && npm run test:integration",
     "coverage:unit": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
     "coverage": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
     "lint": "standard \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\"",
@@ -49,7 +50,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-ffmpeg": "^1.0.0-32"
   },
