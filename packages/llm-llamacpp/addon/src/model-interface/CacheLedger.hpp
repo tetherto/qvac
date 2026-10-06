@@ -372,7 +372,8 @@ inline DecodedLedger deserialize(const llama_token* words, size_t count) {
     }
     totalPositions += positions;
     totalCacheTokens += kv;
-    if (totalPositions > result.nPast || totalCacheTokens > result.cacheTokens) {
+    if (totalPositions > result.nPast ||
+        totalCacheTokens > result.cacheTokens) {
       throw std::runtime_error("cache ledger totals do not match cache state");
     }
     result.ledger.entries.push_back(
@@ -395,7 +396,8 @@ inline void requireTokensInVocab(const Ledger& ledger, int32_t nVocab) {
   for (const Entry& entry : ledger.entries) {
     if (entry.kind == EntryKind::Token &&
         (entry.identity < 0 || entry.identity >= nVocab)) {
-      throw std::runtime_error("cache ledger contains a token outside the vocab");
+      throw std::runtime_error(
+          "cache ledger contains a token outside the vocab");
     }
   }
 }

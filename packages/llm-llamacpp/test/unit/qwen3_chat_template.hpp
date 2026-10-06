@@ -2,8 +2,9 @@
 
 namespace qvac_lib_inference_addon_llama::test {
 
-// The chat template embedded in Qwen3-0.6B-Q8_0.gguf (`tokenizer.chat_template`),
-// for tests that render a Qwen3-style prompt without loading a model.
+// The chat template embedded in Qwen3-0.6B-Q8_0.gguf
+// (`tokenizer.chat_template`), for tests that render a Qwen3-style prompt
+// without loading a model.
 inline constexpr const char* QWEN3_CHAT_TEMPLATE = R"jinja({%- if tools %}
     {{- '<|im_start|>system\n' }}
     {%- if messages[0].role == 'system' %}

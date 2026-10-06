@@ -1072,9 +1072,7 @@ TEST_F(
   fs::remove_all(cacheDir);
 }
 
-TEST_F(
-    ContinuousBatchingIntegrationTest,
-    BatchSaveToMissingParentThrows) {
+TEST_F(ContinuousBatchingIntegrationTest, BatchSaveToMissingParentThrows) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
   const fs::path badCacheDir =
@@ -1332,8 +1330,9 @@ TEST_F(
 }
 
 /// A keyless prefill inside a batch has no product that survives the slot
-/// teardown: the lane's KV is wiped and nothing is kept. The same policy that rejects it on the single
-/// tagged path must reject it per batch item, before anything is scheduled.
+/// teardown: the lane's KV is wiped and nothing is kept. The same policy that
+/// rejects it on the single tagged path must reject it per batch item, before
+/// anything is scheduled.
 TEST_F(
     ContinuousBatchingIntegrationTest, TwoPromptBatchRejectsLiveOnlyPrefill) {
   REQUIRE_MODEL(model_);

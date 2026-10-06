@@ -3,12 +3,12 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
-#include <future>
-#include <thread>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <gtest/gtest.h>
@@ -2557,9 +2557,8 @@ TEST(ExplicitSaveTest, BatchSaveCacheWaitsForTheRunningRequest) {
     lastTokenNs.store(
         std::chrono::steady_clock::now().time_since_epoch().count());
   };
-  auto run = std::async(std::launch::async, [&] {
-    return model->processPromptBatch({prompt});
-  });
+  auto run = std::async(
+      std::launch::async, [&] { return model->processPromptBatch({prompt}); });
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(60);
   while (!streaming.load() && std::chrono::steady_clock::now() < deadline) {
@@ -2585,7 +2584,8 @@ TEST(ExplicitSaveTest, BatchEphemeralConversationIsDroppedOnEviction) {
     GTEST_SKIP() << "base test model not found";
   }
   const std::vector<std::string> keys = {
-      "ephemeral_evict_a.bin", "ephemeral_evict_b.bin",
+      "ephemeral_evict_a.bin",
+      "ephemeral_evict_b.bin",
       "ephemeral_evict_c.bin"};
   for (const auto& key : keys) {
     fs::remove(key);
@@ -2632,11 +2632,13 @@ TEST(BatchedCheckpointStoreTest, KeepsAtMostOneCheckpointSetPerSlot) {
         keys[i]);
     prompt.generationParams.n_predict = 8;
     ASSERT_EQ(model->processPromptBatch({prompt}).size(), 1u);
-    EXPECT_LE(ContinuousBatchSchedulerTestPeer::checkpointStoreSize(*scheduler), 2u)
+    EXPECT_LE(
+        ContinuousBatchSchedulerTestPeer::checkpointStoreSize(*scheduler), 2u)
         << "after key " << i;
   }
   // Three keys were evicted; only the two most recent kept their checkpoints.
-  EXPECT_EQ(ContinuousBatchSchedulerTestPeer::checkpointStoreSize(*scheduler), 2u);
+  EXPECT_EQ(
+      ContinuousBatchSchedulerTestPeer::checkpointStoreSize(*scheduler), 2u);
   model.reset();
   for (const auto& key : keys) {
     fs::remove(key);

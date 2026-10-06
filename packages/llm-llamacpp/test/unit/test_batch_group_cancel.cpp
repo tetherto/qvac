@@ -533,7 +533,8 @@ TEST_F(BatchGroupCancelTest, CancelOfAKeyDeferredPromptRejectsCancelled) {
   while (!tokenSeen.load() && std::chrono::steady_clock::now() < deadline) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
-  ASSERT_TRUE(tokenSeen.load()) << "test setup: the first prompt never streamed";
+  ASSERT_TRUE(tokenSeen.load())
+      << "test setup: the first prompt never streamed";
   EXPECT_EQ(model->activeSlots(), 2u)
       << "the prompt waiting for its key must count as queued work";
 

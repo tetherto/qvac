@@ -290,8 +290,8 @@ void ContinuousBatchScheduler::workerLoop() {
   while (true) {
     workCv_.wait(lock, [this] {
       return stopping_ || cancelRequested_.load() || hasPendingCancels() ||
-             clearRequested_ || pending_.size_approx() > 0 ||
-             hasWorkLocked() || hasRunnableSaveJobLocked();
+             clearRequested_ || pending_.size_approx() > 0 || hasWorkLocked() ||
+             hasRunnableSaveJobLocked();
     });
     if (stopping_) {
       break;

@@ -188,8 +188,8 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
   // test above.)
   std::vector<llama_token> claimed(static_cast<size_t>(nPast) + 1, 1);
   namespace cache = qvac_lib_inference_addon_llama::cache;
-  const std::vector<llama_token> metadata = cache::serialize(
-      cache::fromTokens(claimed), nPast + 1, nPast + 1);
+  const std::vector<llama_token> metadata =
+      cache::serialize(cache::fromTokens(claimed), nPast + 1, nPast + 1);
   ASSERT_GT(
       llama_state_seq_save_file(
           model->getContext(),

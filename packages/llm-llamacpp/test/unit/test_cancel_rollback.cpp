@@ -1736,10 +1736,9 @@ TEST(
   EXPECT_TRUE(fs::exists(badCachePath));
 
   LlamaModel::Prompt followup;
-  followup.input =
-      R"([{"role":"user","content":"This save should fail."},)"
-      R"({"role":"assistant","content":"Ok."},)"
-      R"({"role":"user","content":"Continue."}])";
+  followup.input = R"([{"role":"user","content":"This save should fail."},)"
+                   R"({"role":"assistant","content":"Ok."},)"
+                   R"({"role":"user","content":"Continue."}])";
   followup.cacheKey = badCachePath.string();
   ASSERT_NO_THROW(model->processPrompt(followup));
   EXPECT_GT(

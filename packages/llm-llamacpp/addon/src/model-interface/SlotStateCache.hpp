@@ -12,9 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include <llama.h>
-
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
@@ -58,10 +57,10 @@ struct SlotStateCacheEntry {
 /// stays in RAM, and reaches its `cacheKey` file only when the budget forces
 /// it out or on `flushDirty()`, which the model runs when it is unloaded.
 /// Ephemeral entries are never written automatically: the budget or an unload
-/// drops them. Insert and eviction follow llama-server's `server_prompt_cache::alloc`: an
-/// entry larger than the whole budget is not kept, a newer entry for the same
-/// key replaces the older one, and the oldest entries are evicted until a new
-/// one fits. Thread-safe.
+/// drops them. Insert and eviction follow llama-server's
+/// `server_prompt_cache::alloc`: an entry larger than the whole budget is not
+/// kept, a newer entry for the same key replaces the older one, and the oldest
+/// entries are evicted until a new one fits. Thread-safe.
 class SlotStateCache {
 public:
   explicit SlotStateCache(uint64_t budgetBytes = 0) : budget_(budgetBytes) {}

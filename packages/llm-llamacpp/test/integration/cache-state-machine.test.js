@@ -98,12 +98,16 @@ function buildPrompt(options = {}) {
 // A full-history follow-up decodes only what follows the prefix it shares with
 // the cache, so what it reused is what the cache holds beyond that.
 function assertFollowUpReusesCache(t, firstStats, followUpStats) {
-  const reused = followUpStats.CacheTokens - followUpStats.promptTokens - followUpStats.generatedTokens
+  const reused =
+    followUpStats.CacheTokens - followUpStats.promptTokens - followUpStats.generatedTokens
   t.ok(
     reused > 0 && reused <= firstStats.CacheTokens,
     `follow-up reused ${reused} cached tokens of ${firstStats.CacheTokens} (cache=${followUpStats.CacheTokens}, prompt=${followUpStats.promptTokens}, generated=${followUpStats.generatedTokens})`
   )
-  t.ok(followUpStats.CacheTokens > firstStats.CacheTokens, 'the cache now holds the whole conversation')
+  t.ok(
+    followUpStats.CacheTokens > firstStats.CacheTokens,
+    'the cache now holds the whole conversation'
+  )
 }
 
 function buildLongPrefillPrompt() {
@@ -587,7 +591,8 @@ safeTest('Validation: removed saveCacheToDisk is rejected', { timeout: 600_000 }
       t.fail('should have thrown for saveCacheToDisk: ' + value)
     } catch (err) {
       t.ok(
-        /saveCacheToDisk was removed/.test(err.message) && /saveCache\(cacheKey\)/.test(err.message),
+        /saveCacheToDisk was removed/.test(err.message) &&
+          /saveCache\(cacheKey\)/.test(err.message),
         'rejects saveCacheToDisk: ' + value + ' and points to saveCache()'
       )
     }
@@ -601,7 +606,10 @@ safeTest('Validation: ephemeral must be a boolean', { timeout: 600_000 }, async 
       await model.run([...BASE_PROMPT], { ephemeral: bad })
       t.fail('should have thrown for ephemeral: ' + JSON.stringify(bad))
     } catch (err) {
-      t.ok(/ephemeral must be a boolean/.test(err.message), 'rejects ephemeral: ' + JSON.stringify(bad))
+      t.ok(
+        /ephemeral must be a boolean/.test(err.message),
+        'rejects ephemeral: ' + JSON.stringify(bad)
+      )
     }
   }
 })
@@ -626,16 +634,15 @@ safeTest(
   }
 )
 
-safeTest(
-  'saveCache() rejects a key nothing is cached under',
-  { timeout: 600_000 },
-  async (t) => {
-    const { model, dirPath } = await setupModel(t)
-    await t.exception(model.saveCache(path.join(dirPath, 'never-cached.bin')), /no conversation is cached/)
-    // TypeError is a native error, which plain t.exception rethrows.
-    await t.exception.all(model.saveCache(''), /non-empty string/)
-  }
-)
+safeTest('saveCache() rejects a key nothing is cached under', { timeout: 600_000 }, async (t) => {
+  const { model, dirPath } = await setupModel(t)
+  await t.exception(
+    model.saveCache(path.join(dirPath, 'never-cached.bin')),
+    /no conversation is cached/
+  )
+  // TypeError is a native error, which plain t.exception rethrows.
+  await t.exception.all(model.saveCache(''), /non-empty string/)
+})
 
 safeTest(
   'Options: prefill then saveCache() persists cache file',
@@ -687,8 +694,13 @@ safeTest(
     const session2 = path.join(dirPath, 'opts-ephemeral-2.bin')
 
     await runAndCollectStats(model, [...BASE_PROMPT], { cacheKey: session1, ephemeral: true })
-    await runAndCollectStats(model, [{ role: 'user', content: 'New topic.' }], { cacheKey: session2 })
-    t.absent(fs.existsSync(session1), 'the switch dropped the ephemeral session instead of writing it')
+    await runAndCollectStats(model, [{ role: 'user', content: 'New topic.' }], {
+      cacheKey: session2
+    })
+    t.absent(
+      fs.existsSync(session1),
+      'the switch dropped the ephemeral session instead of writing it'
+    )
 
     await model.unload()
     t.ok(fs.existsSync(session2), 'the unload wrote the non-ephemeral session')
