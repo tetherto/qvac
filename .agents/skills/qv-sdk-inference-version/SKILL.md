@@ -31,6 +31,9 @@ A patch on either side is one release on its own. An SDK patch leaves its range
 alone; an engine patch is picked up by the existing range with no SDK release at
 all.
 
+**On a release train** (`qv-release-train`) skip Step 2: `nx release version`
+writes the range. Step 3 (`packages/sdk-python`) still applies.
+
 ## When to use this skill
 
 **Applies to the SDK pod** (not the agent-stack cascade: cli / ai-sdk-provider /
