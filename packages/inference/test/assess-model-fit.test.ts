@@ -1,14 +1,10 @@
 import test from 'brittle'
-import { estimateLlm, LLM_ESTIMATOR_VERSION } from '@/resources/model-fit/estimators/llm'
-import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
+import type { NativeCandidateFit } from '@/resources/model-fit/assess'
 import { computeFloor, FLOOR_VERSION } from '@/resources/model-fit/floor'
-import { fitResidentMemory, kvObservation } from '@/resources/model-fit/calibration/fit'
-import type { CalibrationPoint } from '@/resources/model-fit/calibration/fit'
-import type { PlatformCalibration } from '@/resources/model-fit/types'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
 import type { SystemResources } from '@/schemas/system-resources'
-import type { ModelFitEstimateTarget, NativeProbeFit } from '@/schemas/assess-model-fit'
+import type { ModelFitEstimateTarget } from '@/schemas/assess-model-fit'
 
 const MIB = 1024 * 1024
 const GIB = 1024 * 1024 * 1024
@@ -16,19 +12,31 @@ const GIB = 1024 * 1024 * 1024
 const F16 = 2
 const Q8_0 = 34 / 32
 
-// Calibration with every scaling term zeroed so a test asserts the KV formula
-// itself rather than a coefficient. Individual tests override what they need.
-const FLAT_CALIBRATION: PlatformCalibration = {
-  weightUpperCoeff: 1,
-  fixedOverheadBytes: { lower: 0, upper: 0 },
-  computeBufferBytesPerToken: { lower: 0, upper: 0 },
-  audioWindowBytes: { lower: 0, upper: 0 },
-  audioStreamingBytes: { lower: 0, upper: 0 },
-  validated: true
-}
-
-function calibration(overrides: Partial<PlatformCalibration> = {}): PlatformCalibration {
-  return { ...FLAT_CALIBRATION, ...overrides }
+/**
+ * One engine verdict, with the figures a set is summed from. `persistent` is
+ * what stays resident while the model is loaded, `working` the peak it holds
+ * only while running.
+ */
+function measured(
+  persistent: number,
+  working: number,
+  verdict: 'fit' | 'does-not-fit' = 'fit'
+): NativeCandidateFit {
+  return {
+    fit: {
+      verdict,
+      basis: 'native-probe',
+      estimatorVersion: 'native-probe-v2',
+      reason: verdict === 'fit' ? 'fits' : 'does-not-fit',
+      projection: {
+        weightsBytes: persistent,
+        contextBytes: 0,
+        computeBytes: working,
+        deviceBytes: persistent + working,
+        hostBytes: 0
+      }
+    }
+  }
 }
 
 // A plain dense transformer: 32 blocks, 8 KV heads, 128-wide K and V.
@@ -148,348 +156,6 @@ function candidate(overrides: Partial<ModelFitEstimateTarget> = {}): ModelFitEst
 }
 
 // ---------------------------------------------------------------------------
-// LLM estimator — KV formula
-// ---------------------------------------------------------------------------
-
-test('estimateLlm: dense model KV matches the hand-computed cache', (t) => {
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 0 }),
-    workload: { kind: 'llm', contextTokens: 4096 },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-
-  // 32 blocks × 8 KV heads × (128 + 128) elements × 4096 tokens × 2 bytes
-  const expected = 32 * 8 * 256 * 4096 * F16
-  t.is(expected, 512 * MIB, 'sanity: the hand-computed cache is 512 MiB')
-  t.is(result.persistent.lower, expected, 'the cache is resident, so it lands in persistent')
-  t.is(result.persistent.upper, expected, 'no GPU, so both bounds use the f16 default')
-  t.is(result.estimatorVersion, LLM_ESTIMATOR_VERSION)
-})
-
-test('estimateLlm: a GPU widens the bound to span the q8_0 default', (t) => {
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 0 }),
-    workload: { kind: 'llm', contextTokens: 4096 },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: true
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-
-  const elements = 32 * 8 * 256 * 4096
-  t.is(result.persistent.lower, Math.ceil(elements * Q8_0), 'GPU default is q8_0')
-  t.is(result.persistent.upper, elements * F16, 'CPU or OpenCL backend keeps f16')
-  t.ok(result.assumptions.some((a) => a.includes('q8_0')))
-})
-
-test('estimateLlm: bitnet keeps f16 even with a GPU (flash attention is off)', (t) => {
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 0, ggufFacts: denseFacts({ architecture: 'bitnet' }) }),
-    workload: { kind: 'llm', contextTokens: 4096 },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: true
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-  t.is(result.persistent.lower, result.persistent.upper)
-  t.is(result.persistent.lower, 32 * 8 * 256 * 4096 * F16)
-})
-
-test('estimateLlm: context above the trained window is clamped', (t) => {
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 0, ggufFacts: denseFacts({ contextLength: 2048 }) }),
-    workload: { kind: 'llm', contextTokens: 1_000_000 },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-  t.is(result.persistent.lower, 32 * 8 * 256 * 2048 * F16, 'sized for 2048, not 1,000,000')
-  t.ok(result.assumptions.some((a) => a.includes('clamped to the trained context')))
-})
-
-test('estimateLlm: per-layer classes cap windowed blocks at the sliding window', (t) => {
-  // The real gemma-4-31B shape: 50 windowed blocks (16 KV heads, 256-wide) and
-  // 10 full-attention blocks (4 KV heads, 512-wide), 1024-token window.
-  const facts = denseFacts({
-    architecture: 'gemma4',
-    blockCount: 60,
-    headCount: 32,
-    headCountKv: 16,
-    keyLength: 512,
-    valueLength: 512,
-    embeddingLength: 5376,
-    contextLength: 262144,
-    slidingWindow: 1024,
-    keyLengthSwa: 256,
-    valueLengthSwa: 256,
-    kvLayerClasses: [
-      { count: 50, headCountKv: 16, keyLength: 256, valueLength: 256, windowed: true },
-      { count: 10, headCountKv: 4, keyLength: 512, valueLength: 512, windowed: false }
-    ]
-  })
-
-  const contextTokens = 32768
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 0, ggufFacts: facts }),
-    workload: { kind: 'llm', contextTokens },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-
-  const windowed = 50 * 16 * (256 + 256) * 1024 * F16
-  const full = 10 * 4 * (512 + 512) * contextTokens * F16
-  t.is(result.persistent.lower, windowed + full)
-
-  // What the per-layer sum buys: reading every block as the widest one is 18x
-  // larger here, and worse still at the model's full 262144-token context.
-  const flat = 60 * 16 * (512 + 512) * contextTokens * F16
-  t.ok(flat / result.persistent.upper > 15, 'the flat maximum is more than 15x the per-layer sum')
-})
-
-test('estimateLlm: hybrid attention sizes only the full-attention blocks', (t) => {
-  // The real Qwen3.5 shape: full attention every 4th block, SSM state elsewhere.
-  const facts = denseFacts({
-    architecture: 'qwen35',
-    blockCount: 32,
-    headCount: 16,
-    headCountKv: 4,
-    keyLength: 256,
-    valueLength: 256,
-    embeddingLength: 2560,
-    contextLength: 262144,
-    fullAttentionInterval: 4,
-    ssmStateSize: 128,
-    ssmConvKernel: 4,
-    ssmInnerSize: 4096
-  })
-
-  const contextTokens = 8192
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 0, ggufFacts: facts }),
-    workload: { kind: 'llm', contextTokens },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-
-  const perBlockPerToken = 4 * (256 + 256)
-  const ssm = 24 * (4096 * 128 + 4096 * 4) * 4
-  t.is(result.persistent.lower, 8 * perBlockPerToken * contextTokens * F16 + ssm)
-  t.is(result.persistent.upper, 8 * perBlockPerToken * contextTokens * F16 + ssm)
-  t.ok(result.assumptions.some((a) => a.includes('every 4 blocks')))
-
-  const flat = 32 * perBlockPerToken * contextTokens * F16
-  t.ok(result.persistent.upper < flat, 'hybrid accounting is below the flat all-blocks figure')
-})
-
-test('estimateLlm: a sliding window without a layer pattern gives a deliberately wide bound', (t) => {
-  // The real gpt-oss shape: a window is declared, but which blocks use it lives
-  // in the engine, not the file.
-  const facts = denseFacts({
-    architecture: 'gpt-oss',
-    blockCount: 24,
-    headCount: 64,
-    headCountKv: 8,
-    keyLength: 64,
-    valueLength: 64,
-    embeddingLength: 2880,
-    contextLength: 131072,
-    slidingWindow: 128
-  })
-
-  const contextTokens = 16384
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 0, ggufFacts: facts }),
-    workload: { kind: 'llm', contextTokens },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-
-  const perBlockPerToken = 8 * (64 + 64)
-  t.is(result.persistent.lower, 24 * perBlockPerToken * 128 * F16, 'every block windowed')
-  t.is(result.persistent.upper, 24 * perBlockPerToken * contextTokens * F16, 'every block full')
-  t.ok(result.reasons.some((r) => r.includes('engine-owned')))
-})
-
-test('estimateLlm: weights use the artifact size as the floor', (t) => {
-  const result = estimateLlm({
-    profile: profile({ artifactBytes: 4_000_000_000 }),
-    workload: { kind: 'llm', contextTokens: 1024 },
-    extraArtifactBytes: 500_000_000,
-    calibration: calibration({ weightUpperCoeff: 1.05 }),
-    hasGpu: false
-  })
-
-  t.is(result.kind, 'estimate')
-  if (result.kind !== 'estimate') return
-  const kv = 32 * 8 * 256 * 1024 * F16
-  t.is(result.persistent.lower, 4_500_000_000 + kv, 'model plus companions plus resident KV')
-  t.is(result.persistent.upper, Math.ceil(4_500_000_000 * 1.05 + kv))
-  t.ok(result.assumptions.some((a) => a.includes('file-backed and evictable')))
-})
-
-// A completion was long assumed to add nothing on top of the load, and the
-// harness's own sampler was broken in a way that agreed. It is measured now, so
-// it lands in `working`: released after the operation, which is what
-// `sequential` counts once and `concurrent` counts per model.
-test('estimateLlm: the measured working peak is a peak, not resident memory', (t) => {
-  const withPeak = estimateLlm({
-    profile: profile({ artifactBytes: 0 }),
-    workload: { kind: 'llm', contextTokens: 512 },
-    extraArtifactBytes: 0,
-    calibration: calibration({ workingPeakBytes: { lower: 0, upper: 80 * MIB } }),
-    hasGpu: false
-  })
-  const without = estimateLlm({
-    profile: profile({ artifactBytes: 0 }),
-    workload: { kind: 'llm', contextTokens: 512 },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-
-  t.is(withPeak.kind, 'estimate')
-  t.is(without.kind, 'estimate')
-  if (withPeak.kind !== 'estimate' || without.kind !== 'estimate') return
-
-  t.is(withPeak.working.upper, 80 * MIB)
-  t.is(withPeak.working.lower, 0)
-  t.is(
-    withPeak.persistent.upper,
-    without.persistent.upper,
-    'the peak is not also counted as resident'
-  )
-  t.is(without.working.upper, 0, 'a fixture measured before the peak was sampled contributes none')
-})
-
-test('estimateLlm: refuses without GGUF facts or on the wrong workload', (t) => {
-  const noFacts = estimateLlm({
-    profile: { schemaVersion: 1, engine: 'llamacpp-completion', artifactBytes: 1 },
-    workload: { kind: 'llm', contextTokens: 1024 },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-  t.is(noFacts.kind, 'unknown')
-
-  const wrongWorkload = estimateLlm({
-    profile: profile(),
-    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-  t.is(wrongWorkload.kind, 'unknown')
-})
-
-// ---------------------------------------------------------------------------
-// Whisper estimator
-// ---------------------------------------------------------------------------
-
-test('estimateWhisper: working memory scales from the 30 s calibration window', (t) => {
-  const cal = calibration({
-    fixedOverheadBytes: { lower: 10 * MIB, upper: 20 * MIB },
-    audioWindowBytes: { lower: 60 * MIB, upper: 90 * MIB },
-    audioStreamingBytes: { lower: 5 * MIB, upper: 8 * MIB }
-  })
-
-  const oneWindow = estimateWhisper({
-    profile: profile({ engine: 'whispercpp-transcription', artifactBytes: 77_700_000 }),
-    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
-    extraArtifactBytes: 0,
-    calibration: cal,
-    hasGpu: false
-  })
-  t.is(oneWindow.kind, 'estimate')
-  if (oneWindow.kind !== 'estimate') return
-  t.is(oneWindow.working.lower, 10 * MIB + 60 * MIB)
-  t.is(oneWindow.working.upper, 20 * MIB + 90 * MIB)
-  t.is(oneWindow.persistent.lower, 77_700_000)
-
-  const halfStreaming = estimateWhisper({
-    profile: profile({ engine: 'whispercpp-transcription', artifactBytes: 77_700_000 }),
-    workload: { kind: 'audio', windowMs: 15_000, streaming: true },
-    extraArtifactBytes: 0,
-    calibration: cal,
-    hasGpu: false
-  })
-  t.is(halfStreaming.kind, 'estimate')
-  if (halfStreaming.kind !== 'estimate') return
-  t.is(halfStreaming.working.lower, 10 * MIB + 60 * MIB * 0.5 + 5 * MIB)
-  t.ok(halfStreaming.assumptions.some((a) => a.includes('streaming session')))
-})
-
-test('estimateWhisper: refuses a non-audio workload', (t) => {
-  const result = estimateWhisper({
-    profile: profile({ engine: 'whispercpp-transcription' }),
-    workload: { kind: 'llm', contextTokens: 1024 },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-  t.is(result.kind, 'unknown')
-})
-
-test('estimateWhisper: unmeasured audio coefficients refuse rather than under-estimate', (t) => {
-  // FLAT_CALIBRATION carries the harness's placeholder zeros: consuming them
-  // would return an estimate whose entire audio working memory is zero.
-  const unmeasured = estimateWhisper({
-    profile: profile({ engine: 'whispercpp-transcription' }),
-    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
-    extraArtifactBytes: 0,
-    calibration: calibration(),
-    hasGpu: false
-  })
-  t.is(unmeasured.kind, 'unknown')
-  if (unmeasured.kind !== 'unknown') return
-  t.ok(unmeasured.reasons.some((r) => r.includes('has not been measured')))
-
-  // A measured window is not enough for a streaming session whose own
-  // coefficient is still a placeholder.
-  const windowOnly = calibration({ audioWindowBytes: { lower: 60 * MIB, upper: 90 * MIB } })
-  const streaming = estimateWhisper({
-    profile: profile({ engine: 'whispercpp-transcription' }),
-    workload: { kind: 'audio', windowMs: 30_000, streaming: true },
-    extraArtifactBytes: 0,
-    calibration: windowOnly,
-    hasGpu: false
-  })
-  t.is(streaming.kind, 'unknown')
-
-  const oneShot = estimateWhisper({
-    profile: profile({ engine: 'whispercpp-transcription' }),
-    workload: { kind: 'audio', windowMs: 30_000, streaming: false },
-    extraArtifactBytes: 0,
-    calibration: windowOnly,
-    hasGpu: false
-  })
-  t.is(oneShot.kind, 'estimate', 'a measured window supports a non-streaming estimate')
-})
-
-// ---------------------------------------------------------------------------
 // Budget and reserve
 // ---------------------------------------------------------------------------
 
@@ -499,7 +165,6 @@ test('assess: desktop reserve is 20% of available, capped at 2 GiB', (t) => {
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(small.budget?.availableBytes, 5 * GIB)
@@ -511,7 +176,6 @@ test('assess: desktop reserve is 20% of available, capped at 2 GiB', (t) => {
     execution: 'sequential',
     resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(large.budget?.reservedBytes, 2 * GIB, 'the cap holds once 20% of available passes it')
@@ -527,8 +191,8 @@ test('assess: a busy host keeps a budget proportional to what is free', (t) => {
     execution: 'sequential',
     resources: resources({ totalBytes: 24 * GIB, usedBytes: 20.7 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
-    resolveProfile: () => profile({ artifactBytes: 2 * GIB })
+    resolveProfile: () => profile({ artifactBytes: 2 * GIB }),
+    nativeFits: [measured(2 * GIB, 0)]
   })
   const available = 24 * GIB - 20.7 * GIB
   const reserved = Math.floor(available * 0.2)
@@ -547,7 +211,6 @@ test('assess: iOS budgets are per-process and refuse without the allowance metri
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
     platform: 'ios-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(withoutMetric.basis, 'process-memory')
@@ -562,7 +225,6 @@ test('assess: iOS budgets are per-process and refuse without the allowance metri
     execution: 'sequential',
     resources: resources({ processUsedBytes: 1 * GIB, processAvailableBytes: 2.5 * GIB }),
     platform: 'ios-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(withMetric.basis, 'process-memory')
@@ -581,7 +243,6 @@ test('assess: android keeps the system basis with the mobile reserve, by explici
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB }),
     platform: 'android-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(result.basis, 'system-memory')
@@ -597,7 +258,6 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
     execution: 'sequential',
     resources: { capabilities: base.capabilities },
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(noSample.verdict, 'unknown')
@@ -622,7 +282,6 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
       }
     },
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(unsupported.verdict, 'unknown')
@@ -633,7 +292,6 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 9 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
   t.is(inconsistent.verdict, 'unknown')
@@ -644,31 +302,20 @@ test('assess: unusable or inconsistent memory evidence yields unknown', (t) => {
 // Verdict boundaries
 // ---------------------------------------------------------------------------
 
-test('assess: verdict boundaries around the budget', (t) => {
-  // Budget: 8 GiB total, 3 GiB used => 5 GiB available, 1 GiB reserved => 4 GiB.
-  function verdictFor(artifactBytes: number, weightUpperCoeff: number) {
-    return assessModelFitFromResources({
-      models: [candidate({ workload: { kind: 'llm', contextTokens: 1 } })],
+test('assess: measured demand is compared against the budget exactly', (t) => {
+  // 8 GiB total, 3 GiB used => 5 GiB available, 1 GiB reserved => 4 GiB budget.
+  const at = (persistent: number) =>
+    assessModelFitFromResources({
+      models: [candidate()],
       execution: 'sequential',
       resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
       platform: 'darwin-arm64',
-      calibration: calibration({ weightUpperCoeff }),
-      resolveProfile: () =>
-        profile({ artifactBytes, ggufFacts: denseFacts({ blockCount: 1, headCountKv: 1 }) })
+      resolveProfile: () => profile(),
+      nativeFits: [measured(persistent, 0)]
     })
-  }
 
-  // 1 block × 1 KV head × 256 elements × 1 token × 2 bytes = 512 bytes of KV.
-  const exactlyAtBudget = verdictFor(4 * GIB - 512, 1)
-  t.is(exactlyAtBudget.verdict, 'likely-fits', 'upper bound exactly equal to the budget fits')
-
-  const justOver = verdictFor(4 * GIB - 511, 1)
-  t.is(justOver.verdict, 'likely-too-large', 'lower bound one byte over the budget does not')
-
-  const straddling = verdictFor(3.9 * GIB, 1.1)
-  t.is(straddling.verdict, 'unknown', 'a bound that straddles the budget cannot be called')
-  t.ok(straddling.estimate!.lowerBoundBytes <= 4 * GIB)
-  t.ok(straddling.estimate!.upperBoundBytes > 4 * GIB)
+  t.is(at(4 * GIB).verdict, 'likely-fits', 'demand exactly equal to the budget fits')
+  t.is(at(4 * GIB + 1).verdict, 'likely-too-large', 'one byte over does not')
 })
 
 // ---------------------------------------------------------------------------
@@ -676,107 +323,67 @@ test('assess: verdict boundaries around the budget', (t) => {
 // ---------------------------------------------------------------------------
 
 test('assess: sequential takes the largest working peak, concurrent sums them', (t) => {
-  // Audio working memory is the per-operation peak that distinguishes the two
-  // modes — an LLM load holds everything resident, so it cannot.
-  const cal = calibration({ audioWindowBytes: { lower: 60 * MIB, upper: 60 * MIB } })
-
   const models: ModelFitEstimateTarget[] = [
-    candidate({
-      model: { name: 'A', sha256Checksum: 'a'.repeat(64) },
-      workload: { kind: 'audio', windowMs: 30_000, streaming: false }
-    }),
-    candidate({
-      model: { name: 'B', sha256Checksum: 'b'.repeat(64) },
-      workload: { kind: 'audio', windowMs: 60_000, streaming: false }
-    })
+    candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+    candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
   ]
+  // Each model: 1 GiB resident, 1 GiB working. Resident always sums to 2 GiB;
+  // the peak adds 1 GiB sequentially and 2 GiB concurrently.
+  const fits = [measured(1 * GIB, 1 * GIB), measured(1 * GIB, 1 * GIB)]
 
-  const resolveProfile = () =>
-    profile({ engine: 'whispercpp-transcription', artifactBytes: 1 * GIB, ggufFacts: undefined })
-
-  const sequential = assessModelFitFromResources({
-    models,
-    execution: 'sequential',
-    resources: resources(),
-    platform: 'darwin-arm64',
-    calibration: cal,
-    resolveProfile
-  })
-  const concurrent = assessModelFitFromResources({
-    models,
-    execution: 'concurrent',
-    resources: resources(),
-    platform: 'darwin-arm64',
-    calibration: cal,
-    resolveProfile
-  })
-
-  // Both keep 2 × 1 GiB of weights resident; the peaks are one window (60 MiB)
-  // for A and two windows (120 MiB) for B.
-  const persistent = 2 * GIB
-  t.is(sequential.estimate?.lowerBoundBytes, persistent + 120 * MIB)
-  t.is(concurrent.estimate?.lowerBoundBytes, persistent + 180 * MIB)
-  t.is(sequential.execution, 'sequential')
-  t.is(concurrent.execution, 'concurrent')
-})
-
-test('assess: co-resident LLM loads count every model’s overhead, so the modes agree', (t) => {
-  const cal = calibration({ fixedOverheadBytes: { lower: 1 * GIB, upper: 1 * GIB } })
-  const facts = denseFacts({ blockCount: 1, headCountKv: 1, contextLength: 8192 })
-
-  const models: ModelFitEstimateTarget[] = [
-    candidate({
-      model: { name: 'A', sha256Checksum: 'a'.repeat(64) },
-      workload: { kind: 'llm', contextTokens: 1 }
-    }),
-    candidate({
-      model: { name: 'B', sha256Checksum: 'b'.repeat(64) },
-      workload: { kind: 'llm', contextTokens: 1 }
-    })
-  ]
-
-  const resolveProfile = () => profile({ artifactBytes: 2 * GIB, ggufFacts: facts })
-
-  const sequential = assessModelFitFromResources({
-    models,
-    execution: 'sequential',
-    resources: resources(),
-    platform: 'darwin-arm64',
-    calibration: cal,
-    resolveProfile
-  })
-  const concurrent = assessModelFitFromResources({
-    models,
-    execution: 'concurrent',
-    resources: resources(),
-    platform: 'darwin-arm64',
-    calibration: cal,
-    resolveProfile
-  })
-
-  // Each resident model carries its weights, 512 B KV cache and 1 GiB overhead
-  // under either mode: `sequential` must not drop the second model's. Only the
-  // working peak separates the modes, and this fixture carries none.
-  const total = 2 * (2 * GIB + 512 + 1 * GIB)
-  t.is(sequential.estimate?.lowerBoundBytes, total)
-  t.is(concurrent.estimate?.lowerBoundBytes, total)
-
-  // With a measured peak, only the operation in flight pays for it under
-  // `sequential`, while `concurrent` assumes one per model.
-  const withPeak = (execution: 'sequential' | 'concurrent') =>
+  // 4.5 GiB free, 20% reserved: a 3.6 GiB budget, which holds the sequential
+  // total of 3 GiB but not the concurrent total of 4 GiB.
+  const assess = (execution: 'sequential' | 'concurrent') =>
     assessModelFitFromResources({
       models,
       execution,
-      resources: resources(),
+      resources: resources({ totalBytes: 4.5 * GIB, usedBytes: 0 }),
       platform: 'darwin-arm64',
-      calibration: calibration({
-        fixedOverheadBytes: { lower: 1 * GIB, upper: 1 * GIB },
-        workingPeakBytes: { lower: 80 * MIB, upper: 80 * MIB }
-      }),
-      resolveProfile
+      resolveProfile: () => profile(),
+      nativeFits: fits
     })
-  t.is(withPeak('sequential').estimate?.lowerBoundBytes, total + 80 * MIB)
-  t.is(withPeak('concurrent').estimate?.lowerBoundBytes, total + 160 * MIB)
+
+  t.is(assess('sequential').verdict, 'likely-fits')
+  t.is(assess('concurrent').verdict, 'likely-too-large')
+})
+
+test('assess: every model measured by its engine reports native evidence', (t) => {
+  const result = assessModelFitFromResources({
+    models: [
+      candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+      candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
+    ],
+    execution: 'concurrent',
+    resources: resources(),
+    platform: 'darwin-arm64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0), measured(1 * GIB, 0)]
+  })
+
+  t.is(result.evidence, 'native-fit')
+  t.is(result.models[0]!.evidence, 'native-fit')
+  t.is(result.models[1]!.evidence, 'native-fit')
+  t.ok(result.reasons.some((r) => r.includes('measured by the engine')))
+})
+
+test('assess: a model the engine could not measure falls back to its floor', (t) => {
+  const result = assessModelFitFromResources({
+    models: [
+      candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+      candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
+    ],
+    execution: 'concurrent',
+    resources: resources(),
+    platform: 'darwin-arm64',
+    resolveProfile: () => profile({ artifactBytes: 1 * GIB, ggufFacts: undefined }),
+    nativeFits: [measured(1 * GIB, 0), { unavailable: 'no registry description (timed-out)' }]
+  })
+
+  t.is(result.evidence, 'computed-only', 'a floor among measured models weakens the set')
+  t.ok(
+    result.reasons.some((r) => r.includes('no engine fit for B')),
+    'the model that lost its verdict is named'
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -796,12 +403,11 @@ test('assess: one unknown model makes the combined verdict unknown', (t) => {
     execution: 'sequential',
     resources: resources(),
     platform: 'darwin-arm64',
-    calibration: calibration(),
-    resolveProfile: (checksum) => (checksum === 'a'.repeat(64) ? profile() : undefined)
+    resolveProfile: (checksum) => (checksum === 'a'.repeat(64) ? profile() : undefined),
+    nativeFits: [measured(1 * GIB, 0), {}]
   })
 
   t.is(result.verdict, 'unknown')
-  t.absent(result.estimate, 'no combined estimate when one model is unknown')
   t.is(result.models[0]!.verdict, 'likely-fits', 'the known model still reports its own verdict')
   t.is(result.models[1]!.verdict, 'unknown')
   t.ok(result.models[1]!.reasons.some((r) => r.includes('no resource profile')))
@@ -823,7 +429,6 @@ test('assess: floors are aggregated under execution and the reason says so', (t)
       execution,
       resources: phone,
       platform: 'android-arm64',
-      calibration: undefined,
       resolveProfile: () => profile({ artifactBytes: 3 * GIB, ggufFacts: undefined })
     })
 
@@ -834,34 +439,27 @@ test('assess: floors are aggregated under execution and the reason says so', (t)
   t.is(sequential.evidence, 'computed-only')
   t.is(sequential.floorBytes, 6 * GIB)
   t.ok(
-    sequential.reasons.some((r) => r.includes('floors summed and only the largest')),
+    sequential.reasons.some((r) => r.includes('only the largest working peak added')),
     'the aggregation is explained under computed-only evidence too'
   )
 
   const concurrent = assess('concurrent')
-  t.ok(concurrent.reasons.some((r) => r.includes('floors summed and every')))
+  t.ok(concurrent.reasons.some((r) => r.includes('every working peak added')))
 })
 
-test('assess: an uncalibrated platform yields unknown, never likely-fits, for a model inside the budget', (t) => {
+test('assess: a model no engine measured yields unknown, never likely-fits, inside the budget', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources(),
     platform: 'linux-arm64',
-    calibration: undefined,
     resolveProfile: () => profile()
   })
 
   t.is(result.verdict, 'unknown')
-  t.ok(result.budget, 'the budget is still reported — only the estimate is missing')
-  t.ok(result.reasons.some((r) => r.includes('no validated calibration')))
+  t.ok(result.budget, 'the budget is still reported')
   t.is(result.models[0]!.verdict, 'unknown')
-  t.ok(
-    result.models[0]!.reasons.some((r) => r.includes('no validated calibration for linux-arm64')),
-    'the per-model reason names the uncalibrated platform'
-  )
   t.is(result.evidence, 'computed-only', 'what evidence there is, is the computed floor')
-  t.absent(result.estimate, 'and a floor is not an estimate')
   t.ok(result.floorBytes, 'the floor itself is reported')
 })
 
@@ -871,31 +469,27 @@ test('assess: an unrecognized platform yields unknown', (t) => {
     execution: 'sequential',
     resources: resources(),
     platform: undefined,
-    calibration: undefined,
     resolveProfile: () => profile()
   })
 
   t.is(result.verdict, 'unknown')
   t.ok(result.reasons.some((r) => r.includes('not one this assessment covers')))
   t.is(result.models[0]!.verdict, 'unknown')
-  t.ok(
-    result.models[0]!.reasons.some((r) => r.includes('not one this assessment covers')),
-    'the per-model reason states the platform is uncovered, not that calibration is missing'
-  )
 })
 
-test('assess: an engine with no estimator yields unknown', (t) => {
+// Every engine without a fitter lands here, which is most of them.
+test('assess: an engine with no fitter falls back to its floor', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources(),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile({ engine: 'nmtcpp-translation', ggufFacts: undefined })
   })
 
-  t.is(result.verdict, 'unknown')
-  t.ok(result.models[0]!.reasons.some((r) => r.includes('no estimator in this phase')))
+  t.is(result.verdict, 'unknown', 'a floor inside the budget confirms nothing')
+  t.is(result.evidence, 'computed-only')
+  t.ok(result.models[0]!.reasons.some((r) => r.includes('weights only')))
 })
 
 test('assess: a companion artifact missing from the catalog yields unknown', (t) => {
@@ -908,7 +502,6 @@ test('assess: a companion artifact missing from the catalog yields unknown', (t)
     execution: 'sequential',
     resources: resources(),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: (checksum) => (checksum === 'a'.repeat(64) ? profile() : undefined)
   })
 
@@ -1004,7 +597,6 @@ test('assess: an uncalibrated platform refuses from the computed floor and never
       execution: 'sequential',
       resources: phone,
       platform: 'android-arm64',
-      calibration: undefined,
       resolveProfile: () => profile({ artifactBytes })
     })
 
@@ -1014,18 +606,10 @@ test('assess: an uncalibrated platform refuses from the computed floor and never
   t.is(tooLarge.budget?.availableAfterReserveBytes, 5 * GIB)
   t.is(tooLarge.evidence, 'computed-only')
   t.is(tooLarge.floorBytes, 6 * GIB + kv)
-  t.absent(tooLarge.estimate, 'a floor has no upper bound to report as an estimate')
   t.is(tooLarge.models[0]!.verdict, 'likely-too-large')
   t.is(tooLarge.models[0]!.evidence, 'computed-only')
   t.is(tooLarge.models[0]!.floorBytes, 6 * GIB + kv)
   t.is(tooLarge.models[0]!.estimatorVersion, FLOOR_VERSION)
-  t.absent(tooLarge.models[0]!.estimate)
-  t.ok(
-    tooLarge.models[0]!.reasons.some((r) =>
-      r.includes('no validated calibration for android-arm64')
-    ),
-    'the reason the verdict is only a floor is kept'
-  )
   t.ok(tooLarge.models[0]!.reasons.some((r) => r.includes('floor alone exceeds the budget')))
   t.ok(tooLarge.reasons.some((r) => r.includes('never confirm a fit')))
 
@@ -1055,7 +639,6 @@ test('assess: two floors that each fit alone can still refuse the set together',
     execution: 'sequential',
     resources: phone,
     platform: 'android-arm64',
-    calibration: undefined,
     resolveProfile: () => profile({ artifactBytes: 3 * GIB })
   })
 
@@ -1073,7 +656,6 @@ test('assess: iOS refuses from the floor once the per-process allowance is known
       execution: 'sequential',
       resources: resources(sample),
       platform: 'ios-arm64',
-      calibration: undefined,
       resolveProfile: () => profile({ artifactBytes })
     })
 
@@ -1106,7 +688,6 @@ test('assess: an unrecognized platform still refuses from the floor', (t) => {
     execution: 'sequential',
     resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
     platform: undefined,
-    calibration: undefined,
     resolveProfile: () => profile({ artifactBytes: 5 * GIB })
   })
 
@@ -1115,56 +696,32 @@ test('assess: an unrecognized platform still refuses from the floor', (t) => {
   t.ok(result.reasons.some((r) => r.includes('not one this assessment covers')))
 })
 
-// The floor is the fallback everywhere, including on a calibrated platform for
-// a model the estimator refuses — audio here, whose coefficients are unmeasured.
-test('assess: on a calibrated platform a model the estimator refuses falls back to its floor', (t) => {
-  const llm = candidate({ model: { name: 'LLM', sha256Checksum: 'a'.repeat(64) } })
-  const whisper = candidate({
-    model: { name: 'WHISPER', sha256Checksum: 'b'.repeat(64) },
-    workload: { kind: 'audio', windowMs: 30_000, streaming: false }
-  })
-  const resolveProfile = (whisperBytes: number) => (checksum: string) =>
-    checksum === 'a'.repeat(64)
-      ? profile({ artifactBytes: 1 * GIB })
-      : profile({
-          engine: 'whispercpp-transcription',
-          artifactBytes: whisperBytes,
-          ggufFacts: undefined
-        })
+// The floor is the fallback for a model no engine measured, and a set holding
+// one can refuse but never confirm.
+test('assess: a measured model beside a floor rests on the weaker evidence', (t) => {
   // 8 GiB total, 3 GiB used: a 4 GiB budget.
-  const assess = (models: ModelFitEstimateTarget[], whisperBytes: number) =>
+  const assess = (floorBytes: number) =>
     assessModelFitFromResources({
-      models,
+      models: [
+        candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+        candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
+      ],
       execution: 'sequential',
       resources: resources({ totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
       platform: 'darwin-arm64',
-      calibration: calibration(),
-      resolveProfile: resolveProfile(whisperBytes)
+      resolveProfile: () => profile({ artifactBytes: floorBytes, ggufFacts: undefined }),
+      nativeFits: [measured(1 * GIB, 0), {}]
     })
 
-  const alone = assess([whisper], 5 * GIB)
-  t.is(
-    alone.verdict,
-    'likely-too-large',
-    '5 GiB of weights do not fit a 4 GiB budget, coefficients or not'
-  )
-  t.is(alone.evidence, 'computed-only')
-  t.ok(alone.models[0]!.reasons.some((r) => r.includes('has not been measured')))
-  t.ok(alone.models[0]!.reasons.some((r) => r.includes('weights only')))
+  const over = assess(5 * GIB)
+  t.is(over.models[0]!.evidence, 'native-fit')
+  t.is(over.models[1]!.evidence, 'computed-only')
+  t.is(over.verdict, 'likely-too-large')
+  t.is(over.evidence, 'computed-only', 'the set rests on its weakest evidence')
+  t.is(over.floorBytes, 6 * GIB, 'the measured model contributes its own bytes to the total')
 
-  const mixed = assess([llm, whisper], 5 * GIB)
-  t.is(mixed.models[0]!.verdict, 'likely-fits')
-  t.is(mixed.models[0]!.evidence, 'calibration')
-  t.is(mixed.models[1]!.verdict, 'likely-too-large')
-  t.is(mixed.models[1]!.evidence, 'computed-only')
-  t.is(mixed.verdict, 'likely-too-large')
-  t.is(mixed.evidence, 'computed-only', 'the set rests on its weakest evidence')
-  t.absent(mixed.estimate)
-  t.is(mixed.floorBytes, mixed.models[0]!.estimate!.lowerBoundBytes + 5 * GIB)
-
-  const bothInside = assess([llm, whisper], 100 * MIB)
-  t.is(bothInside.models[0]!.verdict, 'likely-fits')
-  t.is(bothInside.verdict, 'unknown', 'one floor in the set means the set is never likely-fits')
+  const inside = assess(100 * MIB)
+  t.is(inside.verdict, 'unknown', 'one floor in the set means the set is never likely-fits')
 })
 
 // A discrete card holds the weights in its own memory, so the system budget
@@ -1180,8 +737,6 @@ test('assess: a discrete GPU without coefficients gets no floor', (t) => {
       systemUsedBytes: 7 * GIB
     }),
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => undefined,
     resolveProfile: () => profile({ artifactBytes: 6 * GIB })
   })
 
@@ -1197,20 +752,17 @@ test('assess: a discrete GPU without coefficients gets no floor', (t) => {
 
 // An integrated GPU allocates out of system RAM, so the floor holds there even
 // without the shared fixture — the budget measures the memory the load uses.
-test('assess: an integrated GPU without shared coefficients still gets the floor', (t) => {
+test('assess: an integrated GPU still gets the floor', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ gpu: true, totalBytes: 8 * GIB, usedBytes: 3 * GIB }),
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveSharedGpuCalibration: () => undefined,
     resolveProfile: () => profile({ artifactBytes: 6 * GIB })
   })
 
   t.is(result.verdict, 'likely-too-large')
   t.is(result.evidence, 'computed-only')
-  t.ok(result.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
 })
 
 // ---------------------------------------------------------------------------
@@ -1223,7 +775,6 @@ test('assess: the result always states its basis and its assumptions', (t) => {
     execution: 'sequential',
     resources: resources({ gpu: true }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile()
   })
 
@@ -1237,183 +788,12 @@ test('assess: the result always states its basis and its assumptions', (t) => {
     result.assumptions.some((a) => a.includes('cache-type-k')),
     'default KV-cache types are called out'
   )
-  t.is(result.models[0]!.estimatorVersion, LLM_ESTIMATOR_VERSION)
-})
-
-// ---------------------------------------------------------------------------
-// Calibration fit
-// ---------------------------------------------------------------------------
-
-/** Points generated from known coefficients, one per (artifact, context) pair. */
-function syntheticPoints(
-  weightRatio: number,
-  fixedBytes: number,
-  perTokenBytes: number
-): CalibrationPoint[] {
-  const artifacts = [500 * MIB, 1 * GIB, 4 * GIB]
-  const contexts = [512, 8192]
-  const points: CalibrationPoint[] = []
-  for (const artifactBytes of artifacts) {
-    for (const contextTokens of contexts) {
-      const kvBytes = contextTokens * 1024
-      points.push({
-        artifactBytes,
-        contextTokens,
-        kvBytes,
-        persistentBytes:
-          weightRatio * artifactBytes + perTokenBytes * contextTokens + fixedBytes + kvBytes
-      })
-    }
-  }
-  return points
-}
-
-/** Every observed point must sit at or below the fitted plane plus its excess. */
-function coversEveryPoint(
-  t: { ok(value: unknown, message?: string): void },
-  points: readonly CalibrationPoint[],
-  fit: NonNullable<ReturnType<typeof fitResidentMemory>>
-) {
-  for (const point of points) {
-    const covered =
-      fit.weightRatio * point.artifactBytes +
-      fit.perTokenBytes * point.contextTokens +
-      fit.fixedBytes +
-      fit.worstExcessBytes +
-      point.kvBytes
-    t.ok(point.persistentBytes <= covered + 1e-6, 'the fit plus its excess covers every point')
-  }
-}
-
-test('fitResidentMemory: recovers exact coefficients from noiseless points', (t) => {
-  const points = syntheticPoints(1.05, 256 * MIB, 20_000)
-  const fit = fitResidentMemory(points)
-
-  t.ok(fit, 'six points over three artifacts and two contexts determine the plane')
-  if (!fit) return
-  t.ok(Math.abs(fit.weightRatio - 1.05) < 1e-6)
-  t.ok(Math.abs(fit.fixedBytes - 256 * MIB) < 1)
-  t.ok(Math.abs(fit.perTokenBytes - 20_000) < 1e-3)
-  t.ok(fit.worstExcessBytes < 1, 'a perfect fit leaves no excess')
-})
-
-test('fitResidentMemory: an outlier above the plane lands in the excess, never below the bound', (t) => {
-  const points = syntheticPoints(1.05, 256 * MIB, 20_000)
-  points[3] = { ...points[3]!, persistentBytes: points[3]!.persistentBytes + 200 * MIB }
-
-  const fit = fitResidentMemory(points)
-  t.ok(fit)
-  if (!fit) return
-  t.ok(fit.worstExcessBytes > 0, 'the outlier is not absorbed silently')
-  coversEveryPoint(t, points, fit)
-})
-
-test('fitResidentMemory: a negative solution clamps to zero and still covers the points', (t) => {
-  // No per-token cost at all, with noise nudging the slope slightly negative.
-  const points = syntheticPoints(1.0, 128 * MIB, 0)
-  points[1] = { ...points[1]!, persistentBytes: points[1]!.persistentBytes - 5 * MIB }
-
-  const fit = fitResidentMemory(points)
-  t.ok(fit)
-  if (!fit) return
-  t.ok(fit.perTokenBytes >= 0)
-  t.ok(fit.fixedBytes >= 0)
-  coversEveryPoint(t, points, fit)
-})
-
-test('fitResidentMemory: refuses designs that cannot separate the coefficients', (t) => {
-  t.is(fitResidentMemory([]), undefined, 'no points')
-  t.is(fitResidentMemory(syntheticPoints(1.05, 0, 0).slice(0, 2)), undefined, 'two points')
-
-  // A single context makes the per-token column indistinguishable from the
-  // intercept, so the normal matrix is singular.
-  const singleContext = syntheticPoints(1.05, 256 * MIB, 20_000).filter(
-    (p) => p.contextTokens === 512
-  )
-  t.is(fitResidentMemory(singleContext), undefined, 'one context throughout')
-})
-
-test('kvObservation: a counter that sees every allocation scores 1; compute buffers push it above', (t) => {
-  const exact = kvObservation(syntheticPoints(1.0, 128 * MIB, 0))
-  t.is(exact.models.length, 3, 'one growth per model')
-  t.ok(Math.abs(exact.ratio - 1) < 1e-9, 'persistent grows by exactly the KV growth')
-
-  const withCompute = kvObservation(syntheticPoints(1.0, 128 * MIB, 20_000))
-  t.ok(withCompute.ratio > 1, 'per-token compute buffers only add to the growth')
-})
-
-test('kvObservation: a counter that misses allocation scores its shortfall', (t) => {
-  // Persistent carries 56% of the KV growth — what the win32 working set measured.
-  const points = syntheticPoints(1.0, 128 * MIB, 0).map((p) => ({
-    ...p,
-    persistentBytes: p.persistentBytes - 0.44 * p.kvBytes
-  }))
-  const observation = kvObservation(points)
-  t.ok(Math.abs(observation.ratio - 0.56) < 1e-6)
-  for (const model of observation.models) {
-    t.ok(model.observedDeltaBytes < model.kvDeltaBytes, 'every model shows the shortfall')
-  }
-})
-
-test('kvObservation: one cold-start repeat does not read as a shortfall, and a single context has nothing to judge', (t) => {
-  const base = syntheticPoints(1.0, 128 * MIB, 0)
-  // Three repeats per point; the very first load of the run carries a cold
-  // page-cache transient (~250 MiB observed) on the small context only. The
-  // median of the repeats ignores it, where a mean would read a 15% shortfall.
-  const repeated = [...base, ...base, ...base]
-  const first = repeated.findIndex((p) => p.contextTokens === 512)
-  repeated[first] = {
-    ...repeated[first]!,
-    persistentBytes: repeated[first]!.persistentBytes + 250 * MIB
-  }
-  t.ok(Math.abs(kvObservation(repeated).ratio - 1) < 1e-9)
-
-  const single = kvObservation(base.filter((p) => p.contextTokens === 512))
-  t.is(single.models.length, 0)
-  t.is(single.ratio, 1)
+  t.is(result.models[0]!.estimatorVersion, FLOOR_VERSION)
 })
 
 // ---------------------------------------------------------------------------
 // Discrete-GPU platforms
 // ---------------------------------------------------------------------------
-
-test('assess: a GPU on linux or windows needs coefficients measured on it', (t) => {
-  // These platforms' fixtures describe CPU-resident execution, measured with
-  // the GPU offload disabled. With a GPU present the engine would not run that
-  // way, so those coefficients do not describe the load — whether the card
-  // holds the model in its own memory or, as here, shares system RAM.
-  const withGpu = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: resources({ gpu: true }),
-    platform: 'linux-x64',
-    calibration: calibration(),
-    resolveProfile: () => profile()
-  })
-  t.is(withGpu.verdict, 'unknown')
-  t.is(withGpu.models[0]!.verdict, 'unknown')
-  t.ok(withGpu.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
-
-  const cpuOnly = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: resources(),
-    platform: 'linux-x64',
-    calibration: calibration(),
-    resolveProfile: () => profile()
-  })
-  t.ok(cpuOnly.models[0]!.estimate, 'without a GPU the CPU-resident fixture applies')
-
-  const appleSilicon = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: resources({ gpu: true }),
-    platform: 'darwin-arm64',
-    calibration: calibration(),
-    resolveProfile: () => profile()
-  })
-  t.ok(appleSilicon.models[0]!.estimate, 'unified-memory platforms keep verdicts with a GPU')
-})
 
 /** A second (or third) card on the same host, as `extraGpus` describes it. */
 interface ExtraGpu {
@@ -1552,38 +932,21 @@ function discreteGpuResources(options: {
   return value
 }
 
-test('assess: a calibrated discrete GPU is budgeted against its own memory', (t) => {
+test('assess: a discrete GPU is budgeted against its own memory', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.basis, 'device-memory')
   t.is(result.budget?.totalBytes, 20 * GIB)
   t.is(result.budget?.usedBytes, 1 * GIB)
-  t.ok(result.models[0]!.estimate, 'a calibrated backend produces an estimate, not unknown')
+  t.is(result.models[0]!.verdict, 'likely-fits')
   t.ok(result.assumptions.some((a) => a.includes('vulkan')))
-})
-
-test('assess: an uncalibrated backend stays unknown on a discrete GPU', (t) => {
-  const result = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
-    platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => undefined,
-    resolveProfile: () => profile()
-  })
-
-  t.is(result.verdict, 'unknown')
-  t.is(result.basis, 'system-memory')
-  t.ok(result.models[0]!.reasons.some((r) => r.includes('a GPU is present')))
 })
 
 test('assess: a GPU with too little VRAM is too large even on a roomy host', (t) => {
@@ -1592,9 +955,8 @@ test('assess: a GPU with too little VRAM is too large even on a roomy host', (t)
     execution: 'sequential',
     resources: discreteGpuResources({ vramTotalBytes: 2 * GIB, vramUsedBytes: 1 * GIB }),
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.verdict, 'likely-too-large')
@@ -1611,9 +973,8 @@ test('assess: several GPUs are assessed as alternatives, not as one budget', (t)
       execution: 'sequential',
       resources: discreteGpuResources(options),
       platform: 'linux-x64',
-      calibration: calibration(),
-      resolveGpuCalibration: () => calibration(),
-      resolveProfile: () => profile()
+      resolveProfile: () => profile(),
+      nativeFits: [measured(1 * GIB, 0)]
     })
 
   const twoRoomy = assess({
@@ -1643,9 +1004,9 @@ test('assess: several GPUs are assessed as alternatives, not as one budget', (t)
   t.is(bothTooSmall.verdict, 'likely-too-large', 'too large on the largest is too large anywhere')
 })
 
-// One fixture describes one backend's buffers, so cards that disagree on the
-// backend cannot be assessed under a single set of coefficients.
-test('assess: GPUs on different backends have no single set of coefficients', (t) => {
+// Cards that disagree on the backend name no single device to budget against,
+// so the set falls back to the system budget the engine's bytes also sit in.
+test('assess: GPUs on different backends fall back to the system budget', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
@@ -1655,12 +1016,11 @@ test('assess: GPUs on different backends have no single set of coefficients', (t
       extraGpus: [{ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB, backend: 'rocm' }]
     }),
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
-  t.is(result.verdict, 'unknown')
+  t.is(result.verdict, 'likely-fits')
   t.is(result.basis, 'system-memory')
 })
 
@@ -1683,9 +1043,8 @@ test('assess: an adapter too small to hold a model is not a rival for one', (t) 
       ]
     }),
     platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.verdict, 'likely-fits')
@@ -1694,9 +1053,8 @@ test('assess: an adapter too small to hold a model is not a rival for one', (t) 
 })
 
 // A VM's paravirtual display adapter is enumerated as a GPU by the collector,
-// but the engine has no backend for it and runs on the CPU — which is exactly
-// what these platforms' own coefficients describe. Cloud hosts and CI runners
-// are the common case, so this is where the CPU fixtures earn their keep.
+// but the engine has no backend for it and runs on the CPU. Cloud hosts and CI
+// runners are the common case.
 test('assess: a virtual display adapter is not a GPU the engine can use', (t) => {
   const withVirtualGpu = resources({ gpu: true })
   const gpus = withVirtualGpu.capabilities.gpus
@@ -1715,16 +1073,12 @@ test('assess: a virtual display adapter is not a GPU the engine can use', (t) =>
     execution: 'sequential',
     resources: withVirtualGpu,
     platform: 'linux-arm64',
-    calibration: calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.basis, 'system-memory')
   t.is(result.verdict, 'likely-fits', 'the platform fixture applies, as it would with no GPU')
-  t.ok(
-    result.assumptions.some((a) => a.includes('no GPU reported')),
-    'and the f16 KV default is assumed, as the engine would use'
-  )
 })
 
 // The driver flags are library-presence checks, and ggml's backends need the
@@ -1744,8 +1098,8 @@ test('assess: a GPU with no graphics API the engine talks to is passed over', (t
     execution: 'sequential',
     resources: noDrivers,
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.verdict, 'likely-fits')
@@ -1753,9 +1107,9 @@ test('assess: a GPU with no graphics API the engine talks to is passed over', (t
 
 // An AMD APU under amdgpu exposes a VRAM carve-out, so libgpuinfo infers
 // `dedicated` from sysfs and `unifiedMemory` reads false — a Ryzen 5000U
-// laptop reported over a gigabyte of "VRAM". Applying the discrete card's
-// fixture and budgeting against the carve-out would be wrong twice over.
-test('assess: an AMD GPU on linux cannot be placed, so it stays unknown', (t) => {
+// laptop reported over a gigabyte of "VRAM". Budgeting against the carve-out
+// would be wrong, so the set keeps the system budget.
+test('assess: an AMD GPU on linux is not budgeted against its carve-out', (t) => {
   const resources = discreteGpuResources({ vramTotalBytes: 2 * GIB, vramUsedBytes: 256 * MIB })
   const gpus = resources.capabilities.gpus
   if (gpus.status === 'supported') {
@@ -1772,15 +1126,12 @@ test('assess: an AMD GPU on linux cannot be placed, so it stays unknown', (t) =>
     execution: 'sequential',
     resources,
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveSharedGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
-  t.is(result.verdict, 'unknown')
+  t.is(result.verdict, 'likely-fits')
   t.is(result.basis, 'system-memory', 'and no device budget is formed from the carve-out')
-  t.ok(result.reasons.some((r) => r.includes('cannot say where the model would execute')))
 
   // The same card on windows is unambiguous: DXGI reports real dedicated VRAM.
   const onWindows = assessModelFitFromResources({
@@ -1788,9 +1139,8 @@ test('assess: an AMD GPU on linux cannot be placed, so it stays unknown', (t) =>
     execution: 'sequential',
     resources: discreteGpuResources({ vramTotalBytes: 20 * GIB, vramUsedBytes: 1 * GIB }),
     platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
   t.is(onWindows.verdict, 'likely-fits')
 })
@@ -1800,35 +1150,20 @@ test('assess: an AMD GPU on linux cannot be placed, so it stays unknown', (t) =>
 // ---------------------------------------------------------------------------
 
 // An integrated GPU allocates out of system RAM, so the engine runs on the GPU
-// while the system basis still bounds it. That needs coefficients measured
-// that way: the platform's own fixture was measured with the offload disabled.
-test('assess: an integrated GPU keeps the system basis, with its own coefficients', (t) => {
-  const igpuOnly = {
+// while the system basis still bounds it.
+test('assess: an integrated GPU keeps the system basis', (t) => {
+  const result = assessModelFitFromResources({
     models: [candidate()],
-    execution: 'sequential' as const,
+    execution: 'sequential',
     resources: resources({ gpu: true }),
-    platform: 'linux-x64' as const,
-    calibration: calibration(),
-    resolveProfile: () => profile()
-  }
-
-  const measured = assessModelFitFromResources({
-    ...igpuOnly,
-    resolveSharedGpuCalibration: () => calibration()
+    platform: 'linux-x64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
-  t.is(measured.basis, 'system-memory')
-  t.is(measured.verdict, 'likely-fits')
-  t.ok(measured.assumptions.some((a) => a.includes('integrated GPU allocates out of system RAM')))
 
-  const unmeasured = assessModelFitFromResources({
-    ...igpuOnly,
-    resolveSharedGpuCalibration: () => undefined
-  })
-  t.is(unmeasured.verdict, 'unknown')
-  t.ok(
-    unmeasured.reasons.some((r) => r.includes('integrated metal GPU')),
-    'the refusal names the platform and backend whose fixture is missing'
-  )
+  t.is(result.basis, 'system-memory')
+  t.is(result.verdict, 'likely-fits')
+  t.ok(result.assumptions.some((a) => a.includes('integrated GPU allocates out of system RAM')))
 })
 
 // The host `win32-x64:vulkan-shared` exists for: an ordinary Windows laptop
@@ -1836,7 +1171,7 @@ test('assess: an integrated GPU keeps the system basis, with its own coefficient
 // carve-out and `unifiedMemory` reads false, so the size floor is the only
 // thing that identifies it — and with no discrete card beside it, nothing else
 // can carry the budget.
-test('assess: a Windows laptop with only an iGPU takes the shared fixture', (t) => {
+test('assess: a Windows laptop with only an iGPU keeps the system basis', (t) => {
   const igpuOnly = discreteGpuResources({
     vramTotalBytes: 128 * MIB,
     vramUsedBytes: 8 * MIB,
@@ -1853,35 +1188,19 @@ test('assess: a Windows laptop with only an iGPU takes the shared fixture', (t) 
     }
   }
 
-  const measured = assessModelFitFromResources({
+  const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: igpuOnly,
     platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveSharedGpuCalibration: () => calibration({ weightUpperCoeff: 2.044 }),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
-  t.is(measured.basis, 'system-memory', 'not the 128 MiB carve-out')
-  t.is(measured.budget?.totalBytes, 32 * GIB)
-  t.is(measured.verdict, 'likely-fits')
-  t.ok(measured.assumptions.some((a) => a.includes('Intel(R) UHD Graphics 770')))
-
-  // Without the shared fixture it must not fall back to the CPU coefficients.
-  const unmeasured = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: igpuOnly,
-    platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveSharedGpuCalibration: () => undefined,
-    resolveProfile: () => profile()
-  })
-  t.is(unmeasured.verdict, 'unknown')
-  t.ok(unmeasured.reasons.some((r) => r.includes('integrated vulkan GPU')))
+  t.is(result.basis, 'system-memory', 'not the 128 MiB carve-out')
+  t.is(result.budget?.totalBytes, 32 * GIB)
+  t.is(result.verdict, 'likely-fits')
+  t.ok(result.assumptions.some((a) => a.includes('Intel(R) UHD Graphics 770')))
 })
 
 // A dedicated card next to the integrated one is where the engine would put
@@ -1904,10 +1223,8 @@ test('assess: a dedicated card beside an integrated one takes the device basis',
       ]
     }),
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveSharedGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.basis, 'device-memory')
@@ -1930,12 +1247,11 @@ test('assess: unverified GPU samples cannot form a device budget', (t) => {
     execution: 'sequential',
     resources,
     platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
-  t.is(result.verdict, 'unknown')
+  t.is(result.verdict, 'likely-fits')
   t.is(result.basis, 'system-memory')
 })
 
@@ -1952,14 +1268,13 @@ test('assess: windows budgets against the GPU allowance it is granted', (t) => {
       gpuScope: 'budget'
     }),
     platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.basis, 'device-budget')
   t.is(result.verdict, 'likely-fits')
-  t.ok(result.models[0]!.estimate)
+  t.is(result.models[0]!.verdict, 'likely-fits')
 })
 
 // The bound that a GPU load also costs system RAM has to reach the per-model
@@ -1976,9 +1291,8 @@ test('assess: the system bound reaches per-model verdicts as well as the combine
       gpuScope: 'budget'
     }),
     platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.verdict, 'likely-too-large', 'plenty of VRAM, no system RAM')
@@ -2027,9 +1341,8 @@ test('assess: an adapter too small to hold a model is not a rival candidate', (t
     execution: 'sequential',
     resources,
     platform: 'win32-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.basis, 'device-budget', 'the real card still resolves')
@@ -2057,105 +1370,100 @@ test('assess: a second GPU with an unusable reading still makes the choice ambig
     execution: 'sequential',
     resources,
     platform: 'linux-x64',
-    calibration: calibration(),
-    resolveGpuCalibration: () => calibration(),
-    resolveProfile: () => profile()
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
   })
 
   t.is(result.basis, 'system-memory', 'no device budget is formed')
-  t.is(result.verdict, 'unknown')
+  t.is(result.verdict, 'likely-fits')
 })
 
 // ---------------------------------------------------------------------------
 // Native fit from the registry's stub
 // ---------------------------------------------------------------------------
 
-const NATIVE_FIT: NativeProbeFit = {
-  verdict: 'fit',
-  basis: 'native-probe',
-  estimatorVersion: 'native-probe-v2',
-  reason: 'fits'
-}
-
-test('assess: the engine fitter outranks the coefficients that model it', (t) => {
+test('assess: the engine fitter answers for one model', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile(),
-    nativeFit: NATIVE_FIT
+    nativeFits: [measured(2 * GIB, 0)]
   })
 
   t.is(result.verdict, 'likely-fits')
   t.is(result.evidence, 'native-fit')
   t.is(result.models[0]?.evidence, 'native-fit')
   t.is(result.models[0]?.estimatorVersion, 'native-probe-v2')
-  t.absent(result.estimate, 'the fitter reports no byte range to publish')
   t.ok(result.budget, 'the memory sample is still reported')
-  t.alike(
-    result.reasons,
-    ['the engine fitter read the registry description of this model'],
-    'nothing from the estimator path is reported alongside the verdict'
-  )
-  t.alike(result.assumptions, [], 'the fitter made its own placement')
 })
 
-// The modelled path had no memory sample and would have said so. Under a native
-// verdict that explanation is false, and it must not travel with `likely-fits`.
-test("assess: a native verdict does not carry the estimator's unknown reasons", (t) => {
-  const result = assessModelFitFromResources({
-    models: [candidate()],
-    execution: 'sequential',
-    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
-    platform: undefined,
-    calibration: undefined,
-    resolveProfile: () => profile(),
-    nativeFit: NATIVE_FIT
-  })
-
-  t.is(result.verdict, 'likely-fits')
-  t.is(result.evidence, 'native-fit')
-  t.absent(
-    result.reasons.find((line) => line.includes('unknown')),
-    'no "combined verdict is unknown" under a fit'
-  )
-})
-
-// A host with plenty of memory would estimate `likely-fits`; the fitter saw the
-// real placement and refused. The refusal has to win, or the probe is decoration.
-test('assess: a native refusal overrides a comfortable estimate', (t) => {
+test('assess: a refusal from the engine stands', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile(),
-    nativeFit: { ...NATIVE_FIT, verdict: 'does-not-fit', reason: 'does-not-fit' }
+    nativeFits: [measured(2 * GIB, 0, 'does-not-fit')]
   })
 
   t.is(result.verdict, 'likely-too-large')
   t.is(result.evidence, 'native-fit')
 })
 
-test('assess: an undecided probe leaves the calibrated verdict alone', (t) => {
+// Audiogen reports a peak across pipeline phases and diffusion a per-module
+// table, so neither divides into a breakdown. The refusal is the whole answer.
+test('assess: a refusal with no breakdown still refuses', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile(),
-    nativeFit: { ...NATIVE_FIT, verdict: 'unknown', reason: 'disabled' }
+    nativeFits: [
+      {
+        fit: {
+          verdict: 'does-not-fit',
+          basis: 'native-probe',
+          estimatorVersion: 'native-probe-v2',
+          reason: 'does-not-fit'
+        }
+      }
+    ]
   })
 
-  t.is(result.evidence, 'calibration')
-  t.ok(result.estimate, 'the calibrated bound is still published')
+  t.is(result.verdict, 'likely-too-large')
+  t.is(result.evidence, 'native-fit')
+  t.is(result.models[0]?.verdict, 'likely-too-large')
+  t.is(result.models[0]?.evidence, 'native-fit')
+  t.absent(result.floorBytes, 'a bare refusal contributes no floor')
+})
+
+test('assess: an undecided probe leaves the model to its floor', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    resolveProfile: () => profile(),
+    nativeFits: [
+      {
+        fit: {
+          verdict: 'unknown',
+          basis: 'native-probe',
+          estimatorVersion: 'native-probe-v2',
+          reason: 'disabled'
+        }
+      }
+    ]
+  })
+
+  t.is(result.evidence, 'computed-only')
   t.ok(
-    result.reasons.some((reason) => reason.includes('reached no verdict: disabled')),
-    'the refusal is named beside the verdict it fell back to'
+    result.reasons.some((r) => r.includes('reached no verdict for') && r.includes('disabled')),
+    'the model that reached no verdict is named beside the fallback'
   )
 })
 
@@ -2165,89 +1473,49 @@ test('assess: a probe that never ran names why, beside the fallback', (t) => {
     execution: 'sequential',
     resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile(),
-    nativeFitUnavailable: 'no registry description (timed-out)'
+    nativeFits: [{ unavailable: 'no registry description (timed-out)' }]
   })
 
-  t.is(result.evidence, 'calibration')
+  t.is(result.evidence, 'computed-only')
   t.ok(
-    result.reasons.includes('no engine fit: no registry description (timed-out)'),
+    result.reasons.some((r) => r.includes('no registry description (timed-out)')),
     'the cause travels with the result'
   )
 })
 
-// The native path assembles its own result rather than extending the modelled
-// one, so it carries the placement separately.
-test('assess: the resolved device survives every evidence class', (t) => {
-  const sample = { totalBytes: 64 * GIB, usedBytes: 16 * GIB }
-
-  const native = assessModelFitFromResources({
-    models: [candidate({ device: 'gpu' })],
-    execution: 'sequential',
-    resources: resources(sample),
-    platform: 'darwin-arm64',
-    calibration: calibration(),
-    resolveProfile: () => profile(),
-    nativeFit: NATIVE_FIT
-  })
-
-  const calibrated = assessModelFitFromResources({
-    models: [candidate({ device: 'cpu' })],
-    execution: 'sequential',
-    resources: resources(sample),
-    platform: 'darwin-arm64',
-    calibration: calibration(),
-    resolveProfile: () => profile()
-  })
-
-  const floored = assessModelFitFromResources({
-    models: [candidate({ device: 'cpu' })],
-    execution: 'sequential',
-    resources: resources(sample),
-    platform: 'android-arm64',
-    calibration: undefined,
-    resolveProfile: () => profile()
-  })
-
-  t.is(native.evidence, 'native-fit')
-  t.is(native.models[0]?.device, 'gpu')
-  t.is(calibrated.evidence, 'calibration')
-  t.is(calibrated.models[0]?.device, 'cpu')
-  t.is(floored.evidence, 'computed-only')
-  t.is(floored.models[0]?.device, 'cpu')
-})
-
-test('assess: a native verdict reports no refusal', (t) => {
+// A projection with no byte breakdown has nothing a set can be summed from.
+test('assess: a verdict carrying no figures is not measured evidence', (t) => {
   const result = assessModelFitFromResources({
     models: [candidate()],
     execution: 'sequential',
     resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile(),
-    nativeFit: NATIVE_FIT
+    nativeFits: [
+      {
+        fit: {
+          verdict: 'fit',
+          basis: 'native-probe',
+          estimatorVersion: 'native-probe-v2',
+          reason: 'fits'
+        }
+      }
+    ]
   })
 
-  t.absent(
-    result.reasons.some((reason) => reason.startsWith('no engine fit')),
-    'nothing is explained away under a verdict that was reached'
-  )
+  t.not(result.evidence, 'native-fit')
 })
 
-// One probe measures one model against the whole machine. Applying it to a set
-// would drop every other candidate from the budget.
-test('assess: a set of candidates keeps the estimator that can aggregate', (t) => {
+test('assess: the resolved device survives onto the model result', (t) => {
   const result = assessModelFitFromResources({
-    models: [candidate(), candidate()],
-    execution: 'concurrent',
+    models: [candidate({ device: 'gpu' })],
+    execution: 'sequential',
     resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
     platform: 'darwin-arm64',
-    calibration: calibration(),
     resolveProfile: () => profile(),
-    nativeFit: NATIVE_FIT
+    nativeFits: [measured(2 * GIB, 0)]
   })
 
-  t.is(result.evidence, 'calibration')
-  t.is(result.models.length, 2, 'both candidates are still reported')
+  t.is(result.models[0]?.device, 'gpu')
 })

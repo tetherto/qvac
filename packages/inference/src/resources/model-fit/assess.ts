@@ -11,25 +11,10 @@ import type {
 import type { GPUResourceCapabilities, SystemResources } from '@/schemas/system-resources'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
 import { getModelResourceProfile } from '@/models/registry/resource-profiles'
-import { getGpuCalibration, getSharedGpuCalibration } from '@/resources/model-fit/calibration/index'
-import { estimateLlm } from '@/resources/model-fit/estimators/llm'
-import { estimateWhisper } from '@/resources/model-fit/estimators/whisper'
 import { computeFloor, FLOOR_VERSION } from '@/resources/model-fit/floor'
-import type {
-  ByteRange,
-  EstimatorResult,
-  ModelFitPlatform,
-  PlatformCalibration
-} from '@/resources/model-fit/types'
+import type { ByteRange, ModelFitPlatform } from '@/resources/model-fit/types'
 
 const GIB = 1024 * 1024 * 1024
-
-/** Engines phase 1 can estimate, and which estimator owns each. */
-const ESTIMATORS = {
-  'llamacpp-completion': estimateLlm,
-  'llamacpp-embedding': estimateLlm,
-  'whispercpp-transcription': estimateWhisper
-} as const
 
 const MOBILE_PLATFORMS: readonly ModelFitPlatform[] = ['android-arm64', 'ios-arm64']
 
@@ -40,74 +25,114 @@ const UNIFIED_MEMORY_PLATFORMS: readonly ModelFitPlatform[] = [
   'ios-arm64'
 ]
 
-/**
- * Platforms whose fixture describes CPU-resident execution (`device: 'cpu'`),
- * so a reported GPU sends the host through `resolveGpuPlacement` instead.
- * Apple silicon and mobile calibrate on their GPU already.
- */
-const CPU_CALIBRATED_PLATFORMS: readonly ModelFitPlatform[] = [
-  'darwin-x64',
-  'linux-arm64',
-  'linux-x64',
-  'win32-x64'
-]
-
 /** Resolves a checksum to its catalog resource profile. */
 export type ProfileResolver = (sha256Checksum: string) => ModelResourceProfile | undefined
 
 /**
- * What one candidate came out as. An `estimate` is a two-sided bound from
- * calibrated coefficients; a `floor` is the computed lower bound alone, taken
- * when no coefficients describe the load but the model still executes out of
- * the memory the budget measures; `unknown` is neither.
+ * What one candidate came out as. `native` is what the engine measured;
+ * `refused` is an engine saying no without figures to divide; `floor` is the
+ * computed lower bound alone, taken when no engine answered but the model
+ * still executes out of the memory the budget measures; `unknown` is neither.
  */
 type Evaluation =
-  | Extract<EstimatorResult, { kind: 'estimate' }>
+  | NativeEvaluation
+  | RefusedEvaluation
   | {
       kind: 'floor'
       bytes: number
       reasons: readonly string[]
       assumptions: readonly string[]
     }
-  | Extract<EstimatorResult, { kind: 'unknown' }>
+  | { kind: 'unknown'; reasons: readonly string[]; assumptions?: readonly string[] }
+
+/**
+ * An engine that will not run this load and reports no breakdown to compare —
+ * audiogen gives a peak across pipeline phases, diffusion a per-module table.
+ * The refusal is the whole answer, and needs no budget to stand.
+ */
+interface RefusedEvaluation {
+  kind: 'refused'
+  estimatorVersion: string
+  reasons: readonly string[]
+}
+
+/**
+ * What one engine fitter measured, as bytes that compose. Only `deviceBytes`
+ * divides into persistent and working, so a host figure is carried whole and
+ * counted as resident, which errs toward refusing.
+ */
+interface NativeEvaluation {
+  kind: 'native'
+  persistent: number
+  working: number
+  hostBytes: number
+  estimatorVersion: string
+  verdict: 'fit' | 'does-not-fit'
+  reasons: readonly string[]
+  assumptions?: readonly string[]
+}
+
+/**
+ * What one fitter answered: its measurement where the figures divide, its bare
+ * refusal where they do not, and `undefined` where it reached no verdict or
+ * said yes without figures to carry into the set.
+ */
+function nativeEvaluation(
+  native: NativeCandidateFit | undefined
+): NativeEvaluation | RefusedEvaluation | undefined {
+  const fit = native?.fit
+  if (!fit || fit.verdict === 'unknown') return undefined
+
+  const reasons = fit.message === undefined ? [fit.reason] : [fit.reason, fit.message]
+  const refused: RefusedEvaluation = {
+    kind: 'refused',
+    estimatorVersion: fit.estimatorVersion,
+    reasons
+  }
+
+  const projection = fit.projection
+  if (!projection) return fit.verdict === 'does-not-fit' ? refused : undefined
+
+  const { weightsBytes, contextBytes, computeBytes, hostBytes } = projection
+  if (weightsBytes === undefined || contextBytes === undefined || computeBytes === undefined) {
+    return fit.verdict === 'does-not-fit' ? refused : undefined
+  }
+
+  return {
+    kind: 'native',
+    persistent: weightsBytes,
+    working: contextBytes + computeBytes,
+    hostBytes: hostBytes ?? 0,
+    estimatorVersion: fit.estimatorVersion,
+    verdict: fit.verdict,
+    reasons
+  }
+}
 
 export interface AssessModelFitOptions {
   models: readonly ModelFitEstimateTarget[]
   execution: ModelFitExecution
   resources: SystemResources
   /**
-   * `undefined` when the runtime's platform/arch pair is not a calibration
-   * target. Also selects the mobile headroom policy.
+   * `undefined` when the runtime's platform/arch pair is not one this
+   * assessment covers. Also selects the mobile headroom policy.
    */
   platform: ModelFitPlatform | undefined
-  /** `undefined` when the platform has no validated coefficients. */
-  calibration: PlatformCalibration | undefined
-  /**
-   * Resolves GPU-resident coefficients once the target backend is known.
-   * Defaults to the built-in fixtures; injected in tests.
-   */
-  resolveGpuCalibration?: (
-    platform: ModelFitPlatform,
-    backend: string
-  ) => PlatformCalibration | undefined
-  /** Integrated-GPU coefficients, spent against the system budget. */
-  resolveSharedGpuCalibration?: (
-    platform: ModelFitPlatform,
-    backend: string
-  ) => PlatformCalibration | undefined
   /** Defaults to the generated catalog table; injected in tests. */
   resolveProfile?: ProfileResolver
   /**
-   * The engine's own verdict for the single candidate, from the registry's fit
-   * stub. Resolved in the handler, which is where the network is.
-   *
-   * Only ever set for a one-candidate assessment: the fitter answers about one
-   * model against the whole machine, and two such answers cannot be summed into
-   * a combined budget the way two byte estimates can.
+   * The engine's own verdict per candidate, in `models` order, from the
+   * registry's fit stubs. Resolved in the handler, which is where the network
+   * is. A candidate whose fitter reached no verdict falls back to the evidence
+   * the rest of this assessment can give it.
    */
-  nativeFit?: NativeProbeFit | undefined
-  /** Why the fitter produced no verdict, when one was sought. */
-  nativeFitUnavailable?: string | undefined
+  nativeFits?: readonly NativeCandidateFit[] | undefined
+}
+
+/** One candidate's engine verdict, or why it has none. */
+export interface NativeCandidateFit {
+  fit?: NativeProbeFit | undefined
+  unavailable?: string | undefined
 }
 
 /**
@@ -115,33 +140,20 @@ export interface AssessModelFitOptions {
  * verdict.
  *
  * Pure: every input is passed in, so the same call is testable without a worker,
- * a device, or a network. Sampling, platform detection and calibration lookup
- * happen in the handler.
+ * a device, or a network. Sampling, platform detection and the engine fitter
+ * calls happen in the handler.
  */
 export function assessModelFitFromResources(options: AssessModelFitOptions): AssessModelFitResult {
-  const { models, execution, resources, platform, calibration } = options
+  const { models, execution, resources, platform } = options
   const resolveProfile = options.resolveProfile ?? getModelResourceProfile
-  const resolveGpuCalibration = options.resolveGpuCalibration ?? getGpuCalibration
-  const resolveSharedGpuCalibration = options.resolveSharedGpuCalibration ?? getSharedGpuCalibration
 
-  // Where the model would execute decides which evidence can bound it, and
-  // which fixture describes the load. See METHODOLOGY.md, "Which fixture a
-  // host gets".
-  const mustPlaceGpu =
-    platform !== undefined && CPU_CALIBRATED_PLATFORMS.includes(platform) && hasGpu(resources)
-  const placement = mustPlaceGpu && platform ? resolveGpuPlacement(resources, platform) : undefined
-  const gpuCalibration =
-    placement && platform
-      ? placement.kind === 'device'
-        ? resolveGpuCalibration(platform, placement.backend)
-        : resolveSharedGpuCalibration(platform, placement.backend)
+  const placement =
+    platform !== undefined && hasGpu(resources)
+      ? resolveGpuPlacement(resources, platform)
       : undefined
 
-  // A mode only engages with coefficients measured for it.
-  const onDevice = placement?.kind === 'device' && gpuCalibration ? placement : undefined
-  const onIntegrated = placement?.kind === 'shared' && gpuCalibration ? placement : undefined
-  const gpuMode = onDevice !== undefined || onIntegrated !== undefined
-  const effectiveCalibration = gpuMode ? gpuCalibration : calibration
+  const onDevice = placement?.kind === 'device' ? placement : undefined
+  const onIntegrated = placement?.kind === 'shared' ? placement : undefined
 
   const basis: ModelFitBasis = onDevice
     ? onDevice.targets[0]!.scope === 'budget'
@@ -186,43 +198,23 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   // system budget already *is* the budget.
   const alsoBoundBy = onDevice ? resolveBudget(resources, platform, 'system-memory', []) : undefined
 
-  if (!platform) {
-    reasons.push('the runtime platform is not one this assessment covers')
-  } else if (mustPlaceGpu && !gpuMode) {
-    // Name the missing fixture: the platform's own coefficients exist here,
-    // they are just the wrong ones.
-    reasons.push(
-      !placement
-        ? 'a GPU is reported but its readings cannot say where the model would execute, so no estimate can be defended'
-        : placement.kind === 'device'
-          ? `no validated calibration for ${platform} on ${placement.backend}, so no estimate can be defended`
-          : `no validated calibration for ${platform} on an integrated ${placement.backend} GPU, so no estimate can be defended`
-    )
-  } else if (!effectiveCalibration) {
-    reasons.push(`no validated calibration for ${platform}, so no estimate can be defended`)
-  } else if (effectiveCalibration.measuredAt) {
-    assumptions.push(calibrationAssumption(platform, effectiveCalibration))
-  }
-
-  // Without coefficients, the computed floor still says something — but only
-  // where the model executes out of the memory the budget measures. A discrete
-  // card holds the weights in its own memory, so the system budget bounds
-  // nothing there and the floor has no budget to be compared against.
+  // The computed floor says something only where the model executes out of the
+  // memory the budget measures. A discrete card holds the weights in its own
+  // memory, so the system budget bounds nothing there.
   const floorApplies = !onDevice && boundBySystemMemory(resources, platform)
 
-  const evaluated = models.map((candidate) =>
-    evaluate(
-      candidate,
-      platform,
-      effectiveCalibration,
-      resources,
-      resolveProfile,
-      gpuMode,
-      floorApplies
-    )
+  const evaluated = models.map((candidate, index) =>
+    evaluate(candidate, resolveProfile, floorApplies, options.nativeFits?.[index])
   )
 
+  const results = evaluated.map(({ result }) => result)
+
+  if (!platform) {
+    reasons.push('the runtime platform is not one this assessment covers')
+  }
+
   for (const { result } of evaluated) {
+    if (result.kind === 'refused') continue
     for (const assumption of result.assumptions ?? []) {
       if (!assumptions.includes(assumption)) assumptions.push(assumption)
     }
@@ -232,67 +224,70 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     toModelResult(candidate, result, budget, deviceBudgets, alsoBoundBy)
   )
 
-  const results = evaluated.map(({ result }) => result)
-  const estimates = results.filter(
-    (result): result is Extract<Evaluation, { kind: 'estimate' }> => {
-      return result.kind === 'estimate'
-    }
-  )
+  const natives = results.filter((result): result is NativeEvaluation => result.kind === 'native')
   const anyUnknown = results.some((result) => result.kind === 'unknown')
   const anyFloor = results.some((result) => result.kind === 'floor')
+  const anyRefused = results.some((result) => result.kind === 'refused')
+  const allNative = natives.length === results.length && natives.length > 0
 
-  // A two-sided bound needs every candidate estimated; a floor needs every
-  // candidate to have at least a floor. One model with neither leaves the set
-  // with no evidence at all.
-  const combined = anyUnknown || anyFloor ? undefined : aggregate(estimates, execution)
-  const combinedFloor = anyUnknown ? undefined : aggregateFloor(results, execution)
+  // Measured bytes are exact, so a set of them can confirm a fit. Mixed with a
+  // floor the total is a lower bound again, and `combinedFloor` carries it.
+  const combinedNative = allNative ? aggregateNative(natives, execution) : undefined
+  const combinedFloor = anyUnknown || anyRefused ? undefined : aggregateFloor(results, execution)
 
-  // Absent when a candidate rests on nothing: the set then has no single kind
-  // of evidence to name, and an `unknown` with `evidence` present stays a
-  // near-miss or an uncalibrated floor rather than a missing model.
-  const evidence: ModelFitEvidence | undefined = anyUnknown
-    ? undefined
-    : anyFloor
-      ? 'computed-only'
-      : estimates.length > 0
-        ? 'calibration'
-        : undefined
+  // A refusal decides the set, so it names the evidence; otherwise the weakest
+  // candidate does. Absent when a candidate rests on nothing, so an `unknown`
+  // carrying `evidence` is a near-miss rather than a missing model.
+  const evidence: ModelFitEvidence | undefined = anyRefused
+    ? 'native-fit'
+    : anyUnknown
+      ? undefined
+      : anyFloor
+        ? 'computed-only'
+        : allNative
+          ? 'native-fit'
+          : undefined
 
   if (anyUnknown) {
-    reasons.push('at least one model could not be estimated, so the combined verdict is unknown')
+    reasons.push('at least one model could not be assessed, so the combined verdict is unknown')
   }
 
-  const verdict: ModelFitVerdict = !budget
-    ? 'unknown'
-    : combined
-      ? verdictAgainst(combined, deviceBudgets ?? [budget], alsoBoundBy)
-      : combinedFloor !== undefined
-        ? floorVerdict(combinedFloor, deviceBudgets ?? [budget])
-        : 'unknown'
+  // An engine refuses for reasons its own figures do not carry — no device
+  // could hold the placement, a load shape it will not run — so its refusal
+  // stands whatever the arithmetic says.
+  const refused = anyRefused || natives.some((native) => native.verdict === 'does-not-fit')
 
-  if (onDevice && combined && alsoBoundBy) {
+  const verdict: ModelFitVerdict = refused
+    ? 'likely-too-large'
+    : !budget
+      ? 'unknown'
+      : combinedNative !== undefined
+        ? verdictAgainst(
+            { lower: combinedNative, upper: combinedNative },
+            deviceBudgets ?? [budget],
+            alsoBoundBy
+          )
+        : combinedFloor !== undefined
+          ? floorVerdict(combinedFloor, deviceBudgets ?? [budget])
+          : 'unknown'
+
+  if (onDevice && combinedNative !== undefined && alsoBoundBy) {
     reasons.push(
       'a GPU load is also paid for in system RAM, so every verdict is the more pessimistic of the GPU and system budgets'
     )
   }
 
-  if (deviceBudgets && deviceBudgets.length > 1 && combined) {
+  if (deviceBudgets && deviceBudgets.length > 1 && combinedNative !== undefined) {
     reasons.push(
       'more than one usable GPU is reported, so a fit has to hold on the smallest of them and a refusal on the largest'
     )
   }
 
-  if (budget && combined) {
+  if (budget && (combinedNative !== undefined || combinedFloor !== undefined)) {
     reasons.push(
       execution === 'concurrent'
         ? 'all models counted as resident with every working peak added'
         : 'all models counted as resident with only the largest working peak added'
-    )
-  } else if (budget && combinedFloor !== undefined) {
-    reasons.push(
-      execution === 'concurrent'
-        ? 'all models counted as resident with their floors summed and every calibrated working peak added'
-        : 'all models counted as resident with their floors summed and only the largest calibrated working peak added'
     )
   }
 
@@ -302,26 +297,11 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     )
   }
 
-  // The engine's own fitter, where it reached a verdict, replaces the modelled
-  // one: it read this model's tensor list and measured this machine, which is
-  // what the coefficients above approximate. The estimator's reasons and
-  // assumptions describe the path not taken, so none of them are reported.
-  const native = nativeModelResult(options.nativeFit, modelResults)
-  if (native) {
-    return {
-      verdict: native.verdict,
-      basis,
-      execution,
-      evidence: 'native-fit',
-      ...(budget && { budget }),
-      models: [native],
-      reasons: ['the engine fitter read the registry description of this model'],
-      assumptions: []
-    }
+  if (allNative) {
+    reasons.push('every model was measured by the engine that would run it')
   }
 
-  const declined = nativeFitDecline(options.nativeFit, options.nativeFitUnavailable)
-  if (declined !== undefined) {
+  for (const declined of nativeFitDeclines(options.nativeFits, models)) {
     reasons.push(declined)
   }
 
@@ -331,9 +311,6 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     execution,
     ...(evidence && { evidence }),
     ...(budget && { budget }),
-    ...(combined && {
-      estimate: { lowerBoundBytes: combined.lower, upperBoundBytes: combined.upper }
-    }),
     ...(anyFloor && combinedFloor !== undefined && { floorBytes: combinedFloor }),
     models: modelResults,
     reasons,
@@ -342,50 +319,29 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
 }
 
 /**
- * Why no engine verdict backs this assessment, for the cases where one was
- * sought: the fitter never ran, or it ran and declined. `undefined` where none
- * was sought, which is every multi-candidate assessment.
+ * Why a candidate carries no engine verdict: the fitter never ran for it, or it
+ * ran and declined. Each is named with its model, since a set can lose one
+ * model to the fitter and keep the rest.
  */
-function nativeFitDecline(
-  nativeFit: NativeProbeFit | undefined,
-  unavailable: string | undefined
-): string | undefined {
-  if (unavailable !== undefined) return `no engine fit: ${unavailable}`
-  if (nativeFit?.verdict !== 'unknown') return undefined
+function nativeFitDeclines(
+  nativeFits: readonly NativeCandidateFit[] | undefined,
+  models: readonly ModelFitEstimateTarget[]
+): string[] {
+  const declines: string[] = []
 
-  const detail = nativeFit.message === undefined ? nativeFit.reason : nativeFit.message
-  return `the engine fitter reached no verdict: ${detail}`
-}
+  nativeFits?.forEach((native, index) => {
+    const name = models[index]?.model.name ?? `model ${index + 1}`
+    if (native.unavailable !== undefined) {
+      declines.push(`no engine fit for ${name}: ${native.unavailable}`)
+      return
+    }
+    if (native.fit?.verdict !== 'unknown') return
 
-/**
- * The per-model result a native fit produces, or `undefined` when the modelled
- * one stands.
- *
- * The probe answers about one model against the whole machine. Two such answers
- * carry no byte demand that could be summed under one budget, so a multi-model
- * assessment keeps the estimator that can aggregate. `unknown` — the probe
- * disabled, the load shape unsupported, the child unusable — is not a verdict
- * and falls through the same way.
- */
-function nativeModelResult(
-  nativeFit: NativeProbeFit | undefined,
-  modelResults: readonly ModelFitModelResult[]
-): ModelFitModelResult | undefined {
-  if (!nativeFit || modelResults.length !== 1) return undefined
-  if (nativeFit.verdict === 'unknown') return undefined
+    const detail = native.fit.message === undefined ? native.fit.reason : native.fit.message
+    declines.push(`the engine fitter reached no verdict for ${name}: ${detail}`)
+  })
 
-  const modelled = modelResults[0]
-  if (!modelled) return undefined
-
-  return {
-    name: modelled.name,
-    verdict: nativeFit.verdict === 'fit' ? 'likely-fits' : 'likely-too-large',
-    evidence: 'native-fit',
-    ...(modelled.device !== undefined && { device: modelled.device }),
-    estimatorVersion: nativeFit.estimatorVersion,
-    reasons:
-      nativeFit.message === undefined ? [nativeFit.reason] : [nativeFit.reason, nativeFit.message]
-  }
+  return declines
 }
 
 /**
@@ -412,21 +368,20 @@ export function boundBySystemMemory(
 }
 
 /**
- * One candidate's evaluation: the calibrated estimate when the coefficients
- * describe this load, otherwise the computed floor where a floor can be
- * compared at all, otherwise `unknown`. Whatever kept the estimate from
- * forming stays in the reasons, so a floor verdict still says why it is only
- * a floor.
+ * One candidate's evaluation: the engine fitter's measurement when it ran,
+ * otherwise the computed floor where a floor can be compared at all, otherwise
+ * `unknown`. Whatever kept the measurement from forming stays in the reasons,
+ * so a floor verdict still says why it is only a floor.
  */
 function evaluate(
   candidate: ModelFitEstimateTarget,
-  platform: ModelFitPlatform | undefined,
-  calibration: PlatformCalibration | undefined,
-  resources: SystemResources,
   resolveProfile: ProfileResolver,
-  gpuMode: boolean,
-  floorApplies: boolean
+  floorApplies: boolean,
+  native: NativeCandidateFit | undefined
 ): { candidate: ModelFitEstimateTarget; result: Evaluation } {
+  const measured = nativeEvaluation(native)
+  if (measured) return { candidate, result: measured }
+
   const profile = resolveProfile(candidate.model.sha256Checksum)
   if (!profile) {
     return { candidate, result: unknown('no resource profile in the catalog for this checksum') }
@@ -440,8 +395,12 @@ function evaluate(
     }
   }
 
-  const estimated = estimate(candidate, profile, extra, platform, calibration, resources, gpuMode)
-  if (estimated.kind === 'estimate' || !floorApplies) return { candidate, result: estimated }
+  if (!floorApplies) {
+    return {
+      candidate,
+      result: unknown('no engine verdict, and the floor has no budget to be compared against')
+    }
+  }
 
   const floor = computeFloor({ profile, workload: candidate.workload, extraArtifactBytes: extra })
   return {
@@ -449,54 +408,14 @@ function evaluate(
     result: {
       kind: 'floor',
       bytes: floor.bytes,
-      reasons: [...estimated.reasons, ...floor.reasons],
-      assumptions: [...(estimated.assumptions ?? []), ...floor.assumptions]
+      reasons: floor.reasons,
+      assumptions: floor.assumptions
     }
   }
 }
 
-function unknown(reason: string): Extract<EstimatorResult, { kind: 'unknown' }> {
-  return { kind: 'unknown', estimatorVersion: 'none', reasons: [reason] }
-}
-
-/** Runs the calibrated estimator for a candidate, or says why it cannot. */
-function estimate(
-  candidate: ModelFitEstimateTarget,
-  profile: ModelResourceProfile,
-  extraArtifactBytes: number,
-  platform: ModelFitPlatform | undefined,
-  calibration: PlatformCalibration | undefined,
-  resources: SystemResources,
-  gpuMode: boolean
-): EstimatorResult {
-  if (!calibration) {
-    return unknown(
-      platform
-        ? `no validated calibration for ${platform}`
-        : 'the runtime platform is not one this assessment covers'
-    )
-  }
-
-  // A GPU is present and neither GPU mode engaged, so the only coefficients
-  // left were measured with the offload disabled — not how this host runs.
-  if (!gpuMode && platform && CPU_CALIBRATED_PLATFORMS.includes(platform) && hasGpu(resources)) {
-    return unknown(
-      'a GPU is present, so the model executes on it rather than on the CPU this platform’s coefficients were measured against'
-    )
-  }
-
-  const estimator = ESTIMATORS[profile.engine as keyof typeof ESTIMATORS]
-  if (!estimator) {
-    return unknown(`engine '${profile.engine}' has no estimator in this phase`)
-  }
-
-  return estimator({
-    profile,
-    workload: candidate.workload,
-    extraArtifactBytes,
-    calibration,
-    hasGpu: hasGpu(resources)
-  })
+function unknown(reason: string): Extract<Evaluation, { kind: 'unknown' }> {
+  return { kind: 'unknown', reasons: [reason] }
 }
 
 /**
@@ -518,28 +437,6 @@ function extraArtifactBytes(
     total += profile.artifactBytes
   }
   return total
-}
-
-/**
- * States when, and under what conditions, this platform's coefficients were
- * measured.
- *
- * The backend belongs in the result because the buffers these coefficients
- * cover are allocated by it, while the coefficients themselves are keyed by
- * platform alone — so a fixture measured on one backend is being applied to
- * every backend on that platform. That is a real caveat, and the caller is
- * entitled to see it rather than read the fixture.
- */
-function calibrationAssumption(
-  platform: ModelFitPlatform,
-  calibration: PlatformCalibration
-): string {
-  const base = `${platform} coefficients were calibrated on ${calibration.measuredAt}`
-  const on = calibration.measuredOn
-  if (!on) return base
-
-  const device = on.device ? ` (${on.device})` : ''
-  return `${base} against a ${on.backend} backend${device}, at ${on.kvElementBytes} bytes per KV element`
 }
 
 /**
@@ -593,8 +490,8 @@ function tooSmallToHostAModel(gpu: GPUResourceCapabilities) {
 }
 
 // `gpuType.VIRTUAL`: the virtio / VMware / Hyper-V adapter a VM exposes. It
-// has no compute backend, so counting it as a GPU would deny every VM the
-// platform's own coefficients.
+// has no compute backend, so counting it as a GPU would budget every VM
+// against memory nothing can allocate.
 const GPU_TYPE_VIRTUAL = 3
 
 function isVirtualDisplayAdapter(gpu: GPUResourceCapabilities) {
@@ -625,8 +522,8 @@ function integratedIsIndistinguishable(gpu: GPUResourceCapabilities, platform: M
 }
 
 // Ordered by the backends the addon actually builds, not by what the device's
-// drivers advertise: the NVIDIA calibration host advertises both CUDA and
-// Vulkan, and every load on it reports `ggml_vulkan`, never `ggml_cuda`. The
+// drivers advertise: an NVIDIA host advertises both CUDA and Vulkan, and every
+// load on it reports `ggml_vulkan`, never `ggml_cuda`. The
 // engine's own choice is not observable from here (`chooseBackend` is C++ and
 // only reaches the llama log), so this order has to track the addon's build.
 const GPU_BACKENDS = ['metal', 'vulkan', 'rocm', 'cuda', 'levelZero', 'opencl'] as const
@@ -662,9 +559,8 @@ function resolveGpuPlacement(
   if (deviceBacked.length === 0) {
     const shared = gpus[0]!
     const backend = backendOf(shared)!
-    // Two integrated devices on different backends would need two fixtures and
-    // the engine picks one, so the same rule applies as for cards: no single
-    // set of coefficients, no estimate. They share the budget either way.
+    // The engine picks one of them, so the same rule applies as for cards: no
+    // single backend, no placement. They share the budget either way.
     if (gpus.some((gpu) => backendOf(gpu) !== backend)) return undefined
     return {
       kind: 'shared',
@@ -697,8 +593,8 @@ function resolveGpuPlacement(
     })
   }
 
-  // One fixture covers one backend, and one basis: cards that disagree on
-  // either cannot be assessed under a single set of coefficients.
+  // A placement names one backend and one basis, so cards that disagree on
+  // either name no device to budget against.
   const backend = targets[0]!.backend
   if (targets.some((target) => target.backend !== backend)) return undefined
   if (targets.some((target) => target.scope !== targets[0]!.scope)) return undefined
@@ -861,37 +757,6 @@ function reserveBytes(availableBytes: number, platform: ModelFitPlatform | undef
 }
 
 /**
- * Combines per-model bounds under the declared execution mode.
- *
- * Every model is resident either way — what differs is the working peak:
- * `sequential` counts only the largest, `concurrent` counts them all.
- */
-function aggregate(
-  estimates: readonly Extract<EstimatorResult, { kind: 'estimate' }>[],
-  execution: ModelFitExecution
-): ByteRange {
-  let persistentLower = 0
-  let persistentUpper = 0
-  let workingLower = 0
-  let workingUpper = 0
-
-  for (const estimate of estimates) {
-    persistentLower += estimate.persistent.lower
-    persistentUpper += estimate.persistent.upper
-
-    if (execution === 'concurrent') {
-      workingLower += estimate.working.lower
-      workingUpper += estimate.working.upper
-    } else {
-      workingLower = Math.max(workingLower, estimate.working.lower)
-      workingUpper = Math.max(workingUpper, estimate.working.upper)
-    }
-  }
-
-  return { lower: persistentLower + workingLower, upper: persistentUpper + workingUpper }
-}
-
-/**
  * The combined lower bound when at least one candidate has only a floor: every
  * estimate contributes its own lower bound, every floor its bytes, aggregated
  * the same way as `aggregate` — a floor has no working peak to add.
@@ -906,16 +771,39 @@ function aggregateFloor(
   let working = 0
 
   for (const result of results) {
-    if (result.kind === 'unknown') return undefined
+    if (result.kind === 'unknown' || result.kind === 'refused') return undefined
     if (result.kind === 'floor') {
       persistent += result.bytes
       continue
     }
-    persistent += result.persistent.lower
+
+    persistent += result.persistent + result.hostBytes
     working =
-      execution === 'concurrent'
-        ? working + result.working.lower
-        : Math.max(working, result.working.lower)
+      execution === 'concurrent' ? working + result.working : Math.max(working, result.working)
+  }
+
+  return persistent + working
+}
+
+/**
+ * The combined demand when every candidate was measured by its own engine.
+ * Each fitter answered about one model against the whole machine, so only the
+ * bytes compose: persistent is always resident, and the working peak is summed
+ * under `concurrent` and maximised under `sequential`.
+ *
+ * A host figure carries no breakdown, so it counts as resident throughout.
+ */
+function aggregateNative(
+  natives: readonly NativeEvaluation[],
+  execution: ModelFitExecution
+): number {
+  let persistent = 0
+  let working = 0
+
+  for (const native of natives) {
+    persistent += native.persistent + native.hostBytes
+    working =
+      execution === 'concurrent' ? working + native.working : Math.max(working, native.working)
   }
 
   return persistent + working
@@ -946,6 +834,7 @@ function toModelResult(
   budget: AssessModelFitResult['budget'],
   /** Every candidate GPU budget, when the host has more than one. */
   deviceBudgets: readonly NonNullable<AssessModelFitResult['budget']>[] | undefined,
+  /** The system budget a GPU load is also paid for out of. */
   alsoBoundBy: AssessModelFitResult['budget']
 ): ModelFitModelResult {
   if (result.kind === 'unknown') {
@@ -972,25 +861,36 @@ function toModelResult(
           ? 'no usable system-memory sample, so this model has no verdict'
           : verdict === 'likely-too-large'
             ? 'the computed floor alone exceeds the budget'
-            : 'the computed floor is within the budget, but without calibration the cost above it is unbounded, so a fit cannot be claimed'
+            : 'the computed floor is within the budget, but the cost above it is unmeasured, so a fit cannot be claimed'
       ]
     }
   }
 
-  const total: ByteRange = {
-    lower: result.persistent.lower + result.working.lower,
-    upper: result.persistent.upper + result.working.upper
+  if (result.kind === 'refused') {
+    return {
+      name: candidate.model.name,
+      verdict: 'likely-too-large',
+      evidence: 'native-fit',
+      ...(candidate.device !== undefined && { device: candidate.device }),
+      estimatorVersion: result.estimatorVersion,
+      reasons: [...result.reasons]
+    }
   }
+
+  const bytes = aggregateNative([result], 'sequential')
+  const verdict: ModelFitVerdict =
+    result.verdict === 'does-not-fit'
+      ? 'likely-too-large'
+      : budget
+        ? verdictAgainst({ lower: bytes, upper: bytes }, deviceBudgets ?? [budget], alsoBoundBy)
+        : 'unknown'
 
   return {
     name: candidate.model.name,
-    verdict: budget ? verdictAgainst(total, deviceBudgets ?? [budget], alsoBoundBy) : 'unknown',
-    evidence: 'calibration',
+    verdict,
+    evidence: 'native-fit',
     ...(candidate.device !== undefined && { device: candidate.device }),
-    estimate: { lowerBoundBytes: total.lower, upperBoundBytes: total.upper },
     estimatorVersion: result.estimatorVersion,
-    reasons: budget
-      ? [...result.reasons]
-      : [...result.reasons, 'no usable system-memory sample, so this model has no verdict']
+    reasons: [...result.reasons]
   }
 }
