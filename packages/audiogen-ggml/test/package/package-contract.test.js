@@ -221,7 +221,8 @@ function runDownloaderWithoutRegistryClient(downloaderPath, cwd) {
   const outputPath = path.join(cwd, 'models')
   return spawnSync(process.execPath, [downloaderPath, '--output', outputPath], {
     cwd,
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: { ...process.env, NODE_PATH: '' }
   })
 }
 
