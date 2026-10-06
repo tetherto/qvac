@@ -66,7 +66,6 @@ they are missing but does not fail.
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `ffmpeg`                               | Microphone capture, transcription examples, and the built-in audio decoder. Install from [ffmpeg.org](https://ffmpeg.org/download.html). |
 | [Bare](https://bare.pears.com) runtime | Running the SDK under Bare directly (Node and Bun are supported out of the box).                                                         |
-| [Bun](https://bun.sh)                  | Building the SDK from source or running the monorepo development workflow.                                                               |
 
 ## Project
 

@@ -5,7 +5,7 @@ const ggufPath = process.argv[2]
 
 if (!ggufPath) {
   console.error('✖ Please provide the path to a GGUF file as the first argument')
-  console.error('✖ Usage: bun run examples/llamacpp-filesystem.ts <path-to-gguf-file>')
+  console.error('✖ Usage: npx tsx examples/llamacpp-filesystem.ts <path-to-gguf-file>')
   process.exit(1)
 }
 

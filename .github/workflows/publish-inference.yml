@@ -125,10 +125,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          bun-version: latest
+          node-version: 22
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         shell: bash
@@ -144,24 +144,19 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
-          cat > bunfig.toml <<BUNFIG
-          [install]
-          registry = "https://registry.npmjs.org/"
-
-          [install.scopes]
-          "@tetherto" = { token = "${GIT_PAT}", url = "https://npm.pkg.github.com" }
-          BUNFIG
-
+      # --ignore-scripts: the step above writes GITHUB_TOKEN into .npmrc, so a
+      # dependency lifecycle script would run with that token in reach. It also
+      # skips the package's own `prepare`, hence the explicit build step.
       - name: Install dependencies
         working-directory: ${{ env.WORKDIR }}
-        run: bun install
+        run: npm install --ignore-scripts
 
       # Compile + alias resolution. format / lint / typecheck / tests are the
       # PR gate's job (pr-checks-sdk-pod), the same split publish-sdk.yml uses
       # for the engine's dev build.
       - name: Build
         working-directory: ${{ env.WORKDIR }}
-        run: bun run build
+        run: npm run build
 
       - name: Upload inference dist artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0

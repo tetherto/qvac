@@ -2,7 +2,7 @@
  * Microphone → Parakeet batch transcription (chunked `transcribe`).
  *
  * Usage:
- *   bun run examples/asr/parakeet-microphone-record.ts
+ *   npx tsx examples/asr/parakeet-microphone-record.ts
  *
  * Captures 3 s s16le chunks from the microphone and sends each to `transcribe`
  * with the TDT model. Press Ctrl+C to stop.

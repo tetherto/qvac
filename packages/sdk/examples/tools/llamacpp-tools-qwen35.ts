@@ -9,7 +9,7 @@
  * toolDialect: "qwen35" explicitly if auto-detection does not pick it up.
  *
  * Usage:
- *   bun run bare:example dist/examples/tools/llamacpp-tools-qwen35.js <model-url>
+ *   node dist/examples/tools/llamacpp-tools-qwen35.js <model-url>
  */
 import {
   completion,

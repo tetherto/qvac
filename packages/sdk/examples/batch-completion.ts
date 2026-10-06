@@ -32,7 +32,7 @@
  *                       `tools` or `mcp`, which already constrain output).
  *
  * Run from packages/sdk:
- *   bun run examples/batch-completion.ts
+ *   npx tsx examples/batch-completion.ts
  */
 
 import { batchCompletion, loadModel, unloadModel, LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'

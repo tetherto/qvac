@@ -12,7 +12,7 @@ const modelSrc = process.argv[5] || SD_V2_1_1B_Q8_0
 if (!inputPath) {
   console.error('✖ input image path is required')
   console.error(
-    'Usage: bun run bare:example dist/examples/diffusion-img2img.js <inputImage> [prompt] [outputDir] [modelSrc]'
+    'Usage: node dist/examples/diffusion-img2img.js <inputImage> [prompt] [outputDir] [modelSrc]'
   )
   process.exit(1)
 }

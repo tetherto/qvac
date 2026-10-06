@@ -1,7 +1,7 @@
 /**
  * Real-time Voice Assistant: mic → Whisper (with Silero VAD) → Llama → Supertonic TTS.
  *
- * Usage: bun run examples/voice-assistant/voice-assistant.ts
+ * Usage: npx tsx examples/voice-assistant/voice-assistant.ts
  *
  * Speak a question; the VAD detects when you pause, the utterance is
  * transcribed, sent to the LLM, and the response is spoken back. The loop

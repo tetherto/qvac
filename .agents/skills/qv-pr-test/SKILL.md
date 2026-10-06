@@ -186,7 +186,7 @@ publish from unrelated merged PRs — testing the branch's SDK against the *publ
 
 Do not skip setup based on assumed previous state. The PR worktree is treated as clean/synchronized, and SDK e2e validation must prepare the test package explicitly.
 
-Do not separately run `bun install` or `bun run build` in `packages/sdk` before SDK e2e unless the chosen tier also includes non-e2e SDK example validation that specifically needs it.
+Do not separately run `npm install` or `npm run build` in `packages/sdk` before SDK e2e unless the chosen tier also includes non-e2e SDK example validation that specifically needs it.
 
 ## SDK e2e manual execution
 
@@ -243,18 +243,18 @@ Agent-owned SDK setup and changed-example command shape for POSIX shells:
 
 ```sh
 cd <WORKTREE_PATH>/packages/sdk
-bun install
-bun run build
-bun run examples/<changed-example>.ts
+npm install
+npm run build
+npx tsx examples/<changed-example>.ts
 ```
 
 Agent-owned SDK setup and changed-example command shape for PowerShell:
 
 ```powershell
 Set-Location "<WORKTREE_PATH>/packages/sdk"
-bun install
-bun run build
-bun run examples/<changed-example>.ts
+npm install
+npm run build
+npx tsx examples/<changed-example>.ts
 ```
 
 The user runs the `e2e` setup command and the `qvac-test run:local:*` commands. The agent may run changed examples separately only after the required SDK package-root install/build state exists or has been prepared without `e2e` npm auth.

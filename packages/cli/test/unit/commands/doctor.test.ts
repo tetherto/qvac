@@ -12,7 +12,6 @@ import {
   checkFreeDiskSpace,
   checkFfmpeg,
   checkBareRuntime,
-  checkBun,
   checkDesktopTargets,
   checkAndroidTarget,
   checkIosTarget,
@@ -301,12 +300,6 @@ describe('optional tool probes', () => {
 
   it('Bare runtime warns when missing (recommended only)', () => {
     const r = checkBareRuntime(makeCtx({ probe: probeMissing }))
-    assert.equal(r.status, 'warn')
-    assert.equal(r.severity, 'recommended')
-  })
-
-  it('Bun warns when missing (recommended only)', () => {
-    const r = checkBun(makeCtx({ probe: probeMissing }))
     assert.equal(r.status, 'warn')
     assert.equal(r.severity, 'recommended')
   })

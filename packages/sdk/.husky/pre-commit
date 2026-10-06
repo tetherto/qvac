@@ -1,19 +1,19 @@
 echo "🔍 Running pre-commit checks..."
 
 echo "🧹 Running linter..."
-if ! bun run lint; then
+if ! npm run lint; then
   echo "❌ Linting failed!"
   exit 1
 fi
 
 echo "📝 Checking code formatting..."
-if ! bun run format; then
+if ! npm run format; then
   echo "❌ Formatting check failed!"
   exit 1
 fi
 
 echo "🔎 Type-checking..."
-if ! bun run typecheck; then
+if ! npm run typecheck; then
   echo "❌ Type check failed!"
   exit 1
 fi

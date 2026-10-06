@@ -19,7 +19,7 @@ Each loop iteration:
 ## Run it
 
 ```bash
-bun run examples/voice-assistant/voice-assistant.ts
+npx tsx examples/voice-assistant/voice-assistant.ts
 ```
 
 Press `Ctrl+C` to quit. Models are downloaded on first run and cached
@@ -68,18 +68,18 @@ To use a different mic, set the `MIC_DEVICE` environment variable:
 
 ```bash
 # macOS — pick by index (list with `ffmpeg -f avfoundation -list_devices true -i ""`)
-MIC_DEVICE=":1" bun run examples/voice-assistant/voice-assistant.ts
+MIC_DEVICE=":1" npx tsx examples/voice-assistant/voice-assistant.ts
 
 # Linux — pick a PulseAudio source (list with `pactl list short sources`)
 MIC_DEVICE="alsa_input.usb-Blue_Microphones_Yeti-00" \
-  bun run examples/voice-assistant/voice-assistant.ts
+  npx tsx examples/voice-assistant/voice-assistant.ts
 
 # Windows (PowerShell) — pick by device name
 #   List devices first:
 #     ffmpeg -hide_banner -f dshow -list_devices true -i dummy
 #   Then run with the exact name from that list:
 $env:MIC_DEVICE = "Microphone (Realtek(R) Audio)"
-bun run examples/voice-assistant/voice-assistant.ts
+npx tsx examples/voice-assistant/voice-assistant.ts
 ```
 
 If Windows auto-detection can't find a device, the script prints the

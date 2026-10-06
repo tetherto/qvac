@@ -6,7 +6,7 @@
  * session, printing transcript text as the sliding window decodes
  * successive windows.
  *
- * Usage: bun run examples/bci/bci-filesystem-streaming.ts <neural-bin-file-path>
+ * Usage: npx tsx examples/bci/bci-filesystem-streaming.ts <neural-bin-file-path>
  */
 import { loadModel, unloadModel, bciTranscribeStream, BCI_WINDOWED } from '@qvac/sdk'
 import { readFileSync } from 'fs'
@@ -14,7 +14,7 @@ import { readFileSync } from 'fs'
 const args = process.argv.slice(2)
 
 if (!args[0]) {
-  console.error('Usage: bun run examples/bci/bci-filesystem-streaming.ts <neural-bin-file-path>')
+  console.error('Usage: npx tsx examples/bci/bci-filesystem-streaming.ts <neural-bin-file-path>')
   process.exit(1)
 }
 

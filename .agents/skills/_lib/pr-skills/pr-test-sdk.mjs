@@ -77,7 +77,7 @@ export function sdkExampleCommand(packagePath, filePath) {
   const localPath = filePath.slice(`${packagePath}/`.length);
   return {
     cwd: packagePath,
-    command: `bun run ${localPath}`,
+    command: `npx tsx ${localPath}`,
     reason: "Changed SDK example",
   };
 }

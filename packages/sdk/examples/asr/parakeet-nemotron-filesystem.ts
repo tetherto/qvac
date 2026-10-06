@@ -2,9 +2,9 @@
  * Parakeet Nemotron transcription from an audio file.
  *
  * Usage:
- *   bun run examples/asr/parakeet-nemotron-filesystem.ts \
+ *   npx tsx examples/asr/parakeet-nemotron-filesystem.ts \
  *     <audio-file> [locale] [nemotron-gguf] [--streaming]
- *   bun run examples/asr/parakeet-nemotron-filesystem.ts \
+ *   npx tsx examples/asr/parakeet-nemotron-filesystem.ts \
  *     <audio-file> [nemotron-gguf] [--streaming]
  *
  * Uses `PARAKEET_NEMOTRON_0_6B_Q4_0` when the model is omitted and `auto` when
@@ -32,7 +32,7 @@ const FFMPEG_PROTOCOLS = 'file,pipe'
 const STREAMING_FLAG = '--streaming'
 const EARLY_OUTPUT_END_MESSAGE = 'The transcription stream ended before the decoder input completed'
 const USAGE =
-  'Usage: bun run examples/asr/parakeet-nemotron-filesystem.ts ' +
+  'Usage: npx tsx examples/asr/parakeet-nemotron-filesystem.ts ' +
   '<audio-file> [locale] [nemotron-gguf] [--streaming]'
 
 type StreamingSession = TranscribeStreamConversationSession

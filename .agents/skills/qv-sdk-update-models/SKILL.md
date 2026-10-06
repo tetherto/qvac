@@ -27,7 +27,7 @@ skill is the deliberate regen + PR path.
 
 - Changing naming rules / companion detection / codegen logic (those are code
   changes; regen may be a follow-up, not the whole PR).
-- Only needing a dry-run drift check — run `bun run check-models` directly.
+- Only needing a dry-run drift check — run `npm run check-models` directly.
 - Releasing / changelog work — use `qv-sdk-changelog` after the `[mod]` PR merges.
 
 ## Flags
@@ -48,7 +48,7 @@ Combine as needed: `/qv-sdk-update-models --cascade`, `/qv-sdk-update-models --c
 
 - Working directory is the `qvac` monorepo root (or resolve paths from it).
 - Network access to the live registry (Hyperswarm / Hyperdrive).
-- `packages/sdk` dependencies installed (`bun install` in that package if needed).
+- `packages/sdk` dependencies installed (`npm install` in that package if needed).
 - Optional: `QVAC_REGISTRY_CORE_KEY` to target a non-default registry core.
 - For `--with-python` / `--cascade`: `packages/sdk-python/.venv` with gen extras
   (`python3 -m venv .venv && .venv/bin/pip install -e ".[gen,dev]"`).
@@ -74,7 +74,7 @@ Combine as needed: `/qv-sdk-update-models --cascade`, `/qv-sdk-update-models --c
 
 ### SDK (always)
 
-After a successful `bun run update-models` in `packages/sdk/`:
+After a successful `npm run update-models` in `packages/sdk/`:
 
 - `packages/sdk/models/registry/models.ts`
 - `packages/sdk/models/history/<short-sha>.txt` (only when add/update/remove)
@@ -116,8 +116,8 @@ From monorepo root:
 
 ```text
 Plan:
-  1. bun run check-models   (packages/sdk)
-  2. bun run update-models  (packages/sdk)   [needs confirm]
+  1. npm run check-models   (packages/sdk)
+  2. npm run update-models  (packages/sdk)   [needs confirm]
   3. [optional] provider / python cascade
   4. commit feat[mod] …
   5. open PR via qv-sdk-pr-create
@@ -132,7 +132,7 @@ Cascade: none | provider | python | both
 
 ```bash
 cd packages/sdk
-bun run check-models
+npm run check-models
 ```
 
 | Exit | Meaning | Action |
@@ -150,14 +150,14 @@ After user confirmation:
 
 ```bash
 cd packages/sdk
-bun run update-models
+npm run update-models
 ```
 
 Then:
 
 ```bash
 cd packages/sdk
-bun run contract:check
+npm run contract:check
 ```
 
 `contract:check` must pass (update-models already ran export; this verifies).
@@ -172,7 +172,7 @@ If `--cascade` or `--with-provider`:
 
 ```bash
 cd packages/ai-sdk-provider
-bun run update-models
+npm run update-models
 ```
 
 Note: provider filters engines without OpenAI-shaped endpoints (e.g. VAD). A
@@ -250,8 +250,8 @@ overrides already decided:
 - **What problem:** registry has newer models than the committed SDK catalog;
   consumers need updated compile-time constants
 - **How it solves:** regenerated `models.ts` (+ contract / cascade artifacts)
-  via `bun run update-models`
-- **Testing:** `bun run check-models` (exit 0 after regen); `bun run contract:check`;
+  via `npm run update-models`
+- **Testing:** `npm run check-models` (exit 0 after regen); `npm run contract:check`;
   note cascade checks if run
 
 Still ask before `git push` / `gh pr create` (pr-create’s confirmation step).
@@ -285,8 +285,8 @@ node scripts/sdk/validator.cjs --type=commit --msg="feat[mod]: sync model consta
 Before reporting done:
 
 - [ ] User confirmed regen (and commit / PR when applicable)
-- [ ] `bun run check-models` exits 0 after regen (re-run once to confirm)
-- [ ] `bun run contract:check` exits 0
+- [ ] `npm run check-models` exits 0 after regen (re-run once to confirm)
+- [ ] `npm run contract:check` exits 0
 - [ ] Dirty files ⊆ expected file set for the flags used
 - [ ] History/Models section is incremental — not a bogus full-catalog dump
 - [ ] Cascade checks passed when flags requested

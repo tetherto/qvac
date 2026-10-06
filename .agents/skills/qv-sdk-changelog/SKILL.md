@@ -224,22 +224,22 @@ committed-file format check would later reject. Every SDK pod package uses prett
 (`[inference] format`, `[sdk] format`, …) loads holepunch; `--no-config` or a
 different parser (quote style, trailing commas) is the usual red we hit.
 
-`bunx prettier` fails with `Cannot find package 'prettier-config-holepunch'`
+`npx prettier` fails with `Cannot find package 'prettier-config-holepunch'`
 when that package is not resolvable, then either skips or formats with a
-fallback CI rejects. **Never `--no-config`.** Do not `bun install` in a package
+fallback CI rejects. **Never `--no-config`.** Do not `npm install` in a package
 whose range names an unpublished lockstep dep (e.g. sdk waiting on inference) —
-run `bunx` from a sibling that already has `node_modules`.
+run `npx prettier` from a sibling that already has `node_modules`.
 
 ```bash
 DIR=$(node -e "console.log(require('./scripts/sdk/package-paths.cjs').getPackageDir('<name>'))")
-bunx prettier --check "$DIR/changelog/<version>/**/*.md" "$DIR/CHANGELOG.md"
+npx prettier --check "$DIR/changelog/<version>/**/*.md" "$DIR/CHANGELOG.md"
 ```
 
 Scope those globs to **this package**. Do not run `changelog/**/*.md` from the
 repo root or another package cwd — that walks every historical version folder.
 
-If it reports problems, fix them — `bunx prettier --write` on the same paths, or
-`bun run format:fix` — and re-run the check until it passes clean. Do this before
+If it reports problems, fix them — `npx prettier --write` on the same paths, or
+`npm run format:fix` — and re-run the check until it passes clean. Do this before
 moving on so the release commit carries only prettier-clean markdown.
 
 **Downstream rendering note:** the docs site reads `CHANGELOG_LLM.md`
@@ -487,7 +487,7 @@ push, and keep this list to things that are cheap to prevent:
 
 - **Prettier is holepunch, not stock.** `.prettierrc` is `"prettier-config-holepunch"`.
   Never `--no-config`. Resolve holepunch from a package that can install; do not
-  `bun install` against an unpublished lockstep dep. Quote style and trailing
+  `npm install` against an unpublished lockstep dep. Quote style and trailing
   commas on `CHANGELOG_LLM.md` are the usual fail.
 - **Lockstep: pass the floor.** Never run the generator unflagged for `sdk` /
   `inference`. Same `--base-commit` on both. When that floor is a patch, union
@@ -522,7 +522,7 @@ Before completing:
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-version audit (this package's name on the title/NPM line)
-- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `bun install` against unpublished lockstep deps)
+- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `npm install` against unpublished lockstep deps)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] Published-version audit done: `npm view "$PKG@<base-version>" gitHead` vs HEAD under `getPackageDir(<slug>)` (`$DIR`, not `package.json`) matches `api.md` / `breaking.md` / `models.md`
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`

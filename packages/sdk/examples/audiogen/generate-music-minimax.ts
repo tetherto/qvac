@@ -4,7 +4,7 @@ import { audioGen, loadModel, unloadModel, type ModelProgressUpdate } from '@qva
 // Usage:
 //   AUDIOGEN_MINIMAX_LM_MODEL=/models/mm3-lm-q8.gguf \
 //   AUDIOGEN_MINIMAX_SYNTH_MODEL=/models/mm3-synth-q8.gguf \
-//   bun run examples/audiogen/generate-music-minimax.ts "warm cinematic piano" output.wav
+//   npx tsx examples/audiogen/generate-music-minimax.ts "warm cinematic piano" output.wav
 const caption = process.argv[2] ?? 'Warm cinematic piano with gentle strings'
 const outputPath = process.argv[3] ?? 'minimax-music3-output.wav'
 

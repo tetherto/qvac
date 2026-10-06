@@ -15,7 +15,7 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     root: Annotated[
         Any,
         Field(
-            description="Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
+            description="Generated from the SDK Zod schemas by `npm run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
             title="@qvac/sdk wire contract",
         ),
     ]

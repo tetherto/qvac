@@ -654,7 +654,7 @@ export function buildContract() {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     title: '@qvac/sdk wire contract',
     description:
-      'Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. ' +
+      'Generated from the SDK Zod schemas by `npm run contract:export`. Do not edit by hand. ' +
       'Requests use the schema input shape, responses the output shape; runtime-only ' +
       'refinements and transforms stay server-side.',
     $defs: defs
