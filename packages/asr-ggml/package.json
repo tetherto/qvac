@@ -103,6 +103,7 @@
     "example:whisper:decoder": "bare examples/example.decoder.js",
     "example:parakeet": "bare examples/parakeet-transcribe.js",
     "example:moss-transcribe": "bare examples/moss-transcribe.js",
+    "example:moss-transcribe:fit": "bare examples/moss-transcribe-fit.js",
     "example:parakeet:unified": "bare examples/parakeet-unified-transcribe.js",
     "example:parakeet:nemotron": "bare examples/parakeet-nemotron-transcribe.js",
     "example:parakeet:indic-conformer": "bare examples/parakeet-indic-conformer-transcribe.js",
