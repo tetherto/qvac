@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { toolSchema, type Tool } from '@/schemas'
 import { convertToolInput } from '@/utils/tool-helpers'
 import { getMcpTools } from '@/utils/mcp-adapter'
+import { parameterAllowsNull, primaryParameterType } from '@/utils/tools/shared'
 import type { McpClient } from '@/schemas/mcp-adapter'
 
 test('toolSchema keeps nested parameter keywords', (t) => {
@@ -52,17 +53,18 @@ test('convertToolInput keeps nested Zod structure', (t) => {
   })
   const { properties, required } = tool.parameters
   t.alike(required, ['stops', 'unit'])
-  t.alike(properties['stops'], {
-    type: 'array',
-    items: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        at: { anyOf: [{ type: 'string' }, { type: 'null' }] }
-      },
-      required: ['name', 'at']
-    }
-  })
+  const stops = properties['stops'] as {
+    type: string
+    items: { type: string; properties: Record<string, unknown>; required: string[] }
+  }
+  t.is(stops.type, 'array')
+  t.is(stops.items.type, 'object')
+  t.alike(stops.items.properties['name'], { type: 'string' })
+  t.alike(stops.items.required, ['name', 'at'])
+  // Zod versions differ between `anyOf` and a type array for nullables.
+  const at = stops.items.properties['at']
+  t.is(primaryParameterType(at), 'string')
+  t.ok(parameterAllowsNull(at))
   t.alike(properties['days'], { type: 'integer' }, 'safe-integer bounds are dropped')
   t.alike(properties['unit'], { type: 'string', enum: ['km', 'mi'], description: 'Distance unit' })
   t.absent((tool.parameters as Record<string, unknown>)['$schema'])
