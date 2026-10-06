@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-06#2`. Parler-TTS reuses its
+  decode-step memory plan instead of rebuilding it before every step; output
+  is unchanged.
 - Raise the `speech-cpp` and `ggml-speech` floors to `2026-10-06`. Supertonic
   synthesis is unchanged on every backend this package builds.
 - Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
