@@ -1292,9 +1292,9 @@ namespace LlmLlamacpp {
     // the union collapsing to plain `string`.
     tool_choice?: "auto" | "none" | "required" | (string & {});
     /**
-     * Whether one response may carry more than one tool call. Defaults to
-     * `true`; `false` limits the template and the tool-call grammar to a
-     * single call. Ignored when the prompt carries no tools.
+     * Whether one response may carry more than one tool call. `true` lets the
+     * template and the tool-call grammar accept several; unset or `false`
+     * keeps one. Ignored when the prompt carries no tools.
      */
     parallel_tool_calls?: boolean;
     /**

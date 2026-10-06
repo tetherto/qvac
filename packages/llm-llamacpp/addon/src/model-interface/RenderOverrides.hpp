@@ -13,6 +13,6 @@
 struct RenderOverrides {
   // "auto" | "none" | "required" | <declared function name>.
   std::optional<std::string> toolChoice;
-  // Unset means parallel calls are allowed.
+  // Unset keeps fabric's default of one call per response.
   std::optional<bool> parallelToolCalls;
 };
