@@ -1488,12 +1488,15 @@ bool mentions(std::string text, const std::string& word) {
 }
 
 /// The last turn of a reused chat must still see the conversation: its
-/// reasoning refers to the follow-ups ("warmest", "coolest"), which only make
-/// sense with the earlier turns. Its text is not compared with a cold run:
-/// restoring a checkpoint splits the prefill into other batch shapes, and
-/// greedy output drifts after a few tokens on CUDA and Vulkan.
+/// reasoning refers to the first turn's subject ("rainbow") or to a follow-up
+/// ("warmest", "coolest"), which only make sense with the earlier turns. Its
+/// text is not compared with a cold run: restoring a checkpoint splits the
+/// prefill into other batch shapes, and greedy output drifts after a few tokens
+/// on CUDA and Vulkan.
 void expectAnswersFromTheWholeChat(const std::string& last) {
-  EXPECT_TRUE(mentions(last, "warm") || mentions(last, "cool"))
+  EXPECT_TRUE(
+      mentions(last, "rainbow") || mentions(last, "warm") ||
+      mentions(last, "cool"))
       << "the last turn lost the conversation: " << last;
 }
 
