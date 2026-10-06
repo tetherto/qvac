@@ -1,0 +1,49 @@
+name: Reusable Await PR-head TypeScript Checks
+
+on:
+  workflow_call:
+    inputs:
+      check_name:
+        description: The producer check-run name to wait for on the PR head SHA.
+        required: true
+        type: string
+  # Lets a maintainer run this gate against any commit without opening a PR, so
+  # a change to the poller can be verified in CI before it reaches the default
+  # branch. workflow_dispatch already requires write access and touches no PR
+  # code, so taking the scripts from the dispatched ref adds no new trust.
+  workflow_dispatch:
+    inputs:
+      check_name:
+        description: The producer check-run name to wait for.
+        required: true
+        type: string
+      pr_head_sha:
+        description: Commit SHA to read check runs from.
+        required: true
+        type: string
+
+permissions:
+  checks: read
+  contents: read
+
+jobs:
+  await-ts-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    steps:
+      # Trusted checkout of only the poller scripts; never PR code. For a PR this
+      # is the default branch; for a manual dispatch it is the dispatched ref.
+      - name: Checkout await-ts-checks scripts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/await-ts-checks
+          persist-credentials: false
+
+      - name: Wait for the PR-head TypeScript check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.pr_head_sha }}
+          CHECK_NAME: ${{ inputs.check_name }}
+        run: node .github/scripts/await-ts-checks/await.mjs

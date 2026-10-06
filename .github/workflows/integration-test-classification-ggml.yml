@@ -26,14 +26,27 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/classification-ggml@0.1.0). When set, prebuilds are downloaded from npm instead of from per-PR build artifacts."
         type: string
         required: false
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 env:
   PKG_DIR: packages/classification-ggml
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-integration-tests:
+    needs: runner_names
     timeout-minutes: 30
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
@@ -45,52 +58,94 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204 }}
             platform: linux
             arch: x64
           - os: ubuntu-24.04
+            runner: ${{ needs.runner_names.outputs.ubuntu_2404 }}
             platform: linux
             arch: x64
           - os: ubuntu-22.04-arm
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
             platform: linux
             arch: arm64
-          - os: macos-14
+          - os: mac-mini-m4
             platform: darwin
             arch: arm64
-          - os: windows-2022
-            platform: win32
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
+          # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
+          # the Vulkan loader installed (same env as llm-llamacpp and other fabric
+          # consumers being migrated).
+          - platform: win32
             arch: x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bare runtime
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: npm install --ignore-scripts
 
-      - name: Download prebuild artifacts
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.PKG_DIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      # Prebuilds live in the merged `prebuilds` bundle artifact, which is always present
+      # regardless of how they were produced: the prebuild `merge` job uploads it on a fresh
+      # build, and prebuild-artifact-reuse re-publishes it on a reuse-cache hit. The per-PR
+      # per-platform artifacts (classification-ggml-<platform>-<arch>) only exist on a fresh
+      # build, so downloading by that name matched nothing on a reuse hit and the copy below
+      # failed. The bundle is laid out as top-level <platform>-<arch>/ dirs; extract just this
+      # job's platform below.
+      - name: Download prebuilds bundle
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: classification-ggml-${{ matrix.platform }}-${{ matrix.arch }}*
+          name: prebuilds-classification-ggml
           path: ${{ runner.temp }}/prebuilds-staging
-          merge-multiple: true
 
       - name: Move prebuilds from staging to workspace (Unix)
         if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
         shell: bash
         run: |
+          SRC="${{ runner.temp }}/prebuilds-staging/${{ matrix.platform }}-${{ matrix.arch }}"
+          if [ ! -d "$SRC" ]; then
+            echo "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            ls -la "${{ runner.temp }}/prebuilds-staging" 2>/dev/null || true
+            exit 1
+          fi
           mkdir -p ${{ env.PKG_DIR }}/prebuilds
-          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ env.PKG_DIR }}/prebuilds/
+          cp -r "$SRC" ${{ env.PKG_DIR }}/prebuilds/
           echo "Prebuilds moved from staging area"
           ls -la ${{ env.PKG_DIR }}/prebuilds/
 
@@ -102,9 +157,15 @@ jobs:
         if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
         shell: powershell
         run: |
+          $src = "${{ runner.temp }}\prebuilds-staging\${{ matrix.platform }}-${{ matrix.arch }}"
+          if (-not (Test-Path $src)) {
+            Write-Output "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            if (Test-Path "${{ runner.temp }}\prebuilds-staging") { Get-ChildItem -Force "${{ runner.temp }}\prebuilds-staging" | Format-Table -AutoSize }
+            exit 1
+          }
           $dst = "${{ env.PKG_DIR }}/prebuilds"
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Copy-Item -Recurse -Force $src $dst
           Write-Host "Prebuilds moved from staging area"
           Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 
@@ -184,10 +245,11 @@ jobs:
         run: npm run test:integration
 
       - name: Upload performance report
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
         with:
           name: classification-perf-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ env.PKG_DIR }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 30
+

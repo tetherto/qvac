@@ -24,28 +24,6 @@ env:
   WORKDIR: packages/ai-sdk-provider
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   release-merge-guard:
     name: Release Merge Guard
     if: >-
@@ -74,49 +52,9 @@ jobs:
       publish_feature: ${{ steps.logic.outputs.publish_feature }}
       publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
-      npm_tag: ${{ steps.logic.outputs.npm_tag }}
     steps:
       - id: logic
-        shell: bash
-        env:
-          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
-        run: |
-          set -euo pipefail
-          ref_name="${GITHUB_REF_NAME}"
-          event_name="${GITHUB_EVENT_NAME}"
-
-          publish_main="false"
-          publish_release="false"
-          publish_feature="false"
-          publish_tmp="false"
-
-          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
-            if [ "$ref_name" = "main" ]; then
-              publish_main="true"
-            elif [[ "$ref_name" == release-* ]]; then
-              publish_release="true"
-            elif [[ "$ref_name" == feature-* ]]; then
-              publish_feature="true"
-            elif [[ "$ref_name" == tmp-* ]]; then
-              publish_tmp="true"
-            fi
-          fi
-
-          gpr_tag="dev"
-          if [ "$ref_name" = "main" ]; then
-            gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]]; then
-            gpr_tag="feature"
-          elif [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="temp"
-          fi
-
-          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
-          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
-          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
-          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
-          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
-          echo "npm_tag=${NPM_TAG_INPUT}" >> "$GITHUB_OUTPUT"
+        uses: tetherto/qvac-actions/npm-publish-logic@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
 
   build:
     name: Build package
@@ -133,9 +71,17 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: bun install
 
+      - name: Run format
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run format
+
       - name: Run lint
         working-directory: ${{ env.WORKDIR }}
         run: npm run lint
+
+      - name: Run typecheck
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run typecheck
 
       - name: Run tests
         working-directory: ${{ env.WORKDIR }}
@@ -156,9 +102,8 @@ jobs:
   publish-main-gpr-dev:
     needs:
       - publish-logic
-      - label-gate
       - build
-    if: needs.label-gate.outputs.authorised == 'true' && needs.publish-logic.outputs.publish_main == 'true'
+    if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -186,10 +131,9 @@ jobs:
     needs:
       - publish-logic
       - release-merge-guard
-      - label-gate
       - build
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -209,32 +153,36 @@ jobs:
           name: ai-sdk-provider-dist
           path: packages/ai-sdk-provider/dist
 
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        with:
+          workdir: packages/ai-sdk-provider
+          tag: ${{ inputs.npm_tag }}
+
       - name: Publish to NPM
         id: publish-npm
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
-          tag: ${{ needs.publish-logic.outputs.npm_tag }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: packages/ai-sdk-provider
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "ai-sdk-provider"
-      release_name: "QVAC AI SDK Provider"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/ai-sdk-provider"
 
   publish-feature-gpr:
     needs:
       - publish-logic
-      - label-gate
       - build
-    if: needs.label-gate.outputs.authorised == 'true' && needs.publish-logic.outputs.publish_feature == 'true'
+    if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -261,9 +209,8 @@ jobs:
   publish-tmp-gpr:
     needs:
       - publish-logic
-      - label-gate
       - build
-    if: needs.label-gate.outputs.authorised == 'true' && needs.publish-logic.outputs.publish_tmp == 'true'
+    if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:

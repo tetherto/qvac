@@ -1,0 +1,201 @@
+name: Sync Models to S3 (mobile)
+
+# Mirror model objects into the Device-Farm-local US bucket (us-west-2) so mobile
+# e2e tests stage from the same region as the devices instead of the cross-region
+# EU bucket. Copies only what's missing, server-side (bucket-to-bucket), so a run
+# is a cheap no-op once the bucket is populated.
+#
+# Scope: the qvac_models_compiled/ prefix, where the S3-native mobile addons
+# (tts, ocr, asr, vla, translation) resolve their GGUFs. HuggingFace-only addons
+# (llm, embed, diffusion) are seeded per-run by the seed-and-presign action.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_bucket:
+        description: "Source S3 bucket (existing, EU)"
+        type: string
+        required: false
+        default: "tether-ai-dev"
+      dest_bucket:
+        description: "Destination S3 bucket (Device-Farm-local, US)"
+        type: string
+        required: false
+        default: "tether-ai-dev-us"
+      prefix:
+        description: "Key prefix to mirror"
+        type: string
+        required: false
+        default: "qvac_models_compiled/"
+      dryrun:
+        description: "Opt-in preview: list what would copy, copy nothing"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    # Weekly top-up so newly published compiled models land in the US bucket
+    # without a manual trigger. Sunday 02:00 UTC.
+    - cron: "0 2 * * 0"
+
+concurrency:
+  group: sync-models-to-s3
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Mirror models EU -> US
+    # Self-hosted CPU runner: the first full seed can copy tens of GB and needs
+    # headroom beyond a GitHub-hosted runner's cap. Only shells out to the AWS CLI.
+    runs-on: qvac-ubuntu2204-x64
+    environment: release
+    # Generous ceiling for the initial bulk mirror; steady-state runs are a no-op.
+    timeout-minutes: 360
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      SOURCE_BUCKET: ${{ github.event.inputs.source_bucket || 'tether-ai-dev' }}
+      DEST_BUCKET: ${{ github.event.inputs.dest_bucket || 'tether-ai-dev-us' }}
+      PREFIX: ${{ github.event.inputs.prefix || 'qvac_models_compiled/' }}
+      # Scheduled runs always copy; manual runs copy too unless dryrun=true is
+      # explicitly requested (the add-only sync never deletes, so a live default
+      # is safe). Scheduled runs have no inputs, so they can never be a dry run.
+      DRYRUN: ${{ github.event_name != 'schedule' && github.event.inputs.dryrun == 'true' }}
+      SOURCE_REGION: eu-central-1
+      DEST_REGION: us-west-2
+    steps:
+      - name: Validate bucket and prefix inputs
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Constrain the free-form dispatch inputs before any AWS call: buckets
+          # are allowlisted and the prefix is restricted to a safe charset (no
+          # quotes, whitespace, $, backticks, or `..`).
+          ALLOWED_BUCKETS="tether-ai-dev tether-ai-dev-us"
+
+          for name in SOURCE_BUCKET DEST_BUCKET; do
+            value="${!name}"
+            ok=false
+            for allowed in ${ALLOWED_BUCKETS}; do
+              if [ "${value}" = "${allowed}" ]; then
+                ok=true
+                break
+              fi
+            done
+            if [ "${ok}" != "true" ]; then
+              echo "::error::${name}='${value}' is not in the allowlist (${ALLOWED_BUCKETS})."
+              exit 1
+            fi
+          done
+
+          if ! [[ "${PREFIX}" =~ ^[A-Za-z0-9/._-]+$ ]]; then
+            echo "::error::PREFIX='${PREFIX}' contains disallowed characters (allowed: A-Z a-z 0-9 / . _ -)."
+            exit 1
+          fi
+          if [[ "${PREFIX}" == *".."* ]]; then
+            echo "::error::PREFIX='${PREFIX}' must not contain '..'."
+            exit 1
+          fi
+
+          echo "Inputs validated: ${SOURCE_BUCKET} -> ${DEST_BUCKET}, prefix '${PREFIX}'."
+
+      - name: Mirror prefix (server-side, missing-only, auto-refreshing creds)
+        shell: bash
+        env:
+          OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+        run: |
+          set -uo pipefail
+          echo "Source:      s3://${SOURCE_BUCKET}/${PREFIX} (${SOURCE_REGION})"
+          echo "Destination: s3://${DEST_BUCKET}/${PREFIX} (${DEST_REGION})"
+          echo "Dry run:     ${DRYRUN}"
+
+          # Auto-refreshing creds: a credential_process helper the AWS CLI
+          # re-invokes near expiry, so a multi-hour seed survives the 2h STS cap.
+          # It mints a fresh OIDC JWT and exchanges it via
+          # assume-role-with-web-identity (no pre-existing creds needed).
+          CRED_HELPER="${RUNNER_TEMP}/oidc-cred-process.sh"
+          cat > "${CRED_HELPER}" <<'HELPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          JWT=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
+          # UNSET (not blank) so the CLI does not recurse into this helper's profile
+          # (an empty value is read as a profile literally named "").
+          unset AWS_PROFILE AWS_DEFAULT_PROFILE
+          export AWS_CONFIG_FILE=/dev/null
+          export AWS_SHARED_CREDENTIALS_FILE=/dev/null
+          CREDS=$(aws sts assume-role-with-web-identity \
+            --role-arn "${OIDC_ROLE_ARN}" \
+            --role-session-name sync-models-to-s3 \
+            --web-identity-token "${JWT}" \
+            --duration-seconds 7200 \
+            --region "${STS_REGION}" \
+            --output json)
+          echo "${CREDS}" | jq '{Version:1, AccessKeyId:.Credentials.AccessKeyId, SecretAccessKey:.Credentials.SecretAccessKey, SessionToken:.Credentials.SessionToken, Expiration:.Credentials.Expiration}'
+          HELPER
+          chmod +x "${CRED_HELPER}"
+
+          # Exported so botocore's credential_process subprocess inherits them.
+          export OIDC_ROLE_ARN
+          export STS_REGION="${DEST_REGION}"
+
+          export AWS_CONFIG_FILE="${RUNNER_TEMP}/aws-config"
+          cat > "${AWS_CONFIG_FILE}" <<CONFIG
+          [profile sync]
+          credential_process = ${CRED_HELPER}
+          CONFIG
+          export AWS_PROFILE=sync
+          # Ensure no stale static creds shadow the auto-refreshing profile.
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          # --------------------------------------------------------------------
+
+          # --size-only: dated content-addressed keys mean matching size == same
+          # bytes, so an already-populated bucket is a fast no-op.
+          # --copy-props metadata-directive: skip tag propagation (the OIDC role
+          # lacks s3:GetObjectTagging, which the default sync would require).
+          run_sync() {
+            aws s3 sync \
+              "s3://${SOURCE_BUCKET}/${PREFIX}" \
+              "s3://${DEST_BUCKET}/${PREFIX}" \
+              --source-region "${SOURCE_REGION}" \
+              --region "${DEST_REGION}" \
+              --copy-props metadata-directive \
+              --size-only \
+              --no-progress \
+              "$@"
+          }
+
+          if [ "${DRYRUN}" = "true" ]; then
+            if run_sync --dryrun; then
+              echo "Done. (dry run: true)"
+              exit 0
+            fi
+            echo "Dry run failed (permission, missing bucket, or network error)."
+            exit 1
+          fi
+
+          # `aws s3 sync` exits 0 only after every missing object is copied, so one
+          # successful pass means the mirror is complete. Retries only cover
+          # transient errors; each pass is missing-only, so they are cheap.
+          MAX_ATTEMPTS=8
+          completed=false
+          for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
+            echo "=== sync attempt ${attempt}/${MAX_ATTEMPTS} ==="
+
+            if run_sync; then
+              echo "Sync completed successfully; mirror is up to date."
+              completed=true
+              break
+            fi
+
+            echo "Attempt ${attempt} failed (transient error); backing off before retry."
+            sleep 30
+          done
+
+          if [ "${completed}" != "true" ]; then
+            echo "Mirror did not complete after ${MAX_ATTEMPTS} attempts."
+            echo "Re-dispatch to resume (missing-only)."
+            exit 1
+          fi
+
+          echo "Done. (dry run: false)"

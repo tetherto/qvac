@@ -1,0 +1,311 @@
+name: Merge Guard
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - ready_for_review
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+
+concurrency:
+  # Cancel a superseded in-flight run when a newer event (e.g. a prebuild
+  # label) arrives for the same PR. This gate only READS prebuild statuses (it
+  # no longer builds anything), so cancelling an older run is free and closes a
+  # race: a run started before the label uses a static freshness threshold and
+  # could otherwise trust a pre-label "skipped = success" while the newer
+  # labeled build is still running. Killing the older run leaves only the newer
+  # run, which waits for the real build.
+  group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+  authorize:
+    needs: [fork-approval]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout authorize-pr (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  changes:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.pkglist.outputs.packages }}
+      packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
+      sanity-packages: ${{ steps.pkglist.outputs.sanity-packages }}
+      any: ${{ steps.filter.outputs.pkg-any }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        id: filter
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            pkg-any:
+              - "packages/**"
+            # Shared CI definitions: they affect every addon but name none, so
+            # nx-affected selects nothing and on-pr-nx posts no
+            # qvac/prebuild-<pkg> status for them. They therefore drive
+            # sanity-checks only. Requiring a prebuild status here would poll to
+            # the 180 minute deadline for a status nothing is going to post.
+            shared-ci:
+              - ".github/workflows/*-nx.yml"
+              - ".github/workflows/prebuilds-*.yml"
+              - ".github/workflows/cpp-tests-*.yml"
+              - ".github/workflows/integration-test-*.yml"
+            # No prebuilds-<pkg>.yml line for on-pr-nx packages: on-pr-nx only
+            # triggers on packages/**, so a PR touching just that file would
+            # wait to the deadline for a status nothing posts. shared-ci covers it.
+            asr-ggml:
+              - "packages/asr-ggml/**"
+            audiogen-ggml:
+              - "packages/audiogen-ggml/**"
+            bci-whispercpp:
+              - "packages/bci-whispercpp/**"
+            classification-ggml:
+              - "packages/classification-ggml/**"
+              - ".github/workflows/prebuilds-classification-ggml.yml"
+            decoder-audio:
+              - "packages/decoder-audio/**"
+            diffusion-cpp:
+              - "packages/diffusion-cpp/**"
+            embed-llamacpp:
+              - "packages/embed-llamacpp/**"
+            # Pure-JS/TS package (no prebuilds). Listed so its lint, typecheck,
+            # declaration and generated-artifact checks run under sanity-checks
+            # and reach the required qvac-merge-guard status.
+            infer-base:
+              - "packages/infer-base/**"
+            ggml-rpc-server:
+              - "packages/ggml-rpc-server/**"
+              - "packages/fabric/**"
+              - "cmake/qvac-addon/**"
+            llm-llamacpp:
+              - "packages/llm-llamacpp/**"
+            model-fit:
+              - "packages/model-fit/**"
+            ocr-ggml:
+              - "packages/ocr-ggml/**"
+            translation-nmtcpp:
+              - "packages/translation-nmtcpp/**"
+            tts-ggml:
+              - "packages/tts-ggml/**"
+            fabric:
+              - "packages/fabric/**"
+              - ".github/workflows/prebuilds-fabric.yml"
+            vla:
+              - "packages/vla-ggml/**"
+              - ".github/workflows/prebuilds-vla.yml"
+
+      # Package dir names mostly match the filter/job key (packages/<key>),
+      # except vla (packages/vla-ggml) - mapped explicitly here so
+      # sanity-checks' workdir is always correct. Two outputs: a flat name
+      # list (intersected with PREBUILD_KEYS in verify-prebuilds) and a
+      # name+path list (for the sanity-checks matrix's workdir).
+      - name: Build package lists
+        id: pkglist
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+          # Every package filter key above. Kept in step with that list.
+          # One line: a folded scalar with a deeper indent keeps its newlines,
+          # and $GITHUB_OUTPUT rejects a multiline value.
+          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]'
+        run: |
+          CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
+
+          # `packages` gates verify-prebuilds, so it must only ever name packages
+          # a producer will actually post a status for.
+          echo "packages=${CHANGED}" >> "$GITHUB_OUTPUT"
+
+          # sanity-checks needs no posted status, so a shared-CI edit that names
+          # no package still gets checked here rather than passing the guard with
+          # nothing verified.
+          SANITY="$CHANGED"
+          if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
+            # Compacted again so a wrapped value cannot split the output line.
+            SANITY=$(jq -c . <<< "$ALL_PACKAGES")
+            echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
+          fi
+          echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
+          echo "packages-with-path=$(echo "$SANITY" | jq -c '
+            map({package: ., path: (if . == "vla" then "packages/vla-ggml" else "packages/" + . end)})
+          ')" >> "$GITHUB_OUTPUT"
+
+  sanity-checks:
+    # Runs per-package (matches how ./.github/actions/sanity-checks is
+    # already invoked from every on-pr-<pkg>.yml - workdir is a package
+    # path, there is no root package.json in this monorepo).
+    # Gate on the concrete package list: a non-addon packages/** change leaves
+    # packages=[], which would make this matrix zero-run and result='' downstream.
+    if: needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.sanity-packages != '[]' && needs.changes.outputs.sanity-packages != ''
+    needs: [authorize, changes, fork-approval]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.packages-with-path || '[]') }}
+    runs-on: ubuntu-latest
+    name: sanity-checks (${{ matrix.package }})
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run Sanity checks
+        uses: ./.github/actions/sanity-checks
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: ${{ matrix.path }}
+
+  # Verifies prebuilds without triggering them. Each prebuild-bearing
+  # on-pr-<pkg>.yml posts a qvac/prebuild-<pkg> commit status on the PR head SHA
+  # and stamps its own run URL into the status target_url. A status is trusted
+  # only when the run that produced it is the on-pr-<pkg> workflow AND was
+  # triggered at/after this PR event (run.created_at >= pull_request.updated_at).
+  # That binds the status to a run from the current-or-newer event, so a
+  # superseded pre-label run's "skipped = success" cannot pass the gate just
+  # because its timestamp happens to post-date the label. The producing run is
+  # read by the id embedded in the status, so this never depends on the Actions
+  # API having listed the newest run for the SHA (no listing-lag window).
+  verify-prebuilds:
+    needs: [authorize, changes, fork-approval]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    # Headroom over verify.mjs's 180-minute poll, so a timeout is reported by
+    # the script with the pending contexts rather than as a bare cancellation.
+    timeout-minutes: 190
+    permissions:
+      contents: read
+      statuses: read
+      actions: read
+    steps:
+      # Trusted base-branch checkout of only the prebuild-status scripts (never
+      # PR head code), so verification logic is a single, unit-tested source.
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify addon prebuild statuses on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
+          # Freshness threshold: the moment this PR event fired. The run that
+          # produced a trusted prebuild status must have been triggered at/after
+          # this (run.created_at >= PR_UPDATED_AT), which rejects statuses from
+          # runs of an earlier event (e.g. the pre-label opened/synchronize run).
+          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+        run: node .github/scripts/prebuild-status/verify.mjs
+
+  # Verifies C++/fuzz suites without triggering them. Each C++-test-bearing
+  # on-pr flow posts a qvac/cpp-tests-<pkg> commit status on the PR head SHA
+  # (success when the suite passed or was a legitimate no-label skip). The same
+  # freshness/run-binding rules as verify-prebuilds apply.
+  verify-cpp-tests:
+    needs: [authorize, changes, fork-approval]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 190
+    permissions:
+      contents: read
+      statuses: read
+      actions: read
+    steps:
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify addon C++ test statuses on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
+          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+          KIND: cpp-tests
+        run: node .github/scripts/prebuild-status/verify.mjs
+
+  # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
+  # pre-filter: the called workflow self-detects SDK pod changes and is a fast
+  # no-op when none changed, so this stays graceful for addon-only / non-SDK PRs.
+  sdk-pod-checks:
+    needs: [authorize, fork-approval]
+    if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+
+  qvac-merge-guard:
+    needs:
+      [
+        fork-approval,
+        authorize,
+        changes,
+        sanity-checks,
+        verify-prebuilds,
+        verify-cpp-tests,
+        sdk-pod-checks,
+      ]
+    if: |
+      always() && !cancelled() &&
+      (needs.changes.result == 'success' || needs.changes.result == 'skipped')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      # A skipped gated job maps to success ONLY when the PR was actually
+      # authorized. Without this, an unapproved fork (fork-approval failed,
+      # authorize skipped, or authorize returned allowed=false) would skip
+      # sanity-checks / verify-prebuilds / verify-cpp-tests / sdk-pod-checks and their
+      # skipped=success would green the required check. Require the full
+      # authorization chain up front so those skips fail closed instead.
+      sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
+      build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
+      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
+      cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}

@@ -10,25 +10,23 @@ on:
         type: choice
         required: true
         options:
-          - ocr-onnx
           - nmtcpp
           - llamacpp-llm
           - vlm
-          - onnx-tts
           - parakeet
+          - diffusion-cpp
+          - audiogen-ggml
       workflow_name:
         description: "Integration test workflow name to query"
         type: choice
         required: true
         options:
-          - "Integration Tests (OCR)"
-          - "Mobile Integration Tests (OCR)"
-          - "Integration Tests (NMTCPP)"
+          - "On PR Trigger (nx)"
           - "Integration Tests (LLM)"
           - "Mobile Integration Tests (LLM)"
-          - "Integration Tests (TTS)"
-          - "Mobile Integration Tests (TTS)"
           - "Mobile Integration Tests (Parakeet)"
+          - "Mobile Integration Tests (Diffusion CPP)"
+          - "Benchmark Performance (AudioGen GGML)"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
@@ -73,14 +71,25 @@ jobs:
             ARTIFACT_ADDON="llamacpp-llm"
             FILTER_ARGS=(--filter "gemma4-vl|qwen3.5-vl")
           fi
-          node scripts/perf-report/aggregate.js \
-            --addon "$ARTIFACT_ADDON" \
-            --workflow "$PERF_WORKFLOW" \
-            --runs "$PERF_RUNS" \
-            "${FILTER_ARGS[@]}" \
-            --output "reports/${PERF_ADDON}-performance.md" \
-            --output-json "reports/${PERF_ADDON}-performance.json" \
-            --output-html "reports/${PERF_ADDON}-performance.html"
+          # ACE-Step rows arrive in two differently shaped artifacts (desktop
+          # rtf-benchmark-*.json and the canonical mobile report), which the
+          # shared aggregator does not read, so it has its own script.
+          if [ "$PERF_ADDON" = "audiogen-ggml" ]; then
+            node scripts/perf-report/aggregate-audiogen-ggml-rtf.js \
+              --workflow "$PERF_WORKFLOW" \
+              --runs "$PERF_RUNS" \
+              --output "reports/${PERF_ADDON}-performance.md" \
+              --output-json "reports/${PERF_ADDON}-performance.json"
+          else
+            node scripts/perf-report/aggregate.js \
+              --addon "$ARTIFACT_ADDON" \
+              --workflow "$PERF_WORKFLOW" \
+              --runs "$PERF_RUNS" \
+              "${FILTER_ARGS[@]}" \
+              --output "reports/${PERF_ADDON}-performance.md" \
+              --output-json "reports/${PERF_ADDON}-performance.json" \
+              --output-html "reports/${PERF_ADDON}-performance.html"
+          fi
 
       - name: Generate performance reports (scheduled - all addons)
         if: ${{ github.event_name == 'schedule' }}
@@ -89,28 +98,14 @@ jobs:
         run: |
           mkdir -p reports
 
-          echo "=== OCR (Desktop) ==="
-          node scripts/perf-report/aggregate.js \
-            --addon ocr-onnx \
-            --workflow "Integration Tests (OCR)" \
-            --runs 6 \
-            --output reports/ocr-onnx-performance.md \
-            --output-json reports/ocr-onnx-performance.json \
-            --output-html reports/ocr-onnx-performance.html || true
-
-          echo "=== OCR (Mobile) ==="
-          node scripts/perf-report/aggregate.js \
-            --addon ocr-onnx \
-            --workflow "Mobile Integration Tests (OCR)" \
-            --runs 6 \
-            --output reports/ocr-onnx-mobile-performance.md \
-            --output-json reports/ocr-onnx-mobile-performance.json \
-            --output-html reports/ocr-onnx-mobile-performance.html || true
-
+          # "On PR Trigger (nx)", not "Integration Tests (nx)": the latter runs
+          # via workflow_call, and a called run is listed under its caller, so
+          # querying it by name finds nothing. --addon still selects the right
+          # artifact, and runs without one simply contribute nothing.
           echo "=== Translation ==="
           node scripts/perf-report/aggregate.js \
             --addon nmtcpp \
-            --workflow "Integration Tests (NMTCPP)" \
+            --workflow "On PR Trigger (nx)" \
             --runs 6 \
             --output reports/nmtcpp-performance.md \
             --output-json reports/nmtcpp-performance.json \
@@ -158,24 +153,6 @@ jobs:
             --output-json reports/vlm-mobile-performance.json \
             --output-html reports/vlm-mobile-performance.html || true
 
-          echo "=== TTS ==="
-          node scripts/perf-report/aggregate.js \
-            --addon onnx-tts \
-            --workflow "Integration Tests (TTS)" \
-            --runs 6 \
-            --output reports/onnx-tts-performance.md \
-            --output-json reports/onnx-tts-performance.json \
-            --output-html reports/onnx-tts-performance.html || true
-
-          echo "=== TTS (Mobile) ==="
-          node scripts/perf-report/aggregate.js \
-            --addon onnx-tts \
-            --workflow "Mobile Integration Tests (TTS)" \
-            --runs 6 \
-            --output reports/onnx-tts-mobile-performance.md \
-            --output-json reports/onnx-tts-mobile-performance.json \
-            --output-html reports/onnx-tts-mobile-performance.html || true
-
           echo "=== Parakeet (Mobile) ==="
           node scripts/perf-report/aggregate.js \
             --addon parakeet \
@@ -184,6 +161,34 @@ jobs:
             --output reports/parakeet-mobile-performance.md \
             --output-json reports/parakeet-mobile-performance.json \
             --output-html reports/parakeet-mobile-performance.html || true
+
+          echo "=== Diffusion (Desktop) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon diffusion-cpp \
+            --workflow "On PR Trigger (nx)" \
+            --runs 6 \
+            --output reports/diffusion-cpp-performance.md \
+            --output-json reports/diffusion-cpp-performance.json \
+            --output-html reports/diffusion-cpp-performance.html || true
+
+          echo "=== Diffusion (Mobile) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon diffusion-cpp \
+            --workflow "Mobile Integration Tests (Diffusion CPP)" \
+            --runs 6 \
+            --output reports/diffusion-cpp-mobile-performance.md \
+            --output-json reports/diffusion-cpp-mobile-performance.json \
+            --output-html reports/diffusion-cpp-mobile-performance.html || true
+
+          # ACE-Step (audiogen-ggml) reports desktop and mobile in one table, so
+          # a single aggregation covers both lanes. It is only as fresh as the
+          # last sweep — the benchmark workflow is dispatch-only.
+          echo "=== ACE-Step (Desktop + Mobile) ==="
+          node scripts/perf-report/aggregate-audiogen-ggml-rtf.js \
+            --workflow "Benchmark Performance (AudioGen GGML)" \
+            --runs 6 \
+            --output reports/audiogen-ggml-performance.md \
+            --output-json reports/audiogen-ggml-performance.json || true
 
       # ─── Phase B: COMET quality scoring for NMT (weekly aggregate only) ───
       # Runs only on the Monday scheduled trigger, or on workflow_dispatch
@@ -264,13 +269,13 @@ jobs:
           mkdir -p reports
           # workflow_dispatch passes `runs` as input; schedule defaults to 6.
           RUNS="${PERF_RUNS:-6}"
-          # Query the umbrella "On PR Trigger (NMTCPP)" workflow — that's
+          # Query the umbrella "On PR Trigger (nx)" workflow — that's
           # where perf-report-* artifacts are attached. The inner
-          # "Integration Tests (NMTCPP)" workflow is invoked via
+          # "Integration Tests (nx)" workflow is invoked via
           # workflow_call and its artifacts surface on the umbrella run.
           node scripts/perf-report/comet-score-nmt.js \
             --runs "$RUNS" \
-            --workflow "On PR Trigger (NMTCPP)" \
+            --workflow "On PR Trigger (nx)" \
             --output reports/nmtcpp-comet.md \
             --model Unbabel/wmt22-comet-da || true
 

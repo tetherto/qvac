@@ -1,65 +1,150 @@
 # QVAC SDK Tests
-# Runs desktop and/or mobile (Android/iOS) e2e tests for the SDK package
+# Runs desktop, Electron, Snap, and/or mobile e2e tests for the SDK package
 #
 # Triggered via:
 #   - workflow_dispatch: manual runs with full customizability
 #   - workflow_call: called by on-pr-test-sdk.yml for label/release-branch triggers
 
 name: QVAC Tests (sdk)
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+    && format('SDK e2e · Suite: {0} · Filter: {1}',
+      inputs.suite || 'full',
+      inputs.filter || 'all tests')
+    || github.event.pull_request.title }}
 
 on:
   workflow_dispatch:
     inputs:
-      targets:
-        description: "Which platforms to test"
-        type: choice
-        options:
-          - all
-          - desktop
-          - mobile
-          - android
-          - ios
-        default: all
+      desktop:
+        description: "Desktop tests"
+        type: boolean
+        default: true
+      python:
+        description: "Python tests"
+        type: boolean
+        default: false
+      electron:
+        description: "Electron tests"
+        type: boolean
+        default: false
+      snap:
+        description: "Snap tests (strict confinement)"
+        type: boolean
+        default: false
+      android:
+        description: "Android tests (Device Farm)"
+        type: boolean
+        default: true
+      ios:
+        description: "iOS tests (Device Farm)"
+        type: boolean
+        default: true
+      # workflow_dispatch allows at most 25 inputs and adding the Python leg put
+      # this workflow on that ceiling, so three dispatch-only inputs went:
+      # the `custom` suite choice with `suite-custom`, and `device-farm-timeout`.
+      # A dispatched run therefore takes the 120 minute Device Farm default; the
+      # input still exists on workflow_call, so the callers that set it are
+      # unaffected.
       suite:
-        description: "Suite selection (full = all tests, smoke = smoke suite, custom = use suite-custom value)"
+        description: "Test suite (full = all tests)"
         type: choice
         options:
           - full
           - smoke
-          - custom
         default: full
-      suite-custom:
-        description: "Custom suite value (only used when suite=custom). Comma-separated suite names."
-        type: string
       exclude-suite:
-        description: "Exclude suites (comma-separated, e.g. 'slow,flaky'). Tests tagged with these suites are skipped."
+        description: "Suites to exclude (comma-separated, e.g. slow,flaky)"
         type: string
       filter:
-        description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
+        description: "Test filters (blank = all; comma-separated categories or prefixes)"
         type: string
-      desktop-consumer-timeout:
-        description: "Desktop consumer timeout (seconds)"
-        type: number
-        default: 60
-      mobile-consumer-timeout:
-        description: "Mobile consumer timeout (seconds)"
-        type: number
-        default: 1200
-      device-farm-timeout:
-        description: "Device Farm session timeout (minutes)"
-        type: number
-        default: 90
-      desktop-platforms:
-        description: "JSON array of runner labels for desktop tests"
+      # Unions with Suite/Filter instead of narrowing them: "the smoke suite
+      # plus exactly these tests". Took the slot of the mobile connection
+      # timeout, which nobody was overriding — workflow_dispatch allows at most
+      # 25 inputs and this workflow is at the ceiling.
+      include:
+        description: "Extra testIds to run on top of Suite/Filter (exact ids, comma-separated)"
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
       test-version:
-        description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
+        description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
+        type: string
+      inference-source:
+        description: "Inference source (branch builds packages/inference; npm resolves a version; manifest keeps SDK package.json)"
+        type: choice
+        options:
+          - branch
+          - manifest
+          - npm
+        default: branch
+      inference-version:
+        description: "npm inference version or dist-tag (blank defaults to latest)"
+        type: string
+      test-suite-source:
+        description: "Test-suite source (branch builds packages/test-suite; npm resolves a version; manifest keeps the e2e package.json)"
+        type: choice
+        options:
+          - manifest
+          - branch
+          - npm
+        default: manifest
+      test-suite-version:
+        description: "npm test-suite version or dist-tag (blank defaults to latest)"
         type: string
       cache-models:
-        description: "Cache downloaded models between runs"
+        description: "Reuse downloaded models for Desktop, Electron, and Snap"
         type: boolean
         default: true
+      desktop-consumer-timeout:
+        description: "Desktop/Electron/Snap connection timeout (seconds)"
+        type: number
+        default: 60
+      device-farm-start-timeout:
+        description: "Wait for Device Farm run to start (minutes)"
+        type: number
+        default: 15
+      android-device-pool:
+        description: "Android device pool (blank = random configured pool)"
+        type: string
+        default: ""
+      ios-device-pool:
+        description: "iOS device pool (blank = random configured pool)"
+        type: string
+        default: ""
+      desktop-platforms:
+        description: "Advanced: Desktop runners (JSON array)"
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+      electron-platforms:
+        description: "Advanced: Electron runners (JSON array)"
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
+      snap-platforms:
+        description: "Advanced: Snap runners (JSON array)"
+        type: string
+        default: '["qvac-ubuntu2204-x64-gpu"]'
+      python-platforms:
+        description: "Advanced: Python runners (JSON array)"
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+      # One input, not a boolean plus a runner list: workflow_dispatch allows at
+      # most 25 inputs and this workflow is at the ceiling. Picking a single
+      # runner is what a re-run after a busy-host warning needs anyway.
+      calibration:
+        description: "Run the assessModelFit calibration harness (~30 min per platform warm; first run also downloads ~7.5 GiB of models)"
+        type: choice
+        options:
+          - "off"
+          - all
+          - qvac-macos26-arm64-gpu-calibration
+          - qvac-ubuntu2204-x64-gpu-calibration
+          - qvac-win25-x64-gpu-calibration
+          # darwin-x64 and linux-arm64 have no self-hosted host and need none:
+          # a hosted runner is a fresh VM per job. Both labels already run
+          # llm-llamacpp's own integration tests.
+          - macos-15-large
+          - ubuntu-22.04-arm
+        default: "off"
 
   workflow_call:
     inputs:
@@ -76,6 +161,12 @@ on:
       filter:
         description: "Test filter (comma-separated categories/prefixes)"
         type: string
+      include:
+        description: >-
+          Exact testIds to run in addition to the suite/filter selection
+          (comma-separated). Used to extend a smoke run with the tests a PR touched.
+        type: string
+        default: ""
       desktop-consumer-timeout:
         type: number
         default: 60
@@ -84,12 +175,47 @@ on:
         default: 1200
       device-farm-timeout:
         type: number
-        default: 90
+        default: 120
+      device-farm-start-timeout:
+        type: number
+        default: 15
+      android-device-pool:
+        type: string
+        default: ""
+      ios-device-pool:
+        type: string
+        default: ""
       desktop-platforms:
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+      electron-platforms:
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
+      rerun-plan:
+        description: >-
+          JSON {family: {platform: [testId]}} of previously failed tests. When set,
+          the run is narrowed to exactly these platforms and each platform receives
+          its own test filter. Empty = normal run.
+        type: string
+        default: ""
       test-version:
         type: string
+      inference-source:
+        description: "Inference source: branch, npm, or manifest"
+        type: string
+        default: "branch"
+      inference-version:
+        description: "Inference version or dist-tag for npm"
+        type: string
+        default: ""
+      test-suite-source:
+        description: "Test-suite source: branch, npm, or manifest"
+        type: string
+        default: "manifest"
+      test-suite-version:
+        description: "Test-suite version or dist-tag for npm"
+        type: string
+        default: ""
       cache-models:
         type: boolean
         default: true
@@ -105,78 +231,745 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       suite: ${{ steps.resolve.outputs.suite }}
+      run-desktop: ${{ steps.resolve.outputs.run-desktop }}
+      run-electron: ${{ steps.resolve.outputs.run-electron }}
+      run-snap: ${{ steps.resolve.outputs.run-snap }}
+      run-python: ${{ steps.resolve.outputs.run-python }}
+      run-android: ${{ steps.resolve.outputs.run-android }}
+      run-ios: ${{ steps.resolve.outputs.run-ios }}
+      run-e2e: ${{ steps.resolve.outputs.run-e2e }}
+      desktop-platforms: ${{ steps.plan.outputs.desktop-platforms }}
+      electron-platforms: ${{ steps.plan.outputs.electron-platforms }}
+      snap-platforms: ${{ steps.plan.outputs.snap-platforms }}
+      python-platforms: ${{ steps.plan.outputs.python-platforms }}
+      filter-android: ${{ steps.plan.outputs.filter-android }}
+      filter-ios: ${{ steps.plan.outputs.filter-ios }}
     steps:
-      - name: Resolve suite
+      - name: Resolve configuration
         id: resolve
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGETS: ${{ inputs.targets }}
+          RUN_DESKTOP: ${{ inputs.desktop }}
+          RUN_PYTHON: ${{ inputs.python }}
+          RUN_ELECTRON: ${{ inputs.electron }}
+          RUN_SNAP: ${{ inputs.snap }}
+          RUN_ANDROID: ${{ inputs.android }}
+          RUN_IOS: ${{ inputs.ios }}
+          RUN_CALIBRATION: ${{ inputs.calibration }}
+          SUITE: ${{ inputs.suite }}
         run: |
-          SUITE="${{ inputs.suite }}"
-          if [ "$SUITE" = "full" ] || [ -z "$SUITE" ]; then
-            echo "suite=" >> "$GITHUB_OUTPUT"
-          elif [ "$SUITE" = "custom" ]; then
-            echo "suite=${{ inputs.suite-custom }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+
+          if [ "$SUITE" = "full" ]; then
+            RESOLVED_SUITE=
+          elif [ -z "$SUITE" ]; then
+            RESOLVED_SUITE=
           else
-            echo "suite=$SUITE" >> "$GITHUB_OUTPUT"
+            RESOLVED_SUITE="$SUITE"
           fi
 
-  desktop-tests:
+          RESOLVED_DESKTOP=false
+          RESOLVED_PYTHON=false
+          RESOLVED_ELECTRON=false
+          RESOLVED_SNAP=false
+          RESOLVED_ANDROID=false
+          RESOLVED_IOS=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RESOLVED_DESKTOP="$RUN_DESKTOP"
+            RESOLVED_PYTHON="$RUN_PYTHON"
+            RESOLVED_ELECTRON="$RUN_ELECTRON"
+            RESOLVED_SNAP="$RUN_SNAP"
+            RESOLVED_ANDROID="$RUN_ANDROID"
+            RESOLVED_IOS="$RUN_IOS"
+
+            # Calibration counts as a selection: it wants a host to itself, so a
+            # calibration-only dispatch is the normal way to run it.
+            RESOLVED_CALIBRATION=false
+            if [ "${RUN_CALIBRATION:-off}" != "off" ]; then
+              RESOLVED_CALIBRATION=true
+            fi
+
+            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_PYTHON}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_CALIBRATION}"
+            if [ "$SELECTED" = "falsefalsefalsefalsefalsefalsefalse" ]; then
+              echo "::error::Select at least one platform to test, or enable calibration."
+              exit 1
+            fi
+          else
+            case "$TARGETS" in
+              all)
+                RESOLVED_DESKTOP=true
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              desktop)
+                RESOLVED_DESKTOP=true
+                ;;
+              python)
+                RESOLVED_PYTHON=true
+                ;;
+              "desktop + python")
+                RESOLVED_DESKTOP=true
+                RESOLVED_PYTHON=true
+                ;;
+              electron)
+                ;;
+              snap)
+                ;;
+              mobile)
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              "electron + desktop")
+                RESOLVED_DESKTOP=true
+                ;;
+              "desktop + mobile")
+                RESOLVED_DESKTOP=true
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              "electron + mobile")
+                RESOLVED_ANDROID=true
+                RESOLVED_IOS=true
+                ;;
+              android)
+                RESOLVED_ANDROID=true
+                ;;
+              ios)
+                RESOLVED_IOS=true
+                ;;
+              *)
+                # Comma-separated family list (e.g. "desktop,ios"), used by
+                # failed-test reruns where the families come from the base run.
+                REST="$TARGETS"
+                MATCHED=false
+                while [ -n "$REST" ]; do
+                  ITEM="${REST%%,*}"
+                  if [ "$ITEM" = "$REST" ]; then
+                    REST=""
+                  else
+                    REST="${REST#*,}"
+                  fi
+                  case "$ITEM" in
+                    desktop) RESOLVED_DESKTOP=true; MATCHED=true ;;
+                    python) RESOLVED_PYTHON=true; MATCHED=true ;;
+                    electron) RESOLVED_ELECTRON=true; MATCHED=true ;;
+                    snap) RESOLVED_SNAP=true; MATCHED=true ;;
+                    android) RESOLVED_ANDROID=true; MATCHED=true ;;
+                    ios) RESOLVED_IOS=true; MATCHED=true ;;
+                    "") ;;
+                    *)
+                      echo "::error::Unsupported reusable target: $TARGETS"
+                      exit 1
+                      ;;
+                  esac
+                done
+                if [ "$MATCHED" != "true" ]; then
+                  echo "::error::Unsupported reusable target: $TARGETS"
+                  exit 1
+                fi
+                ;;
+            esac
+          fi
+
+          # Lets the prepare jobs skip on a calibration-only dispatch: the
+          # calibration job builds packages/inference itself and never consumes
+          # a resolved inference or test-suite artifact.
+          RESOLVED_E2E=true
+          if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_PYTHON}" = "falsefalsefalsefalsefalsefalse" ]; then
+            RESOLVED_E2E=false
+          fi
+
+          {
+            echo "suite=$RESOLVED_SUITE"
+            echo "run-desktop=$RESOLVED_DESKTOP"
+            echo "run-electron=$RESOLVED_ELECTRON"
+            echo "run-snap=$RESOLVED_SNAP"
+            echo "run-python=$RESOLVED_PYTHON"
+            echo "run-android=$RESOLVED_ANDROID"
+            echo "run-ios=$RESOLVED_IOS"
+            echo "run-e2e=$RESOLVED_E2E"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply rerun plan
+        id: plan
+        shell: node {0}
+        env:
+          RERUN_PLAN: ${{ inputs.rerun-plan }}
+          DESKTOP_PLATFORMS: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
+          ELECTRON_PLATFORMS: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
+          SNAP_PLATFORMS: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
+          PYTHON_PLATFORMS: ${{ inputs.python-platforms }}
+        run: |
+          const fs = require('fs');
+
+          const raw = (process.env.RERUN_PLAN || '').trim();
+          let plan = null;
+          if (raw) {
+            try {
+              plan = JSON.parse(raw);
+            } catch (err) {
+              console.log(`::error::Invalid rerun-plan JSON: ${err.message}`);
+              process.exit(1);
+            }
+          }
+
+          // Same runner-label -> platform-key mapping as test-node-sdk.yml.
+          function platformKey(label) {
+            const s = String(label).toLowerCase();
+            if (s.includes('win')) return 'windows';
+            if (s.includes('mac') || s.includes('darwin')) return 'macos';
+            return 'linux';
+          }
+
+          function narrow(family, rawRunners) {
+            const runners = JSON.parse(rawRunners);
+            if (!plan) return runners;
+
+            const wanted = plan[family];
+            if (!wanted) return [];
+
+            const kept = runners.filter((runner) => Array.isArray(wanted[platformKey(runner)]));
+            const missing = Object.keys(wanted).filter(
+              (key) => !runners.some((runner) => platformKey(runner) === key)
+            );
+            if (missing.length > 0) {
+              console.log(
+                `::warning::No ${family} runner is configured for: ${missing.join(', ')} — ` +
+                'those previously failed tests will not be re-run.'
+              );
+            }
+            if (kept.length === 0) {
+              console.log(`::error::Rerun plan targets ${family} but no configured runner matches it.`);
+              process.exit(1);
+            }
+            return kept;
+          }
+
+          function filterFor(family, platform) {
+            const ids = plan && plan[family] && plan[family][platform];
+            return Array.isArray(ids) ? ids.join(',') : '';
+          }
+
+          const outputs = {
+            'desktop-platforms': JSON.stringify(narrow('desktop', process.env.DESKTOP_PLATFORMS)),
+            'electron-platforms': JSON.stringify(narrow('electron', process.env.ELECTRON_PLATFORMS)),
+            'snap-platforms': JSON.stringify(narrow('snap', process.env.SNAP_PLATFORMS)),
+            // The fallback is not dead code: `workflow_call` does not carry
+            // this input, and the rerun test drives this script with its own
+            // env. Both need a default that matches the dispatch one.
+            'python-platforms': JSON.stringify(
+              narrow(
+                'python',
+                process.env.PYTHON_PLATFORMS ||
+                  '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+              )
+            ),
+            'filter-android': filterFor('android', 'android'),
+            'filter-ios': filterFor('ios', 'ios'),
+          };
+
+          for (const [key, value] of Object.entries(outputs)) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+            console.log(`${key}=${value}`);
+          }
+
+  prepare-inference:
+    name: Resolve inference source
     needs: resolve
-    if: inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
-    uses: ./.github/workflows/test-desktop-sdk.yml
+    if: needs.resolve.outputs.run-e2e == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      checkout-sha: ${{ steps.checkout.outputs.commit }}
+      source: ${{ steps.inference.outputs.source }}
+      dependency-spec: ${{ steps.inference.outputs.dependency-spec }}
+      provenance: ${{ steps.inference.outputs.provenance }}
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+    steps:
+      - id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/inference
+            .github/actions/sdk-e2e-prepare-inference
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Configure package registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+          ];
+          if (process.env.NPM_TOKEN) {
+            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
+          }
+          if (process.env.PAT_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          }
+          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
+
+      - name: Resolve and prepare inference
+        id: inference
+        shell: bash
+        env:
+          INFERENCE_SOURCE: ${{ inputs.inference-source || 'manifest' }}
+          INFERENCE_VERSION: ${{ inputs.inference-version || '' }}
+          PROJECT_DIRECTORY: packages/sdk
+          INFERENCE_DIRECTORY: packages/inference
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-inference-package
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: node .github/actions/sdk-e2e-prepare-inference/prepare.mjs resolve
+
+      - name: Derive branch artifact name
+        id: artifact
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const name = `sdk-e2e-inference-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\n`);
+
+      - name: Upload branch inference package
+        if: steps.inference.outputs.source == 'branch'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.inference.outputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  prepare-test-suite:
+    name: Resolve test-suite source
+    needs: resolve
+    if: needs.resolve.outputs.run-e2e == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      source: ${{ steps.test-suite.outputs.source }}
+      dependency-spec: ${{ steps.test-suite.outputs.dependency-spec }}
+      provenance: ${{ steps.test-suite.outputs.provenance }}
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+    steps:
+      - id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/e2e/package.json
+            packages/test-suite
+            .github/actions/sdk-e2e-prepare-test-suite
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Configure package registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+          ];
+          if (process.env.NPM_TOKEN) {
+            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
+          }
+          if (process.env.PAT_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          }
+          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
+
+      - name: Resolve and prepare test-suite
+        id: test-suite
+        shell: bash
+        env:
+          TEST_SUITE_SOURCE: ${{ inputs.test-suite-source || 'manifest' }}
+          TEST_SUITE_VERSION: ${{ inputs.test-suite-version || '' }}
+          PROJECT_DIRECTORY: packages/sdk/e2e
+          TEST_SUITE_DIRECTORY: packages/test-suite
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-test-suite-package
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: node .github/actions/sdk-e2e-prepare-test-suite/prepare.mjs resolve
+
+      - name: Derive branch artifact name
+        id: artifact
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const name = `sdk-e2e-test-suite-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\n`);
+
+      - name: Upload branch test-suite package
+        if: steps.test-suite.outputs.source == 'branch'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.test-suite.outputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop-tests:
+    needs: [resolve, prepare-inference, prepare-test-suite]
+    if: needs.resolve.outputs.run-desktop == 'true'
+    uses: ./.github/workflows/test-node-sdk.yml
     with:
+      consumer: desktop
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
+      platforms: ${{ needs.resolve.outputs.desktop-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      test-version: ${{ inputs.test-version || '' }}
+      include: ${{ inputs.include }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
+  # The Python client running the same catalog the desktop leg runs. Its own
+  # leg rather than a second consumer in the desktop run: the producer hands
+  # the queue to the first registrant, so two clients in one run would split
+  # the catalog rather than both answer it.
+  python-tests:
+    needs: [resolve, prepare-inference, prepare-test-suite]
+    if: needs.resolve.outputs.run-python == 'true'
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: python
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ needs.resolve.outputs.python-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  electron-tests:
+    needs: [resolve, prepare-inference, prepare-test-suite]
+    if: needs.resolve.outputs.run-electron == 'true'
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: electron
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ needs.resolve.outputs.electron-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  snap-tests:
+    needs: [resolve, prepare-inference, prepare-test-suite]
+    if: needs.resolve.outputs.run-snap == 'true'
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: snap
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ needs.resolve.outputs.snap-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  # Mobile device runs are the expensive place to find a second copy of a
+  # shared runtime lib, so this fails first. A branch-built @qvac/inference
+  # replaces the published one, as prepare-inference does for the device runs.
+  shared-runtime-libs:
+    name: Shared runtime libs resolve once
+    needs: [resolve, prepare-inference]
+    if: needs.resolve.outputs.run-android == 'true' || needs.resolve.outputs.run-ios == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ needs.prepare-inference.outputs.checkout-sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/inference/package.json
+            .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Check @qvac/sdk
+        env:
+          INFERENCE_SOURCE: ${{ needs.prepare-inference.outputs.source }}
+        run: |
+          if [ "$INFERENCE_SOURCE" = "branch" ]; then
+            node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
+          else
+            node .github/scripts/check-shared-runtime-libs.mjs packages/sdk
+          fi
+
   android-tests:
-    needs: resolve
+    needs: [resolve, prepare-inference, prepare-test-suite, shared-runtime-libs]
     permissions:
       actions: read
       id-token: write
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets != 'desktop' && inputs.targets != 'ios'
+    if: needs.resolve.outputs.run-android == 'true'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
-      filter: ${{ inputs.filter }}
+      filter: ${{ needs.resolve.outputs.filter-android || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      include: ${{ inputs.include }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
-      device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
-      test-version: ${{ inputs.test-version || '' }}
+      device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.android-device-pool }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
 
   ios-tests:
-    needs: resolve
+    needs: [resolve, prepare-inference, prepare-test-suite, shared-runtime-libs]
     permissions:
       actions: read
       id-token: write
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets != 'desktop' && inputs.targets != 'android'
+    if: needs.resolve.outputs.run-ios == 'true'
     uses: ./.github/workflows/test-ios-sdk.yml
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
-      filter: ${{ inputs.filter }}
+      filter: ${{ needs.resolve.outputs.filter-ios || inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      include: ${{ inputs.include }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
-      test-version: ${{ inputs.test-version || '' }}
+      device-pool-name: ${{ inputs.ios-device-pool }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
+
+  # Deliberately not a workflow_call input: the PR label path must never trigger
+  # seven model loads per platform.
+  #
+  # Measurement wants a quiet host. The harness reads its own process RSS, so a
+  # co-scheduled job does not inflate the numbers — but it can create memory
+  # pressure that evicts this process's mapped pages and DEFLATES the persistent
+  # deltas, which is the dangerous direction for an upper bound. The
+  # `*-calibration` labels guarantee that: a runner hook drain-stops the sibling
+  # agents on the host when this job starts and restarts them when it ends, so
+  # the job owns the machine for the duration. Two contract points with that
+  # hook: the job id below MUST stay `calibration` (the hook matches
+  # GITHUB_JOB), and the run holds the whole host, so dispatch during off-peak
+  # windows. The harness's busy-host warnings remain as a backstop — do not
+  # ship a fixture from a warned run.
+  #
+  # The hosted labels in the matrix need none of that: a fresh VM per job
+  # already owns its machine.
+  calibration:
+    if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: >-
+          ${{ fromJSON(inputs.calibration == 'all'
+            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration", "macos-15-large", "ubuntu-22.04-arm"]'
+            || format('["{0}"]', inputs.calibration)) }}
+    runs-on: ${{ matrix.platform }}
+    # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
+    # ~15 min for the 21 loads, plus install and build) — the first run on a
+    # runner also downloads ~7.5 GiB of models from the registry, so the
+    # ceiling budgets for a cold run on a slow connection.
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      # Deliberately no `test-version` here: this job executes the checked-out
+      # code on a persistent runner, so it only ever builds the ref the
+      # workflow was dispatched on — the dispatch branch picker is the way to
+      # choose what to calibrate (CodeQL: cache poisoning via untrusted ref).
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      # No registry tokens: packages/inference has no @tetherto-scoped
+      # dependencies, so a plain public-npmjs install is all this needs.
+      - name: Install and build inference
+        shell: bash
+        working-directory: packages/inference
+        run: |
+          npm install
+          npm run build
+
+      - name: Run calibration harness
+        id: calibrate
+        shell: bash
+        working-directory: packages/inference
+        run: |
+          # The harness names the fixture after the runtime's platform triple,
+          # in a directory that already holds every other platform's fixture —
+          # so the upload has to name the one file this run writes, or a run
+          # that wrote nothing would ship a stale fixture under this platform's
+          # artifact name. Recorded before the harness runs so the path is still
+          # available when it exits non-zero.
+          PLATFORM=$(node -p "process.platform + '-' + process.arch")
+          # Glob so a GPU pass, which keys its fixture by backend as well, is
+          # collected alongside the CPU one. It also matches fixtures already
+          # committed, so read the log's `wrote` lines before shipping one.
+          echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM*.ts" >> "$GITHUB_OUTPUT"
+          # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
+          # bare too old for TypeScript type-stripping.
+          node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write
+
+      # Best-effort second pass with the model resident on the GPU. Only the
+      # CPU-forced platforms need it: Apple silicon already calibrates on Metal,
+      # and its unified memory is bounded by the system basis. Non-fatal — a
+      # host whose GPU memory is not device-scoped simply yields no GPU fixture.
+      - name: Run GPU calibration harness
+        if: ${{ !contains(matrix.platform, 'macos') }}
+        continue-on-error: true
+        shell: bash
+        working-directory: packages/inference
+        run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --gpu
+
+      # Third pass, for the ordinary consumer desktop: the model pinned to the
+      # integrated GPU, which allocates out of system RAM, so RSS stays the
+      # counter. Run everywhere — the harness exits in seconds on a host that
+      # cannot honour it.
+      - name: Run integrated-GPU calibration harness
+        continue-on-error: true
+        shell: bash
+        working-directory: packages/inference
+        run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --igpu
+
+      - name: Upload fixture
+        # A failed gate still writes a fixture (`validated: false`), and that is
+        # worth auditing. The harness's earlier aborts write nothing at all, and
+        # then this step finding no file is the accurate outcome.
+        if: success() || failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: calibration-fixture-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.calibrate.outputs.fixture }}
+          if-no-files-found: error
+          retention-days: 30

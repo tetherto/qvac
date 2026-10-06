@@ -1,0 +1,129 @@
+name: Create Release Tag
+
+# Creates a git tag for a published package WITHOUT creating a GitHub Release.
+# Only the SDK publishes GitHub Releases (see publish-sdk.yml /
+# create-github-release.yml); every other package just gets a version tag for
+# traceability, keeping the Releases page focused on the SDK.
+#
+# The tag is a lightweight, UNSIGNED tag created via the REST API with the
+# default GITHUB_TOKEN. This matches the previous behaviour of
+# softprops/action-gh-release (its tags were never signed either). Signed tags
+# are intentionally not attempted here: GITHUB_TOKEN cannot sign, and GitHub's
+# server-side web-flow signing covers API-created commits but NOT tag objects
+# (verified empirically -- an API-created annotated tag comes back
+# "reason: unsigned"). A Verified tag would require a GPG/SSH signing key.
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        description: "Tag prefix; tag is '<repo_name>-v<published_version>' unless tag_name is set"
+        required: false
+        type: string
+      published_version:
+        description: "Version published in the publish workflow (tagging is skipped when empty)"
+        required: false
+        type: string
+      tag_name:
+        description: "Optional explicit tag name; overrides the '<repo_name>-v<published_version>' default"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  create-tag:
+    if: inputs.published_version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create git tag (no GitHub Release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ inputs.repo_name }}
+          PUBLISHED_VERSION: ${{ inputs.published_version }}
+          TAG_OVERRIDE: ${{ inputs.tag_name }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${TAG_OVERRIDE}" ]; then
+            tag="${TAG_OVERRIDE}"
+          else
+            if [ -z "${REPO_NAME}" ]; then
+              echo "::error::Either repo_name or tag_name must be provided"
+              exit 1
+            fi
+            tag="${REPO_NAME}-v${PUBLISHED_VERSION}"
+          fi
+
+          # SHA the tag currently points at, or empty when the tag is absent.
+          # gh writes the error body to stdout on a 404 and does not apply --jq
+          # to it, so a missing tag still produces output. Exit status is the
+          # only reliable signal here, and the hex guard keeps any response body
+          # from ever reaching the comparison below.
+          tag_sha() {
+            local response sha
+            response="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" 2>/dev/null)" || return 0
+            sha="$(printf '%s' "${response}" | jq -r '.object.sha // empty')"
+            case "${sha}" in
+              [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) printf '%s' "${sha}" ;;
+            esac
+          }
+
+          # Already present? Succeed only if it points where we expect; a tag
+          # at a different SHA is a real problem worth failing on.
+          existing="$(tag_sha)"
+          if [ -n "${existing}" ]; then
+            if [ "${existing}" = "${TARGET_SHA}" ]; then
+              echo "Tag ${tag} already exists at ${TARGET_SHA}; nothing to do."
+              exit 0
+            fi
+            echo "::error::Tag ${tag} already exists at ${existing}, expected ${TARGET_SHA}"
+            exit 1
+          fi
+
+          # Create the tag, tolerating GitHub's occasional transient failures on
+          # POST /git/refs (spurious 403 "Resource not accessible by integration"
+          # or 5xx). A 422 means the ref now exists -- a concurrent run or a
+          # retried attempt won the race -- which we treat as success once the
+          # SHA matches. This keeps a completed release (npm published) from
+          # being reported red by a flaky tag step.
+          attempt=0
+          max_attempts=5
+          while :; do
+            attempt=$((attempt + 1))
+
+            if gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${tag}" \
+              -f sha="${TARGET_SHA}" 2>/tmp/create-ref.err; then
+              echo "Created tag ${tag} -> ${TARGET_SHA}"
+              exit 0
+            fi
+
+            # POST failed -- re-check whether the ref exists now (idempotent path
+            # for a 422 already-exists, or a create that landed despite an error).
+            existing="$(tag_sha)"
+            if [ -n "${existing}" ]; then
+              if [ "${existing}" = "${TARGET_SHA}" ]; then
+                echo "Tag ${tag} already exists at ${TARGET_SHA} (raced with another run); nothing to do."
+                exit 0
+              fi
+              echo "::error::Tag ${tag} exists at ${existing}, expected ${TARGET_SHA}"
+              cat /tmp/create-ref.err || true
+              exit 1
+            fi
+
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "::error::Failed to create tag ${tag} after ${attempt} attempts"
+              cat /tmp/create-ref.err || true
+              exit 1
+            fi
+
+            backoff=$((attempt * attempt * 2))
+            echo "Tag creation attempt ${attempt} failed (transient); retrying in ${backoff}s..."
+            cat /tmp/create-ref.err || true
+            sleep "${backoff}"
+          done

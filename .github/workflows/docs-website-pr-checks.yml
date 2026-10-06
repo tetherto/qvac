@@ -37,12 +37,14 @@ jobs:
         run: bun install
 
       - name: Build and validate
-        # The API summary `index.mdx` (and its older-version siblings) lives
-        # at `content/docs/reference/api/`. It is committed to the repo and
-        # refreshed by the `Docs Release` workflow on SDK release pushes,
-        # so every PR checkout already has it on disk — no placeholder
-        # step is needed here. (The historical placeholder targeted the
-        # legacy `content/docs/sdk/api/` path, which the build never read.)
+        # The API summary lives at `content/docs/sdk/(v0.20)/reference/api.mdx`,
+        # with one copy per cut line under `content/docs/sdk/v0.19/reference/`
+        # and `content/docs/sdk/v0.18/reference/`. Each is committed to the
+        # repo and refreshed locally by the `qv-sdk-changelog` skill (Step 8)
+        # during SDK release prep, so every PR checkout already has them on
+        # disk — no placeholder step is needed here. (The historical
+        # placeholder targeted `content/docs/sdk/api/`, a path the build never
+        # read and that no longer exists.)
         run: bun run build
 
       - name: Run docs tests

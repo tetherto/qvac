@@ -30,23 +30,78 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      include:
+        description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+        required: false
+        type: string
+        default: ""
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
         type: number
         default: 60
+      device-farm-start-timeout:
+        description: "Maximum time in minutes to wait for Device Farm runs to enter RUNNING before starting the producer."
+        required: false
+        type: number
+        default: 90
       device-farm-project-arn:
         description: "AWS Device Farm project ARN"
         required: true
         type: string
       ios-device-pools:
-        description: 'JSON array of iOS device pools [{name, arn}]'
+        description: 'JSON array of iOS device pools [{name, arn, p?, r?}]. Set p=true and r=false for private pools; r=false alone marks manual-only public pools.'
         required: true
         type: string
+      device-pool-name:
+        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, an available private pool is preferred before the public fallback."
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      inference-source:
+        description: "Resolved inference source"
+        required: false
+        type: string
+        default: manifest
+      inference-dependency-spec:
+        description: "Resolved inference package spec for npm"
+        required: false
+        type: string
+        default: ""
+      inference-artifact-name:
+        description: "Branch inference tarball artifact"
+        required: false
+        type: string
+        default: ""
+      inference-provenance:
+        description: "Immutable inference source identity"
+        required: false
+        type: string
+        default: ""
+      test-suite-source:
+        description: "Resolved test-suite source"
+        required: false
+        type: string
+        default: manifest
+      test-suite-dependency-spec:
+        description: "Resolved test-suite package spec for npm"
+        required: false
+        type: string
+        default: ""
+      test-suite-artifact-name:
+        description: "Branch test-suite tarball artifact"
+        required: false
+        type: string
+        default: ""
+      test-suite-provenance:
+        description: "Immutable test-suite source identity"
+        required: false
+        type: string
+        default: ""
     secrets:
       # MQTT_*, NPM_TOKEN, and Apple signing secrets (TEST_APP_APPLE_*,
       # APPLE_P12_PASSWORD, APPLE_KEYCHAIN_PASSWORD) are typically provided
@@ -54,17 +109,10 @@ on:
       # They are declared required: false here so `secrets: inherit` from a
       # caller with no repo-level values does not fail at the workflow_call
       # boundary; the jobs that consume them have environment access.
-      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
-      # repo-level.
-      PAT_TOKEN:
-        required: true
+      # AWS_OIDC_ROLE_ARN remains required:true because it is repo-level.
       NPM_TOKEN:
         required: false
-      MQTT_PROTOCOL:
-        required: false
       MQTT_HOST:
-        required: false
-      MQTT_PORT:
         required: false
       MQTT_USERNAME:
         required: false
@@ -86,12 +134,17 @@ on:
         required: false
 
 env:
+  # Unique: test-sdk.yml calls this workflow once per run. A UI re-run keeps
+  # run_id, so build, device-farm, wait-device-farm-running and run-producer
+  # reject re-runs.
+  E2E_RUN_ID: ios-pr${{ github.event.pull_request.number || '0' }}-${{ github.run_id }}
   APP_BUNDLE_ID: "io.tether.test.qvac"
 
 permissions:
   actions: read
   id-token: write
   contents: read
+  packages: read
 
 jobs:
   report-start:
@@ -117,28 +170,40 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
 
   build:
     name: "[ios] build"
     runs-on: macos-14
     environment: release
     timeout-minutes: 60
-    outputs:
-      runId: ${{ steps.runid.outputs.runId }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: ${{ inputs.project-directory }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            ${{ inputs.project-directory }}
+            packages/inference
+            .github/actions/sdk-e2e-prepare-inference
+            .github/actions/sdk-e2e-prepare-test-suite
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -249,75 +314,6 @@ jobs:
 
           echo "Provisioning profile matches expected bundle ID"
 
-      - name: Generate runId
-        id: runid
-        shell: node {0}
-        env:
-          EXPECTED_JOB_NAME: "[ios] build"
-          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          const fs = require('fs');
-
-          (async () => {
-          async function fetchJobs(page) {
-            const url =
-              `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
-              `/actions/runs/${process.env.GITHUB_RUN_ID}` +
-              `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
-            const res = await fetch(url, {
-              headers: {
-                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-                Accept: 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-              },
-            });
-            if (!res.ok) {
-              throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
-            }
-            return res.json();
-          }
-
-          const jobs = [];
-          for (let page = 1; ; page++) {
-            const data = await fetchJobs(page);
-            jobs.push(...(data.jobs || []));
-            if (!data.jobs || data.jobs.length < 100) break;
-          }
-
-          const matches = jobs.filter(
-            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
-              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
-          );
-          const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
-          const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
-          if (!job) {
-            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
-          }
-
-          const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
-          const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
-          // Base36-encode the numeric job.id so the literal decimal digits
-          // no longer appear in the runId. GitHub's secret masker does a
-          // substring match against masked secret values; if a short numeric
-          // secret (e.g. `secrets.MQTT_PORT`) happens to appear as a
-          // substring of the decimal job.id, the masker will both redact
-          // the runId in logs and silently drop the job-level output with a
-          // "Skip output 'runId' since it may contain secret." warning,
-          // breaking every downstream `needs.build.outputs.runId` consumer.
-          // Encoding job.id as base36 keeps the value unique and stable
-          // while structurally eliminating numeric-substring collisions.
-          const jobIdEncoded = BigInt(job.id).toString(36);
-          const runId = `ios-${refPart}-${jobIdEncoded}`;
-
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
-          console.log(`Generated runId: ${runId}`);
-          })().catch((err) => {
-            console.error(err);
-            process.exit(1);
-          });
-
       - name: Configure npm registries
         shell: node {0}
         run: |
@@ -325,19 +321,37 @@ jobs:
           const path = require('path');
 
           if (!process.env.NPM_TOKEN) { console.log('NPM_TOKEN is empty'); process.exit(1); }
-          if (!process.env.PAT_TOKEN) { console.log('PAT_TOKEN is empty'); process.exit(1); }
+          if (!process.env.GITHUB_TOKEN) { console.log('GITHUB_TOKEN is empty'); process.exit(1); }
 
           const lines = [
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
             `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+            `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
           console.log(`.npmrc configured at ${target}`);
+
+      - name: Apply resolved inference
+        uses: ./.github/actions/sdk-e2e-prepare-inference
+        with:
+          source: ${{ inputs.inference-source }}
+          dependency-spec: ${{ inputs.inference-dependency-spec }}
+          artifact-name: ${{ inputs.inference-artifact-name }}
+          project-directory: ${{ inputs.project-directory }}
+          provenance: ${{ inputs.inference-provenance }}
+
+      - name: Apply resolved test-suite
+        uses: ./.github/actions/sdk-e2e-prepare-test-suite
+        with:
+          source: ${{ inputs.test-suite-source }}
+          dependency-spec: ${{ inputs.test-suite-dependency-spec }}
+          artifact-name: ${{ inputs.test-suite-artifact-name }}
+          project-directory: ${{ inputs.working-directory }}
+          provenance: ${{ inputs.test-suite-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -412,12 +426,12 @@ jobs:
           QVAC_IOS_EXPORT_METHOD: ${{ env.EXPORT_METHOD }}
         run: |
           echo "Building iOS consumer IPA..."
-          echo "   Run ID: ${{ steps.runid.outputs.runId }}"
+          echo "   Run ID: ${{ env.E2E_RUN_ID }}"
           echo "   Bundle ID: $QVAC_IOS_BUNDLE_ID"
           echo "   MQTT Host: $MQTT_HOST"
 
           npx qvac-test build:consumer:ios \
-            --runId "${{ steps.runid.outputs.runId }}" \
+            --runId "${{ env.E2E_RUN_ID }}" \
             --config .
 
           IPA_PATH="build/consumers/ios/consumer.ipa"
@@ -442,15 +456,30 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        device: ${{ fromJson(inputs.ios-device-pools) }}
+    outputs:
+      name: ${{ steps.select.outputs.name }}
+      availability: ${{ steps.select.outputs.availability }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           sparse-checkout: ${{ inputs.working-directory }}/device-farm
+
+      - name: Checkout trusted Device Farm selector
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout-cone-mode: false
+          path: .workflow
 
       - name: Download IPA artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -467,7 +496,7 @@ jobs:
       - name: Upload IPA to Device Farm
         id: upload-app
         run: |
-          echo "Uploading IPA to Device Farm for ${{ matrix.device.name }}..."
+          echo "Uploading IPA to Device Farm..."
 
           IPA_FILE=$(find ./ipa -name "*.ipa" | head -1)
           if [ -z "$IPA_FILE" ]; then
@@ -478,7 +507,7 @@ jobs:
 
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "consumer-${{ needs.build.outputs.runId }}-${{ matrix.device.name }}.ipa" \
+            --name "consumer-${{ env.E2E_RUN_ID }}.ipa" \
             --type "IOS_APP" \
             --output json)
 
@@ -548,7 +577,7 @@ jobs:
         run: |
           SPEC_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "qvac-ios-test-spec-${{ needs.build.outputs.runId }}.yml" \
+            --name "qvac-ios-test-spec-${{ env.E2E_RUN_ID }}.yml" \
             --type "APPIUM_NODE_TEST_SPEC" \
             --output json)
 
@@ -580,16 +609,27 @@ jobs:
             sleep 5
           done
 
+      # Select after every upload is ready to reduce the private availability
+      # check-to-schedule window to only the following scheduling step.
+      - name: Select device pool
+        id: select
+        uses: ./.workflow/.github/actions/sdk-device-farm-select-pool
+        with:
+          # Normalise to strict JSON: the device-pools variable may use lenient
+          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
+          pools: ${{ toJSON(fromJSON(inputs.ios-device-pools)) }}
+          pool-name: ${{ inputs.device-pool-name }}
+
       - name: Schedule Device Farm run
         id: schedule
         run: |
-          echo "Scheduling Device Farm run on ${{ matrix.device.name }}..."
+          echo "Scheduling Device Farm run on ${{ steps.select.outputs.name }}..."
 
-          RUN_NAME="ios-${{ matrix.device.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
+          RUN_NAME="ios-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
 
           RUN_ARN=$(aws devicefarm schedule-run \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --device-pool-arn "${{ matrix.device.arn }}" \
+            --device-pool-arn "${{ steps.select.outputs.arn }}" \
             --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
             --name "$RUN_NAME" \
             --test type=APPIUM_NODE,testPackageArn=${{ steps.upload-test-pkg.outputs.pkg-arn }},testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
@@ -602,47 +642,96 @@ jobs:
           PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
           DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo "Device Farm Console (${{ matrix.device.name }}): $DF_URL"
+          echo "Device Farm Console (${{ steps.select.outputs.name }}): $DF_URL"
 
-          echo "### Device Farm: ${{ matrix.device.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Device Farm: ${{ steps.select.outputs.name }}" >> $GITHUB_STEP_SUMMARY
           echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
 
       - name: Save run ARN
         id: save-arn
         run: |
-          SAFE_NAME=$(echo "${{ matrix.device.name }}" | tr ' /\\:*?"<>|' '_')
+          SAFE_NAME=$(echo "${{ steps.select.outputs.name }}" | tr ' /\\:*?"<>|' '_')
           echo "${{ steps.schedule.outputs.run-arn }}" > "${SAFE_NAME}.txt"
           echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload run ARN
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: device-farm-arn-ios-${{ needs.build.outputs.runId }}-${{ steps.save-arn.outputs.safe-name }}
+          name: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-${{ steps.save-arn.outputs.safe-name }}
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
           retention-days: 1
 
-  run-producer:
-    name: "[ios] run-producer"
-    needs: build
+  wait-device-farm-running:
+    name: "[ios] wait-device-farm-running"
+    needs: [build, device-farm]
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 90
+    timeout-minutes: ${{ inputs.device-farm-start-timeout }}
+    steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-device-farm-wait-for-running
+          sparse-checkout-cone-mode: false
+
+      - name: Download run ARNs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-*
+          path: ./run-arns
+          merge-multiple: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Wait for Device Farm runs to enter RUNNING
+        uses: ./.github/actions/sdk-device-farm-wait-for-running
+        with:
+          platform: ios
+          run-arns-directory: ./run-arns
+          start-timeout-minutes: ${{ inputs.device-farm-start-timeout }}
+
+  run-producer:
+    name: "[ios] run-producer"
+    needs: [build, wait-device-farm-running]
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 120
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Reject UI re-runs
+        if: github.run_attempt != '1'
+        run: |
+          echo "::error::A re-run from the Actions UI reuses this run's E2E_RUN_ID and Device Farm ARN artifacts. Start a new run: apply test-e2e-rerun-failed for failed tests, re-apply test-e2e-smoke or test-e2e-full when an earlier job failed, or dispatch test-sdk.yml again."
+          exit 1
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            packages/inference
             .github/actions/sdk-e2e-fail-on-failures
+            .github/actions/sdk-e2e-prepare-inference
+            .github/actions/sdk-e2e-prepare-test-suite
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -663,11 +752,29 @@ jobs:
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
             `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+            `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
+
+      - name: Apply resolved inference
+        uses: ./.github/actions/sdk-e2e-prepare-inference
+        with:
+          source: ${{ inputs.inference-source }}
+          dependency-spec: ${{ inputs.inference-dependency-spec }}
+          artifact-name: ${{ inputs.inference-artifact-name }}
+          project-directory: ${{ inputs.project-directory }}
+          provenance: ${{ inputs.inference-provenance }}
+
+      - name: Apply resolved test-suite
+        uses: ./.github/actions/sdk-e2e-prepare-test-suite
+        with:
+          source: ${{ inputs.test-suite-source }}
+          dependency-spec: ${{ inputs.test-suite-dependency-spec }}
+          artifact-name: ${{ inputs.test-suite-artifact-name }}
+          project-directory: ${{ inputs.working-directory }}
+          provenance: ${{ inputs.test-suite-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -729,9 +836,12 @@ jobs:
 
       - name: Run producer
         working-directory: ${{ inputs.working-directory }}
+        env:
+          # Read via env, not interpolation: the id list is derived from the PR diff.
+          INCLUDE_TESTS: ${{ inputs.include }}
         run: |
           echo "Starting producer..."
-          echo "   Run ID: ${{ needs.build.outputs.runId }}"
+          echo "   Run ID: ${{ env.E2E_RUN_ID }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
           echo "   Suite: ${{ inputs.suite || '(all)' }}"
@@ -752,11 +862,22 @@ jobs:
             EXCLUDE_SUITE_ARG="--exclude-suite=${{ inputs.exclude-suite }}"
           fi
 
+          # Omitted when empty rather than passed as an empty value: a producer
+          # from a framework build that predates --include would reject it.
+          INCLUDE_ARG=""
+          if [ -n "$INCLUDE_TESTS" ]; then
+            INCLUDE_ARG="--include=$INCLUDE_TESTS"
+          fi
+
+          # Word splitting is the point here, and the ids are restricted to
+          # [A-Za-z0-9._-] upstream, so there is nothing to split on.
+          # shellcheck disable=SC2086
           npx qvac-test run:producer \
-            --runId "${{ needs.build.outputs.runId }}" \
+            --runId "${{ env.E2E_RUN_ID }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
             --report-dir=./reports \
+            $INCLUDE_ARG \
             $FILTER_ARG \
             $SUITE_ARG \
             $EXCLUDE_SUITE_ARG
@@ -866,7 +987,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-ios-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
@@ -889,7 +1010,7 @@ jobs:
 
   cleanup-device-farm:
     name: "[ios] cleanup-device-farm"
-    needs: [build, run-producer, device-farm]
+    needs: [build, device-farm, wait-device-farm-running, run-producer]
     if: always()
     runs-on: ubuntu-latest
     environment: release
@@ -904,13 +1025,13 @@ jobs:
       - name: Download run ARNs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: device-farm-arn-ios-${{ needs.build.outputs.runId }}-*
+          pattern: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-*
           path: ./run-arns
           merge-multiple: true
 
       - name: Stop Device Farm runs and download artifacts
         run: |
-          echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+          echo "Cleaning up Device Farm runs for runId: ${{ env.E2E_RUN_ID }}"
           mkdir -p ./device-farm-logs
 
           for arn_file in run-arns/*.txt; do
@@ -969,13 +1090,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: device-farm-logs-ios-${{ needs.build.outputs.runId }}
+          name: device-farm-logs-ios-${{ env.E2E_RUN_ID }}
           path: ./device-farm-logs/
           retention-days: 30
+          # A cleanup re-run replaces the logs of the earlier attempt.
+          overwrite: true
 
   report-finalize:
     name: "[ios] report-finalize"
-    needs: [report-start, run-producer]
+    needs: [report-start, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -996,10 +1119,14 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
+          device-pool-name: ${{ needs.device-farm.outputs.name }}
+          device-pool-availability: ${{ needs.device-farm.outputs.availability }}
 
   report-artifacts-refresh:
     name: "[ios] report-artifacts-refresh"
-    needs: [report-start, run-producer, cleanup-device-farm]
+    needs: [report-start, run-producer, cleanup-device-farm, device-farm]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1020,4 +1147,8 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
+          device-pool-name: ${{ needs.device-farm.outputs.name }}
+          device-pool-availability: ${{ needs.device-farm.outputs.availability }}
           update-summary: "false"

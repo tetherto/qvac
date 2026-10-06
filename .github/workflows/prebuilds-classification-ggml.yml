@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing lives in on-merge-classification-ggml.yml.
+# Build-only workflow. Publishing lives in on-merge-nx.yml.
 name: Prebuilds (GGML Classification)
 
 on:
@@ -25,6 +25,13 @@ on:
         required: false
         type: string
         default: "packages/classification-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -40,11 +47,12 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: classification-ggml-
       # classification-ggml builds the GGML_BACKEND_DL fabric (gpu-backends), so
-      # build hosts need the Vulkan SDK (incl. glslc) to compile the ggml-vulkan
-      # module from source on cache-miss — same as the other gpu-backends
-      # consumers (embed/llm/nmtcpp/ocr), which already set this. Without it the
-      # linux-arm64 / android-arm64 prebuilds fail to find glslc.
+      # the build host needs the Vulkan SDK (incl. glslc) to compile the
+      # ggml-vulkan module from source on cache-miss — same as the other
+      # gpu-backends consumers (vla/embed/llm/nmtcpp/ocr). The consumer-side
+      # find_dependency(Vulkan) is separately removed under DL by qvac-fabric
+      # 8828.0.2#5, but the fabric's own Vulkan backend build still needs it.
       include-vulkan-sdk: true
+      fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit

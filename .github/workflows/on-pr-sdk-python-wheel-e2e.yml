@@ -1,0 +1,165 @@
+# QVAC sdk-python fat-wheel e2e - PR (test-wheel-e2e)
+#
+# Proves the SHIPPED artifact: builds the self-contained fat wheel per platform,
+# installs it into a CLEAN venv (no @qvac/sdk checkout on the path, no editable
+# src), and runs the full real-worker pytest suite against the installed wheel's
+# bundled worker + pruned native prebuilds. This is what a `pip install -f
+# <release>` user actually runs, so it catches bundle regressions (missing
+# prebuild, lost exec bit, over-aggressive prune, resolver drift) that the
+# source-tree e2es (on-pr-sdk-python-e2e*.yml) can't see.
+#
+# Runs on the self-hosted GPU runners so the GPU inference paths (Vulkan/HIP
+# .so backends that ride in the linux/win bundles) are exercised, with the
+# shared model cache restored. Covers the three GPU-runner platforms; linux-arm64
+# ships a wheel too but has no arm64 GPU runner (its addons are covered by the
+# per-addon integration tests).
+#
+# Plain `pull_request` (public @qvac/* only, no secrets). The `test-wheel-e2e`
+# label is the maintainer approval to run PR code on the self-hosted runners;
+# `workflow_dispatch` lets a maintainer run it on any branch (e.g. to validate
+# this feature branch before merge).
+name: QVAC Tests (sdk-python) fat-wheel - PR
+
+on:
+  pull_request:
+    # Only `labeled` (fresh approval pinned to the head SHA), not `synchronize`:
+    # a later push must be re-approved rather than riding a stale label onto an
+    # unreviewed SHA on the self-hosted runners.
+    types: [labeled]
+    paths:
+      - "packages/sdk-python/**"
+      - "packages/sdk/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wheel-e2e:
+    name: fat-wheel e2e (${{ matrix.label }})
+    # SHA-bound approval: only a fresh `test-wheel-e2e` (labeled, tied to the head
+    # SHA at approval time) or a manual dispatch runs the self-hosted GPU suite.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'test-wheel-e2e')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: qvac-macos26-arm64-gpu
+            label: darwin-arm64
+            platform: macosx_11_0_arm64
+          - os: qvac-ubuntu2204-x64-gpu
+            label: linux-x64
+            platform: manylinux_2_35_x86_64
+          - os: qvac-win25-x64-gpu
+            label: win32-x64
+            platform: win_amd64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/sdk-python
+    env:
+      # Point the worker's model storage at a cacheable, absolute path (same idea
+      # as the SDK e2e). Applied via BareRpcTransport's __init_config.
+      QVAC_CACHE_DIR: ${{ github.workspace }}/.qvac-cache
+    steps:
+      # Self-hosted runners persist the workspace between runs; wipe it.
+      - name: Manual Workspace Cleanup
+        if: runner.environment != 'github-hosted'
+        working-directory: .
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      # Pin to the exact approved head SHA (empty on workflow_dispatch → default ref).
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      # Use the runner's own Python via a venv. actions/setup-python doesn't work
+      # on these self-hosted GPU runners (its toolcache path isn't writable); the
+      # runners already provide Python. Fails loudly if < 3.10.
+      - name: Set up Python (runner's system Python) + build tooling
+        run: |
+          set -e
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          echo "System Python: $("$PY" --version) at $(command -v "$PY")"
+          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
+          "$PY" -m venv .venv
+          if [ -x ".venv/bin/python" ]; then PYBIN="$(pwd)/.venv/bin/python"; else PYBIN="$(pwd)/.venv/Scripts/python"; fi
+          echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
+          "$PYBIN" -m pip install --upgrade pip build
+
+      # node/bun build the worker (they find the pre-cached tool on these runners).
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      # Shared model cache, keyed like the SDK e2e so it invalidates in lockstep.
+      - name: Restore models cache
+        id: models-cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ github.workspace }}/.qvac-cache
+          key: qvac-py-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          restore-keys: |
+            qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
+
+      - name: Build worker
+        run: |
+          "$PYBIN" scripts/build_worker.py
+
+      - name: Build fat wheel
+        env:
+          WHEEL_PLATFORM: ${{ matrix.platform }}
+        run: |
+          "$PYBIN" scripts/build_wheel.py --out-dir dist --platform "$WHEEL_PLATFORM"
+
+      # Clean venv, no editable src and no @qvac/sdk checkout on the path: install
+      # ONLY the built fat wheel (+ test extras). The suite then resolves the
+      # worker from the wheel's _bundle (see tests/_worker_env.py) -- truly the
+      # shipped artifact, not the source tree.
+      - name: Install the built wheel into a clean venv
+        run: |
+          set -e
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" -m venv .venv-wheel
+          if [ -x ".venv-wheel/bin/python" ]; then TESTPY="$(pwd)/.venv-wheel/bin/python"; else TESTPY="$(pwd)/.venv-wheel/Scripts/python"; fi
+          echo "TESTPY=$TESTPY" >> "$GITHUB_ENV"
+          "$TESTPY" -m pip install --upgrade pip
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          echo "installing ${wheels[0]}"
+          "$TESTPY" -m pip install "${wheels[0]}[gen,dev,vla,notebook]"
+
+      # Guard: fail loudly if the suite would resolve anything other than the
+      # installed wheel's bundle (e.g. a stray worker) -- otherwise a green run
+      # could silently be testing the wrong thing.
+      - name: Assert the bundle is what's under test
+        run: |
+          "$TESTPY" -c 'import sys; sys.path.insert(0, "tests"); import _worker_env as w, tetherto.qvac_sdk as pkg; assert "site-packages" in pkg.__file__, pkg.__file__; assert "_bundle" in w.WORKER_PATH and "_bundle" in w.BARE_BIN, (w.WORKER_PATH, w.BARE_BIN); assert w.WORKER_AVAILABLE; print("OK bundle under test:", w.WORKER_PATH)'
+
+      # Full suite (incl. heavy) against the installed wheel. `-o pythonpath=tests`
+      # overrides pyproject's ["src","tests"] so `tetherto` resolves to the
+      # installed wheel, not the source tree.
+      - name: Test the installed wheel (full real-worker suite)
+        run: |
+          "$TESTPY" -m pytest tests/ -o pythonpath=tests -v
+
+      - name: Save models cache
+        if: always() && steps.models-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ github.workspace }}/.qvac-cache
+          key: qvac-py-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true

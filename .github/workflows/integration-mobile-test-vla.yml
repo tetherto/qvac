@@ -24,23 +24,65 @@ on:
         description: "Full NPM package spec to test (optional for workflow_call)"
         type: string
         required: false
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below — it never runs the full default pool. The
+  # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Git ref (branch/tag/SHA) to test"
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'. Valid names + how to find them: docs/ci/MOBILE-ON-DEMAND.md."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Google Pixel 9"
+          - "Google Pixel 8"
+          - "Samsung Galaxy S25 Ultra"
+          - "Apple iPhone 17"
+          - "Apple iPhone 16 Pro"
+          - "Apple iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
         type: string
         required: false
-        default: main
-      package:
-        description: "Full NPM package spec to test (default: @qvac/vla-ggml@latest)"
+        default: ""
+      device_model_operator:
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
+        type: choice
+        required: false
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
+      tests:
+        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string
-        required: true
-        default: '@qvac/vla-ggml@latest'
+        required: false
+        default: ""
+      ref:
+        description: "Git ref (branch/tag/SHA) to test. Leave blank to use the branch you dispatch from."
+        type: string
+        required: false
+        default: ""
+      package:
+        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/vla-ggml@<ver> (published) or @tetherto/vla-ggml-mono@<dev> (GPR) to force-install a specific build. Prefer `prebuild_run_id` for your own PR: it installs the prebuilds your on-pr run already built, with no publish step."
+        type: string
+        required: false
+        default: ""
+      prebuild_run_id:
+        description: "Run id whose `prebuilds` artifact to install — the route for testing YOUR OWN PR on a device. Point it at the on-pr-vla run that already built your prebuilds (the number at the end of that run's URL); no tmp-* branch, no publish, no hand-assembled package name. Takes precedence over `package`, and fails the run if that artifact is missing or expired rather than falling back to @latest. Mutually exclusive with `package`."
+        type: string
+        required: false
+        default: ""
 
 env:
   NODE_VERSION: 'lts/*'
   ADDON_NAME: '@qvac/vla-ggml'
-  PREBUILD_ARTIFACT_PREFIX: 'vla-'  # Prefix for prebuild artifacts
   TEST_FRAMEWORK_REF: 'main'              # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: 'io.tether.test.qvac'    # Bundle ID for the test app (same for all addons)
   ADDON_DIR: 'packages/vla-ggml'
@@ -51,10 +93,22 @@ env:
 # secrets and rename here when VLA needs an isolated Device Farm budget.
 
 concurrency:
-  group: integration-mobile-test-vla-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
+  # time — a fresh dispatch cancels the in-flight one so a re-run never stacks a
+  # second Device Farm run. Different branches map to different groups, so the
+  # same addon can still be tested on 2-3 branches in parallel. workflow_call
+  # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
+  # inputs.platform is only ever set on a manual dispatch, and under workflow_call
+  # github.* resolves to the CALLER, so run_id keeps each call self-contained.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Defense-in-depth gate for workflow_dispatch. The repository's PR entry
   # point (on-pr-vla.yml) already runs authorize-pr before invoking this
   # workflow over workflow_call, so workflow_call runs are pre-authorized.
@@ -82,38 +136,89 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-and-test:
-    needs: [authorize, authorize-dispatch]
-    if: |
-      always() &&
-      (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success')
-    name: Build ${{ matrix.platform }} and Run E2E Tests
-    runs-on: ${{ matrix.runner }}
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE any build or Device Farm run, so a typo
+  # or an empty selection costs nothing. Skipped for workflow_call.
+  validate-devices:
+    name: Validate device selection
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 120
-    continue-on-error: true  # Don't block PR merges if tests fail
+    timeout-minutes: 5
     permissions:
       contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      # Validate the tests filter + shard fan-out against test-groups.json from
+      # the SAME ref the build executes (inputs.ref || github.sha), not the
+      # workflow ref, so a branch that renames/adds runners or shards can't pass
+      # stale validation. Data only — nothing here is executed; the composite
+      # action stays on the trusted workflow ref checked out above.
+      - name: Checkout validation data (matches the built ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            packages/vla-ggml/test/mobile/test-groups.json
+          sparse-checkout-cone-mode: false
+          path: validation-data
+          persist-credentials: false
+      - name: Validate requested devices
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          test-groups-path: validation-data/packages/vla-ggml/test/mobile/test-groups.json
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+  build-and-test:
+    # workflow_call: validate-devices is skipped; its `skipped` result keeps
+    # this job running exactly as before.
+    # workflow_dispatch: a bad/empty device selection blocks this job.
+    needs: [runner_names, authorize, authorize-dispatch, validate-devices]
+    if: |
+      always() &&
+      needs.runner_names.result == 'success' &&
+      (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success') &&
+      (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped')
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
+    environment: release
+    timeout-minutes: 120
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger (workflow_dispatch, workflow_call, schedule). Re-adding it
+    # silently turns failed runs green.
+    permissions:
+      contents: read
+      # prebuild_run_id reads another run and downloads its artifact.
+      actions: read
       packages: read
       pull-requests: write
       id-token: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: Android
-            os: ubuntu-22.04
-            runner: qvac-ubuntu2204-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+      # On workflow_dispatch, run only the chosen platform (devices come from
+      # the manual inputs). workflow_call runs both platforms as before.
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        env:
+          PKG: ${{ github.event.inputs.package }}
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "$PKG" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -128,8 +233,8 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -143,31 +248,53 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/vla-ggml'
           addon-npm-name: '@qvac/vla-ggml'
-          prebuild-artifact-prefix: 'vla-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          prebuild-artifact-prefix: 'prebuild-vla-ggml-'
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          # Manual dispatch (inputs.platform set). An empty `package` does NOT test
+          # this branch's native code: a standalone dispatch produces no prebuild
+          # artifacts, so the fallback resolves the published @qvac/vla-ggml@latest.
+          # @qvac/vla-ggml@<ver> = published; @tetherto/vla-ggml-mono@<dev> = a branch
+          # build from GitHub Packages, the only way to put unmerged native code on a
+          # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call is untouched (artifact-first).
+          package-version: ${{ inputs.platform != '' && inputs.package || '' }}
+          force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
+          # Dispatch-only: under workflow_call this input does not exist and
+          # resolves empty, leaving the artifact-first path untouched.
+          prebuild-run-id: ${{ inputs.prebuild_run_id }}
 
-      # VLA-specific eu-central-1 OIDC session for the SmolVLA S3 presign.
-      # The us-west-2 Device Farm session is acquired separately inside the
-      # upload-to-devicefarm composite. Must run BEFORE Build mobile app so
-      # the presigned URL / sha256 / size are baked into testAssets before
-      # the test app bundle is generated.
+      # OIDC session for the SmolVLA/GR00T S3 presign (the us-west-2 Device Farm
+      # session is acquired separately in upload-to-devicefarm). Must run BEFORE
+      # the build so the presigned URL / sha256 / size are baked into testAssets.
+      # Presign against the US bucket; vla/* models are mirrored under
+      # qvac_models_compiled/ by the EU->US sync job.
       - name: Configure AWS credentials for S3 presign
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
+          aws-region: us-west-2
           role-duration-seconds: 7200
 
       - name: Generate SmolVLA Model URL
         working-directory: addon/packages/vla-ggml
         env:
-          AWS_REGION: eu-central-1
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          AWS_REGION: us-west-2
+          MODEL_S3_BUCKET: tether-ai-dev-us
         run: |
           echo "🔑 Generating SmolVLA model URL for mobile tests..."
           chmod +x scripts/generate-smolvla-presigned-url.sh
           ./scripts/generate-smolvla-presigned-url.sh
           echo "✅ SmolVLA model URL generated and exported"
+
+      - name: Generate GR00T Model URL
+        working-directory: addon/packages/vla-ggml
+        env:
+          AWS_REGION: us-west-2
+          MODEL_S3_BUCKET: tether-ai-dev-us
+        run: |
+          echo "Generating GR00T model URL for mobile tests..."
+          chmod +x scripts/generate-groot-presigned-url.sh
+          ./scripts/generate-groot-presigned-url.sh
+          echo "GR00T model URL generated and exported"
 
       - name: Bundle Model URLs in config files for APK to access
         working-directory: addon/packages/vla-ggml
@@ -177,7 +304,14 @@ jobs:
           SMOLVLA_MODEL_SHA256: ${{ env.SMOLVLA_MODEL_SHA256 }}
         run: |
           echo "📝 Creating model URL config files for mobile app bundling..."
-          echo "   SMOLVLA_MODEL_URL: ${SMOLVLA_MODEL_URL:+SET}${SMOLVLA_MODEL_URL:-NOTSET}"
+          # Presigned URL carries creds: mask it, then log only SET/NOTSET.
+          # `${VAR:-NOTSET}` would expand the full URL into the log when set.
+          if [ -n "${SMOLVLA_MODEL_URL:-}" ]; then
+            echo "::add-mask::${SMOLVLA_MODEL_URL}"
+            echo "   SMOLVLA_MODEL_URL: SET"
+          else
+            echo "   SMOLVLA_MODEL_URL: NOTSET"
+          fi
           echo "   SMOLVLA_MODEL_SIZE: ${SMOLVLA_MODEL_SIZE:-unknown}"
           echo "   SMOLVLA_MODEL_SHA256: ${SMOLVLA_MODEL_SHA256:+SET}${SMOLVLA_MODEL_SHA256:-NOTSET}"
 
@@ -204,13 +338,13 @@ jobs:
           # S3 oracle directly. The pi05 test is gated by `_skipMobilePi05`
           # in pi05.test.js so no pi05 URL/fixture bundling is needed here.
 
-          # Copy the PyTorch reference fixtures into testAssets/ so the
-          # mobile test app can load them via global.assetPaths and run the
-          # same quality assertion the desktop integration test runs (max|Δ|
-          # and cosine similarity vs PyTorch). Without this the mobile run
-          # silently skips the quality check.
+          # Copy the PyTorch reference fixtures into testAssets/ so the mobile
+          # test app can load them via global.assetPaths and run the same
+          # quality assertion the desktop integration test runs (max|delta| and
+          # cosine similarity vs PyTorch). Kept here, gated on the always-present
+          # SMOLVLA_MODEL_URL, so a GR00T S3 hiccup can't break fixture bundling.
           echo ""
-          echo "📦 Bundling integration test fixtures..."
+          echo "Bundling integration test fixtures..."
           for f in pt_actions_libero_fixed.json \
                    pt_actions_libero_real.json \
                    libero_real_left.bin \
@@ -218,15 +352,48 @@ jobs:
             src="test/integration/assets/$f"
             if [ -f "$src" ]; then
               cp "$src" "test/mobile/testAssets/$f"
-              echo "   ✅ $f ($(wc -c < test/mobile/testAssets/$f) bytes)"
+              echo "   $f ($(wc -c < test/mobile/testAssets/$f) bytes)"
             else
-              echo "   ⚠️  $f missing — mobile will skip the corresponding fixture"
+              echo "   $f missing, mobile will skip the corresponding fixture"
             fi
           done
 
-          echo ""
-          echo "📂 testAssets directory contents:"
-          ls -la test/mobile/testAssets/
+      - name: Bundle GR00T Model URL in config file for APK to access
+        working-directory: addon/packages/vla-ggml
+        env:
+          GROOT_MODEL_URL: ${{ env.GROOT_MODEL_URL }}
+          GROOT_MODEL_SIZE: ${{ env.GROOT_MODEL_SIZE }}
+          GROOT_MODEL_SHA256: ${{ env.GROOT_MODEL_SHA256 }}
+        run: |
+          echo "Creating GR00T model URL config for mobile app bundling..."
+          # Presigned URL carries creds: mask it, then log only SET/NOTSET.
+          # `${VAR:-NOTSET}` would expand the full URL into the log when set.
+          if [ -n "${GROOT_MODEL_URL:-}" ]; then
+            echo "::add-mask::${GROOT_MODEL_URL}"
+            echo "   GROOT_MODEL_URL: SET"
+          else
+            echo "   GROOT_MODEL_URL: NOTSET"
+          fi
+          echo "   GROOT_MODEL_SIZE: ${GROOT_MODEL_SIZE:-unknown}"
+          echo "   GROOT_MODEL_SHA256: ${GROOT_MODEL_SHA256:+SET}${GROOT_MODEL_SHA256:-NOTSET}"
+
+          mkdir -p test/mobile/testAssets
+
+          if [ -n "${GROOT_MODEL_URL:-}" ]; then
+            jq -n \
+              --arg url "$GROOT_MODEL_URL" \
+              --arg size "${GROOT_MODEL_SIZE:-}" \
+              --arg sha256 "${GROOT_MODEL_SHA256:-}" \
+              '{modelUrl: $url}
+                + (if $size   != "" then {sizeBytes: ($size | tonumber)} else {} end)
+                + (if $sha256 != "" then {sha256: $sha256}              else {} end)' \
+              > test/mobile/testAssets/groot-urls.json
+            echo "   GR00T URL bundled ($(wc -c < test/mobile/testAssets/groot-urls.json) bytes)"
+            # Do not echo the URL itself (it's a presigned URL with creds).
+          else
+            echo "   GR00T URL not available"
+            exit 1
+          fi
 
       - name: Build mobile app
         id: build
@@ -246,10 +413,60 @@ jobs:
           # WDIO/Mocha session outlives any single test.
           android-per-test-timeout-minutes: '60'
 
+      # Runs after the presigned URLs were bundled ({smolvla,groot}-urls.json), so
+      # we bake them into a per-shard manifest; the host script reads each shard's
+      # grep and pushes only that shard's multi-GB GGUF to a platform-local
+      # staging dir. The phone copies it instead of pulling from the flaky
+      # presigned-S3 link.
+      # pi05 is deferred on mobile and stages nothing.
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: matrix.platform == 'Android'
+        working-directory: addon/packages/vla-ggml
+        run: |
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: matrix.platform == 'iOS'
+        working-directory: addon/packages/vla-ggml
+        run: |
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # On a manual run with a test filter, override to a single grepped spec so
+      # only those tests run (and the sharded fan-out collapses to one spec).
+      # Empty filter / workflow_call keeps the auto-detected shard groups.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          # Reject anything but mocha-safe grep characters so a manual `tests`
+          # value cannot break out of the generated WDIO config on the Device
+          # Farm host (defense-in-depth; the sink is also JSON-encoded).
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
+
       # VLA reuses the LLAMACPP_EMBED Device Farm project + pool secrets
       # (see env-block comment above). The composite auto-detects
-      # test-groups.json under <addon-workdir>/test/mobile/ — VLA currently
-      # has no test-groups.json, so a single default test spec is emitted.
+      # test-groups.json under <addon-workdir>/test/mobile/; VLA ships one
+      # (smolvla/groot), so the test specs come from it.
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -261,10 +478,13 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          test-groups: ${{ steps.manual_tests.outputs.groups }}
           enables-perf: 'true'
           # 70-minute WDIO/Mocha session ceiling so the runner outlives
           # the per-test 60-minute ceiling enforced above.
           mocha-timeout-ms: '4200000'
+          # Host pre-stages the running shard's GGUF before device tests.
+          extra-pre-test-commands: ${{ matrix.platform == 'iOS' && steps.ios_prestage.outputs.block || steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule
@@ -277,6 +497,11 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # workflow_dispatch: fan the chosen shard(s) across the chosen device(s).
+          # workflow_call: default (dual-flagship input) keeps auto-sharded pool runs.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'dual-flagship' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
@@ -331,3 +556,4 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+

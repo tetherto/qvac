@@ -1,0 +1,144 @@
+name: Docs Website Health Check
+
+# Daily production health-check for https://docs.qvac.tether.io (QVAC-20429).
+# Probes every sitemap page, its `.md` sibling, every literal permanent redirect
+# in `_redirects`, and the `llms.txt` / `llms-full.txt` catalogs. On any 404 (or
+# other >= 400 / network error) the scheduled run fails and opens/updates a
+# tracking issue. The broken-URL list stays in the run's step summary and logs —
+# never in Slack or the issue body (a Slack webhook in this public repo is a
+# leak risk; see the ticket discussion).
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # daily 02:30 UTC (08:00 IST)
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/docs-website-health-check.yml
+      - .github/scripts/docs-website-health-check.mjs
+      - .github/scripts/test/docs-website-health-check.test.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-website-health-check-${{ github.ref }}
+  # Never cancel an in-flight production probe / issue-notify half-way through.
+  cancel-in-progress: false
+
+jobs:
+  unit-test:
+    name: Unit tests
+    # PRs and manual runs validate the collector/probe logic without touching
+    # production; the scheduled run skips straight to probing.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Run health-check unit tests
+        run: node --test .github/scripts/test/docs-website-health-check.test.mjs
+
+  probe-production:
+    name: Probe production docs
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Probe docs.qvac.tether.io
+        # `_redirects` is pulled from the `docs-production` branch (what Sevalla
+        # actually serves); the checked-out copy on the default branch is the
+        # offline fallback. `github.repository` keeps forks self-contained.
+        env:
+          REDIRECTS_URL: https://raw.githubusercontent.com/${{ github.repository }}/docs-production/docs/website/public/_redirects
+        run: |
+          node .github/scripts/docs-website-health-check.mjs \
+            --origin https://docs.qvac.tether.io \
+            --redirects-url "$REDIRECTS_URL" \
+            --redirects-file docs/website/public/_redirects \
+            --concurrency 12
+
+  notify-on-failure:
+    name: Open or update tracking issue
+    needs: probe-production
+    # Only the scheduled trigger should file issues. Manual `workflow_dispatch`
+    # runs (used for testing) intentionally stay silent.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Open or update tracking issue
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            const title = 'Docs site health-check detected broken pages';
+            const label = 'docs-health';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The daily docs health-check found one or more broken pages on https://docs.qvac.tether.io.`,
+              ``,
+              `- Run: ${runUrl}`,
+              `- The full list of broken URLs is in the run's **Probe production docs** job (step summary + logs). It is deliberately kept out of this issue and out of Slack.`,
+              `- Triage: a 404 usually means a page was removed/renamed without a matching \`301\` in \`docs/website/public/_redirects\`, or a stale entry in the sitemap. Fix the redirect or the source page and re-run this workflow to confirm.`,
+            ].join('\n');
+
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 5,
+            });
+
+            if (existing.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body,
+              });
+              core.info(`Appended comment to existing issue #${existing[0].number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label],
+                assignees: [
+                  'BrunoCampana',
+                  'GSServita',
+                  'costin-busioc',
+                  'opaninakuffo',
+                  'Proletter',
+                  'sidj-thr',
+                ],
+              });
+              core.info(`Opened new issue #${created.data.number}`);
+            }
