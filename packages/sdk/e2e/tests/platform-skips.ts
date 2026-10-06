@@ -244,6 +244,36 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── the Python client ────────────────────────────────────────────────────
+  // Skipped because the claim belongs to the JS client rather than to the SDK: the same
+  // test id on Python would be asserting something else. This is not the place to record
+  // a body that is merely still to be written -- that one reports `incomplete`, which is
+  // the number the release matrix exists to shrink.
+  {
+    match: /^(no-lingering-bare-|worker-restart-)/,
+    skip: {
+      reason:
+        "Asserts on the Bare worker processes the JS client spawns, by reading this process's own child table. The Python client spawns its own worker with its own lifecycle, so a body here would be testing a different thing under the same name; the JS leg is where this claim lives",
+      platforms: ['desktop-python']
+    }
+  },
+  {
+    match: ['error-invalid-response-type', 'error-structured-error-code'],
+    skip: {
+      reason:
+        "Reads the JS package's exported error-code tables, which are a property of one client's module surface rather than of the shared contract. The equivalent claim for Python is covered by its own unit tests",
+      platforms: ['desktop-python']
+    }
+  },
+  {
+    match: /^rpc-server-device-map/,
+    skip: {
+      reason:
+        "Exercises getRpcDeviceMap, a pure JS helper in the SDK's module surface with no RPC behind it. The Python SDK exposes the RPC server methods, not this helper",
+      platforms: ['desktop-python']
+    }
+  },
+
   // ── one mobile OS only ───────────────────────────────────────────────────
   {
     match: ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
