@@ -47,12 +47,13 @@ full list.
 
 Which rebuild command you run depends on what changed.
 
-| You changed                              | Command                      | Rebuild packaged apps?                    |
-| ---------------------------------------- | ---------------------------- | ----------------------------------------- |
-| Inference source (`packages/inference/`) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
-| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
-| Test code or assets in `e2e/`            | `npm run install:build`      | Yes for mobile and Electron               |
-| Only the producer side (filter, suite)   | none                         | No — use `--skip-build`                   |
+| You changed                               | Command                                 | Rebuild packaged apps?                           |
+| ----------------------------------------- | --------------------------------------- | ------------------------------------------------ |
+| Inference source (`packages/inference/`)  | `npm run install:build:full`            | Yes — `--skip-build` will miss the change        |
+| SDK source (`packages/sdk/` outside e2e)  | `npm run install:build:full`            | Yes — `--skip-build` will miss the change        |
+| Test code or assets in `e2e/`             | `npm run install:build`                 | Yes for mobile and Electron                      |
+| Framework source (`packages/test-suite/`) | `npm run sync:test-suite`, then rebuild | Yes — the app copies the framework at build time |
+| Only the producer side (filter, suite)    | none                                    | No — use `--skip-build`                          |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
 - `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`), clears the
@@ -289,6 +290,36 @@ in the form.
 - **Definitions** live in [`tests/<feature>-tests.ts`](./tests), aggregated in
   [`tests/test-definitions.ts`](./tests/test-definitions.ts). Each entry is a `TestDefinition` with `testId`,
   `params`, `expectation`, optional `suites`, and `metadata`.
+- **Prefer a declarative body.** A definition with `steps` is run by the shared
+  step interpreter, so it runs on every client rather than only the JS ones. The
+  operations and what a client must do with them are specified in
+  [`@qvac/test-suite`'s conformance spec](../../test-suite/docs/conformance.md);
+  the per-platform naming is in [`tests/platform-vocabulary.md`](./tests/platform-vocabulary.md)
+  and the suite tags in [`tests/suite-tags.md`](./tests/suite-tags.md). An
+  executor stays the right answer only for bodies that cannot be data.
+- **Which model a key means** is in [`tests/shared/resource-table.ts`](./tests/shared/resource-table.ts),
+  not in the consumer entries. Regenerate the JSON copy with `npm run emit:resource-table`.
+- **Before pushing**, run the cheap gates:
+
+  ```bash
+  npm run build
+  npm run check:resource-table
+  npm run check:step-dependencies
+  npx qvac-test catalog:validate --config=.
+  ```
+
+- **Working on the framework too?** `package.json` pins `@qvac/test-suite` to a
+  published range, and a build resolves that range — which is what you want
+  unless the change under test is in `packages/test-suite` itself. For that case
+  run `npm run sync:test-suite` by hand; nothing calls it for you. It updates
+  this checkout only — a packaged app takes its own copy when it is built, so a
+  sync alone changes nothing on a phone or in an Electron bundle. The order is
+  sync first, then rebuild the consumer without `--skip-build`: the mobile build
+  installs the published package into `build/consumers/<platform>` and then
+  overwrites it from here (`adoptHostFramework`). An install or a rebuild of
+  this package puts the published framework back, so re-run the sync after
+  either. CI makes the same choice through the `test-suite-source` input, which
+  is `branch` for the SDK e2e PR runs.
 - **Executors — pick one of three locations based on runtime requirements:**
   - [`tests/shared/executors/`](./tests/shared/executors) — **default**. Pure SDK API calls, no Node stdlib,
     no RN APIs. Runs on both desktop and mobile. Example:

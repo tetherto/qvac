@@ -1,5 +1,43 @@
 // RAG test definitions
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/**
+ * Ingests one document and checks that chunks came back.
+ *
+ * The workspace is deleted afterwards whether the body passed or not. The
+ * executor never did this -- it disambiguated instead, suffixing the workspace
+ * with the embedding model's id so runs against different models could not mix
+ * -- but a workspace that is gone by the end cannot collide with anything, and
+ * leaving state behind is what made the suffix necessary in the first place.
+ */
+const ingestSteps = (document: string): Step[] => [
+  { useModel: { deps: ['embeddings'], as: 'model' } },
+  {
+    call: {
+      method: 'ragIngest',
+      params: {
+        modelId: '$model',
+        workspace: '$params.workspace',
+        documents: [document],
+        chunk: true,
+        chunkOpts: {
+          chunkSize: '$params.chunkSize',
+          chunkOverlap: '$params.chunkOverlap',
+          chunkStrategy: '$params.chunkStrategy?'
+        }
+      },
+      as: 'ingested'
+    }
+  },
+  { project: { from: '$ingested', path: 'processed', as: 'processed' } },
+  { assert: { on: '$processed', named: 'lengthAtLeast', with: { length: 1 } } }
+]
+
+/** Removes the workspace the body created, on both paths. */
+const deleteWorkspace: Step[] = [
+  { call: { method: 'ragCloseWorkspace', params: { workspace: '$params.workspace' } } },
+  { call: { method: 'ragDeleteWorkspace', params: { workspace: '$params.workspace' } } }
+]
 
 const createRagTest = (
   testId: string,
@@ -11,12 +49,15 @@ const createRagTest = (
     chunkOverlap: number
     chunkStrategy?: string
   },
-  suites?: string[]
+  suites?: string[],
+  steps?: Step[]
 ): TestDefinition => ({
   testId,
   params,
   expectation: { validation: 'type', expectedType: 'string' }, // Returns success message or result object
   ...(suites && { suites }),
+  steps: steps ?? ingestSteps(params.documentContent ?? ''),
+  finally: deleteWorkspace,
   metadata: {
     category: 'rag',
     dependency: 'embeddings',
@@ -54,6 +95,10 @@ export const ragEmbeddingsLarge = createRagTest('rag-embeddings-large-chunks', {
   chunkStrategy: 'paragraph'
 })
 
+/**
+ * No declarative body: it writes a workspace marker into the platform data directory before ingest
+ * and reads the index manifest on disk after, which no binding exposes.
+ */
 export const ragTurboVecIngestSearch: TestDefinition = {
   testId: 'rag-turbovec-ingest-search',
   params: {
@@ -118,6 +163,32 @@ export const ragLargeDocument: TestDefinition = {
   },
   expectation: { validation: 'throws-error', errorContains: 'context overflow' },
   suites: ['smoke'],
+  // The refusal is the claim here: 32 KB of text overflows the embedding model's context, and the
+  // test exists to pin that it is reported rather than silently truncated.
+  steps: [
+    { asset: { kind: 'document', file: '$params.documentFile', form: 'text', as: 'document' } },
+    { useModel: { deps: ['embeddings'], as: 'model' } },
+    {
+      callError: {
+        method: 'ragIngest',
+        params: {
+          modelId: '$model',
+          workspace: '$params.workspace',
+          documents: ['$document'],
+          chunk: true,
+          chunkOpts: {
+            chunkSize: '$params.chunkSize',
+            chunkOverlap: '$params.chunkOverlap',
+            chunkStrategy: '$params.chunkStrategy'
+          }
+        },
+        as: 'err'
+      }
+    },
+    { project: { from: '$err', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
+  finally: deleteWorkspace,
   metadata: { category: 'rag', dependency: 'embeddings', estimatedDurationMs: 120000 }
 }
 
@@ -130,7 +201,11 @@ export const ragMediumDocument = createRagTest(
     chunkOverlap: 70,
     chunkStrategy: 'paragraph'
   },
-  ['smoke']
+  ['smoke'],
+  [
+    { asset: { kind: 'document', file: '$params.documentFile', form: 'text', as: 'document' } },
+    ...ingestSteps('$document')
+  ]
 )
 
 export const ragTests = [

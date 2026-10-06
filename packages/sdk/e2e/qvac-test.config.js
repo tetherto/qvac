@@ -60,6 +60,28 @@ export default {
       packageManager: 'npm',
       packageScript: 'package:snap'
     },
+    // Non-JS clients that interpret the same catalog. The framework keeps the
+    // MQTT state machine and drives the client over stdin/stdout, so the
+    // protocol stays implemented once. Each entry is its own run and its own
+    // CI leg — runs are single-consumer by design.
+    external: [
+      {
+        name: 'python',
+        platform: 'desktop-python',
+        mode: 'bridge',
+        interpreter: '../../sdk-python/.venv/bin/python',
+        args: ['-m', 'qvac_e2e.runner'],
+        cwd: './python',
+        env: {
+          // Point the Python client at the worker this suite bundles, not a
+          // stock one. Same binary as the JS legs, so any difference in a
+          // result can only have come from the client. The Bare runtime is
+          // resolved by the framework and injected as QVAC_BARE_PATH, so it
+          // stays out of this file.
+          QVAC_WORKER_PATH: '../qvac/worker.entry.mjs'
+        }
+      }
+    ],
     mobile: {
       platforms: ['ios', 'android'],
       entry: './dist/tests/mobile/consumer.js',
