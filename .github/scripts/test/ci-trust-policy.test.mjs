@@ -3136,8 +3136,17 @@ test("cache policy: the toolchain fingerprint identifies vcpkg by version, not b
   if (!/vcpkg_version_raw="\$\("\$\{vcpkg_bin\}" version\)/.test(source)) {
     offenders.push("bash: the fingerprint never runs `vcpkg version`");
   }
-  if (!/\$vcpkgVersion\s*=\s*\(&\s*\$vcpkgBin\s+version/.test(source)) {
+  if (!/\$vcpkgVersionRaw\s*=\s*&\s*\$vcpkgBin\s+version\s*\n/.test(source)) {
     offenders.push("powershell: the fingerprint never runs `vcpkg version`");
+  }
+
+  // Trimming in the same pipeline closes vcpkg's stdout early, and the step
+  // then fails on its leftover exit code (QVAC-26572).
+  if (/\$vcpkgBin\s+version\s*\|/.test(source)) {
+    offenders.push("powershell: `vcpkg version` is piped straight into a trim");
+  }
+  if (!/\$LASTEXITCODE\s+-ne\s+0/.test(source)) {
+    offenders.push("powershell: `vcpkg version`'s exit code is not checked");
   }
 
   // An empty version would hash to one constant on every host, which is the
