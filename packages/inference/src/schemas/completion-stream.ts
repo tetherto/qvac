@@ -203,18 +203,61 @@ export const responseFormatSchema = z.discriminatedUnion('type', [
     .strict()
 ])
 
+const historyToolCallSchema = z.object({
+  id: z.string().optional().describe('Call id, echoed by the `tool` message that answers it.'),
+  name: z.string().min(1).describe('Name of the tool that was called.'),
+  arguments: z.record(z.string(), z.unknown()).describe('Arguments the tool was called with.')
+})
+
+export const historyMessageSchema = z
+  .object({
+    role: z
+      .string()
+      .describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
+    content: z.string().describe('Message content.'),
+    attachments: z
+      .array(attachmentSchema)
+      .optional()
+      .describe('Optional file attachments for multimodal models.'),
+    toolCalls: z
+      .array(historyToolCallSchema)
+      .optional()
+      .describe(
+        "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty."
+      ),
+    toolCallId: z
+      .string()
+      .optional()
+      .describe('On a `tool` turn: the id of the call this result answers.'),
+    toolName: z
+      .string()
+      .optional()
+      .describe('On a `tool` turn: the name of the tool that produced the result.')
+  })
+  .superRefine((message, ctx) => {
+    if (message.toolCalls !== undefined && message.role !== 'assistant') {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`toolCalls` is only valid on an assistant message.',
+        path: ['toolCalls']
+      })
+    }
+    for (const key of ['toolCallId', 'toolName'] as const) {
+      if (message[key] !== undefined && message.role !== 'tool') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `\`${key}\` is only valid on a tool message.`,
+          path: [key]
+        })
+      }
+    }
+  })
+
+export type HistoryMessage = z.infer<typeof historyMessageSchema>
+
 export const completionParamsSchema = z.object({
   history: z
-    .array(
-      z.object({
-        role: z.string().describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
-        content: z.string().describe('Message content.'),
-        attachments: z
-          .array(attachmentSchema)
-          .optional()
-          .describe('Optional file attachments for multimodal models.')
-      })
-    )
+    .array(historyMessageSchema)
     .describe('Array of conversation messages sent to the model.'),
   modelId: z.string().describe('The identifier of the model to use for completion.'),
   kvCache: kvCacheSchema

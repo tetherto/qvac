@@ -1597,15 +1597,69 @@ class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     ]
 
 
+class BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="Arguments the tool was called with.",
+            title="BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem(
+    GeneratedBaseModel
+):
+    id: Annotated[
+        str | None,
+        Field(description="Call id, echoed by the `tool` message that answers it."),
+    ] = None
+    name: Annotated[
+        str, Field(description="Name of the tool that was called.", min_length=1)
+    ]
+    arguments: Annotated[
+        BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments,
+        Field(
+            description="Arguments the tool was called with.",
+            title="BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
 class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
     role: Annotated[
         str,
-        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
+        Field(
+            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
+        ),
     ]
     content: Annotated[str, Field(description="Message content.")]
     attachments: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
+    ] = None
+    tool_calls: Annotated[
+        list[BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem] | None,
+        Field(
+            alias="toolCalls",
+            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+        ),
+    ] = None
+    tool_call_id: Annotated[
+        str | None,
+        Field(
+            alias="toolCallId",
+            description="On a `tool` turn: the id of the call this result answers.",
+        ),
+    ] = None
+    tool_name: Annotated[
+        str | None,
+        Field(
+            alias="toolName",
+            description="On a `tool` turn: the name of the tool that produced the result.",
+        ),
     ] = None
 
 
@@ -2877,15 +2931,67 @@ class CompletionOrchestrateRequestHistoryItemAttachmentsItem(GeneratedBaseModel)
     ]
 
 
+class CompletionOrchestrateRequestHistoryItemToolCallsItemArguments(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="Arguments the tool was called with.",
+            title="CompletionOrchestrateRequestHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CompletionOrchestrateRequestHistoryItemToolCallsItem(GeneratedBaseModel):
+    id: Annotated[
+        str | None,
+        Field(description="Call id, echoed by the `tool` message that answers it."),
+    ] = None
+    name: Annotated[
+        str, Field(description="Name of the tool that was called.", min_length=1)
+    ]
+    arguments: Annotated[
+        CompletionOrchestrateRequestHistoryItemToolCallsItemArguments,
+        Field(
+            description="Arguments the tool was called with.",
+            title="CompletionOrchestrateRequestHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
 class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
     role: Annotated[
         str,
-        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
+        Field(
+            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
+        ),
     ]
     content: Annotated[str, Field(description="Message content.")]
     attachments: Annotated[
         list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
+    ] = None
+    tool_calls: Annotated[
+        list[CompletionOrchestrateRequestHistoryItemToolCallsItem] | None,
+        Field(
+            alias="toolCalls",
+            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+        ),
+    ] = None
+    tool_call_id: Annotated[
+        str | None,
+        Field(
+            alias="toolCallId",
+            description="On a `tool` turn: the id of the call this result answers.",
+        ),
+    ] = None
+    tool_name: Annotated[
+        str | None,
+        Field(
+            alias="toolName",
+            description="On a `tool` turn: the name of the tool that produced the result.",
+        ),
     ] = None
 
 
@@ -3480,15 +3586,67 @@ class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     ]
 
 
+class CompletionStreamRequestHistoryItemToolCallsItemArguments(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="Arguments the tool was called with.",
+            title="CompletionStreamRequestHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CompletionStreamRequestHistoryItemToolCallsItem(GeneratedBaseModel):
+    id: Annotated[
+        str | None,
+        Field(description="Call id, echoed by the `tool` message that answers it."),
+    ] = None
+    name: Annotated[
+        str, Field(description="Name of the tool that was called.", min_length=1)
+    ]
+    arguments: Annotated[
+        CompletionStreamRequestHistoryItemToolCallsItemArguments,
+        Field(
+            description="Arguments the tool was called with.",
+            title="CompletionStreamRequestHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
 class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
     role: Annotated[
         str,
-        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
+        Field(
+            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
+        ),
     ]
     content: Annotated[str, Field(description="Message content.")]
     attachments: Annotated[
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
+    ] = None
+    tool_calls: Annotated[
+        list[CompletionStreamRequestHistoryItemToolCallsItem] | None,
+        Field(
+            alias="toolCalls",
+            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+        ),
+    ] = None
+    tool_call_id: Annotated[
+        str | None,
+        Field(
+            alias="toolCallId",
+            description="On a `tool` turn: the id of the call this result answers.",
+        ),
+    ] = None
+    tool_name: Annotated[
+        str | None,
+        Field(
+            alias="toolName",
+            description="On a `tool` turn: the name of the tool that produced the result.",
+        ),
     ] = None
 
 

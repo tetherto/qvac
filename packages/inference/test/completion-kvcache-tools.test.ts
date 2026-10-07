@@ -205,6 +205,51 @@ test('completion: kv-cache sends the tool block with the turn', async (t) => {
   clearRegistry()
 })
 
+// Past tool calls reach the addon structured, so the chat template renders them
+// itself instead of seeing them as text in `content`.
+test('completion: past tool calls reach the model as tool_calls and tool_call_id', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tool-turns-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'tool-turns-key')
+  await complete(
+    [
+      user('Find the area of a triangle with a base of 10 and height of 5.'),
+      {
+        role: 'assistant',
+        content: '',
+        attachments: [],
+        toolCalls: [
+          { id: 'call_1', name: 'calculate_triangle_area', arguments: { base: 10, height: 5 } }
+        ]
+      },
+      {
+        role: 'tool',
+        content: '25',
+        attachments: [],
+        toolCallId: 'call_1',
+        toolName: 'calculate_triangle_area'
+      }
+    ] as unknown as HistoryEntry[],
+    [areaTool]
+  )
+
+  const sent = calls.find((call) => !call.prefill)!.messages as Record<string, unknown>[]
+  t.alike(sent.find((msg) => msg['role'] === 'assistant')?.['tool_calls'], [
+    { id: 'call_1', name: 'calculate_triangle_area', arguments: { base: 10, height: 5 } }
+  ])
+  const toolTurn = sent.find((msg) => msg['role'] === 'tool')
+  t.is(toolTurn?.['tool_call_id'], 'call_1')
+  t.is(toolTurn?.['name'], 'calculate_triangle_area')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
 // Static placement never trims the tool block back out of the cache, so a
 // block that travels on every turn leaves one copy per turn and grows the
 // prefix with the conversation. It only needs to enter the cache once.

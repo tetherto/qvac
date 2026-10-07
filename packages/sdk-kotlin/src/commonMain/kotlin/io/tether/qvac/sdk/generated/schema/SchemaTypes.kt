@@ -716,11 +716,21 @@ data class BatchCompletionStreamRequestPromptsItemHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: String,
     @SerialName("attachments") val `attachments`: List<BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem>? = null,
+    @SerialName("toolCalls") val `toolCalls`: List<BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem>? = null,
+    @SerialName("toolCallId") val `toolCallId`: String? = null,
+    @SerialName("toolName") val `toolName`: String? = null,
 )
 
 @Serializable
 data class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     @SerialName("path") val `path`: String,
+)
+
+@Serializable
+data class BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String,
+    @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
 )
 
 @Serializable
@@ -1065,11 +1075,21 @@ data class CompletionOrchestrateRequestHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: String,
     @SerialName("attachments") val `attachments`: List<CompletionOrchestrateRequestHistoryItemAttachmentsItem>? = null,
+    @SerialName("toolCalls") val `toolCalls`: List<CompletionOrchestrateRequestHistoryItemToolCallsItem>? = null,
+    @SerialName("toolCallId") val `toolCallId`: String? = null,
+    @SerialName("toolName") val `toolName`: String? = null,
 )
 
 @Serializable
 data class CompletionOrchestrateRequestHistoryItemAttachmentsItem(
     @SerialName("path") val `path`: String,
+)
+
+@Serializable
+data class CompletionOrchestrateRequestHistoryItemToolCallsItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String,
+    @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
 )
 
 @Serializable(with = CompletionOrchestrateRequestKvCacheSerializer::class)
@@ -1284,11 +1304,21 @@ data class CompletionStreamRequestHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: String,
     @SerialName("attachments") val `attachments`: List<CompletionStreamRequestHistoryItemAttachmentsItem>? = null,
+    @SerialName("toolCalls") val `toolCalls`: List<CompletionStreamRequestHistoryItemToolCallsItem>? = null,
+    @SerialName("toolCallId") val `toolCallId`: String? = null,
+    @SerialName("toolName") val `toolName`: String? = null,
 )
 
 @Serializable
 data class CompletionStreamRequestHistoryItemAttachmentsItem(
     @SerialName("path") val `path`: String,
+)
+
+@Serializable
+data class CompletionStreamRequestHistoryItemToolCallsItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String,
+    @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
 )
 
 @Serializable
