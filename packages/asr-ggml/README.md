@@ -663,6 +663,12 @@ For four-speaker streaming diarization, use the Sortformer v2.1 GGUF. For up to
 eight speakers, use Nemotron 3 Diarization. Both enable their speaker cache
 from GGUF metadata. Sortformer v1 remains the four-speaker offline default.
 
+For Nemotron 3 Diarization, `longFormWindowFrames` sets when offline input
+switches from one pass to the speaker cache in 30 s chunks. 0 picks 90 s; a
+negative value always runs one pass, which mixes up speakers past about two
+minutes and fails past 400 s. With `prewarm`, the load runs one offline pass
+and one streaming chunk.
+
 ### MOSS-Transcribe-Diarize: `config.mossTranscribeConfig`
 
 | Option | Default | Description |

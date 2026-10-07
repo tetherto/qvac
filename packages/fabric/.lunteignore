@@ -1,0 +1,7 @@
+node_modules
+build
+dist
+prebuilds
+coverage
+package-lock.json
+*.d.ts

@@ -67,8 +67,8 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"},\"streamOpts\":{\"type\":\"object\",\"properties\":{\"windowTimesteps\":{\"type\":\"integer\"},\"hopTimesteps\":{\"type\":\"integer\"},\"emit\":{\"type\":\"string\",\"enum\":[\"delta\",\"full\"]}}},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"requestId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"operation\":{\"type\":\"string\",\"const\":\"request\"},\"requestId\":{\"type\":\"string\"},\"clearCache\":{\"type\":\"boolean\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"operation\":{\"type\":\"string\",\"const\":\"broad\"},\"modelId\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\",\"enum\":[\"completion\",\"batchCompletion\",\"embeddings\",\"transcribe\",\"translate\",\"diffusion\",\"world\",\"audiogen\",\"tts\",\"ocr\",\"vla\",\"finetune\",\"loadModel\",\"downloadAsset\",\"rpcServer\",\"rpcDiscovery\",\"rag\"]}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"image\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"image\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"type\":{\"type\":\"string\",\"const\":\"classify\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\",\"content\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"remove_thinking_from_context\":{\"type\":\"boolean\"},\"tool_choice\":{\"type\":\"string\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"maxToolTurns\":{\"type\":\"integer\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\",\"content\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"remove_thinking_from_context\":{\"type\":\"boolean\"},\"tool_choice\":{\"type\":\"string\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionStream\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\",\"content\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"remove_thinking_from_context\":{\"type\":\"boolean\"},\"tool_choice\":{\"type\":\"string\"},\"parallel_tool_calls\":{\"type\":\"boolean\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"maxToolTurns\":{\"type\":\"integer\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\",\"content\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"remove_thinking_from_context\":{\"type\":\"boolean\"},\"tool_choice\":{\"type\":\"string\"},\"parallel_tool_calls\":{\"type\":\"boolean\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"all\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"deleteCache\"},\"all\":{\"type\":\"boolean\",\"const\":true}}},{\"type\":\"object\",\"required\":[\"type\",\"auto\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"deleteCache\"},\"auto\":{\"type\":\"boolean\",\"const\":true}}},{\"type\":\"object\",\"required\":[\"type\",\"kvCacheKey\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"deleteCache\"},\"kvCacheKey\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"prompt\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"negative_prompt\":{\"type\":\"string\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"steps\":{\"type\":\"integer\"},\"cfg_scale\":{\"type\":\"number\"},\"img_cfg_scale\":{\"type\":\"number\"},\"guidance\":{\"type\":\"number\"},\"sampling_method\":{\"type\":\"string\",\"enum\":[\"euler\",\"euler_a\",\"heun\",\"dpm2\",\"dpm++2m\",\"dpm++2mv2\",\"dpm++2s_a\",\"lcm\",\"ipndm\",\"ipndm_v\",\"ddim_trailing\",\"tcd\",\"res_multistep\",\"res_2s\"]},\"scheduler\":{\"type\":\"string\",\"enum\":[\"discrete\",\"karras\",\"exponential\",\"ays\",\"gits\",\"sgm_uniform\",\"simple\",\"lcm\",\"smoothstep\",\"kl_optimal\",\"bong_tangent\"]},\"seed\":{\"type\":\"integer\"},\"batch_count\":{\"type\":\"integer\"},\"vae_tiling\":{\"type\":\"boolean\"},\"cache_preset\":{\"type\":\"string\"},\"init_image\":{\"type\":\"string\"},\"init_images\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"increase_ref_index\":{\"type\":\"boolean\"},\"auto_resize_ref_image\":{\"type\":\"boolean\"},\"lora\":{\"type\":\"string\"},\"strength\":{\"type\":\"number\"},\"upscale\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"object\",\"properties\":{\"repeats\":{\"type\":\"integer\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"diffusionStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"topic\",\"type\"],\"properties\":{\"topic\":{\"type\":\"string\"},\"timeoutMs\":{\"type\":\"integer\"},\"type\":{\"type\":\"string\",\"const\":\"discoverRpcServers\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
@@ -736,6 +736,7 @@ data class BatchCompletionStreamRequestPromptsItemGenerationParams(
     @SerialName("reasoning_budget") val `reasoning_budget`: Long? = null,
     @SerialName("remove_thinking_from_context") val `remove_thinking_from_context`: Boolean? = null,
     @SerialName("tool_choice") val `tool_choice`: String? = null,
+    @SerialName("parallel_tool_calls") val `parallel_tool_calls`: Boolean? = null,
 )
 
 @Serializable(with = BatchCompletionStreamRequestPromptsItemResponseFormatSerializer::class)
@@ -818,19 +819,59 @@ data class BatchCompletionStreamRequestPromptsItemToolsItemParameters(
 
 @Serializable
 data class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
-    @SerialName("type") val `type`: BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType,
+    @SerialName("type") val `type`: BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType? = null,
     @SerialName("description") val `description`: String? = null,
     @SerialName("enum") val `enum`: List<JsonElement?>? = null,
 )
 
+@Serializable(with = BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeSerializer::class)
+sealed class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType {
+    data class Value53EF4A00(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00) : BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType()
+    data class Variant2(val value: List<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem>) : BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType()
+}
+internal object BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeSerializer : KSerializer<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Value53EF4A00(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00>(), element))
+            1 -> BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Variant2(input.json.decodeFromJsonElement(serializer<List<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem>>(), element))
+            else -> throw SerializationException("No matching BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType) {
+        when (value) {
+            is BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Value53EF4A00 -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00>(), value.value)
+            is BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Variant2 -> encoder.encodeSerializableValue(serializer<List<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem>>(), value.value)
+        }
+    }
+}
+
 @Serializable
-enum class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType {
+enum class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00 {
     @SerialName("string") `STRING`,
     @SerialName("number") `NUMBER`,
     @SerialName("integer") `INTEGER`,
     @SerialName("boolean") `BOOLEAN`,
     @SerialName("object") `OBJECT`,
     @SerialName("array") `ARRAY`,
+    @SerialName("null") `NULL`,
+}
+
+@Serializable
+enum class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem {
+    @SerialName("string") `STRING`,
+    @SerialName("number") `NUMBER`,
+    @SerialName("integer") `INTEGER`,
+    @SerialName("boolean") `BOOLEAN`,
+    @SerialName("object") `OBJECT`,
+    @SerialName("array") `ARRAY`,
+    @SerialName("null") `NULL`,
 }
 
 @Serializable
@@ -1080,19 +1121,59 @@ data class CompletionOrchestrateRequestToolsItemParameters(
 
 @Serializable
 data class CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
-    @SerialName("type") val `type`: CompletionOrchestrateRequestToolsItemParametersPropertiesValueType,
+    @SerialName("type") val `type`: CompletionOrchestrateRequestToolsItemParametersPropertiesValueType? = null,
     @SerialName("description") val `description`: String? = null,
     @SerialName("enum") val `enum`: List<JsonElement?>? = null,
 )
 
+@Serializable(with = CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeSerializer::class)
+sealed class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType {
+    data class Value70681380(val value: io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380) : CompletionOrchestrateRequestToolsItemParametersPropertiesValueType()
+    data class Variant2(val value: List<CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem>) : CompletionOrchestrateRequestToolsItemParametersPropertiesValueType()
+}
+internal object CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeSerializer : KSerializer<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionOrchestrateRequestToolsItemParametersPropertiesValueType")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): CompletionOrchestrateRequestToolsItemParametersPropertiesValueType {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Value70681380(input.json.decodeFromJsonElement(serializer<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380>(), element))
+            1 -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Variant2(input.json.decodeFromJsonElement(serializer<List<CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem>>(), element))
+            else -> throw SerializationException("No matching CompletionOrchestrateRequestToolsItemParametersPropertiesValueType variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: CompletionOrchestrateRequestToolsItemParametersPropertiesValueType) {
+        when (value) {
+            is CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Value70681380 -> encoder.encodeSerializableValue(serializer<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380>(), value.value)
+            is CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Variant2 -> encoder.encodeSerializableValue(serializer<List<CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem>>(), value.value)
+        }
+    }
+}
+
 @Serializable
-enum class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType {
+enum class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380 {
     @SerialName("string") `STRING`,
     @SerialName("number") `NUMBER`,
     @SerialName("integer") `INTEGER`,
     @SerialName("boolean") `BOOLEAN`,
     @SerialName("object") `OBJECT`,
     @SerialName("array") `ARRAY`,
+    @SerialName("null") `NULL`,
+}
+
+@Serializable
+enum class CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem {
+    @SerialName("string") `STRING`,
+    @SerialName("number") `NUMBER`,
+    @SerialName("integer") `INTEGER`,
+    @SerialName("boolean") `BOOLEAN`,
+    @SerialName("object") `OBJECT`,
+    @SerialName("array") `ARRAY`,
+    @SerialName("null") `NULL`,
 }
 
 @Serializable
@@ -1108,6 +1189,7 @@ data class CompletionOrchestrateRequestGenerationParams(
     @SerialName("reasoning_budget") val `reasoning_budget`: Long? = null,
     @SerialName("remove_thinking_from_context") val `remove_thinking_from_context`: Boolean? = null,
     @SerialName("tool_choice") val `tool_choice`: String? = null,
+    @SerialName("parallel_tool_calls") val `parallel_tool_calls`: Boolean? = null,
 )
 
 @Serializable
@@ -1230,19 +1312,59 @@ data class CompletionStreamRequestToolsItemParameters(
 
 @Serializable
 data class CompletionStreamRequestToolsItemParametersPropertiesValue(
-    @SerialName("type") val `type`: CompletionStreamRequestToolsItemParametersPropertiesValueType,
+    @SerialName("type") val `type`: CompletionStreamRequestToolsItemParametersPropertiesValueType? = null,
     @SerialName("description") val `description`: String? = null,
     @SerialName("enum") val `enum`: List<JsonElement?>? = null,
 )
 
+@Serializable(with = CompletionStreamRequestToolsItemParametersPropertiesValueTypeSerializer::class)
+sealed class CompletionStreamRequestToolsItemParametersPropertiesValueType {
+    data class Value9C410ED0(val value: io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0) : CompletionStreamRequestToolsItemParametersPropertiesValueType()
+    data class Variant2(val value: List<CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem>) : CompletionStreamRequestToolsItemParametersPropertiesValueType()
+}
+internal object CompletionStreamRequestToolsItemParametersPropertiesValueTypeSerializer : KSerializer<CompletionStreamRequestToolsItemParametersPropertiesValueType> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionStreamRequestToolsItemParametersPropertiesValueType")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): CompletionStreamRequestToolsItemParametersPropertiesValueType {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> CompletionStreamRequestToolsItemParametersPropertiesValueType.Value9C410ED0(input.json.decodeFromJsonElement(serializer<CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0>(), element))
+            1 -> CompletionStreamRequestToolsItemParametersPropertiesValueType.Variant2(input.json.decodeFromJsonElement(serializer<List<CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem>>(), element))
+            else -> throw SerializationException("No matching CompletionStreamRequestToolsItemParametersPropertiesValueType variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: CompletionStreamRequestToolsItemParametersPropertiesValueType) {
+        when (value) {
+            is CompletionStreamRequestToolsItemParametersPropertiesValueType.Value9C410ED0 -> encoder.encodeSerializableValue(serializer<CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0>(), value.value)
+            is CompletionStreamRequestToolsItemParametersPropertiesValueType.Variant2 -> encoder.encodeSerializableValue(serializer<List<CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem>>(), value.value)
+        }
+    }
+}
+
 @Serializable
-enum class CompletionStreamRequestToolsItemParametersPropertiesValueType {
+enum class CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0 {
     @SerialName("string") `STRING`,
     @SerialName("number") `NUMBER`,
     @SerialName("integer") `INTEGER`,
     @SerialName("boolean") `BOOLEAN`,
     @SerialName("object") `OBJECT`,
     @SerialName("array") `ARRAY`,
+    @SerialName("null") `NULL`,
+}
+
+@Serializable
+enum class CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem {
+    @SerialName("string") `STRING`,
+    @SerialName("number") `NUMBER`,
+    @SerialName("integer") `INTEGER`,
+    @SerialName("boolean") `BOOLEAN`,
+    @SerialName("object") `OBJECT`,
+    @SerialName("array") `ARRAY`,
+    @SerialName("null") `NULL`,
 }
 
 @Serializable
@@ -1258,6 +1380,7 @@ data class CompletionStreamRequestGenerationParams(
     @SerialName("reasoning_budget") val `reasoning_budget`: Long? = null,
     @SerialName("remove_thinking_from_context") val `remove_thinking_from_context`: Boolean? = null,
     @SerialName("tool_choice") val `tool_choice`: String? = null,
+    @SerialName("parallel_tool_calls") val `parallel_tool_calls`: Boolean? = null,
 )
 
 @Serializable

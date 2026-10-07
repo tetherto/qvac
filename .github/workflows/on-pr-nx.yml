@@ -148,9 +148,13 @@ jobs:
         shell: bash
         env:
           M: ${{ steps.compute.outputs.matrix }}
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGED_FILES: ${{ runner.temp }}/nx-changed-files.raw
         run: |
+          set -euo pipefail
+          # Speech cpp-lint needs a changed source/header, not a dependency bump.
+          node .github/actions/nx-project-matrix/cpp-lint-selection.mjs >> "$GITHUB_OUTPUT"
           {
-            echo "cpplint=$(echo "$M" | jq -c '[.[] | select(.hasCppLint == true)]')"
             # TS checks run PR-head code, so they live in the unprivileged
             # on-pr-<pkg>-ts.yml workflows; we only await their check run. The
             # slug is not the package name, and diffusion predates the shared
@@ -529,12 +533,11 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-      - name: Download prebuilds (from artifacts)
+      - name: Download merged prebuilds
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: prebuild-${{ matrix.package }}-*
+          name: prebuilds-${{ matrix.package }}
           path: ${{ runner.temp }}/qvac-${{ matrix.package }}
-          merge-multiple: true
       - name: Verify linux prebuild dynamic linking
         env:
           CHECKER: ${{ matrix.prebuildLinkingScript }}

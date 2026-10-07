@@ -132,6 +132,14 @@ bare-make install
 npm run test:cpp
 ```
 
+On Linux, the native test runner uses `test/unit/lsan-libdbus.supp` to ignore
+the six allocations left by the system DBus reply during GPU backend probing.
+The same leak reproduces in a pre-H3 addon build. The suppression matches only
+`_dbus_message_loader_queue_messages`; LeakSanitizer remains enabled for addon
+allocations. CTest uses the same suppression. To run `addon-test` directly, set
+`LSAN_OPTIONS=suppressions=$PWD/test/unit/lsan-libdbus.supp` from this package
+directory.
+
 ## Building for Different Platforms
 
 Native builds (building for the same platform you're running on) work out of the box.
