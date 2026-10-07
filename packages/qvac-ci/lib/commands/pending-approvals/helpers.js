@@ -18,7 +18,7 @@ export const SECRET_PATTERNS = [
 ]
 
 export class GitHubSanitizer extends Sanitizer {
-  redact (str) {
+  redact(str) {
     if (typeof str !== 'string') return str
     let result = str
     for (const pattern of SECRET_PATTERNS) {
@@ -28,7 +28,7 @@ export class GitHubSanitizer extends Sanitizer {
   }
 }
 
-export function throwApiError (err, context) {
+export function throwApiError(err, context) {
   let message
   if (err.status === 401) {
     message = 'Authentication failed — check GITHUB_TOKEN / GITHUB_APP_ID / GITHUB_PRIVATE_KEY'
@@ -52,12 +52,12 @@ export const ROLE_DISPLAY = {
 
 export const MIN_CODEOWNER_APPROVALS = 1
 
-export async function buildOctokit () {
+export async function buildOctokit() {
   const token = process.env.GITHUB_TOKEN
   return new Octokit({ auth: token })
 }
 
-export async function buildAppOctokit (owner, repo) {
+export async function buildAppOctokit(owner, repo) {
   const appId = parseInt(process.env.GITHUB_APP_ID, 10)
   const privateKey = process.env.GITHUB_PRIVATE_KEY
 
@@ -71,10 +71,16 @@ export async function buildAppOctokit (owner, repo) {
     const { data } = await appOctokit.rest.apps.getRepoInstallation({ owner, repo })
     installation = data
   } catch (err) {
-    throwApiError(err, `GitHub App (ID: ${appId}) does not appear to be installed on ${owner}/${repo}`)
+    throwApiError(
+      err,
+      `GitHub App (ID: ${appId}) does not appear to be installed on ${owner}/${repo}`
+    )
   }
 
-  const { token: installToken } = await auth({ type: 'installation', installationId: installation.id })
+  const { token: installToken } = await auth({
+    type: 'installation',
+    installationId: installation.id
+  })
 
   return new Octokit({ auth: installToken })
 }
@@ -83,13 +89,9 @@ export async function buildAppOctokit (owner, repo) {
 // GitHub does not let a COMMENTED review supersede an earlier APPROVED or
 // CHANGES_REQUESTED one, and a PENDING review has not been submitted yet
 // (its submitted_at is null). Only these states are decisive.
-export const DECISIVE_REVIEW_STATES = new Set([
-  'APPROVED',
-  'CHANGES_REQUESTED',
-  'DISMISSED'
-])
+export const DECISIVE_REVIEW_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])
 
-export function getLatestApprovals (reviews) {
+export function getLatestApprovals(reviews) {
   const byUser = Object.create(null)
   for (const review of reviews) {
     const username = review.user && review.user.login
@@ -103,7 +105,7 @@ export function getLatestApprovals (reviews) {
   return Object.values(byUser)
 }
 
-export function checkApproved (counts, minTotal) {
+export function checkApproved(counts, minTotal) {
   const maintainer = counts.maintainer || 0
   const teamLead = counts.teamLead || 0
   const other = counts.other || 0
@@ -112,7 +114,7 @@ export function checkApproved (counts, minTotal) {
   return codeowner >= MIN_CODEOWNER_APPROVALS && total >= minTotal
 }
 
-export function getPendingMessage (counts, minTotal) {
+export function getPendingMessage(counts, minTotal) {
   if (checkApproved(counts, minTotal)) return ''
   const maintainer = counts.maintainer || 0
   const teamLead = counts.teamLead || 0
@@ -130,11 +132,12 @@ export function getPendingMessage (counts, minTotal) {
   return parts.join(', and ')
 }
 
-export function buildApprovalComment (approved, counts, pendingMessage) {
-  const approvalSummary = Object.entries(counts)
-    .filter(([, count]) => count > 0)
-    .map(([role, count]) => (ROLE_DISPLAY[role] || role) + ': ' + count)
-    .join(', ') || 'none'
+export function buildApprovalComment(approved, counts, pendingMessage) {
+  const approvalSummary =
+    Object.entries(counts)
+      .filter(([, count]) => count > 0)
+      .map(([role, count]) => (ROLE_DISPLAY[role] || role) + ': ' + count)
+      .join(', ') || 'none'
 
   const lines = [
     '## Review Status',
@@ -147,7 +150,7 @@ export function buildApprovalComment (approved, counts, pendingMessage) {
   return lines.join('\n')
 }
 
-export async function fetchReviews (octokit, owner, repo, prNumber) {
+export async function fetchReviews(octokit, owner, repo, prNumber) {
   try {
     const { data } = await octokit.rest.pulls.listReviews({
       owner,
@@ -162,7 +165,7 @@ export async function fetchReviews (octokit, owner, repo, prNumber) {
 
 // Returns true only for collaborators with write or admin access.
 // Prevents external contributors on public repos from counting toward approvals.
-export async function hasWriteAccess (octokit, owner, repo, username) {
+export async function hasWriteAccess(octokit, owner, repo, username) {
   try {
     const { data } = await octokit.rest.repos.getCollaboratorPermissionLevel({
       owner,
@@ -177,11 +180,9 @@ export async function hasWriteAccess (octokit, owner, repo, username) {
   }
 }
 
-export async function buildApprovalCounts (appOctokit, owner, repo, reviews, teams) {
+export async function buildApprovalCounts(appOctokit, owner, repo, reviews, teams) {
   const latestApprovals = getLatestApprovals(reviews)
-  const approvers = latestApprovals
-    .filter(r => r.state === 'APPROVED')
-    .map(r => r.user.login)
+  const approvers = latestApprovals.filter((r) => r.state === 'APPROVED').map((r) => r.user.login)
 
   if (approvers.length === 0) {
     return { maintainer: 0, teamLead: 0, other: 0 }
@@ -189,7 +190,7 @@ export async function buildApprovalCounts (appOctokit, owner, repo, reviews, tea
 
   // Drop approvers without write access (read-only collaborators or external contributors).
   const accessFlags = await Promise.all(
-    approvers.map(login => hasWriteAccess(appOctokit, owner, repo, login))
+    approvers.map((login) => hasWriteAccess(appOctokit, owner, repo, login))
   )
   const writeApprovers = approvers.filter((_, i) => accessFlags[i])
 
@@ -216,20 +217,20 @@ export async function buildApprovalCounts (appOctokit, owner, repo, reviews, tea
   return counts
 }
 
-export async function getTeamMembers (octokit, org, teamSlug) {
+export async function getTeamMembers(octokit, org, teamSlug) {
   try {
     const members = await octokit.paginate(octokit.rest.teams.listMembersInOrg, {
       org,
       team_slug: teamSlug,
       per_page: 100
     })
-    return new Set(members.map(m => m.login))
+    return new Set(members.map((m) => m.login))
   } catch (err) {
     throwApiError(err, `Team '${teamSlug}' not found in org '${org}'`)
   }
 }
 
-export async function upsertPrComment (octokit, owner, repo, prNumber, body) {
+export async function upsertPrComment(octokit, owner, repo, prNumber, body) {
   const MARKER = '## Review Status'
 
   let comments
@@ -244,7 +245,7 @@ export async function upsertPrComment (octokit, owner, repo, prNumber, body) {
     throwApiError(err, `Could not list comments on PR #${prNumber} in ${owner}/${repo}`)
   }
 
-  const existing = comments.find(c => c.body && c.body.includes(MARKER))
+  const existing = comments.find((c) => c.body && c.body.includes(MARKER))
 
   try {
     if (existing) {
@@ -263,7 +264,10 @@ export async function upsertPrComment (octokit, owner, repo, prNumber, body) {
       })
     }
   } catch (err) {
-    throwApiError(err, `Could not post review-status comment on PR #${prNumber} in ${owner}/${repo}`)
+    throwApiError(
+      err,
+      `Could not post review-status comment on PR #${prNumber} in ${owner}/${repo}`
+    )
   }
 }
 
