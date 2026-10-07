@@ -77,6 +77,7 @@ test('H3 schema: validates fixed controls and unsupported conditioning', (t) => 
     { fps: 16 },
     { cfg_scale: 0 },
     { scheduler: 'simple' },
+    { mode: 'img2vid', init_image: PNG_B64 },
     { control_frames: [PNG_B64] },
     { vace_strength: 0 },
     { strength: 0 }
@@ -87,29 +88,6 @@ test('H3 schema: validates fixed controls and unsupported conditioning', (t) => 
       JSON.stringify(params)
     )
   }
-})
-
-test('H3 schema: accepts image keyframes only for img2vid', (t) => {
-  const base = {
-    modelId: 'h3',
-    prompt: 'Animate the supplied first frame.',
-    width: 960,
-    height: 544,
-    video_frames: 22,
-    fps: 24,
-    cfg_scale: 1
-  }
-  t.ok(h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid', init_image: PNG_B64 }).success)
-  t.is(h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid' }).success, false)
-  t.is(
-    h3VideoRequestSchema.safeParse({ ...base, mode: 'txt2vid', init_image: PNG_B64 }).success,
-    false
-  )
-  t.is(
-    h3VideoRequestSchema.safeParse({ ...base, mode: 'img2vid', init_image: PNG_B64, strength: 0.8 })
-      .success,
-    false
-  )
 })
 
 test('sdcpp config: preserves H3 backend and memory controls', (t) => {

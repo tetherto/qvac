@@ -1151,6 +1151,7 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
     })
   }
   for (const [field, value] of [
+    ['mode', 'txt2vid'],
     ['fps', 24],
     ['cfg_scale', 1],
     ['scheduler', 'discrete']
@@ -1163,7 +1164,7 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
       })
     }
   }
-  for (const field of ['control_frames', 'vace_strength', 'strength'] as const) {
+  for (const field of ['init_image', 'control_frames', 'vace_strength', 'strength'] as const) {
     if (data[field] !== undefined) {
       ctx.addIssue({
         code: 'custom',

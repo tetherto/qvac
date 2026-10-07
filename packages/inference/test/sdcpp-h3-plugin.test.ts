@@ -60,35 +60,11 @@ test('H3 plugin: public load config resolves four files and preserves native con
   t.is(debug._config?.['stream_layers'], false)
 })
 
-test('H3 plugin: audio VAE may be omitted for silent video', async (t) => {
-  const silentConfig = { ...config, audioVaeModelSrc: undefined }
-  const resolved = await diffusionPlugin.resolveConfig!(silentConfig, {
-    resolveModelPath: async (src) => String(src),
-    modelSrc: '/models/model.gguf',
-    modelType: 'sdcpp-generation'
-  })
-  t.alike(resolved.artifacts, {
-    llmModelPath: '/models/encoder.gguf',
-    vaeModelPath: '/models/video.safetensors'
-  })
-  const { model } = diffusionPlugin.createModel({
-    modelId: 'h3-silent',
-    modelPath: '/models/model.gguf',
-    modelConfig: resolved.config,
-    artifacts: resolved.artifacts
-  })
-  const debug = model as { _files?: Record<string, string> }
-  t.alike(debug._files, {
-    model: '/models/model.gguf',
-    llm: '/models/encoder.gguf',
-    vae: '/models/video.safetensors'
-  })
-})
-
 test('H3 plugin: rejects missing and conflicting companions before resolution', async (t) => {
   for (const override of [
     { llmModelSrc: undefined },
     { vaeModelSrc: undefined },
+    { audioVaeModelSrc: undefined },
     { t5XxlModelSrc: '/models/t5.gguf' },
     { highNoiseDiffusionModelSrc: '/models/expert.gguf' },
     { clipVisionModelSrc: '/models/clip.gguf' },
@@ -119,6 +95,7 @@ test('H3 plugin: rejects missing and conflicting companions before resolution', 
 test('H3 plugin: constructor rejects incomplete and conflicting artifacts', (t) => {
   for (const override of [
     { llmModelPath: '' },
+    { audioVaeModelPath: '' },
     { vaeModelPath: '' },
     { t5XxlModelPath: '/models/t5.gguf' },
     { highNoiseDiffusionModelPath: '/models/expert.gguf' },

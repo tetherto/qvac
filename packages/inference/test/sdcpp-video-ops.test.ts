@@ -1,7 +1,6 @@
 import test from 'brittle'
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
 import path from 'bare-path'
-import Buffer from 'bare-buffer'
 
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUg=='
 const JPEG_B64 = '/9j/4AAQSkZJRgABAQEASABIAAA='
@@ -82,7 +81,8 @@ test('video op: H3 validates before native execution and preserves audio results
         { lora_strength: 0 },
         { reference_attention_strength: 0 },
         { high_noise_cfg_scale: 0 },
-        { moe_boundary: 0 }
+        { moe_boundary: 0 },
+        { mode: 'img2vid' as const, init_image: PNG_B64 }
       ]) {
         await t.exception(
           async () => videoOp({ ...base, ...params }).next(),
@@ -115,17 +115,6 @@ test('video op: H3 validates before native execution and preserves audio results
       ]) {
         t.is(observed[2]?.[field], undefined, `${field} remains omitted`)
       }
-      const i2vChunks = []
-      for await (const chunk of videoOp({
-        ...base,
-        mode: 'img2vid',
-        init_image: PNG_B64
-      })) {
-        i2vChunks.push(chunk)
-      }
-      t.is(i2vChunks.at(-1)?.done, true)
-      t.is(observed[4]?.['mode'], 'img2vid')
-      t.alike(observed[4]?.['init_image'], Buffer.from(PNG_B64, 'base64'))
     },
     async () => {},
     false,
