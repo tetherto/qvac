@@ -9,10 +9,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  enableInstallLinks,
   findHostAddonPackages,
   installPlatformPackages,
   mangledAddonName,
-  normalisePlatform,
+  parseArgs,
   planPlatformPackages,
   resolvePlatformPackageName,
 } from './install-platform-packages.mjs';
@@ -51,20 +52,27 @@ function unslicedPrebuilds(module, hosts) {
   return files;
 }
 
-function writeFabric(modules, version, files = {}) {
-  return writePackage(
-    path.join(modules, '@qvac/fabric'),
-    { name: '@qvac/fabric', version, imports: { '#host-addon': hostAddonMap('@qvac/fabric') } },
-    files,
-  );
+function writeSplit(root, name, version, files = {}) {
+  return writePackage(root, { name, version, imports: { '#host-addon': hostAddonMap(name) } }, files);
 }
 
-test('normalisePlatform accepts the action inputs and rejects others', () => {
-  assert.equal(normalisePlatform('Android'), 'android');
-  assert.equal(normalisePlatform('iOS'), 'ios');
-  assert.throws(() => normalisePlatform('linux'), /Android or iOS/);
-  assert.throws(() => normalisePlatform(undefined), /Android or iOS/);
-});
+function writeFabric(modules, version, files = {}) {
+  return writeSplit(path.join(modules, '@qvac/fabric'), '@qvac/fabric', version, files);
+}
+
+// An addon checkout next to a test app, the layout build-mobile-app runs in.
+function workspace(t) {
+  const root = tempDir(t);
+  const addonDir = writePackage(path.join(root, 'addon'), { name: '@qvac/llm-llamacpp', version: '1.0.0' });
+  const appDir = writePackage(path.join(root, 'app'), { name: 'app', version: '1.0.0' });
+  return { addonDir, appDir };
+}
+
+function recordInstalls() {
+  const installs = [];
+  const install = (specs, { cwd }) => installs.push({ specs, cwd });
+  return { installs, install };
+}
 
 test('resolvePlatformPackageName reads the arm64 arm on Android and the flat iOS arm', () => {
   const map = hostAddonMap('@qvac/fabric');
@@ -104,12 +112,13 @@ test('planPlatformPackages keeps installed ones and refuses foreign names', (t) 
     { name: '@qvac/other', version: '1.0.0', hostAddon: hostAddonMap('@qvac/fabric'), packageRoot: modules },
   ];
 
-  const plan = planPlatformPackages(packages, 'android', modules);
+  const plan = planPlatformPackages(packages, ['android'], modules);
   assert.deepEqual(
     plan.map((entry) => [entry.name, entry.platformPackage, entry.localHosts]),
     [['@qvac/fabric', '@qvac/fabric-android-arm64', []]],
   );
-  assert.equal(planPlatformPackages(packages, 'ios', modules).length, 2);
+  assert.equal(planPlatformPackages(packages, ['ios'], modules).length, 2);
+  assert.equal(planPlatformPackages(packages, ['android', 'ios'], modules).length, 3);
 });
 
 test('planPlatformPackages refuses two meta versions sharing one platform package', (t) => {
@@ -119,72 +128,168 @@ test('planPlatformPackages refuses two meta versions sharing one platform packag
     { name: '@qvac/fabric', version: '0.21.0', hostAddon: map, packageRoot: modules },
     { name: '@qvac/fabric', version: '0.20.0', hostAddon: map, packageRoot: modules },
   ];
-  assert.throws(() => planPlatformPackages(packages, 'android', modules), /both 0.21.0 and 0.20.0/);
+  assert.throws(() => planPlatformPackages(packages, ['android'], modules), /both 0.21.0 and 0.20.0/);
 });
 
-test('installPlatformPackages installs a sliced meta package from the registry', (t) => {
-  const root = tempDir(t);
-  const modules = path.join(root, 'node_modules');
-  writeFabric(modules, '0.21.0');
-  const installs = [];
+test('installPlatformPackages fetches both mobile platforms of a dependency from the registry', (t) => {
+  const { addonDir, appDir } = workspace(t);
+  writeFabric(path.join(addonDir, 'node_modules'), '0.21.0');
+  const { installs, install } = recordInstalls();
 
-  const result = installPlatformPackages({
-    modulesDir: modules,
-    platform: 'android',
-    install: (specs, { cwd }) => installs.push([specs, cwd]),
-    log: () => {},
-  });
+  const result = installPlatformPackages({ appDir, addonDir, install, log: () => {} });
 
-  assert.deepEqual(installs, [[['@qvac/fabric-android-arm64@0.21.0'], root]]);
-  assert.equal(result.length, 1);
+  assert.deepEqual(installs, [
+    { specs: ['@qvac/fabric-android-arm64@0.21.0', '@qvac/fabric-ios@0.21.0'], cwd: appDir },
+  ]);
+  assert.equal(result.length, 2);
+  assert.ok(!fs.existsSync(path.join(appDir, '.npmrc')));
 });
 
-test('installPlatformPackages assembles an unsliced build from its own prebuilds', (t) => {
-  const modules = path.join(tempDir(t), 'node_modules');
-  writeFabric(
-    modules,
-    '0.21.0-dev.1',
-    unslicedPrebuilds('qvac__fabric-ios', ['ios-arm64', 'ios-arm64-simulator']),
-  );
-
-  installPlatformPackages({
-    modulesDir: modules,
-    platform: 'ios',
-    install: () => assert.fail('nothing to fetch'),
-    log: () => {},
+test('installPlatformPackages assembles the addon under test from its own prebuilds', (t) => {
+  const { appDir } = workspace(t);
+  const addonDir = writeSplit(path.join(path.dirname(appDir), 'tts'), '@qvac/tts-ggml', '0.11.0', {
+    ...unslicedPrebuilds('qvac__tts-ggml-android-arm64', ['android-arm64']),
+    ...unslicedPrebuilds('qvac__tts-ggml-ios', ['ios-arm64', 'ios-arm64-simulator']),
   });
+  const { installs, install } = recordInstalls();
 
-  const slice = path.join(modules, '@qvac/fabric-ios');
+  installPlatformPackages({ appDir, addonDir, install, log: () => {} });
+
+  assert.deepEqual(installs, [
+    {
+      specs: [
+        'file:.qvac-platform-packages/qvac__tts-ggml-android-arm64',
+        'file:.qvac-platform-packages/qvac__tts-ggml-ios',
+      ],
+      cwd: appDir,
+    },
+  ]);
+  const slice = path.join(appDir, '.qvac-platform-packages/qvac__tts-ggml-ios');
   const manifest = JSON.parse(fs.readFileSync(path.join(slice, 'package.json'), 'utf8'));
-  assert.equal(manifest.name, '@qvac/fabric-ios');
-  assert.equal(manifest.version, '0.21.0-dev.1');
+  assert.equal(manifest.name, '@qvac/tts-ggml-ios');
+  assert.equal(manifest.version, '0.11.0');
   assert.equal(manifest.addon, true);
   assert.equal(fs.readFileSync(path.join(slice, 'index.js'), 'utf8'), 'module.exports = require.addon()\n');
-  assert.ok(fs.existsSync(path.join(slice, 'prebuilds/ios-arm64/qvac__fabric-ios.bare')));
-  assert.ok(fs.existsSync(path.join(slice, 'prebuilds/ios-arm64-simulator/qvac__fabric-ios/libqvac-ggml-cpu.so')));
+  assert.ok(fs.existsSync(path.join(slice, 'prebuilds/ios-arm64/qvac__tts-ggml-ios.bare')));
+  assert.ok(fs.existsSync(path.join(slice, 'prebuilds/ios-arm64-simulator/qvac__tts-ggml-ios/libqvac-ggml-cpu.so')));
   assert.ok(!fs.existsSync(path.join(slice, 'prebuilds/ios-x64-simulator')));
+  assert.equal(fs.readFileSync(path.join(appDir, '.npmrc'), 'utf8'), 'install-links=true\n');
+});
+
+test('installPlatformPackages fetches what the prebuilds do not cover', (t) => {
+  const { appDir } = workspace(t);
+  const addonDir = writeSplit(
+    path.join(path.dirname(appDir), 'tts'),
+    '@qvac/tts-ggml',
+    '0.11.0',
+    unslicedPrebuilds('qvac__tts-ggml-android-arm64', ['android-arm64']),
+  );
+  const { installs, install } = recordInstalls();
+
+  installPlatformPackages({ appDir, addonDir, install, log: () => {} });
+
+  assert.deepEqual(installs[0].specs, [
+    'file:.qvac-platform-packages/qvac__tts-ggml-android-arm64',
+    '@qvac/tts-ggml-ios@0.11.0',
+  ]);
 });
 
 test('installPlatformPackages ignores prebuilds named for another package', (t) => {
-  const modules = path.join(tempDir(t), 'node_modules');
-  writeFabric(modules, '0.21.0', unslicedPrebuilds('qvac__fabric', ['android-arm64']));
-  const installs = [];
+  const { addonDir, appDir } = workspace(t);
+  writeFabric(path.join(addonDir, 'node_modules'), '0.21.0', unslicedPrebuilds('qvac__fabric', ['android-arm64']));
+  const { installs, install } = recordInstalls();
+
+  installPlatformPackages({ appDir, addonDir, platforms: ['android'], install, log: () => {} });
+
+  assert.deepEqual(installs[0].specs, ['@qvac/fabric-android-arm64@0.21.0']);
+});
+
+test('installPlatformPackages skips what the app already has', (t) => {
+  const { addonDir, appDir } = workspace(t);
+  writeFabric(path.join(addonDir, 'node_modules'), '0.21.0');
+  for (const name of ['@qvac/fabric-android-arm64', '@qvac/fabric-ios']) {
+    writePackage(path.join(appDir, 'node_modules', name), { name, version: '0.21.0' });
+  }
+
+  const result = installPlatformPackages({
+    appDir,
+    addonDir,
+    install: () => assert.fail('no install'),
+    log: () => {},
+  });
+  assert.equal(result.length, 0);
+});
+
+test('enableInstallLinks appends once and keeps the existing settings', (t) => {
+  const dir = tempDir(t);
+  fs.writeFileSync(path.join(dir, '.npmrc'), 'legacy-peer-deps=true');
+  enableInstallLinks(dir);
+  enableInstallLinks(dir);
+  assert.equal(fs.readFileSync(path.join(dir, '.npmrc'), 'utf8'), 'legacy-peer-deps=true\ninstall-links=true\n');
+});
+
+test('installPlatformPackages builds a dependency from a --prebuilds tree', (t) => {
+  const { addonDir, appDir } = workspace(t);
+  writeFabric(path.join(addonDir, 'node_modules'), '0.21.0');
+  const run = tempDir(t);
+  writePackage(run, {}, {
+    ...unslicedPrebuilds('qvac__fabric-android-arm64', ['android-arm64']),
+    ...unslicedPrebuilds('qvac__fabric-ios', ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']),
+  });
+  const { installs, install } = recordInstalls();
 
   installPlatformPackages({
-    modulesDir: modules,
-    platform: 'android',
-    install: (specs) => installs.push(...specs),
+    appDir,
+    addonDir,
+    prebuilds: { '@qvac/fabric': path.join(run, 'prebuilds') },
+    install,
     log: () => {},
   });
 
-  assert.deepEqual(installs, ['@qvac/fabric-android-arm64@0.21.0']);
+  assert.deepEqual(installs[0].specs, [
+    'file:.qvac-platform-packages/qvac__fabric-android-arm64',
+    'file:.qvac-platform-packages/qvac__fabric-ios',
+  ]);
+  const slice = path.join(appDir, '.qvac-platform-packages/qvac__fabric-android-arm64');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(slice, 'package.json'), 'utf8')).version, '0.21.0');
+  assert.ok(fs.existsSync(path.join(slice, 'prebuilds/android-arm64/qvac__fabric-android-arm64/libqvac-ggml-cpu.so')));
 });
 
-test('installPlatformPackages is a no-op once the package is in place', (t) => {
-  const modules = path.join(tempDir(t), 'node_modules');
-  writeFabric(modules, '0.21.0', unslicedPrebuilds('qvac__fabric-android-arm64', ['android-arm64']));
-  const options = { modulesDir: modules, platform: 'android', install: () => assert.fail('no install'), log: () => {} };
+test('installPlatformPackages refuses a --prebuilds tree missing a host', (t) => {
+  const { addonDir, appDir } = workspace(t);
+  writeFabric(path.join(addonDir, 'node_modules'), '0.21.0');
+  const run = tempDir(t);
+  writePackage(run, {}, {
+    ...unslicedPrebuilds('qvac__fabric-android-arm64', ['android-arm64']),
+    ...unslicedPrebuilds('qvac__fabric-ios', ['ios-arm64']),
+  });
+  const { installs, install } = recordInstalls();
 
-  assert.equal(installPlatformPackages(options).length, 1);
-  assert.equal(installPlatformPackages(options).length, 0);
+  assert.throws(
+    () =>
+      installPlatformPackages({
+        appDir,
+        addonDir,
+        prebuilds: { '@qvac/fabric': path.join(run, 'prebuilds') },
+        install,
+        log: () => {},
+      }),
+    /no qvac__fabric-ios\.bare for ios-arm64-simulator, ios-x64-simulator/,
+  );
+  assert.deepEqual(installs, []);
+});
+
+test('installPlatformPackages refuses --prebuilds for a package the addon does not install', (t) => {
+  const { addonDir, appDir } = workspace(t);
+  const { install } = recordInstalls();
+  assert.throws(
+    () => installPlatformPackages({ appDir, addonDir, prebuilds: { '@qvac/fabric': appDir }, install, log: () => {} }),
+    /--prebuilds names @qvac\/fabric, but the addon does not install it/,
+  );
+});
+
+test('parseArgs splits --prebuilds at the first = after the scope', () => {
+  const args = parseArgs(['--app-dir', 'a', '--addon-dir', 'b', '--prebuilds', '@qvac/fabric=/tmp/x=y']);
+  assert.deepEqual(args.prebuilds, { '@qvac/fabric': '/tmp/x=y' });
+  assert.throws(() => parseArgs(['--app-dir', 'a', '--addon-dir', 'b', '--prebuilds', '@qvac/fabric']), /expects/);
 });

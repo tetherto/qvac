@@ -171,23 +171,6 @@ runs:
         echo "Setting up mobile test framework..."
         npm install
 
-    - name: Build test app with addon
-      shell: bash
-      working-directory: ./test-framework
-      env:
-        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
-      run: |
-        echo "Building test app with addon..."
-        ADDON_PATH="${GITHUB_WORKSPACE}/addon/${ADDON_WORKDIR}"
-        npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
-        if [ ! -f "backend/backend.cjs" ]; then
-          echo "ERROR: backend/backend.cjs was not generated!"
-          exit 1
-        fi
-        echo "Test app built successfully"
-
-    # PR fabric overlay. Runs before the platform-package overlay below, which
-    # then skips @qvac/fabric because it already has local prebuilds.
     # A leftover tree from an earlier job on the same self-hosted runner must
     # not stand in for the requested run.
     - name: Clear PR fabric prebuilds dir
@@ -206,80 +189,40 @@ runs:
         github-token: ${{ inputs.github-token }}
         path: ${{ runner.temp }}/pr-fabric-prebuilds
 
-    # overlay-local-fabric checks <root>/node_modules/@qvac/fabric only, so
-    # pass the root of every installed copy, nested ones included.
-    - name: Find installed @qvac/fabric copies
-      id: fabric_roots
-      if: inputs.fabric-prebuild-run-id != ''
-      shell: bash
-      working-directory: ./test-framework
-      run: |
-        roots=""
-        while IFS= read -r manifest; do
-          [ -n "$manifest" ] || continue
-          roots="$roots $(cd "$(dirname "$manifest")/../../.." && pwd)"
-        done < <(find node_modules -path '*/@qvac/fabric/package.json')
-        if [ -z "$roots" ]; then
-          echo "::error::fabric-prebuild-run-id is set, but no @qvac/fabric is installed under test-framework/node_modules"
-          exit 1
-        fi
-        echo "@qvac/fabric roots:$roots"
-        echo "dirs=$roots" >> "$GITHUB_OUTPUT"
-
-    # One call per host, so a bundle missing any of them fails here.
-    - name: Overlay PR fabric (android-arm64)
-      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'Android'
-      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
-      with:
-        workdir: ${{ github.workspace }}/test-framework
-        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
-        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
-        platform: android
-        arch: arm64
-
-    - name: Overlay PR fabric (ios-arm64)
-      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'iOS'
-      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
-      with:
-        workdir: ${{ github.workspace }}/test-framework
-        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
-        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
-        platform: ios
-        arch: arm64
-
-    - name: Overlay PR fabric (ios-arm64-simulator)
-      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'iOS'
-      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
-      with:
-        workdir: ${{ github.workspace }}/test-framework
-        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
-        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
-        platform: ios
-        arch: arm64
-        tags: -simulator
-
-    - name: Overlay PR fabric (ios-x64-simulator)
-      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'iOS'
-      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
-      with:
-        workdir: ${{ github.workspace }}/test-framework
-        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
-        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
-        platform: ios
-        arch: x64
-        tags: -simulator
-
-    # A split addon the framework installed (e.g. @qvac/fabric) routes its
-    # runtime through a cross-built platform package, which npm never selects,
-    # so the app depends on it directly like any mobile app would. Must run
-    # after the framework installs the addon and before `npm run bundle` and
-    # the native project build.
+    # A split addon (the one under test, or one it depends on such as
+    # @qvac/fabric) routes its runtime through cross-built platform packages,
+    # which npm never selects, so the app depends on them directly like any
+    # mobile app would. Must run before "Build test app with addon", which
+    # installs the addon and bundles for android-arm64 and ios-arm64 in one go.
+    # With fabric-prebuild-run-id, @qvac/fabric's platform packages are built
+    # from that run instead of taken from the registry.
     - name: Install mobile platform packages
       shell: bash
       working-directory: ./test-framework
       env:
-        PLATFORM: ${{ inputs.platform }}
-      run: node "$GITHUB_ACTION_PATH/install-platform-packages.mjs" --platform "$PLATFORM"
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+        FABRIC_PREBUILD_RUN_ID: ${{ inputs.fabric-prebuild-run-id }}
+      run: |
+        args=(--app-dir . --addon-dir "${GITHUB_WORKSPACE}/addon/${ADDON_WORKDIR}")
+        if [ -n "$FABRIC_PREBUILD_RUN_ID" ]; then
+          args+=(--prebuilds "@qvac/fabric=${RUNNER_TEMP}/pr-fabric-prebuilds")
+        fi
+        node "$GITHUB_ACTION_PATH/install-platform-packages.mjs" "${args[@]}"
+
+    - name: Build test app with addon
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+      run: |
+        echo "Building test app with addon..."
+        ADDON_PATH="${GITHUB_WORKSPACE}/addon/${ADDON_WORKDIR}"
+        npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
+        if [ ! -f "backend/backend.cjs" ]; then
+          echo "ERROR: backend/backend.cjs was not generated!"
+          exit 1
+        fi
+        echo "Test app built successfully"
 
     # Patches the freshly generated e2e/tests/app.test.js to bump the
     # per-test Mocha ceiling. Two ways to opt in:
