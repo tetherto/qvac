@@ -425,6 +425,9 @@ importers:
       js-yaml:
         specifier: ^4.1.0
         version: 4.3.0
+      semver:
+        specifier: ^7.8.0
+        version: 7.8.5
       tsx:
         specifier: ^4.21.0
         version: 4.23.1
@@ -438,6 +441,9 @@ importers:
       '@types/node':
         specifier: ^25.3.3
         version: 25.9.5
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
       lunte:
         specifier: ^1.8.2
         version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)

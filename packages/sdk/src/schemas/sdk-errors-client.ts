@@ -200,7 +200,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED]: {
     name: 'BARE_PACK_NODE_UNSUPPORTED',
     message: (nodeVersion: string, requiredRange: string) =>
-      `bare-pack needs Node ${requiredRange}; its bare-module-lexer native addon aborts on older Node. Found Node v${nodeVersion}. Upgrade Node and run the bundle again.`
+      `bare-pack needs Node ${requiredRange}; found Node v${nodeVersion}. Upgrade Node and run the bundle again.`
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER]: {
     name: 'INVALID_PLUGIN_SPECIFIER',
