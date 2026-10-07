@@ -233,7 +233,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     NmtBackendsHandle backends(backendsDir, openclCacheDir);
     ggml_backend_dev_t device = nullptr;
     if (useGpu) {
-      const auto canonicalBackend =
+      auto canonicalBackend =
           config.getOptionalProperty<js::String>(env, "gpu_backend");
       const std::string gpuBackend =
           canonicalBackend ? canonicalBackend->as<std::string>(env)
