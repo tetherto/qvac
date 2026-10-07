@@ -10,18 +10,19 @@ and the checks CI runs. This skill adds what an agent does differently.
 
 ## When to use
 
-- Two or more packages of a train need a release.
-- The user asks to release the chain or the train, or invokes
+- The user asks to release the SDK chain or the train, or invokes
   `/qv-release-train`.
 
-A package outside every train (`registry-server`, `rag`, `logging`, `error`,
-`test-suite`) stays on the per-package flow in `docs/gitflow.md`.
+A hotfix of one train package, and any package outside every train
+(`registry-server`, `rag`, `logging`, `error`, `test-suite`), stays on the
+per-package flow in `docs/gitflow.md`.
 
 ## Agent rules
 
-- Start from the affected list in the runbook. Every train package on it goes
-  in the version plan. Ask the user for the bump of each when the work does not
-  make it clear.
+- Every train package moves. Ask the user for the bump of each when the work
+  does not make it clear.
+- Before the version pass, set every range between train packages to the
+  current workspace version, then run `pnpm install --lockfile-only`.
 - Show the user the `nx release version --dry-run` output before applying it.
 - Do not run `/qv-sdk-inference-version`: the version pass writes the
   `@qvac/inference` range. Regenerate `packages/sdk-python` per

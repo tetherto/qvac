@@ -204,14 +204,13 @@ Read `baseRefName`, `headRefName`, `isCrossRepository`, `headRepositoryOwner` fr
 
 **Release-train extra checks (base is `release-train-<train>-<x.y.z>`):**
 
-One PR moves several packages. `pr-release-guard.yml` checks versions,
-changelog sections and that every affected train package moved (see
-`docs/ci/RELEASE-TRAIN.md`). Review what it cannot:
+One PR moves every package of the train. `pr-release-guard.yml` and
+`pr-checks-sdk-pod.yml` check versions, ranges, changelog sections and each
+package's checks (see `docs/ci/RELEASE-TRAIN.md`). Review what they cannot:
 
-- Dependency ranges between train packages point at the new versions.
-- `pnpm-lock.yaml` changes only those ranges' `specifier:` lines. Anything more
-  means a range stopped matching the workspace and pnpm fetched the old version
-  from npm.
+- `pnpm-lock.yaml` changes only the `specifier:` lines of the ranges between
+  train packages. Anything more means a range stopped matching the workspace
+  and pnpm fetched an old version from npm.
 - The changelog sections describe the changes since the last release.
 
 ### 4. Read applicable repository instructions for the touched paths

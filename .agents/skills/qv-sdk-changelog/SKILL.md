@@ -30,8 +30,8 @@ If the user doesn't specify, ask which SDK pod package they want to generate a c
 
 Package slugs match git tags (`sdk`, `inference`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
 
-**On a release train** (`qv-release-train`), run this once per package the
-version pass moved; the changelogs land on the one train branch. Step 7 differs
+**On a release train** (`qv-release-train`), run this once per train package;
+the changelogs land on the one train branch. Step 7 differs
 there.
 
 **`sdk` and `inference` are lockstep on major.minor.** Two changelogs, two
