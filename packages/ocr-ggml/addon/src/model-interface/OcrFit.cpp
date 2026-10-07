@@ -40,6 +40,29 @@ bool isMaliVulkan(const ocr_backend_selection::BackendSelection& selected) {
          description.find("immortalis") != std::string::npos;
 }
 
+bool usesMultipleDevices(
+    const OcrConfig& config,
+    const ocr_backend_selection::BackendSelection& selected) {
+  if (config.mode != PipelineMode::DOCTR)
+    return false;
+
+  ggml_backend_dev_t detectionDevice = selected.device;
+  if (config.detectionBackendDevice.has_value()) {
+    detectionDevice = ocr_backend_selection::selectBackendDevice(
+                          *config.detectionBackendDevice, config.gpuDevice,
+                          config.mainGpu)
+                          .device;
+  } else if (isMaliVulkan(selected)) {
+    detectionDevice =
+        ocr_backend_selection::selectBackendDevice(BackendDevice::CPU).device;
+  }
+
+  const bool recognizerAssisted =
+      !selected.selectedIsCpu() &&
+      config.recognizerCpuAssist.value_or(isMaliVulkan(selected));
+  return detectionDevice != selected.device || recognizerAssisted;
+}
+
 OcrFitResult unavailable(const std::string& reason) {
   OcrFitResult result;
   result.reason = reason;
@@ -113,11 +136,7 @@ OcrFitResult assessOcrFit(
     return unavailable("device-unavailable");
 
   const bool cpu = selected.selectedIsCpu();
-  const bool hybrid =
-      doctr && !cpu &&
-      (config.detectionBackendDevice.has_value() ||
-       config.recognizerCpuAssist.value_or(isMaliVulkan(selected)));
-  if (hybrid)
+  if (usesMultipleDevices(config, selected))
     return unavailable("unsupported-config");
 
   OcrFitResult result;

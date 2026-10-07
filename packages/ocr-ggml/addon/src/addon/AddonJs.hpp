@@ -192,6 +192,15 @@ void applyMainGpu(
       "'integrated'"};
 }
 
+void applyGpuDevice(
+    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
+    OcrConfig& config) {
+  using namespace qvac_lib_inference_addon_cpp;
+  if (auto value = params.getOptionalProperty<js::Number>(env, "gpuDevice")) {
+    config.gpuDevice = static_cast<int>(value->as<double>(env));
+  }
+}
+
 // Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal' | 'opencl').
 // Default keeps CPU inference; 'vulkan' (Linux/Windows/Android), 'metal'
 // (Apple) and 'opencl' (Android/Adreno) request a matching GPU with transparent
@@ -339,11 +348,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       optThreads) {
     config.nThreads = static_cast<int>(optThreads->as<double>(env));
   }
-  if (auto optGpuDevice =
-          args1.getOptionalProperty<js::Number>(env, "gpuDevice");
-      optGpuDevice) {
-    config.gpuDevice = static_cast<int>(optGpuDevice->as<double>(env));
-  }
+  applyGpuDevice(env, args1, config);
   if (auto optBackendsDir =
           args1.getOptionalProperty<js::String>(env, "backendsDir");
       optBackendsDir) {
@@ -454,6 +459,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
                               .as<std::string>(env);
   OcrConfig config;
   applyMainGpu(env, request, config);
+  applyGpuDevice(env, request, config);
   applyBackendDevice(env, request, config);
   applyPipelineMode(env, request, config);
   if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
