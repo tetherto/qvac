@@ -177,6 +177,20 @@ public:
     return scheduler.checkpointStore_.size();
   }
 
+  /// `saveCache` / `discardCache` jobs queued and not yet run. Takes the
+  /// scheduler mutex, like `admissionIdAt`.
+  static size_t queuedSaveJobs(Scheduler& scheduler) {
+    std::scoped_lock lock(scheduler.mutex_);
+    return scheduler.saveJobs_.size();
+  }
+
+  /// Requests submitted and not yet admitted into a slot, including those
+  /// waiting for their cacheKey. Takes the scheduler mutex.
+  static size_t queuedRequests(Scheduler& scheduler) {
+    std::scoped_lock lock(scheduler.mutex_);
+    return scheduler.pending_.size_approx() + scheduler.keyDeferred_.size();
+  }
+
   static void setDriverFactory(
       Scheduler& scheduler,
       qvac_lib_inference_addon_llama::batching::DriverFactory factory) {

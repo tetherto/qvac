@@ -3,12 +3,15 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <future>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -2716,6 +2719,13 @@ TEST(ExplicitSaveTest, BatchDiscardGoesBeforeTheNextRequestOnItsKey) {
   if (!fs::exists(test_common::BaseTestModelPath::get())) {
     GTEST_SKIP() << "base test model not found";
   }
+  // Holds the running request inside a decode step (the scheduler lock is
+  // released there) until the discard and the next request are both queued.
+  // Declared before the model, which installs it, so it outlives the worker.
+  std::mutex gateMtx;
+  std::condition_variable gateCv;
+  bool hold = false;
+  bool held = false;
   auto model = loadBatchedModel();
   ASSERT_TRUE(model->isLoaded());
   auto* scheduler = LlamaModelTestPeer::scheduler(*model);
@@ -2727,35 +2737,76 @@ TEST(ExplicitSaveTest, BatchDiscardGoesBeforeTheNextRequestOnItsKey) {
   ASSERT_EQ(model->processPromptBatch({keyedPrompt(history, key)}).size(), 1u);
   ASSERT_EQ(scheduler->parkedSeqIds().size(), 1u);
 
-  // Long enough to still be running when the discard and the next request
-  // are queued behind it.
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [&](llama_context* ctx, llama_batch& batch) {
+        std::unique_lock lock(gateMtx);
+        if (hold) {
+          held = true;
+          gateCv.notify_all();
+          gateCv.wait(lock, [&] { return !hold; });
+        }
+        lock.unlock();
+        return llama_decode(ctx, batch);
+      });
+
+  // Destroyed in reverse: the gate opens first, then the futures wait.
+  std::future<std::vector<std::string>> runningDone;
+  std::future<void> discarded;
+  std::future<std::vector<std::string>> nextDone;
+  struct OpenGateOnExit {
+    std::mutex& mtx;
+    std::condition_variable& cv;
+    bool& hold;
+    ~OpenGateOnExit() {
+      {
+        std::scoped_lock lock(mtx);
+        hold = false;
+      }
+      cv.notify_all();
+    }
+  } openGateOnExit{gateMtx, gateCv, hold};
+  const auto waitFor = [](const std::function<bool()>& ready) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    while (!ready() && std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return ready();
+  };
+
   std::atomic<bool> streaming{false};
   LlamaModel::Prompt running = keyedPrompt(history, key);
   running.generationParams.grammar = R"(root ::= "lighthouse " root)";
-  running.generationParams.n_predict = 256;
+  running.generationParams.n_predict = 64;
   running.outputCallback = [&](const std::string&) { streaming.store(true); };
-  auto runningDone = std::async(
+  runningDone = std::async(
       std::launch::async, [&] { return model->processPromptBatch({running}); });
-  const auto deadline =
-      std::chrono::steady_clock::now() + std::chrono::seconds(60);
-  while (!streaming.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  ASSERT_TRUE(waitFor([&] { return streaming.load(); }))
+      << "the running request never streamed";
+  {
+    std::unique_lock lock(gateMtx);
+    hold = true;
+    ASSERT_TRUE(gateCv.wait_for(lock, std::chrono::seconds(60), [&] {
+      return held;
+    })) << "the running request never reached its next decode";
   }
-  ASSERT_TRUE(streaming.load()) << "the running request never streamed";
 
-  auto discarded =
-      std::async(std::launch::async, [&] { model->discardCache(key); });
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  discarded = std::async(std::launch::async, [&] { model->discardCache(key); });
+  ASSERT_TRUE(waitFor([&] {
+    return ContinuousBatchSchedulerTestPeer::queuedSaveJobs(*scheduler) == 1;
+  })) << "the discard was never queued";
   const uint64_t hitsBefore = scheduler->residentHitsForTesting();
-  auto nextDone = std::async(std::launch::async, [&] {
+  nextDone = std::async(std::launch::async, [&] {
     return model->processPromptBatch({keyedPrompt(history, key)});
   });
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  ASSERT_EQ(
-      runningDone.wait_for(std::chrono::seconds(0)),
-      std::future_status::timeout)
-      << "the running request ended before the discard and the next request "
-         "were queued; the test cannot tell the orders apart";
+  ASSERT_TRUE(waitFor([&] {
+    return ContinuousBatchSchedulerTestPeer::queuedRequests(*scheduler) == 1;
+  })) << "the next request was never queued";
+  {
+    std::scoped_lock lock(gateMtx);
+    hold = false;
+  }
+  gateCv.notify_all();
 
   ASSERT_EQ(
       runningDone.wait_for(std::chrono::seconds(120)),
