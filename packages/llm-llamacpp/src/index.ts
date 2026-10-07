@@ -1290,6 +1290,16 @@ namespace LlmLlamacpp {
      * `cache-checkpoint-storage`.
      */
     cache_checkpoint_storage?: "disk" | "memory";
+    /**
+     * Host-RAM budget, in MiB, for conversations that are not running: a
+     * `cacheKey` switch (single prompt) or a slot eviction (batch) moves the
+     * conversation there instead of writing its file, and the next request on
+     * that key restores it from there. A write-back cache: unsaved turns reach
+     * the file on `saveCache()`, when the budget pushes the entry out, or at
+     * unload; ephemeral entries are dropped instead. `0` (default) is off; the
+     * maximum is 1048576 (1 TiB). Also accepted as `cache-ram-mib`.
+     */
+    cache_ram_mib?: NumericLike;
     [key: string]: string | number | boolean | string[] | undefined;
   }
 
