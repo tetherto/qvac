@@ -59,28 +59,16 @@ struct BackendInterface {
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
-  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs.
-  // Kept so this struct stays a copy of llm-llamacpp's, which is what makes the
-  // two BackendSelection.cpp files diffable.
-  //
-  // The production initialisers in this package deliberately leave it null.
-  // embed exposes no cache-type config, so nothing populates
-  // LoadConstraints::kvCacheTypes and the probe would never be consulted;
-  // wiring it would be dead code. Null means "unknown" and fails OPEN, so that
-  // is safe - but it also means **whoever adds cache-type support to embed must
-  // set this**, or the filter will silently do nothing.
-  //
-  // Deliberately last so existing initialisers keep compiling.
+  // QVAC-23763: KV-cache capability probe. Left null in embed because it has no
+  // cache-type config. Null fails open, so whoever adds cache-type support must
+  // set it. Last so positional initialisers compile.
   bool (*deviceSupportsKvCacheType)(
       ggml_backend_dev_t device, enum ggml_type kvType);
 };
 
 /// @brief Why a candidate device was passed over.
 ///
-/// QVAC-23763: llm-llamacpp expresses the Adreno/BitNet/finetune guards and the
-/// KV-cache capability filter through this. embed has none of those rules
-/// today, so only None is ever set - the enum exists to keep the two
-/// implementations the same shape.
+/// QVAC-23763: embed sets only None today.
 enum class ExclusionReason : std::uint8_t {
   None = 0,
   KvCacheTypeUnsupported,

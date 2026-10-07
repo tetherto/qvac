@@ -66,15 +66,9 @@ struct BackendInterface {
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
-  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs,
-  // which is SET_ROWS writing kvType from F32 - exactly what llama_kv_cache
-  // builds, and exactly what a backend's supports_op table answers. Asking ggml
-  // the capability question beats matching the device name against "cuda",
-  // because the answer then corrects itself when a backend gains those kernels.
-  //
-  // Deliberately last so existing positional initialisers keep compiling. Null
-  // means "unknown" and fails OPEN - no exclusion, pre-QVAC-23763 behaviour -
-  // so an initialiser that omits it stays correct, just unfiltered.
+  // QVAC-23763: whether @p device can run SET_ROWS writing @p kvType from F32,
+  // the op llama_kv_cache builds. Last so positional initialisers compile. Null
+  // fails open.
   bool (*deviceSupportsKvCacheType)(
       ggml_backend_dev_t device, enum ggml_type kvType);
 };
@@ -88,9 +82,8 @@ enum ggml_type kvCacheTypeFromString(const std::string& name);
 
 /// @brief Why a candidate device was passed over.
 ///
-/// QVAC-23763: selection used to express these by clearing whole buckets, which
-/// destroyed the reason along with the candidate. Keeping the reason is what
-/// lets the caller say *why* a higher-priority backend was not chosen.
+/// Kept per candidate so the trace can say why a higher-priority backend was
+/// skipped.
 enum class ExclusionReason : std::uint8_t {
   None = 0,
   FinetuneAdrenoBelow800,
@@ -103,8 +96,7 @@ enum class ExclusionReason : std::uint8_t {
 
 /// @brief What the load requires of a device beyond its being a GPU.
 ///
-/// Default-constructed means no extra constraint, which is every pre-QVAC-23763
-/// caller.
+/// Default-constructed means no extra constraint.
 struct LoadConstraints {
   /// KV-cache types the device must be able to write with SET_ROWS from F32.
   /// Empty when the caller set no cache-type. Non-TBQ/PQ types are present but

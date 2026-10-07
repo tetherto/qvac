@@ -30,13 +30,8 @@ const isIos = platform === 'ios'
 // on the first f16+f16 row, so these smoke tests are disabled on Android.
 const isAndroid = platform === 'android'
 
-// QVAC-23763: the tbq/pq rows used to ask for Vulkan explicitly, because linux
-// x64 enumerates CUDA ahead of Vulkan, CUDA has no TurboQuant or PolarQuant
-// kernels, and the addon refused the load rather than stepping down. Selection
-// now passes such a device over before the cascade picks, so those rows reach
-// Vulkan unpinned - which is what actually exercises the fix. The f16 baseline
-// still runs on whatever the host prefers, which is what makes the memory
-// comparison below meaningful on both backends.
+// QVAC-23763: tbq/pq rows run unpinned. Selection passes CUDA over for these
+// types, so the rows reach Vulkan on their own.
 const isLinuxX64 = platform === 'linux' && os.arch() === 'x64'
 
 // Which of the two same-runner legs are we on. The -vulkan leg hides the CUDA
@@ -231,10 +226,8 @@ async function runHeadDimSmoke(t, modelInfo, label) {
         }
       }
       if (cfg.kind !== 'tbqpq' && isLinuxX64) {
-        // This row pins nothing, so it shows what the default cascade actually
-        // did. Without it a silent fallback is invisible: both integration legs
-        // pass either way, and the pinned rows above only prove the override
-        // path. The two legs expect opposite answers.
+        // This row pins nothing, so it shows what the default cascade did. The
+        // two legs expect opposite answers.
         if (forceVulkanLeg) {
           t.absent(result.choseCuda, `${cfg.label}: CUDA hidden, so CUDA was not chosen`)
         } else {
@@ -243,10 +236,9 @@ async function runHeadDimSmoke(t, modelInfo, label) {
       }
     } catch (err) {
       if (cfg.kind === 'tbqpq' && isTurboQuantUnsupported(err)) {
-        // QVAC-23763: a refusal is now only legitimate where no GPU on the host
-        // can run these types at all - a Metal-only Mac, or a CUDA-only box.
-        // On linux x64 Vulkan is present and the filter must have stepped down
-        // to it, so a refusal there means the demotion did not fire.
+        // QVAC-23763: a refusal is only legitimate where no GPU can run these
+        // types, such as a host whose only GPU backend is CUDA. On linux x64
+        // Vulkan is present, so a refusal means the demotion did not fire.
         t.absent(
           isLinuxX64,
           `${cfg.label}: refused on a host that has Vulkan, so the demotion did not fire`

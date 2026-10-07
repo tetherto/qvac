@@ -322,9 +322,7 @@ Enumeration enumerateCandidates(
 /// Mark the candidates this load cannot use. Never erases: marking rather than
 /// removing is what stops an override resurrecting a ruled-out device.
 ///
-/// embed has none of llm-llamacpp's Adreno/BitNet/finetune rules, so only the
-/// capability filter can fire here - and nothing populates its constraints yet,
-/// because embed exposes no cache-type config. Kept so the two files match.
+/// embed sets no KV constraints yet, so nothing is excluded here.
 void applyExclusions(
     const BackendInterface& bckI, Enumeration& enumeration,
     const backend_selection::BackendRequest& req) {
@@ -617,15 +615,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     return choice;
   };
 
-  // QVAC-23763: an explicit `backend` override wins over the cascade below, but
-  // only over candidates that survived: firstUsable() and the loop here skip
-  // excluded ones. embed has no guards to be ordered against today, but keeping
-  // the rule structural rather than positional is what lets this file stay a
-  // copy of llm-llamacpp's, where it matters.
-  //
-  // Skipped entirely for a CPU load: no devices are enumerated, so the block
-  // could only reach its warning, which would be noise on a deliberate
-  // device:'cpu' request.
+  // QVAC-23763: an override only considers candidates that survived exclusion.
+  // Skipped for a CPU load, where it could only warn.
   if (!request.backendOverride.empty() &&
       request.preferred == BackendType::GPU) {
     for (const std::string& family : request.backendOverride) {
@@ -836,13 +827,9 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
 
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
-  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
-  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
-  // does not support split buffers" on the first one whose backend registry
-  // lacks `ggml_backend_split_buffer_type`. So require all of them, not any
-  // one, and treat "no GPU devices at all" as unsupported.
-  //
-  // No production caller: split-mode 'row' is rejected at config time.
+  // Fabric throws on the first device whose registry lacks split buffers, so
+  // require all of them. No production caller: split-mode 'row' is rejected at
+  // load.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {

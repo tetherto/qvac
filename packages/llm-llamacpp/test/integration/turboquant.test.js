@@ -35,12 +35,8 @@ const isVulkanHappyPath =
 const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
 const isAndroid = platform === 'android'
 
-// QVAC-23763: these rows used to name `backend: 'vulkan'` on linux x64, because
-// CUDA enumerates ahead of Vulkan, has no TurboQuant or PolarQuant kernels, and
-// the addon refused the load rather than stepping down. Selection now asks ggml
-// whether a device can run the requested cache type and passes it over before
-// the cascade picks, so the sweep reaches Vulkan on its own. The pin is gone:
-// what it worked around is fixed, and running unpinned is what exercises it.
+// QVAC-23763: these rows run unpinned. Selection passes CUDA over for TBQ/PQ,
+// so they reach Vulkan on their own.
 
 const skipReason =
   isVulkanHappyPath || isMetalRejectPath
