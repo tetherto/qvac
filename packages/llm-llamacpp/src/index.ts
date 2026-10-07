@@ -1350,8 +1350,9 @@ namespace LlmLlamacpp {
     reasoning_content?: string;
     type?: undefined;
     /**
-     * Calls an assistant turn made, rendered by the chat template in the
-     * model's own tool-call format. `arguments` is an object or its JSON text.
+     * Tool calls this assistant turn made, rendered by the chat template in
+     * the model's own tool-call format. `arguments` is an object or its JSON
+     * text. `content` may be empty on such a turn.
      */
     tool_calls?: ToolCallTurn[];
     /** On a `tool` turn: the id of the call this result answers. */

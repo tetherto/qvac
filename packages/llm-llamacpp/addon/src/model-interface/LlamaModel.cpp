@@ -1668,7 +1668,6 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"backendDevice", runtimeBackendDevice_}};
 }
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 namespace {
 
 [[noreturn]] void throwInvalidToolTurn(const char* what) {
@@ -1733,11 +1732,14 @@ void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
     msg.tool_call_id =
         optionalString(obj, "tool_call_id", "tool_call_id must be a string");
     msg.tool_name = optionalString(obj, "name", "name must be a string");
+  } else if (obj.find("tool_call_id") != obj.end()) {
+    throwInvalidToolTurn("tool_call_id is only valid on tool messages");
   }
 }
 
 } // namespace
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (input.empty()) {
     state_->llmContext_->resetMedia();
@@ -1783,12 +1785,25 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
         }
         newMsg.role = jsonObj["role"].get<std::string>();
 
-        if (jsonObj.find("content") == jsonObj.end()) {
+        // OpenAI-shaped history leaves `content` null or absent on an
+        // assistant turn that only carries `tool_calls`.
+        const auto contentIt = jsonObj.find("content");
+        const bool contentMissing = contentIt == jsonObj.end() ||
+                                    contentIt->second.is<picojson::null>();
+        if (contentMissing && jsonObj.find("tool_calls") == jsonObj.end()) {
           const char* errorMsg = "content is required in the input\n";
           throw qvac_errors::StatusError(
               ADDON_ID, toString(NoContentProvided), errorMsg);
         }
-        auto content = jsonObj["content"].get<std::string>();
+        if (!contentMissing && !contentIt->second.is<std::string>()) {
+          std::string errorMsg =
+              string_format("%s: content must be a string\n", __func__);
+          throw qvac_errors::StatusError(
+              ADDON_ID, toString(InvalidInputFormat), errorMsg);
+        }
+        std::string content = contentMissing
+                                  ? std::string()
+                                  : contentIt->second.get<std::string>();
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "media") {
