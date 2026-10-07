@@ -2709,6 +2709,130 @@ TEST(ExplicitSaveTest, BatchSaveCacheWaitsForTheRunningRequest) {
   fs::remove(key);
 }
 
+// A discard queued behind a running request on its key runs as soon as that
+// request ends, before the next request on the key is admitted, so the next
+// request starts cold instead of continuing the discarded conversation.
+TEST(ExplicitSaveTest, BatchDiscardGoesBeforeTheNextRequestOnItsKey) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+  const std::string key = "explicit_discard_order.bin";
+  fs::remove(key);
+  const std::string history = userTurns({"Name a fruit."});
+
+  ASSERT_EQ(model->processPromptBatch({keyedPrompt(history, key)}).size(), 1u);
+  ASSERT_EQ(scheduler->parkedSeqIds().size(), 1u);
+
+  // Long enough to still be running when the discard and the next request
+  // are queued behind it.
+  std::atomic<bool> streaming{false};
+  LlamaModel::Prompt running = keyedPrompt(history, key);
+  running.generationParams.grammar = R"(root ::= "lighthouse " root)";
+  running.generationParams.n_predict = 256;
+  running.outputCallback = [&](const std::string&) { streaming.store(true); };
+  auto runningDone = std::async(
+      std::launch::async, [&] { return model->processPromptBatch({running}); });
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(60);
+  while (!streaming.load() && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(streaming.load()) << "the running request never streamed";
+
+  auto discarded =
+      std::async(std::launch::async, [&] { model->discardCache(key); });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  const uint64_t hitsBefore = scheduler->residentHitsForTesting();
+  auto nextDone = std::async(std::launch::async, [&] {
+    return model->processPromptBatch({keyedPrompt(history, key)});
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  ASSERT_EQ(
+      runningDone.wait_for(std::chrono::seconds(0)),
+      std::future_status::timeout)
+      << "the running request ended before the discard and the next request "
+         "were queued; the test cannot tell the orders apart";
+
+  ASSERT_EQ(
+      runningDone.wait_for(std::chrono::seconds(120)),
+      std::future_status::ready);
+  ASSERT_EQ(
+      discarded.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  ASSERT_EQ(
+      nextDone.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  EXPECT_NO_THROW(discarded.get());
+  EXPECT_FALSE(nextDone.get().front().empty());
+  EXPECT_EQ(scheduler->residentHitsForTesting(), hitsBefore)
+      << "the next request continued the conversation the caller discarded";
+  model.reset();
+  fs::remove(key);
+}
+
+// A rollback that lands on an empty sequence (here: a hybrid model edits the
+// history past every checkpoint, then overflows) leaves nothing committed in
+// memory. An explicit save must then leave the file holding the last commit
+// alone instead of writing the empty state over it.
+TEST(ExplicitSaveTest, SinglePromptSaveAfterAColdRollbackKeepsTheFile) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  // Small, so the endless grammar below fills it quickly.
+  config["ctx_size"] = "512";
+  config["n_predict"] = "24";
+  config["temp"] = "0";
+  config["seed"] = "11";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  const std::string key = "explicit_save_cold_rollback.bin";
+  fs::remove(key);
+  const auto readBytes = [](const std::string& file) {
+    std::ifstream in(file, std::ios::binary);
+    return std::string(
+        std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  };
+
+  (void)runSingle(
+      *model, userTurns({"Name one thing a harbor lamp needs."}), key);
+  ASSERT_NO_THROW(model->saveCache(key));
+  const std::string saved = readBytes(key);
+  ASSERT_FALSE(saved.empty());
+
+  // Diverges inside the first message, so no checkpoint is a prefix and the
+  // request starts cold; the grammar never completes, so it overflows and
+  // rolls back to that empty start.
+  LlamaModel::Prompt edited = keyedPrompt(
+      userTurns({"Name one thing a lighthouse keeper needs."}), key);
+  edited.generationParams.grammar = R"(root ::= "lighthouse " root)";
+  edited.generationParams.n_predict = -1;
+  try {
+    (void)model->processPrompt(edited);
+  } catch (const std::exception&) {
+    // How the overflow surfaces does not matter; the state it leaves does.
+  }
+  LlmContext* context = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(context, nullptr);
+  ASSERT_EQ(context->getNPast(), 0)
+      << "the rollback did not land cold; the test cannot exercise the save";
+
+  EXPECT_NO_THROW(model->saveCache(key));
+  EXPECT_EQ(readBytes(key), saved)
+      << "saveCache wrote an empty state over the last committed file";
+  model.reset();
+  fs::remove(key);
+}
+
 // An ephemeral batch conversation is dropped when its slot is evicted,
 // instead of being written to its file.
 TEST(ExplicitSaveTest, BatchEphemeralConversationIsDroppedOnEviction) {
