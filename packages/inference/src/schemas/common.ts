@@ -110,6 +110,7 @@ import {
   stateRequestSchema,
   stateResponseSchema
 } from '@/schemas/lifecycle'
+import { decideRequestSchema, decideResponseSchema } from '@/schemas/decisions'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
 import {
   audioEditStreamRequestSchema,
@@ -166,7 +167,8 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
-  classifyRequestSchema
+  classifyRequestSchema,
+  decideRequestSchema
 ])
 
 export const responseSchema = z.discriminatedUnion('type', [
@@ -219,7 +221,8 @@ export const responseSchema = z.discriminatedUnion('type', [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
-  classifyResponseSchema
+  classifyResponseSchema,
+  decideResponseSchema
 ])
 
 export const rpcOptionsSchema = z.object({

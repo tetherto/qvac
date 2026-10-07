@@ -4,7 +4,7 @@ description: A local AI SDK for building cross-platform, P2P applications and sy
 ogImage: /og-home.png
 ---
 
-import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, Rotate3d, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay } from 'lucide-react'
+import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, Rotate3d, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay, ListChecks } from 'lucide-react'
 import { SiKotlin, SiPython, SiTypescript } from '@icons-pack/react-simple-icons'
 
 ## Why QVAC?
@@ -71,6 +71,9 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   </Card>
   <Card href="/sdk/ai-capabilities/image-classification" title={<span className="inline-flex items-center gap-2"><Shapes className="size-4 text-[var(--color-fd-primary)]" />Image classification</span>}>
     Classify images into labels with confidence scores via a customized GGML backend.
+  </Card>
+  <Card href="/sdk/ai-capabilities/laya-decisions" title={<span className="inline-flex items-center gap-2"><ListChecks className="size-4 text-[var(--color-fd-primary)]" />Laya decisions</span>}>
+    Answer choice, ordinal-score, and statement-probability questions about text for routing and evaluation via Laya.
   </Card>
 </Cards>
 
@@ -155,4 +158,3 @@ Choose how you want to start with QVAC:
     Run the QVAC HTTP server and connect it to any OpenAI-compatible tool, harness, or system.
   </Card>
 </Cards>
-
