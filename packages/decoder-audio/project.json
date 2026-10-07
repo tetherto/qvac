@@ -59,7 +59,8 @@
           "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "decoder-audio",
-          "testGateMode": "pre-publish-integration"
+          "testGateMode": "post-publish-integration",
+          "postIntegrationOnGpr": true
         }
       }
     }
