@@ -143,10 +143,11 @@ jobs:
           # train PR checks all of them with each train package installed from
           # a tarball of this commit (the `train` source).
           TRAIN="${TRAIN_INPUT:-}"
-          SOURCE="${SOURCE_INPUT:-train}"
           if [ -z "$TRAIN" ] && [[ "${BASE_REF:-}" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             TRAIN="${BASH_REMATCH[1]}"
           fi
+          SOURCE=""
+          if [ -n "$TRAIN" ]; then SOURCE="${SOURCE_INPUT:-train}"; fi
           echo "train=${TRAIN}" >> "$GITHUB_OUTPUT"
           echo "source=${SOURCE}" >> "$GITHUB_OUTPUT"
 
