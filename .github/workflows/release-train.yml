@@ -6,8 +6,8 @@ name: Release Train (nx)
 # the anchor group's. The train's `checks` decide which check jobs below must
 # pass. See docs/ci/RELEASE-TRAIN.md.
 #
-# The per-package release workflows exclude release-train-* branches; their
-# guard compares one branch version with one package.json.
+# The per-package release workflows run their merge guard with strict-slug, so
+# a release-train-* branch cannot publish through them.
 
 on:
   push:
