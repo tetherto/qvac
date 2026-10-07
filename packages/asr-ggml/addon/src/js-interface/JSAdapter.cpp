@@ -82,7 +82,63 @@ void addConfigParam(
   }
 }
 
+std::string readArrayString(
+    js::Array& array, js_env_t* env, uint32_t index, const char* name) {
+  js_value_t* raw = nullptr;
+  JS(js_get_element(env, array, index, &raw));
+  if (!js::is<js::String>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string(name) + " must contain only strings");
+  }
+  return js::String::fromValue(raw).as<std::string>(env);
+}
+
+std::vector<std::string>
+readStringElements(js::Array array, js_env_t* env, const char* name) {
+  const uint32_t count = array.size(env);
+  std::vector<std::string> values;
+  values.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    values.push_back(readArrayString(array, env, i, name));
+  }
+  return values;
+}
+
+std::vector<std::string>
+readOptionalStringArray(js::Object& obj, js_env_t* env, const char* name) {
+  js_value_t* raw = obj.getProperty(env, name);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return {};
+  }
+  if (!js::is<js::Array>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string(name) + " must be an array of strings");
+  }
+  return readStringElements(js::Array::fromValue(raw), env, name);
+}
+
 } // namespace
+
+moss::MossTranscribeConfig JSAdapter::buildMossTranscribeConfig(
+    js::Object configurationParams, js_env_t* env) {
+  moss::MossTranscribeConfig config;
+  readString(configurationParams, env, "modelPath", config.modelPath);
+  readInt(configurationParams, env, "maxThreads", config.maxThreads);
+  readBool(configurationParams, env, "useGPU", config.useGPU);
+  readString(configurationParams, env, "backendsDir", config.backendsDir);
+  return config;
+}
+
+moss::MossTranscribeRequest
+JSAdapter::readMossTranscribeRequest(js::Object job, js_env_t* env) {
+  moss::MossTranscribeRequest request;
+  readString(job, env, "prompt", request.prompt);
+  request.hotwords = readOptionalStringArray(job, env, "hotwords");
+  readInt(job, env, "maxNewTokens", request.maxNewTokens);
+  return request;
+}
 
 EngineType
 JSAdapter::readEngineType(js::Object configurationParams, js_env_t* env) {
@@ -94,11 +150,14 @@ JSAdapter::readEngineType(js::Object configurationParams, js_env_t* env) {
   if (explicitType == "parakeet") {
     return EngineType::Parakeet;
   }
+  if (explicitType == "moss-transcribe") {
+    return EngineType::MossTranscribe;
+  }
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'whisper' or 'parakeet' (got '" + explicitType +
-            "')");
+        "engineType must be 'whisper', 'parakeet' or 'moss-transcribe' (got '" +
+            explicitType + "')");
   }
 
   // Inference fallback (convenience for direct-binding consumers only; the

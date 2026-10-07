@@ -60,6 +60,7 @@ export const parakeetPlugin = definePlugin({
   displayName: 'Parakeet (NVIDIA NeMo GGML)',
   addonPackage: ADDON_ASR,
   loadConfigSchema: parakeetLoadConfigSchema,
+  assessFit: ASRGgml.assessFit,
 
   resolveConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
     return resolveParakeetConfig(cfg)

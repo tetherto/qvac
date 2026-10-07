@@ -1162,6 +1162,42 @@ void canonicalizeCpuTensorBufferOverrides(
   }
 }
 
+std::optional<llama_load_mode>
+deprecatedLoadFlagMode(const std::string& flag, const std::string& value) {
+  struct DeprecatedLoadFlag {
+    std::string_view key;
+    bool isPositive;
+    bool negatable;
+    llama_load_mode enabled;
+  };
+  static constexpr DeprecatedLoadFlag kDeprecatedLoadFlags[] = {
+      {"mmap", true, true, LLAMA_LOAD_MODE_MMAP},
+      {"no-mmap", false, true, LLAMA_LOAD_MODE_MMAP},
+      {"direct-io", true, true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no-direct-io", false, true, LLAMA_LOAD_MODE_DIRECT_IO},
+      // A valueless flag in llama, so it can only assert itself.
+      {"mlock", true, false, LLAMA_LOAD_MODE_MLOCK}};
+
+  const auto* const flagIt =
+      std::ranges::find(kDeprecatedLoadFlags, flag, &DeprecatedLoadFlag::key);
+  if (flagIt == std::end(kDeprecatedLoadFlags)) {
+    return std::nullopt;
+  }
+  bool requested = true;
+  if (!value.empty()) {
+    if (common_arg_utils::is_truthy(value)) {
+      requested = true;
+    } else if (flagIt->negatable && common_arg_utils::is_falsey(value)) {
+      requested = false;
+    } else {
+      throw std::invalid_argument(string_format(
+          "unknown value for --%s: '%s'", flag.c_str(), value.c_str()));
+    }
+  }
+  return flagIt->isPositive == requested ? flagIt->enabled
+                                         : LLAMA_LOAD_MODE_NONE;
+}
+
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,
     const ModelMetaData& metadata,
@@ -1257,45 +1293,37 @@ NormalizedLoad normalizeLoadForFit(
     params.load_mode = mode->second;
   }
 
-  // The deprecated mmap and direct-io flags are separate options that both
-  // assign params.load_mode, and llama_load_mode is a flat selector rather
-  // than a bitfield, so whichever ran last would erase the other. They are
-  // applied here and never reach the argument parser, which dropped them in
-  // b11018.
-  struct DeprecatedLoadFlag {
-    const char* key;
-    bool isPositive;
-    llama_load_mode enabled;
-  };
-  static constexpr DeprecatedLoadFlag kDeprecatedLoadFlags[] = {
-      {"mmap", true, LLAMA_LOAD_MODE_MMAP},
-      {"no-mmap", false, LLAMA_LOAD_MODE_MMAP},
-      {"no_mmap", false, LLAMA_LOAD_MODE_MMAP},
-      {"direct-io", true, LLAMA_LOAD_MODE_DIRECT_IO},
-      {"direct_io", true, LLAMA_LOAD_MODE_DIRECT_IO},
-      {"no-direct-io", false, LLAMA_LOAD_MODE_DIRECT_IO},
-      {"no_direct_io", false, LLAMA_LOAD_MODE_DIRECT_IO}};
-
+  // The deprecated load flags are no longer in fabric's argument table, so
+  // they are applied here rather than by the generic loop. They all assign
+  // params.load_mode, a flat selector, so flags selecting different modes are
+  // rejected rather than left to whichever applies last.
   std::optional<llama_load_mode> deprecatedMode;
   const char* deprecatedKey = nullptr;
-  for (const auto& flag : kDeprecatedLoadFlags) {
-    const auto it = configFilemap.find(flag.key);
+  for (const char* key :
+       {"mmap",
+        "no-mmap",
+        "no_mmap",
+        "direct-io",
+        "direct_io",
+        "no-direct-io",
+        "no_direct_io",
+        "mlock"}) {
+    const auto it = configFilemap.find(key);
     if (it == configFilemap.end()) {
       continue;
     }
-    bool requested = true;
-    if (!it->second.empty()) {
-      if (common_arg_utils::is_truthy(it->second)) {
-        requested = true;
-      } else if (common_arg_utils::is_falsey(it->second)) {
-        requested = false;
-      } else {
-        // The generic loop reports the unknown value against the key itself.
-        continue;
-      }
+    std::string flag = key;
+    std::ranges::replace(flag, '_', '-');
+    llama_load_mode mode = LLAMA_LOAD_MODE_NONE;
+    try {
+      mode = deprecatedLoadFlagMode(flag, it->second).value();
+    } catch (const std::invalid_argument& e) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format("%s: %s.\n", K_LEGACY_PARSER_NAME.data(), e.what()));
     }
-    const llama_load_mode mode =
-        flag.isPositive == requested ? flag.enabled : LLAMA_LOAD_MODE_NONE;
     if (deprecatedMode.has_value() && deprecatedMode.value() != mode) {
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -1306,10 +1334,10 @@ NormalizedLoad normalizeLoadForFit(
               "instead.\n",
               K_LEGACY_PARSER_NAME.data(),
               deprecatedKey,
-              flag.key));
+              key));
     }
     deprecatedMode = mode;
-    deprecatedKey = flag.key;
+    deprecatedKey = key;
     configFilemap.erase(it);
   }
   if (deprecatedMode.has_value()) {

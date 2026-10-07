@@ -9056,6 +9056,61 @@
     "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 codec encoder / analysis half for voice cloning (GGUF, multilingual)",
@@ -9461,5 +9516,104 @@
     "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
     "notes": "Required for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
     "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-f16.gguf",
+    "engine": "@qvac/audiogen-ggml",
+    "description": "MOSS-SoundEffect v2 text-to-sound model (GGUF)",
+    "quantization": "f16",
+    "params": "1.3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["audio-generation", "sound-effects", "moss-sfx", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-q8_0.gguf",
+    "engine": "@qvac/audiogen-ggml",
+    "description": "MOSS-SoundEffect v2 text-to-sound model (GGUF)",
+    "quantization": "q8_0",
+    "params": "1.3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["audio-generation", "sound-effects", "moss-sfx", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-bf16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech speech-to-speech language model (GGUF)",
+    "quantization": "bf16",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "gguf"],
+    "notes": "Requires the MOSS-Speech codec GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-codec-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech codec for speech-to-speech replies (GGUF)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "codec", "gguf"],
+    "notes": "Pair with a MOSS-Speech language model GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech-Codec"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech speech-to-speech language model (GGUF)",
+    "quantization": "q8_0",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "gguf"],
+    "notes": "Requires the MOSS-Speech codec GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-f16.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q5_0.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q8_0.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-ttsd-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTSD multi-speaker dialogue backbone (GGUF)",
+    "quantization": "f16",
+    "params": "8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-ttsd", "dialogue", "multilingual", "gguf"],
+    "notes": "Requires MOSS-TTS codec decoder and encoder GGUFs for dialogue synthesis.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0"
   }
 ]

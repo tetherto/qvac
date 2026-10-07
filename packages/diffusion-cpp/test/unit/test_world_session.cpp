@@ -150,6 +150,18 @@ TEST_F(WorldSessionModelTest, DestroyUnloadedModelIsNoop) {
 
 class WorldSessionHandlersTest : public ::testing::Test {};
 
+TEST_F(WorldSessionHandlersTest, ImagePixelLimitCanBeConfigured) {
+  WorldSessionConfig config;
+  EXPECT_EQ(config.maxImagePixels, 64ULL * 1024 * 1024);
+  applyWorldSessionHandlers(config, {{"maxImagePixels", "268435456"}});
+  EXPECT_EQ(config.maxImagePixels, 268435456U);
+  for (const auto* value : {"0", "-1", "268435457", "12x"}) {
+    EXPECT_THROW(
+        applyWorldSessionHandlers(config, {{"maxImagePixels", value}}),
+        StatusError);
+  }
+}
+
 TEST_F(
     WorldSessionHandlersTest, VerbosityIsValidatedWithoutChangingGlobalState) {
   const auto previous = logging::g_verbosityLevel.load();

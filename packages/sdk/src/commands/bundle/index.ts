@@ -14,13 +14,17 @@ import {
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
-import { generateAddonsManifest } from '@/commands/bundle/manifest'
+import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import {
   installMissingHostPrebuilds,
   type HostPrebuildPackage
 } from '@/commands/host-prebuilds/index'
 import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
+import { verifyBundle } from '@/commands/verify/index'
+import { formatRuntimeSource } from '@/commands/verify/abi'
+import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
+import type { Logger } from '@/logging/types'
 
 const require = createRequire(import.meta.url)
 
@@ -41,6 +45,14 @@ export interface BundleSdkOptions {
    * is thrown.
    */
   installMissingPrebuilds?: boolean | undefined
+  /**
+   * Check the bundled packages' engines.bare against the Bare runtime of each
+   * host and warn on a mismatch. Defaults to true; callers that run
+   * `verifyBundle` on the result can turn it off.
+   */
+  checkEngines?: boolean | undefined
+  /** Allow network lookups during the engines check. Defaults to true. */
+  network?: boolean | undefined
 }
 
 export interface BundleSdkResult {
@@ -96,6 +108,73 @@ function resolveImportsMapPath(sdkPath: string, sdkName: string): string {
   throw new BareImportsMapNotFoundError(sdkName, importsMapPath)
 }
 
+interface CheckBundleEnginesOptions {
+  projectRoot: string
+  bundlePath: string
+  hosts: string[]
+  configPath: string | undefined
+  network: boolean | undefined
+  logger: Logger
+}
+
+const ENGINES_ISSUE_CODES = new Set(['abi-mismatch', 'engines-mismatch'])
+const AUDIO_PLUGINS = new Set([
+  'whispercpp-transcription',
+  'bci-whispercpp-transcription',
+  'parakeet-transcription',
+  'audiogen-ggml'
+])
+
+function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
+  return pluginSpecifiers.filter((specifier) => {
+    const builtin = parseBuiltinSpecifier(specifier, sdkName)
+    return builtin !== null && AUDIO_PLUGINS.has(builtin.suffix)
+  })
+}
+
+async function checkBundleEngines(options: CheckBundleEnginesOptions) {
+  const { projectRoot, bundlePath, hosts, configPath, network, logger } = options
+
+  logger.info('\n🔎 Checking engines.bare against the Bare runtime of each host...')
+  const result = await verifyBundle({
+    projectRoot,
+    addonsSource: bundlePath,
+    hosts,
+    ...(configPath !== undefined ? { configPath } : {}),
+    ...(network !== undefined ? { network } : {}),
+    onProgress: (message) => logger.info(`   ${message}`)
+  })
+
+  const checkedHosts: string[] = []
+  for (const group of result.runtimes ?? []) {
+    const label = group.hosts.join(', ')
+    if (group.resolution.resolved) {
+      checkedHosts.push(...group.hosts)
+      logger.info(
+        `   ${label}: Bare ${group.resolution.runtime.version} (from ${formatRuntimeSource(group.resolution.runtime)})`
+      )
+    } else {
+      logger.warn(`engines.bare not checked for ${label}: ${group.resolution.error.reason}`)
+    }
+  }
+
+  const mismatches = result.issues.filter(
+    (issue) => ENGINES_ISSUE_CODES.has(issue.code) && issue.level === 'error'
+  )
+  if (mismatches.length === 0) {
+    if (checkedHosts.length > 0) {
+      logger.info(`   No engines.bare mismatches for ${checkedHosts.join(', ')}`)
+    }
+    return
+  }
+
+  const lines = ['The bundle contains packages that require a newer Bare runtime:']
+  for (const issue of mismatches) lines.push(`  - ${issue.message}`)
+  lines.push('')
+  for (const advice of result.advice ?? []) lines.push(...formatEnginesAdvice(advice))
+  logger.warn(lines.join('\n').trimEnd())
+}
+
 export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleSdkResult> {
   const startTime = Date.now()
 
@@ -139,7 +218,21 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
 
-  const deferModules = options.defer ?? []
+  const explicitDefer = options.defer ?? []
+  const includeAudioDecoder =
+    config.includeAudioDecoder !== false && !explicitDefer.includes(AUDIO_DECODER_ADDON)
+  const deferModules = includeAudioDecoder
+    ? explicitDefer
+    : [...new Set([...explicitDefer, AUDIO_DECODER_ADDON])]
+
+  if (!includeAudioDecoder) {
+    const affected = audioPluginsIn(pluginSpecifiers, sdkName)
+    if (affected.length > 0) {
+      logger.warn(
+        `${AUDIO_DECODER_ADDON} is not bundled: ${affected.join(', ')} cannot decode compressed audio files; compressed audiogen output formats also require FFmpeg.`
+      )
+    }
+  }
 
   await fsp.mkdir(outputDir, { recursive: true })
 
@@ -148,7 +241,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   const { runtimeEntry, bundleEntry } = generateWorkerEntries(
     pluginSpecifiers,
     sdkName,
-    resolveSdkImport
+    resolveSdkImport,
+    config.rpcServerProvider
   )
   await fsp.writeFile(entryPath, runtimeEntry, 'utf8')
   logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
@@ -180,7 +274,9 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         const { installed } = await installMissingHostPrebuilds({
           projectRoot,
           hosts,
-          addons: await collectAddonsFromBundle({ bundlePath, projectRoot, hosts }),
+          addons: (await collectAddonsFromBundle({ bundlePath, projectRoot, hosts })).filter(
+            (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
+          ),
           quiet: options.quiet === true,
           logger
         })
@@ -212,8 +308,20 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     bundlePath,
     outputDir,
     projectRoot,
-    logger
+    logger,
+    includeAudioDecoder
   })
+
+  if (options.checkEngines !== false) {
+    await checkBundleEngines({
+      projectRoot,
+      bundlePath,
+      hosts,
+      configPath: configPath ?? undefined,
+      network: options.network,
+      logger
+    })
+  }
 
   if (installRefused !== undefined) throw installRefused
 

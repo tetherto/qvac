@@ -13,18 +13,19 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 - [Local Development](#local-development)
   - [Quick Start](#quick-start)
   - [Generating API Docs Locally](#generating-api-docs-locally)
-  - [Updating the Versions List](#updating-the-versions-list)
+  - [Where generated pages land](#where-generated-pages-land)
+  - [Cutting a documentation line](#cutting-a-documentation-line)
   - [Full Generation (Orchestrated)](#full-generation-orchestrated)
 - [Versioning](#versioning)
 - [Branch Strategy and Deployment](#branch-strategy-and-deployment)
   - [Branch Strategy](#branch-strategy)
+  - [Builder configuration](#builder-configuration)
   - [Staging (automatic)](#staging-automatic)
   - [Production (manual promotion)](#production-manual-promotion)
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
   - [Promote docs to production (manual)](#2-promote-docs-to-production-manual)
   - [SDK release docs (local, skill-driven)](#3-sdk-release-docs-local-skill-driven)
-  - [Production health check (scheduled)](#4-production-health-check-scheduled)
 - [Script Reference](#script-reference)
 - [Release-Notes Overrides](#release-notes-overrides)
 - [Troubleshooting](#troubleshooting)
@@ -49,11 +50,11 @@ Content falls into two categories:
 
 | Category | Path | Committed? |
 |---|---|---|
-| Manual content (guides, tutorials, addons) | `content/docs/sdk/`, `content/docs/addons/`, `content/docs/about-qvac/`, etc. | Yes |
-| SDK API summary (generated) | `content/docs/reference/api/v<X.Y>.x.mdx` (all series, latest included), plus the shim `content/docs/reference/api/index.mdx` | Yes (committed once per minor release) |
-| SDK release notes (generated) | `content/docs/reference/release-notes/v<X.Y>.x.mdx` (all series, latest included), plus the shim `content/docs/reference/release-notes/index.mdx` | Yes (committed on every minor and patch release) |
+| Manual content (guides, tutorials, addons) | one collection folder per top level: `content/docs/ecosystem/`, `content/docs/sdk/`, `content/docs/cli/`, `content/docs/resources/` | Yes |
+| SDK API summary (generated) | `content/docs/sdk/<current line>/reference/api.mdx` | Yes (committed once per minor release) |
+| SDK release notes (generated) | `content/docs/sdk/<current line>/reference/release-notes.mdx` | Yes (committed on every minor and patch release) |
 
-The SDK API summary and release notes are **generated from TypeScript source / package CHANGELOGs** via [TypeDoc](https://typedoc.org/) and Nunjucks. Every minor series — including the current latest — lives as a single permanent MDX file `v<X.Y>.x.mdx` (literal `x` marker; accumulating patch sections inside as `## vX.Y.Z`). The canonical bare URL (`/reference/api`, `/reference/release-notes`) is served by a tiny fixed `index.mdx` **shim** that `<include>`s the current latest series file via Fumadocs' native `remarkInclude` plugin. Rotating latest is therefore a shim rewrite (one changed line in the include target, plus frontmatter refresh) + a managed block update in `public/_redirects` — the outgoing series' MDX is never touched. Generation is triggered by the release pipeline; locally a maintainer can regenerate to preview.
+The SDK API summary and release notes are **generated from TypeScript source / package CHANGELOGs** via [TypeDoc](https://typedoc.org/) and Nunjucks. Each is one MDX page inside the SDK's current documentation line, the folder `src/lib/versions.ts` declares as current. A line that has shipped is never regenerated, so there is one target and no way to name another. Generation is triggered by the release pipeline; locally a maintainer can regenerate to preview.
 
 ### How the Pipeline Works
 
@@ -69,24 +70,16 @@ SDK source (packages/sdk)
 Phase 1: TypeDoc extraction  ──►  api-data.json
   │
   ▼
-Phase 2: Nunjucks rendering  ──►  content/docs/reference/api/v<X.Y>.x.mdx     (versioned series page — same shape for latest and archived)
-                              ──►  src/lib/versions.ts                          (version switcher)
+Phase 2: Nunjucks rendering  ──►  content/docs/sdk/<current line>/reference/api.mdx
 ```
 
-Release notes are **per minor series** too — each minor line owns one
-permanent MDX page that accumulates patch sections as `## vX.Y.Z`
+Release notes are one page in the current line too — it accumulates patch
+sections as `## vX.Y.Z`
 directly under the `## vX.Y.0` minor block. The body of each section is
 inlined verbatim from each SDK pod package's
 `packages/<pkg>/changelog/<version>/CHANGELOG_LLM.md` under a per-package
 `### @qvac/<pkg>` subsection (heading levels demoted so they nest under
 the page hierarchy).
-
-The canonical bare URL for each section is served by a permanent shim
-`index.mdx` that contains just frontmatter + one `<include>` line. The
-shim is rewritten on every minor rotation to point at the new
-`v<X.Y>.x.mdx`; patch releases don't touch it except for the description
-range in release notes. See [Versioning](#versioning) below for the
-full model.
 
 ---
 
@@ -113,7 +106,7 @@ Without generating API docs, the site loads but SDK API links will 404.
 
 ### Setting `SDK_PATH`
 
-The generation scripts need `SDK_PATH` to point at the SDK package root (the directory containing `package.json`, `tsconfig.json`, and `src/index.ts`).
+The generation scripts need `SDK_PATH` to point at the SDK package root (the directory containing `index.ts` and `tsconfig.json`).
 
 Copy `.env.example` to `.env` and set the path:
 
@@ -129,68 +122,93 @@ Bun loads `.env` automatically when running scripts.
 
 ### Generating API Docs Locally
 
-Two entry points depending on what you want to do:
-
-**1. Render the API summary for a single version (no version-bumping):**
-
 ```bash
 bun run scripts/generate-api-docs.ts <version> [flags]
 ```
 
-Examples:
-
-```bash
-# Re-render a minor series into content/docs/reference/api/v<X.Y>.x.mdx
-bun run scripts/generate-api-docs.ts 0.11.0
-
-# Same, but explicitly targeting an existing file (used by ad-hoc relabel)
-bun run scripts/generate-api-docs.ts 0.10.0 --target=v0.10.x.mdx --title-only
-```
-
 This will:
-1. Run TypeDoc against the SDK entry point (`SDK_PATH/src/index.ts`) and write `api-data.json`
-2. Render a single MDX via the Nunjucks `single-page.njk` template:
-   - default → `content/docs/reference/api/v<X.Y>.x.mdx` (series-named — same file whether the series is latest or archived)
-   - `--target=<file>` → `content/docs/reference/api/<file>` (explicit override)
+
+1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`) and write `api-data.json`
+2. Render a single MDX via the Nunjucks `single-page.njk` template into
+   `content/docs/sdk/<current line>/reference/api.mdx`, the line
+   `src/lib/versions.ts` declares as current
 3. Run a smoke test that checks for `## Functions` and `## Errors` headings
 
 `--title-only` short-circuits this: it skips TypeDoc + render and only
-rewrites the `title:` line of the existing target MDX, then runs the
+rewrites the `title:` line of the existing page, then runs the
 same smoke test.
-
-The generator never writes to `index.mdx` — that path is the shim,
-managed exclusively by `release-version-minor.ts`.
 
 **Flags:**
 
 | Flag | Description |
 |---|---|
-| `--target=<file>` | Override the output filename inside `api/` (defaults to `v<X.Y>.x.mdx`). |
-| `--title-only` | Rewrite the frontmatter title in-place (skips TypeDoc + render). Handy for one-off relabel. |
+| `--title-only` | Rewrite the frontmatter title in-place (skips TypeDoc + render). |
 | `--force-extract` | Bypass the mtime cache and re-run TypeDoc extraction. |
 
-**2. Release a new version end-to-end (generate incoming, rewrite shims, rotate redirects, refresh dropdown):**
+There is no flag naming the target. The destination is the SDK's current line,
+read from the manifest, and a version that is not that line's is refused before
+anything is written — see [Where generated pages land](#where-generated-pages-land).
+
+Release notes work the same way:
 
 ```bash
-# Auto-detects minor (X.Y.0) vs patch (X.Y.Z, Z >= 1)
-bun run scripts/release-version.ts <new-version> [--force-extract]
+bun run scripts/generate-release-notes.ts <version> [--append-patch]
 ```
 
-This is the orchestrator the CI pipeline calls. It dispatches to the
-focused `release-version-minor.ts` / `release-version-patch.ts` modules
-based on the patch number, and never commits or opens PRs itself — the
-wrapping workflow does that. See
-[Release-version orchestrators](#release-version-orchestrators) below.
+`--append-patch` inserts a `## vX.Y.Z` section into the line's existing page
+instead of rendering it from scratch. Re-running the same patch is idempotent.
 
-### Updating the Versions List
+### Where generated pages land
 
-After generating docs, refresh `src/lib/versions.ts` from disk:
+Both generators write into the SDK's **current documentation line** — the
+folder `src/lib/versions.ts` declares as current — and neither takes a target.
+A line that has shipped is what the site already serves and is never
+regenerated.
+
+Because the destination is read rather than passed, it has to be checked. A
+version that is not the current line's is refused, before the first write:
+
+```
+Refusing to write v0.21 pages into v0.20, the current line of /sdk.
+  v0.21 has no line yet. Cut it before documenting the release:
+    bun run scripts/cut-line.ts sdk v0.21
+```
+
+Without that refusal, documenting a release before its line is cut would
+overwrite the previous line's own release notes, and the resulting tree would
+still build and still pass the suite.
+
+### Cutting a documentation line
+
+A cut is what makes the next line current. It happens immediately after a
+release deploys — not when the next one is being prepared — so new material has
+a folder to land in and the release that just shipped is preserved as it stood.
 
 ```bash
-bun run scripts/update-versions-list.ts [--latest=X.Y.Z]
+bun run scripts/cut-line.ts <collection> <version>
+
+bun run scripts/cut-line.ts sdk v0.21
 ```
 
-This walks `content/docs/reference/api/` and `content/docs/reference/release-notes/` for `vX.Y.x.mdx` siblings (series-named) and rebuilds the section manifests (`API_SECTION`, `RELEASE_NOTES_SECTION`). The optional `--latest=X.Y.Z` flag overrides which precise patch is recorded as `section.latest` (used for the page title's latest-patch range); the selector itself only shows series labels (`v0.11.x (latest)`, `v0.10.x`, ...). Defaults to the SDK's `package.json` version when `--latest` is omitted.
+It renames the outgoing folder group to its plain form, copies it to the new
+group, updates the manifest, adds the preserved line's index pair to
+`public/_redirects`, and moves the currency marker from the preserved line's
+titles to the opened one's. It refuses a collection that is not versioned, a
+version that is not above the current line, a destination already on disk, and
+a working tree that already carries changes.
+
+It is a convenience, never a dependency. The same cut made by hand is the same
+cut — the procedure is in [`README.md`](README.md) — and the build is what
+accepts either. The command does not build; run `npm run build` and `npm test`
+yourself and review the diff.
+
+`src/lib/versions.ts` is hand-edited. It declares every documented software,
+the package it is, where it is documented, and the versions published for it.
+Publishing a version is two edits in one diff — the folder under
+`content/docs/`, and the entry in that file — and
+`tests/line-structure.test.ts` fails the build when the two disagree, naming
+the version at fault. `scripts/update-versions-list.ts`, which used to
+regenerate the file from disk, is retired and refuses to run.
 
 ### Full Generation (Orchestrated)
 
@@ -200,61 +218,70 @@ When running inside the monorepo, use the orchestrator script that reads the SDK
 bun run docs:generate
 ```
 
-This runs `generate-api-docs.ts` followed by `update-versions-list.ts` in sequence — useful for previewing a regen against the current SDK without bumping the latest pointer. It writes to the current series' `v<X.Y>.x.mdx` (which the shim already `<include>`s), so the shim and `_redirects` block never need to move during a preview regen.
+This runs `generate-api-docs.ts` — useful for previewing a regen against the current SDK. It no longer refreshes the version list, which is hand-edited.
 
 ---
 
 ## Versioning
 
-Only the API summary and release notes are versioned. Every other content surface (about-qvac, getting-started, examples, tutorials, addons, cli, http-server, home) lives at a single bare path that always reflects the current SDK.
+Versioning is a property of a collection. A **versioned collection** — the SDK,
+the CLI — publishes one **documentation line** per minor release: one folder
+directly under the collection, holding a complete page tree for that release.
+The unversioned collections, Ecosystem and Resources, publish one copy of
+everything.
 
-Each versioned section is one folder under `content/docs/reference/` containing:
-
-- One permanent MDX **per minor series** (literal `x` marker in the filename), including the current latest — every minor line has exactly one on-disk page for its entire lifetime.
-- A tiny fixed `index.mdx` **shim** that serves the canonical bare URL and `<include>`s the current latest series file via Fumadocs' `remarkInclude` plugin.
+The current line's folder is written in parentheses. Fumadocs reads that as a
+group and excludes it from the slug, so the current line answers the
+version-less paths; every other line's folder is plain, so its pages carry the
+version:
 
 ```
 content/docs/
-├── about-qvac/                              -> not versioned
-├── addons/                                  -> not versioned
-├── cli.mdx                                  -> not versioned
-├── http-server.mdx                          -> not versioned
-├── index.mdx                                -> not versioned (home)
-├── sdk/                                     -> not versioned
-│   ├── examples/                            -> not versioned
-│   ├── getting-started/                     -> not versioned
-│   └── tutorials/                           -> not versioned
-└── reference/
-    ├── api/
-    │   ├── index.mdx                        -> shim: <include>./v<latestSeries>.x.mdx
-    │   ├── v0.18.x.mdx                      -> current latest minor series (content lives here)
-    │   ├── v0.17.x.mdx                      -> archived minor series
-    │   ├── v0.10.x.mdx
-    │   └── ...
-    └── release-notes/
-        ├── index.mdx                        -> shim: <include>./v<latestSeries>.x.mdx
-        ├── v0.18.x.mdx                      -> current latest series (accumulates ## vX.Y.Z patches)
-        ├── v0.17.x.mdx                      -> archived minor series
-        ├── v0.10.x.mdx
-        └── ...
+├── ecosystem/                  -> not versioned
+├── resources/                  -> not versioned
+├── sdk/
+│   ├── (v0.20)/                -> current line, serves /sdk/…
+│   │   ├── quickstart.mdx      ->            /sdk/quickstart
+│   │   └── reference/
+│   │       ├── api.mdx         ->            /sdk/reference/api          (generated)
+│   │       └── release-notes.mdx ->          /sdk/reference/release-notes (generated)
+│   ├── v0.19/                  -> preserved, serves /sdk/v0.19/…
+│   └── v0.18/
+└── cli/
+    ├── (v0.14)/
+    ├── v0.13/
+    └── v0.12/
 ```
 
-- **Format**: `vX.Y.x` (literal `x` for the patch component). One permanent page per minor line — the current latest is not special on disk.
-- **`index.mdx` shim**: Serves the canonical bare URL (`/reference/api`, `/reference/release-notes`). Body is one line: `<include>./v<latestSeries>.x.mdx</include>`. Rewritten by `release-version-minor.ts` when latest rotates; otherwise touched only by `release-version-patch.ts` in `patch-latest` mode to mirror the versioned page's `description:` (release-notes range grows) — API's shim description is static, so patches never touch the API shim.
-- **`vX.Y.x.mdx`**: Every minor series' permanent page, served from `<basePath>/v<X.Y>.x` (e.g. `/reference/api/v0.10.x`). Same shape for latest and archived — the difference is only in which file the shim points at. Frontmatter titles are always the plain series label (`vX.Y.x`, no "(latest)" marker — that lives exclusively on the shim).
-- **Latest-series alias redirect**: The versioned URL of the current latest (e.g. `/reference/api/v0.18.x`) 301-aliases to the bare canonical (`/reference/api/`) via a managed block in `public/_redirects`, delimited by `# ==== BEGIN latest-series alias (managed) ====` / `# ==== END latest-series alias (managed) ====` markers. `release-version-minor.ts` rewrites the block on every rotation. Search engines and crawlers therefore consolidate on the canonical bare URL — the versioned URL is only "real" once the series is archived (i.e., no longer the current latest).
-- **Version list**: Two `VersionedSection` records (`API_SECTION`, `RELEASE_NOTES_SECTION`) in `src/lib/versions.ts`, refreshed by `scripts/update-versions-list.ts` from disk. Each carries both `latest` (precise patch, e.g. `v0.18.3`) and `latestSeries` (e.g. `v0.18.x`). The selector labels and URLs use the series form; the precise patch only surfaces in titles / description ranges.
-- **Sidebar tree**: Single `customTree` in `src/lib/custom-tree.ts`. The `API` and `Release notes` entries are flat single-page links pointing at the shim; the version selector beside the page title (only on `/reference/api*` and `/reference/release-notes*`) handles series switching via full-page reload.
+- **Line name**: `vX.Y`. A line represents every patch in its range, so a line
+  is never named for a patch.
+- **Currency**: stated once, by the parentheses. Nothing else records it, which
+  is why a cut is the only thing that changes it.
+- **Manifest**: `src/lib/versions.ts`, hand-edited, naming each line and the
+  folder holding it. `tests/line-structure.test.ts` fails the build when the
+  manifest and the folders disagree.
+- **Permanence**: a published line is never removed. It is the only record of
+  how that release behaved, and the readers who need it are the ones pinned to
+  it.
+- **Everything else is derived**: the switcher, the sidebars, the canonical
+  URLs, the agent artifacts, `versions.json`, the sitemap, and the retrieval
+  metadata are computed at build time from the manifest and the folders.
 
-SDK release docs are generated **locally** as part of the release prep, not by a CI workflow. The `qv-sdk-changelog` skill (Step 8) runs the `release-version.ts` dispatcher in the same working tree as the changelog, so both land in a single release PR. The dispatcher reads the version, picks minor (generate incoming versioned files → rewrite both shims → rotate `_redirects` alias block) for `X.Y.0` and patch (insert `## vX.Y.Z` section into the versioned page — API summary untouched) for `X.Y.Z` with `Z >= 1`, and forwards to the focused orchestrator.
+SDK release docs are generated **locally** as part of the release prep, not by
+a CI workflow. The `qv-sdk-changelog` skill (Step 8) runs the two generators in
+the same working tree as the changelog, so both land in a single release PR.
+The line being released was already cut, so the generators have somewhere to
+write; a release that reaches them before the cut is refused.
 
 ### Minor vs patch release behavior
 
-| Trigger | API summary | Release notes | Shim + redirects | Versions list |
-|---|---|---|---|---|
-| `release-sdk-X.Y.0` (minor) | Re-run TypeDoc → new `v<X.Y>.x.mdx`. Outgoing series' MDX is not touched. | Full render of the new minor's `## vX.Y.0` block (per-package verbatim `CHANGELOG_LLM.md` under `### @qvac/<pkg>`) into `v<X.Y>.x.mdx`. Outgoing series' MDX is not touched. | Both shims rewritten to `<include>` the new series file with fresh title / description. Managed `latest-series alias` block in `public/_redirects` swapped from outgoing to incoming series. | `latest = X.Y.0`, `latestSeries = vX.Y.x`. |
-| `release-sdk-X.Y.Z` matching current latest minor (`patch-latest`) | **Not touched.** Patches by definition don't change public API. | Insert `## v<X.Y.Z>` section directly after the existing `## v<X.Y>.0` block in `v<X.Y>.x.mdx`. Re-runs are idempotent (the section is replaced in place). Description range bumps to include the new patch. | Release-notes shim's `description:` line mirrored from the versioned page's new range. API shim is not touched (its description is static). Redirect block unchanged. | `latest = X.Y.Z` (selector label unchanged — still `vX.Y.x (latest)`). |
-| `release-sdk-X.Y.Z` for an archived minor (`patch-archived`) | **Not touched.** | Insert the same section into the existing `v<X.Y>.x.mdx` page. No rename. | Not touched (the archived series is not the shim's target). | `latest` unchanged (script omits `--latest`). |
+| Trigger | API summary | Release notes |
+|---|---|---|
+| `release-sdk-X.Y.0` (minor) | Re-run TypeDoc and render `api.mdx` into the current line. | Full render of the `## vX.Y.0` block (per-package verbatim `CHANGELOG_LLM.md` under `### @qvac/<pkg>`) into the current line's `release-notes.mdx`. |
+| `release-sdk-X.Y.Z`, `Z >= 1` (patch) | **Not touched.** The public API is frozen at the minor boundary, so a patch by definition adds nothing here. | Insert the `## vX.Y.Z` section directly after the existing `## vX.Y.0` block. Description range bumps to include the new patch. |
+
+A patch of an older line is an ordinary edit to that line's page, not a release
+flow: the generators only write the current line.
 
 Re-running a patch is **idempotent** — the existing `## vX.Y.Z` block is detected and replaced in place rather than appended again. The newest patch always sits directly below the minor block; older patches stay further down.
 
@@ -269,23 +296,21 @@ without a folder for that version are skipped (the SDK typically lists
 all five pod packages; in practice only `@qvac/sdk` shares the version
 namespace with the SDK pod's release cadence).
 
-### Release-version orchestrators
+### Retired tooling
 
-A thin dispatcher (`release-version.ts`) auto-detects minor vs patch from the version's patch number and forwards to one of two focused modules:
+The patch-series scheme — where a version was a `vX.Y.x.mdx` sibling of the API
+summary rather than a folder — had orchestrators that froze the outgoing series
+and regenerated the manifest from disk. They are kept on disk for reference and
+**refuse to run**, because the manifest is now hand-edited and a cut is a
+content change:
 
-**`release-version-minor.ts`** — for `X.Y.0` releases.
+- `scripts/release-version.ts` and its `release-version-minor.ts` /
+  `release-version-patch.ts` modules
+- `scripts/update-versions-list.ts`
 
-1. Reads the current `latest` from `src/lib/versions.ts` (the outgoing version, only used for logging / sanity checks — the outgoing series' MDX is never touched).
-2. Calls `scripts/generate-api-docs.ts <new>` — runs TypeDoc + render and writes the new `reference/api/v<X.Y>.x.mdx`.
-3. Calls `scripts/generate-release-notes.ts <new>` — reads per-package `CHANGELOG_LLM.md` verbatim and writes the new `reference/release-notes/v<X.Y>.x.mdx`.
-4. Rewrites `reference/api/index.mdx` — the shim now `<include>`s `v<newMajor>.<newMinor>.x.mdx` and advertises the new `(latest)` label in its frontmatter.
-5. Rewrites `reference/release-notes/index.mdx` — same for release notes.
-6. Rewrites the managed `latest-series alias` block in `public/_redirects` so the incoming series' versioned URL 301s to the canonical bare path (the outgoing series' block is replaced in place).
-7. Calls `scripts/update-versions-list.ts --latest=<new>` — refreshes `versions.ts` so the dropdown marks the new series as `(latest)` and keeps every other on-disk series listed.
-
-**`release-version-patch.ts`** — for `X.Y.Z` releases with `Z >= 1`. Inspects `src/lib/versions.ts` to choose between `patch-latest` (write to the current latest's `v<X.Y>.x.mdx`, then mirror its updated `description:` onto the release-notes shim) and `patch-archived` (write to the existing archived `v<X.Y>.x.mdx`; no shim touch). The script never invokes the API summary generator (patches don't change public API) and never touches `public/_redirects` (patch releases don't rotate latest).
-
-All three modules are pure file mutations — they never `git commit` or `gh pr create`. The wrapping GitHub workflow opens the PR.
+Nothing calls them. Running one prints what to do instead. The release path is
+the two generators; the cut is `scripts/cut-line.ts` or the hand procedure in
+[`README.md`](README.md).
 
 ---
 
@@ -311,6 +336,22 @@ Hosting provider builds              ▼
 
 With `main` + `docs-production`, production is always a fast-forward of a reviewed, already-on-`main` state — so the two branches never diverge historically and staging is always what production will become.
 
+### Builder configuration
+
+The build runs in two phases, and each sizes its own parallelism from the core count the builder reports — the host's, not the container's share. On a 16-core builder that means more than 12 GB, and a smaller builder is killed by the kernel partway through `Creating an optimized production build`. It prints no error, because the overrun is Turbopack's native memory rather than a V8 heap it could abort on.
+
+Three build-time environment variables cap both phases and bring the whole build under 5 GB. Set them on every builder that runs `next build`; they must be real environment variables, since Next and Turbopack read them at startup, before any `.env` file:
+
+- `TURBO_TASKS_AVAILABLE_PARALLELISM=1` — threads Turbopack compiles with. This is the one that governs the peak.
+- `CIRCLE_NODE_TOTAL=2` — static generation workers, as `value - 1`.
+- `NODE_OPTIONS=--max-old-space-size=2048` — V8 heap ceiling per Node process, for the generation phase only.
+
+Measured on this tree, with the full `npm run build` chain and a cold cache: the default parallelism dies at 8 GB, `4` fits in 8 GB, `2` in 6 GB, `1` in 5 GB, and nothing fits in 4 GB. The cost of `1` is compile time, roughly three minutes instead of forty seconds.
+
+Raising `NODE_OPTIONS` does not help and tends to hurt: it is a ceiling, not a reservation, so a larger value only lets each process grow further before collecting, and the kernel kills it.
+
+`TURBO_TASKS_AVAILABLE_PARALLELISM=1` is the last notch of that dial. The requirement grows with the content — every retained documentation line is a full copy of a content tree — so once growth outgrows 5 GB the answer has to come from fewer retained lines or a larger builder. Re-measure after each cut.
+
 ### Staging (automatic)
 
 ```
@@ -335,24 +376,16 @@ hosting provider's build the same way.
 ### Production (manual promotion)
 
 ```
-Staging is verified and ready at a known commit
+Staging is verified and ready
     │
     ▼
-Manually run the "Promote docs to production" workflow (workflow_dispatch),
-passing that commit as the `commit` input
+Manually run the "Promote docs to production" workflow (workflow_dispatch)
     │
     ▼
-Preflight job (ungated) validates the commit and publishes the
-commit list to the run summary
-    │  (fails here if the commit is not on main, or the ff is not possible)
+Workflow fast-forwards docs-production to origin/main (--ff-only)
+    │  (fails if docs-production has diverged from main)
     ▼
-Promote job pauses for docs-production environment approval
-    │  (required reviewer: qvac-internal-release)
-    ▼
-Workflow fast-forwards docs-production to the commit (--ff-only)
-    │
-    ▼
-Push to docs-production (as the GitHub App — ruleset bypass identity)
+Push to docs-production
     │
     ▼
 Hosting provider detects new commit on docs-production
@@ -364,29 +397,10 @@ Hosting provider builds the static site and deploys to production
 Production is promoted by manually running the **Promote docs to
 production** workflow (`.github/workflows/promote-docs-production.yml`),
 never by merging a PR into `docs-production`. The workflow advances
-`docs-production` to the commit given in the required `commit` input,
-using **fast-forward-only** semantics: if the branches have diverged it
-fails instead of creating a merge commit, so `docs-production` stays a
-pure pointer into `main`'s history. A `docs-production` environment
-required-reviewer gate pauses the job until a `qvac-internal-release`
-member approves.
-
-The target is an explicit input rather than "whatever `main` points at"
-because the approval gate introduces an unbounded delay between dispatch
-and push. Resolving `main` after the approval would promote commits that
-landed while the run waited — commits nobody verified on staging. Naming
-the commit pins the promotion to the state the operator actually
-inspected, and makes the run self-documenting: the target appears in the
-run title, so the approver sees what they are approving.
-
-The validation runs in a separate ungated `preflight` job for the same
-reason. An environment gate pauses a job before any of its steps run, so
-a single-job workflow can only discover a bad input *after* someone has
-been asked to approve it. Splitting the work means every rejectable
-condition fails while the run is still unattended, and the reviewer is
-only ever paged for a promotion that is known to be valid. Preflight also
-writes the resolved SHA and the exact list of commits being promoted to
-the run summary, which is what the reviewer reads before approving.
+`docs-production` to the current `main` commit using **fast-forward-only**
+semantics: if the branches have diverged it fails instead of creating a
+merge commit, so `docs-production` stays a pure pointer into `main`'s
+history.
 
 The person promoting is responsible for confirming staging is healthy and
 that the docs PR Checks have passed on `main` before running the workflow.
@@ -406,7 +420,7 @@ Head of QVAC to publish the SDK package) is a human decision.
 
 ## CI Workflows
 
-Three GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`, and one probes the deployed production site on a daily schedule. SDK release docs are generated locally by a Cursor skill (no release workflow). None of these workflows build or deploy the site — the hosting provider does that on branch pushes.
+Two GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`. SDK release docs are generated locally by a Cursor skill (no release workflow). Neither workflow builds or deploys the site — the hosting provider does that on branch pushes.
 
 ### 1. Docs Website PR Checks
 
@@ -422,7 +436,7 @@ Three GitHub Actions workflows touch the docs: one validates docs PRs, one manua
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
-The API summary `index.mdx` lives at `content/docs/reference/api/` and is committed to the repo (refreshed locally by the `qv-sdk-changelog` skill Step 8 during SDK release prep), so PR checkouts always have it on disk — no placeholder step is needed.
+The API summary page lives in the SDK's current line, at `content/docs/sdk/<current line>/reference/api.mdx`, and is committed to the repo (refreshed locally by the `qv-sdk-changelog` skill Step 8 during SDK release prep), so PR checkouts always have it on disk — no placeholder step is needed.
 
 ### 2. Promote docs to production (manual)
 
@@ -430,58 +444,45 @@ The API summary `index.mdx` lives at `content/docs/reference/api/` and is commit
 
 **Triggers:** Manual `workflow_dispatch` only. It never runs automatically on a merge to `main`.
 
-**Inputs:**
-
-| Input | Required | Description |
-|---|---|---|
-| `commit` | Yes | The commit to promote. Any revision already merged to `main` (a full SHA is recommended; the resolved SHA is echoed in the log). |
-
 **What it does:**
-- Pauses for approval on the `docs-production` environment (`qvac-internal-release` required reviewers)
-- Mints a short-lived **GitHub App token** (`actions/create-github-app-token`) and checks out `docs-production` (full history) with it — the App is the only bypass identity on the `docs-production` ruleset (the default `GITHUB_TOKEN` / GitHub Actions integration cannot be a ruleset bypass actor)
+- Checks out `docs-production` (full history) using `PAT_TOKEN` (the default `GITHUB_TOKEN` cannot push to the protected `docs-production` branch)
 - Fetches `origin/main` and runs `git merge --ff-only origin/main`
 - Pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
 
-Divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`. Promoting the commit `docs-production` already points at is a no-op that exits cleanly.
+**Fails when:** `docs-production` has diverged from `main` (the `--ff-only` merge is rejected). This is intentional — divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`.
 
 **Purpose:** Give the docs owner a single, deliberate button to promote the reviewed `main` state to production once the SDK package is (about to be) published, without ever letting `docs-production` drift from `main`'s history.
 
-> `docs-production` is branch-protected (Restrict updates, Restrict deletions, Block force pushes, no PR merges). The promotion workflow — running as the GitHub App after environment approval — is the only identity allowed to advance it.
+> `docs-production` should stay branch-protected (no direct pushes, no PR merges); the promotion workflow's `PAT_TOKEN` account is the only identity allowed to push to it.
 
 ### 3. SDK release docs (local, skill-driven)
 
-**Where:** the `qv-sdk-changelog` Cursor skill, Step 8 (`.agents/skills/qv-sdk-changelog/SKILL.md`). There is no GitHub Actions docs-release workflow — generation runs locally during release prep and ships in the SDK release PR alongside the changelog.
+**Where:** the `qv-sdk-changelog` Cursor skill, Step 8 (`.cursor/skills/qv-sdk-changelog/SKILL.md`). There is no GitHub Actions docs-release workflow — generation runs locally during release prep and ships in the SDK release PR alongside the changelog.
 
 **When:** while preparing an `@qvac/sdk` release (after the changelog / `CHANGELOG_LLM.md` is generated). Skipped for non-`sdk` packages.
 
+**Precondition:** the line for the version being released is already cut. The
+cut happens right after the *previous* release deploys, so by release prep the
+folder exists. Reaching the generators before that is refused, naming the cut
+that is missing.
+
 **What it does:**
-1. Runs `release-version.ts <version> --force-extract` from `docs/website`, which dispatches:
-   - **Minor (`X.Y.0`)** — full flow: generates the new API summary into `content/docs/reference/api/v<X.Y>.x.mdx` (TypeDoc + render — output is deterministic by construction), generates the new release notes into `content/docs/reference/release-notes/v<X.Y>.x.mdx` (per-package verbatim `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block), rewrites both `index.mdx` shims to `<include>` the new series file, rotates the managed alias block in `public/_redirects`, and refreshes `src/lib/versions.ts`. The outgoing series' MDX is never touched.
-   - **Patch (`X.Y.Z`, `Z >= 1`)** — `release-version-patch.ts` inspects `src/lib/versions.ts` and picks `patch-latest` (incoming `X.Y` == latest `X.Y`: insert `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block of `v<X.Y>.x.mdx`, then mirror the freshly-computed description onto the release-notes shim) or `patch-archived` (older minor: insert the same section into the existing archived `v<X.Y>.x.mdx`, no shim touch, no rename). The API summary page is never touched by patches.
+1. Runs the generators from `docs/website`, against the current line:
+   - **Minor (`X.Y.0`)** — `generate-api-docs.ts <version> --force-extract`
+     (TypeDoc + render, deterministic by construction) and
+     `generate-release-notes.ts <version>` (per-package verbatim
+     `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block).
+   - **Patch (`X.Y.Z`, `Z >= 1`)** — `generate-release-notes.ts <version> --append-patch`,
+     inserting `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block.
+     The API summary is never touched by a patch.
 2. Runs `npm run build` from `docs/website` to verify the site still compiles (fail-stop on error).
-3. Only the generated surfaces are committed — `content/docs/reference/api/**`, `content/docs/reference/release-notes/**`, `src/lib/versions.ts`, and (on minor rotations) `public/_redirects`. The skill only generates files (it never runs `git add`); review `git status` and commit these, while all build/generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored so they never show up.
+3. Only the generated surfaces are committed — `content/docs/sdk/<current line>/reference/api.mdx` and `content/docs/sdk/<current line>/reference/release-notes.mdx`. Never `src/lib/versions.ts` or `public/_redirects`: both belong to the cut. The skill only generates files (it never runs `git add`); review `git status` and commit these, while all build/generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored so they never show up.
 
 The dual-checkout race window the old CI workflow guarded against does not apply locally: the skill runs in the single release working tree after the changelog is generated, so the SDK source and CHANGELOGs are already the released state.
 
 Once the SDK release PR (and its backmerge) lands on `main`, the hosting provider's `main` build picks it up and deploys to staging.
 
 Patches never re-run TypeDoc — they touch only the frontmatter title of the API summary and append a section to the release notes — so `api-data.json` only changes on minor releases.
-
-### 4. Production health check (scheduled)
-
-**File:** `.github/workflows/docs-website-health-check.yml`
-
-**Triggers:** Daily `schedule` (`30 2 * * *`, i.e. 02:30 UTC / 08:00 IST), manual `workflow_dispatch`, and `pull_request` (only when the workflow, script, or its test change — runs the unit tests, never the production probe).
-
-**What it does:**
-- **`probe-production`** runs `.github/scripts/docs-website-health-check.mjs` against `https://docs.qvac.tether.io`. The script assembles the set of URLs a reader or crawler should reach — every `<loc>` in the live `sitemap.xml`, each page's `.md` sibling, every literal `301` source in `public/_redirects` (pulled from the `docs-production` branch so it matches what the CDN serves), and `llms.txt` / `llms-full.txt` — then GETs each one (following redirects) with bounded concurrency. Any `404`, other `>= 400`, or network error fails the job.
-- **`notify-on-failure`** runs only on the scheduled trigger and, on failure, opens (or comments on) a tracking issue labelled `docs-health`.
-
-**What it deliberately does NOT do:** the list of broken URLs is written to the run's step summary and job log only — never to the issue body and never to Slack. A Slack webhook stored in this public repo is a credential-leak risk (a leaked webhook lets anyone post malicious links into the workspace), so the notification carries only a link back to the run. Consult the failed run to see which URLs broke.
-
-**Purpose:** Catch broken pages on the deployed production site (e.g. a page removed or renamed without a matching redirect) shortly after they appear, rather than waiting for a user report.
-
-> The collector/probe logic is pure and unit-tested (`.github/scripts/test/docs-website-health-check.test.mjs`); run `node --test .github/scripts/test/docs-website-health-check.test.mjs` locally. To probe manually, run `node .github/scripts/docs-website-health-check.mjs --redirects-file docs/website/public/_redirects` from the repo root.
 
 ---
 
@@ -491,17 +492,19 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 
 | Script | npm alias | Description |
 |---|---|---|
-| `release-version.ts` | `docs:release-version` | Unified release dispatcher: parses the version and forwards to the minor or patch orchestrator. Called by the `qv-sdk-changelog` skill (Step 8) during release prep. |
-| `release-version-minor.ts` | -- | Minor (X.Y.0) orchestrator: generate incoming `v<X.Y>.x.mdx` for API + release notes → rewrite both `index.mdx` shims → rotate the managed alias block in `public/_redirects` → refresh `versions.ts`. Importable from `release-version.ts`. |
-| `release-version-patch.ts` | -- | Patch (X.Y.Z, Z>=1) orchestrator: insert `## v<X.Y.Z>` after the existing minor block on the appropriate series page. Also mirrors the versioned page's updated description onto the release-notes shim in `patch-latest` mode. Never touches the API summary. Importable from `release-version.ts`. |
-| `generate-api-docs.ts` | `docs:generate-api` | Renders one minor series' API summary MDX at `v<X.Y>.x.mdx`. `--title-only` rewrites only the frontmatter title; `--target=<file>` overrides the output filename. Never writes to `index.mdx` (the shim is managed by `release-version-minor.ts`). |
+| `release-version.ts` | -- | **Retired**, kept for reference. Was the release dispatcher forwarding to the minor or patch orchestrator. |
+| `release-version-minor.ts` | -- | **Retired**, kept for reference. Was the minor (X.Y.0) orchestrator: freeze outgoing series → generate new latest → refresh `versions.ts`. |
+| `release-version-patch.ts` | -- | **Retired**, kept for reference. Was the patch (X.Y.Z, Z>=1) orchestrator, inserting `## v<X.Y.Z>` after the existing minor block. |
+| `generate-api-docs.ts` | `docs:generate-api` | Renders the API summary page of the SDK's current line. `--title-only` rewrites only the frontmatter title. |
 | `api-docs/extract.ts` | -- | Phase 1: TypeDoc analysis, writes `api-data.json` |
 | `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
 | `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
-| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates / augments the release-notes series MDX at `v<X.Y>.x.mdx`. Default mode renders the page from scratch with a `## v<X.Y.0>` block; `--append-patch` inserts a `## v<X.Y.Z>` block directly after the minor; `--title-only` relabels the frontmatter title only. Never writes to `index.mdx`. |
-| `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from `reference/api/v*.x.mdx` and `reference/release-notes/v*.x.mdx` siblings on disk. `--latest=X.Y.Z` records the precise patch in `latest` (the selector still labels series-only). |
-| `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the current-latest series file + refreshes `versions.ts` using the monorepo SDK's `package.json` version (no version bump, no shim / redirects touch) |
-| `lib/release-shared.ts` | -- | Shared helpers for the release orchestrators — version parsing, `versions.ts` reader, series-sibling resolver, series-name helpers, and the shim / redirects writers (`writeShim`, `writeLatestSeriesAliasRedirects`, `rewriteFrontmatterDescriptionLine`, `readFrontmatterField`). |
+| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates / augments the release-notes page of the SDK's current line. Default mode renders the page from scratch with a `## v<X.Y.0>` block; `--append-patch` inserts a `## v<X.Y.Z>` block directly after the minor; `--title-only` relabels the frontmatter title only. |
+| `cut-line.ts` | -- | Cuts a versioned collection's next documentation line: preserves the outgoing one, opens the new one as a copy, and updates the manifest, the redirects, and the currency marker. A convenience for the hand procedure in `README.md`, never a dependency. |
+| `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
+| `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the current line's API summary using the monorepo SDK's `package.json` version (no version bump) |
+| `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
+| `lib/release-shared.ts` | -- | Shared helpers for the generators: version parsing, the manifest reader, and `referenceDirFor` / `apiPageFor` / `releaseNotesPageFor`, which resolve the current line's reference folder and refuse a version that is not its own |
 | `lib/changelog-parser.ts` | -- | Changelog parsing — `readChangelogLLMVerbatim` for the verbatim per-package render plus legacy `parseChangelog` / `parseChangelogFolder` / `mergeChangelogs` exports kept for unit-test fixtures and ad-hoc tooling |
 | `lib/link-validator.ts` | -- | Internal link extraction + resolution (used by the link-integrity test) |
 
@@ -533,14 +536,14 @@ For example, `release-notes-overrides/0.11.0.md`. The file should contain `## He
 ### SDK entry point not found
 
 ```
-SDK entry point not found: /path/to/sdk/src/index.ts
+SDK entry point not found: /path/to/sdk/index.ts
 ```
 
 **Cause:** `SDK_PATH` is not set or points to the wrong directory.
 
 **Fix:**
 1. Verify `.env` exists in `docs/website/` (copy from `.env.example`)
-2. Ensure `SDK_PATH` points to the SDK package root (the directory containing `package.json`, `tsconfig.json`, and `src/index.ts`)
+2. Ensure `SDK_PATH` points to the SDK package root containing `index.ts` and `tsconfig.json`
 3. On Windows, use backslashes or forward slashes — both work with Bun
 
 ### No API functions extracted
@@ -573,30 +576,52 @@ No API functions extracted. Check that:
 Version vX.Y.Z was not found
 ```
 
-**Cause:** `update-versions-list.ts` ran but the version's MDX file doesn't exist on disk.
+**Cause:** a version is recorded but its MDX file doesn't exist on disk. Only reachable through the retired release tooling; the equivalent failure today is `tests/line-structure.test.ts` reporting a declared version whose folder is missing.
 
-**Fix:** Run `docs:generate-api -- <version>` (writes `v<X.Y>.x.mdx`), then `docs:update-versions`. For a full release flow use `docs:release-version -- <version>` (auto-detects minor vs patch) instead.
+**Fix:** For a version declared in `src/lib/versions.ts`, create the folder the entry names, or drop the entry. The two must agree.
+
+### Refusing to write vX.Y pages into vA.B
+
+```
+Refusing to write v0.21 pages into v0.20, the current line of /sdk.
+```
+
+**Cause:** the generators write into the current line and only accept a version that belongs to it.
+
+**Fix:** if the version is ahead, its line has not been cut — `bun run scripts/cut-line.ts sdk v<X.Y>`, or the hand procedure in [`README.md`](README.md). If the version is behind, it has already shipped and its line is what the site serves; edit that line's page directly instead of regenerating it.
+
+### Build stops with no error and no log
+
+**Symptom:** the builder's output ends partway through `Creating an optimized production build` and nothing follows — no stack trace, no `JavaScript heap out of memory`, no failing step. The exit status is 137 or 143.
+
+**Cause:** the kernel's OOM killer, not a build error. Compilation exceeded the builder's RAM. Because Turbopack allocates outside V8's heap, the process is killed rather than aborting with a message, which is why there is nothing to read.
+
+**Fix:** set `TURBO_TASKS_AVAILABLE_PARALLELISM=1` on the builder, which caps the phase that overran. See [Builder configuration](#builder-configuration). Raising `NODE_OPTIONS=--max-old-space-size` does not help here and makes matters worse by letting each Node process grow further.
+
+To reproduce locally, run the build under the same ceiling:
+
+```bash
+systemd-run --user --scope -p MemoryMax=8G -p MemorySwapMax=0 npx next build
+```
 
 ### Build fails in CI (PR checks)
 
-The committed `content/docs/reference/api/index.mdx` shim is what `next build` reads at the canonical URL — it `<include>`s the current series' `v<X.Y>.x.mdx`, both of which must exist. If the build still fails:
+The committed `content/docs/sdk/<current line>/reference/api.mdx` is what `next build` reads. If the build still fails:
 
 1. Check that `source.config.ts` and `next.config.mjs` are valid
-2. Confirm the shim's `<include>` target file exists on disk
-3. Run `bun run build` locally to reproduce
-4. Look for broken MDX frontmatter or invalid imports in `content/`
+2. Run `bun run build` locally to reproduce
+3. Look for broken MDX frontmatter or invalid imports in `content/`
 
-### Recover a broken shim after a bad release
+### Recover a broken reference page after a bad release
 
-If a release ran but produced a broken `reference/api/index.mdx` or `reference/release-notes/index.mdx`, restore it by re-running the orchestrator against the previous version:
+If a release ran but produced a broken `reference/api.mdx` or `reference/release-notes.mdx`, re-render the page from the current line's own version:
 
 ```bash
-# Auto-detects minor (regen + shim rewrite + redirects rotate)
-# vs patch (append section + shim description mirror).
-bun run scripts/release-version.ts <previous-X.Y.Z> --force-extract
+bun run scripts/generate-api-docs.ts <current-line-X.Y.Z> --force-extract
+bun run scripts/generate-release-notes.ts <current-line-X.Y.Z>
 ```
 
-Then revert the bad commit / branch state via `git`. There is no automatic backup directory — versioning is the safety net (every previous series exists as a sibling `v<X.Y>.x.mdx`, untouched by the failed release).
+Then revert the bad commit / branch state via `git`. There is no automatic backup directory — versioning is the safety net (every previous version exists as a sibling `vX.Y.Z.mdx`).
 
 ### Generated MDX contains "undefined" or "[object Object]"
 

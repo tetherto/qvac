@@ -1,6 +1,64 @@
 # Changelog
 
+## [0.56.0] - 2026-10-06
+
+### Breaking
+
+- `assessFit` takes `config`, the map `loadModel` takes, in place of `params`,
+  and resolves it with the load's own code. `config` names a device, as every
+  load does ([#4841](https://github.com/tetherto/qvac/pull/4841)).
+
+  ```js
+  // before
+  LlmLlamacpp.assessFit({ modelPath, params: { 'ctx-size': '4096', 'gpu-layers': '0' } })
+  // after
+  LlmLlamacpp.assessFit({ modelPath, config: { device: 'gpu', 'ctx-size': '4096', 'gpu-layers': '0' } })
+  ```
+
+- `assessFit` byte figures can differ: with `flash-attn` unset the resolver
+  settles on `on`, which is what the load runs.
+- `main-gpu: 'dedicated'`, `rpc-servers`, `flash-attn: 'auto'`,
+  `prefetch-weights` and `tensor-read-lazy` now produce verdicts where they
+  answered `unsupported-config`, and a LoRA adapter, an mmproj or a `cpu`
+  device is refused.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
+### Added
+
+- `generationParams.parallel_tool_calls` (boolean). `true` lets one response
+  carry several tool calls; unset or `false` keeps one.
+
+### Fixed
+
+- The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
+  and `mlock` keep working with qvac-fabric 11018, which no longer accepts
+  them. The addon maps them to `load-mode` for both loads and `assessFit`.
+
 ## [0.55.1] - 2026-09-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+  `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
+  expert caching defaulting to CUDA only, GLM-5 Next support). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so
+  the range bump is what picks up the new fabric. A caret on a `0.x` version
+  locks the minor, so `^0.18.0` would not have resolved `0.19.0` on its own.
+  No API change.
+- MoE models on Metal and Vulkan no longer get an automatic expert cache.
+  Set `moe-cache-mib: auto` to opt back in on those backends.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.19.0` together.
 
 ### Fixed
 
@@ -8,6 +66,10 @@
   loader. With GPU offload, pinned MoE expert weights use the backend's host
   buffer instead of an ordinary CPU model buffer. No public API changes
   ([#4762](https://github.com/tetherto/qvac/pull/4762)).
+- `assessFit` now honours `moe-cache-mib: auto` the way the load does. The
+  load's fit received that choice but the projection did not, so on Metal or
+  Vulkan a MoE model's projected `gpuLayers` and `deviceBytes` could differ
+  from the load.
 
 ## [0.55.0] - 2026-09-28
 

@@ -4,9 +4,18 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
+import { execFileSync } from 'node:child_process'
 import { bundleSdk } from '@/commands/bundle'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
+import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
+import { getClientLogger } from '@/logging'
+import {
+  generateAddonsManifest,
+  extractPackedString,
+  extractBarePackHeader
+} from '@/commands/bundle/manifest'
 
 function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-project-'))
@@ -179,6 +188,35 @@ describe('generateWorkerEntry', () => {
   const tag = (specifier: string): string =>
     specifier.startsWith('@qvac/sdk') ? `RESOLVED:${specifier}` : specifier
 
+  it('leaves RPC native imports out of a model-only worker', () => {
+    const entry = generateWorkerEntry(['@qvac/sdk/nmtcpp-translation/plugin'], '@qvac/sdk')
+    assert.doesNotMatch(entry, /rpc-server|RpcServerProvider/)
+  })
+
+  it('assembles a server-only worker with an explicit provider and no model plugin', () => {
+    const plugins = resolvePluginSpecifiers(
+      { plugins: [], rpcServerProvider: '@qvac/sdk/ggml-rpc-server/provider' },
+      '@qvac/sdk',
+      getClientLogger({ enableConsole: false })
+    )
+    assert.deepEqual(plugins, [])
+    const { runtimeEntry, bundleEntry } = generateWorkerEntries(
+      plugins,
+      '@qvac/sdk',
+      tag,
+      '@qvac/sdk/ggml-rpc-server/provider'
+    )
+    assert.match(runtimeEntry, /from "@qvac\/sdk\/ggml-rpc-server\/provider"/)
+    assert.match(bundleEntry, /from "RESOLVED:@qvac\/sdk\/ggml-rpc-server\/provider"/)
+    assert.match(runtimeEntry, /registerRpcServerProvider\(rpcServerProvider\)/)
+    assert.doesNotMatch(runtimeEntry, /registerPlugin\(/)
+  })
+
+  it('quotes custom provider specifiers as module strings', () => {
+    const entry = generateWorkerEntry([], '@qvac/sdk', tag, 'custom"provider')
+    assert.ok(entry.includes('from "custom\\"provider";'))
+  })
+
   it('routes SDK imports through the resolver and registers plugins via @qvac/sdk/plugins', () => {
     const entry = generateWorkerEntry([], '@qvac/sdk', tag)
     assert.match(entry, /from "RESOLVED:@qvac\/sdk\/worker-lifecycle"/)
@@ -210,7 +248,241 @@ describe('generateWorkerEntry', () => {
   })
 })
 
+describe('inference native dependency boundary', () => {
+  it('packs a translation-only app without installing the RPC server addon', async (t) => {
+    const require = createRequire(import.meta.url)
+    const inferenceManifest = require.resolve('@qvac/inference/package')
+    const inferenceRoot = path.dirname(inferenceManifest)
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-inference-optional-rpc-'))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+    const isolatedRoot = path.join(projectRoot, 'node_modules', '@qvac', 'inference')
+    fs.mkdirSync(isolatedRoot, { recursive: true })
+    fs.copyFileSync(inferenceManifest, path.join(isolatedRoot, 'package.json'))
+    fs.cpSync(path.join(inferenceRoot, 'dist'), path.join(isolatedRoot, 'dist'), {
+      recursive: true
+    })
+    const manifest = JSON.parse(fs.readFileSync(inferenceManifest, 'utf8'))
+    function linkDependency(dependency: string, from: string, optional = false) {
+      const target = path.join(projectRoot, 'node_modules', dependency)
+      if (fs.existsSync(target)) return
+      let parent = from
+      let source = path.join(parent, 'node_modules', dependency)
+      while (!fs.existsSync(source) && parent !== path.dirname(parent)) {
+        parent = path.dirname(parent)
+        source = path.join(parent, 'node_modules', dependency)
+      }
+      if (optional && !fs.existsSync(source)) return
+      source = fs.realpathSync(source)
+      fs.mkdirSync(path.dirname(target), { recursive: true })
+      fs.symlinkSync(source, target, 'junction')
+      const pkg = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'))
+      for (const child of Object.keys(pkg.dependencies ?? {})) linkDependency(child, source)
+      for (const child of Object.keys({ ...pkg.optionalDependencies, ...pkg.peerDependencies })) {
+        linkDependency(child, source, true)
+      }
+    }
+    // Include the selected model addon, its language detector, and runtime dependencies.
+    for (const dependency of [
+      ...Object.keys(manifest.dependencies),
+      '@qvac/translation-nmtcpp',
+      '@qvac/langdetect-text'
+    ]) {
+      linkDependency(dependency, inferenceRoot)
+    }
+    const isolatedRequire = createRequire(path.join(isolatedRoot, 'package.json'))
+    assert.throws(() => isolatedRequire.resolve('@qvac/ggml-rpc-server'))
+    const entryPath = path.join(projectRoot, 'entry.mjs')
+    fs.writeFileSync(
+      entryPath,
+      [
+        "import { registerPlugin, heartbeat } from '@qvac/inference';",
+        "import { nmtPlugin } from '@qvac/inference/nmtcpp-translation/plugin';",
+        'registerPlugin(nmtPlugin);',
+        'await heartbeat();'
+      ].join('\n')
+    )
+    const bundlePath = path.join(projectRoot, 'worker.bundle.js')
+    const packBin = path.join(path.dirname(require.resolve('bare-pack/package')), 'bin.js')
+    execFileSync(
+      packBin,
+      ['--host', `${process.platform}-${process.arch}`, '--linked', '--out', bundlePath, entryPath],
+      { stdio: 'pipe' }
+    )
+    const header = extractBarePackHeader(extractPackedString(fs.readFileSync(bundlePath, 'utf8')))
+    assert.doesNotMatch(JSON.stringify(header.resolutions), /ggml-rpc-server|rpc\/ggml-provider/)
+    const { addons } = await generateAddonsManifest({
+      bundlePath,
+      outputDir: projectRoot,
+      projectRoot,
+      logger: getClientLogger({ enableConsole: false })
+    })
+    assert.ok(addons.some((addon) => addon.includes('translation-nmtcpp')))
+    assert.ok(addons.every((addon) => !addon.includes('ggml-rpc-server')))
+  })
+})
+
+function assertDecoderExcludedFromBundle(result: Awaited<ReturnType<typeof bundleSdk>>): void {
+  assert.ok(!result.addons.includes('bare-ffmpeg'))
+  const header = extractBarePackHeader(
+    extractPackedString(fs.readFileSync(result.bundlePath, 'utf8'))
+  )
+  const resolutions = header.resolutions ?? {}
+  assert.ok(
+    !Object.keys(resolutions).some((key) => key.includes('/node_modules/bare-ffmpeg/')),
+    'bare-ffmpeg module must not be in the bundle graph'
+  )
+  assert.ok(JSON.stringify(resolutions).includes('deferred:bare-ffmpeg'))
+  assert.ok(
+    !JSON.stringify(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8'))).includes(
+      'bare-ffmpeg'
+    )
+  )
+}
+
 describe('bundleSdk worker entries', () => {
+  it('omits bare-ffmpeg from the addon manifest when audio decoding is disabled', async (t) => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-audio-manifest-'))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+    const addonRoot = path.join(projectRoot, 'node_modules', 'bare-ffmpeg')
+    fs.mkdirSync(addonRoot, { recursive: true })
+    fs.writeFileSync(path.join(addonRoot, 'package.json'), JSON.stringify({ addon: true }))
+    const bundlePath = path.join(projectRoot, 'worker.bundle.js')
+    const packed =
+      'bundle\n' +
+      JSON.stringify({
+        id: 'audio-manifest',
+        resolutions: { '/node_modules/bare-ffmpeg/index.js': {} }
+      })
+    fs.writeFileSync(bundlePath, `module.exports = ${JSON.stringify(packed)};`)
+    const logger = getClientLogger({ enableConsole: false })
+    const enabled = await generateAddonsManifest({
+      bundlePath,
+      outputDir: projectRoot,
+      projectRoot,
+      logger
+    })
+    assert.deepEqual(enabled.addons, ['bare-ffmpeg'])
+    const disabled = await generateAddonsManifest({
+      bundlePath,
+      outputDir: projectRoot,
+      projectRoot,
+      logger,
+      includeAudioDecoder: false
+    })
+    assert.deepEqual(disabled.addons, [])
+    assert.deepEqual(JSON.parse(fs.readFileSync(disabled.manifestPath, 'utf8')).addons, [])
+  })
+
+  it('bundles a PCM-only audio plugin without linking bare-ffmpeg', async (t) => {
+    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
+    const addonPath = path.join(sdkPath, 'node_modules', 'bare-ffmpeg')
+    fs.writeFileSync(
+      path.join(sdkPath, 'dist', 'plugins.js'),
+      'export function registerPlugin(plugin) { globalThis.plugin = plugin }'
+    )
+    fs.mkdirSync(addonPath, { recursive: true })
+    fs.writeFileSync(
+      path.join(addonPath, 'package.json'),
+      JSON.stringify({
+        name: 'bare-ffmpeg',
+        version: '1.0.0',
+        main: 'index.js',
+        addon: true
+      })
+    )
+    fs.writeFileSync(path.join(addonPath, 'index.js'), 'module.exports = {}')
+    const sdkManifestPath = path.join(sdkPath, 'package.json')
+    const sdkManifest = JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8'))
+    sdkManifest.exports['./whispercpp-transcription/plugin'] = './dist/whisper-plugin.js'
+    fs.writeFileSync(sdkManifestPath, JSON.stringify(sdkManifest))
+    fs.writeFileSync(
+      path.join(sdkPath, 'dist', 'whisper-plugin.js'),
+      "export const whisperPlugin = { decode: () => require('bare-ffmpeg') };"
+    )
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        plugins: ['@qvac/sdk/whispercpp-transcription/plugin'],
+        includeAudioDecoder: false
+      })
+    )
+
+    const result = await bundleSdk({
+      projectRoot,
+      sdkPath,
+      configPath,
+      hosts: [`${process.platform}-${process.arch}`],
+      quiet: true,
+      checkEngines: false
+    })
+
+    assertDecoderExcludedFromBundle(result)
+    assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
+
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ plugins: ['@qvac/sdk/whispercpp-transcription/plugin'] })
+    )
+    const warnings: string[] = []
+    const originalInfo = console.info
+    const originalWarn = console.warn
+    t.after(() => {
+      console.info = originalInfo
+      console.warn = originalWarn
+    })
+    console.info = () => {}
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(' '))
+    }
+    const explicitlyDeferred = await bundleSdk({
+      projectRoot,
+      sdkPath,
+      configPath,
+      hosts: [`${process.platform}-${process.arch}`],
+      defer: ['bare-ffmpeg'],
+      checkEngines: false
+    })
+    assertDecoderExcludedFromBundle(explicitlyDeferred)
+    assert.ok(warnings.some((message) => message.includes('cannot decode compressed audio files')))
+  })
+
+  it('bundles an audiogen plugin with bare-ffmpeg deferred', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    const addonPath = path.join(sdkPath, 'node_modules', 'bare-ffmpeg')
+    fs.mkdirSync(addonPath, { recursive: true })
+    fs.writeFileSync(
+      path.join(addonPath, 'package.json'),
+      JSON.stringify({ name: 'bare-ffmpeg', version: '1.0.0', main: 'index.js', addon: true })
+    )
+    fs.writeFileSync(path.join(addonPath, 'index.js'), 'module.exports = {}')
+    const sdkManifestPath = path.join(sdkPath, 'package.json')
+    const sdkManifest = JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8'))
+    sdkManifest.exports['./audiogen-ggml/plugin'] = './dist/audiogen-plugin.js'
+    fs.writeFileSync(sdkManifestPath, JSON.stringify(sdkManifest))
+    fs.writeFileSync(
+      path.join(sdkPath, 'dist', 'audiogen-plugin.js'),
+      "export const audiogenPlugin = { encode: () => require('bare-ffmpeg') }"
+    )
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        plugins: ['@qvac/sdk/audiogen-ggml/plugin'],
+        includeAudioDecoder: false
+      })
+    )
+
+    const result = await bundleSdk({
+      projectRoot,
+      sdkPath,
+      configPath,
+      hosts: [`${process.platform}-${process.arch}`],
+      quiet: true,
+      checkEngines: false
+    })
+
+    assertDecoderExcludedFromBundle(result)
+  })
+
   it('uses resolved imports for bare-pack but writes a relocatable runtime entry', async (t) => {
     const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
 
