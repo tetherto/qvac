@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <utility>
+
 #include <llama.h>
 
 #include "SequenceStateSnapshot.hpp"
@@ -21,13 +24,17 @@ public:
 
   void clear() noexcept { snapshot_.clear(); }
 
-  void setStorage(SnapshotStorage storage) noexcept { storage_ = storage; }
+  void setStorage(SnapshotStorage storage, std::string directory = {}) {
+    storage_ = storage;
+    directory_ = std::move(directory);
+  }
   void setScope(SnapshotScope scope) noexcept { scope_ = scope; }
 
 private:
   SequenceStateSnapshot snapshot_;
   SnapshotStorage storage_ = SnapshotStorage::Memory;
   SnapshotScope scope_ = SnapshotScope::Full;
+  std::string directory_;
 };
 
 } // namespace qvac_lib_inference_addon_llama::utils

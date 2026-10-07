@@ -251,7 +251,8 @@ void LlamaModel::init(bool acquireLock) {
   if (snap->cacheCheckpointPolicy_.storage ==
       qvac_lib_inference_addon_llama::utils::SnapshotStorage::Disk) {
     try {
-      qvac_lib_inference_addon_llama::utils::requireSnapshotDirectory();
+      qvac_lib_inference_addon_llama::utils::requireSnapshotDirectory(
+          snap->cacheCheckpointPolicy_.directory);
     } catch (const std::exception& e) {
       throw qvac_errors::StatusError(
           ADDON_ID,

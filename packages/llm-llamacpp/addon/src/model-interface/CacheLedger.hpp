@@ -41,6 +41,9 @@ inline constexpr size_t LEDGER_ENTRY_WORDS = 5;
 //     largest size the context allows.
 //   * `cache_checkpoint_storage`: `memory` (host RAM, default) or `disk`
 //     (temp files).
+//   * `cache_checkpoint_dir`: with `disk`, the directory the private
+//     snapshot directory is created in instead of the OS temp dir (an app's
+//     cache directory on Android, which gives apps no usable temp dir).
 inline constexpr size_t DEFAULT_PROCESS_CHECKPOINTS = 1;
 inline constexpr size_t MAX_CONFIGURABLE_PROCESS_CHECKPOINTS = 1024;
 inline constexpr const char* CACHE_CHECKPOINTS_KEY = "cache_checkpoints";
@@ -53,6 +56,9 @@ inline constexpr const char* CACHE_CHECKPOINT_STORAGE_KEY =
     "cache_checkpoint_storage";
 inline constexpr const char* CACHE_CHECKPOINT_STORAGE_KEY_DASHED =
     "cache-checkpoint-storage";
+inline constexpr const char* CACHE_CHECKPOINT_DIR_KEY = "cache_checkpoint_dir";
+inline constexpr const char* CACHE_CHECKPOINT_DIR_KEY_DASHED =
+    "cache-checkpoint-dir";
 // Host-RAM budget, in MiB, for batch conversation states moved out of their
 // slot (`parallel >= 2`); 0 (default) disables that tier. Resident slots and
 // the cacheKey file do not depend on it.
@@ -65,6 +71,8 @@ struct CheckpointPolicy {
   uint64_t maxBytes = 0; // 0 = unlimited
   qvac_lib_inference_addon_llama::utils::SnapshotStorage storage =
       qvac_lib_inference_addon_llama::utils::SnapshotStorage::Memory;
+  // Base for disk snapshots; empty = the OS temp dir.
+  std::string directory;
 };
 
 enum class EntryKind : int32_t { Token = 1, Media = 2 };
@@ -248,6 +256,17 @@ parseCheckpointPolicy(std::unordered_map<std::string, std::string>& config) {
           storage->first + " must be \"disk\" or \"memory\", got: \"" +
           storage->second + "\"");
     }
+  }
+  if (const auto dir = takeConfigKey(
+          config, CACHE_CHECKPOINT_DIR_KEY, CACHE_CHECKPOINT_DIR_KEY_DASHED)) {
+    if (dir->second.empty()) {
+      throw std::invalid_argument(dir->first + " must not be empty");
+    }
+    if (policy.storage != SnapshotStorage::Disk) {
+      throw std::invalid_argument(
+          dir->first + " needs " + CACHE_CHECKPOINT_STORAGE_KEY + " \"disk\"");
+    }
+    policy.directory = dir->second;
   }
   return policy;
 }

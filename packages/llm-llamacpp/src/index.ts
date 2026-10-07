@@ -1292,6 +1292,14 @@ namespace LlmLlamacpp {
      */
     cache_checkpoint_storage?: "disk" | "memory";
     /**
+     * With `cache_checkpoint_storage: 'disk'`, the directory the private
+     * snapshot directory is created in, instead of the OS temp directory.
+     * Needed on Android, whose apps get no usable temp directory: pass the
+     * app's cache directory. Setting it without `'disk'` fails the load.
+     * Also accepted as `cache-checkpoint-dir`.
+     */
+    cache_checkpoint_dir?: string;
+    /**
      * Host-RAM budget, in MiB, for conversations that are not running: a
      * `cacheKey` switch (single prompt) or a slot eviction (batch) moves the
      * conversation there instead of writing its file, and the next request on

@@ -343,4 +343,29 @@ TEST(
   fs::permissions(base.path(), fs::perms::owner_all);
   EXPECT_TRUE(fs::is_empty(base.path()));
 }
+
+// `cache_checkpoint_dir`: the private directory goes under the given base,
+// and a base that cannot hold one is reported by name.
+TEST(SequenceStateSnapshotTest, RequireSnapshotDirectoryUsesTheGivenBase) {
+  ScratchBase base("checkpoint_dir");
+  ASSERT_NO_THROW(requireSnapshotDirectory(base.path().string()));
+  size_t created = 0;
+  for (const auto& entry : fs::directory_iterator(base.path())) {
+    EXPECT_TRUE(entry.is_directory());
+    EXPECT_EQ(
+        fs::status(entry.path()).permissions() & fs::perms::all,
+        fs::perms::owner_all);
+    ++created;
+  }
+  EXPECT_EQ(created, 1u);
+
+  const fs::path missing = base.path() / "missing";
+  try {
+    requireSnapshotDirectory(missing.string());
+    ADD_FAILURE() << "a missing base was accepted";
+  } catch (const std::runtime_error& e) {
+    EXPECT_NE(std::string(e.what()).find(missing.string()), std::string::npos)
+        << e.what();
+  }
+}
 #endif

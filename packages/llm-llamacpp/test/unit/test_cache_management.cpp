@@ -15,6 +15,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -1825,6 +1826,61 @@ TEST(CacheHistoryCheckpointTest, HybridCheckpointsStayInMemoryByDefault) {
     }
   }
   fs::remove(cacheFile);
+}
+
+// `cache_checkpoint_dir` moves disk snapshots out of the OS temp dir (which an
+// Android app cannot use) into a private directory under the given base.
+TEST(CacheHistoryCheckpointTest, HybridDiskCheckpointsGoToTheCheckpointDir) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "hybrid_checkpoint_dir_cache.bin";
+  const fs::path base = fs::temp_directory_path() / "qvac_checkpoint_dir_test";
+  fs::remove(cacheFile);
+  fs::remove_all(base);
+  fs::create_directories(base);
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "48";
+  config["temp"] = "0";
+  config["seed"] = "11";
+  config["cache_checkpoint_storage"] = "disk";
+  config["cache_checkpoint_dir"] = base.string();
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const uint64_t filesBefore = qvac_lib_inference_addon_llama::utils::
+      sequenceStateSnapshotFilesWritten();
+  const NextEditRegenerateRun run = runNextEditRegenerate(*model, cacheFile);
+  ASSERT_GT(run.reuse[0], 0u) << "the chat never restored a checkpoint";
+  EXPECT_GT(
+      qvac_lib_inference_addon_llama::utils::
+              sequenceStateSnapshotFilesWritten() -
+          filesBefore,
+      0u);
+
+  // The private directory sits under the base, and holds the live checkpoint
+  // files; nothing is written into the base itself.
+  std::vector<fs::path> entries;
+  for (const auto& entry : fs::directory_iterator(base)) {
+    entries.push_back(entry.path());
+  }
+  ASSERT_EQ(entries.size(), 1u);
+  EXPECT_TRUE(fs::is_directory(entries.front()));
+  EXPECT_FALSE(fs::is_empty(entries.front()))
+      << "the live checkpoints are not in the checkpoint dir";
+
+  model.reset();
+  fs::remove(cacheFile);
+  fs::remove_all(base);
 }
 
 // Changing the user message k-th from the end needs k + 1 checkpoints: after

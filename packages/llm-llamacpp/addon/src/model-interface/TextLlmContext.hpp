@@ -134,7 +134,7 @@ public:
       const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
       override {
     cacheCheckpointPolicy_ = policy;
-    requestRollback_.setStorage(policy.storage);
+    requestRollback_.setStorage(policy.storage, policy.directory);
   }
   [[nodiscard]] std::vector<llama_token> cacheStateTokens() const override;
   void restoreCacheStateTokens(const std::vector<llama_token>& tokens) override;

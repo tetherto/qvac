@@ -1412,7 +1412,8 @@ void MtmdLlmContext::capturePreRequestCacheSnapshot() {
           current_.pos,
           preRequestCacheSnapshot_,
           cacheCheckpointPolicy_.storage,
-          snapshotScope_)) {
+          snapshotScope_,
+          cacheCheckpointPolicy_.directory)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
@@ -1608,7 +1609,8 @@ void MtmdLlmContext::captureHistoryCheckpoint(llama_pos pos) {
           pos,
           checkpoint.state,
           cacheCheckpointPolicy_.storage,
-          snapshotScope_)) {
+          snapshotScope_,
+          cacheCheckpointPolicy_.directory)) {
     QLOG_IF(
         Priority::WARNING,
         "[MtmdLlm] failed to capture end-of-history checkpoint\n");

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -38,57 +39,70 @@ uint64_t currentProcessId() noexcept {
 #endif
 }
 
-// Directory the snapshots of this process go to. Snapshots hold conversation
-// state, so they only ever go to a directory other users cannot read (see
-// `createPrivateSnapshotDirectory`), never to the shared temp dir under their
-// predictable names. Created on first use and retried until it succeeds; a
-// directory this process created is removed at exit once its files are gone.
-class SnapshotDirectory {
+// Directories the snapshots of this process go to, one per base (the OS temp
+// dir, or a `cache_checkpoint_dir`). Snapshots hold conversation state, so
+// they only ever go to a directory other users cannot read (see
+// `createPrivateSnapshotDirectory`), never straight into the base under their
+// predictable names. Each is created on first use and retried until it
+// succeeds; the ones this process created are removed at exit once their files
+// are gone.
+class SnapshotDirectories {
 public:
-  SnapshotDirectory() = default;
-  ~SnapshotDirectory() {
-    if (owned_) {
-      std::error_code ec;
-      std::filesystem::remove(path_, ec);
+  SnapshotDirectories() = default;
+  ~SnapshotDirectories() {
+    for (const auto& [base, dir] : dirs_) {
+      if (dir.owned) {
+        std::error_code ec;
+        std::filesystem::remove(dir.path, ec);
+      }
     }
   }
-  SnapshotDirectory(const SnapshotDirectory&) = delete;
-  SnapshotDirectory& operator=(const SnapshotDirectory&) = delete;
+  SnapshotDirectories(const SnapshotDirectories&) = delete;
+  SnapshotDirectories& operator=(const SnapshotDirectories&) = delete;
 
-  // Never changes once set, so the reference stays valid without the lock.
-  const std::filesystem::path& require() {
+  // An empty `requestedBase` is the OS temp dir. A directory never changes
+  // once created and map nodes are stable, so the reference stays valid
+  // without the lock.
+  const std::filesystem::path& require(const std::string& requestedBase) {
     std::scoped_lock lock(mutex_);
-    if (!path_.empty()) {
-      return path_;
+    if (const auto it = dirs_.find(requestedBase); it != dirs_.end()) {
+      return it->second.path;
     }
-    std::error_code ec;
-    const std::filesystem::path base = std::filesystem::temp_directory_path(ec);
-    if (ec) {
-      throw std::runtime_error(
-          "cannot find the OS temp directory: " + ec.message());
+    std::filesystem::path base = requestedBase;
+    if (base.empty()) {
+      std::error_code ec;
+      base = std::filesystem::temp_directory_path(ec);
+      if (ec) {
+        throw std::runtime_error(
+            "cannot find the OS temp directory: " + ec.message());
+      }
     }
+    Dir dir;
     try {
-      path_ = createPrivateSnapshotDirectory(base);
+      dir.path = createPrivateSnapshotDirectory(base);
     } catch (const std::exception& e) {
       throw std::runtime_error(
           "cannot create a private snapshot directory under " + base.string() +
           ": " + e.what());
     }
 #ifndef _WIN32
-    owned_ = true;
+    dir.owned = true;
 #endif
-    return path_;
+    return dirs_.emplace(requestedBase, std::move(dir)).first->second.path;
   }
 
 private:
+  struct Dir {
+    std::filesystem::path path;
+    bool owned = false;
+  };
   std::mutex mutex_;
-  std::filesystem::path path_;
-  bool owned_ = false;
+  std::map<std::string, Dir> dirs_;
 };
 
-SnapshotDirectory& snapshotDirectory() {
-  static SnapshotDirectory directory;
-  return directory;
+SnapshotDirectories& snapshotDirectories() {
+  static SnapshotDirectories directories;
+  return directories;
 }
 
 // Produce a per-process unique temp file path for a snapshot. PID
@@ -96,10 +110,11 @@ SnapshotDirectory& snapshotDirectory() {
 // per-slot snapshots in continuous batching, and the monotonic
 // counter disambiguates back-to-back captures within the same slot.
 // Throws when the snapshot directory cannot be created.
-std::string makeUniqueSnapshotPath(llama_seq_id seqId) {
+std::string
+makeUniqueSnapshotPath(llama_seq_id seqId, const std::string& directory) {
   static std::atomic<uint64_t> counter{0};
   const auto id = counter.fetch_add(1, std::memory_order_relaxed);
-  const std::filesystem::path& base = snapshotDirectory().require();
+  const std::filesystem::path& base = snapshotDirectories().require(directory);
   const std::string filename = "qvac_llamacpp_seq_" +
                                std::to_string(currentProcessId()) + "_" +
                                std::to_string(static_cast<int>(seqId)) + "_" +
@@ -241,7 +256,8 @@ void SequenceStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
 
 bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
-    SequenceStateSnapshot& out, SnapshotStorage storage, SnapshotScope scope) {
+    SequenceStateSnapshot& out, SnapshotStorage storage, SnapshotScope scope,
+    const std::string& directory) {
   out.clear();
   if (lctx == nullptr) {
     return false;
@@ -280,7 +296,7 @@ bool snapshotSequenceState(
     } else {
       std::string path;
       try {
-        path = makeUniqueSnapshotPath(seqId);
+        path = makeUniqueSnapshotPath(seqId, directory);
       } catch (const std::exception&) {
         return false;
       }
@@ -319,7 +335,7 @@ bool snapshotSequenceState(
   // alongside the state; the ledger lives in the cache transaction.
   std::string path;
   try {
-    path = makeUniqueSnapshotPath(seqId);
+    path = makeUniqueSnapshotPath(seqId, directory);
   } catch (const std::exception&) {
     return false;
   }
@@ -388,7 +404,9 @@ uint64_t estimateMaxSequenceStateBytes(
   return fixed + perToken * static_cast<uint64_t>(perSeqTokens);
 }
 
-void requireSnapshotDirectory() { (void)snapshotDirectory().require(); }
+void requireSnapshotDirectory(const std::string& directory) {
+  (void)snapshotDirectories().require(directory);
+}
 
 std::filesystem::path
 createPrivateSnapshotDirectory(const std::filesystem::path& base) {

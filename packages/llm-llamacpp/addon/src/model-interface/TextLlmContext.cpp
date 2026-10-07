@@ -1208,7 +1208,8 @@ void TextLlmContext::capturePreRequestCacheSnapshot() {
           nPast_,
           preRequestCacheSnapshot_,
           cacheCheckpointPolicy_.storage,
-          snapshotScope_)) {
+          snapshotScope_,
+          cacheCheckpointPolicy_.directory)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
@@ -1383,7 +1384,8 @@ void TextLlmContext::captureHistoryCheckpoint(llama_pos pos) {
           pos,
           checkpoint.state,
           cacheCheckpointPolicy_.storage,
-          snapshotScope_)) {
+          snapshotScope_,
+          cacheCheckpointPolicy_.directory)) {
     QLOG_IF(
         Priority::WARNING,
         "[TextLlm] failed to capture end-of-history checkpoint\n");

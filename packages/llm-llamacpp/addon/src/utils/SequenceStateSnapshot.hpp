@@ -154,10 +154,15 @@ private:
 // no payload (see `adoptEmpty`); `out.empty()` returns false afterwards so the
 // rollback gates know a capture has been recorded, and `restoreSequenceState`
 // will clear the sequence memory to match.
+//
+// Disk storage writes into this process's private directory under
+// `directory` (`cache_checkpoint_dir`), or under the OS temp dir when it is
+// empty; see `requireSnapshotDirectory`.
 bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
     SequenceStateSnapshot& out, SnapshotStorage storage = SnapshotStorage::Disk,
-    SnapshotScope scope = SnapshotScope::Full);
+    SnapshotScope scope = SnapshotScope::Full,
+    const std::string& directory = {});
 
 // Upper bound, in bytes, of one snapshot of `seqId`-style state once a
 // sequence holds `perSeqTokens` tokens. Measured, not modelled: decodes two
@@ -173,13 +178,14 @@ bool snapshotSequenceState(
     ::llama_context* lctx, const ::llama_vocab* vocab, uint32_t perSeqTokens,
     SnapshotScope scope = SnapshotScope::Full);
 
-// Creates this process's snapshot directory if it does not exist yet: a
-// private directory (`mkdtemp`, mode 0700) under the OS temp dir on POSIX,
-// the per-user temp dir itself on Windows. Throws `std::runtime_error`
-// naming the temp dir and the reason when it cannot, and tries again on the
-// next call. Disk storage writes only there, so a load with
+// Creates this process's snapshot directory under `directory`
+// (`cache_checkpoint_dir`; empty = the OS temp dir) if it does not exist yet:
+// a private directory (`mkdtemp`, mode 0700) on POSIX, the directory itself on
+// Windows, where the temp dir is per user. Throws `std::runtime_error` naming
+// the base and the reason when it cannot, and tries again on the next call.
+// Disk storage writes only there, so a load with
 // `cache_checkpoint_storage: disk` calls this to fail up front.
-void requireSnapshotDirectory();
+void requireSnapshotDirectory(const std::string& directory = {});
 
 // Creates a directory only the current user can access under `base`, and
 // returns it; throws `std::runtime_error` with the reason on failure.

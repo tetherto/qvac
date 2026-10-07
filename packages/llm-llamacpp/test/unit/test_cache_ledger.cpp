@@ -249,6 +249,29 @@ TEST(CacheLedger, ParseCheckpointPolicyRejectsBadValues) {
       << "both spellings at once must be rejected like flash-attn";
 }
 
+// `cache_checkpoint_dir` only means something with disk storage, so it is
+// refused rather than silently ignored without it.
+TEST(CacheLedger, ParseCheckpointDirNeedsDiskStorage) {
+  std::unordered_map<std::string, std::string> disk{
+      {"cache_checkpoint_storage", "disk"},
+      {"cache-checkpoint-dir", "/data/user/0/app/cache"}};
+  const cache::CheckpointPolicy policy = cache::parseCheckpointPolicy(disk);
+  EXPECT_EQ(policy.storage, SnapshotStorage::Disk);
+  EXPECT_EQ(policy.directory, "/data/user/0/app/cache");
+  EXPECT_TRUE(disk.empty());
+
+  std::unordered_map<std::string, std::string> none;
+  EXPECT_TRUE(cache::parseCheckpointPolicy(none).directory.empty());
+
+  std::unordered_map<std::string, std::string> memory{
+      {"cache_checkpoint_dir", "/tmp/x"}};
+  EXPECT_THROW(cache::parseCheckpointPolicy(memory), std::invalid_argument);
+
+  std::unordered_map<std::string, std::string> empty{
+      {"cache_checkpoint_storage", "disk"}, {"cache_checkpoint_dir", ""}};
+  EXPECT_THROW(cache::parseCheckpointPolicy(empty), std::invalid_argument);
+}
+
 // Every untrimmable model, DeepSeek V4 included, snapshots only the state a
 // tail trim cannot rebuild.
 TEST(ModelMemoryPolicy, UntrimmableModelsSnapshotPartially) {

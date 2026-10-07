@@ -169,8 +169,12 @@ None of them has any effect on pure-attention models.
   Qwen3.5-0.8B, 18 MB on DeepSeek V4). `disk` writes them instead to a
   private directory (mode 0700 on POSIX) the addon creates under the OS temp
   directory when the model loads. If that directory cannot be created, the
-  load fails with `InvalidArgument`; set `TMPDIR` to a writable directory or
-  use `memory`.
+  load fails with `InvalidArgument`; set `cache_checkpoint_dir` or `TMPDIR`
+  to a writable directory, or use `memory`.
+- `cache_checkpoint_dir`: with `disk`, the directory the private snapshot
+  directory is created in, instead of the OS temp directory. Android gives
+  apps no usable temp directory, so pass the app's cache directory there.
+  Setting it without `disk` fails the load.
 
 The storage setting is independent of the `cacheKey` file. In both modes that
 file is written only by the writes described in [Save the cache to

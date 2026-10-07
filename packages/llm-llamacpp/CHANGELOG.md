@@ -64,6 +64,9 @@
   cached chat on a hybrid / recurrent model never touches the disk; `disk`
   writes them to a private directory under the OS temp directory, and the
   load fails with `InvalidArgument` when that directory cannot be created.
+- `cache_checkpoint_dir` (also `cache-checkpoint-dir`): with `disk`, the
+  directory that private directory is created in instead of the OS temp
+  directory, e.g. an Android app's cache directory.
 
 ### Changed
 
