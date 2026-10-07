@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-07` and the `ggml-speech` floor to
+  `2026-10-06` for the MiniMax-Music3 memory fit. Generation is unchanged.
 - Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
   the ggml changes of the QVAC LLM stack, so both build from the same backend
   code. Same models, same backends, no API change.
