@@ -10,6 +10,7 @@ on:
       - ready_for_review
     branches:
       - main
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -58,13 +59,13 @@ jobs:
           github-token: ${{ github.token }}
 
   changes:
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request_target' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}
       packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
       sanity-packages: ${{ steps.pkglist.outputs.sanity-packages }}
-      any: ${{ steps.filter.outputs.pkg-any }}
+      any: ${{ steps.filter.outputs.pkg-any || steps.filter-mg.outputs.pkg-any }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -73,9 +74,10 @@ jobs:
           persist-credentials: false
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
         id: filter
+        if: github.event_name == 'pull_request_target'
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          filters: |
+          filters: &filters |
             pkg-any:
               - "packages/**"
             # Shared CI definitions: they affect every addon but name none, so
@@ -132,6 +134,14 @@ jobs:
               - "packages/vla-ggml/**"
               - ".github/workflows/prebuilds-vla.yml"
 
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        id: filter-mg
+        if: github.event_name == 'merge_group'
+        with:
+          base: ${{ github.event.merge_group.base_sha }}
+          ref: ${{ github.event.merge_group.head_sha }}
+          filters: *filters
+
       # Package dir names mostly match the filter/job key (packages/<key>),
       # except vla (packages/vla-ggml) - mapped explicitly here so
       # sanity-checks' workdir is always correct. Two outputs: a flat name
@@ -140,7 +150,7 @@ jobs:
       - name: Build package lists
         id: pkglist
         env:
-          CHANGES: ${{ steps.filter.outputs.changes }}
+          CHANGES: ${{ steps.filter.outputs.changes || steps.filter-mg.outputs.changes }}
           # Every package filter key above. Kept in step with that list.
           # One line: a folded scalar with a deeper indent keeps its newlines,
           # and $GITHUB_OUTPUT rejects a multiline value.
@@ -206,7 +216,9 @@ jobs:
   # API having listed the newest run for the SHA (no listing-lag window).
   verify-prebuilds:
     needs: [authorize, changes, fork-approval]
-    if: needs.authorize.outputs.allowed == 'true'
+    # Not applicable on a merge group: the on-pr-* producers do not post
+    # statuses there yet, and verify.mjs fails closed without them.
+    if: needs.authorize.outputs.allowed == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     # Headroom over verify.mjs's 180-minute poll, so a timeout is reported by
     # the script with the pending contexts rather than as a bare cancellation.
@@ -244,7 +256,9 @@ jobs:
   # freshness/run-binding rules as verify-prebuilds apply.
   verify-cpp-tests:
     needs: [authorize, changes, fork-approval]
-    if: needs.authorize.outputs.allowed == 'true'
+    # Not applicable on a merge group: the on-pr-* producers do not post
+    # statuses there yet, and verify.mjs fails closed without them.
+    if: needs.authorize.outputs.allowed == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 190
     permissions:
