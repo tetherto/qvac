@@ -69,7 +69,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-inference-')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -85,6 +85,7 @@ jobs:
           package-slug: inference
           package-json-path: packages/inference/package.json
           changelog-path: packages/inference/CHANGELOG.md
+          strict-slug: true
 
   # Same check as on-pr-shared-runtime-libs.yml, re-run against the
   # peers on npm at publish time.
@@ -180,7 +181,7 @@ jobs:
       - shared-runtime-libs
     if: >-
       needs.shared-runtime-libs.result == 'success' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.release-merge-guard.result == 'success'
     runs-on: ubuntu-latest
     environment: npm
     outputs:
