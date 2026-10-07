@@ -81,7 +81,18 @@ export interface MossFitRequest extends TtsFitCommon {
     streamChunkTokens?: number;
     durationTokens?: number;
 }
-export type TtsFitRequest = SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest;
+export interface MossSoundEffectFitRequest extends TtsFitCommon {
+    engineType: 'moss-sfx';
+    mossSoundEffectPath: string;
+    prompt: string;
+    seconds: number;
+    negativePrompt?: string;
+    steps?: number;
+    guidance?: number;
+    shift?: number;
+    threads?: number;
+}
+export type TtsFitRequest = SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest | MossSoundEffectFitRequest;
 /** The voice engines a fit can be asked for, read off the request union. */
 export type TtsFitEngine = TtsFitRequest['engineType'];
 export type TtsFitStatus = 'fits' | 'does-not-fit' | 'error';

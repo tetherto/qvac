@@ -1353,6 +1353,7 @@ fit.report
 | `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
 | `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
 | `moss` | `mossBackbonePath`, `mossCodecDecoderPath`, optional `mossCodecEncoderPath` | Required `promptRows`, `referenceSamples`, `streaming`; load controls `durationTokens`, `streamChunkTokens`, `threads` |
+| `moss-sfx` | Required `mossSoundEffectPath` | Required `prompt`, `seconds`; optional `negativePrompt`, `steps`, `guidance`, `shift`, `threads` |
 
 Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
 
@@ -1360,7 +1361,7 @@ Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the 
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
 
-A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-SoundEffect and MOSS-Speech do not yet have fitters. A broken request, or a host with no native binding, throws.
+A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, throws.
 
 MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
 native prompt length, including special tokens, encoded speaker references and
@@ -1389,6 +1390,30 @@ this may reject a workload whose actual peak is smaller. The fit follows the
 load's generation settings and does not change synthesis behavior.
 
 The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
+
+### MOSS-SoundEffect fit
+
+```js
+const fit = TTSGgml.assessFit({
+  engineType: 'moss-sfx',
+  mossSoundEffectPath: './moss-sfx-v2-q8_0.gguf',
+  prompt: 'Rain falling on a tin roof.',
+  seconds: 8,
+  useGPU: false
+})
+console.log(fit.report)
+```
+
+The fitter uses generation's tokenizer, request validation and graph builders,
+without loading weights or generating audio. It supports full and metadata-only
+GGUF files. `negativePrompt`, `steps`, `guidance` and `shift` keep their generation
+semantics; `marginBytes` keeps the shared 256 MiB default. DiT processes the model's
+full latent duration even for a short output. Requested seconds size decoder
+windows and audio buffers. The shared compute arena is counted at its peak:
+`lmComputeBytes` covers text/DiT, `codecComputeBytes` any additional VAE demand.
+Host memory includes conditioning, temporary arrays and CPU fallback buffers.
+
+Run `bare examples/moss-sfx-fit.js ./moss-sfx-v2-q8_0.gguf "Rain on a roof." 8`.
 
 ## Examples
 
