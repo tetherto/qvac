@@ -28,10 +28,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
+  the ggml changes of the QVAC LLM stack, so both build from the same backend
+  code. Same models, same backends, no API change.
 - Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29#1, preserving the
   QVAC seed, BCI windowed-attention and streaming/VAD patches.
-- Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships
-  Nemotron 3 Diarization and MOSS-Transcribe-Diarize with hotwords.
+- Raise the `speech-cpp` floor to `2026-10-05`, the revision that ships
+  Nemotron 3 Diarization and MOSS-Transcribe-Diarize with hotwords. Nemotron 3
+  Diarization now runs on CUDA, Vulkan, Metal and OpenCL. Offline inputs longer
+  than 90 s keep stable speakers: a single pass mixed speakers up past about
+  two minutes and failed past 400 s. `assessFit` no longer crashes on
+  Nemotron 3 Diarization models. Same models, same API.
 
 ### Fixed
 
