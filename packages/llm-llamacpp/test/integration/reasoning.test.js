@@ -742,18 +742,15 @@ safeTest(
 // Qwen3.5 coverage — exercises the reasoning detection on a hybrid SSM
 // checkpoint and verifies the recurrent-memory gate keeps the cache
 // untouched. Qwen3.5 thinking traces can exceed 1k tokens before
-// `</think>` closes, so we give a larger n_predict / ctx_size.
-//
-// These four ask for Vulkan on linux x64, where CUDA is now preferred. They
-// need the model to emit `</think>` inside n_predict, because the compactor
-// only drops a span that actually closed, and whether it closes is not stable
-// across backends: measured greedy at v10297.1.0, CUDA closed after 355 tokens
-// while CPU ran the full 3072 without closing, diverging about fifteen tokens
-// in. That is a cross-backend trajectory divergence, tracked separately.
-// Pinning the backend keeps these tests meaningful; it does not fix it.
+// `</think>` closes, so we give a larger n_predict / ctx_size. Greedy
+// Qwen3.5-0.8B can loop inside `<think>` on the CPU backend; the budget
+// force-closes the span so these tests always have one to compact. On linux
+// x64, where CUDA is now preferred, they also pin Vulkan: whether the span
+// closes is not stable across backends.
 const QWEN35_REASONING_CONFIG = {
   ctx_size: '8192',
   n_predict: '3072',
+  reasoning_budget: '1024',
   ...(os.platform() === 'linux' && os.arch() === 'x64' ? { backend: 'vulkan' } : {})
 }
 
