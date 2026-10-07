@@ -192,7 +192,7 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
-    "bare-subprocess": "^5.2.1",
+    "bare-subprocess": "^6.2.1",
     "bare-url": "^2.4.3",
     "brittle": "^3.17.0"
   },
