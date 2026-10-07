@@ -168,6 +168,8 @@ interface TranslationNmtcpp {
  */
 interface TranslationNmtcppConstructor {
   new (args: TranslationNmtcppArgs): TranslationNmtcpp;
+  /** Assess a model before loading it, using current device memory. */
+  assessFit(request: TranslationNmtcpp.FitRequest): TranslationNmtcpp.FitResult;
   /**
    * Available model types for translation
    */
@@ -185,6 +187,55 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     IndicTrans: "IndicTrans",
     Bergamot: "Bergamot",
   };
+
+  static assessFit(
+    request: TranslationNmtcpp.FitRequest,
+  ): TranslationNmtcpp.FitResult {
+    if (
+      !request ||
+      !request.files ||
+      typeof request.files.model !== "string" ||
+      !path.isAbsolute(request.files.model)
+    ) {
+      throw new TypeError("files.model must be an absolute path");
+    }
+    if (request.files.pivotModel && !path.isAbsolute(request.files.pivotModel)) {
+      throw new TypeError("files.pivotModel must be an absolute path");
+    }
+    const modelType = request.config?.modelType;
+    if (modelType !== "IndicTrans" && modelType !== "Bergamot") {
+      throw new TypeError("config.modelType must be IndicTrans or Bergamot");
+    }
+    if (
+      modelType === "IndicTrans" &&
+      (request.config["main-gpu"] !== undefined ||
+        request.config.main_gpu !== undefined)
+    ) {
+      return {
+        status: "error",
+        reason: "unsupported-config",
+        backend: "",
+        modelBytes: 0,
+        requiredBytes: 0,
+        freeBytes: 0,
+        report: "Fit with main-gpu selection is unavailable",
+      };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
+    const binding = require("./binding") as {
+      assessFit?: (input: TranslationNmtcpp.FitRequest) => TranslationNmtcpp.FitResult;
+    };
+    if (typeof binding.assessFit !== "function") {
+      throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
+    }
+    return binding.assessFit({
+      ...request,
+      config: {
+        ...request.config,
+        backendsDir: request.config.backendsDir ?? resolveBackendsDir(),
+      },
+    });
+  }
 
   private readonly opts: { stats?: boolean };
   readonly logger: QvacLogger;
@@ -692,6 +743,24 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
  */
 // eslint-disable-next-line @typescript-eslint/no-namespace -- class/namespace merging is the only way to type a constructor-first CommonJS export.
 namespace TranslationNmtcpp {
+  export interface FitRequest {
+    files: TranslationNmtcppFiles;
+    config: TranslationNmtcppConfig;
+    /** Additional free memory to reserve, in bytes. */
+    marginBytes?: number;
+  }
+
+  export interface FitResult {
+    status: "fits" | "does-not-fit" | "error";
+    reason: string;
+    /** CPU or selected GGML device name. */
+    backend: string;
+    modelBytes: number;
+    requiredBytes: number;
+    freeBytes: number;
+    report: string;
+  }
+
   export interface TranslationNmtcppFiles {
     model: string;
     srcVocab?: string;

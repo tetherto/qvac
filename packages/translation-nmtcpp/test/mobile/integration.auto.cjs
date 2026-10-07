@@ -11,6 +11,10 @@ async function runEsmDefaultExport (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/esm-default-export.test.js', options)
 }
 
+async function runFit (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runIndictrans (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/indictrans.test.js', options)
 }

@@ -79,6 +79,46 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         IndicTrans: "IndicTrans",
         Bergamot: "Bergamot",
     };
+    static assessFit(request) {
+        if (!request ||
+            !request.files ||
+            typeof request.files.model !== "string" ||
+            !path.isAbsolute(request.files.model)) {
+            throw new TypeError("files.model must be an absolute path");
+        }
+        if (request.files.pivotModel && !path.isAbsolute(request.files.pivotModel)) {
+            throw new TypeError("files.pivotModel must be an absolute path");
+        }
+        const modelType = request.config?.modelType;
+        if (modelType !== "IndicTrans" && modelType !== "Bergamot") {
+            throw new TypeError("config.modelType must be IndicTrans or Bergamot");
+        }
+        if (modelType === "IndicTrans" &&
+            (request.config["main-gpu"] !== undefined ||
+                request.config.main_gpu !== undefined)) {
+            return {
+                status: "error",
+                reason: "unsupported-config",
+                backend: "",
+                modelBytes: 0,
+                requiredBytes: 0,
+                freeBytes: 0,
+                report: "Fit with main-gpu selection is unavailable",
+            };
+        }
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
+        const binding = require("./binding");
+        if (typeof binding.assessFit !== "function") {
+            throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
+        }
+        return binding.assessFit({
+            ...request,
+            config: {
+                ...request.config,
+                backendsDir: request.config.backendsDir ?? resolveBackendsDir(),
+            },
+        });
+    }
     opts;
     logger;
     addon;
