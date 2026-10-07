@@ -116,7 +116,8 @@ jobs:
       extra-cmake-defines: ${{ matrix.extraCmakeDefines }}
       platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
       # Consumers only: overlaying fabric's own build into itself is meaningless.
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), matrix.package) && inputs.fabric-overlay-artifact || '' }}
+      # fabric-consumers is a workflow_call input, so a dispatch has none.
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), matrix.package) && inputs.fabric-overlay-artifact || '' }}
       reuse-workflow-file: ${{ inputs.reuse-workflow-file }}
     secrets: inherit
 
