@@ -46,6 +46,14 @@ function resolveBackendsDir(): string {
   return path.join(__dirname, "prebuilds");
 }
 
+function isAbsoluteModelPath(modelPath: string): boolean {
+  return (
+    modelPath.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(modelPath) ||
+    modelPath.startsWith("\\\\")
+  );
+}
+
 interface QvacResponseHandlers {
   cancelHandler: () => Promise<void>;
   signal?: AbortSignal;
@@ -195,11 +203,11 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
       !request ||
       !request.files ||
       typeof request.files.model !== "string" ||
-      !path.isAbsolute(request.files.model)
+      !isAbsoluteModelPath(request.files.model)
     ) {
       throw new TypeError("files.model must be an absolute path");
     }
-    if (request.files.pivotModel && !path.isAbsolute(request.files.pivotModel)) {
+    if (request.files.pivotModel && !isAbsoluteModelPath(request.files.pivotModel)) {
       throw new TypeError("files.pivotModel must be an absolute path");
     }
     const modelType = request.config?.modelType;

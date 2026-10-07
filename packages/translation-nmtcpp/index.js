@@ -35,6 +35,11 @@ function resolveBackendsDir() {
         return fabricRoot;
     return path.join(__dirname, "prebuilds");
 }
+function isAbsoluteModelPath(modelPath) {
+    return (modelPath.startsWith("/") ||
+        /^[A-Za-z]:[\\/]/.test(modelPath) ||
+        modelPath.startsWith("\\\\"));
+}
 class QvacIndicTransResponse extends infer_base_1.QvacResponse {
     processor;
     dstLang;
@@ -83,10 +88,10 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         if (!request ||
             !request.files ||
             typeof request.files.model !== "string" ||
-            !path.isAbsolute(request.files.model)) {
+            !isAbsoluteModelPath(request.files.model)) {
             throw new TypeError("files.model must be an absolute path");
         }
-        if (request.files.pivotModel && !path.isAbsolute(request.files.pivotModel)) {
+        if (request.files.pivotModel && !isAbsoluteModelPath(request.files.pivotModel)) {
             throw new TypeError("files.pivotModel must be an absolute path");
         }
         const modelType = request.config?.modelType;

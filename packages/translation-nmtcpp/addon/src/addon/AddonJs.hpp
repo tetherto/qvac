@@ -130,7 +130,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   };
 
   double margin = 0;
-  if (auto value = request.getOptionalProperty<js::Number>(env, "marginBytes")) {
+  if (auto value =
+          request.getOptionalProperty<js::Number>(env, "marginBytes")) {
     margin = value->as<double>(env);
     if (!std::isfinite(margin) || margin < 0 || std::trunc(margin) != margin ||
         margin > 9007199254740991.0) {
@@ -168,7 +169,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 
   if (report.empty()) {
     auto pivotValue = files.getOptionalProperty<js::String>(env, "pivotModel");
-    const std::string pivot = pivotValue ? pivotValue->as<std::string>(env) : "";
+    const std::string pivot =
+        pivotValue ? pivotValue->as<std::string>(env) : "";
     if (!pivot.empty()) {
       if (modelType != "Bergamot" || !fs::is_regular_file(pivot, ec)) {
         reason = "unsupported-config";
@@ -218,7 +220,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   if (report.empty()) {
     // CPU is the only backend for Bergamot, regardless of GPU settings.
     const bool useGpu = modelType == "IndicTrans" &&
-        optionBoolean("use_gpu").value_or(optionBoolean("useGPU").value_or(false));
+                        optionBoolean("use_gpu").value_or(
+                            optionBoolean("useGPU").value_or(false));
     const std::string backendsDir = optionString("backendsDir");
     const std::string openclCacheDir = optionString("openclCacheDir");
     NmtBackendsHandle backends(backendsDir, openclCacheDir);
@@ -227,23 +230,28 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       const std::string gpuBackend = !optionString("gpu_backend").empty()
                                          ? optionString("gpu_backend")
                                          : optionString("gpuBackend");
-      const auto ordinal = optionNumber("gpu_device").value_or(
-          optionNumber("gpuDevice").value_or(0));
+      const auto ordinal = optionNumber("gpu_device")
+                               .value_or(optionNumber("gpuDevice").value_or(0));
       if (!std::isfinite(ordinal) || std::trunc(ordinal) != ordinal ||
           ordinal < 0 || ordinal > std::numeric_limits<int>::max()) {
         reason = "unsupported-config";
         report = "Invalid GPU device ordinal";
-      } else if (config.getOptionalProperty<js::Number>(env, "main-gpu") ||
-                 config.getOptionalProperty<js::Number>(env, "main_gpu") ||
-                 config.getOptionalProperty<js::String>(env, "main-gpu") ||
-                 config.getOptionalProperty<js::String>(env, "main_gpu")) {
+      } else if (
+          config.getOptionalProperty<js::Number>(env, "main-gpu") ||
+          config.getOptionalProperty<js::Number>(env, "main_gpu") ||
+          config.getOptionalProperty<js::String>(env, "main-gpu") ||
+          config.getOptionalProperty<js::String>(env, "main_gpu")) {
         reason = "unsupported-config";
         report = "Fit with main-gpu selection is unavailable";
       } else {
         device = nmtSelectGpuDevice(
-            true, gpuBackend, static_cast<int>(ordinal), "assessFit",
-            {}, !gpuBackend.empty() || optionNumber("gpu_device").has_value() ||
-                    optionNumber("gpuDevice").has_value());
+            true,
+            gpuBackend,
+            static_cast<int>(ordinal),
+            "assessFit",
+            {},
+            !gpuBackend.empty() || optionNumber("gpu_device").has_value() ||
+                optionNumber("gpuDevice").has_value());
       }
     } else {
       device = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
@@ -268,9 +276,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         constexpr uint64_t overhead = 512ULL * 1024ULL * 1024ULL;
         if (modelBytes <= (9007199254740991ULL - overhead) / 4) {
           requiredBytes = modelBytes * 4 + overhead;
-          const uint64_t budget = static_cast<uint64_t>(margin) < freeBytes
-                                      ? freeBytes - static_cast<uint64_t>(margin)
-                                      : 0;
+          const uint64_t budget =
+              static_cast<uint64_t>(margin) < freeBytes
+                  ? freeBytes - static_cast<uint64_t>(margin)
+                  : 0;
           size_t hostFree = free;
           if (useGpu) {
             auto* cpu = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
@@ -282,9 +291,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
           }
           if (useGpu && hostFree == 0) {
             reason = "host-memory-unavailable";
-          } else if (requiredBytes <= budget &&
-                     static_cast<uint64_t>(margin) < hostFree &&
-                     requiredBytes <= hostFree - static_cast<uint64_t>(margin)) {
+          } else if (
+              requiredBytes <= budget &&
+              static_cast<uint64_t>(margin) < hostFree &&
+              requiredBytes <= hostFree - static_cast<uint64_t>(margin)) {
             status = "fits";
             reason = "fits";
           } else if (modelBytes > budget && !useGpu) {
@@ -314,9 +324,18 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   result.setProperty(env, "reason", js::String::create(env, reason));
   result.setProperty(env, "backend", js::String::create(env, backend));
   result.setProperty(env, "report", js::String::create(env, report));
-  result.setProperty(env, "modelBytes", js::Number::create(env, static_cast<double>(modelBytes)));
-  result.setProperty(env, "requiredBytes", js::Number::create(env, static_cast<double>(requiredBytes)));
-  result.setProperty(env, "freeBytes", js::Number::create(env, static_cast<double>(freeBytes)));
+  result.setProperty(
+      env,
+      "modelBytes",
+      js::Number::create(env, static_cast<double>(modelBytes)));
+  result.setProperty(
+      env,
+      "requiredBytes",
+      js::Number::create(env, static_cast<double>(requiredBytes)));
+  result.setProperty(
+      env,
+      "freeBytes",
+      js::Number::create(env, static_cast<double>(freeBytes)));
   return result;
 }
 JSCATCH

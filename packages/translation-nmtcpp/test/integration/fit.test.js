@@ -43,7 +43,8 @@ function checkRealModelFit(t, request) {
   t.ok(fit.freeBytes > 0, 'current device memory was queried')
   t.ok(fit.report.includes('Translation load estimate:'), 'a readable report was returned')
   t.ok(
-    fit.status === 'fits' || fit.status === 'does-not-fit' ||
+    fit.status === 'fits' ||
+      fit.status === 'does-not-fit' ||
       (fit.status === 'error' && fit.reason === 'insufficient-evidence'),
     'the ordinary assessment has a capacity verdict or explicitly reports uncertainty'
   )
@@ -59,29 +60,37 @@ function checkRealModelFit(t, request) {
   t.ok(reserved.modelBytes >= fit.modelBytes)
 }
 
-test('fit assesses a real IndicTrans model without loading it', { timeout: TEST_TIMEOUT }, async (t) => {
-  const model = await ensureIndicTransModel()
-  checkRealModelFit(t, {
-    files: { model },
-    config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
-  })
-})
+test(
+  'fit assesses a real IndicTrans model without loading it',
+  { timeout: TEST_TIMEOUT },
+  async (t) => {
+    const model = await ensureIndicTransModel()
+    checkRealModelFit(t, {
+      files: { model },
+      config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
+    })
+  }
+)
 
-test('fit assesses a real Bergamot model without loading it', { timeout: TEST_TIMEOUT }, async (t) => {
-  const modelDir = await ensureBergamotModel()
-  const names = fs.readdirSync(modelDir)
-  const modelName = names.find((name) => name.includes('.intgemm'))
-  const vocabName = names.find((name) => name.endsWith('.spm'))
-  t.ok(modelName, 'Bergamot weights are available')
-  t.ok(vocabName, 'Bergamot vocabulary is available')
-  if (!modelName || !vocabName) return
+test(
+  'fit assesses a real Bergamot model without loading it',
+  { timeout: TEST_TIMEOUT },
+  async (t) => {
+    const modelDir = await ensureBergamotModel()
+    const names = fs.readdirSync(modelDir)
+    const modelName = names.find((name) => name.includes('.intgemm'))
+    const vocabName = names.find((name) => name.endsWith('.spm'))
+    t.ok(modelName, 'Bergamot weights are available')
+    t.ok(vocabName, 'Bergamot vocabulary is available')
+    if (!modelName || !vocabName) return
 
-  checkRealModelFit(t, {
-    files: {
-      model: path.join(modelDir, modelName),
-      srcVocab: path.join(modelDir, vocabName),
-      dstVocab: path.join(modelDir, vocabName)
-    },
-    config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
-  })
-})
+    checkRealModelFit(t, {
+      files: {
+        model: path.join(modelDir, modelName),
+        srcVocab: path.join(modelDir, vocabName),
+        dstVocab: path.join(modelDir, vocabName)
+      },
+      config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
+    })
+  }
+)
