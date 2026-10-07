@@ -40,6 +40,18 @@ test('runners.yaml parses with unique keys and labels', () => {
   )
 })
 
+test('decoder-audio Linux x64 integration uses the CPU runner for each Ubuntu version', () => {
+  const project = JSON.parse(readRepoFile('packages/decoder-audio/project.json'))
+  const platforms = project.targets['test:integration'].options.ci.platforms
+    .filter((row) => row.platform === 'linux' && row.arch === 'x64')
+  const runners = loadRunners()
+  const expected = [
+    ['ubuntu-22.04', 'linux_ubuntu2204_x64'],
+    ['ubuntu-24.04', 'linux_ubuntu2404_x64'],
+  ].map(([os, key]) => ({ os, runner: runners.find((entry) => entry.key === key).label }))
+  assert.deepEqual(platforms.map(({ os, runner }) => ({ os, runner })), expected)
+})
+
 test('parseRunnersYaml rejects duplicates and junk', () => {
   assert.throws(
     () => parseRunnersYaml('macos_ios: macos-14\nmacos_ios: macos-15\n'),
