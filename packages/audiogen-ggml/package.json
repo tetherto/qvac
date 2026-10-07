@@ -1,39 +1,39 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Audio generation (music) addon for qvac",
-  "addon": true,
   "engines": {
     "bare": ">=1.19.0"
   },
   "imports": {
     "#host-addon": {
       "linux": {
-        "x64": ["@qvac/audiogen-ggml-linux-x64", "./addon-unavailable.js"],
-        "arm64": ["@qvac/audiogen-ggml-linux-arm64", "./addon-unavailable.js"],
+        "x64": "@qvac/audiogen-ggml-linux-x64",
+        "arm64": "@qvac/audiogen-ggml-linux-arm64",
         "default": "./addon-unavailable.js"
       },
       "darwin": {
-        "arm64": ["@qvac/audiogen-ggml-darwin-arm64", "./addon-unavailable.js"],
-        "x64": ["@qvac/audiogen-ggml-darwin-x64", "./addon-unavailable.js"],
+        "arm64": "@qvac/audiogen-ggml-darwin-arm64",
+        "x64": "@qvac/audiogen-ggml-darwin-x64",
         "default": "./addon-unavailable.js"
       },
       "win32": {
-        "x64": ["@qvac/audiogen-ggml-win32-x64", "./addon-unavailable.js"],
+        "x64": "@qvac/audiogen-ggml-win32-x64",
         "default": "./addon-unavailable.js"
       },
       "android": {
-        "arm64": ["@qvac/audiogen-ggml-android-arm64", "./addon-unavailable.js"],
+        "arm64": "@qvac/audiogen-ggml-android-arm64",
         "default": "./addon-unavailable.js"
       },
-      "ios": ["@qvac/audiogen-ggml-ios", "./addon-unavailable.js"],
+      "ios": "@qvac/audiogen-ggml-ios",
       "default": "./addon-unavailable.js"
     }
   },
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
-    "build:native": "bare-make generate && bare-make build && bare-make install",
-    "build:native:cuda": "bare-make generate -D ENABLE_CUDA=ON && bare-make build && bare-make install",
+    "build:native": "bare-make generate && bare-make build && bare-make install && npm run link:platform",
+    "build:native:cuda": "bare-make generate -D ENABLE_CUDA=ON && bare-make build && bare-make install && npm run link:platform",
+    "link:platform": "node ../../scripts/ci/slice-platform-packages.mjs --link-local --workdir .",
     "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",

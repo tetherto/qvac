@@ -1,5 +1,3 @@
-import { resolveBackendsDir } from './backends'
-
 interface AsrFitCommon {
   /** Absolute path to the model, or to a weightless copy where one exists. */
   modelPath: string
@@ -96,14 +94,8 @@ interface FitBinding {
  * engine's reason. Only a broken request throws.
  */
 export function assessFit(request: AsrFitRequest): AsrFitResult {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
   const binding = require('../binding.js') as FitBinding
 
-  return binding.assessFit({
-    ...request,
-    backendsDir:
-      typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-        ? request.backendsDir
-        : resolveBackendsDir()
-  })
+  return binding.assessFit(request)
 }

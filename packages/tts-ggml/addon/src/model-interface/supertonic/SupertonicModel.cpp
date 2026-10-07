@@ -97,21 +97,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
         enhancerActive ? 0 : cfg.outputSampleRate.value_or(0);
   }
 
-  // Mirrors ChatterboxModel::toEngineOptions; see that file for the
-  // detailed rationale. Compose `cfg.backendsDir / BACKENDS_SUBDIR`
-  // before forwarding so a host that already passes
-  // `path.join(__dirname, 'prebuilds')` (the qvac
-  // llm-llamacpp / transcription-parakeet convention) gets the
-  // expected `<bare-target>/qvac__tts-ggml/` scan dir without
-  // knowing the per-arch shape.
-  if (!cfg.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath =
-        (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   opts.opencl_cache_dir = cfg.openclCacheDir;
 
   detail::applyVulkanPipelineCache(opts, cfg);

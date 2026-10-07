@@ -10,7 +10,6 @@ import {
   type WhisperConfigurationParams,
 } from "./configChecker";
 import { QvacErrorAddonASRGgml, ERR_CODES } from "../../lib/error";
-import { resolveBackendsDir } from "../../lib/backends";
 import { END_OF_INPUT } from "../../lib/constants";
 import { normalizeAudioStream, type ByteFormat } from "../../lib/audio";
 import { assertNoRunOptions } from "../parakeet/driver";
@@ -435,10 +434,9 @@ export class WhisperDriver implements AsrDriver {
       // is pinned. The user-facing `audio_format` config key only selects
       // how raw Uint8Array bytes are interpreted at the JS boundary.
       audio_format: WIRE_AUDIO_FORMAT,
-      backendsDir:
-        typeof this.params.backendsDir === "string"
-          ? this.params.backendsDir
-          : resolveBackendsDir(),
+      ...(typeof this.params.backendsDir === "string"
+        ? { backendsDir: this.params.backendsDir }
+        : {}),
     };
   }
 

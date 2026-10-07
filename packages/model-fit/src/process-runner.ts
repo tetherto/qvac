@@ -1,7 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-import fs = require('bare-fs')
-import path = require('bare-path')
-import fabricBackends = require('@qvac/fabric/backends')
 import processModule = require('bare-process')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -35,26 +32,6 @@ interface RunnerProcess {
 }
 
 const process = processModule as unknown as RunnerProcess
-
-// Duplicate of index.ts resolveBackendsDir: this runner must not import
-// `./index` at load time because that would load the native binding. The v2
-// llamaConfigFit path also cannot go through fitParams().
-function resolveBackendsDir (): string | undefined {
-  // fabric's resolver only checks that the platform package resolves, not that
-  // its prebuilds are on disk.
-  const fabricRoot = fabricBackends.resolveBackendsDir()
-  if (fabricRoot !== null && isDirectory(fabricRoot)) return fabricRoot
-  const packaged = path.join(__dirname, 'prebuilds')
-  return isDirectory(packaged) ? packaged : undefined
-}
-
-function isDirectory (dir: string): boolean {
-  try {
-    return fs.statSync(dir).isDirectory()
-  } catch {
-    return false
-  }
-}
 
 function exitAfterWriteError (error: Error): void {
   process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
@@ -98,14 +75,7 @@ function fitLlama (...args: Parameters<FitProcessLlamaFit>): ReturnType<FitProce
       nCtxMin?: number
     }): FitLlamaResult
   }
-  let resolved = config
-  if (config.backendsDir === undefined) {
-    const packaged = resolveBackendsDir()
-    if (packaged !== undefined) {
-      resolved = { ...config, backendsDir: packaged }
-    }
-  }
-  return binding.llamaConfigFit({ loadKind, ...resolved })
+  return binding.llamaConfigFit({ loadKind, ...config })
 }
 
 function finish (line: string): void {

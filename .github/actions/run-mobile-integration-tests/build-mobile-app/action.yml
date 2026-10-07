@@ -269,17 +269,17 @@ runs:
         arch: x64
         tags: -simulator
 
-    # npm never selects a cross-built platform package, and bare-link reads
-    # only a package's own prebuilds/, so a split addon the framework installed
-    # (e.g. @qvac/fabric) would reach the app without its runtime. Must run
+    # A split addon the framework installed (e.g. @qvac/fabric) routes its
+    # runtime through a cross-built platform package, which npm never selects,
+    # so the app depends on it directly like any mobile app would. Must run
     # after the framework installs the addon and before `npm run bundle` and
     # the native project build.
-    - name: Overlay mobile platform prebuilds
+    - name: Install mobile platform packages
       shell: bash
       working-directory: ./test-framework
       env:
         PLATFORM: ${{ inputs.platform }}
-      run: node "$GITHUB_ACTION_PATH/overlay-platform-prebuilds.mjs" --platform "$PLATFORM"
+      run: node "$GITHUB_ACTION_PATH/install-platform-packages.mjs" --platform "$PLATFORM"
 
     # Patches the freshly generated e2e/tests/app.test.js to bump the
     # per-test Mocha ceiling. Two ways to opt in:

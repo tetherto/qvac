@@ -581,7 +581,7 @@ runs:
         # (scripts/ci/slice-platform-packages.mjs); only the @qvac npmjs release
         # is sliced, so @tetherto -mono dev builds never reach this branch.
         # The slice is named by the meta's `#host-addon` imports map, the same
-        # lookup build-mobile-app/overlay-platform-prebuilds.mjs uses. Mobile
+        # lookup build-mobile-app/install-platform-packages.mjs uses. Mobile
         # slices are cross-built, so they are not in optionalDependencies.
         if [ ! -d "$META_DIR/package/prebuilds" ]; then
           case "$PACKED_NAME" in
@@ -606,8 +606,7 @@ runs:
           MAPPED_PKG=$(node -e '
             const [manifestPath, suffix] = process.argv.slice(1)
             const map = (require(manifestPath).imports || {})["#host-addon"] || {}
-            let entry = suffix === "ios" ? map.ios : (map.android || {}).arm64
-            if (Array.isArray(entry)) entry = entry[0]
+            const entry = suffix === "ios" ? map.ios : (map.android || {}).arm64
             process.stdout.write(typeof entry === "string" ? entry : "")
           ' "$PACKED_MANIFEST" "$PLATFORM_SUFFIX" 2>/dev/null || echo "")
           # The map is registry-controlled, so it may only confirm the name the
@@ -649,13 +648,14 @@ runs:
             echo "Refusing to put binaries from a different build on the device."
             exit 1
           fi
-          # Slice layout puts prebuilds under addon/prebuilds/<host>, one level
-          # deeper than the meta package's own prebuilds/.
-          if [ ! -d "$PLATFORM_DIR/package/addon/prebuilds" ] || [ -z "$(ls -A "$PLATFORM_DIR/package/addon/prebuilds" 2>/dev/null)" ]; then
-            echo "::error::$PLATFORM_SPEC contains no addon/prebuilds — nothing to install."
+          # A slice keeps the meta package's prebuilds/<host> layout, so its
+          # tree lands where an unsliced build's would, and the build step
+          # assembles the platform package from it.
+          if [ ! -d "$PLATFORM_DIR/package/prebuilds" ] || [ -z "$(ls -A "$PLATFORM_DIR/package/prebuilds" 2>/dev/null)" ]; then
+            echo "::error::$PLATFORM_SPEC contains no prebuilds — nothing to install."
             exit 1
           fi
-          mv "$PLATFORM_DIR/package/addon/prebuilds" ./prebuilds
+          mv "$PLATFORM_DIR/package/prebuilds" ./prebuilds
           echo "Verified: $PLATFORM prebuilds come from $PLATFORM_PACKED_NAME@$PLATFORM_PACKED_VERSION ($REGISTRY_DESC)"
         else
           mv "$META_DIR/package/prebuilds" ./prebuilds

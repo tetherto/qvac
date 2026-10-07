@@ -57,53 +57,46 @@ export interface PrebuildLocation {
 }
 
 const PREBUILDS_DIR = 'prebuilds'
-const PLATFORM_ADDON_DIR = 'addon'
 
 /**
- * Directories to search for an addon's `<host>` prebuild, in precedence order:
+ * Where an addon's `<host>` prebuild may live:
  *
- * 1. `<packageRoot>/prebuilds/<host>` — the fat layout every addon used to
- *    publish, and where source builds and `linked:` checkouts still land.
- * 2. `<platformRoot>/addon/prebuilds/<host>` — the per-platform package the
- *    addon's `#host-addon` map names for this host, when that package is
- *    installed. Each platform package embeds an inner `addon/` package named
- *    after the meta addon so the `.bare` file keeps its name.
- *
- * A local `prebuilds/` always wins, matching the precedence the addons apply
- * in their own `binding.js` (`require.addon()` first, platform package second).
+ * - `<packageRoot>/prebuilds/<host>` for an ordinary addon, including the
+ *   per-platform packages themselves.
+ * - `<platformRoot>/prebuilds/<host>` for a split addon, whose `#host-addon`
+ *   map names a platform package for this host. The meta's own `prebuilds/`
+ *   does not count: its `binding.js` is `require('#host-addon')`, so the
+ *   platform package is the only thing loaded. Empty when that package is not
+ *   installed.
  */
 export async function resolvePrebuildLocations(
   addon: NativeAddon,
   host: string
 ): Promise<PrebuildLocation[]> {
-  const locations: PrebuildLocation[] = [
-    { hostDir: path.join(addon.packageRoot, PREBUILDS_DIR, host) }
-  ]
-
   const platformPackage = await platformPackageForHost(addon, host)
-  if (platformPackage === null) return locations
+  if (platformPackage === null) {
+    return [{ hostDir: path.join(addon.packageRoot, PREBUILDS_DIR, host) }]
+  }
 
   const platformRoot = await findInstalledPackage(
     await realPackageRoot(addon.packageRoot),
     platformPackage
   )
-  if (platformRoot !== null) {
-    const location: PrebuildLocation = {
-      hostDir: path.join(platformRoot, PLATFORM_ADDON_DIR, PREBUILDS_DIR, host),
-      platformPackage
-    }
-    const installedVersion = await readPackageVersion(platformRoot)
-    if (
-      addon.version !== undefined &&
-      installedVersion !== undefined &&
-      installedVersion !== addon.version
-    ) {
-      location.mismatchedVersion = installedVersion
-    }
-    locations.push(location)
-  }
+  if (platformRoot === null) return []
 
-  return locations
+  const location: PrebuildLocation = {
+    hostDir: path.join(platformRoot, PREBUILDS_DIR, host),
+    platformPackage
+  }
+  const installedVersion = await readPackageVersion(platformRoot)
+  if (
+    addon.version !== undefined &&
+    installedVersion !== undefined &&
+    installedVersion !== addon.version
+  ) {
+    location.mismatchedVersion = installedVersion
+  }
+  return [location]
 }
 
 /**
@@ -173,10 +166,13 @@ function describeMissingPrebuild(
   platformPackage: string | null,
   platformLocation: PrebuildLocation | undefined
 ): string {
-  const expected = locations.map((location) => path.join(location.hostDir, '*.bare'))
+  const expected =
+    locations.length > 0
+      ? locations.map((location) => path.join(location.hostDir, '*.bare')).join(' or ')
+      : `${platformPackage ?? addon.name} to be installed with ${path.join(PREBUILDS_DIR, host, '*.bare')}`
   return (
     `${formatAddonId(addon)} is missing a prebuild for ${host} ` +
-    `(expected ${expected.join(' or ')}).` +
+    `(expected ${expected}).` +
     missingPlatformPackageHint(addon, platformPackage, platformLocation)
   )
 }

@@ -194,9 +194,9 @@ JSAdapter::buildAcestepConfig(js::Object configurationParams, js_env_t* env) {
   cfg.threads = readRequiredNonNegativeInt(configurationParams, env, "threads");
   cfg.useGpu = readRequiredBool(configurationParams, env, "useGPU");
   cfg.nGpuLayers = readRequiredInt(configurationParams, env, "nGpuLayers");
-  // Optional: host-provided prebuilds root for dlopen'd ggml backend modules
-  // (see AcestepConfig::backendsDir). Empty when the host omits it; the addon
-  // then relies on ggml's built-in search path.
+  // Optional directory for the dlopen'd ggml backend modules (see
+  // AcestepConfig::backendsDir). Empty when the host omits it; the addon then
+  // scans its own.
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }

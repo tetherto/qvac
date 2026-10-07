@@ -26,8 +26,6 @@ const requiredFiles = [
   'index.js',
   'index.d.ts',
   'addon-unavailable.js',
-  'lib/backends.js',
-  'lib/backends.d.ts',
   'engines/types.d.ts',
   'engines/whisper/driver.d.ts',
   'engines/parakeet/driver.d.ts',

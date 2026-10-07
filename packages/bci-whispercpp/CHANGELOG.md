@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   code. Same models, same backends, no API change.
 - Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29, preserving the
   QVAC seed, BCI windowed-attention and streaming/VAD patches.
+- `binding.js` is now `module.exports = require.addon()`. A host with no
+  prebuild throws `require.addon()`'s own error instead of a wrapped one.
 - Raise the `speech-cpp` floor to `2026-10-07#1`, whose whisper fitter reads
   the registry's weightless descriptions. Transcription is unchanged.
 

@@ -927,20 +927,15 @@ describe('checkPrebuilds', () => {
 function writePlatformPackage(
   projectRoot: string,
   relPackageDir: string,
-  options: { name: string; addon: string; hosts: string[]; version?: string }
+  options: { name: string; hosts: string[]; version?: string }
 ): string {
-  const version = options.version ?? '0.9.0'
   const platformRoot = writePackageJson(projectRoot, relPackageDir, {
     name: options.name,
-    version
-  })
-  writeJson(path.join(platformRoot, 'addon', 'package.json'), {
-    name: options.addon,
-    version,
+    version: options.version ?? '0.9.0',
     addon: true
   })
   for (const host of options.hosts) {
-    writePrebuild(path.join(platformRoot, 'addon'), host)
+    writePrebuild(platformRoot, host)
   }
   return platformRoot
 }
@@ -957,20 +952,20 @@ function metaAddon(packageRoot: string) {
 function ttsHostAddonMap() {
   return {
     linux: {
-      x64: ['@qvac/tts-ggml-linux-x64', './addon-unavailable.js'],
-      arm64: ['@qvac/tts-ggml-linux-arm64', './addon-unavailable.js']
+      x64: '@qvac/tts-ggml-linux-x64',
+      arm64: '@qvac/tts-ggml-linux-arm64'
     },
     darwin: {
-      arm64: ['@qvac/tts-ggml-darwin-arm64', './addon-unavailable.js'],
-      x64: ['@qvac/tts-ggml-darwin-x64', './addon-unavailable.js']
+      arm64: '@qvac/tts-ggml-darwin-arm64',
+      x64: '@qvac/tts-ggml-darwin-x64'
     },
     win32: {
-      x64: ['@qvac/tts-ggml-win32-x64', './addon-unavailable.js']
+      x64: '@qvac/tts-ggml-win32-x64'
     },
     android: {
-      arm64: ['@qvac/tts-ggml-android-arm64', './addon-unavailable.js']
+      arm64: '@qvac/tts-ggml-android-arm64'
     },
-    ios: ['@qvac/tts-ggml-ios', './addon-unavailable.js']
+    ios: '@qvac/tts-ggml-ios'
   }
 }
 
@@ -978,7 +973,6 @@ function splitTtsManifest(): Record<string, unknown> {
   return {
     name: '@qvac/tts-ggml',
     version: '0.9.0',
-    addon: true,
     imports: { '#host-addon': ttsHostAddonMap() }
   }
 }
@@ -989,7 +983,6 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
       writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
         name: '@qvac/tts-ggml-darwin-arm64',
-        addon: '@qvac/tts-ggml',
         hosts: ['darwin-arm64']
       })
       const issues = await checkPrebuilds({
@@ -1008,7 +1001,6 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
         'node_modules/@qvac/tts-ggml/node_modules/@qvac/tts-ggml-linux-x64',
         {
           name: '@qvac/tts-ggml-linux-x64',
-          addon: '@qvac/tts-ggml',
           hosts: ['linux-x64']
         }
       )
@@ -1023,7 +1015,6 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       const hosts = ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
       writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-ios', {
         name: '@qvac/tts-ggml-ios',
-        addon: '@qvac/tts-ggml',
         hosts
       })
       const issues = await checkPrebuilds({ addon: metaAddon(packageRoot), hosts })
@@ -1036,12 +1027,10 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
       writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
         name: '@qvac/tts-ggml-darwin-arm64',
-        addon: '@qvac/tts-ggml',
         hosts: ['darwin-arm64']
       })
       writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-win32-x64', {
         name: '@qvac/tts-ggml-win32-x64',
-        addon: '@qvac/tts-ggml',
         hosts: []
       })
       const issues = await checkPrebuilds({
@@ -1056,7 +1045,7 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
 
       const win32 = issues.find((i) => i.host === 'win32-x64')
       assert.ok(win32)
-      assert.match(win32.message, /tts-ggml-win32-x64[\\/]addon[\\/]prebuilds[\\/]win32-x64/)
+      assert.match(win32.message, /tts-ggml-win32-x64[\\/]prebuilds[\\/]win32-x64/)
       assert.doesNotMatch(win32.message, /"@qvac\/tts-ggml-win32-x64": "0\.9\.0"/)
       assert.equal(
         linux.platformPackage,
@@ -1072,7 +1061,6 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
       writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-android-arm64', {
         name: '@qvac/tts-ggml-android-arm64',
-        addon: '@qvac/tts-ggml',
         hosts: []
       })
       const issues = await checkPrebuilds({
@@ -1114,17 +1102,18 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
       const platformRoot = writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-android-arm64', {
         name: '@qvac/tts-ggml-android-arm64',
-        addon: '@qvac/tts-ggml',
         hosts: ['android-arm64'],
         version: '0.8.3'
       })
 
       const locations = await resolvePrebuildLocations(metaAddon(packageRoot), 'android-arm64')
-      assert.deepEqual(locations[1], {
-        hostDir: path.join(platformRoot, 'addon', 'prebuilds', 'android-arm64'),
-        platformPackage: '@qvac/tts-ggml-android-arm64',
-        mismatchedVersion: '0.8.3'
-      })
+      assert.deepEqual(locations, [
+        {
+          hostDir: path.join(platformRoot, 'prebuilds', 'android-arm64'),
+          platformPackage: '@qvac/tts-ggml-android-arm64',
+          mismatchedVersion: '0.8.3'
+        }
+      ])
 
       const issues = await checkPrebuilds({
         addon: metaAddon(packageRoot),
@@ -1151,7 +1140,6 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       })
       writePlatformPackage(dir, 'node_modules/@qvac/llm-llamacpp-android-arm64', {
         name: '@qvac/llm-llamacpp-android-arm64',
-        addon: '@qvac/llm-llamacpp',
         hosts: ['android-arm64']
       })
       const issues = await checkPrebuilds({
@@ -1168,28 +1156,31 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
     })
   })
 
-  it('searches the meta package prebuilds first, then the platform package', async () => {
+  it('searches only the platform package of a split addon, never the meta', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
       const platformRoot = writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
         name: '@qvac/tts-ggml-darwin-arm64',
-        addon: '@qvac/tts-ggml',
         hosts: ['darwin-arm64']
       })
 
       const locations = await resolvePrebuildLocations(metaAddon(packageRoot), 'darwin-arm64')
       assert.deepEqual(locations, [
-        { hostDir: path.join(packageRoot, 'prebuilds', 'darwin-arm64') },
         {
-          hostDir: path.join(platformRoot, 'addon', 'prebuilds', 'darwin-arm64'),
+          hostDir: path.join(platformRoot, 'prebuilds', 'darwin-arm64'),
           platformPackage: '@qvac/tts-ggml-darwin-arm64'
         }
       ])
 
+      writePrebuild(packageRoot, 'linux-x64')
       const withoutPlatform = await resolvePrebuildLocations(metaAddon(packageRoot), 'linux-x64')
-      assert.deepEqual(withoutPlatform, [
-        { hostDir: path.join(packageRoot, 'prebuilds', 'linux-x64') }
-      ])
+      assert.deepEqual(withoutPlatform, [])
+      const issues = await checkPrebuilds({ addon: metaAddon(packageRoot), hosts: ['linux-x64'] })
+      assert.deepEqual(
+        issues.map((i) => i.host),
+        ['linux-x64'],
+        "the meta's own prebuilds/ is never loaded"
+      )
     })
   })
 
@@ -1206,7 +1197,6 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
         'node_modules/.pnpm/@qvac+tts-ggml-darwin-arm64@0.9.0/node_modules/@qvac/tts-ggml-darwin-arm64',
         {
           name: '@qvac/tts-ggml-darwin-arm64',
-          addon: '@qvac/tts-ggml',
           hosts: ['darwin-arm64']
         }
       )
@@ -1223,13 +1213,11 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
 
       const locations = await resolvePrebuildLocations(metaAddon(linkedPackageRoot), 'darwin-arm64')
       assert.deepEqual(locations, [
-        { hostDir: path.join(linkedPackageRoot, 'prebuilds', 'darwin-arm64') },
         {
           hostDir: path.join(
             realPackageRoot,
             '..',
             'tts-ggml-darwin-arm64',
-            'addon',
             'prebuilds',
             'darwin-arm64'
           ),
@@ -1567,11 +1555,13 @@ describe('verifyBundle orchestrator', () => {
       })
       writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
         name: '@qvac/tts-ggml-darwin-arm64',
-        addon: '@qvac/tts-ggml',
         hosts: ['darwin-arm64']
       })
       const bundlePath = path.join(dir, 'worker.bundle.js')
-      writeBareBundle(bundlePath, { '/node_modules/@qvac/tts-ggml/index.js': true })
+      writeBareBundle(bundlePath, {
+        '/node_modules/@qvac/tts-ggml/index.js': true,
+        '/node_modules/@qvac/tts-ggml-darwin-arm64/index.js': true
+      })
 
       const result = await verifyBundle({
         projectRoot: dir,
@@ -1583,8 +1573,8 @@ describe('verifyBundle orchestrator', () => {
       assert.equal(hasWarnings(result), false)
       assert.deepEqual(
         result.addons.map((addon) => addon.name),
-        ['@qvac/tts-ggml'],
-        'only the meta package is an addon; the platform package is not double-counted'
+        ['@qvac/tts-ggml-darwin-arm64'],
+        'the bundled platform package is the addon; the meta is not double-counted'
       )
     })
   })
@@ -2021,6 +2011,30 @@ describe('formatVerifyBundleResult', () => {
       assert.match(
         out,
         /@qvac\/tts-ggml@0\.9\.0 for ios-arm64 \(needs "@qvac\/tts-ggml-ios": "0\.9\.0" in package\.json\)/
+      )
+    })
+  })
+
+  it('checks an installed platform package through its meta, not on every host', async () => {
+    await withTempDir(async (dir) => {
+      writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
+        name: '@qvac/tts-ggml-darwin-arm64',
+        hosts: ['darwin-arm64']
+      })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64', 'android-arm64'],
+        bareRuntimeVersion: '1.30.3'
+      })
+      assert.deepEqual(
+        result.issues.map((issue) => [issue.code, 'host' in issue ? issue.host : null]),
+        [['missing-prebuild', 'android-arm64']]
+      )
+      assert.deepEqual(
+        result.addons.map((addon) => addon.name),
+        ['@qvac/tts-ggml']
       )
     })
   })

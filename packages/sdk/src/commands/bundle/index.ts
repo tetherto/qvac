@@ -7,20 +7,19 @@ import {
   resolveConfigForProject
 } from '@/client/config-loader/resolve-config.node'
 import { createCommandLogger } from '@/commands/command-logger'
-import {
-  BareImportsMapNotFoundError,
-  HostPrebuildsInstallRefusedError
-} from '@/utils/errors-client'
+import { BareImportsMapNotFoundError, HostPrebuildsMissingError } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
 import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import {
+  findMissingHostPrebuilds,
   installMissingHostPrebuilds,
+  resolveAddons,
   type HostPrebuildPackage
 } from '@/commands/host-prebuilds/index'
-import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
+import type { NativeAddon } from '@/commands/verify/addon-source'
 import { verifyBundle } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
@@ -37,12 +36,13 @@ export interface BundleSdkOptions {
   quiet?: boolean | undefined
   verbose?: boolean | undefined
   /**
-   * Install the addon platform packages the bundle needs for its mobile hosts
-   * with the project's package manager (see `ensureHostPrebuilds`), then
-   * bundle again. Off by default: without it, bundling never changes
-   * package.json or node_modules. When the install is refused, the bundle and
-   * its manifest are still written before `HostPrebuildsInstallRefusedError`
-   * is thrown.
+   * Install the addon platform packages the project's split addons need for
+   * its mobile hosts with the project's package manager (see
+   * `ensureHostPrebuilds`) before bundling. Off by default: without it,
+   * bundling never changes package.json or node_modules, and a mobile host
+   * whose platform package is missing fails with `HostPrebuildsMissingError`,
+   * naming the exact pins. A refused install
+   * throws `HostPrebuildsInstallRefusedError` before anything is written.
    */
   installMissingPrebuilds?: boolean | undefined
   /**
@@ -254,11 +254,28 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
+  // A split addon's `binding.js` is `require('#host-addon')`, which bare-pack
+  // cannot resolve for a host whose platform package is missing, so the
+  // packages go in before the first bundle.
   let installedPrebuilds: HostPrebuildPackage[] = []
-  let installRefused: HostPrebuildsInstallRefusedError | undefined
+  const projectAddons = async () =>
+    (await resolveAddons(projectRoot, undefined, logger)).filter(
+      (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
+    )
+  if (options.installMissingPrebuilds === true) {
+    const { installed } = await installMissingHostPrebuilds({
+      projectRoot,
+      hosts,
+      addons: await projectAddons(),
+      quiet: options.quiet === true,
+      logger
+    })
+    installedPrebuilds = installed
+  }
+
   try {
     await fsp.writeFile(bundleEntryPath, bundleEntry, 'utf8')
-    const barePackOptions = {
+    await runBarePack({
       entryPath: bundleEntryPath,
       outputPath: bundlePath,
       hosts,
@@ -266,35 +283,12 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       deferModules,
       quiet: options.quiet === true,
       logger
+    })
+  } catch (error: unknown) {
+    if (options.installMissingPrebuilds !== true) {
+      await throwIfPlatformPackagesMissing(await projectAddons(), hosts, error)
     }
-    await runBarePack(barePackOptions)
-
-    if (options.installMissingPrebuilds === true) {
-      try {
-        const { installed } = await installMissingHostPrebuilds({
-          projectRoot,
-          hosts,
-          addons: (await collectAddonsFromBundle({ bundlePath, projectRoot, hosts })).filter(
-            (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
-          ),
-          quiet: options.quiet === true,
-          logger
-        })
-        installedPrebuilds = installed
-        // Where a platform package was missing, bare-pack resolved the addon's
-        // `#host-addon` import to its fallback module; bundle again to pick up
-        // the installed package.
-        if (installed.length > 0) {
-          logger.info('\n🔨 Bundling again with the installed platform packages...')
-          await runBarePack(barePackOptions)
-        }
-      } catch (error: unknown) {
-        if (!(error instanceof HostPrebuildsInstallRefusedError)) throw error
-        // A refusal happens before anything is installed, so the bundle
-        // already written is final and only its manifest is left to write.
-        installRefused = error
-      }
-    }
+    throw error
   } finally {
     await fsp.rm(bundleEntryPath, { force: true })
   }
@@ -323,8 +317,6 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     })
   }
 
-  if (installRefused !== undefined) throw installRefused
-
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)
   logger.info('Generated files:')
@@ -344,4 +336,27 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     manifestPath: manifestResult.manifestPath,
     installedPrebuilds
   }
+}
+
+/**
+ * Turns a failed bare-pack into `HostPrebuildsMissingError` when split addons
+ * are missing mobile platform packages: their `#host-addon` import cannot
+ * resolve without them.
+ */
+async function throwIfPlatformPackagesMissing(
+  addons: NativeAddon[],
+  hosts: string[],
+  cause: unknown
+) {
+  let missing: HostPrebuildPackage[]
+  try {
+    missing = await findMissingHostPrebuilds(addons, hosts)
+  } catch {
+    return
+  }
+  if (missing.length === 0) return
+  throw new HostPrebuildsMissingError(
+    Object.fromEntries(missing.map((pkg) => [pkg.name, pkg.version])),
+    cause
+  )
 }

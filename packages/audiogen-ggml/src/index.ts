@@ -37,7 +37,6 @@ import {
   type EncodedAudio,
   type OutputFormat
 } from './lib/audio-format'
-import { resolveBackendsDir } from './lib/backends'
 import { ERR_CODES, QvacErrorAudioGen } from './error'
 
 export const ENGINE_ACESTEP = 'acestep'
@@ -102,12 +101,9 @@ export interface AudioGenRuntimeConfig {
   /** 0 = engine auto-picks. */
   threads?: number
   /**
-   * Override the prebuilds root the native engine scans for dlopen'd ggml
-   * backend modules. Defaults to `resolveBackendsDir()`: the package's own
-   * `prebuilds/` when present, otherwise the installed platform package
-   * (`@qvac/audiogen-ggml-<platform>-<arch>`). Only set this for a
-   * non-standard prebuilds layout. Needed on arm64, where the CPU backend is
-   * a set of per-microarch MODULE .so files.
+   * Directory the native engine scans, as given, for dlopen'd ggml backend
+   * modules. Unset scans the addon's own, next to its native module, which is
+   * where the platform package and bare-link put them.
    */
   backendsDir?: string
 }
@@ -1165,7 +1161,7 @@ export class AudioGen {
     const files = options.files ?? {}
     const config = options.config ?? {}
     this._engineType = detectEngineType(files, options.engine)
-    const backendsDir = config.backendsDir ?? resolveBackendsDir()
+    const backendsDir = config.backendsDir
     const threads = requireNonNegativeInt32(config.threads ?? 0, 'threads')
     this._ditVariant = files.ditVariant
 
@@ -1825,7 +1821,6 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
-export { resolveBackendsDir } from './lib/backends'
 export { assessFit } from './lib/fit'
 export type { AudiogenFitRequest, AudiogenFitResult, AudiogenFitStatus } from './lib/fit'
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error'

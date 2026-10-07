@@ -1,10 +1,15 @@
-// Fails when a shipped JavaScript file hides a relative `require` from
+// Fails when a shipped JavaScript file hides a `require` from
 // `bare-module-lexer`, the scanner `bare-pack` uses to walk the module graph.
 //
-// A lexer desync is invisible at build time: `bare-pack` exits 0 and writes a
-// bundle that silently omits every module discovered after the desync point.
-// The omission only surfaces on device, as `MODULE_NOT_FOUND` for a module that
-// is plainly present in the published tarball.
+// Two ways to hide one:
+// - A lexer desync is invisible at build time: `bare-pack` exits 0 and writes
+//   a bundle that silently omits every module discovered after the desync
+//   point. The omission only surfaces on device, as `MODULE_NOT_FOUND` for a
+//   module that is plainly present in the published tarball.
+// - A computed specifier. The lexer records only string literals, so
+//   `require(name)`, `require.resolve(name)`, `require.addon(dir)` and
+//   `require.addon.resolve(dir)` name nothing it can follow and do not work
+//   bundled. `require.addon()` with no argument means `'.'` and is fine.
 //
 // Usage: node scripts/ci/check-bundler-requires.mjs [packageDir]
 
@@ -14,6 +19,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 const LEXER_PACKAGE = 'bare-module-lexer'
 // The mobile app bundle is produced by `bare-pack`, so the lexer has to be the
@@ -26,6 +32,11 @@ const BUNDLER_SPEC = 'bare-pack@1.5.1'
 // node_api_is_sharedarraybuffer (Node >= 22.21); 1.6.3 predates it (pin from #4218).
 const LEXER_OVERRIDES = { [LEXER_PACKAGE]: '1.6.3' }
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
+// A require-family call whose first argument is not a plain string literal.
+// Template literals count as computed: the lexer does not follow them.
+const COMPUTED_REQUIRE_PATTERN =
+  /(?<![\w$.])require(?:\.addon)?(?:\.resolve)?\s*\(\s*(?!['")])/g
+const COMMENT_PATTERN = /\/\*[\s\S]*?\*\/|(?<![:'"\\])\/\/[^\n]*/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
 // and fixtures under `test/` embed require-looking strings in output text
 // (scanning them produced false positives across six packages); the rest are
@@ -126,13 +137,33 @@ function reportHidden(directory, scriptPath, specifiers) {
   }
 }
 
+// Comments are blanked rather than removed so match offsets keep their lines.
+export function computedRequireLines(source) {
+  const code = source.replace(COMMENT_PATTERN, (comment) => comment.replace(/[^\n]/g, ' '))
+  return [...code.matchAll(COMPUTED_REQUIRE_PATTERN)].map(
+    (match) => code.slice(0, match.index).split('\n').length
+  )
+}
+
+function reportComputed(directory, scriptPath, lines) {
+  const relativePath = path.relative(directory, scriptPath)
+  for (const line of lines) {
+    process.stderr.write(
+      `::error file=${relativePath},line=${line}::require with a computed specifier is ` +
+        'invisible to bare-module-lexer and does not work bundled; use a string literal ' +
+        '(an "imports" map entry such as "#host-addon" picks per host)\n'
+    )
+  }
+}
+
 function countHidden(lex, directory, scripts) {
   let hidden = 0
   for (const scriptPath of scripts) {
     const specifiers = hiddenSpecifiers(lex, scriptPath)
-    if (specifiers.length === 0) continue
-    reportHidden(directory, scriptPath, specifiers)
-    hidden += specifiers.length
+    const computed = computedRequireLines(fs.readFileSync(scriptPath, 'utf8'))
+    if (specifiers.length > 0) reportHidden(directory, scriptPath, specifiers)
+    if (computed.length > 0) reportComputed(directory, scriptPath, computed)
+    hidden += specifiers.length + computed.length
   }
   return hidden
 }
@@ -164,4 +195,4 @@ function main() {
   }
 }
 
-main()
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()

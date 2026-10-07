@@ -3,7 +3,6 @@ import path = require("bare-path");
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 import type { OcrGgmlParams } from "./index";
-import { resolveBackendsDir } from "./lib/backends-dir";
 
 /** Both OCR model files and the backend placement used by load(). */
 export interface OcrFitRequest extends OcrGgmlParams {
@@ -46,8 +45,5 @@ export function assessFit(request: OcrFitRequest): OcrFitResult {
   const binding = require("./binding") as {
     assessFit(input: OcrFitRequest): OcrFitResult;
   };
-  return binding.assessFit({
-    ...request,
-    backendsDir: request.backendsDir ?? resolveBackendsDir(),
-  });
+  return binding.assessFit(request);
 }

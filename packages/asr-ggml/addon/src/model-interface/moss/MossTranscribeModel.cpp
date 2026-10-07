@@ -13,6 +13,7 @@
 
 #include "addon/AsrErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
 
 namespace qvac::asrggml::moss {
 
@@ -54,16 +55,6 @@ int backendIdFromName(const std::string& name) {
   if (startsWith(name, "OpenCL"))
     return BACKEND_OPENCL;
   return BACKEND_OTHER;
-}
-
-std::string resolveBackendsDir(const std::string& backendsDir) {
-  if (backendsDir.empty())
-    return {};
-  fs::path path(backendsDir);
-#ifdef BACKENDS_SUBDIR
-  path = (path / fs::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-  return path.string();
 }
 
 bool allDigits(const std::string& text) {
@@ -119,7 +110,7 @@ MossTranscribeModel::toEngineOptions(const MossTranscribeConfig& cfg) {
   if (cfg.maxThreads > 0)
     options.n_threads = cfg.maxThreads;
   options.use_gpu = cfg.useGPU;
-  options.backends_dir = resolveBackendsDir(cfg.backendsDir);
+  options.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return options;
 }
 

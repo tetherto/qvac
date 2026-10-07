@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
-const backends_1 = require("./backends");
 /**
  * Projects one model against the memory free right now, reading model metadata
  * and never weight data. Parakeet is GGUF, so the registry's weightless copy of
@@ -17,12 +16,7 @@ const backends_1 = require("./backends");
  * engine's reason. Only a broken request throws.
  */
 function assessFit(request) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
     const binding = require('../binding.js');
-    return binding.assessFit({
-        ...request,
-        backendsDir: typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-            ? request.backendsDir
-            : (0, backends_1.resolveBackendsDir)()
-    });
+    return binding.assessFit(request);
 }

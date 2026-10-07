@@ -61,9 +61,8 @@ export interface OcrGgmlParams {
      */
     nThreads?: number;
     /**
-     * Directory holding ggml backend shared libraries. Default: the root
-     * `@qvac/fabric/backends` resolves (desktop), falling back to this package's `prebuilds/` on
-     * mobile where the package tree isn't resolvable from the packed worklet.
+     * Directory holding ggml backend shared libraries. Default: the ones
+     * @qvac/fabric ships, which it locates itself next to its runtime.
      */
     backendsDir?: string;
     /**

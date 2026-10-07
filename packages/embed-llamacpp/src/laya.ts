@@ -11,7 +11,6 @@ import {
 } from "@qvac/infer-base";
 import {
   pickPrimaryGgufPath,
-  resolveBackendsDir,
   type AddonOutputCallback,
   type LoadWeightsData,
   type NumericLike,
@@ -236,9 +235,6 @@ export class LayaInterface {
     outputCb: AddonOutputCallback,
   ) {
     this._binding = binding as LayaBinding;
-    if (!configurationParams.backendsDir) {
-      configurationParams.backendsDir = resolveBackendsDir();
-    }
     this._handle = this._binding.createLayaInstance(this, configurationParams, outputCb);
   }
 

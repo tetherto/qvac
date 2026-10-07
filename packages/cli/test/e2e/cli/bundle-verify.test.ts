@@ -66,7 +66,7 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
 describe('cli: bundle sdk addon platform packages', () => {
   // The throwaway project has no lockfile, so no package manager can be
   // chosen and nothing is installed.
-  it('names the platform packages it cannot install and still bundles', async (t) => {
+  it('names the platform packages it cannot install and fails without them', async (t) => {
     const dir = await project(t)
 
     const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64'], {
@@ -74,20 +74,15 @@ describe('cli: bundle sdk addon platform packages', () => {
       timeoutMs: 300_000
     })
 
-    assert.equal(bundle.code, 0, `bundle sdk failed:\n${bundle.output}`)
+    assert.notEqual(bundle.code, 0, 'a split addon cannot bundle without its platform package')
     assert.match(bundle.output, /Cannot install the addon platform packages automatically/)
+    assert.match(bundle.output, /Bundling without installing them/)
+    assert.match(bundle.output, /HOST_PREBUILDS_MISSING|needs each mobile host's platform package/)
     assert.match(bundle.output, /"@qvac\/tts-ggml-android-arm64": "\d+\.\d+\.\d+"/)
-    assert.match(bundle.output, /Bundled without installing them/)
-    assert.doesNotMatch(bundle.output, /Bundling again/, 'a refused install bundles once')
-    assert.ok(await exists(join(dir, 'qvac', 'worker.bundle.js')), 'expected qvac/worker.bundle.js')
-    assert.ok(
-      await exists(join(dir, 'qvac', 'addons.manifest.json')),
-      'expected qvac/addons.manifest.json'
-    )
     assert.ok(!(await exists(join(dir, 'package.json'))), 'package.json must not be created')
   })
 
-  it('skips the install with --no-install', async (t) => {
+  it('skips the install with --no-install and names the pins to add', async (t) => {
     const dir = await project(t)
 
     const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64', '--no-install'], {
@@ -95,8 +90,8 @@ describe('cli: bundle sdk addon platform packages', () => {
       timeoutMs: 300_000
     })
 
-    assert.equal(bundle.code, 0, `bundle sdk failed:\n${bundle.output}`)
-    assert.doesNotMatch(bundle.output, /addon platform packages/)
-    assert.ok(await exists(join(dir, 'qvac', 'worker.bundle.js')), 'expected qvac/worker.bundle.js')
+    assert.notEqual(bundle.code, 0)
+    assert.doesNotMatch(bundle.output, /Cannot install the addon platform packages/)
+    assert.match(bundle.output, /"@qvac\/tts-ggml-android-arm64": "\d+\.\d+\.\d+"/)
   })
 })

@@ -124,7 +124,6 @@ export declare class ParakeetInterface {
     private _bufferedBytes;
     private _config;
     constructor(binding: ParakeetBinding, configurationParams: ParakeetConfigurationParams, outputCallback: ParakeetOutputCallback, stateCallback?: ParakeetStateCallback | null);
-    private _applyDefaults;
     private _setState;
     private _createNativeInstance;
     private _looksLikeVadEvent;

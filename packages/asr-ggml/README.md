@@ -193,11 +193,12 @@ package selected at install time through `os`/`cpu` filtered
 
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
-the platform package and fail at require time with an error naming the missing
-package; a locally built `prebuilds/` directory in the package root always
-takes precedence. Use `require('@qvac/asr-ggml').resolveBackendsDir()` to
-locate the directory holding the host's prebuilt binaries and dynamically
-loaded ggml backends.
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build:native`) stages it
+as the host's platform package in `node_modules/`.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
 and `optionalDependencies` filtering can never select them. Mobile
@@ -787,15 +788,13 @@ additionally reports
 
 Two paths matter on Android and Linux:
 
-- **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
-  holding dynamically-loaded ggml backend libraries (CUDA, Vulkan, OpenCL,
-  per-arch CPU variants). Defaults to `resolveBackendsDir()`: the package's
-  own `prebuilds/` when present (local builds, mobile flatten), otherwise the
-  installed platform package (see [Platform packages](#platform-packages));
-  the native addon
-  appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
-  when backend libraries ship elsewhere — e.g. Android's
-  `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.
+- **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — directory
+  scanned, as given, for dynamically-loaded ggml backend libraries (CUDA,
+  Vulkan, OpenCL, per-arch CPU variants). Unset scans the addon's own: the
+  directory its native module was loaded from
+  (`prebuilds/<host>/qvac__asr-ggml-<suffix>/` in a platform package, the
+  app's native library directory after `bare-link`). Pass a path only when
+  backend libraries ship somewhere else.
   No-op on Apple, where backends are statically linked.
 - **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
   compiled program-binary cache. Android-only; pass the host app's cache
@@ -951,8 +950,10 @@ npm run build          # build:ts (TypeScript) + build:native (bare-make)
 npm run build:cuda     # same, with the CUDA backend compiled in (needs nvcc)
 ```
 
-`build:native` runs `bare-make generate` → `bare-make build` →
-`bare-make install`. `build:native:cuda` is the same chain with
+`build:native` runs `bare-make generate`, `bare-make build`,
+`bare-make install` and `npm run link:platform`, which stages
+`prebuilds/<host>/` as `node_modules/@qvac/asr-ggml-<host>`: `#host-addon`
+only ever loads a platform package. `build:native:cuda` is the same chain with
 `-D ASR_CUDA=ON` on the generate step.
 
 ### Test

@@ -124,25 +124,11 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (cfg.minP.has_value())
     opts.min_p = *cfg.minP;
 
-  // Compose the actual backends-scan directory from the host-provided
-  // prebuilds root plus the cmake-bare per-target subdir
-  // (BACKENDS_SUBDIR, e.g. `android-arm64/qvac__tts-ggml`). Mirrors
-  // the exact shape qvac/packages/transcription-parakeet uses in
-  // ParakeetModel.cpp + qvac/packages/llm-llamacpp uses in
-  // LlamaLazyInitializeBackend.cpp so a host that already passes
-  // `path.join(__dirname, 'prebuilds')` gets identical resolution
-  // semantics across the three addons. Empty `backendsDir` -> leave
-  // `opts.backends_dir` empty so tts-cpp falls back to ggml's
-  // compile-time default search path (`ggml_backend_load_all()`
-  // rather than `..._from_path()`).
-  if (!cfg.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath =
-        (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  // A configured `backendsDir` is scanned as given; otherwise the module's
+  // own backends directory. Empty only when the loader cannot locate the
+  // module, which leaves tts-cpp on ggml's default search
+  // (`ggml_backend_load_all()` rather than `..._from_path()`).
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Forwarded as-is. Empty -> leave $GGML_OPENCL_CACHE_DIR alone
   // (the env-set-by-host path still wins). Only consumed on Android
   // by `tts_cpp::detail::set_opencl_cache_dir()`; other platforms

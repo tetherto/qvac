@@ -1,9 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import path = require("bare-path");
-import fabricBackends = require("@qvac/fabric/backends");
-/* eslint-enable @typescript-eslint/no-require-imports */
-
 export type NumericLike = `${number}`;
 
 export interface GGMLConfig {
@@ -29,10 +23,9 @@ export interface AddonConfigurationParams {
   path: string;
   config: GGMLConfig;
   /**
-   * Root the native side searches for ggml compute backends, with
-   * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the root
-   * `@qvac/fabric/backends` resolves on desktop, falling back to this
-   * addon's own `prebuilds/` on mobile.
+   * Directory holding the ggml compute backend modules, overriding the ones
+   * @qvac/fabric ships. Empty (the default) lets fabric load its own, which
+   * it locates next to its runtime on every platform.
    */
   backendsDir?: string;
 }
@@ -141,22 +134,6 @@ export function pickPrimaryGgufPath(files: string[]): string {
   return files.find((p) => SHARD_REGEX.test(p)) || files[0];
 }
 
-// The ggml compute backends ship next to the @qvac/fabric runtime
-// (<root>/<host>/qvac__fabric). We deliberately do not copy them into this
-// addon to avoid duplicating tens of MB per fabric consumer. On desktop,
-// @qvac/fabric/backends resolves that root in whichever package holds the
-// runtime. On mobile the package tree isn't resolvable at runtime (the worklet
-// runs from a packed bundle), so fall back to this addon's own prebuilds, where
-// the mobile packaging stages the backends. The native side appends
-// BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-export function resolveBackendsDir(): string {
-  // fabric's resolver only checks that the platform package resolves, not that
-  // its prebuilds are on disk.
-  const fabricRoot = fabricBackends.resolveBackendsDir();
-  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
-  return path.join(__dirname, "prebuilds");
-}
-
 /** An interface between the Bare C++ addon and the JS runtime. */
 export class BertInterface implements Addon {
   private readonly _binding: BertBinding;
@@ -169,9 +146,8 @@ export class BertInterface implements Addon {
   ) {
     this._binding = binding as BertBinding;
 
-    if (!configurationParams.backendsDir) {
-      configurationParams.backendsDir = resolveBackendsDir();
-    }
+    // createInstance reads the key unconditionally.
+    configurationParams.backendsDir ??= "";
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb);
   }

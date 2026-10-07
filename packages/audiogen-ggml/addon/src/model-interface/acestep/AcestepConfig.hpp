@@ -26,13 +26,9 @@ struct AcestepConfig {
   bool  useGpu;
   int   nGpuLayers;      // GPU layers to offload when useGpu is set
 
-  // Host-provided prebuilds root (e.g. `path.join(__dirname, 'prebuilds')`).
-  // The addon appends the cmake-bare per-target subdir (BACKENDS_SUBDIR) and
-  // forwards it as `EngineOptions::backends_dir` so the engine can dlopen the
-  // ggml backend modules staged next to the `.bare` -- required on arm64, where
-  // the CPU backend ships as per-microarch MODULE .so files. Empty -> the
-  // engine relies on ggml's built-in search path (fine for static desktop /
-  // Apple).
+  // Directory scanned, as given, for the dlopen'd ggml backend modules --
+  // required on arm64, where the CPU backend ships as per-microarch MODULE .so
+  // files. Empty scans the addon's own, next to the `.bare`.
   std::string backendsDir;
 };
 

@@ -228,6 +228,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("HOST_PREBUILDS_INSTALL_FAILED", reportedCode, message, payload)
     class ClientHostPrebuildsInstallRefused(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("HOST_PREBUILDS_INSTALL_REFUSED", reportedCode, message, payload)
+    class ClientHostPrebuildsMissing(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("HOST_PREBUILDS_MISSING", reportedCode, message, payload)
     class ClientInvalidAudioChunkType(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("INVALID_AUDIO_CHUNK_TYPE", reportedCode, message, payload)
     class ClientInvalidOperationInResponse(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -398,6 +400,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "CONFIG_VALIDATION_FAILED" && (code == null || code == 50605) -> QvacKnownException.ClientConfigValidationFailed(message, payload, code)
     name == "HOST_PREBUILDS_INSTALL_FAILED" && (code == null || code == 50616) -> QvacKnownException.ClientHostPrebuildsInstallFailed(message, payload, code)
     name == "HOST_PREBUILDS_INSTALL_REFUSED" && (code == null || code == 50615) -> QvacKnownException.ClientHostPrebuildsInstallRefused(message, payload, code)
+    name == "HOST_PREBUILDS_MISSING" && (code == null || code == 50617) -> QvacKnownException.ClientHostPrebuildsMissing(message, payload, code)
     name == "INVALID_AUDIO_CHUNK_TYPE" && code == 50004 -> QvacKnownException.ClientInvalidAudioChunkType(message, payload, code)
     name == "INVALID_OPERATION_IN_RESPONSE" && (code == null || code == 50002) -> QvacKnownException.ClientInvalidOperationInResponse(message, payload, code)
     name == "INVALID_PLUGIN_SPECIFIER" && (code == null || code == 50612) -> QvacKnownException.ClientInvalidPluginSpecifier(message, payload, code)

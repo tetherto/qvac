@@ -59,9 +59,8 @@ public:
   /// Called from createInstance so load failures surface synchronously.
   void load();
 
-  /// Optional addon-prebuilds root (e.g. `<addon>/prebuilds`). Combined with
-  /// the BACKENDS_SUBDIR compile-time relative path to locate ggml's runtime
-  /// backend modules. No-op on platforms where the CPU backend is static.
+  /// Optional directory holding ggml's backend modules, overriding the ones
+  /// @qvac/fabric ships. No-op on platforms where the backends are static.
   void setBackendsDir(std::string backendsDir);
 
 private:

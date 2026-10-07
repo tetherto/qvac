@@ -1,6 +1,7 @@
 _bare_*
 _napi_*
 _js_*
+_qvac_fabric_*
 _llama_*
 _LLAMA_*
 _llava_*

@@ -35,6 +35,7 @@
 #include "addon/GgmlLogForwarding.hpp"
 #include "addon/StreamingSessionRegistry.hpp"
 #include "js-interface/JSAdapter.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/ParakeetStreamingProcessor.hpp"
 #include "model-interface/ParakeetTypes.hpp"
 #include "model-interface/StreamingProcessor.hpp"
@@ -527,16 +528,12 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto margin = number("marginBytes")) {
     options.margin_bytes = static_cast<uint64_t>(*margin);
   }
-  if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
-    // The backends live in the per-target subdir cmake-bare writes under the
-    // prebuilds root. The registry is built once per process, so a root that
-    // resolves to nothing leaves every later load without a device too.
-    std::filesystem::path root(dir->as<std::string>(env));
-#ifdef BACKENDS_SUBDIR
-    root = (root / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    options.backends_dir = root.string();
-  }
+  // The registry is built once per process, so a directory that holds no
+  // backends leaves every later load without a device too.
+  auto dir = request.getOptionalProperty<js::String>(env, "backendsDir");
+  options.backends_dir =
+      resolveBackendsDir(dir.has_value() ? dir->as<std::string>(env) : "")
+          .string();
 
   const ::parakeet::FitResult fit = ::parakeet::fit_params(options);
 

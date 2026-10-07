@@ -18,7 +18,6 @@ import {
 } from "./ocr-ggml";
 import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
 import { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } from "./lib/main-gpu";
-import { resolveBackendsDir } from "./lib/backends-dir";
 import { assessFit } from "./fit";
 export type { OcrFitRequest, OcrFitResult } from "./fit";
 export { assessFit } from "./fit";
@@ -92,9 +91,8 @@ export interface OcrGgmlParams {
    */
   nThreads?: number;
   /**
-   * Directory holding ggml backend shared libraries. Default: the root
-   * `@qvac/fabric/backends` resolves (desktop), falling back to this package's `prebuilds/` on
-   * mobile where the package tree isn't resolvable from the packed worklet.
+   * Directory holding ggml backend shared libraries. Default: the ones
+   * @qvac/fabric ships, which it locates itself next to its runtime.
    */
   backendsDir?: string;
   /**
@@ -363,10 +361,9 @@ export class OcrGgml {
       }
     }
 
-    configurationParams.backendsDir =
-      this.params.backendsDir !== undefined
-        ? this.params.backendsDir
-        : resolveBackendsDir();
+    if (this.params.backendsDir !== undefined) {
+      configurationParams.backendsDir = this.params.backendsDir;
+    }
 
     this.logger.info("Creating ocr-ggml addon");
     try {

@@ -5,8 +5,8 @@
 //
 // Backend selection is deferred to qvac-fabric's ggml plugin loader: the
 // translation unit does not include any backend-specific headers; instead
-// smolvla_load_model() resolves backendsDir/BACKENDS_SUBDIR to an absolute
-// path and loads plugins from there, then picks the best device (Vulkan on
+// smolvla_load_model() loads the plugins @qvac/fabric ships (or those in an
+// explicit backendsDir), then picks the best device (Vulkan on
 // Linux/Windows/Android, Metal on macOS/iOS, CPU everywhere).
 
 #include <cmath>
@@ -287,10 +287,9 @@ void computeSinusoidalTimeEmbeddingCached(
 bool smolvlaCanMmapWeights(ggml_backend_t backend);
 
 // Load model from GGUF file. `force_cpu`: skip GPU device selection.
-// `backendsDir`: absolute path to the prebuilds folder; BACKENDS_SUBDIR is
-// appended before calling ggml_backend_load_all_from_path so dlopen works
-// regardless of process CWD (critical on mobile). Pass empty string to fall
-// back to ggml_backend_load_all() (static builds / desktop dev).
+// `backendsDir`: optional directory holding the ggml backend modules. Pass an
+// empty string to load the ones @qvac/fabric ships, which it locates next to
+// its runtime regardless of process CWD (critical on mobile).
 //
 // On failure `model.load_error` holds a human-readable reason; callers
 // surface it so a load failure is diagnosable from the JS error alone.

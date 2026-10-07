@@ -6,7 +6,6 @@ const fs = require("bare-fs");
 const path = require("bare-path");
 const env = require("bare-env");
 const QvacLogger = require("@qvac/logging");
-const fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
@@ -25,22 +24,6 @@ function getErrorMessage(error, fallback) {
             return message;
     }
     return typeof error === "string" ? error : fallback;
-}
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds, where the mobile packaging stages the backends. The native side
-// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && fs.existsSync(fabricRoot))
-        return fabricRoot;
-    return path.join(__dirname, "prebuilds");
 }
 /**
  * High-level classifier for MobileNetV3-Small 3-class image triage.
@@ -96,7 +79,7 @@ class ImageClassifier {
         // JS-only flags. The native-logger gate lives in the JS-side opts arg.
         const configurationParams = {
             path: this.modelPath,
-            config: { backendsDir: resolveBackendsDir() },
+            config: {},
         };
         const disableNativeLogger = !this.nativeLogger || env.QVAC_CLASSIFICATION_DISABLE_NATIVE_LOGGER === "1";
         try {

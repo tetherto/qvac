@@ -88,16 +88,7 @@ tts_cpp::parler::EngineOptions toEngineOptions(const ParlerConfig& cfg) {
   if (cfg.streamFirstChunkTokens.has_value())
     opts.stream_first_chunk_frames = *cfg.streamFirstChunkTokens;
 
-  // Mirrors SupertonicModel::toEngineOptions: compose
-  // `cfg.backendsDir / BACKENDS_SUBDIR` before forwarding.
-  if (!cfg.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath = (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR))
-                          .lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return opts;
 }
 

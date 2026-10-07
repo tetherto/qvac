@@ -1,9 +1,10 @@
 name: 'Overlay local @qvac/fabric'
 description: >
   Copy PR-built fabric prebuilds into every installed node_modules/@qvac/fabric
-  tree under the consumer workdir (and optional extra search roots). Must run
-  after npm install and before bare-make generate so find_package(qvac-fabric)
-  resolves headers from the overlaid tree.
+  tree under the consumer workdir (and optional extra search roots), and link
+  them as the platform packages nested in that tree. Must run after npm install
+  and before bare-make generate so find_package(qvac-fabric) resolves headers,
+  and the layout lookup the runtime, from the overlaid tree.
 
 inputs:
   workdir:
@@ -169,6 +170,12 @@ runs:
 
             renameArtifacts(process.argv[1])
           ' "$dest"
+          # The runtime is linked from @qvac/fabric-<host>, and npm installed the
+          # released one. Nest the overlaid hosts as platform packages inside
+          # this meta, which is where CMake, bare and the symbol check resolve
+          # them from first.
+          node "$GITHUB_ACTION_PATH/../../../scripts/ci/slice-platform-packages.mjs" \
+            --link-local --workdir "$pkg" --keep-dirs "include share"
         done < <(
           for search_root in $SEARCH; do
             discover_fabric_packages "$search_root"

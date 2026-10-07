@@ -145,8 +145,7 @@ MossSpeechModel::toEngineOptions(const MossSpeechConfig& cfg) {
   opts.codec_path = cfg.codecPath;
   if (cfg.threads.value_or(0) > 0)
     opts.n_threads = *cfg.threads;
-  if (!cfg.backendsDir.empty())
-    opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   opts.use_gpu = wantsGpu(cfg);
   return opts;
 }

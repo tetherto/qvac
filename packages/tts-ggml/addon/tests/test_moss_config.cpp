@@ -13,6 +13,7 @@
 #include <tts-cpp/moss/engine.h>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/moss/MossConfig.hpp"
 #include "model-interface/moss/MossModel.hpp"
 
@@ -327,7 +328,7 @@ TEST(MossEngineOptions, UnsetDirectableFieldsKeepEngineDefaults) {
   const auto opts = MossModel::toEngineOptions(minimallyValidStubConfig());
   EXPECT_TRUE(opts.dialogue_reference_paths.empty());
   EXPECT_EQ(opts.duration_tokens, defaults.duration_tokens);
-  EXPECT_TRUE(opts.backends_dir.empty());
+  EXPECT_EQ(opts.backends_dir, qvac::ttsggml::defaultBackendsDir().string());
 }
 
 TEST(MossEngineOptions, ZeroThreadsKeepsTheEngineDefault) {

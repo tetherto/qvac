@@ -5,9 +5,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { execPath } from 'process'
 import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from '@/commands'
-import { createCommandLogger } from '@/commands/command-logger'
-import { installMissingHostPrebuilds } from '@/commands/host-prebuilds/index'
-import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
 import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
 import { getProjectRootFromMod } from '@/expo/plugins/get-project-root'
@@ -33,9 +30,6 @@ const MOBILE_HOSTS_BY_PLATFORM: Record<MobilePlatform, string[]> = {
   ios: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
 }
 
-/** Compiled resolver copied beside each patched linker as this filename. */
-const PLATFORM_ADDON_RESOLVER = 'qvac-platform-addons.mjs'
-
 /** Every mobile host, in platform order. The bundle covers all of them. */
 const MOBILE_HOSTS = [...MOBILE_HOSTS_BY_PLATFORM.android, ...MOBILE_HOSTS_BY_PLATFORM.ios]
 
@@ -46,9 +40,10 @@ type BareKitLinkerPaths = {
 
 type MobileBundleOptions = {
   /**
-   * Install the addon platform packages the bundle needs for the current
-   * build target with the app's package manager, pinned in package.json.
-   * Off by default: `expo prebuild` then fails and names each package to add.
+   * Install the platform packages the app's split addons need for every
+   * mobile host the bundle covers (both platforms: the bundle is shared) with
+   * the app's package manager, pinned in package.json. Off by default:
+   * `expo prebuild` then fails and names each package to add.
    */
   installMissingPrebuilds?: boolean
 }
@@ -90,34 +85,15 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
   // for every mobile host: a dual-platform `expo prebuild` runs this mod twice
   // and the second run would otherwise overwrite the first platform's bundle
   // with one that resolved the other platform's conditions.
-  const bundle = () =>
-    runBundler(projectRoot, sdkPackage.dir, configPath, deferredModules, MOBILE_HOSTS)
-  let linkerPaths = await bundle()
+  const linkerPaths = await runBundler(
+    projectRoot,
+    sdkPackage.dir,
+    configPath,
+    deferredModules,
+    MOBILE_HOSTS,
+    options.installMissingPrebuilds === true
+  )
   const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
-
-  if (options.installMissingPrebuilds === true) {
-    // Take the addons from the bundle graph, which records where each linked
-    // addon really is; looking their names up in the project would miss the
-    // SDK's addons under pnpm or bun's isolated layout.
-    const { installed } = await installMissingHostPrebuilds({
-      projectRoot,
-      hosts: platformHosts,
-      addons: await collectAddonsFromBundle({
-        bundlePath: generatedBundle,
-        projectRoot,
-        hosts: platformHosts
-      }),
-      quiet: false,
-      logger: createCommandLogger({})
-    })
-    if (installed.length > 0) {
-      const names = installed.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
-      console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
-      // bare-pack resolved `#host-addon` to the addon's fallback module for
-      // hosts whose platform package was missing.
-      linkerPaths = await bundle()
-    }
-  }
 
   await runVerifier(projectRoot, generatedBundle, configPath, platformHosts)
 
@@ -178,20 +154,26 @@ async function runBundler(
   qvacSdkPath: string,
   configPath: string | null,
   deferredModules: string[],
-  hosts: string[]
+  hosts: string[],
+  installMissingPrebuilds: boolean
 ): Promise<BareKitLinkerPaths> {
   const linkerPaths = patchBareKitLinkers(projectRoot, qvacSdkPath)
 
-  await bundleSdk({
+  const { installedPrebuilds } = await bundleSdk({
     projectRoot,
     sdkPath: qvacSdkPath,
     ...(configPath ? { configPath } : {}),
     hosts,
     defer: deferredModules,
     quiet: true,
+    installMissingPrebuilds,
     // runVerifier checks engines.bare right after, with progress output.
     checkEngines: false
   })
+  if (installedPrebuilds.length > 0) {
+    const names = installedPrebuilds.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
+    console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
+  }
 
   return linkerPaths
 }
@@ -245,59 +227,29 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string): BareKitL
   }
 
   const patchesDir = path.join(qvacSdkPath, 'src', 'expo', 'plugins', 'patches')
-  const resolver = compiledPlatformAddonResolver(qvacSdkPath)
   if (!fs.existsSync(patchesDir)) {
     console.log(`⚠️ QVAC: patches directory not found (${patchesDir}), skipping linker patch`)
     return { android: null, ios: null }
   }
 
   return {
-    android: copyLinkerPatch(
-      patchesDir,
-      resolver,
-      path.join(bareKitPath, 'android'),
-      'android-link.mjs'
-    ),
-    ios: copyLinkerPatch(patchesDir, resolver, path.join(bareKitPath, 'ios'), 'ios-link.mjs')
+    android: copyLinkerPatch(patchesDir, path.join(bareKitPath, 'android'), 'android-link.mjs'),
+    ios: copyLinkerPatch(patchesDir, path.join(bareKitPath, 'ios'), 'ios-link.mjs')
   }
 }
 
-/**
- * Copies one linker patch and the split-addon resolver it imports, returning the
- * installed linker path. The resolver has to sit beside the linker: the patch is
- * installed into react-native-bare-kit and imports it relatively.
- */
-function copyLinkerPatch(
-  patchesDir: string,
-  resolver: string,
-  targetDir: string,
-  patchName: string
-): string | null {
+/** Copies one linker patch, returning the installed linker path. */
+function copyLinkerPatch(patchesDir: string, targetDir: string, patchName: string): string | null {
   const patch = path.join(patchesDir, patchName)
-  if (!fs.existsSync(patch) || !fs.existsSync(resolver)) {
-    // Installing the patch without the resolver it imports would break linking
-    // outright, so leave the stock linker in place instead.
-    console.log(`⚠️ QVAC: linker patch incomplete (${patch}), leaving the stock linker`)
+  if (!fs.existsSync(patch)) {
+    console.log(`⚠️ QVAC: linker patch not found (${patch}), leaving the stock linker`)
     return null
   }
 
   const target = path.join(targetDir, 'link.mjs')
   fs.copyFileSync(patch, target)
-  fs.copyFileSync(resolver, path.join(targetDir, PLATFORM_ADDON_RESOLVER))
   console.log(`✅ QVAC: Patched ${path.basename(targetDir)}/link.mjs for manifest-aware linking`)
   return target
-}
-
-function compiledPlatformAddonResolver(qvacSdkPath: string): string {
-  return path.join(
-    qvacSdkPath,
-    'dist',
-    'src',
-    'expo',
-    'plugins',
-    'patches',
-    'qvac-platform-addons.js'
-  )
 }
 
 export {

@@ -39,9 +39,6 @@ class LayaInterface {
     _handle;
     constructor(binding, configurationParams, outputCb) {
         this._binding = binding;
-        if (!configurationParams.backendsDir) {
-            configurationParams.backendsDir = (0, addon_1.resolveBackendsDir)();
-        }
         this._handle = this._binding.createLayaInstance(this, configurationParams, outputCb);
     }
     async cancel() {

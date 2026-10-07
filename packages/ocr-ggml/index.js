@@ -11,7 +11,6 @@ const error_1 = require("./lib/error");
 Object.defineProperty(exports, "QvacErrorAddonOcrGgml", { enumerable: true, get: function () { return error_1.QvacErrorAddonOcrGgml; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_1.ERR_CODES; } });
 const main_gpu_1 = require("./lib/main-gpu");
-const backends_dir_1 = require("./lib/backends-dir");
 const fit_1 = require("./fit");
 var fit_2 = require("./fit");
 Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
@@ -163,10 +162,9 @@ class OcrGgml {
                 configurationParams[field] = this.params[field];
             }
         }
-        configurationParams.backendsDir =
-            this.params.backendsDir !== undefined
-                ? this.params.backendsDir
-                : (0, backends_dir_1.resolveBackendsDir)();
+        if (this.params.backendsDir !== undefined) {
+            configurationParams.backendsDir = this.params.backendsDir;
+        }
         this.logger.info("Creating ocr-ggml addon");
         try {
             this.addon = this._createAddon(configurationParams);

@@ -10,8 +10,8 @@ export interface MossTranscribeConfig {
     /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL / CUDA). */
     useGPU?: boolean;
     /**
-     * Directory containing dynamically-loaded ggml backend libraries. Defaults
-     * to the package's own `prebuilds/` folder.
+     * Directory scanned, as given, for dynamically-loaded ggml backend
+     * libraries. Unset scans the addon's own, next to its native module.
      */
     backendsDir?: string;
 }

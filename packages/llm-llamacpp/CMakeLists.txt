@@ -21,8 +21,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 # llama / ggml / mtmd / libcommon runtime is the shared @qvac/fabric prebuild
-# (dynamically linked, loaded once per process); sets qvac_fabric_target +
-# BACKENDS_SUBDIR_VALUE.
+# (dynamically linked, loaded once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
 add_bare_module(inference-addon-llama EXPORTS)
@@ -77,7 +76,7 @@ target_link_libraries(
 )
 
 qvac_addon_link_fabric(${inference-addon-llama} ${qvac_fabric_target})
-qvac_addon_finalize(${inference-addon-llama} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${inference-addon-llama})
 
 # Option to build CLI
 option(BUILD_CLI "Build CLI tool example" FALSE)

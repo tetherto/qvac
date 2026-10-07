@@ -3,7 +3,6 @@
 const fs = require("bare-fs");
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
-const fabricBackends = require("@qvac/fabric/backends");
 // `./addon` and `./lib/error` are imported as whole-module aliases rather than
 // named imports so the `VlaModel` namespace at the bottom of this file can
 // re-export their members with `export import`. That is what makes the
@@ -15,24 +14,6 @@ const errorModule = require("./lib/error");
 const infer_base_1 = require("@qvac/infer-base");
 const { DEFAULT_IMAGE_SIZE } = addonModule;
 const { QvacErrorAddonVla, ERR_CODES } = errorModule;
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds. The mobile packager flattens the fabric runtime's native
-// prebuilds into that load path (same dependency-flattening as ONNX Runtime .so
-// files). The native side appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to
-// whichever root we return.
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && fs.existsSync(fabricRoot))
-        return fabricRoot;
-    return path.join(__dirname, "prebuilds");
-}
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
 const binding = require("./binding");
 // Maps the C++ Priority enum (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) to the
@@ -526,9 +507,7 @@ class VlaModel {
             // Canonical instance lifecycle (mirrors LLM/embed/NMT):
             // createInstance(jsHandle, params, outputCb) — the framework's
             // JobRunner thread consumes runJob() and feeds the outputCb.
-            const backendsDir = this._config.backendsDir
-                ? this._config.backendsDir
-                : resolveBackendsDir();
+            const backendsDir = this._config.backendsDir ?? "";
             this._handle = binding.createInstance(this, {
                 ggufPath,
                 backend,

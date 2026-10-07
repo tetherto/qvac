@@ -97,7 +97,7 @@ addon build spine into helpers (`qvac_addon_preproject`,
 `qvac_addon_project_setup`, `qvac_addon_use_fabric`, `qvac_addon_link_fabric`,
 `qvac_addon_finalize`) plus a **test-harness staging helper**
 `qvac_addon_stage_fabric_for_test(<target> <fabric_target>)` that copies the
-shared `qvac__fabric@0.bare` runtime + its ggml backends next to a plain test
+shared `qvac__fabric-<suffix>@<major>.bare` runtime + its ggml backends next to a plain test
 executable, sets `$ORIGIN`/`@loader_path` rpath, and links the win32 delay-load
 helper. `classification-ggml` is migrated; the rest follow.
 

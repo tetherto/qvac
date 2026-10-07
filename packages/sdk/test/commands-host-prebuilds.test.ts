@@ -34,10 +34,10 @@ function writeJson(filePath: string, value: unknown): void {
 
 function hostAddonMap(name: string) {
   return {
-    linux: { x64: [`${name}-linux-x64`, './addon-unavailable.js'] },
-    darwin: { arm64: [`${name}-darwin-arm64`, './addon-unavailable.js'] },
-    android: { arm64: [`${name}-android-arm64`, './addon-unavailable.js'] },
-    ios: [`${name}-ios`, './addon-unavailable.js'],
+    linux: { x64: `${name}-linux-x64` },
+    darwin: { arm64: `${name}-darwin-arm64` },
+    android: { arm64: `${name}-android-arm64` },
+    ios: `${name}-ios`,
     default: './addon-unavailable.js'
   }
 }
@@ -52,7 +52,6 @@ function writeSplitAddon(
   writeJson(path.join(packageRoot, 'package.json'), {
     name,
     version,
-    addon: true,
     imports: { '#host-addon': hostAddonMap(name) }
   })
   return { name, version, packageRoot, packageJsonPath: path.join(packageRoot, 'package.json') }
@@ -65,17 +64,10 @@ function writeFatAddon(root: string, name: string, version: string, hosts: strin
   return { name, version, packageRoot, packageJsonPath: path.join(packageRoot, 'package.json') }
 }
 
-function writePlatformPackage(
-  root: string,
-  name: string,
-  addon: string,
-  version: string,
-  hosts: string[]
-) {
+function writePlatformPackage(root: string, name: string, version: string, hosts: string[]) {
   const platformRoot = path.join(root, 'node_modules', ...name.split('/'))
-  writeJson(path.join(platformRoot, 'package.json'), { name, version })
-  writeJson(path.join(platformRoot, 'addon', 'package.json'), { name: addon, version, addon: true })
-  for (const host of hosts) writeBare(path.join(platformRoot, 'addon', 'prebuilds', host))
+  writeJson(path.join(platformRoot, 'package.json'), { name, version, addon: true })
+  for (const host of hosts) writeBare(path.join(platformRoot, 'prebuilds', host))
 }
 
 function writeBare(dir: string): void {
@@ -313,9 +305,7 @@ describe('findMissingHostPrebuilds', () => {
   it('skips a platform package installed at the addon version', async () => {
     await withTempDir(async (dir) => {
       const addon = writeSplitAddon(dir, '@qvac/tts-ggml', '0.9.2')
-      writePlatformPackage(dir, '@qvac/tts-ggml-android-arm64', '@qvac/tts-ggml', '0.9.2', [
-        'android-arm64'
-      ])
+      writePlatformPackage(dir, '@qvac/tts-ggml-android-arm64', '0.9.2', ['android-arm64'])
       assert.deepEqual(await findMissingHostPrebuilds([addon], ['android-arm64']), [])
     })
   })
@@ -323,9 +313,7 @@ describe('findMissingHostPrebuilds', () => {
   it('replaces a platform package installed at another version', async () => {
     await withTempDir(async (dir) => {
       const addon = writeSplitAddon(dir, '@qvac/tts-ggml', '0.9.2')
-      writePlatformPackage(dir, '@qvac/tts-ggml-android-arm64', '@qvac/tts-ggml', '0.9.1', [
-        'android-arm64'
-      ])
+      writePlatformPackage(dir, '@qvac/tts-ggml-android-arm64', '0.9.1', ['android-arm64'])
       const missing = await findMissingHostPrebuilds([addon], ['android-arm64'])
       assert.deepEqual(
         missing.map((pkg) => `${pkg.name}@${pkg.version}`),
@@ -334,11 +322,25 @@ describe('findMissingHostPrebuilds', () => {
     })
   })
 
-  it('skips a source-built addon with a local prebuilds/<host>', async () => {
+  it('skips a source-built addon whose platform package is linked inside it', async () => {
+    await withTempDir(async (dir) => {
+      const addon = writeSplitAddon(dir, '@qvac/tts-ggml', '0.9.2')
+      writePlatformPackage(addon.packageRoot, '@qvac/tts-ggml-android-arm64', '0.9.2', [
+        'android-arm64'
+      ])
+      assert.deepEqual(await findMissingHostPrebuilds([addon], ['android-arm64']), [])
+    })
+  })
+
+  it('does not count prebuilds/<host> inside a split addon meta', async () => {
     await withTempDir(async (dir) => {
       const addon = writeSplitAddon(dir, '@qvac/tts-ggml', '0.9.2')
       writeBare(path.join(addon.packageRoot, 'prebuilds', 'android-arm64'))
-      assert.deepEqual(await findMissingHostPrebuilds([addon], ['android-arm64']), [])
+      const missing = await findMissingHostPrebuilds([addon], ['android-arm64'])
+      assert.deepEqual(
+        missing.map((pkg) => pkg.name),
+        ['@qvac/tts-ggml-android-arm64']
+      )
     })
   })
 
@@ -408,9 +410,7 @@ describe('ensureHostPrebuilds', () => {
   it('does nothing when every prebuild resolves, without looking for a package manager', async () => {
     await withTempDir(async (dir) => {
       writeSplitAddon(dir, '@qvac/tts-ggml', '0.9.2')
-      writePlatformPackage(dir, '@qvac/tts-ggml-android-arm64', '@qvac/tts-ggml', '0.9.2', [
-        'android-arm64'
-      ])
+      writePlatformPackage(dir, '@qvac/tts-ggml-android-arm64', '0.9.2', ['android-arm64'])
       const result = await ensureHostPrebuilds({
         projectRoot: dir,
         hosts: ['android-arm64', 'darwin-arm64'],
