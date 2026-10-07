@@ -396,6 +396,11 @@ async function runCacheStateMachineTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
 
+async function runCheckpointDiskProbeTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCheckpointDiskProbeTest')) return __FILTERED
+  return runIntegrationModule('../integration/checkpoint-disk-probe.test.js', options)
+}
+
 async function runConfigParametersTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runConfigParametersTest')) return __FILTERED
   return runIntegrationModule('../integration/config-parameters.test.js', options)
