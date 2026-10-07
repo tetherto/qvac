@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       fabric_run_id:
-        description: "Completed on-pr-fabric run with fabric-prebuilds for this ref"
+        description: "on-pr-fabric run for this ref whose fabric-prebuilds artifact to use. It may still be running."
         type: string
         required: false
         default: ""

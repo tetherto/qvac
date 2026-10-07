@@ -956,20 +956,11 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     return {selectedDeviceName};
   }
 
-  // Dedupe by device_id rather than scoping to the selected registry. The
-  // hazard this list exists for is one physical card registering under two
-  // backends; scoping by registry also dropped a *second* physical card on a
-  // mixed-vendor host, an NVIDIA plus a discrete AMD say, which is the very
-  // population split mode is for. Preferring the selected registry on a tie
-  // keeps an explicit `backend` override binding, which an unfiltered list
-  // would not: qvac-fabric's own dedupe keeps whichever backend registered
-  // first, and CUDA loads before Vulkan.
-  // Deduping needs EVERY selected-registry device to publish a bus id. One that
-  // does not leaves no key to match its twin in another registry by, and a
-  // partial key list is worse than none: the cross-registry skip below would
-  // not fire, so the id-less device and its id-bearing twin would both be
-  // emitted, naming one physical card twice. Fall back to registry scoping for
-  // the whole list in that case.
+  // Dedupe by device_id, not by registry, so a second physical card on a
+  // mixed-vendor host stays in the split. Ties go to the selected registry so a
+  // `backend` override still binds. If any selected-registry device has no bus
+  // id its twin cannot be matched, so fall back to registry scoping for the
+  // whole list rather than name one card twice.
   bool selectedRegistryHasAllIds = true;
   std::vector<std::string> selectedIds;
   for (const auto& candidate : devices) {

@@ -2,7 +2,8 @@
 
 Self-contained, runnable ports of the TypeScript SDK examples
 (`packages/sdk/examples`). Each file is one `asyncio` script (`async def main()`
-+ `asyncio.run`) that opens a `Client`, does one thing, and exits.
+
+- `asyncio.run`) that opens a `Client`, does one thing, and exits.
 
 No example imports another. Helpers like the `print_progress` download printer
 are repeated inline, exactly as the TypeScript examples repeat theirs, so a file
@@ -40,22 +41,23 @@ Models download over P2P from the registry on first use and are cached locally.
 
 ## Index
 
-| Example | Mirrors (`packages/sdk/examples/…`) | Public API shown |
-|---------|-------------------------------------|------------------|
-| `quickstart.py` | `quickstart.ts` | `load_model`, `completion`, `unload_model` |
-| `completion_events.py` | `completion-events.ts` | `completion` typed event stream + `run.final` |
-| `completion_tools.py` | `tools/llamacpp-native-tools.ts` | client-side tool loop via `completion` + `final.tool_calls` |
-| `completion_orchestrate.py` | `tools/llamacpp-native-tools.ts` (worker-orchestrated) | `completion_orchestrate` with tool `handler`s |
-| `cancel.py` | `cancel-by-request-id.ts` | `cancel` by `request_id`, `InferenceCancelledError` |
-| `embeddings.py` | `embed-p2p.ts` | `embed` (`EmbedRequest`) |
-| `translation.py` | `translation/translation-llm.ts` | `translate` |
-| `transcription.py` | `transcription/whispercpp-filesystem.ts` | `transcribe` (`TranscribeRequest`) |
-| `text_to_speech.py` | `tts/supertonic.ts` | `text_to_speech` (`TextToSpeechRequest`) |
-| `audiogen.py` | `audiogen/generate-music.ts` | `audio_gen_stream` (`AudioGenStreamRequest`), multi-model AudioGen loading |
-| `ocr.py` | `ocr-fasttext.ts` | `ocr_stream` (`OcrStreamRequest`) |
-| `registry_query.py` | `registry-query.ts` | `model_registry_list` / `_search` / `_get_model` |
-| `model_info.py` | `cache-management.ts` | `get_model_info`, `download_asset_with_progress` |
-| `logging_streams.py` | `logging-streaming.ts` | `logging_stream`, `SDK_LOG_ID` |
-| `vla.py` | `vla-smolvla.ts` | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state` |
-| `plugins.py` | `plugins.ts` | `invoke_plugin`, `invoke_plugin_stream` |
-| `notebook.ipynb` / `notebook.py` | (Python-only) | `notebook.SyncClient` — synchronous, numpy/pandas, live streaming (Jupyter notebook + script) |
+| Example                          | Mirrors (`packages/sdk/examples/…`)                    | Public API shown                                                                                                          |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `quickstart.py`                  | `quickstart.ts`                                        | `load_model`, `completion`, `unload_model`                                                                                |
+| `rpc_servers.py`                 | `rpc-server.ts`, `rpc-inference.ts`                    | `start_rpc_server`, `stop_rpc_server`, `discover_rpc_servers`; serving requires a worker configured with the RPC provider |
+| `completion_events.py`           | `completion-events.ts`                                 | `completion` typed event stream + `run.final`                                                                             |
+| `completion_tools.py`            | `tools/llamacpp-native-tools.ts`                       | client-side tool loop via `completion` + `final.tool_calls`                                                               |
+| `completion_orchestrate.py`      | `tools/llamacpp-native-tools.ts` (worker-orchestrated) | `completion_orchestrate` with tool `handler`s                                                                             |
+| `cancel.py`                      | `cancel-by-request-id.ts`                              | `cancel` by `request_id`, `InferenceCancelledError`                                                                       |
+| `embeddings.py`                  | `embed-p2p.ts`                                         | `embed` (`EmbedRequest`)                                                                                                  |
+| `translation.py`                 | `translation/translation-llm.ts`                       | `translate`                                                                                                               |
+| `transcription.py`               | `transcription/whispercpp-filesystem.ts`               | `transcribe` (`TranscribeRequest`)                                                                                        |
+| `text_to_speech.py`              | `tts/supertonic.ts`                                    | `text_to_speech` (`TextToSpeechRequest`)                                                                                  |
+| `audiogen.py`                    | `audiogen/generate-music.ts`                           | `audio_gen_stream` (`AudioGenStreamRequest`), multi-model AudioGen loading                                                |
+| `ocr.py`                         | `ocr-fasttext.ts`                                      | `ocr_stream` (`OcrStreamRequest`)                                                                                         |
+| `registry_query.py`              | `registry-query.ts`                                    | `model_registry_list` / `_search` / `_get_model`                                                                          |
+| `model_info.py`                  | `cache-management.ts`                                  | `get_model_info`, `download_asset_with_progress`                                                                          |
+| `logging_streams.py`             | `logging-streaming.ts`                                 | `logging_stream`, `SDK_LOG_ID`                                                                                            |
+| `vla.py`                         | `vla-smolvla.ts`                                       | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state`                                                             |
+| `plugins.py`                     | `plugins.ts`                                           | `invoke_plugin`, `invoke_plugin_stream`                                                                                   |
+| `notebook.ipynb` / `notebook.py` | (Python-only)                                          | `notebook.SyncClient` — synchronous, numpy/pandas, live streaming (Jupyter notebook + script)                             |

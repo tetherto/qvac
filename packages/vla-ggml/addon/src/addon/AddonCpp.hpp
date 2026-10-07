@@ -44,8 +44,6 @@ public:
   // `backendsDir`: absolute path to the prebuilds folder; forwarded to the
   // backend implementation so ggml backends are loaded from an absolute
   // path rather than relative to process CWD (required on mobile).
-  // `backendOverride`: GPU backend families in priority order, e.g.
-  // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
   explicit VlaModel(
       const std::string& ggufPath, bool forceCpu = false,
       std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {},

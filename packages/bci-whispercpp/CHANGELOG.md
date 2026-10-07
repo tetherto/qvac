@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
+  the ggml changes of the QVAC LLM stack, so both build from the same backend
+  code. Same models, same backends, no API change.
+- Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29, preserving the
+  QVAC seed, BCI windowed-attention and streaming/VAD patches.
+
 ### Fixed
 
 - Require `ggml-speech` `2026-09-30` directly, not only through `speech-cpp`.

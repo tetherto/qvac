@@ -353,6 +353,26 @@ class VideoStableDiffusion {
         else if (hasReferenceConditioning) {
             throw new Error('reference_attention_strength and reference_downscale_factor require reference_images.');
         }
+        let decodedInputPixels = 0;
+        const maxJobPixels = Number(this._config.max_job_pixels ?? 128 * 1024 * 1024);
+        const countInputPixels = (image) => {
+            const dimensions = peekImageDims(image);
+            if (dimensions) {
+                decodedInputPixels += dimensions.w * dimensions.h;
+                if (decodedInputPixels > maxJobPixels) {
+                    const limit = maxJobPixels % (1024 * 1024) === 0
+                        ? `${maxJobPixels / (1024 * 1024)} Mi pixel`
+                        : `${maxJobPixels} pixel`;
+                    throw new RangeError(`Video input images exceed the ${limit} decoded job limit`);
+                }
+            }
+        };
+        if (params.init_image instanceof Uint8Array)
+            countInputPixels(params.init_image);
+        for (const frame of params.control_frames ?? [])
+            countInputPixels(frame);
+        for (const image of params.reference_images ?? [])
+            countInputPixels(image);
         if (params.reference_attention_strength != null &&
             (!Number.isFinite(params.reference_attention_strength) ||
                 params.reference_attention_strength < 0 ||
@@ -360,11 +380,11 @@ class VideoStableDiffusion {
             throw new RangeError(`reference_attention_strength must be in [0, 1]. Got: ${params.reference_attention_strength}`);
         }
         if (params.reference_downscale_factor != null &&
-            (!Number.isFinite(params.reference_downscale_factor) || params.reference_downscale_factor !== 1)) {
+            (!Number.isFinite(params.reference_downscale_factor) ||
+                params.reference_downscale_factor !== 1)) {
             throw new RangeError(`reference_downscale_factor must be exactly 1. Got: ${params.reference_downscale_factor}`);
         }
-        if (params.vae_extra_tiling_args != null &&
-            typeof params.vae_extra_tiling_args !== 'string') {
+        if (params.vae_extra_tiling_args != null && typeof params.vae_extra_tiling_args !== 'string') {
             throw new TypeError(`vae_extra_tiling_args must be a string. Got: ${typeof params.vae_extra_tiling_args}`);
         }
         if (params.vace_strength != null &&

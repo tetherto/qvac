@@ -296,8 +296,9 @@ std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 /// GPU/iGPU device's backend provides split buffers, because qvac-fabric
 /// requires split buffers from each device it distributes over and throws on
 /// the first one that lacks them. No production caller: split-mode 'row' is
-/// rejected at config time. As of qvac-fabric v10549 only SYCL provides split
-/// buffers, so this is false in every shipped configuration.
+/// rejected at config time. As of qvac-fabric v11018 only SYCL and Hexagon
+/// provide split buffers, and the port builds neither, so this is false in
+/// every shipped configuration.
 bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
 /// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
@@ -308,20 +309,11 @@ bool gpuBackendSupportsRowSplit();
 /// deduplicated by `props.device_id` so a card registered under two backends is
 /// named once, preferring @p selectedDeviceName's registry.
 ///
-/// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
-/// registers twice, as CUDA0 and Vulkan0, so an unfiltered device list would
-/// spread a single card across two backends. Deduping rather than scoping to
-/// one registry keeps a second physical card on a mixed-vendor host, and
-/// preferring the selected registry keeps a `backend` override binding.
+/// QVAC-23763: one NVIDIA card registers as both CUDA0 and Vulkan0. Empty when
+/// every usable GPU/iGPU device comes from one registry and none was excluded
+/// by @p constraints, or when @p selectedDeviceName matches nothing.
 ///
-/// A device whose backend publishes no bus id falls back to registry scoping,
-/// since it cannot be matched against its own duplicate.
-///
-/// Empty when every usable GPU/iGPU device comes from one registry and no
-/// device was excluded by @p constraints, or when @p selectedDeviceName
-/// matches nothing.
-///
-/// No production caller: split loads pin device handles from
+/// No production caller yet: split loads pin device handles from
 /// `getSplitDeviceSelection()` instead.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,

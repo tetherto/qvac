@@ -12,6 +12,29 @@ const LLM_BASE = {
   modelSrc: 'model.gguf'
 }
 
+test('llmConfigSchema: preserves ordered RPC endpoints and device selection', (t) => {
+  for (const servers of ['10.0.0.2:50052', '10.0.0.3:50052,10.0.0.2:50052']) {
+    const config = llmConfigSchema.parse({ 'rpc-servers': servers, devices: 'RPC0' })
+    t.is(config['rpc-servers'], servers)
+    t.is(config.devices, 'RPC0')
+  }
+})
+
+test('llmConfigSchema: rejects duplicate RPC endpoints before native registration', (t) => {
+  for (const servers of [
+    '10.0.0.2:50052,10.0.0.2:50052,10.0.0.3:50052',
+    '10.0.0.2:50052,10.0.0.3:50052,10.0.0.2:50052',
+    '10.0.0.2:50052, 10.0.0.2:50052'
+  ]) {
+    const result = llmConfigSchema.safeParse({ 'rpc-servers': servers })
+    t.is(result.success, false)
+    if (!result.success) {
+      t.alike(result.error.issues[0]?.path, ['rpc-servers'])
+      t.is(result.error.issues[0]?.message, 'RPC server endpoints must be unique')
+    }
+  }
+})
+
 test('llmConfigBaseSchema: accepts supported split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)

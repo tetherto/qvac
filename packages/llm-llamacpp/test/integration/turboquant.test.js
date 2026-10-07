@@ -185,15 +185,9 @@ for (const kv of KV_COMBOS) {
     const output = await collectResponse(response)
     const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
 
-    // QVAC-23763: these are TurboQuant/PolarQuant rows and ggml-cuda has no
-    // kernels for them, so whatever the cascade picks it must not be CUDA. That
-    // holds on every host, which is why it replaces the old "the vulkan pin
-    // bound" check: this asserts the outcome that matters rather than that a
-    // workaround was applied.
-    //
-    // Checked after the first run, never straight after load(): backend
-    // selection is lazy, so the log lands a tick later and an immediate check
-    // reads an empty buffer.
+    // ggml-cuda has no TBQ/PQ kernels, so the row must not land on CUDA. Checked
+    // after the first run: selection is lazy, so the log is empty right after
+    // load.
     t.absent(
       specLogger.logs.some((l) => /Chosen GPU CUDA/.test(l)),
       'a TBQ/PQ row did not land on CUDA'

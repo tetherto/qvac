@@ -141,7 +141,7 @@ declare namespace VlaModel {
      * Which backend `load()` should use. QVAC-23763.
      *
      * - `"auto"` (default): pick the best available device, preferring CUDA, then
-     *   HIP/ROCm, then Vulkan or Metal, then CPU.
+     *   HIP/ROCm, then the first other accepted GPU, then CPU.
      * - `"cpu"`: skip GPU selection entirely.
      * - a comma-separated GPU family list, e.g. `"cuda"` or `"cuda,vulkan"`:
      *   try those families in order, then fall back to the normal order if none

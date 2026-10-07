@@ -193,14 +193,11 @@ async function runBenchmark(cfg, modelInfo) {
       output,
       kvCacheMiB,
       generatedTokens: stats.generatedTokens || 0,
-      // QVAC-23763: the capability filter's own verdict. Selection logs this
-      // when it passes a device over because its backend cannot run the
-      // requested cache type, which is what turns "the row happened to work"
-      // into "the demotion fired". Read here, after the run: backend selection
-      // is lazy, so the log is not in the buffer yet when load() returns.
+      // QVAC-23763: logged when a device is passed over for the KV type. Read
+      // after the run: selection is lazy.
       demotedForKvType: specLogger.logs.some((l) => /cannot run KV-cache type/.test(l)),
-      // chooseBackend's own verdict. Read from the log because the addon
-      // exposes no API that reports which backend was selected.
+      // The default cascade's choice. The addon has no API that reports the
+      // selected backend.
       choseCuda: specLogger.logs.some((l) => /Chosen GPU CUDA/.test(l))
     }
   } finally {

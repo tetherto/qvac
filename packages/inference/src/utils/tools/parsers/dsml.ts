@@ -1,6 +1,9 @@
 import type { Tool, ToolCall, ToolCallError } from '@/schemas/index'
 import {
   generateStableToolCallId,
+  coerceByParameterTypes,
+  parameterAllowsNull,
+  parameterTypes,
   validateToolArguments,
   type ParserResult
 } from '@/utils/tools/shared'
@@ -18,7 +21,7 @@ const NAME_ATTR_REGEX = /(?:^|\s)name="([^"]*)"/
 const STRING_ATTR_REGEX = /(?:^|\s)string="(true|false)"/i
 const FALLBACK_DIALECT_REGEX = /<tool_call>|"name"\s*:/
 
-function coerceBySchemaType(value: string, type?: string): unknown {
+function coerceBySchemaType(value: string, type: string): unknown {
   switch (type) {
     case 'number': {
       const n = Number(value)
@@ -46,9 +49,12 @@ function coerceBySchemaType(value: string, type?: string): unknown {
   }
 }
 
-function coerceParamValue(raw: string, isString: string | undefined, type?: string): unknown {
+function coerceParamValue(raw: string, isString: string | undefined, schema?: unknown): unknown {
   const trimmed = raw.trim()
-  if (isString === undefined) return coerceBySchemaType(trimmed, type)
+  if (isString === undefined) {
+    if (trimmed === 'null' && parameterAllowsNull(schema)) return null
+    return coerceByParameterTypes(trimmed, parameterTypes(schema), coerceBySchemaType)
+  }
   if (isString === 'true') return trimmed
   try {
     return JSON.parse(trimmed)
@@ -161,7 +167,7 @@ export function parseDsmlFormat(text: string, tools: Tool[]): ParserResult {
       }
       const isString = STRING_ATTR_REGEX.exec(attrs)?.[1]?.toLowerCase()
       try {
-        args[key] = coerceParamValue(param[2]!, isString, properties[key]?.type)
+        args[key] = coerceParamValue(param[2]!, isString, properties[key])
       } catch (err) {
         parseError = `${key}: ${err instanceof Error ? err.message : String(err)}`
         break

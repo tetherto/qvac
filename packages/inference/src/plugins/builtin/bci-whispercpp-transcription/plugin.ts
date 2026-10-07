@@ -1,4 +1,7 @@
-import BCIWhispercpp, { type BCIWhispercppConfig } from '@qvac/bci-whispercpp'
+import BCIWhispercpp, {
+  type BCIWhispercppConfig,
+  assessFit as bciAssessFit
+} from '@qvac/bci-whispercpp'
 import {
   definePlugin,
   defineHandler,
@@ -43,6 +46,7 @@ export const bciPlugin = definePlugin({
   displayName: 'BCI (whisper.cpp)',
   addonPackage: ADDON_BCI,
   loadConfigSchema: bciConfigSchema,
+  assessFit: bciAssessFit,
 
   resolveConfig: resolveBciConfig,
 
