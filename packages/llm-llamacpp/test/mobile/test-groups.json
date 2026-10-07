@@ -35,6 +35,7 @@
     ]
   },
   "android": {
+    "diskProbe": ["runCheckpointDiskProbeTest"],
     "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
@@ -99,8 +100,7 @@
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest",
       "runQwen35MultimodalCacheStressTest",
-      "runKvCacheExtendedTest",
-      "runCheckpointDiskProbeTest"
+      "runKvCacheExtendedTest"
     ]
   },
   "iosWeekly": {
