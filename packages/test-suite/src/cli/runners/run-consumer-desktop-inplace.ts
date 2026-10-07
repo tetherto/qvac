@@ -57,6 +57,9 @@ async function main() {
   const runId = requireArg(args, 'runId')
   const configDir = path.resolve(readArg(args, 'config') ?? process.cwd())
   const platform = readArg(args, 'platform') ?? hostPlatform('desktop')
+  // The consumer entry applies the resource table as it is imported below, and it has to
+  // read the same label this process registers with.
+  process.env['QVAC_TEST_PLATFORM'] = platform
   const mqttBrokerOverride = readArg(args, 'mqtt-broker')
 
   // Load .env from the config directory (mocha-like behavior)

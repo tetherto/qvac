@@ -82,7 +82,8 @@ program
   .requiredOption('--runId <id>', 'Unique run identifier (must match producer)')
   .option('--mqtt-broker <url>', 'MQTT broker URL (overrides config)')
   .option('--config <path>', 'Path to config directory', process.cwd())
-  .option('--platform <platform>', 'Platform name', 'desktop')
+  // No default: the runner derives `desktop-<os>` instead, and a default here would win.
+  .option('--platform <platform>', 'Platform name')
   .action(runConsumerDesktop)
 
 program
