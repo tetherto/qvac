@@ -477,6 +477,11 @@ CacheManager::saveForCaller(const std::string& cacheKey) {
   if (!hasActiveCache() || sessionPath_ != cacheKey) {
     return SaveOutcome::NotHere;
   }
+  // Nothing committed (its only request rolled back, or a rollback landed
+  // cold): nothing to write, and the file still holds the last commit.
+  if (llmContext_->getNPast() == 0) {
+    return SaveOutcome::NotHere;
+  }
   if (!activeCacheDirty_ && activeCacheSavedToDisk_ &&
       isFileInitialized(sessionPath_)) {
     return SaveOutcome::Current;

@@ -74,8 +74,9 @@ public:
 
   /// The caller's explicit save (`saveCache`): writes the active conversation
   /// to its file when it is `cacheKey` and the file does not already hold it,
-  /// ephemeral or not. A failed write throws `UnableToSaveSessionFile` and
-  /// keeps the conversation, still marked unsaved.
+  /// ephemeral or not. An empty session (`nPast == 0`) is `NotHere`, so the
+  /// file is left as it is. A failed write throws `UnableToSaveSessionFile`
+  /// and keeps the conversation, still marked unsaved.
   SaveOutcome saveForCaller(const std::string& cacheKey);
 
   /// The caller's explicit discard (`discardCache`): drops the active
