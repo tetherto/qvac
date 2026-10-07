@@ -2477,6 +2477,69 @@ TEST_F(
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, DeprecatedMmapAliasSelectsMmap) {
+  auto config = baseConfig();
+  config["mmap"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedMlockAliasSelectsMlock) {
+  auto config = baseConfig();
+  config["mlock"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_MLOCK);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedAliasUnknownValueIsRejected) {
+  auto config = baseConfig();
+  config["no-mmap"] = "sometimes";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST(DeprecatedLoadFlagModeTest, MapsEachFlagAndPolarity) {
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("mmap", ""), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("mmap", "off"), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("no-mmap", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(
+      lfn::deprecatedLoadFlagMode("no-mmap", "false"), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(
+      lfn::deprecatedLoadFlagMode("direct-io", "on"),
+      LLAMA_LOAD_MODE_DIRECT_IO);
+  EXPECT_EQ(
+      lfn::deprecatedLoadFlagMode("no-direct-io", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("mlock", "1"), LLAMA_LOAD_MODE_MLOCK);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("load-mode", "mmap"), std::nullopt);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("no_mmap", ""), std::nullopt);
+}
+
+TEST(DeprecatedLoadFlagModeTest, RejectsValuesTheFlagDoesNotTake) {
+  EXPECT_THROW(
+      static_cast<void>(lfn::deprecatedLoadFlagMode("mmap", "maybe")),
+      std::invalid_argument);
+  // mlock is valueless in llama, so it cannot be turned off.
+  EXPECT_THROW(
+      static_cast<void>(lfn::deprecatedLoadFlagMode("mlock", "off")),
+      std::invalid_argument);
+}
+
 TEST_F(LoadFitNormalizationTest, InvalidChatTemplateRemainsInvalid) {
   auto config = baseConfig();
   config["chat-template"] = "invalid_template_name_xyz123";

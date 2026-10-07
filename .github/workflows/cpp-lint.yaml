@@ -67,7 +67,7 @@ jobs:
   cpp-lint:
     runs-on: qvac-ubuntu2204-x64
     # A cold `setup-cuda` curls ~1GB from developer.download.nvidia.com, then a
-    # changed fabric overlay can need a full CUDA build during generation.
+    # new qvac-fabric port version can need a full CUDA build during generation.
     # Warm runs finish in 1.5 to 2.5 minutes.
     timeout-minutes: 120
     environment: release

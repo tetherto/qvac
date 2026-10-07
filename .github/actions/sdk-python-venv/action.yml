@@ -1,0 +1,69 @@
+name: Set up the Python client venv
+description: >-
+  Create a virtualenv from the runner's own Python and install packages/sdk-python
+  into it, for the self-hosted GPU runners the Python legs run on.
+
+# actions/setup-python does not work on these runners: its python-versions
+# tarball ships a setup.sh that hardcodes `mkdir /Users/runner/hostedtoolcache`,
+# and that path is not writable here (the runner user's home is
+# /Users/actions-runner-*). Per infra, the runners already carry Python, so the
+# venv keeps installs off the system interpreter. Fails loudly below 3.10.
+#
+# Two workflows need this -- the Python e2e leg in test-node-sdk.yml and the
+# package's own suite in on-pr-sdk-python-e2e-full.yml -- so the reason lives
+# here rather than in each of them.
+
+inputs:
+  project-dir:
+    description: "Directory holding the client's pyproject.toml"
+    required: false
+    default: packages/sdk-python
+  extras:
+    description: "Extras to install, as pip spells them (e.g. dev or gen,dev,vla)"
+    required: false
+    default: dev
+  export-python-bin:
+    description: "Also export the interpreter as PYBIN in the job environment"
+    required: false
+    default: "false"
+
+outputs:
+  python-bin:
+    description: "Absolute path to the venv interpreter"
+    value: ${{ steps.venv.outputs.python-bin }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create the venv and install the client
+      id: venv
+      shell: bash
+      env:
+        PROJECT_DIR: ${{ inputs.project-dir }}
+        EXTRAS: ${{ inputs.extras }}
+        EXPORT_PYTHON_BIN: ${{ inputs.export-python-bin }}
+      run: |
+        set -e
+        # The e2e checkout is sparse, so say so plainly if the client is missing
+        # rather than letting `venv` create the directory and pip report a
+        # confusing "not a Python project".
+        if [ ! -f "$PROJECT_DIR/pyproject.toml" ]; then
+          echo "::error::$PROJECT_DIR is not in the checkout; add it to sparse-checkout"
+          exit 1
+        fi
+        if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+        echo "System Python: $("$PY" --version) at $(command -v "$PY")"
+        "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
+        "$PY" -m venv "$PROJECT_DIR/.venv"
+        # Windows puts the interpreter under Scripts, every other platform under bin.
+        if [ -x "$PROJECT_DIR/.venv/bin/python" ]; then
+          PYBIN="$PWD/$PROJECT_DIR/.venv/bin/python"
+        else
+          PYBIN="$PWD/$PROJECT_DIR/.venv/Scripts/python"
+        fi
+        "$PYBIN" -m pip install --upgrade pip
+        "$PYBIN" -m pip install -e "$PROJECT_DIR[$EXTRAS]"
+        echo "python-bin=$PYBIN" >> "$GITHUB_OUTPUT"
+        if [ "$EXPORT_PYTHON_BIN" = "true" ]; then
+          echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
+        fi

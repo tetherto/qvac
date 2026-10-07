@@ -111,7 +111,14 @@ runs:
           Write-Output "::error::vcpkg binary not found (VCPKG_ROOT=$env:VCPKG_ROOT); cache key would be unstable"
           exit 1
         }
-        $vcpkgVersion = (& $vcpkgBin version | Select-Object -First 1)
+        # Captured whole, then trimmed: `Select-Object -First 1` closes the pipe
+        # early and the leftover $LASTEXITCODE fails the step.
+        $vcpkgVersionRaw = & $vcpkgBin version
+        if ($LASTEXITCODE -ne 0) {
+          Write-Output "::error::'$vcpkgBin version' exited $LASTEXITCODE; cache key would be unstable"
+          exit 1
+        }
+        $vcpkgVersion = $vcpkgVersionRaw | Select-Object -First 1
         if ([string]::IsNullOrWhiteSpace($vcpkgVersion)) {
           Write-Output "::error::'$vcpkgBin version' printed nothing; cache key would be unstable"
           exit 1

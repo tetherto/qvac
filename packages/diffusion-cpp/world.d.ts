@@ -23,6 +23,7 @@ export interface WorldFiles {
     scene: string;
 }
 export interface WorldConfig {
+    maxImagePixels?: NumericLike;
     threads?: number;
     seed?: number;
     backend?: string;

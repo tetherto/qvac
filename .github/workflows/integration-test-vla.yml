@@ -41,7 +41,7 @@ jobs:
     needs: runner_names
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    # QVAC-23763: -vulkan only on the new leg, so existing check names are kept.
+    # Suffix only the Vulkan leg so the other check names stay unchanged.
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.force_vulkan == 'true' && '-vulkan' || '' }}-integration-tests
     permissions:
       contents: read
@@ -383,8 +383,6 @@ jobs:
           # below resolves from. Same input the nx lane and the seed use.
           hash-files-glob: packages/vla-ggml/project.json
 
-      # Use the shared model manifest, but the Vulkan regression leg only runs
-      # SmolVLA and does not need the pi05 or GR00T downloads.
       - name: Resolve the S3 model set
         id: model-s3
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
@@ -392,6 +390,7 @@ jobs:
         with:
           package: vla-ggml
 
+      # The Vulkan leg only runs SmolVLA, so skip the pi05 and GR00T downloads.
       - name: Select SmolVLA for Vulkan regression
         id: vulkan-model-s3
         if: ${{ matrix.force_vulkan == 'true' }}
@@ -406,6 +405,8 @@ jobs:
             console.log("manifest=" + JSON.stringify(selected))
           ' >> "$GITHUB_OUTPUT"
 
+      # smolvla has skipOnCacheHit; pi05 and GR00T oracle dirs are outside the
+      # cache, so they always download.
       - name: Download VLA models from S3
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         uses: ./.github/actions/stage-integration-models

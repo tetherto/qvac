@@ -1,4 +1,9 @@
-import { textToSpeech, textToSpeechStream } from '@qvac/sdk'
+import {
+  getModelInfo,
+  textToSpeech,
+  textToSpeechStream,
+  TTS_CODEC_DECODER_AUDIO8_Q8_0
+} from '@qvac/sdk'
 
 // Audio8 takes no per-request voice conditioning: emotion, pace, and
 // description fields are rejected for this engine, so only the text and the
@@ -6,6 +11,9 @@ import { textToSpeech, textToSpeechStream } from '@qvac/sdk'
 type Audio8Params = {
   text: string
   operation?: 'batch' | 'stream' | 'sentence-stream' | 'duplex'
+  // macOS / iOS only: the codec decoder's Core ML bundle must be cached beside
+  // it and the batch synthesis must report running its codec there.
+  requireCoreml?: boolean
 }
 
 type TtsTestResult = {
@@ -34,6 +42,36 @@ function buildAudio8Request(modelId: string, params: Audio8Params) {
 async function synthesize(modelId: string, params: Audio8Params) {
   const result = textToSpeech(buildAudio8Request(modelId, params))
   return await result.buffer
+}
+
+const COREML_BUNDLE = 'audio8-codec-decoder.mlmodelc/'
+const COREML_COMPONENTS = [
+  'analytics/coremldata.bin',
+  'coremldata.bin',
+  'metadata.json',
+  'model.mil',
+  'weights/weight.bin'
+]
+
+// The tts-audio8 resource loads this decoder in every consumer.
+async function missingCoremlComponents() {
+  const info = await getModelInfo({ name: TTS_CODEC_DECODER_AUDIO8_Q8_0.name })
+  return COREML_COMPONENTS.filter(
+    (component) =>
+      !info.cacheFiles.some(
+        (file) => file.isCached && file.path.includes(COREML_BUNDLE + component)
+      )
+  )
+}
+
+async function synthesizeOnCoreml(modelId: string, params: Audio8Params) {
+  const result = textToSpeech(buildAudio8Request(modelId, params))
+  const buffer = await result.buffer
+  const stats = await result.stats
+  if (stats?.codecSidecarLoaded !== 1 || stats.codecOnCoreml !== 1) {
+    throw new Error(`Audio8 codec did not run on Core ML: ${JSON.stringify(stats)}`)
+  }
+  return buffer
 }
 
 async function synthesizeStream(modelId: string, params: Audio8Params) {
@@ -90,6 +128,7 @@ async function synthesizeDuplex(modelId: string, params: Audio8Params) {
 }
 
 async function synthesizeForOperation(modelId: string, params: Audio8Params) {
+  if (params.requireCoreml) return synthesizeOnCoreml(modelId, params)
   if (params.operation === 'stream') return synthesizeStream(modelId, params)
   if (params.operation === 'sentence-stream') return synthesizeSentenceStream(modelId, params)
   if (params.operation === 'duplex') return synthesizeDuplex(modelId, params)
@@ -127,6 +166,15 @@ export function makeAudio8TtsHandler<
       }
 
       const modelId = await dependencies.ensureLoaded(dependencies.dependency)
+      if (params.requireCoreml) {
+        const missing = await missingCoremlComponents()
+        if (missing.length > 0) {
+          return {
+            passed: false,
+            output: `Audio8 Core ML bundle not cached: ${missing.join(', ')}`
+          } as TResult
+        }
+      }
       const buffer = await synthesizeForOperation(modelId, params)
       const sampleCount = buffer.length
       const validationError = audioValidationError(buffer)
@@ -135,8 +183,9 @@ export function makeAudio8TtsHandler<
         return { passed: false, output: `Audio8 ${validationError}` } as TResult
       }
 
+      const codec = params.requireCoreml ? ' codec=coreml' : ''
       return dependencies.validate(
-        `audio8-generated operation=${params.operation ?? 'batch'} ${sampleCount} samples`,
+        `audio8-generated operation=${params.operation ?? 'batch'}${codec} ${sampleCount} samples`,
         expectation
       )
     } catch (error) {

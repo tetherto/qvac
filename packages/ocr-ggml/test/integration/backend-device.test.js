@@ -10,7 +10,8 @@ const {
   ensureModelPath,
   safeUnload,
   findVulkanBackendLib,
-  PREBUILDS_DIR
+  PREBUILDS_DIR,
+  OCR_TEST_THREADS
 } = require('./utils')
 
 // QVAC-19797: opt-in Vulkan GGML backend. Requesting `backendDevice: 'vulkan'`
@@ -153,7 +154,9 @@ test(
         pathDetector: detectorPath,
         pathRecognizer: recognizerPath,
         langList: ['en'],
-        backendDevice: 'vulkan'
+        backendDevice: 'vulkan',
+        // Runs on CPU when no Vulkan GPU is present.
+        nThreads: OCR_TEST_THREADS
       },
       opts: { stats: true }
     })
@@ -299,7 +302,9 @@ test(
         pathDetector: detectorPath,
         pathRecognizer: recognizerPath,
         langList: ['en'],
-        backendDevice: 'metal'
+        backendDevice: 'metal',
+        // Runs on CPU when no Metal GPU is present.
+        nThreads: OCR_TEST_THREADS
       },
       opts: { stats: true }
     })

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ParakeetDriver = void 0;
+exports.assertNoRunOptions = assertNoRunOptions;
 const parakeet_1 = require("./parakeet");
 const error_1 = require("../../lib/error");
 const constants_1 = require("../../lib/constants");
@@ -60,6 +61,16 @@ const PARAKEET_STREAMING_OPT_KEYS = [
     "chunkRightContextMs",
     "spkCacheUpdatePeriod",
 ];
+/** Rejects per-call `run()` options on an engine that takes none. */
+function assertNoRunOptions(options, engine) {
+    const keys = Object.keys(options ?? {});
+    if (keys.length === 0)
+        return;
+    throw new error_1.QvacErrorAddonASRGgml({
+        code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: `${keys.join(", ")}: run options are moss-transcribe only (engine is ${engine})`,
+    });
+}
 function asError(error) {
     return error instanceof Error ? error : new Error(String(error));
 }
@@ -167,7 +178,8 @@ class ParakeetDriver {
     getBackendInfo() {
         return this.addon?.getBackendInfo?.() ?? null;
     }
-    run(audio) {
+    run(audio, options = {}) {
+        assertNoRunOptions(options, "parakeet");
         const response = this.ctx.job.start();
         void this._pumpBatchAudio(audio).catch((error) => {
             this.ctx.job.fail(asError(error));

@@ -70,6 +70,12 @@ function collectModelConstants(
   }
 }
 
+export interface LoadParams {
+  modelSrc?: ModelConstant | string
+  modelType: string
+  modelConfig?: ModelConfig
+}
+
 interface TrackedModel {
   modelId: string
   dep: string
@@ -235,6 +241,26 @@ export class ResourceManager {
     this.testCount++
   }
 
+  /**
+   * What `loadModel` would be called with for this key, without calling it. `ensureLoaded`
+   * runs these parameters, `assessModelFit` takes the same shape, and a test that drives the
+   * load itself reads them through the `modelSource` step.
+   */
+  async loadParams(dep: string): Promise<LoadParams> {
+    const def = this.definitions.get(dep)
+    if (!def) throw new Error(`Unknown dependency: ${dep}`)
+    // The config is a resolver, because a client may resolve an asset inside it asynchronously.
+    // Handing the function itself to a test that drives `loadModel` would put a function on the
+    // wire where the contract wants an object.
+    const config = await this.resolveConfig(dep, def)
+    return {
+      ...(def.constant ? { modelSrc: def.constant } : {}),
+      ...(def.modelSrc !== undefined ? { modelSrc: def.modelSrc } : {}),
+      modelType: def.type,
+      ...(config !== undefined ? { modelConfig: config } : {})
+    }
+  }
+
   async ensureLoaded(dep: string): Promise<string> {
     const existing = this.models.get(dep)
     if (existing) {
@@ -242,20 +268,7 @@ export class ResourceManager {
       return existing.modelId
     }
 
-    const def = this.definitions.get(dep)
-    if (!def) throw new Error(`Unknown dependency: ${dep}`)
-
-    const modelSrcOpts = def.constant
-      ? { modelSrc: def.constant as never }
-      : def.modelSrc !== undefined
-        ? { modelSrc: def.modelSrc }
-        : {}
-
-    const modelId = await loadModel({
-      ...modelSrcOpts,
-      modelType: def.type as never,
-      modelConfig: await this.resolveConfig(dep, def)
-    } as never)
+    const modelId = await loadModel((await this.loadParams(dep)) as never)
 
     this.models.set(dep, {
       modelId,

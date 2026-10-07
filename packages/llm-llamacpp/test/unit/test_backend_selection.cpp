@@ -1574,9 +1574,8 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
-// The two guards above have a second arm each, and neither was pinned. Both
-// matter for QVAC-23763: the override loop skips any candidate a guard marked
-// excluded, and all four arms have to keep working.
+// Second arm of each guard. The override loop skips excluded candidates, so
+// all four arms must hold.
 
 // BitNet TQ on Adreno <800 is CPU only (TQ kernels run faster there), so no
 // override may reach a GPU. The 800+ arm of this guard is pinned above.
@@ -1642,7 +1641,7 @@ TEST_F(
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
-// ---- the capability filter (QVAC-23763 R9/R10) ----
+// ---- the capability filter ----
 
 static BackendChoice chooseWithKvTypes(
     MockBackendInterface& mockBackend,
@@ -1800,7 +1799,7 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectKvExcludedCuda) {
   EXPECT_EQ(choice.name, "vulkan0");
 }
 
-// ---- backend-required (QVAC-23763 R11) ----
+// ---- backend-required (QVAC-23763) ----
 
 static BackendChoice chooseWithRequired(
     MockBackendInterface& mockBackend,
@@ -1817,8 +1816,7 @@ static BackendChoice chooseWithRequired(
   return chooseBackend(request, bckI);
 }
 
-// Without it a pin is advisory. That is the behaviour that made the integration
-// suites' backend pins silently meaningless.
+// Without it a pin is advisory: a miss runs the default cascade.
 TEST_F(BackendSelectionTest, AdvisoryOverrideStillFallsThrough) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   EXPECT_EQ(chooseWithRequired(mockBackend, {"cuda"}, false).name, "vulkan0");
@@ -1910,7 +1908,7 @@ TEST_F(BackendSelectionTest, BackendRequiredWithoutBackendThrows) {
   EXPECT_FALSE(tryBackendRequiredFromMap(off, false));
 }
 
-// ---- main-gpu addressing (QVAC-23763 R13) ----
+// ---- main-gpu addressing (QVAC-23763) ----
 
 static BackendChoice
 chooseWithMainGpu(MockBackendInterface& mockBackend, const MainGpu& mainGpu) {
@@ -1929,9 +1927,7 @@ TEST_F(BackendSelectionTest, MainGpuIntegerStillWorks) {
   EXPECT_EQ(parseMainGpu(""), std::nullopt);
 }
 
-// std::stoi parsed a leading prefix and threw the rest away. That is what made
-// a bus id parse as device 0, so tightening it is a prerequisite for the forms
-// below - and a behaviour change worth pinning.
+// "1abc" used to parse as 1.
 TEST_F(BackendSelectionTest, MainGpuRejectsPartialIntegerParse) {
   EXPECT_THROW(parseMainGpu("1abc"), qvac_errors::StatusError);
   EXPECT_THROW(parseMainGpu("0 1"), qvac_errors::StatusError);

@@ -259,7 +259,7 @@ const EmbedLlamacpp = require('@qvac/embed-llamacpp')
 
 const fit = EmbedLlamacpp.assessFit({
   modelPath: '/models/embed.gguf',
-  params: { 'batch-size': '1024' }
+  config: { device: 'gpu', 'batch-size': '1024' }
 })
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
@@ -271,7 +271,7 @@ fit.deviceBytes // model, context and compute summed across the devices, host ex
 fit.hostBytes // the same, for the trailing host row
 ```
 
-`params` takes the load in llama's own CLI spelling without the leading `--`, exactly as the loader takes it: `gpu-layers`, `tensor-split`, `batch-size` and the rest. Each is dispatched through llama's argument table, so a placement pinned there reaches the projection. A setting llama does not recognise, or a flag asked to be off that can only assert itself, is `status: "error"` with `unsupported-config`.
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
 
 Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
 

@@ -4,7 +4,9 @@
 #include <any>
 #include <cctype>
 #include <cstring>
+#include <initializer_list>
 #include <map>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <stdexcept>
@@ -485,6 +487,8 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
   return splitMode;
 }
 
+} // namespace
+
 BertModelSetup setupParams(
     const std::string& modelGgufPath,
     std::unordered_map<std::string, std::string> configFilemap) {
@@ -694,6 +698,50 @@ BertModelSetup setupParams(
     }
   }
 
+  // The deprecated load flags are no longer in fabric's argument table, so
+  // the mode they select is passed as --load-mode. An explicit load-mode wins.
+  std::optional<llama_load_mode> deprecatedMode;
+  const char* deprecatedKey = nullptr;
+  for (const char* key :
+       {"mmap", "no-mmap", "direct-io", "no-direct-io", "mlock"}) {
+    const auto it = configFilemap.find(key);
+    if (it == configFilemap.end()) {
+      continue;
+    }
+    llama_load_mode mode = LLAMA_LOAD_MODE_NONE;
+    try {
+      mode = deprecatedLoadFlagMode(key, it->second).value();
+    } catch (const std::invalid_argument& e) {
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(InvalidConfiguration), e.what());
+    }
+    if (deprecatedMode.has_value() && deprecatedMode.value() != mode) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(InvalidConfiguration),
+          string_format(
+              "'%s' and '%s' select different load modes; use 'load-mode' "
+              "instead",
+              deprecatedKey,
+              key));
+    }
+    deprecatedMode = mode;
+    deprecatedKey = key;
+    configFilemap.erase(it);
+  }
+  if (deprecatedMode.has_value()) {
+    if (configFilemap.contains("load-mode")) {
+      qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+          GGML_LOG_LEVEL_WARN,
+          string_format(
+              "[BertModel] '%s' ignored: 'load-mode' is set\n", deprecatedKey)
+              .c_str(),
+          nullptr);
+    } else {
+      configFilemap["load-mode"] = loadModeName(deprecatedMode.value());
+    }
+  }
+
   for (const auto& [key, value] : configFilemap) {
     if (key.empty()) {
       continue;
@@ -722,8 +770,6 @@ BertModelSetup setupParams(
 
   return result;
 }
-} // namespace
-
 void BertModel::resolveShardPaths(
     GGUFShards& shards, const std::string& modelPath) {
   if (shards.gguf_files.empty()) {

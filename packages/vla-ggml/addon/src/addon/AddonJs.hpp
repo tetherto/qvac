@@ -28,13 +28,9 @@ namespace qvac_lib_infer_vla_ggml {
 
 namespace detail {
 
-// Trim and lowercase the `backend` selector. 'cpu' and 'auto' are compared
-// exactly by createInstance while parseBackendOverride lowercases each family
-// first, so without this 'CPU' misses forceCpu and is then rejected as an
-// unknown GPU family, and ' auto ' is parsed as a family list.
+// Trim and lowercase so 'CPU' and ' auto ' hit the exact 'cpu' and 'auto'
+// checks in createInstance.
 inline std::string normaliseBackendSelector(std::string backend) {
-  // Same trim set as parseBackendOverride, \r included, so a CRLF-sourced
-  // value is not rejected as an unknown family.
   constexpr std::string_view kTrim = " \t\r\n\v\f";
   const auto begin = backend.find_first_not_of(kTrim);
   if (begin == std::string::npos) {
@@ -297,12 +293,9 @@ inline js_value_t* hparamsToJs(js_env_t* env, const VlaHparamsGeneric& hp) {
 // Builds the VlaModel + the framework's output callback stack and registers
 // it as a managed instance. `jsHandle` is the JS-side wrapper object that
 // the framework passes back as the first argument of every outputCb call.
-// `backend === 'cpu'` forces the CPU backend even on a runner with a usable
-// GPU. QVAC-23763: any other non-empty value is now a comma-separated GPU
-// backend priority list, e.g. 'cuda' or 'cuda,vulkan', and an unrecognised
-// name is rejected. Empty still means "pick the best device". Before
-// QVAC-23763 every non-'cpu' value meant "pick the best device", so a typo was
-// silently ignored; it now throws InvalidArgument.
+// `backend === 'cpu'` forces CPU. Any other non-empty value except 'auto' is a
+// comma-separated GPU priority list, and an unknown name throws
+// InvalidArgument.
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 

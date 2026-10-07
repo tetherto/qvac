@@ -22,9 +22,6 @@ public:
   // Loads the model from `ggufPath`. Throws std::runtime_error on failure
   // (mirrors the previous VlaModel constructor behaviour). `forceCpu` and
   // `backendsDir` are forwarded verbatim to `smolvla_load_model`.
-  // `backendOverride` lists GPU backend families in priority order, e.g.
-  // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
-  // `backendRequired` makes that list binding rather than advisory.
   SmolvlaModelAdapter(
       const std::string& ggufPath, bool forceCpu,
       const std::string& backendsDir,

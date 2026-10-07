@@ -9,7 +9,7 @@ description: >
 
 inputs:
   family:
-    description: "SDK e2e family: desktop | electron | snap | android | ios"
+    description: "SDK e2e family: desktop | electron | snap | python | android | ios"
     required: true
   platforms:
     description: >
@@ -66,7 +66,7 @@ runs:
         FAMILY: ${{ inputs.family }}
       run: |
         case "$FAMILY" in
-          desktop|electron|snap)
+          desktop|electron|snap|python)
             echo "results-pattern=results-${FAMILY}-*" >> "$GITHUB_OUTPUT"
             ;;
           android)
@@ -122,8 +122,11 @@ runs:
             `/actions/runs/${context.runId}`;
 
           const resultsRoot = '.sdk-e2e-report/current-results';
+          // Families whose artifact name carries the platform, because they run a
+          // matrix. android and ios run one device each and drop the suffix.
           const isNodeFamily =
-            family === 'desktop' || family === 'electron' || family === 'snap';
+            family === 'desktop' || family === 'electron' || family === 'snap' ||
+            family === 'python';
 
           const artifactDir = (platform) =>
             isNodeFamily ? `results-${family}-${platform}` : `results-${family}`;

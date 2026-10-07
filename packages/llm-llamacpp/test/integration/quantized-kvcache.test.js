@@ -30,13 +30,8 @@ const isIos = platform === 'ios'
 // on the first f16+f16 row, so these smoke tests are disabled on Android.
 const isAndroid = platform === 'android'
 
-// QVAC-23763: the tbq/pq rows used to ask for Vulkan explicitly, because linux
-// x64 enumerates CUDA ahead of Vulkan, CUDA has no TurboQuant or PolarQuant
-// kernels, and the addon refused the load rather than stepping down. Selection
-// now passes such a device over before the cascade picks, so those rows reach
-// Vulkan unpinned - which is what actually exercises the fix. The f16 baseline
-// still runs on whatever the host prefers, which is what makes the memory
-// comparison below meaningful on both backends.
+// QVAC-23763: tbq/pq rows run unpinned. Selection passes CUDA over for these
+// types, so the rows reach Vulkan on their own.
 const isLinuxX64 = platform === 'linux' && os.arch() === 'x64'
 
 // Which of the two same-runner legs are we on. The -vulkan leg hides the CUDA
@@ -193,14 +188,11 @@ async function runBenchmark(cfg, modelInfo) {
       output,
       kvCacheMiB,
       generatedTokens: stats.generatedTokens || 0,
-      // QVAC-23763: the capability filter's own verdict. Selection logs this
-      // when it passes a device over because its backend cannot run the
-      // requested cache type, which is what turns "the row happened to work"
-      // into "the demotion fired". Read here, after the run: backend selection
-      // is lazy, so the log is not in the buffer yet when load() returns.
+      // QVAC-23763: logged when a device is passed over for the KV type. Read
+      // after the run: selection is lazy.
       demotedForKvType: specLogger.logs.some((l) => /cannot run KV-cache type/.test(l)),
-      // Read final placement after model initialization. `stats.backendFamily`
-      // is the coarse enum, not the device name.
+      // Final placement from the structured log. `stats.backendFamily` is only
+      // the coarse family.
       choseCuda: specLogger.logs.some((l) => /\[backend-selection\].*selected=cuda/.test(l))
     }
   } finally {
@@ -234,10 +226,8 @@ async function runHeadDimSmoke(t, modelInfo, label) {
         }
       }
       if (cfg.kind !== 'tbqpq' && isLinuxX64) {
-        // This row pins nothing, so it shows what the default cascade actually
-        // did. Without it a silent fallback is invisible: both integration legs
-        // pass either way, and the pinned rows above only prove the override
-        // path. The two legs expect opposite answers.
+        // This row pins nothing, so it shows what the default cascade did. The
+        // two legs expect opposite answers.
         if (forceVulkanLeg) {
           t.absent(result.choseCuda, `${cfg.label}: CUDA hidden, so CUDA was not chosen`)
         } else {
@@ -246,10 +236,9 @@ async function runHeadDimSmoke(t, modelInfo, label) {
       }
     } catch (err) {
       if (cfg.kind === 'tbqpq' && isTurboQuantUnsupported(err)) {
-        // QVAC-23763: a refusal is now only legitimate where no GPU on the host
-        // can run these types at all - a Metal-only Mac, or a CUDA-only box.
-        // On linux x64 Vulkan is present and the filter must have stepped down
-        // to it, so a refusal there means the demotion did not fire.
+        // QVAC-23763: a refusal is only legitimate where no GPU can run these
+        // types, such as a host whose only GPU backend is CUDA. On linux x64
+        // Vulkan is present, so a refusal means the demotion did not fire.
         t.absent(
           isLinuxX64,
           `${cfg.label}: refused on a host that has Vulkan, so the demotion did not fire`

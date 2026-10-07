@@ -53,6 +53,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 22461801,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '00c33768333062bcb45e480171441f1e385757bb4b97610727901a783a2923a0': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 398734976
+  },
   '00da0a14c23e5636a4d37b605e9a6c102b546b85bd965c77fe1e5282c151695d': {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -203,6 +208,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       contextLength: 40960
     }
   },
+  '0602a4c262e3b474633871881e224031cae7dfc45bd7598392d5ba701d7da958': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 455733184
+  },
   '0655d05ccaf3cd2a01f910ef542455b7b14e66d96f6c95889079b9ca1ee168cf': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -312,6 +322,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'llamacpp-completion',
     artifactBytes: 16529
   },
+  '0b96d38be896967d23c156786aecf7b7bb51c56f3add41c6ee7a7dc1280f8222': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 1094008
+  },
   '0bca85e2c3eacb2a6ed3c168730bdafb3398d158e0d72ba1adb78a437dae8874': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -346,11 +361,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2248
-  },
-  '0f26bd6cfe8ba53624ea67ed2df7ddaa70179efc82160264561a0f05b70ba23d': {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 749625216
   },
   '0f2c8bc7f13ecb9b89459e8fd9af6d8736e0f6b1c8f8a80f747fcdc030d0a588': {
     schemaVersion: 1,
@@ -572,15 +582,20 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 2862696
   },
+  '1c9c1c141869c802148f9d0efd239ef00ee8d917c149dfdd99b7fae6a9bae48b': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 1887
+  },
   '1d41f1f6b67a8c29fa3aabbc7758b766bdd9acdbeec7d1277ab60c8e492c8b7a': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 1065180
   },
-  '1d593b947fbf5dca16f6d17266e4c587f01fb265994b2612783287c5cd735d15': {
+  '1d69f29ab1d43a94aa9680d54aac6b2447a0ff8ef308aed52d7f047afb6c6a84': {
     schemaVersion: 1,
     engine: 'parakeet-transcription',
-    artifactBytes: 140717952
+    artifactBytes: 391389760
   },
   '1d7855f91c3e2b8ef79fbea62707d46ceb8a1ad01834ef6dd500f32a7006cc2c': {
     schemaVersion: 1,
@@ -588,10 +603,20 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 35951615,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '1e49edba0d86e55de620e5130a4743415c820b55a47a5129d4524793783b59e3': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 460225408
+  },
   '1ef575be54a310eeace84c52e609f2a8c292f3c4b170376ee6ee3524c0c30316': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 4371896
+  },
+  '1f62748e4d590b6a8c461be776031545e9628a3b0174af30585289342d9d0082': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 443473
   },
   '1f7b7f0b984cf065c604360c29c8098362ed61b290db0ff12c6f360bb1a8a980': {
     schemaVersion: 1,
@@ -639,6 +664,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 1977
   },
+  '232719c463a9d7a8c9758475ae3007e24c08f07d172bcafb9066346f6afef08e': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
+  },
   '23369fd6c6587f185a5c2a0dfe3fffb0a4d14eb09510dc72a8b2682680267905': {
     schemaVersion: 1,
     engine: 'tts-ggml',
@@ -648,6 +678,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 802367
+  },
+  '24811607850b4ef37f8c87c7f3b6c6755424174fc47d22d57597bac409cc8b5d': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 1407544192
   },
   '248f47568788ecc351da7e5e07064d4153b4f71e011364ae2c931ffeec4d1cc2': {
     schemaVersion: 1,
@@ -715,6 +750,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'ggml-vla',
     artifactBytes: 3759519072
+  },
+  '27eb152fa63e88b9b40f24ce341b7d02b5b1f19cf83f78e315561e5b6b63ac7b': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2205
   },
   '27fba2f530dc4e459e2acdcb0f575f20660bb18f20126a02327061dc5cd34ccd': {
     schemaVersion: 1,
@@ -803,6 +843,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 2260
   },
+  '2ab83ae423cbc86e51e7b2e368ce13d73f152f47c508bff186d95781c7a819cc': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
+  },
   '2b7194817c5dd9225ca90c0d908cc92e1d6d1f45625781a5feb037ac568d6a61': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -835,10 +880,20 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 22428729,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '2c2f2c6dbec71cb6be677b98cf2b79e94f6b4fc05f6de424b632095ddcc79e90': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 92343296
+  },
   '2c969b069b3d230feddd17db2d74eb658a9b33b960d2d40adbca5496c9784e85': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 4295860
+  },
+  '2ca52ec71c9bd7c16ce6591354a9acf7ed095f2026d92b551383c322eebf3648': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2201
   },
   '2d091e5508c8d997517dad35a8ff5c74c3afdc282631ff7139dd55785cb704c8': {
     schemaVersion: 1,
@@ -902,6 +957,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'sdcpp-generation',
     artifactBytes: 253815318
   },
+  '30118dc568766ae91f9229721b477f2ff21aeb92d3e119da069eb462cb9da636': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 453879
+  },
   '3020fbce4d4629677a2cb4b8216cc33a79b0829f95fe193c23a6342949ed05fd': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -927,6 +987,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 817335
   },
+  '32af6c251a216a5756e42548eb8576e87e57008b2a141251dd82e4997559c8e2': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
+  },
   '32b5e0df493671a223cb5cb32430181cbb7fe6b5562c91dbc3d35410d37e5ff6': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -936,6 +1001,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
     artifactBytes: 77691713
+  },
+  '334972b314388713a313987bd4ffc614d419f23854f67097afe2db434c764b64': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 626254
   },
   '3397f2e15859d268dc91782e92e70c485c7780448d57d622d145374390168f71': {
     schemaVersion: 1,
@@ -1030,6 +1100,31 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 510
   },
+  '3907dc1658db1f78a9826bf8d5bcb8dc65db0d466388937af57f2294fae62ec1': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 7206168928,
+    ggufFacts: {
+      architecture: 'qwen35',
+      blockCount: 64,
+      headCount: 24,
+      headCountKv: 4,
+      keyLength: 256,
+      valueLength: 256,
+      embeddingLength: 5120,
+      contextLength: 262144,
+      fullAttentionInterval: 4,
+      ssmStateSize: 128,
+      ssmConvKernel: 4,
+      ssmInnerSize: 6144,
+      ssmGroupCount: 16
+    }
+  },
+  '3a038872f427860db2c5b7b9dde35d12c50d28fa1fe7928fcad8b37d5e146a91': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 459886336
+  },
   '3a071ed3d982f6eb6ee116b84067bf70041e4229e43ea65ecb6d7c2796e8851b': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1114,6 +1209,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 21882147,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '3dcc79ad01db53d9b9f7f893f43fc81e7124bce2dbf4675c81d4bf9001f3f658': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 1429807168
+  },
   '3dd8752c133799247167677a48e4040a6742e4fad9fdc2896ad02bc8c8c45b39': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1155,21 +1255,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'tts-ggml',
     artifactBytes: 262241216
-  },
-  '406bd5983096cc49e1019e9c295e1b011d7b17ccae9e066266eb1734a4743bf7': {
-    schemaVersion: 1,
-    engine: 'llamacpp-completion',
-    artifactBytes: 807691648,
-    ggufFacts: {
-      architecture: 'llama',
-      blockCount: 16,
-      headCount: 32,
-      headCountKv: 8,
-      keyLength: 64,
-      valueLength: 64,
-      embeddingLength: 2048,
-      contextLength: 131072
-    }
   },
   '40767965cbc4289fccc7a8dc34fa6d4700ccc0ff36ba382a85acc943fb1b0c03': {
     schemaVersion: 1,
@@ -1220,6 +1305,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       embeddingLength: 2048,
       contextLength: 40960
     }
+  },
+  '41f12eedb6af7d0fa0139fbd7ed4e7bdef7f91a9cdce2ae325b2fb23e1fb9c15': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2409663264
   },
   '4221c26e5663502d1c96fc901c9967d0e70ce2dcfaa5a9fb9280a46bd19e3c07': {
     schemaVersion: 1,
@@ -1400,11 +1490,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 20770630,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
-  '48102e55d61aaa827b89af03d772106e37de6ee12e8746f278f6315e71d980ad': {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 741330176
-  },
   '48162b9ae086ad8e72275ece2245215975186de3601d5a74719de19ad88741b6': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1519,6 +1604,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 2774540
   },
+  '4db3f5dfb43e873cfeead18ea461a9a2e5b6dbab0087aa246ca530e61fa22789': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 210497024
+  },
   '4dd6a91feff71e745395dcc0d52f885848ca0d843d5f70628ca51b3be1b70b45': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1619,6 +1709,26 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 1090089
   },
+  '53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 5946648928,
+    ggufFacts: {
+      architecture: 'qwen35',
+      blockCount: 64,
+      headCount: 24,
+      headCountKv: 4,
+      keyLength: 256,
+      valueLength: 256,
+      embeddingLength: 5120,
+      contextLength: 262144,
+      fullAttentionInterval: 4,
+      ssmStateSize: 128,
+      ssmConvKernel: 4,
+      ssmInnerSize: 6144,
+      ssmGroupCount: 16
+    }
+  },
   '5480719a5a8ac43acdf28db1c89a4d60837a475e1120ea0c4e021c4d5b7e6fd6': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1681,6 +1791,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 904455
   },
+  '5742c9963653de3bf66c45dc3112c4e49214c12a6f3aee21c579989cf652168c': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2146
+  },
   '5761c39887a0e0cd3dd38d22cadc31cecd2a43b0514c4bba96b426736e7fd72d': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1723,6 +1838,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 23500531,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '5b2bcd13c6d24d0214644da29040f35bd721a03ec442afe484abd61447ab11c0': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
+  },
   '5bc2b3860aa151a4c6e7bb095e1fcce7cf12c7b020ca08dcec0c6d018bb7dd94': {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -1764,6 +1884,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 2238
   },
+  '5d8ba37d92a85a52d7c1791fe86fc87d0c9e938431444d8bb4ce7ee9158bb27c': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 375
+  },
   '5deff7093d558768f8c22406449202e27595f023cc383a2b66beed240ed46443': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1778,6 +1903,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
     artifactBytes: 43537433
+  },
+  '5ec1cefe305b458b61eced97ce305813080433e70175cc0e93fb6f0cd7f702cb': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2155
   },
   '5ec9a1eb849cf8fde0908904808e65a0c5a3027f85b1b5b9944c6b15d424598d': {
     schemaVersion: 1,
@@ -1926,6 +2056,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'whispercpp-transcription',
     artifactBytes: 264477561
   },
+  '6807ede61d570bb86ba34b756a0fa109edc33668604de867c6ea6d8f1d631903': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 629246976
+  },
   '6844883ee7b9c73e029369a2428fd48657b48111a2ca087662bf538e4ac1388f': {
     schemaVersion: 1,
     engine: 'tts-ggml',
@@ -1972,6 +2107,21 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'tts-ggml',
     artifactBytes: 5690
   },
+  '691b31e2d4be3fcfe4853ec3dc707cb54ad31b8efe34eb302ea6b23f58170290': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2453
+  },
+  '6928753cce866fa5ed26f06141f3a65ebab1b61a75e63e12e75c7df688f8bd74': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
+  },
+  '6939e6f4240dcf3e692d6eeb6d4df598267503a129e68dffae86d88fdaa04823': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 243
+  },
   '6961ce07f38e6c113a70855706aa7cad4cc828f986d1751c33f14699f885a2e8': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -1996,6 +2146,21 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 193106987
+  },
+  '6a13da69b498c560965ad15b5eede6dffacd5eb985759070a5b35575ed6a801c': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 807692320,
+    ggufFacts: {
+      architecture: 'llama',
+      blockCount: 16,
+      headCount: 32,
+      headCountKv: 8,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 2048,
+      contextLength: 131072
+    }
   },
   '6a154ec41e390aaaaf579f6e891042cee03f22ced96f6027182565cb64d298f5': {
     schemaVersion: 1,
@@ -2132,6 +2297,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 35739430,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '71d5aeddc532f4efba19ccf4a6a451dbcb2731683d214c45e4f2fe5019b1a2cc': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 263080384
+  },
   '724b358d399c6b23444de36d76e9e2630c7024c29d9e617323b820a11631535a': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2143,6 +2313,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 22624484,
     assumptions: ['artifactBytes sums 4 companion-set files']
+  },
+  '7296314b2930a0b45edd96470f8667fc88c6edbf877aa4f1bae5e0e5bfea7523': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 405212736
   },
   '72a81bb8b87ef6d12165ce5302010b6192f0424877954ad4568ca8a7ee46e1e5': {
     schemaVersion: 1,
@@ -2201,6 +2376,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'llamacpp-completion',
     artifactBytes: 825245568
   },
+  '75ee1e9caaa14477ca623f19c4711dafba032f794fd4220f98539c28cc4da5b7': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 1390644896
+  },
   '76763bab9e6c7f90d0a202a91a21a678dd65d9cfc1cfcd4f3c80f5a83a531444': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2257,16 +2437,16 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 22178320,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
-  '78566cbce8fe23b85c5c956d3bd9125a351d6aedd43e8e38470ecb00075e3b37': {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 1380198336
-  },
   '78f7e6e1435cc2d4a29cf597f493187fe29ddb9ce9d3766c287e2e6d37052d01': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 36842426,
     assumptions: ['artifactBytes sums 4 companion-set files']
+  },
+  '79052285fdcb2876312bf914afe6d654f4d07c68c1c243a5e3aaf43895761abc': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 48220512
   },
   '7939009b975b68a9842f3de285a38338729ecdbcf2358702ca2cc66b5bd7a89c': {
     schemaVersion: 1,
@@ -2298,6 +2478,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
         'kvLayerClasses derived from per-layer attention metadata'
       ]
     }
+  },
+  '796fc5a6e14c682551454702cab64e053f293a5814a5589a7b63de1545db298b': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 626247
   },
   '7a543087d4e9c1fe2f6b6f735b5e31aeadab80235e734c0388278722042ee3a2': {
     schemaVersion: 1,
@@ -2331,6 +2516,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 22306258,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '7b6d79c2fcb26d846666f1b9b12d06eba933e3ca43dfcb0f977e7008631314b0': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 374
+  },
   '7b73fa47b4d1401bdf3a0898827fac94bced6633bf64ef7fe55492b6115cc74b': {
     schemaVersion: 1,
     engine: 'sdcpp-generation',
@@ -2362,6 +2552,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2228
+  },
+  '7bd5394dbf10a5f7537dd1817bffa9cefd97d200e14e45754328b90a4f8fe4b6': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 761593408
   },
   '7c8ee65ba580d162c9c4c06a6bc45b6aaa2215ff7bfdd27751581f61179495a5': {
     schemaVersion: 1,
@@ -2405,6 +2600,16 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 20960880,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '7d98496e2a2d88bf1c1d5c65f6f44f79f3148e93bd43a5e74753e50791daaaab': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 374
+  },
+  '7db7cb76fc776b39b40fe2f5350a4978acb9c1cc4d7bc4c7ae1ee93046f98834': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 450651
+  },
   '7deecba2614a1e8bd8b549f57f4e507be90d88dbea704fda2a355373fbb781df': {
     schemaVersion: 1,
     engine: 'llamacpp-completion',
@@ -2435,6 +2640,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 922599
+  },
+  '7fef9f1edf82f9e5c308f89509d017fb85781e03c1dc05447b617e0421f51d90': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 140718080
   },
   '8017cbf812bae400794c424699b89de90db06ac7a4ca67a420013a9f68b270c1': {
     schemaVersion: 1,
@@ -2503,6 +2713,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 1109000
   },
+  '830e7a89dc08bc88e98ff48c68552ff780a2042f26327992d419f17798caade9': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
+  },
   '8351a34c6d33b5a52dc8fbbbb81e19195b861834541a7f31e4dfce668b0193b9': {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
@@ -2533,6 +2748,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'sdcpp-generation',
     artifactBytes: 22844832
   },
+  '8496e6044ece35f61abc37d2b9b53f01e165884b6d37649b98aac41985f3c2d5': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 150244416
+  },
   '84f636e1a9a11df6236e0e742db95065d4924af049f677e1ac3ffd6d1f0c98af': {
     schemaVersion: 1,
     engine: 'tts-ggml',
@@ -2552,6 +2772,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 3631332
+  },
+  '859da8c521d20ff32f1b58050831c8e3d1c99510979e327278e997bfb2c294a9': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 375
   },
   '863a92c482184cdfd172cc77c55d6d8f71f132cbe154b2aa64d5f48a19e6f118': {
     schemaVersion: 1,
@@ -2643,11 +2868,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'tts-ggml',
     artifactBytes: 827414304
   },
-  '896463ab74886d027538709f3a21d141b7a99061d4b337a2777c142926f91416': {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 1407544256
-  },
   '8971ee4f331ff0a4c609374f32984b3d4e6dc086c0aa35f1d637fad1829e887f': {
     schemaVersion: 1,
     engine: 'llamacpp-completion',
@@ -2694,6 +2914,22 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 5195132
   },
+  '8bc3e1de50fc91751ab893965c78c17589323bf4d2a9c1be2750ada7c7fabfaa': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 1331108128,
+    ggufFacts: {
+      architecture: 'acestep-lm',
+      blockCount: 28,
+      headCount: 16,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 64,
+      embeddingLength: 1024,
+      contextLength: 40960,
+      assumptions: ['key_length/value_length absent — derived from embedding_length / head_count']
+    }
+  },
   '8c7d9ba830c15e2ba89a70307f301a62b7b2a51ae1e9f9a3938843eaa875af3d': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2704,6 +2940,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 791280
+  },
+  '8d6899b736f2dd6fc34e22d27bf37f87c76cee288f7963856b5b842bf6d8034a': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 375
   },
   '8d93c54aa5e2044c416ec680b5ff9af0227bd698521666e8b1a1ea1b041fbae8': {
     schemaVersion: 1,
@@ -2736,6 +2977,16 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       contextLength: 131072,
       slidingWindow: 1024
     }
+  },
+  '8e4d4881ae07ddf3180bba38e98d5e0375b250432fef8a327575b09c37a47d68': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 741330464
+  },
+  '8e90e30d32fa1f88406fe63e53e82784fc05de2202e5080cd58a7114e4a92b5c': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
   },
   '8ed3cefac12693b9312910a5bb3be59bf3eb5bb2903dfe954a1ff1b4beaf80ff': {
     schemaVersion: 1,
@@ -2801,6 +3052,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       ssmInnerSize: 4096,
       ssmGroupCount: 16
     }
+  },
+  '91a4028ee0795526154185eb46edf2e63b06674f279fb6e3987a2a82e0c9edb7': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 1284062944
   },
   '921dc7e259f308e5b027111fa185efcbf33db13f6e35749ddf7f5cdb60ef520b': {
     schemaVersion: 1,
@@ -2885,6 +3141,22 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       ssmConvKernel: 4,
       ssmInnerSize: 2048,
       ssmGroupCount: 16
+    }
+  },
+  '942ec6a7bc11a40809af5f337063f2af2acc63e4fcd4a92b0cb42dc2bc7c41e8': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 1445710208,
+    ggufFacts: {
+      architecture: 'acestep-dit',
+      blockCount: 24,
+      headCount: 16,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 128,
+      embeddingLength: 2048,
+      contextLength: 32768,
+      assumptions: ['key_length/value_length absent — derived from embedding_length / head_count']
     }
   },
   '94b660f37c9c29a904b48498a7202846faaeef16f30668f356336c29cefc0f63': {
@@ -2986,11 +3258,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       contextLength: 40960
     }
   },
-  '98651c49ef4e3dbc2606f91bbc870431b84fdad739e9ff491e958d0f61c89a97': {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 395029120
-  },
   '98d20700a345a131ffeaabf526faef324e5a1d83b75bf500c02f76401eb92d6c': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3036,6 +3303,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'whispercpp-transcription',
     artifactBytes: 77691713
   },
+  '9c3a5d0a4f8876d1dfc0d2385df42ae21adbec7e9866af45a934621d7566d84e': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 461065984
+  },
   '9c87aa09ff4f81c320993fe412624ca3584fe9ccf5371247d64f1117dffcf168': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3068,15 +3340,30 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 36687609,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '9edfb3e309497b426f0257d70f6a1335e12fbd0d04573cb268acb4960a4f4230': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 578180
+  },
   '9f90fc4aad773cb7f2b861ef83bed22f8ebdc4e4998db5a3a2709a368c740f9e': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2238
   },
+  '9fb15428e3a3fdb92f7c86f7ee46560b1c06ba3d8aa5c8833fa1e6ac47223bf5': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 639847
+  },
   a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002: {
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
     artifactBytes: 147964211
+  },
+  a03f3acc16ef995e517b891aff83f155a256e817d62cdd6f5b03dbe59bbf0250: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 373894144
   },
   a0bd28041b9a48c56db942c1f12c59c355b04ff117ad940a68cad6212e3fcb99: {
     schemaVersion: 1,
@@ -3099,10 +3386,10 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       slidingWindow: 512
     }
   },
-  a1fb4ab2a6dd8a931e67d08b24e6e277e5163d26abb495fe730a23385964fc36: {
+  a1a4b925359719fae8e3ff021014dc917b999ba6a1b4b1376caef6be959e8b02: {
     schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 74110976
+    engine: 'tts-ggml',
+    artifactBytes: 973490560
   },
   a220363d60391f7ce3df8ec9785424dbc00c24d5786d1a4308cf8ca3ed3385c2: {
     schemaVersion: 1,
@@ -3113,6 +3400,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 772941
+  },
+  a2f5e4b2eaf688d9dfbcff17d4c36b6952c53b23247ffb0a573fea8453e9db64: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 1380198400
   },
   a3125072128fc76d1c1d8d19f7b095c7e3bfbf00594dcf8a8bd3bcb334935d57: {
     schemaVersion: 1,
@@ -3178,6 +3470,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     },
     assumptions: ['artifactBytes sums 3 shards']
   },
+  a5d1e68539b622c7abd5c3d1500e5322772c1c8c75c6de5a8ed96ebe296806fe: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2163
+  },
   a642e9c9bbe2069628bb585071a138b794d04dae588823d183aa27af76698ef3: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3213,15 +3510,25 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'parakeet-transcription',
     artifactBytes: 147436704
   },
+  a8855cc104cdde8d9a9b87da430ffc3e70c4cbdb34507154aef0c13dd02b06a0: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 408
+  },
+  a8fbce44032eda4fdf6d098f4c3602fca309859a129f4cdb33d2709b48ba7d32: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 257940000
+  },
   a908cec72179edbbf61f3e2572c83f16739b31267371be3f59f6c4f783ffb519: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2228
   },
-  a9b228101e8c3eeabeb5a38f1948f2a0a1ced9262e3261fcb301a935e38c4f28: {
+  a9a124b6a5c1306393d6e32c55324a8d9189734cb8b31ef29c8e3836ce7a76d4: {
     schemaVersion: 1,
     engine: 'parakeet-transcription',
-    artifactBytes: 1390644608
+    artifactBytes: 459886336
   },
   aa326306c177e11129de5bfeba518abc499c0b6005492766748a9c9ea6f4c712: {
     schemaVersion: 1,
@@ -3345,11 +3652,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 772004
   },
-  adf2dbe247896ab2812404a693f4c4b52145dc76811c88490e286d2efe6f5b32: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 391389696
-  },
   ae65553d8841fbff7b1674faa32ff2d4235d8f6501f1e4aba87b17e01c4ab00e: {
     schemaVersion: 1,
     engine: 'tts-ggml',
@@ -3370,11 +3672,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 4197836
-  },
-  af090772797632dcea0546985b112f86a9a10e0d87d10a2b74bd6ae57464aded: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 1429807168
   },
   af151db26e3b0a87e805d899d3f105aa0a11f9124893d47ca3f39e47b27cfa8f: {
     schemaVersion: 1,
@@ -3504,6 +3801,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 2542096
   },
+  b2aeab6f28b70e11e273a53d85a0443064aed88dacab8c4a636feb009fad4049: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 138051616
+  },
   b2f44477cb1d92ca92217a195808eef830afd7ef525a3633215ca24d7da6396f: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3597,6 +3899,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'llamacpp-completion',
     artifactBytes: 199470624
   },
+  b620dd0d76e1ecae77e37454737499c30cbe690694a5e11290c1552f50c4075d: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 74111136
+  },
   b625d3dcdfa2b4bbec496c9a0a30d169c917464ac5ea75506c0699972fea95f0: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -3607,6 +3914,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 21331993,
     assumptions: ['artifactBytes sums 4 companion-set files']
+  },
+  b6a4bee9fb19fb83f3c3f5fc9035ac7045125d7878133957408ff3fa50d64a9a: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2162
   },
   b6c7b8fd3a8427abf4b0df61dd472d4f628fb80e9ec194c87e96e209d0208c4b: {
     schemaVersion: 1,
@@ -3669,11 +3981,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'llamacpp-completion',
     artifactBytes: 108782144
   },
-  bbd05057baf15e32311e1366edb4a77ade897a29ca152ec36cac4fb05005469c: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 75458048
-  },
   bcbfad4019e582a78df01d624f67ef8abc5399625935169b4cd620ea4a82074d: {
     schemaVersion: 1,
     engine: 'tts-ggml',
@@ -3718,6 +4025,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       ssmInnerSize: 2048,
       ssmGroupCount: 16
     }
+  },
+  bd58f79047d62b6811270026c1cc6c9f1b894bafac90c3eded732069bb955067: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 395029408
   },
   bd9b65504acc6d9726dd281f7defc2adb7c2c22d0688fe2f84697de25197c8c5: {
     schemaVersion: 1,
@@ -3790,10 +4102,20 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 529
   },
+  c0260cac05d04740b004c07d96b7171470740c597ba642d9ac7fed341acb486b: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 375
+  },
   c09588ca5662b230ed65bd39a07f58d9f7dd21c3a19e4aeb1bff39bf3b297c56: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 807708
+  },
+  c0ac48cf5b18403301d9e19f2983c715ac789c522720dda9acccd87e447481e1: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
   },
   c10b950a18ec75d3ee61b55ed1ba5b4c3ff3d7afd726651b813d48165bd5847a: {
     schemaVersion: 1,
@@ -3872,11 +4194,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 1109047
   },
-  c7b7f62d27791ef96049955667de5650684617f4a29f4cf5810e9ab831492cd3: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 138051456
-  },
   c7c9eb64a20f03b30a327a450381d2159e75012fddb2e806a590e4651d3d65d8: {
     schemaVersion: 1,
     engine: 'llamacpp-completion',
@@ -3933,10 +4250,20 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 3303648
   },
+  c96214b73932d6411f817030c6308c1d1f3b5db945315e8f3f2eeb3d0493713d: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 75458176
+  },
   c9ef83603e41f78d41fa601ba9c7196be58518bd964bfe364f325665bc8bc7d0: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 3860080
+  },
+  ca0a6780db9de26eb4c95fabe8ddb233270f1836b3fd0a682a28194936656622: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 129095
   },
   ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910: {
     schemaVersion: 1,
@@ -3952,6 +4279,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'sdcpp-generation',
     artifactBytes: 168120878
+  },
+  caa552d3369ea37f03fadf7d706cc4ad54660ba7ec7f18ce089c2635ef221ea5: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 794582720
   },
   cad75f2c3eccb9545b571ca32f235e6ffaae6d8a77bfa808cf8068948c421f10: {
     schemaVersion: 1,
@@ -3998,6 +4330,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'sdcpp-generation',
     artifactBytes: 15879461504
   },
+  cd7426ed873eca2ae5c729764f5781376a320a85169b7b640bddda4a1d6f742e: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 243
+  },
   cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864: {
     schemaVersion: 1,
     engine: 'llamacpp-completion',
@@ -4042,6 +4379,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2226
+  },
+  d1ebadd4c44804436156408bd47dbb58002ba3e9934c2fdcf6fb8fc6085d8b6a: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 669940640
   },
   d2142d8ae97857656b227fef6733ea46e82da3b7546cd944dec88ba280aadfeb: {
     schemaVersion: 1,
@@ -4091,6 +4433,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 3515428
   },
+  d41a7e7213730c5c1aad603e3176f2fe00a5844c04754d83c9a55657b2990795: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 369
+  },
   d453e776dac188abb702146b70e105ef5306212785f1b1f31c40831044b31ffc: {
     schemaVersion: 1,
     engine: 'llamacpp-completion',
@@ -4118,11 +4465,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'llamacpp-completion',
     artifactBytes: 986833408
-  },
-  d474dacc63ad8df1a9003f888bcb48c476d7dadec3e2ef5106a75f426e47cb63: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 257939840
   },
   d49d917bccd3e569ddf282ea597f1e255eb3b891254cc5c931d669e646bd77cf: {
     schemaVersion: 1,
@@ -4355,6 +4697,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'sdcpp-generation',
     artifactBytes: 19388448416
   },
+  de21f3aea7a63b0c0cfa6577fce3fa1a0f2ff8403970bd4ab99185f213400250: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 93015360
+  },
   de4bf2b9ffb4d910e32720ec3a43655fb6f4062ce5219332f824fc1bdca7a5f4: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4439,11 +4786,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 4636248
   },
-  e29d2749b0d38d827f9649c410a075894a329409f750287b8e7dfb1c6e2e7b5e: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 398735040
-  },
   e2b30db98ac6706efc893067a74e51f36f015a8f820fe8a4f0f5052fa6a22f30: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4515,6 +4857,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 22635839,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  e76ca401746d0463e926e7f99188a4535949db6bdded98a78effca6477d879a6: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 803230720
+  },
   e789be33dfdb639e98f5cf9eb01aa945ec3c882f68f3c8860389cf846f0112d8: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4551,6 +4898,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       slidingWindow: 1024
     }
   },
+  e9ea1ece8209acd727ab84219975915dca7166b3bf53f5602f829bd3cfaf7e93: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 2151
+  },
   e9f8d86c32eb82441c8b2558c9c2843f39d73fe03fc3fbe294e239707ca4b36e: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4567,6 +4919,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 2832156
   },
+  ea45cdab0faf551f06ab51e8b1aff40d7a9cfcd0bdb651054bf52b5876de70f1: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 669940640
+  },
   eacf610d1ee4bd5ed0197a0777dd8f4fceb8eefa27009067c7d496cb68fbde45: {
     schemaVersion: 1,
     engine: 'llamacpp-completion',
@@ -4576,6 +4933,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 4990588
+  },
+  ebce21ec8ed0f137bba0da671326bf77df375309b048f69d6ce0c2fdadaab620: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 735323200
   },
   ec0c210d09cd5d8a5edf7a50462db0a8fb5dd78d03bbc6d4d72d91074f0490e4: {
     schemaVersion: 1,
@@ -4593,11 +4955,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'whispercpp-transcription',
     artifactBytes: 77691713
   },
-  ed0d50e801a8c763642e1e08b8f1189deadee14e219261bc4f4f7c9c0d22d8af: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 263080256
-  },
   ed328e589a3ccd70fd3ce7773fc3c01d8b7b18c687464cacf17fd40a8c0daadd: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4613,16 +4970,16 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'llamacpp-completion',
     artifactBytes: 7791
   },
-  ed7df4144243f7a41cb6d057a824f22c52c3aabb5971b6654803b8d94e0f1f1a: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 735323136
-  },
   ed8bb4a811e1c45a259e91052080d25e5c8b4e2df0e59cb1521c04a57855ef97: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 35540466,
     assumptions: ['artifactBytes sums 4 companion-set files']
+  },
+  edc08ce62fce103156f200efd998cd1f09b6a78ec32162ed3e6b8b90932ba27e: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 85168256
   },
   edc6015cb15694c27be7d1d33f1bc015db9a358ff51ed524628c027504907ba9: {
     schemaVersion: 1,
@@ -4736,6 +5093,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'parakeet-transcription',
     artifactBytes: 79031136
   },
+  f21302fc878043c33c45ff019a6a30d6d9fac63925f259122fdba97d477f2443: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 374
+  },
   f27814dffca6102255ed7a338f2a83c16905a07e09444016187c768aaf9ac7b6: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4796,11 +5158,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 4724124
-  },
-  f6ad1b9912c03c95b3377eaf0fc2fee635a4e4904409d8efac1944343d9f3360: {
-    schemaVersion: 1,
-    engine: 'parakeet-transcription',
-    artifactBytes: 761593408
   },
   f6b6c6d5cfa6f00d964eeb7add28eb14ce7481734d506b90681007678cd2c484: {
     schemaVersion: 1,
@@ -5016,10 +5373,15 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       ssmGroupCount: 16
     }
   },
-  fee699b3257ce0cfd249f490ab9f9791d9e0f6f8781e4354db2aa5584e594c82: {
+  fe057335043748bed119651c64229a4bd394ebe176a6a9eed46281867e4e28ff: {
     schemaVersion: 1,
     engine: 'parakeet-transcription',
-    artifactBytes: 405212736
+    artifactBytes: 2150
+  },
+  fe3013294baaa39e77615d39ec75c627496c60b95e72b1097674db64eebf9aaf: {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 749625152
   },
   fefd91bc5551877762cd0d0cbe583080f8e636d5aa65a9a5f42b369654df778b: {
     schemaVersion: 1,

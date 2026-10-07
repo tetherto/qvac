@@ -492,10 +492,9 @@ class VlaModel {
         catch { }
         this._nativeLoggerActive = false;
     }
-    // QVAC-23763: `backend` now also takes a comma-separated GPU priority list,
-    // e.g. "cuda" or "cuda,vulkan". "auto" and "cpu" keep their meaning. The
-    // family names are validated natively so the list stays in one place; this
-    // check only rejects the shapes that never reach the addon.
+    // `backend` is 'auto', 'cpu', or a comma-separated GPU priority list such as
+    // 'cuda,vulkan'. Family names are validated natively; this only rejects
+    // shapes that never reach the addon.
     async load({ backend = "auto", backendRequired = false, } = {}) {
         if (typeof backend !== "string" || backend.trim() === "") {
             throw new QvacErrorAddonVla({
@@ -509,9 +508,8 @@ class VlaModel {
                 adds: `backendRequired must be a boolean (got: ${String(backendRequired)})`,
             });
         }
-        // QVAC-23763: on its own it would mean "require the default order", which
-        // is not a thing. Rejected here rather than natively so the message names
-        // the JS-level spelling the caller actually wrote.
+        // QVAC-23763: on its own it would mean "require the default order". Also
+        // checked here so the message names the JS spelling the caller wrote.
         if (backendRequired && (backend === "auto" || backend === "cpu")) {
             throw new QvacErrorAddonVla({
                 code: ERR_CODES.INVALID_CONFIG,

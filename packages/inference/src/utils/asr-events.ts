@@ -7,7 +7,7 @@ export function isVadEvent(event: ASRGgml.ASRStreamOutput): event is ASRGgml.Vad
     event.type === 'vad' &&
     typeof event.speaking === 'boolean' &&
     typeof event.score === 'number' &&
-    (event.source === 'silero' || event.source === 'energy')
+    (event.source === 'silero' || event.source === 'energy' || event.source === 'sortformer')
   )
 }
 

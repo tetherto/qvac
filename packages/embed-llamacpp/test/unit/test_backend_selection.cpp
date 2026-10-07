@@ -1459,11 +1459,11 @@ TEST_F(
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// ---- backend-required and main-gpu addressing (QVAC-23763 R11/R13) ----
+// ---- backend-required and main-gpu addressing (QVAC-23763) ----
 //
-// Mirrors the llm-llamacpp cases. embed has no metadata, finetuning or Adreno
-// rules, so the "an override cannot resurrect a guarded device" variants have
-// no counterpart here; everything else applies unchanged.
+// Mirrors the llm-llamacpp cases, minus the "override cannot resurrect a
+// guarded device" ones: embed has no metadata, finetune or Adreno-version
+// exclusions.
 
 static BackendChoice chooseWithRequired(
     MockBackendInterface& mockBackend,
@@ -1564,8 +1564,7 @@ TEST_F(BackendSelectionTest, MainGpuIntegerStillWorks) {
   EXPECT_EQ(parseMainGpu(""), std::nullopt);
 }
 
-// std::stoi parsed a leading prefix and threw the rest away, which is what made
-// a bus id parse as device 0.
+// "1abc" used to parse as 1.
 TEST_F(BackendSelectionTest, MainGpuRejectsPartialIntegerParse) {
   EXPECT_THROW(parseMainGpu("1abc"), qvac_errors::StatusError);
   EXPECT_THROW(parseMainGpu("nonsense"), qvac_errors::StatusError);

@@ -1,0 +1,110 @@
+name: Publish SDK Kotlin
+
+on:
+  push:
+    tags:
+      - 'sdk-kotlin-v*'
+  workflow_dispatch:
+    inputs:
+      destination:
+        description: Maven destination (Central stages for review by default)
+        type: choice
+        options: [github, central]
+        default: github
+      release_central:
+        description: Publish Central deployment publicly and wait for PUBLISHED
+        type: boolean
+        default: false
+  workflow_call:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-sdk-kotlin-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: packages/sdk-kotlin
+
+jobs:
+  publish:
+    name: Verify and publish Maven artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: release
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;29.0.14206865'
+
+      - name: Verify release tag version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          version="$(python3 -c 'import json; print(json.load(open("../sdk/package.json"))["version"])')"
+          test "$GITHUB_REF_NAME" = "sdk-kotlin-v$version"
+
+      - name: Verify release gates
+        run: >-
+          ./gradlew --no-daemon
+          checkVersionAlignment
+          checkContract
+          verifyPublishedWorker
+          jvmTest
+          :android-example:testDebugUnitTest
+          :android-example:assembleDebug
+          :android-example:compileDebugAndroidTestKotlin
+
+      - name: Verify all artifacts through standalone Maven consumers
+        run: |
+          ./gradlew --no-daemon verifyMavenPublications
+          ./scripts/verify-maven-consumers.sh
+
+      - name: Publish Maven artifacts
+        if: (inputs.destination || vars.KOTLIN_MAVEN_DESTINATION || 'github') != 'central'
+        run: ./gradlew --no-daemon publishSdkToReleaseRepository
+        env:
+          MAVEN_REPOSITORY_URL: ${{ vars.KOTLIN_MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
+          MAVEN_USERNAME: ${{ secrets.KOTLIN_MAVEN_USERNAME || github.actor }}
+          MAVEN_PASSWORD: ${{ secrets.KOTLIN_MAVEN_PASSWORD || github.token }}
+          MAVEN_SIGNING_KEY: ${{ secrets.KOTLIN_MAVEN_SIGNING_KEY }}
+          MAVEN_SIGNING_PASSWORD: ${{ secrets.KOTLIN_MAVEN_SIGNING_PASSWORD }}
+
+      - name: Stage or publish to Maven Central
+        if: (inputs.destination || vars.KOTLIN_MAVEN_DESTINATION || 'github') == 'central'
+        shell: bash
+        run: |
+          if [[ "$RELEASE_CENTRAL" == true ]]; then
+            ./gradlew --no-daemon publishAndReleaseToMavenCentral
+          else
+            ./gradlew --no-daemon publishToMavenCentral
+          fi
+        env:
+          # Manual dispatch stages unless explicitly authorized to release.
+          RELEASE_CENTRAL: ${{ inputs.release_central || github.event_name != 'workflow_dispatch' }}
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.KOTLIN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.KOTLIN_CENTRAL_PASSWORD }}
+          MAVEN_SIGNING_KEY: ${{ secrets.KOTLIN_MAVEN_SIGNING_KEY }}
+          MAVEN_SIGNING_PASSWORD: ${{ secrets.KOTLIN_MAVEN_SIGNING_PASSWORD }}

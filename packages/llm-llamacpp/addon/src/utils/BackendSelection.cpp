@@ -324,7 +324,7 @@ void emplaceIfValidDevice(
   } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
     family = DeviceFamily::Igpu;
   }
-  // Anything else - an ACCEL device, say - is logged but is not a candidate,
+  // Anything else, such as an ACCEL device, is logged but is not a candidate,
   // matching the pre-QVAC-23763 bucketing.
   if (!family.has_value()) {
     return;
@@ -396,10 +396,9 @@ std::string normalizePciBusId(std::string id) {
 
 /// Resolve a backend-qualified or bus-id `main-gpu` to device indices.
 ///
-/// Scans rather than indexes: that is what makes these forms stable against
-/// backend load order. A missing match is an error: falling through could run
-/// on a different GPU. A bus id keeps every
-/// backend representation of that physical device so `backend` can choose.
+/// Scans rather than indexes, so the result survives backend load order. No
+/// match throws rather than falling to another GPU. A bus id returns every
+/// backend's copy of that card so `backend` can choose.
 std::vector<size_t>
 resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
   const size_t deviceCount = bckI.ggml_backend_dev_count();
@@ -512,9 +511,6 @@ Enumeration enumerateCandidates(
     } else if (std::holds_alternative<MainGpuType>(mainGpuValue)) {
       gpuType = std::get<MainGpuType>(mainGpuValue);
     } else {
-      // QVAC-23763: the two stable forms. Both resolve by scanning devices
-      // rather than indexing, which is the whole point - an index is what
-      // backend load order moves.
       const std::vector<size_t> resolved =
           ::resolveNamedMainGpu(bckI, mainGpuValue);
       for (const size_t index : resolved) {
@@ -622,13 +618,8 @@ void applyExclusions(
     }
   }
 
-  // QVAC-23763: a device whose backend cannot run the requested KV-cache type
-  // is passed over here, before the cascade picks, rather than the load being
-  // refused after it. On a host with another GPU that can run it, that turns a
-  // failed load into a working one on the next backend down.
-  //
-  // Runs after the guards above so a device already excluded keeps its original
-  // reason, which is the more useful one to report.
+  // QVAC-23763: pass over devices that cannot run the KV type. Runs after the
+  // guards so an excluded device keeps its first reason.
   if (bckI.deviceSupportsKvCacheType == nullptr ||
       req.constraints.kvCacheTypes.empty()) {
     return;
@@ -895,11 +886,8 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
     return static_cast<char>(std::tolower(c));
   });
 
-  // QVAC-23763: the integer arm must consume the WHOLE value. It used to be
-  // std::stoi, which parses a leading prefix and discards the rest, so a PCI
-  // bus id like "0000:65:00.0" parsed silently as device 0. Requiring full
-  // consumption is what makes the string forms below safe to add - and it is a
-  // behaviour change in its own right: "1abc" no longer parses as 1.
+  // Whole value must be an integer. std::stoi took a prefix, so "0000:65:00.0"
+  // parsed as 0 and "1abc" as 1.
   int deviceIndex = 0;
   const char* first = lowerStr.data();
   const char* last = first + lowerStr.size();
@@ -915,8 +903,8 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
     return MainGpu(MainGpuType::Dedicated);
   }
 
-  // "<family>:<index>", e.g. "cuda:0". Checked before the bus id: neither shape
-  // can match the other, since a family is alphabetic and a bus id is not.
+  // "<family>:<index>", e.g. "cuda:0". Cannot match a bus id, which always has
+  // a '.'.
   static const std::regex qualifiedRe(R"(^([a-z]+):([0-9]+)$)");
   if (std::smatch m; std::regex_match(lowerStr, m, qualifiedRe)) {
     const std::string family = ::canonicaliseFamily(m[1].str());
@@ -1082,9 +1070,7 @@ bool backend_selection::tryBackendRequiredFromMap(
   }
   configFilemap.erase(it);
 
-  // Only meaningful alongside `backend`. On its own it reads as "require the
-  // default cascade", which is not a thing, so it is far more likely to be a
-  // mistake than an intent.
+  // True without `backend` has no meaning.
   if (required && !backendOverridePresent) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -1270,9 +1256,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
         }
       }
     }
-    // QVAC-23763: name what WAS enumerated. Without it, diagnosing a pin that
-    // missed takes a second run with verbose logging - and the reason a
-    // candidate was passed over is exactly what the caller needs to see.
+    // Name what was enumerated, and why each was passed over, so a missed pin
+    // needs no second run.
     std::string enumerated;
     for (const Candidate& c : enumeration.candidates) {
       if (!enumerated.empty()) {
@@ -1320,10 +1305,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     }
   }
 
-  // If no backend can run the requested KV type directly, keep a safe GPU
-  // placement so fabric can move only that layer's KV cache to a CPU buffer.
-  // CUDA, OpenCL and Metal have addon guards for these types, so they cannot
-  // use this fallback path.
+  // If no backend can run the KV type, keep a GPU where fabric can put only
+  // that layer's KV on CPU.
   const auto canUseCpuKvFallback = [](const Candidate& c) {
     return c.excluded == ExclusionReason::KvCacheTypeUnsupported &&
            ::allowsCpuKvFallback(c.name);
@@ -1433,9 +1416,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
       ::productionSupportsKvCacheType};
   BackendChoice choice = chooseBackend(request, bckI);
 
-  // Only on the real path, and only once the cascade picks a CUDA device: the
-  // inner overload is what the unit tests drive, and it must not touch the
-  // filesystem.
+  // Only on the real path, once a CUDA device is chosen. The inner overload is
+  // what unit tests drive and must not touch the filesystem.
   if (choice.type == BackendType::GPU &&
       choice.name.find("cuda") != std::string::npos &&
       shouldWarnAboutJitCache()) {
@@ -1956,14 +1938,9 @@ std::vector<std::string> backend_selection::getTensorSplitDeviceNames(
 
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
-  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
-  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
-  // does not support split buffers" on the first one whose backend registry
-  // lacks `ggml_backend_split_buffer_type`. So require all of them, not any
-  // one, and treat "no GPU devices at all" as unsupported.
-  //
-  // No production caller: split-mode 'row' is rejected at load, and no shipped
-  // backend has split buffers.
+  // Fabric throws on the first device whose registry lacks split buffers, so
+  // require all of them. No production caller: split-mode 'row' is rejected at
+  // load.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
@@ -2087,20 +2064,11 @@ backend_selection::splitModeDeviceNamesDetailed(
     return single;
   }
 
-  // Dedupe by device_id rather than scoping to the selected registry. The
-  // hazard this list exists for is one physical card registering under two
-  // backends; scoping by registry also dropped a *second* physical card on a
-  // mixed-vendor host, an NVIDIA plus a discrete AMD say, which is the very
-  // population split mode is for. Preferring the selected registry on a tie
-  // keeps an explicit `backend` override binding, which an unfiltered list
-  // would not: qvac-fabric's own dedupe keeps whichever backend registered
-  // first, and CUDA loads before Vulkan.
-  // Deduping needs EVERY selected-registry device to publish a bus id. One that
-  // does not leaves no key to match its twin in another registry by, and a
-  // partial key list is worse than none: the cross-registry skip below would
-  // not fire, so the id-less device and its id-bearing twin would both be
-  // emitted, naming one physical card twice. Fall back to registry scoping for
-  // the whole list in that case.
+  // Dedupe by device_id, not by registry, so a second physical card on a
+  // mixed-vendor host stays in the split. Ties go to the selected registry so a
+  // `backend` override still binds. If any selected-registry device has no bus
+  // id its twin cannot be matched, so fall back to registry scoping for the
+  // whole list rather than name one card twice.
   bool selectedRegistryHasAllIds = true;
   std::vector<std::string> selectedIds;
   for (const auto& candidate : devices) {
