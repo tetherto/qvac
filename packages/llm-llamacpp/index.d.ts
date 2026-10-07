@@ -309,10 +309,11 @@ declare namespace LlmLlamacpp {
         /**
          * Where checkpoints and the per-request rollback snapshot live:
          * `'memory'` (default) keeps them in host RAM so a cached chat never
-         * touches the disk, `'disk'` writes them to the OS temp directory. Each
-         * snapshot holds only the state a tail trim cannot rebuild, a size fixed
-         * by the model (about 20 MB on Qwen3.5-0.8B). Also accepted as
-         * `cache-checkpoint-storage`.
+         * touches the disk, `'disk'` writes them to a private directory under the
+         * OS temp directory, and the load fails with `InvalidArgument` when that
+         * directory cannot be created. Each snapshot holds only the state a tail
+         * trim cannot rebuild, a size fixed by the model (about 20 MB on
+         * Qwen3.5-0.8B). Also accepted as `cache-checkpoint-storage`.
          */
         cache_checkpoint_storage?: "disk" | "memory";
         /**

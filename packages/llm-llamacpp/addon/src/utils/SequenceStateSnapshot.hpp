@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -171,6 +172,19 @@ bool snapshotSequenceState(
 [[nodiscard]] uint64_t estimateMaxSequenceStateBytes(
     ::llama_context* lctx, const ::llama_vocab* vocab, uint32_t perSeqTokens,
     SnapshotScope scope = SnapshotScope::Full);
+
+// Creates this process's snapshot directory if it does not exist yet: a
+// private directory (`mkdtemp`, mode 0700) under the OS temp dir on POSIX,
+// the per-user temp dir itself on Windows. Throws `std::runtime_error`
+// naming the temp dir and the reason when it cannot, and tries again on the
+// next call. Disk storage writes only there, so a load with
+// `cache_checkpoint_storage: disk` calls this to fail up front.
+void requireSnapshotDirectory();
+
+// Creates a directory only the current user can access under `base`, and
+// returns it; throws `std::runtime_error` with the reason on failure.
+[[nodiscard]] std::filesystem::path
+createPrivateSnapshotDirectory(const std::filesystem::path& base);
 
 // Process-wide count of snapshot files actually written by
 // `snapshotSequenceState` (empty-sequence captures write nothing and are not

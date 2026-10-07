@@ -1,9 +1,13 @@
 #include "SequenceStateSnapshot.hpp"
 
 #include <atomic>
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -20,7 +24,6 @@
 #include <llama.h>
 
 #include "common/common.h"
-#include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
@@ -36,32 +39,13 @@ uint64_t currentProcessId() noexcept {
 }
 
 // Directory the snapshots of this process go to. Snapshots hold conversation
-// state, so on POSIX they live in a private directory `mkdtemp` creates with
-// mode 0700 under the temp dir, unreadable by other users whatever the umask
-// or the predictable file names. Windows' temp dir is already per user. The
-// directory is removed at exit once its files are gone. When `mkdtemp` fails
-// there is no private directory, and disk snapshots fall back to memory.
+// state, so they only ever go to a directory other users cannot read (see
+// `createPrivateSnapshotDirectory`), never to the shared temp dir under their
+// predictable names. Created on first use and retried until it succeeds; a
+// directory this process created is removed at exit once its files are gone.
 class SnapshotDirectory {
 public:
-  SnapshotDirectory() {
-    std::error_code ec;
-    std::filesystem::path base = std::filesystem::temp_directory_path(ec);
-    if (ec) {
-      // Falling back to "." keeps the snapshot machinery functional on
-      // systems where the temp dir lookup fails; the file is still
-      // cleaned up on destruct / clear.
-      base = ".";
-    }
-#ifndef _WIN32
-    std::string pattern = (base / "qvac_llamacpp_XXXXXX").string();
-    if (::mkdtemp(pattern.data()) != nullptr) {
-      path_ = pattern;
-      owned_ = true;
-      return;
-    }
-#endif
-    path_ = base;
-  }
+  SnapshotDirectory() = default;
   ~SnapshotDirectory() {
     if (owned_) {
       std::error_code ec;
@@ -70,53 +54,52 @@ public:
   }
   SnapshotDirectory(const SnapshotDirectory&) = delete;
   SnapshotDirectory& operator=(const SnapshotDirectory&) = delete;
-  [[nodiscard]] const std::filesystem::path& path() const noexcept {
-    return path_;
-  }
-  /// Snapshot files may go here: always on Windows, only in the directory
-  /// `mkdtemp` created on POSIX.
-  [[nodiscard]] bool usable() const noexcept {
-#ifdef _WIN32
-    return true;
-#else
-    return owned_;
+
+  // Never changes once set, so the reference stays valid without the lock.
+  const std::filesystem::path& require() {
+    std::scoped_lock lock(mutex_);
+    if (!path_.empty()) {
+      return path_;
+    }
+    std::error_code ec;
+    const std::filesystem::path base = std::filesystem::temp_directory_path(ec);
+    if (ec) {
+      throw std::runtime_error(
+          "cannot find the OS temp directory: " + ec.message());
+    }
+    try {
+      path_ = createPrivateSnapshotDirectory(base);
+    } catch (const std::exception& e) {
+      throw std::runtime_error(
+          "cannot create a private snapshot directory under " + base.string() +
+          ": " + e.what());
+    }
+#ifndef _WIN32
+    owned_ = true;
 #endif
+    return path_;
   }
 
 private:
+  std::mutex mutex_;
   std::filesystem::path path_;
   bool owned_ = false;
 };
 
-const SnapshotDirectory& snapshotDirectory() {
-  static const SnapshotDirectory directory;
+SnapshotDirectory& snapshotDirectory() {
+  static SnapshotDirectory directory;
   return directory;
-}
-
-// Disk storage without a private directory would write conversation state
-// under predictable names in the shared temp dir: use memory instead.
-SnapshotStorage effectiveStorage(SnapshotStorage requested) {
-  if (requested != SnapshotStorage::Disk || snapshotDirectory().usable()) {
-    return requested;
-  }
-  static std::atomic<bool> warned{false};
-  if (!warned.exchange(true)) {
-    QLOG_IF(
-        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "could not create a private snapshot directory; cache checkpoints "
-        "are kept in memory instead of on disk");
-  }
-  return SnapshotStorage::Memory;
 }
 
 // Produce a per-process unique temp file path for a snapshot. PID
 // disambiguates across processes, `seqId` disambiguates concurrent
 // per-slot snapshots in continuous batching, and the monotonic
 // counter disambiguates back-to-back captures within the same slot.
+// Throws when the snapshot directory cannot be created.
 std::string makeUniqueSnapshotPath(llama_seq_id seqId) {
   static std::atomic<uint64_t> counter{0};
   const auto id = counter.fetch_add(1, std::memory_order_relaxed);
-  const std::filesystem::path& base = snapshotDirectory().path();
+  const std::filesystem::path& base = snapshotDirectory().require();
   const std::string filename = "qvac_llamacpp_seq_" +
                                std::to_string(currentProcessId()) + "_" +
                                std::to_string(static_cast<int>(seqId)) + "_" +
@@ -276,7 +259,6 @@ bool snapshotSequenceState(
     out.setScope(scope);
     return true;
   }
-  storage = effectiveStorage(storage);
 
   if (scope == SnapshotScope::Partial) {
     // There is no file variant of the partial API, so both storages copy the
@@ -296,7 +278,12 @@ bool snapshotSequenceState(
     if (storage == SnapshotStorage::Memory) {
       out.adoptBuffer(std::move(buffer), nPastAt);
     } else {
-      std::string path = makeUniqueSnapshotPath(seqId);
+      std::string path;
+      try {
+        path = makeUniqueSnapshotPath(seqId);
+      } catch (const std::exception&) {
+        return false;
+      }
       if (!writeFile(path, buffer)) {
         removeFileQuiet(path);
         return false;
@@ -330,7 +317,12 @@ bool snapshotSequenceState(
   // `state_seq_write_data(io, seq_id, /*flags=*/0)`, llama.cpp's
   // full-state sequence path. We do not save any prompt tokens
   // alongside the state; the ledger lives in the cache transaction.
-  std::string path = makeUniqueSnapshotPath(seqId);
+  std::string path;
+  try {
+    path = makeUniqueSnapshotPath(seqId);
+  } catch (const std::exception&) {
+    return false;
+  }
   const size_t savedBytes = llama_state_seq_save_file(
       lctx,
       path.c_str(),
@@ -394,6 +386,28 @@ uint64_t estimateMaxSequenceStateBytes(
   const uint64_t perToken = afterTwo - afterOne;
   const uint64_t fixed = afterOne > perToken ? afterOne - perToken : afterOne;
   return fixed + perToken * static_cast<uint64_t>(perSeqTokens);
+}
+
+void requireSnapshotDirectory() { (void)snapshotDirectory().require(); }
+
+std::filesystem::path
+createPrivateSnapshotDirectory(const std::filesystem::path& base) {
+#ifdef _WIN32
+  // Windows' temp dir is already per user.
+  std::error_code ec;
+  if (!std::filesystem::is_directory(base, ec)) {
+    throw std::runtime_error(
+        ec ? ec.message() : std::string("not a directory"));
+  }
+  return base;
+#else
+  // `mkdtemp` creates the directory with mode 0700 whatever the umask.
+  std::string pattern = (base / "qvac_llamacpp_XXXXXX").string();
+  if (::mkdtemp(pattern.data()) == nullptr) {
+    throw std::runtime_error(std::strerror(errno));
+  }
+  return pattern;
+#endif
 }
 
 uint64_t sequenceStateSnapshotFilesWritten() noexcept {

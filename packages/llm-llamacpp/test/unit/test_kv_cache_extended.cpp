@@ -547,13 +547,15 @@ TEST(KvCacheExtended, RenderCostPerTurn) {
   }
 }
 
-// C10: without a private snapshot directory, disk snapshots fall back to
-// memory instead of the shared temp dir. `SnapshotDirectory` is a process-wide
-// static, so run this alone (`--gtest_filter=*SnapshotFallsBackToMemory*`).
-TEST(KvCacheExtended, SnapshotFallsBackToMemoryWithoutPrivateDir) {
+// C10: `cache_checkpoint_storage: disk` without a private snapshot directory
+// fails the load, instead of writing to the shared temp dir or silently
+// keeping snapshots in memory. The snapshot directory is process-wide and
+// kept once created, so run this alone
+// (`--gtest_filter=*DiskStorageWithoutPrivateDirFailsTheLoad*`).
+TEST(KvCacheExtended, DiskStorageWithoutPrivateDirFailsTheLoad) {
   SKIP_UNLESS_KV_CACHE_EXTENDED();
 #ifdef _WIN32
-  GTEST_SKIP() << "the mkdtemp fallback is POSIX only";
+  GTEST_SKIP() << "relies on POSIX directory permissions";
 #else
   if (::geteuid() == 0) {
     GTEST_SKIP() << "root ignores directory permissions";
@@ -562,17 +564,8 @@ TEST(KvCacheExtended, SnapshotFallsBackToMemoryWithoutPrivateDir) {
   if (utils::sequenceStateSnapshotFilesWritten() > 0) {
     GTEST_SKIP() << "a disk snapshot already ran in this process; run alone";
   }
-  const auto path = qwen3Model();
+  const auto path = qwen35Model();
   REQUIRE_MODEL(path);
-  ScratchDir dir("snapshot_state");
-  auto model = loadModel(path);
-  // A keyed request keeps its state in sequence 0 for the snapshot below.
-  (void)model->processPrompt(
-      keyed(chatInput(FIRST_TURN), dir.file("chat.bin")));
-  LlmContext* context = LlamaModelTestPeer::llmContext(*model);
-  ASSERT_NE(context, nullptr);
-  const llama_pos nPast = context->getNPast();
-  ASSERT_GT(nPast, 0);
 
   ScratchDir readOnly("snapshot_tmp");
   fs::permissions(
@@ -581,9 +574,18 @@ TEST(KvCacheExtended, SnapshotFallsBackToMemoryWithoutPrivateDir) {
   const std::string savedTmp = previous != nullptr ? previous : "";
   ::setenv("TMPDIR", readOnly.path().c_str(), 1);
 
-  utils::SequenceStateSnapshot snapshot;
-  const bool captured = utils::snapshotSequenceState(
-      model->getContext(), 0, nPast, snapshot, utils::SnapshotStorage::Disk);
+  std::string error;
+  try {
+    (void)loadModel(path, {{"cache_checkpoint_storage", "disk"}});
+  } catch (const std::exception& e) {
+    error = e.what();
+  }
+  bool memoryLoaded = false;
+  try {
+    memoryLoaded =
+        loadModel(path, {{"cache_checkpoint_storage", "memory"}})->isLoaded();
+  } catch (const std::exception&) {
+  }
 
   if (previous != nullptr) {
     ::setenv("TMPDIR", savedTmp.c_str(), 1);
@@ -592,10 +594,13 @@ TEST(KvCacheExtended, SnapshotFallsBackToMemoryWithoutPrivateDir) {
   }
   fs::permissions(readOnly.path(), fs::perms::owner_all);
 
-  EXPECT_TRUE(captured) << "no private directory must not lose the snapshot";
-  EXPECT_FALSE(snapshot.hasFile());
-  EXPECT_TRUE(snapshot.hasBuffer());
+  EXPECT_NE(error.find("cache_checkpoint_storage 'disk'"), std::string::npos)
+      << "the load did not fail with the storage error: " << error;
+  EXPECT_NE(error.find(readOnly.path().string()), std::string::npos)
+      << "the error does not name the temp dir: " << error;
+  EXPECT_TRUE(fs::is_empty(readOnly.path()))
+      << "something was written to the temp dir";
   EXPECT_EQ(utils::sequenceStateSnapshotFilesWritten(), 0u);
-  EXPECT_TRUE(utils::restoreSequenceState(model->getContext(), 0, snapshot));
+  EXPECT_TRUE(memoryLoaded) << "memory storage must not need the directory";
 #endif
 }

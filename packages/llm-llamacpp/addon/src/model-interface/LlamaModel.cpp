@@ -246,6 +246,19 @@ void LlamaModel::init(bool acquireLock) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
   }
+  // Disk snapshots only ever go to a private directory; one that cannot be
+  // created fails the load here rather than a request later.
+  if (snap->cacheCheckpointPolicy_.storage ==
+      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Disk) {
+    try {
+      qvac_lib_inference_addon_llama::utils::requireSnapshotDirectory();
+    } catch (const std::exception& e) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          std::string("cache_checkpoint_storage 'disk': ") + e.what());
+    }
+  }
 
   auto normalized = load_fit_normalization::normalizeLoadForFit(
       modelPath,

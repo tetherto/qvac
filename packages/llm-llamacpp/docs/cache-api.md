@@ -166,8 +166,11 @@ None of them has any effect on pure-attention models.
 - `cache_checkpoint_storage`: `memory` (default) keeps checkpoints and the
   per-request rollback snapshot in host RAM, so a cached chat never touches
   the disk; each live snapshot costs its size in RAM (about 20 MB on
-  Qwen3.5-0.8B, 18 MB on DeepSeek V4). `disk` writes them to the OS temp
-  directory instead.
+  Qwen3.5-0.8B, 18 MB on DeepSeek V4). `disk` writes them instead to a
+  private directory (mode 0700 on POSIX) the addon creates under the OS temp
+  directory when the model loads. If that directory cannot be created, the
+  load fails with `InvalidArgument`; set `TMPDIR` to a writable directory or
+  use `memory`.
 
 The storage setting is independent of the `cacheKey` file. In both modes that
 file is written only by the writes described in [Save the cache to

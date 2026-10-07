@@ -1,11 +1,15 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #include "utils/SequenceStateSnapshot.hpp"
 
@@ -282,3 +286,61 @@ TEST(SequenceStateSnapshotTest, EstimateOnNullCtxIsZero) {
           /*lctx=*/nullptr, /*vocab=*/nullptr, /*perSeqTokens=*/4096),
       0u);
 }
+
+#ifndef _WIN32
+namespace {
+
+// A fresh directory for one test, removed (permissions restored) when done.
+class ScratchBase {
+public:
+  explicit ScratchBase(const std::string& name)
+      : path_(fs::temp_directory_path() / ("qvac_snap_unit_" + name)) {
+    std::error_code ec;
+    fs::permissions(path_, fs::perms::owner_all, ec);
+    fs::remove_all(path_, ec);
+    fs::create_directories(path_);
+  }
+  ~ScratchBase() {
+    std::error_code ec;
+    fs::permissions(path_, fs::perms::owner_all, ec);
+    fs::remove_all(path_, ec);
+  }
+  ScratchBase(const ScratchBase&) = delete;
+  ScratchBase& operator=(const ScratchBase&) = delete;
+  [[nodiscard]] const fs::path& path() const { return path_; }
+
+private:
+  fs::path path_;
+};
+
+} // namespace
+
+// Disk snapshots go only to a directory other users cannot read.
+TEST(SequenceStateSnapshotTest, PrivateSnapshotDirectoryIsOwnerOnly) {
+  ScratchBase base("private_dir");
+  const fs::path dir = createPrivateSnapshotDirectory(base.path());
+  EXPECT_EQ(dir.parent_path(), base.path());
+  ASSERT_TRUE(fs::is_directory(dir));
+  EXPECT_EQ(
+      fs::status(dir).permissions() & fs::perms::all, fs::perms::owner_all);
+}
+
+// No private directory can be made: the failure is reported with its reason,
+// and nothing is created in its place.
+TEST(
+    SequenceStateSnapshotTest, PrivateSnapshotDirectoryFailsUnderReadOnlyBase) {
+  if (::geteuid() == 0) {
+    GTEST_SKIP() << "root ignores directory permissions";
+  }
+  ScratchBase base("read_only_base");
+  fs::permissions(base.path(), fs::perms::owner_read | fs::perms::owner_exec);
+  try {
+    (void)createPrivateSnapshotDirectory(base.path());
+    ADD_FAILURE() << "creating a directory under a read-only base succeeded";
+  } catch (const std::runtime_error& e) {
+    EXPECT_FALSE(std::string(e.what()).empty());
+  }
+  fs::permissions(base.path(), fs::perms::owner_all);
+  EXPECT_TRUE(fs::is_empty(base.path()));
+}
+#endif
