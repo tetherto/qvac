@@ -37,6 +37,8 @@ from . import (
     CompletionOrchestrateResponse,
     CompletionStreamRequest,
     CompletionStreamResponse,
+    DecideRequest,
+    DecideResponse,
     DeleteCacheRequest,
     DeleteCacheResponse,
     DiffusionStreamRequest,
@@ -195,6 +197,11 @@ async def completion_stream(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield CompletionStreamResponse.model_validate(chunk)
+
+
+async def decide(transport: Transport, params: DecideRequest) -> DecideResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return DecideResponse.model_validate(await transport.call(payload))
 
 
 async def delete_cache(
@@ -523,6 +530,7 @@ __all__ = [
     "classify",
     "completion_orchestrate",
     "completion_stream",
+    "decide",
     "delete_cache",
     "diffusion_stream",
     "discover_rpc_servers",

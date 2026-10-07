@@ -21,6 +21,13 @@ const RULES: Rule[] = [
       platforms: ['mobile', 'desktop-python']
     }
   },
+  {
+    match: /^decisions-/,
+    skip: {
+      reason: 'Laya decision tests require the local QVAC_LAYA_MODEL desktop fixture',
+      platforms: ['mobile']
+    }
+  },
   // ── every leg but Snap ───────────────────────────────────────────────────
   {
     match: /^snap-storage-/,
