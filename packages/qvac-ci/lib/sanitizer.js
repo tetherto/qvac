@@ -12,11 +12,11 @@
  *   }
  */
 export class Sanitizer {
-  redact (str) {
+  redact(str) {
     return str
   }
 
-  sanitizeError (err) {
+  sanitizeError(err) {
     if (err && typeof err.message === 'string') {
       return this.redact(err.message)
     }
