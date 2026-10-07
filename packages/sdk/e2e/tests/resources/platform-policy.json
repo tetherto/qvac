@@ -1,0 +1,22 @@
+{
+  "desktop": {
+    "downloadTarget": "desktop",
+    "unloadSettleMs": 0
+  },
+  "electron": {
+    "downloadTarget": "desktop",
+    "unloadSettleMs": 0
+  },
+  "snap": {
+    "downloadTarget": "desktop",
+    "unloadSettleMs": 0
+  },
+  "mobile": {
+    "downloadTarget": "mobile",
+    "unloadSettleMs": 200
+  },
+  "python": {
+    "downloadTarget": "desktop",
+    "unloadSettleMs": 0
+  }
+}

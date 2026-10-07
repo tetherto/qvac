@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.28.0] - 2026-10-07
+
+### Added
+
+- MiniMax-H3 FL2VA ConvRot text-to-video and image-to-video examples with
+  synchronized audio, model download script, and FLUX.2-generated I2V keyframes.
+
+### Changed
+
+- Route H3 image-to-video first-frame conditioning through the native video job
+  and require the video VAE encoder for that mode.
+
+### Pull Requests
+
+- [#4789](https://github.com/tetherto/qvac/pull/4789) - QVAC-24827 feat:
+  MiniMax H3 text-to-video and image-to-video.
+
 ## [0.27.0] - 2026-10-02
 
 ### Added

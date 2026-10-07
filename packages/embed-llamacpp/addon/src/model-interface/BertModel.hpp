@@ -71,6 +71,12 @@ struct BertModelSetup {
   int64_t resolvedBackendDevice = 0;
 };
 
+/// Parses a load's config map into `common_params`, resolving the backend,
+/// split mode and device placement.
+BertModelSetup setupParams(
+    const std::string& modelGgufPath,
+    std::unordered_map<std::string, std::string> configFilemap);
+
 /// Apply the final split-device handles and remap positional tensor shares.
 void applySplitDeviceSelection(
     common_params& params, std::unordered_map<std::string, std::string>& config,

@@ -7,15 +7,22 @@ const { ensureModel, getModelConfigs } = require('./utils')
 
 const MODEL_NAME = getModelConfigs()[0]?.modelName ?? 'embeddinggemma-300M-Q8_0.gguf'
 
+// Every load names a device, so every projection of one does too.
+const GPU = { device: 'gpu' }
+
 async function modelPath() {
   const [name, dir] = await ensureModel({ modelName: MODEL_NAME })
   return path.join(dir, name)
 }
 
+function assess(modelPath, config = {}, rest = {}) {
+  return EmbedLlamacpp.assessFit({ modelPath, config: { ...GPU, ...config }, ...rest })
+}
+
 // The figures depend on what the runner has free, so the assertions are the
 // relationships that hold on any machine.
 test('a projection is internally consistent', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({ modelPath: await modelPath() })
+  const fit = assess(await modelPath())
 
   t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
   t.ok(fit.devices.length > 0, 'at least the host row')
@@ -28,7 +35,7 @@ test('a projection is internally consistent', { timeout: 600_000 }, async (t) =>
 })
 
 test('the context is pinned to the trained context', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({ modelPath: await modelPath() })
+  const fit = assess(await modelPath())
 
   t.comment(`status=${fit.status} ctxSize=${fit.ctxSize} trainCtxSize=${fit.trainCtxSize}`)
   if (fit.status !== 'fits') {
@@ -42,75 +49,68 @@ test('the context is pinned to the trained context', { timeout: 600_000 }, async
 })
 
 test('an oversized context is capped at the trained context', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'ctx-size': '1000000' }
-  })
+  const fit = assess(await modelPath(), { 'ctx-size': '1000000' })
 
-  if (fit.status === 'error') {
-    t.pass('the runner could not read the model')
-    return
-  }
-  t.ok(fit.ctxSize <= fit.trainCtxSize, 'capped, as the load caps it')
-})
-
-test('a pinned layer count survives into the projection', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'gpu-layers': '0' }
-  })
-
-  t.is(fit.gpuLayers, 0, 'the fitter rewrites defaults, not a value the load pinned')
-})
-
-test('a host-only placement offloads nothing', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { device: 'none' }
-  })
-
-  t.comment(`status=${fit.status} gpuLayers=${fit.gpuLayers}`)
   if (fit.status === 'error') {
     t.pass('this runner could not project the model')
     return
   }
-  t.is(fit.gpuLayers, 0, 'no device in the placement, so no layer is offloaded')
-  t.is(fit.devices.length, 1, 'the host row is the only row')
+  t.is(fit.ctxSize, fit.trainCtxSize, 'capped, as the load caps it')
+})
+
+test('a pinned layer count survives into the projection', { timeout: 600_000 }, async (t) => {
+  const fit = assess(await modelPath(), { 'gpu-layers': '0' })
+
+  t.is(fit.gpuLayers, 0, 'the fitter rewrites defaults, not a value the load pinned')
 })
 
 test('a model that cannot be read is an outcome, not a throw', (t) => {
-  const fit = EmbedLlamacpp.assessFit({ modelPath: '/nonexistent/model.gguf' })
+  const fit = assess('/nonexistent/model.gguf')
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'model-unreadable')
   t.alike(fit.devices, [])
 })
 
-test('an option that would end the process is refused', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'list-devices': '' }
-  })
+// A setting the engine accepts is a setting the projection accepts.
+const EVERY_SETTING = {
+  'gpu-layers': '8',
+  'batch-size': '256',
+  'main-gpu': 'dedicated',
+  'split-mode': 'layer',
+  'tensor-split': '1',
+  'flash-attn': 'auto'
+}
 
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
-})
+test('every setting a load carries reaches the fitter', { timeout: 600_000 }, async (t) => {
+  const file = await modelPath()
 
-test('a boolean value llama does not define is refused', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    params: { 'no-kv-offload': 'garbage' }
-  })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-config')
+  for (const [key, value] of Object.entries(EVERY_SETTING)) {
+    const fit = assess(file, { [key]: value })
+    t.not(fit.reason, 'unsupported-config', `${key} is a shape the engine accepts`)
+  }
 })
 
 test('a context floor that is not a count is refused', { timeout: 600_000 }, async (t) => {
-  const fit = EmbedLlamacpp.assessFit({
-    modelPath: await modelPath(),
-    minCtxSize: -1
-  })
+  const fit = assess(await modelPath(), {}, { minCtxSize: -1 })
+
+  t.is(fit.status, 'error')
+  t.is(fit.reason, 'unsupported-config')
+})
+
+test(
+  'a load the engine cannot parse is an outcome, not a throw',
+  { timeout: 600_000 },
+  async (t) => {
+    const fit = assess(await modelPath(), { 'gpu-layers': 'not-a-number' })
+
+    t.is(fit.status, 'error')
+    t.is(fit.reason, 'unsupported-config')
+  }
+)
+
+test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
+  const fit = assess(await modelPath(), { device: 'cpu' })
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-config')

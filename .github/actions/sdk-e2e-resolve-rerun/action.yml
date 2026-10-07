@@ -33,7 +33,7 @@ runs:
           const MARKER = '<!-- sdk-e2e-base-state -->';
           const DATA_RE = /<!-- sdk-e2e-base-state-data:v1:([A-Za-z0-9+/=]+) -->/;
           const PLAN_MARKER = '<!-- sdk-e2e-rerun-plan -->';
-          const FAMILY_ORDER = ['desktop', 'electron', 'snap', 'android', 'ios'];
+          const FAMILY_ORDER = ['desktop', 'electron', 'snap', 'python', 'android', 'ios'];
 
           const pr = context.payload.pull_request?.number;
           const runUrl =

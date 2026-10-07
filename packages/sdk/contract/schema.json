@@ -1991,6 +1991,10 @@
                     "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
                     "type": "string",
                     "minLength": 1
+                  },
+                  "parallel_tool_calls": {
+                    "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false,
@@ -2107,16 +2111,37 @@
                             "type": "object",
                             "properties": {
                               "type": {
-                                "type": "string",
-                                "enum": [
-                                  "string",
-                                  "number",
-                                  "integer",
-                                  "boolean",
-                                  "object",
-                                  "array"
-                                ],
-                                "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType"
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "string",
+                                      "number",
+                                      "integer",
+                                      "boolean",
+                                      "object",
+                                      "array",
+                                      "null"
+                                    ],
+                                    "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "string",
+                                        "number",
+                                        "integer",
+                                        "boolean",
+                                        "object",
+                                        "array",
+                                        "null"
+                                      ],
+                                      "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem"
+                                    }
+                                  }
+                                ]
                               },
                               "description": {
                                 "type": "string"
@@ -2124,11 +2149,24 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": ["string", "number", "boolean", "null"]
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
-                            "required": ["type"],
+                            "additionalProperties": {},
                             "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue"
                           },
                           "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties"
@@ -2141,6 +2179,7 @@
                         }
                       },
                       "required": ["type", "properties"],
+                      "additionalProperties": {},
                       "title": "BatchCompletionStreamRequestPromptsItemToolsItemParameters"
                     }
                   },
@@ -3307,9 +3346,37 @@
                       "type": "object",
                       "properties": {
                         "type": {
-                          "type": "string",
-                          "enum": ["string", "number", "integer", "boolean", "object", "array"],
-                          "title": "CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "string",
+                                "number",
+                                "integer",
+                                "boolean",
+                                "object",
+                                "array",
+                                "null"
+                              ],
+                              "title": "CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "string",
+                                  "number",
+                                  "integer",
+                                  "boolean",
+                                  "object",
+                                  "array",
+                                  "null"
+                                ],
+                                "title": "CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem"
+                              }
+                            }
+                          ]
                         },
                         "description": {
                           "type": "string"
@@ -3317,11 +3384,24 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
-                      "required": ["type"],
+                      "additionalProperties": {},
                       "title": "CompletionOrchestrateRequestToolsItemParametersPropertiesValue"
                     },
                     "title": "CompletionOrchestrateRequestToolsItemParametersProperties"
@@ -3334,6 +3414,7 @@
                   }
                 },
                 "required": ["type", "properties"],
+                "additionalProperties": {},
                 "title": "CompletionOrchestrateRequestToolsItemParameters"
               }
             },
@@ -3395,6 +3476,10 @@
               "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "string",
               "minLength": 1
+            },
+            "parallel_tool_calls": {
+              "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "type": "boolean"
             }
           },
           "additionalProperties": false,
@@ -3921,9 +4006,37 @@
                       "type": "object",
                       "properties": {
                         "type": {
-                          "type": "string",
-                          "enum": ["string", "number", "integer", "boolean", "object", "array"],
-                          "title": "CompletionStreamRequestToolsItemParametersPropertiesValueType"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "string",
+                                "number",
+                                "integer",
+                                "boolean",
+                                "object",
+                                "array",
+                                "null"
+                              ],
+                              "title": "CompletionStreamRequestToolsItemParametersPropertiesValueType"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "string",
+                                  "number",
+                                  "integer",
+                                  "boolean",
+                                  "object",
+                                  "array",
+                                  "null"
+                                ],
+                                "title": "CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem"
+                              }
+                            }
+                          ]
                         },
                         "description": {
                           "type": "string"
@@ -3931,11 +4044,24 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
-                      "required": ["type"],
+                      "additionalProperties": {},
                       "title": "CompletionStreamRequestToolsItemParametersPropertiesValue"
                     },
                     "title": "CompletionStreamRequestToolsItemParametersProperties"
@@ -3948,6 +4074,7 @@
                   }
                 },
                 "required": ["type", "properties"],
+                "additionalProperties": {},
                 "title": "CompletionStreamRequestToolsItemParameters"
               }
             },
@@ -4009,6 +4136,10 @@
               "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "string",
               "minLength": 1
+            },
+            "parallel_tool_calls": {
+              "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "type": "boolean"
             }
           },
           "additionalProperties": false,
@@ -15379,6 +15510,22 @@
                       "description": "0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
                       "type": "number"
                     },
+                    "mainGpu": {
+                      "description": "GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647,
+                          "title": "OcrMainGpuIndex"
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["integrated", "dedicated"],
+                          "title": "LoadModelSrcRequestGgmlOcrModelConfigMainGpu"
+                        }
+                      ]
+                    },
                     "detectorModelSrc": {
                       "description": "Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.",
                       "anyOf": [
@@ -15642,7 +15789,14 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "type": ["number", "string"]
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -16332,7 +16486,7 @@
                       ]
                     },
                     "clipVisionModelSrc": {
-                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no CLIP-vision projection).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -16858,7 +17012,14 @@
                         },
                         "maxVram": {
                           "description": "VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
-                          "type": ["number", "string"]
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
                         },
                         "streamLayers": {
                           "description": "Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -19073,10 +19234,7 @@
                   {
                     "type": "number"
                   }
-                ],
-                "items": false,
-                "minItems": 4,
-                "maxItems": 4
+                ]
               },
               "confidence": {
                 "type": "number"

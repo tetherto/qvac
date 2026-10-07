@@ -1695,6 +1695,12 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
             min_length=1,
         ),
     ] = None
+    parallel_tool_calls: Annotated[
+        bool | None,
+        Field(
+            description="Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
+        ),
+    ] = None
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatText(GeneratedBaseModel):
@@ -1784,19 +1790,46 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueT
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem(
+    Enum
+):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
     GeneratedBaseModel
 ):
-    type: Annotated[
-        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType,
-        Field(
-            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType"
-        ),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType
+        | list[
+            BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem
+        ]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[
+    str, Any
+]
+BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue.model_rebuild(
+    force=True
+)
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
@@ -1819,6 +1852,9 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties,
@@ -1827,6 +1863,12 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseMo
         ),
     ]
     required: list[str] | None = None
+
+
+BatchCompletionStreamRequestPromptsItemToolsItemParameters.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+BatchCompletionStreamRequestPromptsItemToolsItemParameters.model_rebuild(force=True)
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItem(GeneratedBaseModel):
@@ -2890,19 +2932,38 @@ class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType(Enum):
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
     GeneratedBaseModel
 ):
-    type: Annotated[
-        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType,
-        Field(
-            title="CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
-        ),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType
+        | list[CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+CompletionOrchestrateRequestToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionOrchestrateRequestToolsItemParametersPropertiesValue.model_rebuild(force=True)
 
 
 class CompletionOrchestrateRequestToolsItemParametersProperties(
@@ -2915,12 +2976,21 @@ class CompletionOrchestrateRequestToolsItemParametersProperties(
 
 
 class CompletionOrchestrateRequestToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         CompletionOrchestrateRequestToolsItemParametersProperties,
         Field(title="CompletionOrchestrateRequestToolsItemParametersProperties"),
     ]
     required: list[str] | None = None
+
+
+CompletionOrchestrateRequestToolsItemParameters.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionOrchestrateRequestToolsItemParameters.model_rebuild(force=True)
 
 
 class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
@@ -2998,6 +3068,12 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
         Field(
             description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
             min_length=1,
+        ),
+    ] = None
+    parallel_tool_calls: Annotated[
+        bool | None,
+        Field(
+            description="Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
         ),
     ] = None
 
@@ -3455,15 +3531,36 @@ class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
     boolean = "boolean"
     object = "object"
     array = "array"
+    null = "null"
+
+
+class CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValue(GeneratedBaseModel):
-    type: Annotated[
-        CompletionStreamRequestToolsItemParametersPropertiesValueType,
-        Field(title="CompletionStreamRequestToolsItemParametersPropertiesValueType"),
-    ]
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CompletionStreamRequestToolsItemParametersPropertiesValueType
+        | list[CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
+
+
+CompletionStreamRequestToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CompletionStreamRequestToolsItemParametersPropertiesValue.model_rebuild(force=True)
 
 
 class CompletionStreamRequestToolsItemParametersProperties(
@@ -3476,12 +3573,21 @@ class CompletionStreamRequestToolsItemParametersProperties(
 
 
 class CompletionStreamRequestToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
     type: Literal["object"] = "object"
     properties: Annotated[
         CompletionStreamRequestToolsItemParametersProperties,
         Field(title="CompletionStreamRequestToolsItemParametersProperties"),
     ]
     required: list[str] | None = None
+
+
+CompletionStreamRequestToolsItemParameters.__annotations__["__pydantic_extra__"] = dict[
+    str, Any
+]
+CompletionStreamRequestToolsItemParameters.model_rebuild(force=True)
 
 
 class CompletionStreamRequestToolsItem(GeneratedBaseModel):
@@ -3559,6 +3665,12 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
         Field(
             description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
             min_length=1,
+        ),
+    ] = None
+    parallel_tool_calls: Annotated[
+        bool | None,
+        Field(
+            description="Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it."
         ),
     ] = None
 
@@ -15327,6 +15439,23 @@ class LoadModelSrcRequestGgmlOcrModelConfigBackendDevice(Enum):
     opencl = "opencl"
 
 
+class OcrMainGpuIndex(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
+            ge=0,
+            le=2147483647,
+            title="OcrMainGpuIndex",
+        ),
+    ]
+
+
+class LoadModelSrcRequestGgmlOcrModelConfigMainGpu(Enum):
+    integrated = "integrated"
+    dedicated = "dedicated"
+
+
 class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -15511,6 +15640,13 @@ class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
         Field(
             alias="gpuDevice",
             description="0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
+        ),
+    ] = None
+    main_gpu: Annotated[
+        OcrMainGpuIndex | LoadModelSrcRequestGgmlOcrModelConfigMainGpu | None,
+        Field(
+            alias="mainGpu",
+            description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
         ),
     ] = None
     detector_model_src: Annotated[
@@ -17384,7 +17520,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc | None,
         Field(
             alias="clipVisionModelSrc",
-            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no CLIP-vision projection).",
         ),
     ] = None
     audio_vae_model_src: Annotated[
@@ -19636,7 +19772,7 @@ class OcrStreamResponseBlocksItem(GeneratedBaseModel):
         extra="forbid",
     )
     text: str
-    bbox: tuple[float, float, float, float] | None = None
+    bbox: list[Any] | None = None
     confidence: float | None = None
 
 

@@ -293,7 +293,8 @@ export const sdcppConfigSchema = z.object({
     .describe(
       'OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for ' +
         'Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. ' +
-        'Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).'
+        'Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no ' +
+        'CLIP-vision projection).'
     ),
   audioVaeModelSrc: modelSrcInputSchema
     .optional()

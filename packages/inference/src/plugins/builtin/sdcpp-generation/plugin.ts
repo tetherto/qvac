@@ -448,7 +448,8 @@ export const diffusionPlugin = definePlugin({
       // via llm + video VAE + connectors, optional audio VAE —
       // `SdModel::isLtxModel_ = !embeddingsConnectorsPath.empty()`); without
       // them, an audio VAE (or an llm with no Wan T5) means MiniMax-H3
-      // (llm + video VAE + audio VAE); everything else is Wan via t5Xxl.
+      // (llm + video VAE, with an optional audio VAE); everything else is Wan
+      // via t5Xxl.
       // Native code verifies the model's tensors.
       const embeddingsConnectorsModelPath = artifacts?.['embeddingsConnectorsModelPath']
 

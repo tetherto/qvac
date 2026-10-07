@@ -12,12 +12,14 @@ Video generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-di
 It supports two modes — `txt2vid` (from a text prompt) and `img2vid` (animate a still image) — across the WAN 2.1, Wan 2.2, LTX-2, and MiniMax-H3 model families. `video()` returns `{ progressStream, outputs, stats }`: `outputs` resolves to the generated video(s) as `Uint8Array` buffers (AVI), `progressStream` streams step-by-step progress, and `stats` carries per-run metadata.
 
 <Callout type="warn">
-Video generation is hardware-intensive: it requires at least **16 GB of video memory** or **20 GB of unified memory**.
+  Video generation is hardware-intensive: it requires at least **16 GB of video
+  memory** or **20 GB of unified memory**.
 </Callout>
 
 ## Functions
 
 Use the following sequence of function calls:
+
 1. [`loadModel()`](/sdk/reference/api#loadmodel)
 2. [`video()`](/sdk/reference/api#video)
 3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
@@ -31,12 +33,12 @@ Generates a video from a `prompt` in one of two modes:
 #### Modes
 
 - **`txt2vid`** — generate a video from a text prompt alone. Supported by all families.
-- **`img2vid`** — animate a still image. Supported by WAN (load the model with `clipVisionModelSrc`, an OpenCLIP ViT-H/14 encoder) and LTX-2 (no CLIP-vision encoder needed).
+- **`img2vid`** — animate a still image. Supported by WAN (load the model with `clipVisionModelSrc`, an OpenCLIP ViT-H/14 encoder), LTX-2, and MiniMax-H3. LTX-2 and H3 condition through their video VAEs and need no CLIP-vision encoder.
 
-`img2vid` takes two extra params:
+`img2vid` takes a source frame and, where supported, a denoise strength:
 
 - `init_image` — PNG or JPEG bytes (`Uint8Array`) of the first frame. Required.
-- `strength` — a value in `0–1`. Use higher values when you want the output to diverge more from the first frame.
+- `strength` — a value in `0–1` for WAN and LTX-2. Use higher values when you want the output to diverge more from the first frame. MiniMax-H3 uses its native keyframe conditioning and rejects this field.
 
 #### Generation knobs
 
@@ -81,8 +83,8 @@ Size and frame constraints:
 - On **LTX-2** and **Wan 2.2 TI2V-5B**, `width` and `height` must be multiples of **32**.
 - On **LTX-2**, `video_frames` must satisfy `8*k + 1` (e.g. `25`, `121`, `241`), with a maximum of **257**.
 - On **LTX-2** with `reference_images`, the minimum `video_frames` rises to **121**.
-- On **MiniMax-H3**, `width` and `height` must be multiples of **32**, `video_frames` must satisfy `17*k + 5`, and `fps` must be **24**. H3 produces synchronized audio at **32 kHz**.
-</Callout>
+- On **MiniMax-H3**, `width` and `height` must be multiples of **32**, `video_frames` must satisfy `17*k + 5`, and `fps` must be **24**. Loading `audioVaeModelSrc` adds synchronized audio at **32 kHz**; omit it for silent video.
+  </Callout>
 
 The returned `stats` includes `hasAudio` (`true` when the output AVI carries a muxed audio track) and `audioSampleRate` (Hz of that track, `0` when there is no audio).
 
@@ -95,10 +97,10 @@ Four model families are supported — **WAN 2.1**, **Wan 2.2**, **LTX-2**, and *
 - **Wan 2.2 TI2V-5B** (txt2vid, single-expert): split layout — diffusion model + UMT5-XXL text encoder (via `t5XxlModelSrc`) + Wan 2.2 VAE (via `vaeModelSrc`). The Wan 2.2 VAE's 16× spatial compression is what gives TI2V its 32-pixel grid; the Wan 2.1 VAE is not interchangeable. The UMT5-XXL text encoder is byte-identical to the Wan 2.1 repackage, so both generations share the one registry entry. Available constants: `WAN2_2_TI2V_5B_Q5_K_S`, `UMT5_XXL_FP16`, `WAN_2_2_COMFYUI_REPACKAGED_VAE`.
 - **Wan 2.2 A14B** (txt2vid, dual-expert / mixture-of-experts): split layout — low-noise diffusion model + high-noise diffusion model (via `highNoiseDiffusionModelSrc`, whose presence selects this layout) + UMT5-XXL text encoder + Wan 2.2 VAE. The A14B-only `high_noise_*` and `moe_boundary` request fields route to the high-noise expert and are rejected on single-expert layouts.
 - **LTX-2** (txt2vid and img2vid): split layout — diffusion model + Gemma text encoder (via `llmModelSrc`) + video VAE (via `vaeModelSrc`) + text-embedding connectors (via `embeddingsConnectorsModelSrc`, whose presence selects this layout), plus an optional audio VAE (via `audioVaeModelSrc`) for the synchronized 48 kHz audio track. Its img2vid path needs no CLIP-vision encoder.
-- **MiniMax-H3** (txt2vid): split layout — diffusion model + Qwen3-VL text encoder (via `llmModelSrc`) + video VAE (via `vaeModelSrc`) + audio VAE (via `audioVaeModelSrc`). H3 uses a 32-pixel spatial grid, `17*k + 5` frames at 24 FPS, and produces synchronized 32 kHz audio. It does not support `img2vid`, Wan's T5 encoder, or CLIP vision encoders.
+- **MiniMax-H3** (txt2vid and img2vid): split layout — diffusion model + Qwen3-VL text encoder (via `llmModelSrc`) + video VAE (via `vaeModelSrc`), plus an optional audio VAE (via `audioVaeModelSrc`) for synchronized 32 kHz audio. H3 uses a 32-pixel spatial grid and `17*k + 5` frames at 24 FPS. Its img2vid path conditions through the video VAE and needs no CLIP-vision encoder; Wan's T5 encoder and CLIP companions are unsupported.
 
 <Callout type="warn">
-LTX-2 is large (~21B) — budget at least **20 GB** of video / unified memory.
+  LTX-2 is large (~21B) — budget at least **20 GB** of video / unified memory.
 </Callout>
 
 For models available as constants, see [SDK — Models](/sdk#models).
@@ -114,7 +116,9 @@ The following script shows text-to-video generation using Wan 2.1 T2V 1.3B with 
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid.js title="diffusion-txt2vid.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -122,7 +126,9 @@ The following script shows text-to-video generation using Wan 2.1 T2V 1.3B with 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid.ts title="diffusion-txt2vid.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -136,7 +142,9 @@ The following script shows image-to-video generation using Wan 2.1 I2V with its 
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/diffusion-img2vid.js title="diffusion-img2vid.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -144,7 +152,9 @@ The following script shows image-to-video generation using Wan 2.1 I2V with its 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-img2vid.ts title="diffusion-img2vid.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -158,7 +168,9 @@ The following script shows text-to-video generation with Wan 2.2 TI2V-5B Turbo (
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid-wan22.js title="diffusion-txt2vid-wan22.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -166,7 +178,9 @@ The following script shows text-to-video generation with Wan 2.2 TI2V-5B Turbo (
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid-wan22.ts title="diffusion-txt2vid-wan22.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -180,7 +194,9 @@ The following script loads LTX-2 with its split layout (diffusion model + Gemma 
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid-ltx.js title="diffusion-txt2vid-ltx.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -188,7 +204,9 @@ The following script loads LTX-2 with its split layout (diffusion model + Gemma 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid-ltx.ts title="diffusion-txt2vid-ltx.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -202,7 +220,9 @@ The following script animates a first-frame `init_image` with LTX-2. Unlike WAN 
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/diffusion-img2vid-ltx.js title="diffusion-img2vid-ltx.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -210,7 +230,9 @@ The following script animates a first-frame `init_image` with LTX-2. Unlike WAN 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-img2vid-ltx.ts title="diffusion-img2vid-ltx.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -224,7 +246,9 @@ The following script conditions LTX-2 on a composite reference sheet so the gene
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/diffusion-ic-lora-ltx.js title="diffusion-ic-lora-ltx.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -232,7 +256,9 @@ The following script conditions LTX-2 on a composite reference sheet so the gene
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-ic-lora-ltx.ts title="diffusion-ic-lora-ltx.ts" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -246,7 +272,9 @@ The following script loads MiniMax-H3 with its split layout (diffusion model + Q
 <WrapCode>
 
 ```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid-minimax-h3.js title="diffusion-txt2vid-minimax-h3.js" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 
@@ -254,15 +282,48 @@ The following script loads MiniMax-H3 with its split layout (diffusion model + Q
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid-minimax-h3.ts title="diffusion-txt2vid-minimax-h3.ts" lineNumbers
+
 ```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Image-to-video (MiniMax-H3)
+
+The following script animates a first-frame image with MiniMax-H3. It uses the same diffusion, Qwen3-VL, and video VAE layout as H3 text-to-video; no CLIP-vision encoder is needed. The audio VAE is omitted for silent output, but you can add `audioVaeModelSrc` when loading the model to generate synchronized 32 kHz audio.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-img2vid-minimax-h3.js title="diffusion-img2vid-minimax-h3.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-img2vid-minimax-h3.ts title="diffusion-img2vid-minimax-h3.ts" lineNumbers
+
+```
+
 </WrapCode>
 </Tab>
 </Tabs>
 
 <Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
+  The Python client supports this capability through the same worker. A
+  dedicated Python example is not yet published — see the [Python
+  SDK](/sdk/python-sdk) for the API surface.
 </Callout>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+  **Tip:** all examples throughout this documentation are self-contained and
+  runnable. For instructions on how to run them, see the [JS/TS
+  quickstart](/sdk/js-ts-sdk#quickstart) or the [Python
+  quickstart](/sdk/python-sdk#quickstart).
 </Callout>
