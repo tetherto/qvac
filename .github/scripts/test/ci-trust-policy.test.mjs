@@ -1133,6 +1133,20 @@ test("merge guard fails closed when the PR was not authorized", () => {
   }
 });
 
+test("bare-major check fails the workflow and stays out of the required merge guard", () => {
+  const guard = read(".github/workflows/pr-gate-merge.yml");
+  assert.doesNotMatch(
+    guard,
+    /bare-majors/,
+    "a bare-major failure must not feed qvac-merge-guard",
+  );
+
+  const workflow = read(".github/workflows/bare-majors.yml");
+  assert.match(workflow, /check-bare-majors\.mjs/);
+  assert.match(onBlock(workflow), /pull_request:/);
+  assert.doesNotMatch(onBlock(workflow), /pull_request_target/);
+});
+
 test("merge guard cancels superseded in-flight runs", () => {
   const source = read(".github/workflows/pr-gate-merge.yml");
   // verify-prebuilds uses a static per-run freshness threshold, so an older
@@ -2004,7 +2018,7 @@ test('RPC server prebuilds consume PR-built npm Fabric artifacts', () => {
   assert.match(nxPrebuilds, /reuse-workflow-file:\s*\$\{\{ inputs\.reuse-workflow-file \}\}/)
   assert.match(
     nxPrebuilds,
-    /fabric-overlay-artifact:\s*\$\{\{ contains\(fromJSON\(inputs\.fabric-consumers\), matrix\.package\) && inputs\.fabric-overlay-artifact \|\| '' \}\}/,
+    /fabric-overlay-artifact:\s*\$\{\{ contains\(fromJSON\(inputs\.fabric-consumers \|\| '\[\]'\), matrix\.package\) && inputs\.fabric-overlay-artifact \|\| '' \}\}/,
   )
   assert.ok(fabricConsumers.includes('ggml-rpc-server'), 'the RPC server must receive the PR-built Fabric overlay')
   assert.match(
@@ -3136,8 +3150,17 @@ test("cache policy: the toolchain fingerprint identifies vcpkg by version, not b
   if (!/vcpkg_version_raw="\$\("\$\{vcpkg_bin\}" version\)/.test(source)) {
     offenders.push("bash: the fingerprint never runs `vcpkg version`");
   }
-  if (!/\$vcpkgVersion\s*=\s*\(&\s*\$vcpkgBin\s+version/.test(source)) {
+  if (!/\$vcpkgVersionRaw\s*=\s*&\s*\$vcpkgBin\s+version\s*\n/.test(source)) {
     offenders.push("powershell: the fingerprint never runs `vcpkg version`");
+  }
+
+  // Trimming in the same pipeline closes vcpkg's stdout early, and the step
+  // then fails on its leftover exit code (QVAC-26572).
+  if (/\$vcpkgBin\)?\s+['"]?version['"]?\s*\)?\s*\|/.test(source)) {
+    offenders.push("powershell: `vcpkg version` is piped straight into a trim");
+  }
+  if (!/\$vcpkgVersionRaw\s*=\s*&\s*\$vcpkgBin\s+version\s*\n\s*if\s*\(\s*\$LASTEXITCODE\s+-ne\s+0/.test(source)) {
+    offenders.push("powershell: `vcpkg version`'s exit code is not checked");
   }
 
   // An empty version would hash to one constant on every host, which is the
