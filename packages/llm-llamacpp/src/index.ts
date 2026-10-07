@@ -1061,9 +1061,8 @@ namespace LlmLlamacpp {
      */
     backend?: string;
     /**
-     * Make `backend` binding rather than advisory. Without it, a backend list
-     * that matches no device logs a warning and runs the default cascade, so a
-     * caller that must not silently move backends has no way to say so.
+     * Make `backend` binding: a list matching no device fails the load instead
+     * of running the default cascade.
      *
      * Only meaningful alongside `backend`; setting it without one is rejected.
      * Accepts `true`/`on`/`1` and `false`/`off`/`0`. Defaults to false.

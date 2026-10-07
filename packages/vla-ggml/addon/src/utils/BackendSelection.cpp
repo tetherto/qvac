@@ -283,9 +283,7 @@ ggml_backend_dev_t pickBestGpuDevice(
         }
       }
     }
-    // QVAC-23763: name what WAS accepted. Without it, diagnosing a pin that
-    // missed needs a second run - and on this picker the Adreno gate can be the
-    // reason a device is not in the list at all, which is worth seeing.
+    // Name what was accepted, so a missed pin needs no second run.
     std::string acceptedNames;
     for (const auto& [backendLower, dev] : accepted) {
       (void)dev;

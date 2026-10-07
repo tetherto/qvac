@@ -380,10 +380,9 @@ std::string normalizePciBusId(std::string id) {
 
 /// Resolve a backend-qualified or bus-id `main-gpu` to device indices.
 ///
-/// Scans rather than indexes: that is what makes these forms stable against
-/// backend load order. A missing match is an error: falling through could run
-/// on a different GPU. A bus id keeps every
-/// backend representation of that physical device so `backend` can choose.
+/// Scans rather than indexes, so the result survives backend load order. No
+/// match throws rather than falling to another GPU. A bus id returns every
+/// backend's copy of that card so `backend` can choose.
 std::vector<size_t>
 resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
   const size_t deviceCount = bckI.ggml_backend_dev_count();
@@ -496,9 +495,6 @@ Enumeration enumerateCandidates(
     } else if (std::holds_alternative<MainGpuType>(mainGpuValue)) {
       gpuType = std::get<MainGpuType>(mainGpuValue);
     } else {
-      // QVAC-23763: the two stable forms. Both resolve by scanning devices
-      // rather than indexing, which is the whole point - an index is what
-      // backend load order moves.
       const std::vector<size_t> resolved =
           ::resolveNamedMainGpu(bckI, mainGpuValue);
       for (const size_t index : resolved) {
@@ -847,11 +843,8 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
     return static_cast<char>(std::tolower(c));
   });
 
-  // QVAC-23763: the integer arm must consume the WHOLE value. It used to be
-  // std::stoi, which parses a leading prefix and discards the rest, so a PCI
-  // bus id like "0000:65:00.0" parsed silently as device 0. Requiring full
-  // consumption is what makes the string forms below safe to add - and it is a
-  // behaviour change in its own right: "1abc" no longer parses as 1.
+  // Whole value must be an integer. std::stoi took a prefix, so "0000:65:00.0"
+  // parsed as 0 and "1abc" as 1.
   int deviceIndex = 0;
   const char* first = lowerStr.data();
   const char* last = first + lowerStr.size();
@@ -867,8 +860,8 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
     return MainGpu(MainGpuType::Dedicated);
   }
 
-  // "<family>:<index>", e.g. "cuda:0". Checked before the bus id: neither shape
-  // can match the other, since a family is alphabetic and a bus id is not.
+  // "<family>:<index>", e.g. "cuda:0". Cannot match a bus id, which always has
+  // a '.'.
   static const std::regex qualifiedRe(R"(^([a-z]+):([0-9]+)$)");
   if (std::smatch m; std::regex_match(lowerStr, m, qualifiedRe)) {
     const std::string family = ::canonicaliseFamily(m[1].str());
@@ -1034,9 +1027,7 @@ bool backend_selection::tryBackendRequiredFromMap(
   }
   configFilemap.erase(it);
 
-  // Only meaningful alongside `backend`. On its own it reads as "require the
-  // default cascade", which is not a thing, so it is far more likely to be a
-  // mistake than an intent.
+  // True without `backend` has no meaning.
   if (required && !backendOverridePresent) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -1150,9 +1141,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
         }
       }
     }
-    // QVAC-23763: name what WAS enumerated. Without it, diagnosing a pin that
-    // missed takes a second run with verbose logging - and the reason a
-    // candidate was passed over is exactly what the caller needs to see.
+    // Name what was enumerated, and why each was passed over, so a missed pin
+    // needs no second run.
     std::string enumerated;
     for (const Candidate& c : enumeration.candidates) {
       if (!enumerated.empty()) {

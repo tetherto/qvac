@@ -23,12 +23,10 @@ enum BackendType : std::uint8_t { CPU, GPU };
 
 enum class MainGpuType : std::uint8_t { Integrated, Dedicated };
 
-/// @brief `main-gpu: "cuda:0"` - the nth device of a backend family.
+/// @brief `main-gpu: "cuda:0"`, the nth device of a backend family.
 ///
-/// QVAC-23763: a bare integer indexes ggml's full device list, whose order
-/// depends on which backends loaded. Adding CUDA therefore silently repointed
-/// every existing numeric value. Naming the family makes the address stable
-/// against that.
+/// A bare index depends on backend load order, so adding CUDA moves it. Naming
+/// the family makes it stable.
 struct MainGpuQualified {
   std::string family;
   int index = 0;
@@ -70,15 +68,9 @@ std::vector<std::string> tryBackendOverrideFromMap(
 
 /// @brief Extract and erase `backend-required` (or `backend_required`).
 ///
-/// QVAC-23763: a `backend` that matches no device logs a warning and runs the
-/// default cascade, so every pin written with it is advisory. This makes it
-/// binding: with it set, a backend list that matches nothing is an error rather
-/// than a silent move to another backend.
-///
-/// Accepts true/on/1 and false/off/0. Throws when both spellings are present,
-/// when the value is neither, or when it is set true without a `backend` -
-/// which has no meaning and is far more likely a mistake than an intent.
-/// Defaults to false, so existing configs keep the advisory behaviour.
+/// Makes `backend` binding: a list matching no device throws instead of running
+/// the default cascade. Accepts true/on/1, false/off/0. Throws on both
+/// spellings, a bad value, or true without `backend`. Default false.
 bool tryBackendRequiredFromMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     bool backendOverridePresent);

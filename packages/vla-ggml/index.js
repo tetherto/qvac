@@ -508,9 +508,8 @@ class VlaModel {
                 adds: `backendRequired must be a boolean (got: ${String(backendRequired)})`,
             });
         }
-        // QVAC-23763: on its own it would mean "require the default order", which
-        // is not a thing. Rejected here rather than natively so the message names
-        // the JS-level spelling the caller actually wrote.
+        // QVAC-23763: on its own it would mean "require the default order". Also
+        // checked here so the message names the JS spelling the caller wrote.
         if (backendRequired && (backend === "auto" || backend === "cpu")) {
             throw new QvacErrorAddonVla({
                 code: ERR_CODES.INVALID_CONFIG,
