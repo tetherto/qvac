@@ -1,10 +1,10 @@
 'use strict'
 
+const os = require('bare-os')
 const path = require('bare-path')
 const process = require('bare-process')
-const test = require('brittle')
 const { LayaDecisions } = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 
 // No Laya GGUF is pinned in models.manifest.json yet, so the tests that run a
 // model need LAYA_TEST_MODEL to point at one (the variable the C++ tests read too).
@@ -15,8 +15,15 @@ const skip = !LAYA_MODEL
 // need no Laya model and run everywhere.
 const NO_MODEL = '/nonexistent/laya.gguf'
 
-const GPU = { device: 'gpu', gpu_layers: '99' }
+const platform = os.platform()
+const arch = os.arch()
+const isDarwinX64 = platform === 'darwin' && arch === 'x64'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isMobile = platform === 'ios' || platform === 'android'
+
 const CPU = { device: 'cpu' }
+// As the other embed tests: these runners load on the CPU.
+const GPU = isDarwinX64 || isLinuxArm64 || isMobile ? CPU : { device: 'gpu', gpu_layers: '99' }
 
 const QUESTIONS = {
   department: {
@@ -72,7 +79,7 @@ function checkAnswers(t, answers) {
   t.ok(refund.noul >= 0 && refund.noul <= 1, `noul is a probability (${refund.noul})`)
 }
 
-test(
+safeTest(
   'a single state is answered for every question type',
   { skip, timeout: 600_000 },
   async (t) => {
@@ -97,7 +104,7 @@ test(
   }
 )
 
-test('a batch answers each state as it would alone', { skip, timeout: 600_000 }, async (t) => {
+safeTest('a batch answers each state as it would alone', { skip, timeout: 600_000 }, async (t) => {
   await withLaya(t, GPU, async (laya) => {
     const { result: results } = await decide(laya, { states: STATES, questions: QUESTIONS })
 
@@ -110,7 +117,7 @@ test('a batch answers each state as it would alone', { skip, timeout: 600_000 },
   })
 })
 
-test('the CPU and the GPU choose the same answers', { skip, timeout: 600_000 }, async (t) => {
+safeTest('the CPU and the GPU choose the same answers', { skip, timeout: 600_000 }, async (t) => {
   const request = { states: STATES, questions: QUESTIONS }
   const onGpu = await withLaya(t, GPU, async (laya) => (await decide(laya, request)).result)
   const onCpu = await withLaya(t, CPU, async (laya) => (await decide(laya, request)).result)
@@ -124,7 +131,7 @@ test('the CPU and the GPU choose the same answers', { skip, timeout: 600_000 }, 
   }
 })
 
-test(
+safeTest(
   'an invalid request fails without breaking the instance',
   { skip, timeout: 600_000 },
   async (t) => {
@@ -142,7 +149,7 @@ test(
   }
 )
 
-test('cancel stops a running request', { skip, timeout: 600_000 }, async (t) => {
+safeTest('cancel stops a running request', { skip, timeout: 600_000 }, async (t) => {
   await withLaya(t, CPU, async (laya) => {
     // Long enough on any CPU that the cancel lands while it runs.
     const states = Array.from({ length: 512 }, (_, i) => `${STATES[i % STATES.length]} (#${i})`)
@@ -156,7 +163,7 @@ test('cancel stops a running request', { skip, timeout: 600_000 }, async (t) => 
   })
 })
 
-test('a second request while one runs is refused', { skip, timeout: 600_000 }, async (t) => {
+safeTest('a second request while one runs is refused', { skip, timeout: 600_000 }, async (t) => {
   await withLaya(t, CPU, async (laya) => {
     const states = Array.from({ length: 64 }, (_, i) => `${STATES[i % STATES.length]} (#${i})`)
     const first = await laya.run({ states, questions: QUESTIONS })
@@ -169,7 +176,7 @@ test('a second request while one runs is refused', { skip, timeout: 600_000 }, a
   })
 })
 
-test('load rejects a missing device', async (t) => {
+safeTest('load rejects a missing device', {}, async (t) => {
   const laya = new LayaDecisions({ files: { model: [NO_MODEL] }, config: {} })
   try {
     await laya.load()
@@ -181,7 +188,7 @@ test('load rejects a missing device', async (t) => {
   }
 })
 
-test('load rejects an option Laya does not take', async (t) => {
+safeTest('load rejects an option Laya does not take', {}, async (t) => {
   const laya = new LayaDecisions({
     files: { model: [NO_MODEL] },
     config: { ...GPU, pooling: 'mean' }
@@ -196,7 +203,7 @@ test('load rejects an option Laya does not take', async (t) => {
   }
 })
 
-test('load rejects a GGUF that is not a Laya checkpoint', { timeout: 600_000 }, async (t) => {
+safeTest('load rejects a GGUF that is not a Laya checkpoint', { timeout: 600_000 }, async (t) => {
   const [name, dir] = await ensureModel({ modelName: 'embeddinggemma-300M-Q8_0.gguf' })
   const laya = new LayaDecisions({ files: { model: [path.join(dir, name)] }, config: GPU })
   try {
@@ -209,7 +216,7 @@ test('load rejects a GGUF that is not a Laya checkpoint', { timeout: 600_000 }, 
   }
 })
 
-test('run before load is refused', (t) => {
+safeTest('run before load is refused', {}, (t) => {
   const laya = new LayaDecisions({ files: { model: [NO_MODEL] }, config: CPU })
   return t.exception(laya.run({ state: STATES[0], questions: QUESTIONS }), /Call load\(\) first/)
 })
