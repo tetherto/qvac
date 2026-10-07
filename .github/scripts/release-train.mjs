@@ -294,12 +294,21 @@ function publishTrain ([movedJson], options) {
   setOutputs({ published: !options['dry-run'] })
 }
 
+// A registry error counts as "not served yet": the versions are already
+// published, so the only outcome that matters is whether npm serves them in time.
 function waitServed ([movedJson]) {
   const moved = JSON.parse(movedJson ?? '[]')
+  const deadline = Date.now() + 10 * 60 * 1000
   for (const project of moved) {
-    for (let attempt = 1; ; attempt++) {
-      if (isPublished(project.name, project.version)) break
-      if (attempt === 30) fail([`npm does not serve ${project.name}@${project.version} after 30 attempts`])
+    for (;;) {
+      let served = false
+      try {
+        served = isPublished(project.name, project.version)
+      } catch (error) {
+        console.log(error.message)
+      }
+      if (served) break
+      if (Date.now() > deadline) fail([`npm does not serve ${project.name}@${project.version} after 10 minutes`])
       spawnSync('sleep', ['10'])
     }
     console.log(`npm serves ${project.name}@${project.version}`)
