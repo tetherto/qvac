@@ -138,11 +138,6 @@ try {
     ],
     E2E_DIR
   )
-  // The install above restores @qvac/test-suite from the registry, which is what
-  // the catalog is meant to build against: `package.json` pins the published
-  // range. Working on the framework itself is the exception, and `npm run
-  // sync:test-suite` is how you say so -- deliberately, rather than having every
-  // build silently prefer the source next door.
   run('npm', ['run', 'build'], E2E_DIR)
   run('npm', ['run', 'bundle:sdk'], E2E_DIR)
 

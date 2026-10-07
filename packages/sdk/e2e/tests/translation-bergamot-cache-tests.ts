@@ -1,53 +1,13 @@
-import type { Step, TestDefinition } from '@qvac/test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 interface BergamotCacheParams {
   pair: string
 }
 
-/** Load the pair twice; the second time must be a pure cache hit. */
-const cacheReloadSteps = (dep: string): Step[] => [
-  { modelSource: { dep, as: 'src' } },
-  {
-    call: {
-      method: 'loadModel',
-      params: {
-        modelSrc: '$src.modelSrc',
-        modelType: '$src.modelType',
-        modelConfig: '$src.modelConfig'
-      },
-      as: 'warm'
-    }
-  },
-  { project: { from: '$warm', path: 'modelId', as: 'warmId' } },
-  { call: { method: 'unloadModel', params: { modelId: '$warmId' } } },
-  {
-    call: {
-      method: 'loadModel',
-      params: {
-        modelSrc: '$src.modelSrc',
-        modelType: '$src.modelType',
-        modelConfig: '$src.modelConfig',
-        withProgress: true
-      },
-      as: 'reload'
-    }
-  },
-  { project: { from: '$reload', path: 'modelId', as: 'reloadedId' } },
-  { project: { from: '$reload', path: 'progress', as: 'progress' } },
-  { assert: { on: '$progress', named: 'noPartialDownloads' } }
-]
-
-/** Unloads the second load, on both paths. */
-const unloadReloaded: Step[] = [
-  { call: { method: 'unloadModel', params: { modelId: '$reloadedId?' } } }
-]
-
 const cacheReloadTest = (pair: string): TestDefinition => ({
   testId: `translation-bergamot-${pair}-cache-reload`,
   params: { pair } satisfies BergamotCacheParams,
   expectation: { validation: 'function', fn: () => true },
-  steps: cacheReloadSteps(`bergamot-${pair}`),
-  finally: unloadReloaded,
   metadata: {
     category: 'translation-bergamot-cache',
     dependency: 'none',

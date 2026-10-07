@@ -1,9 +1,6 @@
 docs/typedoc.jsonc
 changelog/
 test/mocks/*
-# Generated from tests/shared/*.ts by emit-resource-table.mjs, and checked against it
-# by check:resource-table -- the generator owns this formatting, not prettier.
-e2e/tests/resources/*.json
 SECURITY.md
 .github
 *.mdx

@@ -1,5 +1,5 @@
 // Diffusion test definitions
-import type { Step, TestDefinition, TestResult } from '@qvac/test-suite'
+import type { TestDefinition, TestResult } from '@qvac/test-suite'
 
 type ExpectationLike =
   | { validation: 'type'; expectedType: 'string' | 'number' | 'array' }
@@ -10,8 +10,6 @@ type DiffusionTestOptions = {
   estimatedDurationMs?: number
   suites?: string[]
   dependency?: string
-  /** A hand-written body, for the tests that are more than one generation. */
-  steps?: Step[]
 }
 
 // Generic so `typeof someTest.testId`/`typeof someTest.params` keep their literal
@@ -22,109 +20,18 @@ export type DiffusionTestDef<
   P extends Record<string, unknown>
 > = TestDefinition & { testId: TId; params: P }
 
-/** Param names that are file names before the run and bytes during it. */
-const DIFFUSION_ASSET_KEYS = new Set(['init_image', 'init_images'])
-
-/** One diffusion run, checked against its outputs. */
-const diffusionSteps = (
-  dependency: string,
-  params: Record<string, unknown>,
-  fold: 'all' | 'last' | 'events' = 'all'
-): Step[] => {
-  const steps: Step[] = [{ useModel: { deps: [dependency], as: 'model' } }]
-
-  const call: Record<string, unknown> = { modelId: '$model' }
-  for (const key of Object.keys(params)) {
-    if (DIFFUSION_ASSET_KEYS.has(key)) continue
-    call[key] = `$params.${key}`
-  }
-
-  // A single reference image resolves through `asset`, which is what makes the same definition
-  // runnable where a file path is not a thing.
-  if (typeof params.init_image === 'string') {
-    steps.push({
-      asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' }
-    })
-    call.init_image = '$initImage'
-  }
-
-  steps.push({ call: { method: 'diffusion', collect: fold, params: call, as: 'run' } })
-  steps.push({ project: { from: '$run', path: fold, as: 'outputs' } })
-  steps.push({ assert: { on: '$outputs', use: 'expectation' } })
-  return steps
-}
-
-/**
- * Bodies that are more than one run: a seed compared against a second run with the same seed, an
- * img2img output weighed against its txt2img baseline, a progress stream asserted on, a standalone
- * upscaler.
- */
-const DIFFUSION_MULTI_RUN = new Set([
-  'diffusion-seed-reproducibility',
-  'diffusion-img2img-vs-txt2img-baseline',
-  'diffusion-fusion-flux2-basic',
-  'diffusion-streaming-progress',
-  'diffusion-stats-valid',
-  'diffusion-standalone-upscaler-x4',
-  'diffusion-standalone-upscaler-backend-device'
-])
-
-/** The same generation twice, compared. */
-const twoRunSteps = (
-  call: Record<string, unknown>,
-  second: Record<string, unknown>,
-  check: Step
-): Step[] => [
-  { useModel: { deps: ['diffusion'], as: 'model' } },
-  {
-    call: { method: 'diffusion', collect: 'all', params: { modelId: '$model', ...call }, as: 'a' }
-  },
-  { project: { from: '$a', path: 'all[0]', as: 'first' } },
-  {
-    call: {
-      method: 'diffusion',
-      collect: 'all',
-      params: { modelId: '$model', ...call, ...second },
-      as: 'b'
-    }
-  },
-  { project: { from: '$b', path: 'all[0]', as: 'second' } },
-  check
-]
-
-/** The phase timings a diffusion run reports, and what they have to add up to. */
-const PHASE_FIELDS = ['conditionerMs', 'denoiseMs', 'vaeMs', 'postProcessMs']
-
-/** The standalone upscaler: no prompt, no diffusion, just an image in and a bigger one out. */
-const upscaleSteps = (dependency: string, checks: Step[]): Step[] => [
-  { useModel: { deps: [dependency], as: 'model' } },
-  { asset: { kind: 'image', file: '$params.image', form: 'bytes', as: 'image' } },
-  {
-    call: {
-      method: 'upscale',
-      collect: 'all',
-      params: { modelId: '$model', image: '$image', repeats: '$params.repeats?' },
-      as: 'run'
-    }
-  },
-  { project: { from: '$run', path: 'all', as: 'outputs' } },
-  { assert: { on: '$outputs', named: 'lengthAtLeast', with: { length: 1 } } },
-  ...checks
-]
-
 function createDiffusionTest<const TId extends string, const P extends Record<string, unknown>>(
   testId: TId,
   params: P,
   expectation: ExpectationLike,
   options: DiffusionTestOptions = {}
 ): DiffusionTestDef<TId, P> {
-  const { estimatedDurationMs = 300000, suites, dependency = 'diffusion', steps } = options
+  const { estimatedDurationMs = 300000, suites, dependency = 'diffusion' } = options
   return {
     testId,
     params,
     expectation,
     ...(suites && { suites }),
-    ...(steps && { steps }),
     metadata: {
       category: 'diffusion',
       dependency,
@@ -270,22 +177,7 @@ export const diffusionSeedReproducibility = createDiffusionTest(
     seed: 12345
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 600000,
-    steps: twoRunSteps(
-      {
-        prompt: '$params.prompt',
-        width: '$params.width',
-        height: '$params.height',
-        steps: '$params.steps',
-        seed: '$params.seed'
-      },
-      {},
-      {
-        compare: { left: '$first', right: '$second', named: 'identicalBytes' }
-      }
-    )
-  }
+  { estimatedDurationMs: 600000 }
 )
 
 export const diffusionBatchCount = createDiffusionTest(
@@ -336,39 +228,7 @@ export const diffusionImg2imgImgCfgScale = createDiffusionTest(
     steps: 4,
     seed: 42
   },
-  { validation: 'function', fn: validatePngDims(256, 256, 'img2img PNG') },
-  {
-    steps: [
-      { useModel: { deps: ['diffusion'], as: 'model' } },
-      { asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' } },
-      {
-        call: {
-          method: 'diffusion',
-          collect: 'all',
-          params: {
-            modelId: '$model',
-            prompt: '$params.prompt',
-            init_image: '$initImage',
-            strength: '$params.strength',
-            img_cfg_scale: '$params.img_cfg_scale',
-            width: '$params.width',
-            height: '$params.height',
-            steps: '$params.steps',
-            seed: '$params.seed'
-          },
-          as: 'run'
-        }
-      },
-      { project: { from: '$run', path: 'all', as: 'outputs' } },
-      {
-        assert: {
-          on: '$outputs',
-          named: 'pngDimensions',
-          with: { width: '$params.width', height: '$params.height' }
-        }
-      }
-    ]
-  }
+  { validation: 'function', fn: validatePngDims(256, 256, 'img2img PNG') }
 )
 
 export const diffusionImg2imgVsTxt2imgBaseline = createDiffusionTest(
@@ -382,38 +242,9 @@ export const diffusionImg2imgVsTxt2imgBaseline = createDiffusionTest(
     steps: 4,
     seed: 42
   },
+  // Required by TestDefinition but effectively ignored — DiffusionExecutor.img2imgVsTxt2imgBaseline gates the result.
   { validation: 'type', expectedType: 'array' },
-  {
-    estimatedDurationMs: 600000,
-    // The second run drops `init_image`. If the backend ignored the reference the two outputs would
-    // collapse onto each other, which the floor catches.
-    steps: [
-      { asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' } },
-      ...twoRunSteps(
-        {
-          prompt: '$params.prompt',
-          init_image: '$initImage',
-          strength: '$params.strength',
-          width: '$params.width',
-          height: '$params.height',
-          steps: '$params.steps',
-          seed: '$params.seed'
-        },
-        // `null` rather than an omitted key: the second call has to be the same call with the
-        // reference taken out, and an optional reference that resolves to nothing is dropped from
-        // the params entirely.
-        { init_image: '$missing?' },
-        {
-          compare: {
-            left: '$first',
-            right: '$second',
-            named: 'imageDivergesFrom',
-            with: { minRatio: 0.01 }
-          }
-        }
-      )
-    ]
-  }
+  { estimatedDurationMs: 600000 }
 )
 
 export const diffusionImg2imgInvalidStrength = createDiffusionTest(
@@ -432,31 +263,7 @@ export const diffusionImg2imgInvalidStrength = createDiffusionTest(
     // bumps that rephrase numeric-bound messages.
     errorContains: 'strength'
   },
-  {
-    estimatedDurationMs: 60000,
-    steps: [
-      { useModel: { deps: ['diffusion'], as: 'model' } },
-      { asset: { kind: 'image', file: '$params.init_image', form: 'bytes', as: 'initImage' } },
-      {
-        callError: {
-          method: 'diffusion',
-          collect: 'all',
-          params: {
-            modelId: '$model',
-            prompt: '$params.prompt',
-            init_image: '$initImage',
-            strength: '$params.strength',
-            width: '$params.width',
-            height: '$params.height',
-            steps: '$params.steps'
-          },
-          as: 'err'
-        }
-      },
-      { project: { from: '$err', path: 'message', as: 'message' } },
-      { assert: { on: '$message', use: 'expectation' } }
-    ]
-  }
+  { estimatedDurationMs: 60000 }
 )
 
 // ---- streaming ----
@@ -470,29 +277,7 @@ export const diffusionStreaming = createDiffusionTest(
     steps: 4,
     seed: 42
   },
-  { validation: 'type', expectedType: 'array' },
-  {
-    steps: [
-      { useModel: { deps: ['diffusion'], as: 'model' } },
-      {
-        call: {
-          method: 'diffusion',
-          collect: 'all',
-          params: {
-            modelId: '$model',
-            prompt: '$params.prompt',
-            width: '$params.width',
-            height: '$params.height',
-            steps: '$params.steps',
-            seed: '$params.seed'
-          },
-          as: 'run'
-        }
-      },
-      { project: { from: '$run', path: 'all', as: 'outputs' } },
-      { assert: { on: '$outputs', use: 'expectation' } }
-    ]
-  }
+  { validation: 'type', expectedType: 'array' }
 )
 
 export const diffusionStreamingProgress = createDiffusionTest(
@@ -505,52 +290,7 @@ export const diffusionStreamingProgress = createDiffusionTest(
     seed: 42
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 300000,
-    suites: ['smoke'],
-    // One run answers all three: images came back, progress ticked, and every tick carried the step
-    // counters a caller would draw a progress bar from.
-    steps: [
-      { useModel: { deps: ['diffusion'], as: 'model' } },
-      {
-        call: {
-          method: 'diffusion',
-          collect: 'events',
-          params: {
-            modelId: '$model',
-            prompt: '$params.prompt',
-            width: '$params.width',
-            height: '$params.height',
-            steps: '$params.steps',
-            seed: '$params.seed'
-          },
-          as: 'run'
-        }
-      },
-      { project: { from: '$run', path: 'all', as: 'outputs' } },
-      { assert: { on: '$outputs', named: 'lengthAtLeast', with: { length: 1 } } },
-      { project: { from: '$run', path: 'events', as: 'ticks' } },
-      { assert: { on: '$ticks', named: 'lengthAtLeast', with: { length: 1 } } },
-      {
-        repeat: {
-          over: '$ticks',
-          as: 'tick',
-          collectInto: 'checkedTicks',
-          steps: [
-            {
-              assert: {
-                on: '$tick',
-                named: 'nonNegativeNumbers',
-                with: { fields: ['step', 'totalSteps', 'elapsedMs'] }
-              }
-            }
-          ]
-        }
-      },
-      { project: { from: '$run', path: 'stats', as: 'stats' } },
-      { assert: { on: '$stats', named: 'fieldsPresent', with: { fields: ['generationMs'] } } }
-    ]
-  }
+  { estimatedDurationMs: 300000, suites: ['smoke'] }
 )
 
 // ---- stats ----
@@ -564,53 +304,7 @@ export const diffusionStatsValid = createDiffusionTest(
     steps: 4,
     seed: 42
   },
-  { validation: 'type', expectedType: 'string' },
-  {
-    // The phase timings have to reconcile with the total: if they do not, some phase is not being
-    // accounted for, and the breakdown a caller profiles against is wrong without any single number
-    // looking wrong.
-    steps: [
-      { useModel: { deps: ['diffusion'], as: 'model' } },
-      {
-        call: {
-          method: 'diffusion',
-          collect: 'all',
-          params: {
-            modelId: '$model',
-            prompt: '$params.prompt',
-            width: '$params.width',
-            height: '$params.height',
-            steps: '$params.steps',
-            seed: '$params.seed'
-          },
-          as: 'run'
-        }
-      },
-      { project: { from: '$run', path: 'stats', as: 'stats' } },
-      { assert: { on: '$stats', named: 'nonNegativeNumbers', with: { fields: PHASE_FIELDS } } },
-      {
-        assert: {
-          on: '$stats',
-          named: 'positiveIntegers',
-          with: { fields: ['totalSteps'] }
-        }
-      },
-      {
-        assert: {
-          on: '$stats',
-          named: 'timingStatsPresent',
-          with: { field: 'stepsPerSecond' }
-        }
-      },
-      {
-        assert: {
-          on: '$stats',
-          named: 'fieldsSumTo',
-          with: { fields: PHASE_FIELDS, total: 'generationMs', ratio: 0.01, minTolerance: 2 }
-        }
-      }
-    ]
-  }
+  { validation: 'type', expectedType: 'string' }
 )
 
 // ---- diffusion_fa config flag ----
@@ -653,35 +347,9 @@ export const diffusionFusionFlux2Basic = createDiffusionTest(
     steps: 4,
     seed: 42
   },
+  // Required by TestDefinition but effectively ignored - DiffusionExecutor.fusionFlux2Basic gates the result.
   { validation: 'type', expectedType: 'array' },
-  {
-    estimatedDurationMs: 600000,
-    // Same shape as the img2img baseline: the second run drops the reference images, and if the
-    // addon ignored them the outputs would collapse together.
-    steps: [
-      { asset: { kind: 'image', file: 'cat.jpg', form: 'bytes', as: 'firstImage' } },
-      { asset: { kind: 'image', file: 'elephant.jpg', form: 'bytes', as: 'secondImage' } },
-      ...twoRunSteps(
-        {
-          prompt: '$params.prompt',
-          init_images: ['$firstImage', '$secondImage'],
-          width: '$params.width',
-          height: '$params.height',
-          steps: '$params.steps',
-          seed: '$params.seed'
-        },
-        { init_images: '$missing?' },
-        {
-          compare: {
-            left: '$first',
-            right: '$second',
-            named: 'imageDivergesFrom',
-            with: { minRatio: 0.01 }
-          }
-        }
-      )
-    ]
-  }
+  { estimatedDurationMs: 600000 }
 )
 
 // ---- ESRGAN upscale ----
@@ -710,40 +378,7 @@ export const diffusionEsrganUpscaleX4 = createDiffusionTest(
       `ESRGAN x${ESRGAN_SCALE}`
     )
   },
-  {
-    estimatedDurationMs: 600000,
-    dependency: 'diffusion-esrgan',
-    steps: [
-      { useModel: { deps: ['diffusion-esrgan'], as: 'model' } },
-      {
-        call: {
-          method: 'diffusion',
-          collect: 'all',
-          params: {
-            modelId: '$model',
-            prompt: '$params.prompt',
-            width: '$params.width',
-            height: '$params.height',
-            steps: '$params.steps',
-            seed: '$params.seed',
-            upscale: '$params.upscale'
-          },
-          as: 'run'
-        }
-      },
-      { project: { from: '$run', path: 'all', as: 'outputs' } },
-      {
-        assert: {
-          on: '$outputs',
-          named: 'pngDimensions',
-          with: {
-            width: ESRGAN_SOURCE_WIDTH * ESRGAN_SCALE,
-            height: ESRGAN_SOURCE_HEIGHT * ESRGAN_SCALE
-          }
-        }
-      }
-    ]
-  }
+  { estimatedDurationMs: 600000, dependency: 'diffusion-esrgan' }
 )
 
 export const diffusionStandaloneUpscalerX4 = createDiffusionTest(
@@ -760,22 +395,7 @@ export const diffusionStandaloneUpscalerX4 = createDiffusionTest(
       `Standalone upscaler x${ESRGAN_SCALE}`
     )
   },
-  {
-    estimatedDurationMs: 600000,
-    dependency: 'upscaler',
-    steps: upscaleSteps('upscaler', [
-      {
-        assert: {
-          on: '$outputs',
-          named: 'pngDimensions',
-          with: {
-            width: STANDALONE_UPSCALER_SOURCE_WIDTH * ESRGAN_SCALE,
-            height: STANDALONE_UPSCALER_SOURCE_HEIGHT * ESRGAN_SCALE
-          }
-        }
-      }
-    ])
-  }
+  { estimatedDurationMs: 600000, dependency: 'upscaler' }
 )
 
 export const diffusionStandaloneUpscalerBackendDevice = createDiffusionTest(
@@ -785,16 +405,7 @@ export const diffusionStandaloneUpscalerBackendDevice = createDiffusionTest(
     repeats: 1
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 1000,
-    dependency: 'upscaler',
-    // Which device the work landed on is the claim; either answer is acceptable, an absent or
-    // unknown one is not.
-    steps: upscaleSteps('upscaler', [
-      { project: { from: '$run', path: 'stats.backendDevice', as: 'device' } },
-      { assert: { on: '$device', named: 'valueIn', with: { values: ['cpu', 'gpu'] } } }
-    ])
-  }
+  { estimatedDurationMs: 1000, dependency: 'upscaler' }
 )
 
 export const diffusionStandaloneUpscalerCpu = createDiffusionTest(
@@ -804,15 +415,7 @@ export const diffusionStandaloneUpscalerCpu = createDiffusionTest(
     repeats: 1
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 2000,
-    dependency: 'upscaler-cpu',
-    suites: ['smoke'],
-    steps: upscaleSteps('upscaler-cpu', [
-      { project: { from: '$run', path: 'stats.backendDevice', as: 'device' } },
-      { assert: { on: '$device', named: 'valueIn', with: { values: ['cpu'] } } }
-    ])
-  }
+  { estimatedDurationMs: 2000, dependency: 'upscaler-cpu', suites: ['smoke'] }
 )
 
 export const diffusionTests = [
@@ -840,16 +443,3 @@ export const diffusionTests = [
   diffusionStandaloneUpscalerBackendDevice,
   diffusionStandaloneUpscalerCpu
 ] as const
-
-/**
- * Attach a body to every definition that is one run. Tests that take several images, or that expect
- * a rejection, keep their hand-written bodies for now: the first needs a repeat over assets, the
- * second is about the load path.
- */
-for (const test of diffusionTests) {
-  if (test.steps || DIFFUSION_MULTI_RUN.has(test.testId)) continue
-  if (test.expectation.validation !== 'type') continue
-  const params = test.params as Record<string, unknown>
-  if (Array.isArray(params.init_images)) continue
-  test.steps = diffusionSteps(String(test.metadata?.dependency ?? 'diffusion'), params)
-}

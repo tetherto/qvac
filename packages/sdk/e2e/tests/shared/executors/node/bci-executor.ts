@@ -74,14 +74,14 @@ export class BciExecutor extends AbstractModelExecutor<typeof bciTests> {
   }
 
   async runMissingFile(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { neuralDataPath: string }
+    const p = params as { neuralFileName: string }
     const exp = expectation as Expectation
     const modelId = await this.resources.ensureLoaded('bci')
 
     try {
       await bciTranscribe({
         modelId,
-        neuralData: p.neuralDataPath
+        neuralData: this.neuralPath(p.neuralFileName)
       })
       return {
         passed: false,

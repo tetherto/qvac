@@ -27,15 +27,12 @@ export interface VideoResult {
  * @param params - Video request parameters (model, prompt, dimensions, frame count, fps, sampler, seed, etc.).
  * @returns A result object exposing `requestId` (stable identifier for this in-flight generation), `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated video buffers, typically a single AVI file), and `stats` (promise of generation statistics).
  *
- * Supports `txt2vid` (text-to-video) and `img2vid` (image-to-video) for Wan,
- * LTX-2, and MiniMax H3. For Wan `img2vid`, load the pipeline with
+ * Supports `txt2vid` (text-to-video) and `img2vid` (image-to-video) for both the
+ * Wan and LTX-2 layouts. For Wan `img2vid`, load the pipeline with
  * `modelConfig.clipVisionModelSrc` set to `clip_vision_h.safetensors`; LTX-2
  * `img2vid` conditions on the first frame through its video VAE and needs no
  * CLIP vision weights (the same LTX-2 model loaded for txt2vid also does
- * img2vid). MiniMax H3 uses its video VAE to condition on the first frame;
- * it requires the text encoder and audio VAE companions. H3 frames must
- * satisfy `17*k + 5`, and its native frame rate is 24 FPS. On React Native,
- * the bundled video diffusion models are too large
+ * img2vid). On React Native, the bundled video diffusion models are too large
  * for typical mobile devices.
  *
  * @example Basic txt2vid generation
@@ -76,23 +73,6 @@ export interface VideoResult {
  *   init_image: firstFrame,
  *   strength: 0.85,
  * });
- * ```
- *
- * @example MiniMax H3 image-to-video with audio
- * ```typescript
- * const firstFrame = fs.readFileSync("first-frame.png");
- * const { outputs } = video({
- *   modelId,
- *   mode: "img2vid",
- *   prompt: "A sailboat glides across a calm bay as the camera follows it.",
- *   init_image: firstFrame,
- *   width: 960,
- *   height: 544,
- *   video_frames: 22,
- *   fps: 24,
- *   cfg_scale: 1,
- * });
- * fs.writeFileSync("h3-output.avi", (await outputs)[0]);
  * ```
  *
  * @example With control frames (e.g. for guided generation)

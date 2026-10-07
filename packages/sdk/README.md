@@ -20,8 +20,6 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 ## Supported environments and installation
 
-For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the native addon manifest. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
-
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
 On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
@@ -83,12 +81,6 @@ try {
 ```bash
 node quickstart.js
 ```
-
-A first `loadModel()` call also starts the SDK's worker. If that startup ever
-exceeds its budget (cold disk cache, antivirus scanning the native addon), the
-call fails with `RPC_INIT_TIMEOUT`. Re-running usually succeeds; to give every
-start more room, raise `rpcInitTimeoutMs` in `qvac.config.*` or set the
-`QVAC_RPC_INIT_TIMEOUT_MS` environment variable.
 
 ## System resource diagnostics
 

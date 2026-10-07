@@ -5,9 +5,7 @@ export const snapStorageTests: TestDefinition[] = [
     testId: 'snap-storage-common-root',
     params: {},
     expectation: { validation: 'type', expectedType: 'string' },
-    // Strict-confined Snap storage paths: a property of how the JS SDK is distributed. No generated
-    // client has such a distribution.
-    suites: ['snap', 'packaging'],
+    suites: ['snap'],
     metadata: {
       category: 'snap',
       dependency: 'none',

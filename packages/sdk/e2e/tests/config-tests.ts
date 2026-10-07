@@ -1,4 +1,4 @@
-import type { Step, TestDefinition } from '@qvac/test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 /**
  * End-to-end coverage for registry-download configuration plumbing.
@@ -14,21 +14,12 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
  * those values in effect.
  */
 
-/** The download path, driven with the fixture's retries/timeout in effect. */
-const downloadSmokeSteps: Step[] = [
-  { modelSource: { dep: 'whisper', as: 'src' } },
-  { call: { method: 'downloadAsset', params: { assetSrc: '$src.modelSrc' }, as: 'downloaded' } },
-  { project: { from: '$downloaded', path: 'path', as: 'path' } },
-  { assert: { on: '$path', named: 'nonEmptyText' } }
-]
-
 export const configRegistryDownloadSmoke: TestDefinition = {
   testId: 'config-registry-download-smoke',
   params: {},
-  // Read only by the executor, on the legs without step bindings; the steps assert on their own.
+  // expectation is validated inside the executor
   expectation: { validation: 'function', fn: () => true },
   suites: ['smoke'],
-  steps: downloadSmokeSteps,
   metadata: {
     category: 'config',
     dependency: 'none',
@@ -36,10 +27,6 @@ export const configRegistryDownloadSmoke: TestDefinition = {
   }
 }
 
-/**
- * No declarative body: it cancels from inside the first progress event and tells a cache hit from
- * an ignored cancel by elapsed time, and steps can neither act on an event nor measure time.
- */
 export const configRegistryDownloadRespectsCancel: TestDefinition = {
   testId: 'config-registry-download-respects-cancel',
   params: {},

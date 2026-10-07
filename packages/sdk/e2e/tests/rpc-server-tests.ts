@@ -1,8 +1,5 @@
 import type { TestDefinition } from '@qvac/test-suite'
 
-// No declarative bodies: `getRpcDeviceMap` is a JS-only helper, and cancelling a discovery needs the
-// in-flight call's request id, which `start` does not expose.
-
 export const rpcServerLifecycle = {
   testId: 'rpc-server-lifecycle',
   params: {},

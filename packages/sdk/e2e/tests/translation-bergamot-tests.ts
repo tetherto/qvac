@@ -1,65 +1,4 @@
-import type { Expectation, Step, TestDefinition } from '@qvac/test-suite'
-
-/**
- * One NMT translation. The model carries its own language pair, so unlike the LLM-backed
- * translations there is no `from`/`to` to pass -- which is exactly the distinction the executor
- * used to decide which call to make.
- */
-const nmtSteps = (dependency: string): Step[] => [
-  { useModel: { deps: [dependency], as: 'model' } },
-  {
-    call: {
-      method: 'translate',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        text: '$params.text',
-        modelType: 'nmtcpp-translation',
-        stream: false
-      },
-      as: 'run'
-    }
-  },
-  { project: { from: '$run', path: 'text', as: 'text' } },
-  { assert: { on: '$text', use: 'expectation' } }
-]
-
-/** A batch NMT translation: several inputs in one call. */
-const nmtBatchSteps = (count: number): Step[] => [
-  { useModel: { deps: ['bergamot-en-fr'], as: 'model' } },
-  {
-    call: {
-      method: 'translate',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        text: '$params.texts',
-        modelType: 'nmtcpp-translation',
-        stream: false
-      },
-      as: 'run'
-    }
-  },
-  { project: { from: '$run', path: 'translations', as: 'translations' } },
-  { assert: { on: '$translations', named: 'lengthIs', with: { length: count } } },
-  {
-    repeat: {
-      over: '$translations',
-      as: 'entry',
-      collectInto: 'checked',
-      steps: [{ assert: { on: '$entry', named: 'nonEmptyText' } }]
-    }
-  },
-  { project: { from: '$run', path: 'text', as: 'text' } },
-  {
-    assert: {
-      on: '$text',
-      named: 'equalsJoined',
-      with: { parts: '$translations', separator: '\n' }
-    }
-  },
-  { assert: { on: '$text', use: 'expectation' } }
-]
+import type { TestDefinition, Expectation } from '@qvac/test-suite'
 
 const createBergamotTest = (
   testId: string,
@@ -124,32 +63,10 @@ export const bergamotEnFrNumbers = createBergamotTest(
   { validation: 'contains-any', contains: ['réunion', '10', '25', 'participant'] }
 )
 
-/** An empty input is refused, not translated. */
 export const bergamotEnFrEmptyText: TestDefinition = {
   testId: 'translation-bergamot-en-fr-empty-text',
   params: { text: '', resource: 'bergamot-en-fr' },
-  expectation: { validation: 'throws-error', errorContains: 'Text cannot be empty' },
-  steps: [
-    { useModel: { deps: ['bergamot-en-fr'], as: 'model' } },
-    {
-      callError: {
-        method: 'translate',
-        collect: 'text',
-        params: {
-          modelId: '$model',
-          text: '$params.text',
-          modelType: 'nmtcpp-translation',
-          stream: false
-        },
-        as: 'err'
-      }
-    },
-    { project: { from: '$err', path: 'message', as: 'message' } },
-    // The wording is deliberately not asserted. Both clients refuse before anything reaches the
-    // worker -- the SDK's own request validation on JS, pydantic on Python -- and each validator
-    // words it its own way.
-    { assert: { on: '$message', named: 'nonEmptyText' } }
-  ],
+  expectation: { validation: 'type', expectedType: 'string' },
   metadata: {
     category: 'translation-bergamot',
     dependency: 'bergamot-en-fr',
@@ -177,7 +94,6 @@ export const bergamotEnFrBatchBasic: TestDefinition = {
   testId: 'translation-bergamot-en-fr-batch-basic',
   params: { texts: ['Good morning', 'Good night'], resource: 'bergamot-en-fr' },
   expectation: { validation: 'contains-any', contains: ['bonjour', 'matin', 'nuit', 'bonne'] },
-  steps: nmtBatchSteps(2),
   metadata: {
     category: 'translation-bergamot',
     dependency: 'bergamot-en-fr',
@@ -192,7 +108,6 @@ export const bergamotEnFrBatchMultiple: TestDefinition = {
     resource: 'bergamot-en-fr'
   },
   expectation: { validation: 'contains-any', contains: ['comment', 'temps', 'merci', 'revoir'] },
-  steps: nmtBatchSteps(4),
   metadata: {
     category: 'translation-bergamot',
     dependency: 'bergamot-en-fr',
@@ -207,7 +122,6 @@ export const bergamotEnFrBatchArray: TestDefinition = {
     resource: 'bergamot-en-fr'
   },
   expectation: { validation: 'contains-any', contains: ['bonjour', 'matin', 'temps', 'merci'] },
-  steps: nmtBatchSteps(3),
   metadata: {
     category: 'translation-bergamot',
     dependency: 'bergamot-en-fr',
@@ -292,14 +206,3 @@ export const translationBergamotTests = [
   bergamotPivotBasic,
   bergamotPivotStreaming
 ]
-
-/**
- * Attach the body to every definition that is one translation. A test naming several texts, or
- * comparing two runs, keeps its hand-written body.
- */
-for (const test of translationBergamotTests) {
-  if (test.steps) continue
-  const params = test.params as { text?: unknown; texts?: unknown }
-  if (typeof params.text !== 'string' || params.texts !== undefined) continue
-  test.steps = nmtSteps(String(test.metadata?.dependency ?? ''))
-}

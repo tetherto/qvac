@@ -212,10 +212,6 @@ export interface DeferredToolsParams {
   toolDialect?: ToolDialect
 }
 
-/**
- * No declarative body: the history is built by the client-side `executeToolSearch` helper, which no
- * contract method exposes, in each dialect's own tool-call syntax.
- */
 function createDeferredToolsTest(
   testId: string,
   params: Omit<DeferredToolsParams, 'systemPrompt'>,

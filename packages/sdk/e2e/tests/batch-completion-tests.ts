@@ -1,4 +1,4 @@
-import type { Step, TestDefinition } from '@qvac/test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import type { ToolDialect } from '@qvac/sdk'
 
 interface GenerationParams {
@@ -57,43 +57,16 @@ type BatchCompletionExpectation =
   | { validation: 'type'; expectedType: 'string' | 'array' }
   | { validation: 'throws-error'; errorContains: string }
 
-/** The batch call itself, with only the arguments the test sets. */
-const batchSteps = (
-  dependency: string,
-  checks: Step[],
-  /** The prompts to send, when they are not `params.prompts` verbatim. */
-  prompts: unknown = '$params.prompts'
-): Step[] => [
-  { useModel: { deps: [dependency], as: 'model' } },
-  {
-    call: {
-      method: 'batchCompletion',
-      collect: 'all',
-      params: {
-        modelId: '$model',
-        prompts,
-        stream: '$params.stream',
-        toolDialect: '$params.toolDialect?'
-      },
-      as: 'run'
-    }
-  },
-  { project: { from: '$run', path: 'all', as: 'results' } },
-  ...checks
-]
-
 function createBatchCompletionTest(
   testId: string,
   params: BatchCompletionTestParams,
   expectation: BatchCompletionExpectation,
-  estimatedDurationMs = 15000,
-  steps?: Step[]
+  estimatedDurationMs = 15000
 ): TestDefinition {
   return {
     testId,
     params,
     expectation,
-    ...(steps && { steps }),
     metadata: {
       category: 'batch-completion',
       dependency: params.resourceKey ?? 'llm-batch',
@@ -162,18 +135,7 @@ export const batchCompletionBasic = createBatchCompletionTest(
       second: ['"second"']
     }
   },
-  { validation: 'contains-all', contains: ['"first"', '"second"'] },
-  15000,
-  batchSteps('llm-batch', [
-    { assert: { on: '$results', named: 'lengthIs', with: { length: 2 } } },
-    {
-      assert: {
-        on: '$results',
-        named: 'textsById',
-        with: { expect: { first: ['"first"'], second: ['"second"'] } }
-      }
-    }
-  ])
+  { validation: 'contains-all', contains: ['"first"', '"second"'] }
 )
 
 export const batchCompletionStreaming = createBatchCompletionTest(
@@ -209,28 +171,7 @@ export const batchCompletionStreaming = createBatchCompletionTest(
       'stream-second': ['"stream-second"']
     }
   },
-  { validation: 'contains-all', contains: ['"stream-first"', '"stream-second"'] },
-  15000,
-  batchSteps('llm-batch', [
-    { assert: { on: '$results', named: 'lengthIs', with: { length: 2 } } },
-    { project: { from: '$run', path: 'events', as: 'events' } },
-    {
-      assert: {
-        on: '$events',
-        named: 'streamedEachId',
-        with: { ids: ['stream-first', 'stream-second'] }
-      }
-    },
-    {
-      assert: {
-        on: '$results',
-        named: 'textsById',
-        with: {
-          expect: { 'stream-first': ['"stream-first"'], 'stream-second': ['"stream-second"'] }
-        }
-      }
-    }
-  ])
+  { validation: 'contains-all', contains: ['"stream-first"', '"stream-second"'] }
 )
 
 export const batchCompletionEmptyRejected = createBatchCompletionTest(
@@ -240,20 +181,7 @@ export const batchCompletionEmptyRejected = createBatchCompletionTest(
     stream: false
   },
   { validation: 'throws-error', errorContains: 'prompts' },
-  2000,
-  [
-    { useModel: { deps: ['llm-batch'], as: 'model' } },
-    {
-      callError: {
-        method: 'batchCompletion',
-        collect: 'all',
-        params: { modelId: '$model', prompts: '$params.prompts', stream: '$params.stream' },
-        as: 'err'
-      }
-    },
-    { project: { from: '$err', path: 'message', as: 'message' } },
-    { assert: { on: '$message', use: 'expectation' } }
-  ]
+  2000
 )
 
 export const batchCompletionToolCalling = createBatchCompletionTest(
@@ -301,68 +229,38 @@ export const batchCompletionToolCalling = createBatchCompletionTest(
     }
   },
   { validation: 'type', expectedType: 'string' },
-  20000,
-  batchSteps('tools-batch', [
-    { project: { from: '$results', path: '[0].final.toolCalls', as: 'calls' } },
-    {
-      assert: {
-        on: '$calls',
-        named: 'toolCallShape',
-        with: { declared: ['get_weather'], name: 'get_weather', argKeys: ['city'] }
-      }
-    },
-    { assert: { on: '$results', named: 'noToolCallsFor', with: { ids: ['plain'] } } }
-  ])
+  20000
 )
-
-/** One prompt with an image, one without, in the same batch. */
-const visionMixedPrompts = (image: string) => [
-  {
-    id: 'image',
-    history: [
-      {
-        role: 'user',
-        content: 'What animal is in this image? Reply with one word.',
-        attachments: [{ path: image }]
-      }
-    ],
-    generationParams: visionDeterministic
-  },
-  {
-    id: 'text',
-    history: [{ role: 'user', content: 'Reply with only the word PLAIN.' }],
-    generationParams: deterministic
-  }
-]
 
 export const batchCompletionVisionMixed = createBatchCompletionTest(
   'batch-completion-vision-mixed',
   {
     resourceKey: 'vision-batch',
-    prompts: visionMixedPrompts('shared-test-data/images/elephant.jpg'),
+    prompts: [
+      {
+        id: 'image',
+        history: [
+          {
+            role: 'user',
+            content: 'What animal is in this image? Reply with one word.',
+            attachments: [{ path: 'shared-test-data/images/elephant.jpg' }]
+          }
+        ],
+        generationParams: visionDeterministic
+      },
+      {
+        id: 'text',
+        history: [{ role: 'user', content: 'Reply with only the word PLAIN.' }],
+        generationParams: deterministic
+      }
+    ],
     stream: false,
     expectedAnyById: {
       image: ELEPHANT_IMAGE_TERMS
     }
   },
   { validation: 'contains-any', contains: ELEPHANT_IMAGE_TERMS },
-  30000,
-  [
-    { asset: { kind: 'image', file: 'elephant.jpg', form: 'path', as: 'image' } },
-    ...batchSteps(
-      'vision-batch',
-      [
-        {
-          assert: {
-            on: '$results',
-            named: 'textsById',
-            with: { expect: { image: ELEPHANT_IMAGE_TERMS }, mode: 'any' }
-          }
-        }
-      ],
-      visionMixedPrompts('$image')
-    )
-  ]
+  30000
 )
 
 export const batchCompletionVisionMissingImage = createBatchCompletionTest(
@@ -385,20 +283,7 @@ export const batchCompletionVisionMissingImage = createBatchCompletionTest(
     stream: false
   },
   { validation: 'throws-error', errorContains: 'not found' },
-  10000,
-  [
-    { useModel: { deps: ['vision-batch'], as: 'model' } },
-    {
-      callError: {
-        method: 'batchCompletion',
-        collect: 'all',
-        params: { modelId: '$model', prompts: '$params.prompts', stream: '$params.stream' },
-        as: 'err'
-      }
-    },
-    { project: { from: '$err', path: 'message', as: 'message' } },
-    { assert: { on: '$message', use: 'expectation' } }
-  ]
+  10000
 )
 
 export const batchCompletionTests = [

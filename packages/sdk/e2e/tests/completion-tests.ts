@@ -1,5 +1,5 @@
 // Completion test definitions
-import type { Step, TestDefinition } from '@qvac/test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 interface GenerationParams {
   temp?: number
@@ -53,114 +53,7 @@ interface CompletionTestOptions {
   suites?: string[]
   skip?: { reason: string }
   dependency?: 'llm' | 'llm-batch' | 'llm-small-ctx' | 'none'
-  /** A hand-written body, for the tests that are more than one call. */
-  steps?: Step[]
-  /** Teardown, for the tests that leave something behind. */
-  finally?: Step[]
 }
-
-/** The named cache the warm-overflow test fills and then deletes. */
-const WARM_OVERFLOW_CACHE_KEY = 'completion-context-overflow-warm'
-
-/** The warm-overflow follow-up, and the checks that it overflowed on top of the committed turn. */
-const warmOverflowFollowUp = (as: string): Step[] => [
-  {
-    callError: {
-      method: 'completion',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        history: [
-          { role: 'user', content: '$params.history[0].content' },
-          { role: 'assistant', content: '$firstText' },
-          { role: 'user', content: '$params.followUpContent' }
-        ],
-        stream: false,
-        kvCache: WARM_OVERFLOW_CACHE_KEY,
-        generationParams: '$params.generationParams'
-      },
-      as
-    }
-  },
-  { project: { from: `$${as}`, path: 'details', as: `${as}Details` } },
-  { project: { from: `$${as}Details`, path: 'cachedTokens', as: `${as}Cached` } },
-  { assert: { on: `$${as}Cached`, named: 'atLeast', with: { value: 200 } } }
-]
-
-/** The declarative body every plain completion test has. */
-const completionSteps = (dependency: string): Step[] => [
-  { useModel: { deps: [dependency], as: 'model' } },
-  {
-    call: {
-      method: 'completion',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        history: '$params.history',
-        stream: '$params.stream?',
-        stopSequences: '$params.stopSequences?',
-        responseFormat: '$params.responseFormat?',
-        tools: '$params.tools?',
-        generationParams: '$params.generationParams?'
-      },
-      as: 'run'
-    }
-  },
-  { project: { from: '$run', path: 'text', as: 'text' } },
-  { assert: { on: '$text', use: 'expectation' } }
-]
-
-/** Tests whose body is more than one call, left on the executor for now. */
-/** A completion call, with only the parameters the test sets. */
-const completionCall = (extra: Record<string, unknown> = {}) => ({
-  modelId: '$model',
-  history: '$params.history',
-  stream: '$params.stream?',
-  stopSequences: '$params.stopSequences?',
-  responseFormat: '$params.responseFormat?',
-  tools: '$params.tools?',
-  generationParams: '$params.generationParams?',
-  ...extra
-})
-
-/** One completion, bound under `as` with its text projected out. */
-const completionRun = (dependency: string, as: string, extra: Step[] = []): Step[] => [
-  { useModel: { deps: [dependency], as: 'model' } },
-  { call: { method: 'completion', collect: 'text', params: completionCall(), as } },
-  { project: { from: `$${as}`, path: 'text', as: `${as}Text` } },
-  ...extra
-]
-
-/** Several completions issued before any of them is awaited. */
-const concurrentSteps = (dependency: string, count: number, checks: Step[]): Step[] => {
-  const steps: Step[] = [{ useModel: { deps: [dependency], as: 'model' } }]
-  for (let i = 0; i < count; i++) {
-    steps.push({
-      start: { method: 'completion', collect: 'text', params: completionCall(), as: `run${i}` }
-    })
-  }
-  for (let i = 0; i < count; i++) {
-    steps.push({ settle: { of: `$run${i}`, as: `settled${i}` } })
-    steps.push({ project: { from: `$settled${i}`, path: 'text', as: `text${i}` } })
-  }
-  return [...steps, ...checks]
-}
-
-/** Tests whose body is more than one call, and which carry their own below. */
-const NOT_YET_DECLARATIVE = new Set([
-  'completion-response-format-json-object',
-  'completion-response-format-json-object-streaming',
-  'completion-response-format-json-schema',
-  'completion-response-format-with-tools-rejected',
-  'completion-stats',
-  'completion-concurrent-requests',
-  'completion-concurrent-overlap',
-  'completion-seed-reproducibility',
-  'completion-stop-reason-length',
-  'completion-context-boundary-stop',
-  'completion-context-overflow-prefill',
-  'completion-context-overflow-warm-cache'
-])
 
 // Helper for creating completion tests with common structure
 const createCompletionTest = (
@@ -168,27 +61,18 @@ const createCompletionTest = (
   params: CompletionTestParams,
   expectation: CompletionExpectation,
   options: CompletionTestOptions = {}
-): TestDefinition => {
-  const dependency = options.dependency ?? 'llm'
-  return {
-    testId,
-    params,
-    expectation,
-    ...(options.suites && { suites: options.suites }),
-    ...(options.skip && { skip: options.skip }),
-    ...(options.finally && { finally: options.finally }),
-    ...(options.steps
-      ? { steps: options.steps }
-      : NOT_YET_DECLARATIVE.has(testId) || dependency === 'none'
-        ? {}
-        : { steps: completionSteps(dependency) }),
-    metadata: {
-      category: 'completion',
-      dependency,
-      estimatedDurationMs: options.estimatedDurationMs ?? 10000
-    }
+): TestDefinition => ({
+  testId,
+  params,
+  expectation,
+  ...(options.suites && { suites: options.suites }),
+  ...(options.skip && { skip: options.skip }),
+  metadata: {
+    category: 'completion',
+    dependency: options.dependency ?? 'llm',
+    estimatedDurationMs: options.estimatedDurationMs ?? 10000
   }
-}
+})
 
 // Basic completion tests
 export const completionStreaming = createCompletionTest(
@@ -452,20 +336,7 @@ export const completionSeedReproducibility = createCompletionTest(
     stream: false,
     generationParams: DETERMINISTIC
   },
-  { validation: 'type', expectedType: 'string' },
-  {
-    // The same prompt and seed twice. Identical text is the claim; the first run having produced
-    // anything at all is the premise, because two empty strings are also identical.
-    steps: [
-      ...completionRun('llm', 'first'),
-      { assert: { on: '$firstText', named: 'nonEmptyText' } },
-      {
-        call: { method: 'completion', collect: 'text', params: completionCall(), as: 'second' }
-      },
-      { project: { from: '$second', path: 'text', as: 'secondText' } },
-      { compare: { left: '$firstText', right: '$secondText', named: 'equalStrings' } }
-    ]
-  }
+  { validation: 'type', expectedType: 'string' }
 )
 
 export const completionStopSequencesMultiple = createCompletionTest(
@@ -498,15 +369,7 @@ export const completionConcurrentRequests = createCompletionTest(
     generationParams: DETERMINISTIC
   },
   { validation: 'contains-all', contains: ['6'] },
-  {
-    estimatedDurationMs: 15000,
-    suites: ['smoke'],
-    steps: concurrentSteps('llm', 3, [
-      { assert: { on: '$text0', use: 'expectation' } },
-      { assert: { on: '$text1', use: 'expectation' } },
-      { assert: { on: '$text2', use: 'expectation' } }
-    ])
-  }
+  { estimatedDurationMs: 15000, suites: ['smoke'] }
 )
 
 // Proves real concurrent decoding, not just eventual success: fires several
@@ -653,10 +516,7 @@ export const completionResponseFormatJsonObject = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 64 }
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 15000,
-    steps: completionRun('llm', 'run', [{ assert: { on: '$runText', named: 'jsonObjectShape' } }])
-  }
+  { estimatedDurationMs: 15000 }
 )
 
 export const completionResponseFormatJsonObjectStreaming = createCompletionTest(
@@ -674,12 +534,7 @@ export const completionResponseFormatJsonObjectStreaming = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 64 }
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 15000,
-    // Streamed, and the pieces still have to join into one JSON object: a format promise that only
-    // held in non-streaming mode would be worth less than no promise.
-    steps: completionRun('llm', 'run', [{ assert: { on: '$runText', named: 'jsonObjectShape' } }])
-  }
+  { estimatedDurationMs: 15000 }
 )
 
 export const completionResponseFormatJsonSchema = createCompletionTest(
@@ -711,24 +566,7 @@ export const completionResponseFormatJsonSchema = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 128 }
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 20000,
-    // `exactKeys` is the `additionalProperties: false` half of the schema: a model that returned
-    // the three fields plus a fourth would satisfy every per-field check and still have broken the
-    // contract.
-    steps: completionRun('llm', 'run', [
-      {
-        assert: {
-          on: '$runText',
-          named: 'jsonObjectShape',
-          with: {
-            fields: { name: 'string', age: 'integer', occupation: 'string' },
-            exactKeys: ['name', 'age', 'occupation']
-          }
-        }
-      }
-    ])
-  }
+  { estimatedDurationMs: 20000 }
 )
 
 export const completionReasoningBudgetDisabled = createCompletionTest(
@@ -772,13 +610,7 @@ export const completionStopReasonLength = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 3 }
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 8000,
-    steps: completionRun('llm', 'run', [
-      { project: { from: '$run', path: 'stopReason', as: 'stopReason' } },
-      { assert: { on: '$stopReason', named: 'valueIn', with: { values: ['length'] } } }
-    ])
-  }
+  { estimatedDurationMs: 8000 }
 )
 
 export const completionResponseFormatWithToolsRejected = createCompletionTest(
@@ -802,31 +634,7 @@ export const completionResponseFormatWithToolsRejected = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 64 }
   },
   { validation: 'throws-error', errorContains: 'responseFormat' },
-  {
-    estimatedDurationMs: 5000,
-    dependency: 'none',
-    // No model: the refusal is the client's own validation, and it has to happen before anything is
-    // looked up.
-    steps: [
-      {
-        callError: {
-          method: 'completion',
-          collect: 'text',
-          params: {
-            modelId: 'schema-refinement-placeholder',
-            history: '$params.history',
-            stream: '$params.stream',
-            responseFormat: '$params.responseFormat',
-            tools: '$params.tools',
-            generationParams: '$params.generationParams'
-          },
-          as: 'err'
-        }
-      },
-      { project: { from: '$err', path: 'message', as: 'message' } },
-      { assert: { on: '$message', use: 'expectation' } }
-    ]
-  }
+  { estimatedDurationMs: 5000, dependency: 'none' }
 )
 
 export const completionStats: TestDefinition = {
@@ -837,24 +645,6 @@ export const completionStats: TestDefinition = {
     generationParams: { predict: 32 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
-  steps: completionRun('llm', 'run', [
-    { assert: { on: '$runText', named: 'nonEmptyText' } },
-    { project: { from: '$run', path: 'stats', as: 'stats' } },
-    {
-      assert: {
-        on: '$stats',
-        named: 'fieldsPresent',
-        with: { fields: ['timeToFirstToken', 'tokensPerSecond'] }
-      }
-    },
-    {
-      assert: {
-        on: '$stats',
-        named: 'nonNegativeNumbers',
-        with: { fields: ['timeToFirstToken', 'tokensPerSecond'] }
-      }
-    }
-  ]),
   metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
@@ -874,28 +664,7 @@ export const completionContextBoundaryStop = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 1000 }
   },
   { validation: 'type', expectedType: 'string' },
-  {
-    estimatedDurationMs: 45000,
-    dependency: 'llm-small-ctx',
-    // Three claims, and the middle one is the test: it stopped for "length", it stopped *below* the
-    // prediction budget -- which is what makes it the context boundary rather than the budget
-    // running out -- and the tokens produced before the boundary were returned rather than
-    // discarded.
-    steps: completionRun('llm-small-ctx', 'run', [
-      { project: { from: '$run', path: 'stopReason', as: 'stopReason' } },
-      { assert: { on: '$stopReason', named: 'valueIn', with: { values: ['length'] } } },
-      { project: { from: '$run', path: 'stats.generatedTokens', as: 'generated' } },
-      {
-        assert: {
-          on: '$generated',
-          named: 'belowBudget',
-          with: { budget: '$params.generationParams.predict' }
-        }
-      },
-      { project: { from: '$run', path: 'fullText', as: 'fullText' } },
-      { assert: { on: '$fullText', named: 'nonEmptyText' } }
-    ])
-  }
+  { estimatedDurationMs: 45000, dependency: 'llm-small-ctx' }
 )
 
 // A prompt that cannot fit the window is refused before any decoding with the
@@ -916,41 +685,7 @@ export const completionContextOverflowPrefill = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 8 }
   },
   { validation: 'throws-error', errorContains: 'context' },
-  {
-    estimatedDurationMs: 15000,
-    dependency: 'llm-small-ctx',
-    // The rejection has to carry the parsed sizes, not just say "context".
-    steps: [
-      { useModel: { deps: ['llm-small-ctx'], as: 'model' } },
-      {
-        callError: {
-          method: 'completion',
-          collect: 'text',
-          params: completionCall(),
-          as: 'err'
-        }
-      },
-      { project: { from: '$err', path: 'message', as: 'message' } },
-      { assert: { on: '$message', use: 'expectation' } },
-      { project: { from: '$err', path: 'details', as: 'details' } },
-      {
-        assert: {
-          on: '$details',
-          named: 'positiveIntegers',
-          with: { fields: ['promptTokens', 'ctxSize'] }
-        }
-      },
-      {
-        assert: {
-          on: '$details',
-          named: 'atLeastField',
-          with: { field: 'promptTokens', atLeast: 'ctxSize' }
-        }
-      },
-      { project: { from: '$details', path: 'ctxSize', as: 'ctxSize' } },
-      { assert: { on: '$ctxSize', named: 'valueIn', with: { values: [512] } } }
-    ]
-  }
+  { estimatedDurationMs: 15000, dependency: 'llm-small-ctx' }
 )
 
 // Turn one fills most of the 512 window and is cached; the follow-up fits
@@ -977,58 +712,7 @@ export const completionContextOverflowWarmCache = createCompletionTest(
     generationParams: { ...DETERMINISTIC, predict: 48 }
   },
   { validation: 'throws-error', errorContains: 'context' },
-  {
-    estimatedDurationMs: 30000,
-    dependency: 'llm-small-ctx',
-    // Two turns against one named cache. Turn one has to end commit-eligible -- no stop reason,
-    // some text -- or turn two would be a cold full-history resend and would not be testing the
-    // warm path at all.
-    steps: [
-      { useModel: { deps: ['llm-small-ctx'], as: 'model' } },
-      {
-        call: {
-          method: 'completion',
-          collect: 'text',
-          params: {
-            modelId: '$model',
-            history: '$params.history',
-            stream: false,
-            kvCache: WARM_OVERFLOW_CACHE_KEY,
-            generationParams: '$params.generationParams'
-          },
-          as: 'firstTurn'
-        }
-      },
-      { project: { from: '$firstTurn', path: 'stopReason', as: 'firstStop' } },
-      { assert: { on: '$firstStop', named: 'isAbsent' } },
-      { project: { from: '$firstTurn', path: 'fullText', as: 'firstText' } },
-      { assert: { on: '$firstText', named: 'nonEmptyText' } },
-      // The follow-up overflows on top of the committed first turn, so `cachedTokens` carries it;
-      // a cold full-history resend would overflow too, with nothing cached.
-      ...warmOverflowFollowUp('err'),
-      { project: { from: '$err', path: 'message', as: 'message' } },
-      { assert: { on: '$message', use: 'expectation' } },
-      { project: { from: '$errDetails', path: 'ctxSize', as: 'ctxSize' } },
-      { assert: { on: '$ctxSize', named: 'valueIn', with: { values: [512] } } },
-      {
-        assert: {
-          on: '$errDetails',
-          named: 'atLeastField',
-          with: { field: 'requiredTokens', atLeast: 'ctxSize' }
-        }
-      },
-      // The overflow must not have destroyed the cache: the same follow-up overflows warm again.
-      ...warmOverflowFollowUp('retry')
-    ],
-    finally: [
-      {
-        call: {
-          method: 'deleteCache',
-          params: { kvCacheKey: WARM_OVERFLOW_CACHE_KEY, modelId: '$model?' }
-        }
-      }
-    ]
-  }
+  { estimatedDurationMs: 30000, dependency: 'llm-small-ctx' }
 )
 
 export const completionTests = [
