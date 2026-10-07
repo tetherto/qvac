@@ -7,6 +7,10 @@ export const systemResourcesCapabilities = {
     validation: 'contains-all',
     contains: ['capabilities valid', 'sample omitted']
   },
+  steps: [
+    { call: { method: 'getSystemResources', params: { sample: '$params.sample' }, as: 'res' } },
+    { assert: { on: '$res', named: 'systemResourcesShape', with: { sample: false } } }
+  ],
   metadata: {
     category: 'system-resources',
     dependency: 'none',
@@ -21,6 +25,10 @@ export const systemResourcesSample = {
     validation: 'contains-all',
     contains: ['capabilities valid', 'sample valid']
   },
+  steps: [
+    { call: { method: 'getSystemResources', params: { sample: '$params.sample' }, as: 'res' } },
+    { assert: { on: '$res', named: 'systemResourcesShape', with: { sample: true } } }
+  ],
   metadata: {
     category: 'system-resources',
     dependency: 'none',
@@ -35,6 +43,17 @@ export const systemResourcesInvalidInput = {
     validation: 'throws-error',
     errorContains: 'sample'
   },
+  steps: [
+    {
+      callError: {
+        method: 'getSystemResources',
+        params: { sample: '$params.sample' },
+        as: 'err'
+      }
+    },
+    { project: { from: '$err', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
   metadata: {
     category: 'system-resources',
     dependency: 'none',

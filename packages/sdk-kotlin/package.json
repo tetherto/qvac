@@ -11,6 +11,6 @@
   "dependencies": {
     "@qvac/sdk": "0.21.0",
     "bare-link": "3.0.1",
-    "react-native-bare-kit": "0.15.6"
+    "react-native-bare-kit": "0.14.0"
   }
 }

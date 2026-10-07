@@ -1061,7 +1061,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
@@ -1736,7 +1736,7 @@ importers:
         specifier: 0.28.0
         version: 0.28.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
@@ -1751,7 +1751,7 @@ importers:
         specifier: 0.1.0
         version: 0.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/inference':
-        specifier: ^0.20.0
+        specifier: ^0.21.0
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
@@ -12400,7 +12400,7 @@ snapshots:
       node-forge: 1.4.0
       npm-package-arg: 11.0.3
       ora: 3.4.0
-      picomatch: 4.0.7
+      picomatch: 4.0.5
       pretty-bytes: 5.6.0
       pretty-format: 29.7.0
       progress: 2.0.3
@@ -12562,7 +12562,7 @@ snapshots:
       hermes-parser: 0.29.1
       jsc-safe-url: 0.2.4
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.5
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
