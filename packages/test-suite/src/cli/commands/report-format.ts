@@ -1,3 +1,4 @@
+import type { ReportComparison } from '../../utils/compare-reports.js'
 import * as fs from 'node:fs'
 
 interface FormatOptions {
@@ -32,39 +33,7 @@ export async function reportFormat(options: FormatOptions) {
   }
 }
 
-function generateMarkdown(comparison: {
-  metadata: {
-    baseline: { runId: string }
-    current: { runId: string }
-  }
-  summary: {
-    baseline: { total: number; passed: number; failed: number }
-    current: {
-      total: number
-      passed: number
-      failed: number
-      skipped?: number
-      incomplete?: number
-    }
-    delta: number
-  }
-  categories: Record<
-    string,
-    {
-      baseline: { passed: number; total: number }
-      current: { passed: number; total: number }
-      delta: number
-    }
-  >
-  changes: {
-    newFailures: Array<{ testId: string; error?: string }>
-    coverageRegressions?: Array<{ testId: string; reason?: string }>
-    newlySkipped?: Array<{ testId: string; reason?: string }>
-    fixedTests: Array<{ testId: string }>
-    newTests: string[]
-    removedTests: string[]
-  }
-}): string {
+function generateMarkdown(comparison: ReportComparison): string {
   const lines: string[] = []
 
   lines.push('## 🧪 Test Results\n')
@@ -91,7 +60,7 @@ function generateMarkdown(comparison: {
   lines.push(
     `- Delta: ${comparison.summary.delta > 0 ? '+' : ''}${comparison.summary.delta} tests, ${rateDeltaNum > 0 ? '+' : ''}${rateDelta}%`
   )
-  // The rate above counts neither, so say how many tests it left out.
+  // The rate above counts neither.
   const notRun =
     (comparison.summary.current.skipped ?? 0) + (comparison.summary.current.incomplete ?? 0)
   if (notRun > 0) {
@@ -139,13 +108,11 @@ function generateMarkdown(comparison: {
     lines.push('')
   }
 
-  // Coverage regressions -- a test that used to pass and no longer runs at all
+  // Both lists are absent from a comparison an older CLI wrote.
   const coverageRegressions = comparison.changes.coverageRegressions ?? []
   if (coverageRegressions.length > 0) {
     lines.push('### 🚫 No Longer Run\n')
-    lines.push(
-      'These passed in the baseline. This client no longer has a body or binding for them.\n'
-    )
+    lines.push('These passed in the baseline. This client has no body or binding for them now.\n')
     lines.push('| Test ID | Reason |')
     lines.push('|---------|--------|')
     for (const regression of coverageRegressions.slice(0, 10)) {
@@ -157,7 +124,6 @@ function generateMarkdown(comparison: {
     lines.push('')
   }
 
-  // Newly skipped -- reported, but the runner's own limits land here too
   const newlySkipped = comparison.changes.newlySkipped ?? []
   if (newlySkipped.length > 0) {
     lines.push('### ⏭️ Newly Skipped\n')

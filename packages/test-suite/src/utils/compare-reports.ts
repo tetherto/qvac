@@ -1,13 +1,16 @@
-/** The four states a run records. The comparison used to admit only the first two. */
+/** The four states a run records. */
 export type TestOutcome = 'success' | 'failure' | 'skipped' | 'incomplete'
 
-export interface ComparedTest {
+export interface RunReportTest {
   testId: string
   outcome: TestOutcome
   error?: string
+  /** Set when outcome is incomplete; `error` may be absent. */
+  incompleteReason?: string
 }
 
-export interface ComparedReport {
+/** The part of a run's `results-*.json` the comparison reads. */
+export interface RunReport {
   runId: string
   summary: {
     total: number
@@ -18,22 +21,46 @@ export interface ComparedReport {
     duration: number
   }
   categories: Record<string, { passed: number; failed: number; total: number }>
-  tests: ComparedTest[]
+  tests: RunReportTest[]
+}
+
+/** The document `report:compare` writes and `report:format` renders. */
+export interface ReportComparison {
+  metadata: {
+    baseline: { runId: string; timestamp: string }
+    current: { runId: string; timestamp: string }
+  }
+  summary: {
+    baseline: RunReport['summary']
+    current: RunReport['summary']
+    delta: number
+  }
+  categories: Record<
+    string,
+    {
+      baseline: { passed: number; total: number }
+      current: { passed: number; total: number }
+      delta: number
+    }
+  >
+  changes: ReportChanges
 }
 
 export interface ReportChanges {
   newFailures: Array<{ testId: string; error?: string }>
-  /** Passed in the baseline, and this run had no body or binding for it. */
+  /** Passed in the baseline, incomplete now. */
   coverageRegressions: Array<{ testId: string; reason?: string }>
-  /** Passed in the baseline, and this run skipped it. Reported, never fatal -- see below. */
+  /** Passed in the baseline, skipped now. */
   newlySkipped: Array<{ testId: string; reason?: string }>
   fixedTests: Array<{ testId: string }>
   newTests: string[]
   removedTests: string[]
 }
 
-function group(tests: readonly ComparedTest[]): Map<string, ComparedTest[]> {
-  const byId = new Map<string, ComparedTest[]>()
+const reasonOf = (test: RunReportTest) => test.incompleteReason ?? test.error
+
+function group(tests: readonly RunReportTest[]): Map<string, RunReportTest[]> {
+  const byId = new Map<string, RunReportTest[]>()
   for (const test of tests) {
     const existing = byId.get(test.testId)
     if (existing) existing.push(test)
@@ -43,18 +70,12 @@ function group(tests: readonly ComparedTest[]): Map<string, ComparedTest[]> {
 }
 
 /**
- * What changed between two runs of the same catalog.
- *
- * A test that stops running is a regression as real as one that starts failing: the gate stays
- * green while the client quietly covers less. The two ways that happens are kept apart, because
- * only one of them is the client's doing:
- *
- * - `incomplete` means this client has no body or binding for the test. Nothing about the machine
- *   can cause it, so a pass that turns incomplete is a defect.
- * - `skipped` also covers the runner's own limits -- two GPUs, a reachable LAN server, an opt-in
- *   env flag -- which legitimately differ between the baseline machine and this one.
+ * What changed between two runs of the same catalog. A test that stops running matters as much as
+ * one that starts failing, but the two ways it happens are kept apart: `incomplete` means the
+ * client has no body or binding, which no machine can cause, while a skip can come from the
+ * runner's own limits -- two GPUs, a reachable server, an opt-in flag.
  */
-export function compareReports(baseline: ComparedReport, current: ComparedReport): ReportChanges {
+export function compareReports(baseline: RunReport, current: RunReport): ReportChanges {
   const baselineById = group(baseline.tests)
   const currentById = group(current.tests)
 
@@ -74,16 +95,20 @@ export function compareReports(baseline: ComparedReport, current: ComparedReport
       continue
     }
 
-    // A test can appear more than once in a run; the worst result of the set decides.
+    // A test can appear more than once in a run; the worst result decides.
     const baselineAllPassed = baselineRuns.every((test) => test.outcome === 'success')
     const failure = currentRuns.find((test) => test.outcome === 'failure')
     const incomplete = currentRuns.find((test) => test.outcome === 'incomplete')
     const skipped = currentRuns.find((test) => test.outcome === 'skipped')
 
     if (baselineAllPassed) {
-      if (failure) changes.newFailures.push({ testId, error: failure.error })
-      else if (incomplete) changes.coverageRegressions.push({ testId, reason: incomplete.error })
-      else if (skipped) changes.newlySkipped.push({ testId, reason: skipped.error })
+      if (failure) {
+        changes.newFailures.push({ testId, error: failure.error })
+      } else if (incomplete) {
+        changes.coverageRegressions.push({ testId, reason: reasonOf(incomplete) })
+      } else if (skipped) {
+        changes.newlySkipped.push({ testId, reason: reasonOf(skipped) })
+      }
       continue
     }
 

@@ -1,5 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { compareReports } from '../../dist/utils/compare-reports.js'
 
 const report = (runId, tests) => ({
@@ -31,6 +36,14 @@ test('a pass that turns skipped is reported apart from the regressions', () => {
   const changes = transition('success', 'skipped')
   assert.deepEqual(changes.newlySkipped, [{ testId: 't', reason: 'why' }])
   assert.equal(changes.coverageRegressions.length, 0)
+})
+
+test('the reason comes from incompleteReason when the client set only that', () => {
+  const changes = compareReports(
+    report('base', [result('t', 'success')]),
+    report('curr', [{ testId: 't', outcome: 'incomplete', incompleteReason: 'no binding' }])
+  )
+  assert.deepEqual(changes.coverageRegressions, [{ testId: 't', reason: 'no binding' }])
 })
 
 test('a failure that passes again is fixed', () => {
@@ -84,4 +97,32 @@ test('a baseline that was not green is never a coverage regression', () => {
     report('curr', [result('t', 'incomplete')])
   )
   assert.equal(changes.coverageRegressions.length, 0)
+})
+
+test('the command exits non-zero only on a coverage regression', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-compare-'))
+  const cli = fileURLToPath(new URL('../../dist/cli/index.js', import.meta.url))
+  const write = (name, tests) =>
+    fs.writeFileSync(path.join(dir, name), JSON.stringify(report(name, tests)))
+
+  write('baseline.json', [result('t', 'success')])
+  write('regressed.json', [result('t', 'incomplete', 'no binding')])
+  write('skipped.json', [result('t', 'skipped', 'needs two GPUs')])
+
+  const run = (current) =>
+    spawnSync(process.execPath, [
+      cli,
+      'report:compare',
+      `--baseline=${path.join(dir, 'baseline.json')}`,
+      `--current=${path.join(dir, current)}`,
+      `--output=${path.join(dir, 'out.json')}`
+    ])
+
+  assert.equal(run('regressed.json').status, 1)
+  assert.equal(run('skipped.json').status, 0)
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(dir, 'out.json'), 'utf8')).changes.newlySkipped.length,
+    1,
+    'the comparison is written before the exit code is set'
+  )
 })

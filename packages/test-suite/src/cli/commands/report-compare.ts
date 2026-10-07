@@ -1,6 +1,10 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { compareReports, type ComparedReport } from '../../utils/compare-reports.js'
+import {
+  compareReports,
+  type ReportComparison,
+  type RunReport
+} from '../../utils/compare-reports.js'
 
 interface CompareOptions {
   baseline: string
@@ -15,14 +19,14 @@ export async function reportCompare(options: CompareOptions) {
 
     // Load baseline
     const baselineData = fs.readFileSync(options.baseline, 'utf-8') as string
-    const baseline: ComparedReport = JSON.parse(baselineData)
+    const baseline: RunReport = JSON.parse(baselineData)
     console.log(
       `📋 Baseline: ${baseline.runId} (${baseline.summary.passed}/${baseline.summary.total} passed)`
     )
 
     // Load current
     const currentData = fs.readFileSync(options.current, 'utf-8') as string
-    const current: ComparedReport = JSON.parse(currentData)
+    const current: RunReport = JSON.parse(currentData)
     console.log(
       `📋 Current:  ${current.runId} (${current.summary.passed}/${current.summary.total} passed)\n`
     )
@@ -49,8 +53,7 @@ export async function reportCompare(options: CompareOptions) {
       }
     }
 
-    // Build comparison result
-    const comparison = {
+    const comparison: ReportComparison = {
       metadata: {
         baseline: { runId: baseline.runId, timestamp: new Date().toISOString() },
         current: { runId: current.runId, timestamp: new Date().toISOString() }
@@ -80,7 +83,7 @@ export async function reportCompare(options: CompareOptions) {
       `   Overall delta: ${comparison.summary.delta > 0 ? '+' : ''}${comparison.summary.delta}`
     )
 
-    // Failing here is the point: a test that stopped running leaves every other check green.
+    // Failing is the point: nothing else notices a test that stopped running.
     if (changes.coverageRegressions.length > 0) {
       console.error(
         `\n❌ ${changes.coverageRegressions.length} test(s) passed in the baseline and this client no longer runs:`
