@@ -39,7 +39,13 @@ function generateMarkdown(comparison: {
   }
   summary: {
     baseline: { total: number; passed: number; failed: number }
-    current: { total: number; passed: number; failed: number }
+    current: {
+      total: number
+      passed: number
+      failed: number
+      skipped?: number
+      incomplete?: number
+    }
     delta: number
   }
   categories: Record<
@@ -52,6 +58,8 @@ function generateMarkdown(comparison: {
   >
   changes: {
     newFailures: Array<{ testId: string; error?: string }>
+    coverageRegressions?: Array<{ testId: string; reason?: string }>
+    newlySkipped?: Array<{ testId: string; reason?: string }>
     fixedTests: Array<{ testId: string }>
     newTests: string[]
     removedTests: string[]
@@ -81,8 +89,17 @@ function generateMarkdown(comparison: {
     `- Baseline: ${comparison.summary.baseline.passed}/${comparison.summary.baseline.total} (${baselineRate}%)`
   )
   lines.push(
-    `- Delta: ${comparison.summary.delta > 0 ? '+' : ''}${comparison.summary.delta} tests, ${rateDeltaNum > 0 ? '+' : ''}${rateDelta}%\n`
+    `- Delta: ${comparison.summary.delta > 0 ? '+' : ''}${comparison.summary.delta} tests, ${rateDeltaNum > 0 ? '+' : ''}${rateDelta}%`
   )
+  // The rate above counts neither, so say how many tests it left out.
+  const notRun =
+    (comparison.summary.current.skipped ?? 0) + (comparison.summary.current.incomplete ?? 0)
+  if (notRun > 0) {
+    lines.push(
+      `- Not run: ${comparison.summary.current.skipped ?? 0} skipped, ${comparison.summary.current.incomplete ?? 0} incomplete`
+    )
+  }
+  lines.push('')
 
   // Per-category results
   lines.push('### Per-Category Results\n')
@@ -118,6 +135,39 @@ function generateMarkdown(comparison: {
     }
     if (comparison.changes.newFailures.length > 10) {
       lines.push(`\n_... and ${comparison.changes.newFailures.length - 10} more_`)
+    }
+    lines.push('')
+  }
+
+  // Coverage regressions -- a test that used to pass and no longer runs at all
+  const coverageRegressions = comparison.changes.coverageRegressions ?? []
+  if (coverageRegressions.length > 0) {
+    lines.push('### 🚫 No Longer Run\n')
+    lines.push(
+      'These passed in the baseline. This client no longer has a body or binding for them.\n'
+    )
+    lines.push('| Test ID | Reason |')
+    lines.push('|---------|--------|')
+    for (const regression of coverageRegressions.slice(0, 10)) {
+      lines.push(`| \`${regression.testId}\` | ${regression.reason?.substring(0, 50) ?? 'N/A'} |`)
+    }
+    if (coverageRegressions.length > 10) {
+      lines.push(`\n_... and ${coverageRegressions.length - 10} more_`)
+    }
+    lines.push('')
+  }
+
+  // Newly skipped -- reported, but the runner's own limits land here too
+  const newlySkipped = comparison.changes.newlySkipped ?? []
+  if (newlySkipped.length > 0) {
+    lines.push('### ⏭️ Newly Skipped\n')
+    lines.push('| Test ID | Reason |')
+    lines.push('|---------|--------|')
+    for (const skipped of newlySkipped.slice(0, 10)) {
+      lines.push(`| \`${skipped.testId}\` | ${skipped.reason?.substring(0, 50) ?? 'N/A'} |`)
+    }
+    if (newlySkipped.length > 10) {
+      lines.push(`\n_... and ${newlySkipped.length - 10} more_`)
     }
     lines.push('')
   }
