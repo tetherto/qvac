@@ -4,7 +4,7 @@
  * `TurnHandle.savedCount`).
  *
  * This module intentionally has **no** `bare-*` imports so it can be
- * exercised directly from unit tests running under `bun` without
+ * exercised directly from unit tests running under Node without
  * pulling in the Bare runtime (which is not available in that
  * environment).
  *

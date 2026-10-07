@@ -18,10 +18,17 @@ function declaresInference() {
   return Boolean(pkg.dependencies?.['@qvac/inference'])
 }
 
-// npm is a .cmd shim on Windows, which Node only spawns through a shell.
+// `npm run` exports the parent's config as npm_config_* and the child npm
+// would honour it (an `--omit=dev` on the caller would drop the devDependencies
+// the build needs), so those are stripped. npm is a .cmd shim on Windows,
+// which Node only spawns through a shell.
 function npm(args, cwd) {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('npm_config_'))
+  )
   const { status, error } = spawnSync('npm', args, {
     cwd,
+    env,
     stdio: 'inherit',
     shell: process.platform === 'win32'
   })
