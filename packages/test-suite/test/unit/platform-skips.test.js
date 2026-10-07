@@ -47,3 +47,14 @@ test('no declared platforms is not a platform skip', () => {
   assert.equal(new Probe('desktop-macos').reasonFor(undefined), null)
   assert.equal(new Probe('desktop-macos').reasonFor([]), null)
 })
+
+test('a JS consumer registers a label that carries its OS', async () => {
+  const { hostOs, hostPlatform } = await import('../../dist/cli/utils/host-platform.js')
+
+  assert.ok(['macos', 'linux', 'windows'].includes(hostOs()))
+  assert.equal(hostPlatform('desktop'), `desktop-${hostOs()}`)
+
+  // Why the suffix matters: a per-OS rule reaches no leg that registers the bare family.
+  assert.equal(skips(hostPlatform('desktop'), [`desktop-${hostOs()}`]), true)
+  assert.equal(skips('desktop', ['desktop-macos']), false)
+})
