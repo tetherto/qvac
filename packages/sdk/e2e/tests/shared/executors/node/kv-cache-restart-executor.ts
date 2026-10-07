@@ -102,27 +102,24 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
       await this.resources.evictAll()
       // The claim is what survives a restart, not what ends the worker: anything else still
       // attached keeps it alive. Ask first, insist after.
-      let during = await waitForBareChildren(process.pid, (pids) => pids.length === 0, 15_000)
+      const gone = (pids: number[]) => !pids.includes(before[0]!)
+      let during = await waitForBareChildren(process.pid, gone, 15_000)
       let ended = 'by unloading every model'
-      if (during.length !== 0) {
-        for (const pid of during) {
-          try {
-            process.kill(pid, 'SIGKILL')
-          } catch {
-            /* already gone */
-          }
+      if (!gone(during)) {
+        try {
+          process.kill(before[0]!, 'SIGKILL')
+        } catch {
+          /* already gone */
         }
-        const killed = during.join(', ')
-        during = await waitForBareChildren(process.pid, (pids) => pids.length === 0, 30_000)
-        ended = `by terminating ${killed}, which outlived its models`
+        during = await waitForBareChildren(process.pid, gone, 30_000)
+        ended = `by terminating ${before[0]}, which outlived its models`
       }
-      if (during.length !== 0) {
+      if (!gone(during)) {
         return {
           passed: false,
           output:
-            `The Bare worker (pid ${during.join(', ')}) survived both unloading every model and ` +
-            `SIGKILL, so the cache state was never lost and this test cannot prove the boundary ` +
-            `was restored`
+            `Worker ${before[0]} survived both unloading every model and SIGKILL, so the cache ` +
+            `state was never lost and this test cannot prove the boundary was restored`
         }
       }
 

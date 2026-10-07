@@ -701,13 +701,10 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       { role: 'user' as const, content: params.prompt }
     ]
 
-    // Fire two completions at the same model in the same tick. The default
-    // completion policy serializes same-model requests FIFO instead of
-    // rejecting the second, so BOTH must succeed — the second simply waits
-    // for the first to release the native llama.cpp context, then runs.
-    // Start on an idle slot: a job the previous test still holds is refused at dispatch, which
-    // says nothing about the policy. A real rejection comes back through `captureFinal` as data,
-    // so it never reaches this retry.
+    // Two completions at the same model in the same tick: the policy serializes them FIFO, so
+    // both must succeed. They start on an idle slot, since a job the previous test still holds
+    // is refused at dispatch and says nothing about the policy; a real rejection comes back
+    // through `captureFinal` as data and never reaches the retry.
     const { obs1, obs2, final1, final2 } = await callWhenAddonIdle(async () => {
       const run1 = completion({ modelId, history, stream: true })
       const run2 = completion({ modelId, history, stream: true })

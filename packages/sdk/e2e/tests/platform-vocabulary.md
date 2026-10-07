@@ -19,6 +19,9 @@ is off on iOS for ONNX/CoreML OOM, parakeet streaming is off on Android as
 flaky. A vocabulary that could not say "iOS but not Android" would force those
 back into consumer code, which is exactly what this moves away from.
 
+A JS consumer builds its own label from `hostPlatform(family)` in `@qvac/test-suite`, so a new
+one carries its OS without being told to.
+
 ## Matching
 
 A leg registers with a label. A skip entry applies when it **equals** the
