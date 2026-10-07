@@ -1896,16 +1896,25 @@ TEST(CacheHistoryCheckpointTest, HybridDiskCheckpointsGoToTheCheckpointDir) {
           filesBefore,
       0u);
 
-  // The private directory sits under the base, and holds the live checkpoint
-  // files; nothing is written into the base itself.
   std::vector<fs::path> entries;
   for (const auto& entry : fs::directory_iterator(base)) {
     entries.push_back(entry.path());
   }
+#ifdef _WIN32
+  // Windows writes the live checkpoint files into the base itself.
+  ASSERT_FALSE(entries.empty())
+      << "the live checkpoints are not in the checkpoint dir";
+  for (const fs::path& entry : entries) {
+    EXPECT_TRUE(fs::is_regular_file(entry)) << entry;
+  }
+#else
+  // A private directory sits under the base and holds the live checkpoint
+  // files; nothing is written into the base itself.
   ASSERT_EQ(entries.size(), 1u);
   EXPECT_TRUE(fs::is_directory(entries.front()));
   EXPECT_FALSE(fs::is_empty(entries.front()))
       << "the live checkpoints are not in the checkpoint dir";
+#endif
 
   model.reset();
   fs::remove(cacheFile);
