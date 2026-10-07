@@ -154,8 +154,10 @@ Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) keep only the
 last `n_swa` positions in their window layers. A trim back to the shared prefix
 is refused when the cells in front of it were already evicted (the same
 `llama_memory_seq_pos_min` test llama-server uses): the suffix would attend to
-a truncated window, so the prompt is reprocessed from scratch instead. Those
-models take no checkpoints yet.
+a truncated window, so the prompt is reprocessed from scratch instead. A
+rollback applies the same test to its target before trimming: when the request
+decoded past the window, the sequence is cleared and the next turn starts cold.
+Those models take no checkpoints yet.
 
 A prefill-only request whose whole prompt is already resident has nothing to
 decode. It is admitted with an empty plan and commits immediately, on the

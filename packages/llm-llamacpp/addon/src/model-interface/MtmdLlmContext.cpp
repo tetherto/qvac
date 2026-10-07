@@ -1630,7 +1630,15 @@ bool MtmdLlmContext::restorePreRequestCacheState() {
     // whatever `current_` says: a chunk that throws mid-prompt leaves the
     // cursor short of the cells already decoded.
     try {
+      // See TextLlmContext::restorePreRequestCacheState.
+      const bool windowIntact =
+          canTrimSequenceTo(modelCtx_.lctx, preRequestCacheUsage_.pos);
       clearSequenceMemory(modelCtx_.lctx, preRequestCacheUsage_.pos, -1);
+      if (!windowIntact) {
+        clearSequenceMemory(modelCtx_.lctx);
+        preRequestLedger_.entries.clear();
+        preRequestCacheUsage_ = {};
+      }
     } catch (const std::exception& e) {
       QLOG_IF(
           Priority::WARNING,

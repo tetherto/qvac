@@ -1356,12 +1356,12 @@ TEST_F(CacheManagementTest, SinglePromptCacheUsesSeqStateFormat) {
 
 namespace {
 
-std::unique_ptr<LlamaModel>
-loadSlidingWindowModel(const test_common::TestModelPath& modelPath) {
+std::unique_ptr<LlamaModel> loadSlidingWindowModel(
+    const test_common::TestModelPath& modelPath, const char* ctxSize = "4096") {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["ctx_size"] = "4096";
+  config["ctx_size"] = ctxSize;
   config["n_predict"] = "24";
   config["temp"] = "0";
   config["seed"] = "7";
@@ -1430,6 +1430,82 @@ TEST(CacheSlidingWindowTest, DivergenceBehindTheWindowMatchesAColdRun) {
   EXPECT_EQ(fromCache, fromScratch)
       << "a cached turn diverging behind the sliding window must be "
          "reprocessed, not trimmed onto an evicted window";
+
+  fs::remove(cacheFile);
+}
+
+// A rollback trims back to the pre-request cursor, but a request that decoded
+// more than a window past it has evicted the cells in front of that cursor.
+// The cache must restart cold rather than keep a ledger that claims them.
+TEST(CacheSlidingWindowTest, RollbackPastTheWindowRestartsCold) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_rollback_cache.bin";
+  fs::remove(cacheFile);
+  const std::string history =
+      R"([{"role":"user","content":"Name one thing a harbor lamp needs."}])";
+
+  // 2048 positions against a 512-position window: filling the context evicts
+  // every window cell in front of the primed prompt.
+  auto cached = loadSlidingWindowModel(modelPath, "2048");
+  ASSERT_TRUE(cached->isLoaded());
+  LlamaModel::Prompt primer;
+  primer.input = history;
+  primer.prefill = true;
+  primer.cacheKey = cacheFile.string();
+  EXPECT_TRUE(cached->processPrompt(primer).empty());
+
+  // The grammar never completes, so the turn runs until the context is full
+  // and the overflow rolls it back.
+  LlamaModel::Prompt overflowing;
+  overflowing.input = history;
+  overflowing.cacheKey = cacheFile.string();
+  overflowing.generationParams.grammar = R"(root ::= "lighthouse " root)";
+  overflowing.generationParams.n_predict = -1;
+  try {
+    (void)cached->processPrompt(overflowing);
+  } catch (const std::exception&) {
+    // How the overflow surfaces does not matter; the state it leaves does.
+  }
+
+  LlmContext* context = LlamaModelTestPeer::llmContext(*cached);
+  ASSERT_NE(context, nullptr);
+  llama_context* lctx = context->getCtx();
+  const int32_t nSwa = llama_model_n_swa(llama_get_model(lctx));
+  ASSERT_GT(nSwa, 0);
+  // A non-empty cursor needs its window resident; an emptied window reports
+  // pos_min -1, which is as wrong as a truncated one.
+  const llama_pos nPast = context->getNPast();
+  if (nPast > 0) {
+    const llama_pos posMin =
+        llama_memory_seq_pos_min(llama_get_memory(lctx), context->getSeqId());
+    EXPECT_GE(posMin, 0) << "the rollback left a cursor at " << nPast
+                         << " with no sliding-window cells at all";
+    EXPECT_LE(posMin, std::max<llama_pos>(0, nPast - nSwa))
+        << "the rollback left a cursor at " << nPast
+        << " whose sliding window is no longer resident";
+  }
+
+  LlamaModel::Prompt next;
+  next.input = history;
+  next.cacheKey = cacheFile.string();
+  const std::string fromCache = cached->processPrompt(next);
+
+  auto cold = loadSlidingWindowModel(modelPath, "2048");
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = history;
+  const std::string fromScratch = cold->processPrompt(fresh);
+
+  ASSERT_FALSE(fromScratch.empty());
+  EXPECT_EQ(fromCache, fromScratch)
+      << "the turn after a rollback past the window must match a cold run";
 
   fs::remove(cacheFile);
 }

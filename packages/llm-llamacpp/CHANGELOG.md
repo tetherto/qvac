@@ -171,7 +171,10 @@
   immediately.
 - On sliding-window models (Gemma 3/4, gpt-oss) a cached turn that diverges
   behind the attention window is reprocessed instead of trimmed onto evicted
-  window cells, which made the model answer from a truncated context.
+  window cells, which made the model answer from a truncated context. A
+  rolled-back request (context overflow, cancel during prefill, decode error)
+  that decoded past the window likewise leaves the cache cold instead of
+  claiming the evicted cells.
 - Pure-attention models never write a full-state temp-file snapshot any more.
   A rolled-back request drops what it added with a tail trim; when
   reconciliation had trimmed a diverging history first, the rollback lands on

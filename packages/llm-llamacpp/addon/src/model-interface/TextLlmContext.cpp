@@ -1405,7 +1405,17 @@ bool TextLlmContext::restorePreRequestCacheState() {
     // whatever `nPast_` says, so a decode that fails part-way cannot leave
     // cells past the cursor.
     try {
+      // Decoding past the target can evict the sliding-window cells in
+      // front of it, which no trim brings back: land cold instead. Checked
+      // before the trim, which may empty the window altogether.
+      const bool windowIntact =
+          canTrimSequenceTo(modelCtx_.lctx, preRequestNPast_);
       clearSequenceMemory(modelCtx_.lctx, preRequestNPast_, -1);
+      if (!windowIntact) {
+        clearSequenceMemory(modelCtx_.lctx);
+        preRequestLedger_.entries.clear();
+        preRequestNPast_ = 0;
+      }
     } catch (const std::exception& e) {
       QLOG_IF(
           Priority::WARNING,
