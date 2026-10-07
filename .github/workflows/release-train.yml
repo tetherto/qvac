@@ -3,7 +3,8 @@ name: Release Train (nx)
 # Publishes a release train: the nx release groups that
 # .github/release-trains.json joins into one train, from one
 # release-train-<train>-<x.y.z> branch, behind one npm approval. The version is
-# the anchor group's. See docs/ci/RELEASE-TRAIN.md.
+# the anchor group's. The train's `checks` decide which check jobs below must
+# pass. See docs/ci/RELEASE-TRAIN.md.
 #
 # The per-package release workflows exclude release-train-* branches; their
 # guard compares one branch version with one package.json.
@@ -15,11 +16,6 @@ on:
 
   workflow_dispatch:
     inputs:
-      npm_tag:
-        description: "npm dist-tag for every package, e.g. release-1.x. Empty or latest: latest, or release-<major>.<minor> for a package older than npm's latest or a prerelease."
-        required: false
-        default: ""
-        type: string
       publish_pypi_only:
         description: "Skip npm and publish tetherto-qvac-sdk only (npm already shipped)."
         required: false
@@ -78,13 +74,12 @@ jobs:
       projects: ${{ steps.resolve.outputs.projects }}
       dist_paths: ${{ steps.resolve.outputs.dist_paths }}
       moved: ${{ steps.resolve.outputs.moved }}
+      checks: ${{ steps.resolve.outputs.checks }}
       release_slug: ${{ steps.resolve.outputs.release_slug }}
       release_dir: ${{ steps.resolve.outputs.release_dir }}
       release_version: ${{ steps.resolve.outputs.release_version }}
       release_name: ${{ steps.resolve.outputs.release_name }}
     steps:
-      # Full history with tags: nx measures what changed since the last train
-      # release's tag.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           persist-credentials: false
@@ -164,6 +159,13 @@ jobs:
           TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
         run: pnpm exec nx run-many -t prepublishOnly --projects="$TRAIN_PROJECTS"
 
+      # The publish job compares what npm stores against these tarballs. Packing
+      # also fails on a package whose dist/ is empty.
+      - name: Pack the train
+        env:
+          TRAIN: ${{ needs.train.outputs.name }}
+        run: node .github/scripts/release-train.mjs pack "$TRAIN" "$RUNNER_TEMP/train-tarballs"
+
       - name: Upload train dist artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -172,13 +174,64 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload train tarballs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: tarballs-${{ needs.train.outputs.name }}
+          path: ${{ runner.temp }}/train-tarballs
+          if-no-files-found: error
+          retention-days: 30
+
+  # The checks publish-inference.yml and publish-sdk.yml run before npm. The
+  # engine is not on npm yet, so the sdk check uses the workspace copy.
+  shared-runtime-libs:
+    name: Shared runtime libs resolve once
+    needs: [train]
+    if: needs.train.outputs.moved != '[]' && contains(fromJSON(needs.train.outputs.checks), 'shared-runtime-libs')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Check @qvac/inference
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/inference
+
+      - name: Check @qvac/sdk
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
+
+  # Each package's own checks, as on its release PR, with every train package
+  # installed from a tarball of this commit. Its tarballs are its own: the
+  # publish job never takes anything from this run.
+  package-checks:
+    name: Package checks before publish
+    needs: [train]
+    if: needs.train.outputs.moved != '[]' && contains(fromJSON(needs.train.outputs.checks), 'package-checks')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+    with:
+      train: ${{ needs.train.outputs.name }}
+      source: train
+      ref: ${{ github.sha }}
+
   build-sdk-python:
     name: Build tetherto-qvac-sdk (Python)
     needs:
       - fork-approval
       - authorize
       - train
-    if: needs.authorize.outputs.allowed == 'true' && needs.train.outputs.moved != '[]'
+    if: >-
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.train.outputs.moved != '[]' &&
+      contains(fromJSON(needs.train.outputs.checks), 'sdk-python')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -238,32 +291,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The checks publish-inference.yml and publish-sdk.yml run before npm. The
-  # engine is not on npm yet, so the sdk check uses the workspace copy.
-  shared-runtime-libs:
-    name: Shared runtime libs resolve once
-    needs: [train]
-    if: needs.train.outputs.moved != '[]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Check @qvac/inference
-        run: node .github/scripts/check-shared-runtime-libs.mjs packages/inference
-
-      - name: Check @qvac/sdk
-        run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
-
-  # Needs build-sdk-python so a stale generate.py stops npm too, as in
-  # publish-sdk.yml.
+  # A check the train does not list is skipped; one it lists must succeed.
   publish-npm:
     name: Publish the train to npm
     needs:
@@ -271,14 +299,17 @@ jobs:
       - authorize
       - train
       - build
-      - build-sdk-python
       - shared-runtime-libs
+      - package-checks
+      - build-sdk-python
     if: >-
+      always() &&
       needs.authorize.outputs.allowed == 'true' &&
-      needs.build.result == 'success' &&
-      needs.build-sdk-python.result == 'success' &&
-      needs.shared-runtime-libs.result == 'success' &&
       needs.train.result == 'success' &&
+      needs.build.result == 'success' &&
+      (needs.shared-runtime-libs.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'shared-runtime-libs')) &&
+      (needs.package-checks.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks')) &&
+      (needs.build-sdk-python.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'sdk-python')) &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -289,17 +320,6 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Validate npm_tag input
-        if: inputs.npm_tag != ''
-        shell: bash
-        env:
-          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
-        run: |
-          if ! echo "$NPM_TAG_INPUT" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$NPM_TAG_INPUT'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
-            exit 1
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -323,6 +343,12 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
+      - name: Download train tarballs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: tarballs-${{ needs.train.outputs.name }}
+          path: ${{ runner.temp }}/train-tarballs
+
       # pnpm 11 reads PNPM_CONFIG_* and ignores NPM_CONFIG_*. Lifecycle scripts
       # stay off so inference's `prepare` does not rebuild over the downloaded
       # dist.
@@ -332,18 +358,46 @@ jobs:
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           PNPM_CONFIG_PROVENANCE: "true"
           MOVED: ${{ needs.train.outputs.moved }}
-          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
           DRY_RUN: ${{ inputs.dry_run == true }}
         shell: bash
         run: |
           set -euo pipefail
-          args=(--tag="$NPM_TAG_INPUT")
+          args=(--tarballs="$RUNNER_TEMP/train-tarballs")
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
           node .github/scripts/release-train.mjs publish "$MOVED" "${args[@]}"
 
-  # tetherto-qvac-sdk ships at @qvac/sdk's version, so it publishes when the
-  # train's GitHub release package moved. `published` is false on a re-run
-  # that found everything on npm already.
+  served:
+    name: Wait until npm serves the train
+    needs: [train, publish-npm]
+    if: needs.publish-npm.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Wait
+        env:
+          MOVED: ${{ needs.train.outputs.moved }}
+        run: node .github/scripts/release-train.mjs wait "$MOVED"
+
+  # The same checks against what npm now serves. Tags, the GitHub release,
+  # PyPI and the wheels wait for them.
+  published-checks:
+    name: Package checks after publish
+    needs: [train, served]
+    if: contains(fromJSON(needs.train.outputs.checks), 'package-checks')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+    with:
+      train: ${{ needs.train.outputs.name }}
+      source: published
+      ref: ${{ github.sha }}
+
   publish-pypi:
     name: Publish tetherto-qvac-sdk to PyPI
     needs:
@@ -352,6 +406,7 @@ jobs:
       - train
       - build-sdk-python
       - publish-npm
+      - published-checks
     if: >-
       always() &&
       github.repository == 'tetherto/qvac' &&
@@ -360,8 +415,8 @@ jobs:
       needs.train.outputs.release_version != '' &&
       (
         (
-          needs.publish-npm.result == 'success' &&
-          needs.publish-npm.outputs.published == 'true'
+          needs.publish-npm.outputs.published == 'true' &&
+          (needs.published-checks.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
         )
         ||
         (
@@ -384,20 +439,22 @@ jobs:
           name: dist-sdk-python
           path: dist
 
-      # Lets a recovery dispatch finish a partial upload.
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          skip-existing: true
 
-  # Not gated on `published`: a re-run may still owe tags. The GitHub release
-  # makes its own package's tag.
+  # Tags go on the commit npm records as each version's gitHead. The GitHub
+  # release makes its own package's tag.
   tag:
     name: Tag the published packages
     needs:
       - train
       - publish-npm
-    if: needs.publish-npm.result == 'success' && inputs.dry_run != true
+      - published-checks
+    if: >-
+      always() &&
+      needs.publish-npm.result == 'success' &&
+      inputs.dry_run != true &&
+      (needs.published-checks.result == 'success' || needs.publish-npm.outputs.published != 'true' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -406,6 +463,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - name: Tag
         env:
@@ -421,10 +479,12 @@ jobs:
     needs:
       - train
       - publish-npm
+      - published-checks
     if: >-
-      needs.publish-npm.result == 'success' &&
+      always() &&
       needs.publish-npm.outputs.published == 'true' &&
-      needs.train.outputs.release_version != ''
+      needs.train.outputs.release_version != '' &&
+      (needs.published-checks.result == 'success' || !contains(fromJSON(needs.train.outputs.checks), 'package-checks'))
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -440,7 +500,7 @@ jobs:
     needs:
       - train
       - github-release
-    if: needs.github-release.result == 'success'
+    if: always() && needs.github-release.result == 'success' && contains(fromJSON(needs.train.outputs.checks), 'sdk-python')
     permissions:
       contents: write
     uses: ./.github/workflows/build-sdk-python-fat-wheels.yml

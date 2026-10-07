@@ -25,8 +25,22 @@ on:
       - feature-*
       - tmp-*
   workflow_dispatch:
-  # Lets pr-gate-merge.yml call this workflow directly.
+  # Lets pr-gate-merge.yml call this workflow directly, and release-train.yml
+  # run a train's packages before and after publishing.
   workflow_call:
+    inputs:
+      train:
+        description: "Release train whose packages to check; empty for the PR's changed packages"
+        type: string
+        default: ""
+      source:
+        description: "train: every train package from tarballs of this commit; published: from npm"
+        type: string
+        default: ""
+      ref:
+        description: "Commit to check out and test"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -76,8 +90,9 @@ jobs:
       packages: read
     # Hard cap so a hung job can't hog runners or burn minutes. Slightly above
     # the 30-min default because this rollup runs up to 6 packages sequentially
-    # (incl. the SDK build + bare/e2e tests and the two consumer installs).
-    timeout-minutes: 45
+    # (incl. the SDK build + bare/e2e tests and the two consumer installs). A
+    # release train builds and checks every package in it.
+    timeout-minutes: ${{ (inputs.train != '' || startsWith(github.base_ref, 'release-train-')) && 100 || 45 }}
     steps:
       # Checkout the trusted base commit. The package config and the diff
       # baseline are read from here — never from the PR — so a PR cannot edit
@@ -98,6 +113,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          TRAIN_INPUT: ${{ inputs.train }}
+          SOURCE_INPUT: ${{ inputs.source }}
         run: |
           # Fail closed: any error here (git fetch/diff, jq) fails the step and
           # therefore the whole "SDK Pod Checks" job — never a silent green.
@@ -122,7 +139,23 @@ jobs:
                             then .sdk_sources_release else .sdk_sources end)
             ]' .github/sdk-pod-checks.json)
 
-          if [ "$EVENT" = "workflow_dispatch" ]; then
+          # A release train's packages are not on npm until it publishes, so a
+          # train PR checks all of them with each train package installed from
+          # a tarball of this commit (the `train` source).
+          TRAIN="${TRAIN_INPUT:-}"
+          SOURCE="${SOURCE_INPUT:-train}"
+          if [ -z "$TRAIN" ] && [[ "${BASE_REF:-}" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            TRAIN="${BASH_REMATCH[1]}"
+          fi
+          echo "train=${TRAIN}" >> "$GITHUB_OUTPUT"
+          echo "source=${SOURCE}" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$TRAIN" ]; then
+            SLUGS=$(node .github/scripts/release-train.mjs slugs "$TRAIN")
+            echo "projects=$(node .github/scripts/release-train.mjs projects "$TRAIN")" >> "$GITHUB_OUTPUT"
+            PACKAGES=$(echo "$ALL_PACKAGES" | jq -c --argjson slugs "$SLUGS" --arg src "$SOURCE" '
+              [ .[] | select(.package as $p | $slugs | index($p)) | .sources = [$src] ]')
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
             # workflow_dispatch: run all packages
             PACKAGES="$ALL_PACKAGES"
           else
@@ -157,7 +190,7 @@ jobs:
         if: steps.detect.outputs.has_changes == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Bun
         if: steps.detect.outputs.has_changes == 'true'
@@ -170,6 +203,25 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
+        if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.source == 'train'
+
+      # The tarballs are what the release would publish. The workspace install
+      # is removed afterwards so each package below installs on its own, as a
+      # consumer would.
+      - name: Pack the release train
+        if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.source == 'train'
+        shell: bash
+        env:
+          TRAIN: ${{ steps.detect.outputs.train }}
+          TRAIN_PROJECTS: ${{ steps.detect.outputs.projects }}
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm exec nx run-many -t build --projects="$TRAIN_PROJECTS" --exclude-task-dependencies
+          node .github/scripts/release-train.mjs pack "$TRAIN" "$RUNNER_TEMP/train-tarballs"
+          git clean -ffdX
 
       - name: Configure npm registries
         if: steps.detect.outputs.has_changes == 'true'
@@ -198,10 +250,11 @@ jobs:
 
       - name: Run SDK pod checks
         if: steps.detect.outputs.has_changes == 'true'
-        timeout-minutes: 40
+        timeout-minutes: ${{ steps.detect.outputs.train != '' && 80 || 40 }}
         shell: bash
         env:
           PACKAGES: ${{ steps.detect.outputs.packages }}
+          TRAIN_TARBALLS: ${{ runner.temp }}/train-tarballs
           # Maintainer escape hatch: when this label is present the gate still
           # runs and logs failures, but reports success so an urgent fix can
           # land over a confirmed false-positive check. Audited via the label
@@ -405,6 +458,11 @@ jobs:
               # of the installer (bun lacks --if-present).
               if [ "$SRC" = "workspace" ]; then
                 run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
+              fi
+              # Train: every train package, at any depth, resolves from its
+              # tarball; everything else from the registry.
+              if [ "$SRC" = "train" ]; then
+                run "stage train tarballs $src" node "$WS/.github/scripts/release-train.mjs" stage . "$TRAIN_TARBALLS"
               fi
 
               if [ "$PKG" = "sdk" ]; then
