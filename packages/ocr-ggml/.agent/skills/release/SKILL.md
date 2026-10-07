@@ -75,10 +75,11 @@ Proceed? (y/n)
    ```bash
    git push origin release-<package>-<version>
    ```
-4. Trigger the release workflow manually:
+4. Trigger the release workflow manually. Pushing the branch does not start it: a branch with no new commits never matches the workflow's `paths` filter.
    ```bash
-   gh workflow run "on-merge-<package>.yml" --repo tetherto/qvac --ref release-<package>-<version>
+   gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref release-<package>-<version> -f package=<package>
    ```
+   `model-fit` and `ggml-rpc-server` keep their own `on-merge-<package>.yml`; dispatch that one with no inputs.
 
 This workflow:
 - Runs `release-merge-guard` (validates version bump + changelog)
