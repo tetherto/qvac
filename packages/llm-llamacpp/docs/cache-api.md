@@ -343,10 +343,12 @@ nothing. With the RAM tier on, an evicted conversation moves into RAM instead
 of being written.
 
 Eviction copies the conversation's whole state off the device, and writes it
-to its file when the RAM tier is off; `saveCache()` writes it too. Both run on
-the scheduler's worker thread, so every slot pauses for that long: up to
-hundreds of MB on a long context. Sizing `cache_ram_mib` to hold the
-conversations in use moves eviction writes from admission to unload.
+to its file when the RAM tier is off; `saveCache()` writes it too. With the
+tier on, a full tier writes its oldest entry with unsaved turns at that same
+point to make room. All of these run on the scheduler's worker thread, so
+every slot pauses for that long: up to hundreds of MB on a long context.
+Sizing `cache_ram_mib` to hold the conversations in use moves eviction writes
+from admission to unload.
 
 **On both paths:**
 
