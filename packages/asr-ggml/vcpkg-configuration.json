@@ -1,9 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "0cca2feebac62e25d10c026aec5645ff704f25dd",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "QVAC-26493/moss-asr-model-fit"
+    "baseline": "ebd94a424f7280b8db761e8f099a753f5e02c409",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
