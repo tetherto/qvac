@@ -1591,6 +1591,9 @@ std::unique_ptr<LlamaModel> loadHybridChatModel(
   }
   if (storage != nullptr) {
     config["cache_checkpoint_storage"] = storage;
+    if (std::string(storage) == "disk") {
+      config["cache_checkpoint_dir"] = fs::temp_directory_path().string();
+    }
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = modelPath.path;
@@ -1826,6 +1829,32 @@ TEST(CacheHistoryCheckpointTest, HybridCheckpointsStayInMemoryByDefault) {
     }
   }
   fs::remove(cacheFile);
+}
+
+// `disk` without `cache_checkpoint_dir` is a configuration error caught at
+// load, before anything is written anywhere.
+TEST(CacheHistoryCheckpointTest, DiskStorageWithoutCheckpointDirFailsTheLoad) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "512";
+  config["cache_checkpoint_storage"] = "disk";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string error;
+  try {
+    LlamaModel model(
+        test_common::BaseTestModelPath::get(),
+        std::string(),
+        std::move(config));
+    model.waitForLoadInitialization();
+  } catch (const std::exception& e) {
+    error = e.what();
+  }
+  EXPECT_NE(error.find("cache_checkpoint_dir"), std::string::npos)
+      << "the load did not fail on the missing directory: " << error;
 }
 
 // `cache_checkpoint_dir` moves disk snapshots out of the OS temp dir (which an

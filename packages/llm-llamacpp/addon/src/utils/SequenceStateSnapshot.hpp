@@ -156,8 +156,9 @@ private:
 // will clear the sequence memory to match.
 //
 // Disk storage writes into this process's private directory under
-// `directory` (`cache_checkpoint_dir`), or under the OS temp dir when it is
-// empty; see `requireSnapshotDirectory`.
+// `directory` (`cache_checkpoint_dir`, which the load config requires with
+// `disk`); an empty `directory`, used only by direct callers such as tests,
+// means the OS temp dir. See `requireSnapshotDirectory`.
 bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
     SequenceStateSnapshot& out, SnapshotStorage storage = SnapshotStorage::Disk,
@@ -179,7 +180,8 @@ bool snapshotSequenceState(
     SnapshotScope scope = SnapshotScope::Full);
 
 // Creates this process's snapshot directory under `directory`
-// (`cache_checkpoint_dir`; empty = the OS temp dir) if it does not exist yet:
+// (`cache_checkpoint_dir`; empty = the OS temp dir, for direct callers only)
+// if it does not exist yet:
 // a private directory (`mkdtemp`, mode 0700) on POSIX, the directory itself on
 // Windows, where the temp dir is per user. Throws `std::runtime_error` naming
 // the base and the reason when it cannot, and tries again on the next call.

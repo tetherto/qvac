@@ -166,15 +166,16 @@ None of them has any effect on pure-attention models.
 - `cache_checkpoint_storage`: `memory` (default) keeps checkpoints and the
   per-request rollback snapshot in host RAM, so a cached chat never touches
   the disk; each live snapshot costs its size in RAM (about 20 MB on
-  Qwen3.5-0.8B, 18 MB on DeepSeek V4). `disk` writes them instead to a
-  private directory (mode 0700 on POSIX) the addon creates under the OS temp
-  directory when the model loads. If that directory cannot be created, the
-  load fails with `InvalidArgument`; set `cache_checkpoint_dir` or `TMPDIR`
-  to a writable directory, or use `memory`.
-- `cache_checkpoint_dir`: with `disk`, the directory the private snapshot
-  directory is created in, instead of the OS temp directory. Android gives
-  apps no usable temp directory, so pass the app's cache directory there.
-  Setting it without `disk` fails the load.
+  Qwen3.5-0.8B, 18 MB on DeepSeek V4). `disk` writes them instead to files in
+  `cache_checkpoint_dir`, which it requires.
+- `cache_checkpoint_dir`: **required with `disk`**, and refused without it.
+  When the model loads, the addon creates a private directory (mode 0700)
+  inside it and writes only there; on Windows it writes in the directory
+  itself. There is no default: the OS temp
+  directory is not usable on every platform (Android gives apps none), so the
+  caller names the location. On mobile, pass the app's cache directory. The
+  load fails with `InvalidArgument` when the key is missing, empty, or no
+  private directory can be created in it.
 
 The storage setting is independent of the `cacheKey` file. In both modes that
 file is written only by the writes described in [Save the cache to
@@ -194,7 +195,8 @@ const model = new LlmLlamacpp({
     ctx_size: '8192',
     cache_checkpoints: '4',
     cache_checkpoints_max_bytes: String(2 * 1024 * 1024 * 1024),
-    cache_checkpoint_storage: 'disk'
+    cache_checkpoint_storage: 'disk',
+    cache_checkpoint_dir: '/path/to/app/cache' // required with 'disk'
   }
 })
 ```

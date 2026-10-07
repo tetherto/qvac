@@ -62,11 +62,12 @@
 - `cache_checkpoint_storage`: `memory` (default) or `disk`. With `memory` the
   checkpoints and the per-request rollback snapshot stay in host RAM, so a
   cached chat on a hybrid / recurrent model never touches the disk; `disk`
-  writes them to a private directory under the OS temp directory, and the
-  load fails with `InvalidArgument` when that directory cannot be created.
-- `cache_checkpoint_dir` (also `cache-checkpoint-dir`): with `disk`, the
-  directory that private directory is created in instead of the OS temp
-  directory, e.g. an Android app's cache directory.
+  writes them to files in `cache_checkpoint_dir`.
+- `cache_checkpoint_dir` (also `cache-checkpoint-dir`): required with `disk`
+  and refused without it. Checkpoint files go in a private (0700) directory
+  the addon creates in it when the model loads (on Windows, in the directory
+  itself), e.g. in an Android app's cache directory. The load fails with
+  `InvalidArgument` when it is missing, empty, or unusable.
 
 ### Changed
 

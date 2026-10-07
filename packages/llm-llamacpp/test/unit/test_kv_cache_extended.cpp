@@ -547,12 +547,11 @@ TEST(KvCacheExtended, RenderCostPerTurn) {
   }
 }
 
-// C10: `cache_checkpoint_storage: disk` without a private snapshot directory
-// fails the load, instead of writing to the shared temp dir or silently
-// keeping snapshots in memory. The snapshot directory is process-wide and
-// kept once created, so run this alone
-// (`--gtest_filter=*DiskStorageWithoutPrivateDirFailsTheLoad*`).
-TEST(KvCacheExtended, DiskStorageWithoutPrivateDirFailsTheLoad) {
+// C10: `cache_checkpoint_storage: disk` with a `cache_checkpoint_dir` that
+// cannot hold a private snapshot directory fails the load, naming that
+// directory, instead of writing elsewhere or silently keeping snapshots in
+// memory.
+TEST(KvCacheExtended, DiskStorageWithUnusableCheckpointDirFailsTheLoad) {
   SKIP_UNLESS_KV_CACHE_EXTENDED();
 #ifdef _WIN32
   GTEST_SKIP() << "relies on POSIX directory permissions";
@@ -561,22 +560,20 @@ TEST(KvCacheExtended, DiskStorageWithoutPrivateDirFailsTheLoad) {
     GTEST_SKIP() << "root ignores directory permissions";
   }
   namespace utils = qvac_lib_inference_addon_llama::utils;
-  if (utils::sequenceStateSnapshotFilesWritten() > 0) {
-    GTEST_SKIP() << "a disk snapshot already ran in this process; run alone";
-  }
   const auto path = qwen35Model();
   REQUIRE_MODEL(path);
 
-  ScratchDir readOnly("snapshot_tmp");
+  ScratchDir readOnly("checkpoint_dir_read_only");
   fs::permissions(
       readOnly.path(), fs::perms::owner_read | fs::perms::owner_exec);
-  const char* previous = std::getenv("TMPDIR");
-  const std::string savedTmp = previous != nullptr ? previous : "";
-  ::setenv("TMPDIR", readOnly.path().c_str(), 1);
+  const uint64_t filesBefore = utils::sequenceStateSnapshotFilesWritten();
 
   std::string error;
   try {
-    (void)loadModel(path, {{"cache_checkpoint_storage", "disk"}});
+    (void)loadModel(
+        path,
+        {{"cache_checkpoint_storage", "disk"},
+         {"cache_checkpoint_dir", readOnly.path().string()}});
   } catch (const std::exception& e) {
     error = e.what();
   }
@@ -586,21 +583,15 @@ TEST(KvCacheExtended, DiskStorageWithoutPrivateDirFailsTheLoad) {
         loadModel(path, {{"cache_checkpoint_storage", "memory"}})->isLoaded();
   } catch (const std::exception&) {
   }
-
-  if (previous != nullptr) {
-    ::setenv("TMPDIR", savedTmp.c_str(), 1);
-  } else {
-    ::unsetenv("TMPDIR");
-  }
   fs::permissions(readOnly.path(), fs::perms::owner_all);
 
   EXPECT_NE(error.find("cache_checkpoint_storage 'disk'"), std::string::npos)
       << "the load did not fail with the storage error: " << error;
   EXPECT_NE(error.find(readOnly.path().string()), std::string::npos)
-      << "the error does not name the temp dir: " << error;
+      << "the error does not name the checkpoint dir: " << error;
   EXPECT_TRUE(fs::is_empty(readOnly.path()))
-      << "something was written to the temp dir";
-  EXPECT_EQ(utils::sequenceStateSnapshotFilesWritten(), 0u);
+      << "something was written to the checkpoint dir";
+  EXPECT_EQ(utils::sequenceStateSnapshotFilesWritten(), filesBefore);
   EXPECT_TRUE(memoryLoaded) << "memory storage must not need the directory";
 #endif
 }

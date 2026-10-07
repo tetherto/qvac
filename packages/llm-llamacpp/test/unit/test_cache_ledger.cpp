@@ -212,7 +212,9 @@ TEST(CacheLedger, ParseCheckpointPolicyConsumesEverySpelling) {
          "sees it";
 
   std::unordered_map<std::string, std::string> dashed{
-      {"cache-checkpoints", "0"}, {"cache-checkpoint-storage", "disk"}};
+      {"cache-checkpoints", "0"},
+      {"cache-checkpoint-storage", "disk"},
+      {"cache-checkpoint-dir", "/tmp"}};
   const cache::CheckpointPolicy zero = cache::parseCheckpointPolicy(dashed);
   EXPECT_EQ(zero.maxCount, 0u);
   EXPECT_EQ(zero.storage, SnapshotStorage::Disk);
@@ -249,9 +251,10 @@ TEST(CacheLedger, ParseCheckpointPolicyRejectsBadValues) {
       << "both spellings at once must be rejected like flash-attn";
 }
 
-// `cache_checkpoint_dir` only means something with disk storage, so it is
-// refused rather than silently ignored without it.
-TEST(CacheLedger, ParseCheckpointDirNeedsDiskStorage) {
+// `cache_checkpoint_dir` goes with disk storage both ways: `disk` requires it
+// (there is no OS temp dir default), and it is refused without `disk` rather
+// than silently ignored.
+TEST(CacheLedger, ParseCheckpointDirIsRequiredExactlyWithDisk) {
   std::unordered_map<std::string, std::string> disk{
       {"cache_checkpoint_storage", "disk"},
       {"cache-checkpoint-dir", "/data/user/0/app/cache"}};
@@ -270,6 +273,17 @@ TEST(CacheLedger, ParseCheckpointDirNeedsDiskStorage) {
   std::unordered_map<std::string, std::string> empty{
       {"cache_checkpoint_storage", "disk"}, {"cache_checkpoint_dir", ""}};
   EXPECT_THROW(cache::parseCheckpointPolicy(empty), std::invalid_argument);
+
+  std::unordered_map<std::string, std::string> diskOnly{
+      {"cache_checkpoint_storage", "disk"}};
+  try {
+    (void)cache::parseCheckpointPolicy(diskOnly);
+    ADD_FAILURE() << "disk storage without cache_checkpoint_dir was accepted";
+  } catch (const std::invalid_argument& e) {
+    EXPECT_NE(
+        std::string(e.what()).find("cache_checkpoint_dir"), std::string::npos)
+        << e.what();
+  }
 }
 
 // Every untrimmable model, DeepSeek V4 included, snapshots only the state a

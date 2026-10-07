@@ -23,7 +23,7 @@ graph TB
     end
 
     subgraph "Storage chosen by cache_checkpoint_storage"
-        TMPD["OS temp directory<br/>(disk)"]
+        TMPD["cache_checkpoint_dir<br/>(disk)"]
         HRAM["Host RAM<br/>(memory)"]
     end
 
@@ -70,7 +70,7 @@ graph TB
 | Pre-request snapshot | never | at the start of every cached request |
 | Checkpoints | never | one per committed cached request, at the end of its history (the pre-request snapshot only serves rollback) |
 | Rollback target | shared prefix with the request's prompt | state before the prompt was sent (the snapshot); the restored checkpoint when the request diverged |
-| Disk writes for a chat with one `cacheKey`, before `saveCache()` or unload | none | none by default; temp files with `cache_checkpoint_storage: disk` |
+| Disk writes for a chat with one `cacheKey`, before `saveCache()` or unload | none | none by default; checkpoint files in `cache_checkpoint_dir` with `cache_checkpoint_storage: disk` |
 
 The decision is `needsFullStateSnapshot` in `ModelMemoryPolicy.hpp`, by
 architecture: recurrent or hybrid per llama.cpp, or DeepSeek V4. All of them
@@ -315,7 +315,8 @@ then trims the sequence to the checkpoint's position
 Sizes are fixed by the model, whatever the conversation length: about 20 MB
 on Qwen3.5-0.8B and 18 MB on DeepSeek V4-Flash, against ~233 MB for a full
 copy of Qwen3.5-0.8B at 32k tokens. They live in host RAM by default
-(`cache_checkpoint_storage: memory`) or in temp files with `disk`, and are
+(`cache_checkpoint_storage: memory`) or in files in `cache_checkpoint_dir`
+with `disk`, and are
 never written into the `cacheKey` file. On the single-prompt path a
 conversation loaded from its file starts without checkpoints; with
 `parallel >= 2` the scheduler keeps a key's checkpoints across that file
@@ -563,7 +564,8 @@ stateDiagram-v2
 | `prefill` | `runOptions` | Warm the cache without generating; commits as soon as prefill completes. Needs a `cacheKey` on `parallel >= 2`. |
 | `cache_checkpoints` | load config | Checkpoints kept per sequence (default 1: the last request's end-of-history checkpoint; 2 also serves an edit of the last user message; 0 disables them and their capture). Full-state models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
-| `cache_checkpoint_storage` | load config | `memory` (host RAM, default) or `disk` (temp files) for snapshots and checkpoints. |
+| `cache_checkpoint_storage` | load config | `memory` (host RAM, default) or `disk` (files in `cache_checkpoint_dir`) for snapshots and checkpoints. |
+| `cache_checkpoint_dir` | load config | Required with `disk`, refused without it: where checkpoint files go, inside a private directory created in it (0700; on Windows, the directory itself). |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |
 | `cache_ram_mib` | load config | Host-RAM budget for conversations that are not running: switched away on the single-prompt path, or evicted from their batch slot. Write-back: files are written on budget eviction, `saveCache()`, reload or unload (default 0, off). |
 

@@ -1284,18 +1284,19 @@ namespace LlmLlamacpp {
     /**
      * Where checkpoints and the per-request rollback snapshot live:
      * `'memory'` (default) keeps them in host RAM so a cached chat never
-     * touches the disk, `'disk'` writes them to a private directory under the
-     * OS temp directory, and the load fails with `InvalidArgument` when that
-     * directory cannot be created. Each snapshot holds only the state a tail
-     * trim cannot rebuild, a size fixed by the model (about 20 MB on
-     * Qwen3.5-0.8B). Also accepted as `cache-checkpoint-storage`.
+     * touches the disk, `'disk'` writes them to files in
+     * `cache_checkpoint_dir`, which it requires. Each snapshot holds only the
+     * state a tail trim cannot rebuild, a size fixed by the model (about 20 MB
+     * on Qwen3.5-0.8B). Also accepted as `cache-checkpoint-storage`.
      */
     cache_checkpoint_storage?: "disk" | "memory";
     /**
-     * With `cache_checkpoint_storage: 'disk'`, the directory the private
-     * snapshot directory is created in, instead of the OS temp directory.
-     * Needed on Android, whose apps get no usable temp directory: pass the
-     * app's cache directory. Setting it without `'disk'` fails the load.
+     * Required with `cache_checkpoint_storage: 'disk'`, and refused without
+     * it: where checkpoint files go, inside a private directory the addon
+     * creates in it (mode 0700; on Windows, the directory itself). There is
+     * no default, because the OS temp directory is not usable on every
+     * platform (Android); on mobile, pass the app's cache directory. The load
+     * fails with `InvalidArgument` when it is missing, empty, or unusable.
      * Also accepted as `cache-checkpoint-dir`.
      */
     cache_checkpoint_dir?: string;
