@@ -9,7 +9,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-  applyFabricPrebuilds,
   applyOverlay,
   findHostAddonPackages,
   normalisePlatform,
@@ -157,71 +156,4 @@ test('overlayPlatformPrebuilds fetches the slice at the meta package version', (
   assert.deepEqual(fetched, [['@qvac/fabric-android-arm64@0.18.0', root]]);
   assert.deepEqual(result.map((entry) => entry.hosts), [['android-arm64']]);
   assert.ok(fs.existsSync(path.join(fabric, 'prebuilds/android-arm64/qvac__fabric.bare')));
-});
-
-// A `prebuild-fabric-<host>` artifact: <host>/ at the root, next to include/ and share/.
-function writeFabricPrebuilds(root, hosts, marker) {
-  const files = { 'include/ggml.h': '', 'share/qvac-fabric/cmake/qvac-fabricConfig.cmake': '' };
-  for (const host of hosts) {
-    files[`${host}/qvac__fabric.bare`] = marker;
-    files[`${host}/qvac__fabric/libqvac-ggml-cpu.so`] = marker;
-  }
-  return writePackage(root, { name: 'artifact' }, files);
-}
-
-test('overlayPlatformPrebuilds takes @qvac/fabric from the PR prebuilds and never fetches its slice', (t) => {
-  const root = tempDir(t);
-  const modules = path.join(root, 'node_modules');
-  const fabric = writePackage(path.join(modules, '@qvac/fabric'), {
-    name: '@qvac/fabric',
-    version: '0.18.1',
-    imports: { '#host-addon': hostAddonMap('@qvac/fabric') },
-  }, {
-    'prebuilds/android-arm64/qvac__fabric/libqvac-ggml-stale.so': 'published',
-  });
-  const tts = writePackage(path.join(modules, '@qvac/tts-ggml'), {
-    name: '@qvac/tts-ggml',
-    version: '1.0.0',
-    imports: { '#host-addon': hostAddonMap('@qvac/tts-ggml') },
-  });
-  const prFabric = writeFabricPrebuilds(path.join(root, 'pr-fabric'), ['android-arm64'], 'pr');
-  const slice = writeSlice(path.join(root, 'slice'), ['android-arm64']);
-  const fetched = [];
-
-  const result = overlayPlatformPrebuilds({
-    modulesDir: modules,
-    platform: 'android',
-    fabricPrebuildsDir: prFabric,
-    fetchSlice: (spec) => {
-      fetched.push(spec);
-      return slice;
-    },
-    log: () => {},
-  });
-
-  assert.deepEqual(fetched, ['@qvac/tts-ggml-android-arm64@1.0.0']);
-  assert.deepEqual(result.map((entry) => entry.name).sort(), ['@qvac/fabric', '@qvac/tts-ggml']);
-  assert.equal(fs.readFileSync(path.join(fabric, 'prebuilds/android-arm64/qvac__fabric.bare'), 'utf8'), 'pr');
-  assert.ok(!fs.existsSync(path.join(fabric, 'prebuilds/android-arm64/qvac__fabric/libqvac-ggml-stale.so')));
-  assert.ok(fs.existsSync(path.join(tts, 'prebuilds/android-arm64/qvac__fabric.bare')));
-});
-
-test('applyFabricPrebuilds fails when the PR prebuilds lack every target host', (t) => {
-  const root = tempDir(t);
-  const packageRoot = writePackage(path.join(root, 'fabric'), { name: '@qvac/fabric' });
-  const prFabric = writeFabricPrebuilds(path.join(root, 'pr-fabric'), ['linux-x64'], 'pr');
-
-  assert.throws(() => applyFabricPrebuilds(packageRoot, prFabric, 'android'), /hold none of android-arm64/);
-});
-
-test('overlayPlatformPrebuilds fails when PR prebuilds are given but @qvac/fabric is not installed', (t) => {
-  const root = tempDir(t);
-  const modules = path.join(root, 'node_modules');
-  writePackage(path.join(modules, 'plain'), { name: 'plain', version: '1.0.0' });
-  const prFabric = writeFabricPrebuilds(path.join(root, 'pr-fabric'), ['android-arm64'], 'pr');
-
-  assert.throws(
-    () => overlayPlatformPrebuilds({ modulesDir: modules, platform: 'android', fabricPrebuildsDir: prFabric, log: () => {} }),
-    /no @qvac\/fabric is installed/,
-  );
 });

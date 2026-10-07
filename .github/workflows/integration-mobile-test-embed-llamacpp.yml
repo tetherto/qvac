@@ -37,7 +37,7 @@ on:
         required: false
         default: ""
       fabric_prebuild_run_id:
-        description: "Run id whose `prebuild-fabric-<host>` artifacts replace the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
         type: string
         required: false
         default: ""
@@ -97,7 +97,7 @@ on:
         required: false
         default: ""
       fabric_prebuild_run_id:
-        description: "Run id whose `prebuild-fabric-<host>` artifacts replace the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
         type: string
         required: false
         default: ""
