@@ -29,8 +29,7 @@ test('Should detect multiple languages (topK=2)', (t) => {
   // Check for expected language codes
   // If the text is predominantly recognized as French or English
   t.ok(
-    results.some(r => r.language === 'French') ||
-    results.some(r => r.language === 'English'),
+    results.some((r) => r.language === 'French') || results.some((r) => r.language === 'English'),
     'Should detect either French or English in the top 2 results'
   )
 })
