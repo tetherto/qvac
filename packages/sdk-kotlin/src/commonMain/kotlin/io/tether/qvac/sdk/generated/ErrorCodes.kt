@@ -44,6 +44,7 @@ object ErrorCodes {
     const val SERVER_MODEL_FILE_LOCATE_FAILED: Int = 52203
     const val SERVER_MODEL_FILE_NOT_FOUND: Int = 52201
     const val SERVER_MODEL_FILE_NOT_FOUND_IN_DIR: Int = 52202
+    const val SERVER_MODEL_FIT_REFUSED: Int = 52212
     const val SERVER_MODEL_LOAD_FAILED: Int = 52200
     const val SERVER_MODEL_NOT_FOUND: Int = 52002
     const val SERVER_MODEL_NOT_LOADED: Int = 52003
@@ -184,6 +185,7 @@ object ErrorCodes {
         "SERVER_MODEL_FILE_LOCATE_FAILED" to 52203,
         "SERVER_MODEL_FILE_NOT_FOUND" to 52201,
         "SERVER_MODEL_FILE_NOT_FOUND_IN_DIR" to 52202,
+        "SERVER_MODEL_FIT_REFUSED" to 52212,
         "SERVER_MODEL_LOAD_FAILED" to 52200,
         "SERVER_MODEL_NOT_FOUND" to 52002,
         "SERVER_MODEL_NOT_LOADED" to 52003,
@@ -343,6 +345,7 @@ object ErrorCodes {
         "MODEL_FILE_LOCATE_FAILED" to listOf(52203),
         "MODEL_FILE_NOT_FOUND" to listOf(52201),
         "MODEL_FILE_NOT_FOUND_IN_DIR" to listOf(52202),
+        "MODEL_FIT_REFUSED" to listOf(52212),
         "MODEL_LOAD_FAILED" to listOf(52200),
         "MODEL_NOT_FOUND" to listOf(52002, 19003),
         "MODEL_NOT_LOADED" to listOf(52003),
