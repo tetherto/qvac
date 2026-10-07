@@ -490,10 +490,9 @@ class VlaModel {
         catch { }
         this._nativeLoggerActive = false;
     }
-    // QVAC-23763: `backend` now also takes a comma-separated GPU priority list,
-    // e.g. "cuda" or "cuda,vulkan". "auto" and "cpu" keep their meaning. The
-    // family names are validated natively so the list stays in one place; this
-    // check only rejects the shapes that never reach the addon.
+    // `backend` is 'auto', 'cpu', or a comma-separated GPU priority list such as
+    // 'cuda,vulkan'. Family names are validated natively; this only rejects
+    // shapes that never reach the addon.
     async load({ backend = "auto", } = {}) {
         if (typeof backend !== "string" || backend.trim() === "") {
             throw new QvacErrorAddonVla({

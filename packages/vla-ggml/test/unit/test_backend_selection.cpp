@@ -42,8 +42,7 @@ TEST(VlaBackendSelection, ReturnsZeroWhenAdrenoFollowedByNoDigits) {
 //
 // Only the parsing half is covered here. pickBestGpuDevice() calls the ggml
 // device API directly rather than through an injectable interface, unlike the
-// llm and embed addons, so its preference order has no unit-test seam. That is
-// pre-existing and not introduced by this change.
+// llm and embed addons, so its preference order has no unit-test seam.
 
 TEST(VlaBackendSelection, ParseBackendOverrideLowercasesAndSplits) {
   EXPECT_EQ(
@@ -69,15 +68,11 @@ TEST(VlaBackendSelection, ParseBackendOverrideIgnoresEmptyEntries) {
       (std::vector<std::string>{"cuda", "vulkan"}));
 }
 
-// Both spellings are accepted and both mean the same family, so the list
-// collapses to the "rocm" that ggml's HIP build actually reports.
 TEST(VlaBackendSelection, ParseBackendOverrideAcceptsHipAndRocm) {
   EXPECT_EQ(
       parseBackendOverride("rocm,hip"), (std::vector<std::string>{"rocm"}));
 }
 
-// BEHAVIOUR CHANGE, QVAC-23763: before this, any value other than "cpu" was
-// silently treated as "pick the best device", so a typo went unnoticed.
 TEST(VlaBackendSelection, ParseBackendOverrideThrowsOnUnknownName) {
   EXPECT_THROW(parseBackendOverride("cudaa"), qvac_errors::StatusError);
 }
@@ -133,9 +128,7 @@ TEST(VlaBackendSelection, ParseBackendOverrideAcceptsAutoInAList) {
   EXPECT_TRUE(parseBackendOverride(" AUTO ").empty());
 }
 
-// normaliseBackendSelector trims the whole value but not each entry, so a CRLF
-// config file
-// would otherwise throw on a value that reads as correct.
+// A CRLF config value must not throw on an entry that reads as correct.
 TEST(VlaBackendSelection, ParseBackendOverrideTrimsCarriageReturns) {
   EXPECT_EQ(
       parseBackendOverride("cuda\r\n,\tvulkan\r"),
