@@ -1,5 +1,11 @@
-import { BARE_PACK_NODE_ENGINES, isBarePackNodeSupported } from '@qvac/sdk/commands'
+import { createRequire } from 'node:module'
+import semver from 'semver'
 import type { Check } from '@/doctor/check'
+
+const require = createRequire(import.meta.url)
+// The CLI's own engines.node; bundling (bare-pack) is what needs this range.
+const { engines } = require('../../../package.json') as { engines: { node: string } }
+const NODE_ENGINES = engines.node
 
 // Where the `qvac` CLI itself can run. This is NOT the set of SDK deploy
 // targets — the SDK additionally targets Android and iOS via Expo/BareKit,
@@ -12,29 +18,27 @@ const SUPPORTED_CLI_HOSTS: ReadonlyArray<string> = [
   'win32-x64'
 ]
 
-const NODE_VERSION_PATTERN = /^v?\d+\.\d+\.\d+/
-
 export const checkNodeVersion: Check = (ctx) => {
   const version = ctx.nodeVersion
-  if (!NODE_VERSION_PATTERN.test(version)) {
+  if (semver.valid(version) === null) {
     return {
       id: 'node-version',
       label: 'Node.js version',
       status: 'warn',
       severity: 'required',
       value: version,
-      hint: `Could not parse Node.js version; expected 22.21+ or 24.9+ (${BARE_PACK_NODE_ENGINES}).`
+      hint: `Could not parse Node.js version; expected ${NODE_ENGINES}.`
     }
   }
   const display = version.startsWith('v') ? version : `v${version}`
-  if (!isBarePackNodeSupported(version)) {
+  if (!semver.satisfies(version, NODE_ENGINES, { includePrerelease: true })) {
     return {
       id: 'node-version',
       label: 'Node.js version',
       status: 'fail',
       severity: 'required',
       value: display,
-      hint: `Upgrade Node.js to 22.21+ or 24.9+ (current: ${display}); bundling requires it.`
+      hint: `Upgrade Node.js to ${NODE_ENGINES} (current: ${display}); bundling needs Node 22.21+ on the 22 line or 24.9+.`
     }
   }
   return {
