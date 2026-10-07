@@ -59,17 +59,9 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
 
   await inference.load()
 
-  // chooseBackend() logs "Chosen <family> Backend (backend override)" only
-  // when the pin binds. A `backend` that matches no device falls through to the
-  // default cascade with a warning that also says "backend override", so match
-  // the parenthesised suffix. The override block is skipped outright for a CPU
-  // load. Without this the pin is advisory, and the two Qwen3.5 tests that call
-  // this would fall back to CUDA and report their old flakiness as a genuine
-  // failure.
-  //
-  // Call this AFTER the first completion, never straight after load(): backend
-  // selection is lazy, so the log lands a tick later and an immediate check
-  // reads an empty buffer and fails on a pin that did bind.
+  // Only a pin that binds logs "(backend override)" with parentheses; a pin
+  // that matches no device warns without them. Call after the first
+  // completion: backend selection is lazy, so the log is empty right after load.
   function assertBackendPin() {
     if (!config.backend || config.device !== 'gpu') {
       return

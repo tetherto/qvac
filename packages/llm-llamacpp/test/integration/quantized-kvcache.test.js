@@ -193,18 +193,12 @@ async function runBenchmark(cfg, modelInfo) {
       output,
       kvCacheMiB,
       generatedTokens: stats.generatedTokens || 0,
-      // chooseBackend() logs "Chosen <family> Backend (backend override)" only
-      // when the pin binds. A `backend` that matches no device falls through to
-      // the default cascade with a warning that also says "backend override",
-      // so match the parenthesised suffix. Without this the pin below is
-      // advisory and a silent fallback to CUDA would look identical to a run
-      // that honoured it. Read here, after
-      // the run: backend selection is lazy, so the log is not in the buffer yet
-      // when load() returns.
+      // Only a pin that binds logs "(backend override)" with parentheses. Read
+      // after the run: backend selection is lazy, so the log is empty right
+      // after load.
       backendOverrideApplied: specLogger.logs.some((l) => /\(backend override\)/.test(l)),
-      // chooseBackend's own verdict, for the rows that pin nothing. Read from
-      // the log for the same reason as above: the addon exposes no API that
-      // reports which backend was selected.
+      // The default cascade's choice, for rows that pin nothing. The addon has
+      // no API that reports the selected backend.
       choseCuda: specLogger.logs.some((l) => /Chosen GPU CUDA/.test(l))
     }
   } finally {
