@@ -10,21 +10,23 @@ import io.tether.qvac.sdk.QvacCapability
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.barekit.AndroidServiceTransport
 import io.tether.qvac.sdk.completion
-import io.tether.qvac.sdk.generated.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.SDK_VERSION
-import io.tether.qvac.sdk.generated.TranscribeRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
+import io.tether.qvac.sdk.generated.schema.TranscribeRequest
+import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunk
+import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunkFilePath
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.transcribe
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -177,26 +179,18 @@ class AndroidContractInstrumentationTest {
             client.completion.stream(
                 CompletionStreamRequest(
                     captureThinking = false,
-                    generationParams = buildJsonObject {
-                        put("predict", 16)
-                        put("reasoning_budget", 0)
-                        put("temp", 0.0)
-                    },
-                    history = listOf(buildJsonObject {
-                        put("role", "user")
-                        put("content", "Reply with exactly CPU_OK")
-                    }),
+                    generationParams = CompletionStreamRequestGenerationParams(
+                        predict = 16.0,
+                        reasoning_budget = 0,
+                        temp = 0.0,
+                    ),
+                    history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = "Reply with exactly CPU_OK")),
                     modelId = requireNotNull(modelId),
                     stream = true,
-                    type = "completionStream",
                 ),
             ).collect { response ->
-                response.events.forEach { element ->
-                    val event = element.jsonObject
-                    if (event["type"]?.jsonPrimitive?.contentOrNull == "contentDelta") {
-                        output.append(event["text"]?.jsonPrimitive?.contentOrNull.orEmpty())
-                    }
-                }
+                response.events.filterIsInstance<CompletionStreamResponseEventsItem.ContentDelta>()
+                    .forEach { output.append(it.value.text) }
             }
 
             assertEquals("CPU_OK", output.toString().trim())
@@ -233,13 +227,11 @@ class AndroidContractInstrumentationTest {
 
             client.transcribe(
                 TranscribeRequest(
-                    audioChunk = buildJsonObject {
-                        put("type", "filePath")
-                        put("value", audioFile.absolutePath)
-                    },
+                    audioChunk = TranscribeRequestAudioChunk.FilePath(
+                        TranscribeRequestAudioChunkFilePath(value = audioFile.absolutePath),
+                    ),
                     metadata = false,
                     modelId = requireNotNull(modelId),
-                    type = "transcribe",
                 ),
             ).collect()
         } finally {
@@ -284,28 +276,20 @@ class AndroidContractInstrumentationTest {
             client.completion.stream(
                 CompletionStreamRequest(
                     captureThinking = false,
-                    generationParams = buildJsonObject {
-                        put("predict", 16)
-                        put("temp", 0.0)
-                    },
-                    history = listOf(buildJsonObject {
-                        put("role", "user")
-                        put("content", "Name the dominant color in one word.")
-                        put("attachments", buildJsonArray {
-                            add(buildJsonObject { put("path", imageFile.absolutePath) })
-                        })
-                    }),
+                    generationParams = CompletionStreamRequestGenerationParams(predict = 16.0, temp = 0.0),
+                    history = listOf(
+                        CompletionStreamRequestHistoryItem(
+                            role = "user",
+                            content = "Name the dominant color in one word.",
+                            attachments = listOf(CompletionStreamRequestHistoryItemAttachmentsItem(path = imageFile.absolutePath)),
+                        ),
+                    ),
                     modelId = requireNotNull(modelId),
                     stream = true,
-                    type = "completionStream",
                 ),
             ).collect { response ->
-                response.events.forEach { element ->
-                    val event = element.jsonObject
-                    if (event["type"]?.jsonPrimitive?.contentOrNull == "contentDelta") {
-                        output.append(event["text"]?.jsonPrimitive?.contentOrNull.orEmpty())
-                    }
-                }
+                response.events.filterIsInstance<CompletionStreamResponseEventsItem.ContentDelta>()
+                    .forEach { output.append(it.value.text) }
             }
 
             assertTrue(output.toString(), output.isNotBlank())

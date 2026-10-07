@@ -214,8 +214,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
 data class AssessModelFitRequest(
     @SerialName("models") val `models`: List<AssessModelFitRequestModelsItem>,
     @SerialName("execution") val `execution`: AssessModelFitRequestExecution? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("policy") val `policy`: String? = "interactive-v1",
+    @SerialName("policy") val `policy`: String? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "assessModelFit",
 )
@@ -1036,8 +1035,7 @@ data class ClassifyRequest(
     @SerialName("topK") val `topK`: Long? = null,
     @SerialName("width") val `width`: Long? = null,
     @SerialName("height") val `height`: Long? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("channels") val `channels`: Double? = 3.0,
+    @SerialName("channels") val `channels`: Double? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "classify",
 )
@@ -7969,8 +7967,7 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigWorldVerbositySeria
 
 @Serializable
 data class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String? = "esrgan",
+    @SerialName("type") val `type`: String? = null,
     @SerialName("model_src") val `model_src`: LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModel_src? = null,
     @SerialName("tile_size") val `tile_size`: Long? = null,
     @SerialName("direct") val `direct`: Boolean? = null,
@@ -8153,8 +8150,7 @@ internal object LoadModelSrcRequestAudiogenGgmlModelConfigSerializer : KSerializ
 
 @Serializable
 data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("engine") val `engine`: String? = "acestep",
+    @SerialName("engine") val `engine`: String? = null,
     @SerialName("useGPU") val `useGPU`: Boolean? = null,
     @SerialName("threads") val `threads`: Long? = null,
     @SerialName("backendsDir") val `backendsDir`: String? = null,
@@ -10032,8 +10028,7 @@ data class VideoStreamRequest(
     @SerialName("strength") val `strength`: Double? = null,
     @SerialName("reference_images") val `reference_images`: List<String>? = null,
     @SerialName("reference_attention_strength") val `reference_attention_strength`: Double? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("reference_downscale_factor") val `reference_downscale_factor`: Double? = 1.0,
+    @SerialName("reference_downscale_factor") val `reference_downscale_factor`: Double? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "videoStream",
 )
@@ -11274,8 +11269,7 @@ data class CompletionOrchestrateResponse(
     @SerialName("events") val `events`: List<CompletionOrchestrateResponseEventsItem>? = null,
     @SerialName("toolCallback") val `toolCallback`: CompletionOrchestrateResponseToolCallback? = null,
     @SerialName("done") val `done`: Boolean? = null,
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("stopReason") val `stopReason`: String? = "maxToolTurns",
+    @SerialName("stopReason") val `stopReason`: String? = null,
 )
 
 @Serializable(with = CompletionOrchestrateResponseEventsItemSerializer::class)

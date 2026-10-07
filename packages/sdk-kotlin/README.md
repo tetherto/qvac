@@ -327,15 +327,12 @@ client.stream(
 ## Typed and idiomatic Kotlin API
 
 The contract generator produces Kotlin serialization models and typed methods
-for every operation in `manifest.json`. The generated layer is available under
-`io.tether.qvac.sdk.generated` and includes request/response models, call-shape
-metadata, model constants, model-type maps, error codes, and `SDK_VERSION`.
-
-For new code, use request/response types from
+for every operation in `manifest.json`. Request/response types live in
 `io.tether.qvac.sdk.generated.schema`: discriminated unions are sealed classes,
 engine configurations are nested typed models, and serializers preserve the
-worker's JSON shape (no Kotlin wrapper fields on the wire). Existing flat models
-remain source-compatible. Import one model namespace, not both wildcards.
+worker's JSON shape (no Kotlin wrapper fields on the wire).
+`io.tether.qvac.sdk.generated` holds call-shape metadata, model constants,
+model-type maps, error codes, and `SDK_VERSION`.
 Worker numeric/range and addon-specific validation remains authoritative.
 
 ```kotlin

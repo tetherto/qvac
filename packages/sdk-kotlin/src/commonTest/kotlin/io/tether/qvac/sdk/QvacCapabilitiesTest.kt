@@ -41,12 +41,12 @@ class QvacCapabilitiesTest {
                     put(
                         "events",
                         kotlinx.serialization.json.buildJsonArray {
-                            add(buildJsonObject { put("type", "contentDelta"); put("text", "hel") })
+                            add(buildJsonObject { put("type", "contentDelta"); put("seq", 0); put("text", "hel") })
                             // rawDelta and thinkingDelta also carry `text`; they must not leak
                             // into the answer stream.
-                            add(buildJsonObject { put("type", "thinkingDelta"); put("text", "REASON") })
-                            add(buildJsonObject { put("type", "rawDelta"); put("text", "RAW") })
-                            add(buildJsonObject { put("type", "contentDelta"); put("text", "lo") })
+                            add(buildJsonObject { put("type", "thinkingDelta"); put("seq", 1); put("text", "REASON") })
+                            add(buildJsonObject { put("type", "rawDelta"); put("seq", 2); put("text", "RAW") })
+                            add(buildJsonObject { put("type", "contentDelta"); put("seq", 3); put("text", "lo") })
                         },
                     )
                 },
@@ -55,11 +55,10 @@ class QvacCapabilitiesTest {
         val client = QvacClient(transport)
 
         val values = client.completion.text(
-            io.tether.qvac.sdk.generated.CompletionStreamRequest(
+            io.tether.qvac.sdk.generated.schema.CompletionStreamRequest(
                 history = emptyList(),
                 modelId = "qwen",
                 stream = true,
-                type = "completionStream",
             ),
         ).toList()
 

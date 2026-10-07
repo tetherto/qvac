@@ -53,11 +53,18 @@ import androidx.compose.ui.unit.sp
 import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completion
-import io.tether.qvac.sdk.generated.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.ModelConstant
-import io.tether.qvac.sdk.generated.ModelProgressResponse
 import io.tether.qvac.sdk.generated.Models
-import io.tether.qvac.sdk.generated.TranscribeRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItemCompletionDoneStopReason
+import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
+import io.tether.qvac.sdk.generated.schema.TranscribeRequest
+import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunk
+import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunkFilePath
 import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.transcribe
 import kotlinx.coroutines.CancellationException
@@ -68,12 +75,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.max
@@ -84,7 +85,7 @@ class MiniAssistantScreen(
     private val activity: Activity,
     private val scope: CoroutineScope,
 ) {
-    private val history = mutableListOf<JsonObject>()
+    private val history = mutableListOf<CompletionStreamRequestHistoryItem>()
     private val messages = mutableStateListOf<AssistantMessage>()
     private var nextMessageId = 0L
     private var client: QvacClient? = null
@@ -415,67 +416,52 @@ class MiniAssistantScreen(
         val displayPrompt = prompt.ifEmpty { "Describe this image." }
         composerText = ""
         appendMessage("user", displayPrompt + if (imagePath == null) "" else "\n[Image attached]")
-        history += buildJsonObject {
-            put("role", "user")
-            put("content", displayPrompt)
-            if (imagePath != null) {
-                put("attachments", buildJsonArray {
-                    add(buildJsonObject { put("path", imagePath) })
-                })
-            }
-        }
+        history += CompletionStreamRequestHistoryItem(
+            role = "user",
+            content = displayPrompt,
+            attachments = imagePath?.let { listOf(CompletionStreamRequestHistoryItemAttachmentsItem(path = it)) },
+        )
         selectedImagePath = null
         attachmentText = "Record a message or attach an image."
         attachmentTone = StatusTone.Secondary
         val bubbleId = appendMessage("assistant", "Thinking…")
         val responseText = StringBuilder()
-        var stopReason: String? = null
+        var lengthLimited = false
         try {
             requireNotNull(client).completion.stream(
                 CompletionStreamRequest(
                     // Separate thinking events from the visible answer.
                     captureThinking = true,
-                    generationParams = buildJsonObject {
+                    generationParams = CompletionStreamRequestGenerationParams(
                         // -1 generates until EOS. The finite model context is
                         // the only unavoidable upper bound.
-                        put("predict", -1)
-                        put("reasoning_budget", -1)
-                        put("temp", 0.7)
-                    },
+                        predict = -1.0,
+                        reasoning_budget = -1,
+                        temp = 0.7,
+                    ),
                     history = history.toList(),
                     modelId = modelId,
                     stream = true,
-                    type = "completionStream",
                 ),
             ).collect { response ->
-                response.events.forEach { element ->
-                    val event = element.jsonObject
-                    when (event["type"]?.jsonPrimitive?.contentOrNull) {
-                        "contentDelta" -> {
-                            responseText.append(event["text"]?.jsonPrimitive?.contentOrNull.orEmpty())
+                response.events.forEach { event ->
+                    when (event) {
+                        is CompletionStreamResponseEventsItem.ContentDelta -> {
+                            responseText.append(event.value.text)
                             updateMessage(bubbleId, responseText.toString())
                         }
-                        "completionDone" -> {
-                            stopReason = event["stopReason"]?.jsonPrimitive?.contentOrNull
-                            if (stopReason == "error") {
-                                error(
-                                    event["error"]?.jsonObject?.get("message")
-                                        ?.jsonPrimitive?.contentOrNull
-                                        ?: "The model returned an inference error",
-                                )
-                            }
-                        }
+                        is CompletionStreamResponseEventsItem.CompletionDoneError -> error(event.value.error.message)
+                        is CompletionStreamResponseEventsItem.CompletionDone -> lengthLimited =
+                            event.value.stopReason == CompletionStreamResponseEventsItemCompletionDoneStopReason.LENGTH
+                        else -> Unit
                     }
                 }
             }
             if (responseText.isEmpty()) {
                 updateMessage(bubbleId, "No response was returned. Try again.")
             }
-            history += buildJsonObject {
-                put("role", "assistant")
-                put("content", responseText.toString())
-            }
-            if (stopReason == "length") {
+            history += CompletionStreamRequestHistoryItem(role = "assistant", content = responseText.toString())
+            if (lengthLimited) {
                 setStatus("The model context window is full", StatusTone.Danger)
             }
         } catch (error: CancellationException) {
@@ -560,13 +546,11 @@ class MiniAssistantScreen(
         try {
             requireNotNull(client).transcribe(
                 TranscribeRequest(
-                    audioChunk = buildJsonObject {
-                        put("type", "filePath")
-                        put("value", file.absolutePath)
-                    },
+                    audioChunk = TranscribeRequestAudioChunk.FilePath(
+                        TranscribeRequestAudioChunkFilePath(value = file.absolutePath),
+                    ),
                     metadata = false,
                     modelId = modelId,
-                    type = "transcribe",
                 ),
             ).collect { response -> response.text?.let(transcript::append) }
             if (transcript.isNotBlank()) {

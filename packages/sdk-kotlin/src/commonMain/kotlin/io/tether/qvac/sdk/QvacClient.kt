@@ -1,30 +1,23 @@
 package io.tether.qvac.sdk
 
+import io.tether.qvac.sdk.generated.schema.HeartbeatRequest
+import io.tether.qvac.sdk.generated.schema.HeartbeatResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-
-@Serializable
-data class HeartbeatResponse(
-    val type: String,
-    val number: Double,
-)
 
 class QvacClient(
     private val transport: QvacTransport,
-    private val json: Json = Json {
+    internal val json: Json = Json {
         ignoreUnknownKeys = true
         explicitNulls = true
     },
@@ -32,10 +25,7 @@ class QvacClient(
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val runtimeProfile: QvacRuntimeProfile? get() = transport.runtimeProfile
 
-    suspend fun heartbeat(): HeartbeatResponse {
-        val response = call(buildJsonObject { put("type", "heartbeat") })
-        return json.decodeFromJsonElement(response)
-    }
+    suspend fun heartbeat(): HeartbeatResponse = heartbeat(HeartbeatRequest())
 
     suspend fun call(payload: JsonObject): JsonObject {
         transport.runtimeProfile?.requirePayload(payload)
@@ -80,6 +70,15 @@ class QvacClient(
             json.decodeFromJsonElement(checkResponse(response))
         }
     }
+
+    /** Typed request, undecoded frames: for callers that decode frames leniently. */
+    internal inline fun <reified Request : Any> streamEncoded(request: Request): Flow<JsonObject> =
+        stream(json.encodeToJsonElement(request).jsonObject)
+
+    internal inline fun <reified Request : Any> duplexEncoded(
+        request: Request,
+        input: Flow<ByteArray>,
+    ): Flow<JsonObject> = duplex(json.encodeToJsonElement(request).jsonObject, input)
 
     internal inline fun <
         reified Request : Any,

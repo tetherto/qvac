@@ -12,7 +12,8 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,8 +53,8 @@ class QvacCompletionApiTest {
         assertEquals("hmm", result.thinking)
         assertEquals(12.5, result.stats?.tokensPerSecond)
         assertEquals("eos", result.stopReason)
-        assertEquals(-1L, transport.lastPayload?.get("generationParams")?.jsonObject
-            ?.get("predict")?.jsonPrimitive?.longOrNull)
+        assertEquals(-1.0, transport.lastPayload?.get("generationParams")?.jsonObject
+            ?.get("predict")?.jsonPrimitive?.doubleOrNull)
         assertEquals(listOf("hello ", "world"), run.tokens.toList())
         assertTrue(run.cancel())
         client.close()
@@ -121,6 +122,72 @@ class QvacCompletionApiTest {
 
         assertTrue(call.canInvoke)
         assertEquals("sunny in Rome", call.invoke().jsonPrimitive.content)
+        val wireTool = transport.lastPayload?.get("tools")?.jsonArray?.single()?.jsonObject
+        assertEquals("function", wireTool?.get("type")?.jsonPrimitive?.content)
+        val parameters = wireTool?.get("parameters")?.jsonObject
+        assertEquals("object", parameters?.get("type")?.jsonPrimitive?.content)
+        assertEquals("string", parameters?.get("properties")?.jsonObject?.get("city")?.jsonObject
+            ?.get("type")?.jsonPrimitive?.content)
+        assertEquals("city", parameters?.get("required")?.jsonArray?.single()?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun unknownEventTypesSurfaceAsUnknownEvents() = runTest {
+        val client = QvacClient(
+            ApiTransport(
+                stream = flowOf(
+                    completionFrame(
+                        done = true,
+                        event("contentDelta", 0) { put("text", "hi") },
+                        event("futureEvent", 1) { put("detail", "x") },
+                        event("completionDone", 2) { put("stopReason", "eos") },
+                    ),
+                ),
+            ),
+        )
+        try {
+            val run = client.completion.run("model", listOf(QvacMessage.user("hi")))
+            assertEquals("hi", run.final.await().text)
+            val unknown = run.events.toList().filterIsInstance<QvacCompletionEvent.Unknown>().single()
+            assertEquals(1L, unknown.sequence)
+            assertEquals("futureEvent", unknown.payload["type"]?.jsonPrimitive?.content)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun kvCacheAndToolDialectUseContractValues() = runTest {
+        val transport = ApiTransport(
+            stream = flowOf(
+                completionFrame(
+                    done = true,
+                    event("contentDelta", 0) { put("text", "ok") },
+                    event("completionDone", 1) { put("stopReason", "eos") },
+                ),
+            ),
+        )
+        val client = QvacClient(transport)
+        try {
+            client.completion.run(
+                modelId = "model",
+                history = listOf(QvacMessage.user("hi")),
+                options = QvacCompletionOptions(kvCache = QvacKvCache.Key("chat-1"), toolDialect = "hermes"),
+            ).final.await()
+            assertEquals("chat-1", transport.lastPayload?.get("kvCache")?.jsonPrimitive?.content)
+            assertEquals("hermes", transport.lastPayload?.get("toolDialect")?.jsonPrimitive?.content)
+
+            assertFailsWith<IllegalArgumentException> {
+                client.completion.run(
+                    modelId = "model",
+                    history = listOf(QvacMessage.user("hi")),
+                    options = QvacCompletionOptions(toolDialect = "not-a-dialect"),
+                )
+            }
+            assertFailsWith<IllegalArgumentException> { QvacKvCache.Key("") }
+        } finally {
+            client.close()
+        }
     }
 
     @Test
@@ -159,6 +226,8 @@ class QvacCompletionApiTest {
         ).final.await()
 
         assertEquals("Sunny", result.text)
+        // The final orchestrate frame carries no stopReason; the turn's completionDone event decides it.
+        assertEquals("eos", result.stopReason)
         assertTrue(callbackReply.contains("\"callId\":\"c1\""))
         assertTrue(callbackReply.contains("\"result\":\"sunny\""))
         assertFalse(callbackReply.contains("error"))
