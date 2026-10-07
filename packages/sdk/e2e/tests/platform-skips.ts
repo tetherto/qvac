@@ -191,6 +191,16 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── the RPC server ───────────────────────────────────────────────────────
+  {
+    match: /^rpc-server-(?!device-map)/,
+    skip: {
+      reason:
+        'The strict-confined Snap has no libibverbs.so.1, so the RPC backend refuses to start there: startRpcServer fails before any of these can say anything about the SDK',
+      platforms: ['snap']
+    }
+  },
+
   // ── the OCR GPU-selection check ──────────────────────────────────────────
   {
     match: /^ocr-main-gpu-/,

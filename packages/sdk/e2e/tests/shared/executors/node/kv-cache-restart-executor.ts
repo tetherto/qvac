@@ -31,6 +31,23 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
     'worker-restart-kv-cache-boundary': this.workerRestart.bind(this)
   } as never
 
+  /** `ensureLoaded`, retried while the client is still recovering from the restart. */
+  private async loadThroughRestart(timeoutMs = 60_000): Promise<string> {
+    const deadline = Date.now() + timeoutMs
+    for (;;) {
+      try {
+        return await this.resources.ensureLoaded('llm')
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const recovering = /exited mid-request|aborted|ECONNRESET|socket|not connected/i.test(
+          message
+        )
+        if (!recovering || Date.now() >= deadline) throw error
+        await new Promise<void>((resolve) => setTimeout(resolve, 250))
+      }
+    }
+  }
+
   async workerRestart(
     params: {
       cacheKey: string
@@ -111,7 +128,10 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
         }
       }
 
-      modelId = await this.resources.ensureLoaded('llm')
+      // The client notices the dead worker as an aborted connection, and a load issued while it
+      // is still tearing the old one down fails with that abort rather than with anything about
+      // this test. Retry until it has a worker to talk to again.
+      modelId = await this.loadThroughRestart()
       const after = await waitForBareChildren(process.pid, (pids) => pids.length === 1)
       if (after.length !== 1 || after[0] === before[0]) {
         return {
