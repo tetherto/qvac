@@ -87,9 +87,8 @@ export const sdcppConfigSchema = z.object({
         'The video layout is selected from the auxiliary sources: supplying ' +
         '`embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder ' +
         'via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for ' +
-        'synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` ' +
-        'selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` ' +
-        'for synchronized audio); otherwise ' +
+        'synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + ' +
+        '`audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise ' +
         'the Wan layout is used (UMT5 text encoder ' +
         'via `t5XxlModelSrc` + VAE). ' +
         'On React Native, loading the video model on-device will likely fail ' +
@@ -298,9 +297,9 @@ export const sdcppConfigSchema = z.object({
   audioVaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'Audio VAE decoder model — optional for MiniMax-H3 and LTX-2. ' +
+      'Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. ' +
         'Enables synchronized audio muxed into the output AVI. ' +
-        'Omit for silent video; unsupported by Wan.'
+        'Omit for silent LTX-2 video; unsupported by Wan.'
     ),
   embeddingsConnectorsModelSrc: modelSrcInputSchema
     .optional()
