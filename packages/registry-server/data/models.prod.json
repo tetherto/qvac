@@ -9615,5 +9615,82 @@
     "tags": ["tts", "moss-ttsd", "dialogue", "multilingual", "gguf"],
     "notes": "Requires MOSS-TTS codec decoder and encoder GGUFs for dialogue synthesis.",
     "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 1/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00002-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 2/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00003-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 3/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00004-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 4/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00005-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 5/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00006-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 6/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for GLM-5.3 Flash 320B-A18B",
+    "quantization": "bf16",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct"],
+    "notes": "Required for image input with every GLM-5.3 Flash quantization.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
   }
 ]
