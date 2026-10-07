@@ -4,7 +4,7 @@
 // 1. Addon ranges. @qvac/inference's peerDependencies is the source of truth for
 //    the inference addons. For every addon p in it, inference's
 //    devDependencies.p and the SDK's dependencies.p must carry the identical
-//    range.
+//    range. Opt-in services may instead use an optional SDK peer plus a dev dependency.
 //
 // 2. Shared major.minor. @qvac/sdk and @qvac/inference expose the same API, so
 //    the major and minor of the SDK's own version must equal the major and minor
@@ -38,6 +38,7 @@ export interface Manifest {
   dependencies?: Ranges
   devDependencies?: Ranges
   peerDependencies?: Ranges
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
   engines?: Ranges
 }
 
@@ -52,9 +53,13 @@ export function checkAddonRanges(inferencePkg: Manifest, sdkPkg: Manifest) {
   const drifts: string[] = []
   for (const [name, peer] of Object.entries(peers)) {
     const dev = inferenceDev[name]
-    const dep = sdkDeps[name]
+    const optionalPeer = sdkPkg.peerDependenciesMeta?.[name]?.optional === true
+    const dep = sdkDeps[name] ?? (optionalPeer ? sdkPkg.peerDependencies?.[name] : undefined)
     const mismatches: string[] = []
     if (dep !== peer) mismatches.push(dep === undefined ? 'SDK is missing it' : `SDK has ${dep}`)
+    if (sdkDeps[name] === undefined && optionalPeer && sdkPkg.devDependencies?.[name] !== peer) {
+      mismatches.push('SDK devDependencies must match its optional peer')
+    }
     if (dev !== peer) {
       mismatches.push(
         dev === undefined

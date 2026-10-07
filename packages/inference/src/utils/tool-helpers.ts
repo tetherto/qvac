@@ -1,9 +1,8 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import { toolSchema, type Tool, type ToolCall, type ToolCallWithCall } from '@/schemas/tools'
 import { InvalidToolsArrayError, InvalidToolSchemaError } from '@/errors/index'
 
 type ZodObjectType = z.ZodObject<z.ZodRawShape>
-type JsonSchemaEnumValue = string | number | boolean | null
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>
 
@@ -18,104 +17,37 @@ export type ToolInput<T extends ZodObjectType = ZodObjectType> = {
   group?: string
 }
 
-function zodTypeToJsonSchemaType(
-  type: string
-): 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' {
-  switch (type) {
-    case 'string':
-      return 'string'
-    case 'number':
-      return 'number'
-    case 'boolean':
-      return 'boolean'
-    case 'object':
-      return 'object'
-    case 'array':
-      return 'array'
-    case 'optional':
-    default:
-      return 'string'
+// Zod's integer bounds; they add nothing a tool grammar needs.
+const SAFE_INTEGER_BOUNDS = new Set([Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER])
+
+function dropSafeIntegerBounds(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(dropSafeIntegerBounds)
+  if (!node || typeof node !== 'object') return node
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(node)) {
+    if ((key === 'minimum' || key === 'maximum') && SAFE_INTEGER_BOUNDS.has(value as number)) {
+      continue
+    }
+    out[key] = dropSafeIntegerBounds(value)
   }
+  return out
+}
+
+function zodToToolParameters(schema: ZodObjectType): Tool['parameters'] {
+  const { $schema: _schema, ...json } = dropSafeIntegerBounds(
+    z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' })
+  ) as Record<string, unknown>
+  return { ...json, type: 'object', properties: json['properties'] ?? {} } as Tool['parameters']
 }
 
 export function convertToolInput(input: ToolInput): Tool {
-  const zodSchema = input.parameters as unknown as {
-    shape?: Record<string, unknown>
-    def?: { shape?: Record<string, unknown> }
-  }
-
-  // Try both shape and def.shape for Zod v4 compatibility
-  const shape =
-    zodSchema.shape || (typeof zodSchema.def?.shape === 'object' ? zodSchema.def.shape : {})
-
-  const properties: Record<
-    string,
-    {
-      type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array'
-      description?: string
-      enum?: JsonSchemaEnumValue[]
-    }
-  > = {}
-  const required: string[] = []
-
-  for (const [key, value] of Object.entries(shape)) {
-    const field = value as {
-      type?: string
-      description?: string
-      def?: {
-        type?: string
-        values?: string[]
-        innerType?: {
-          type?: string
-          description?: string
-          def?: { type?: string }
-        }
-      }
-    }
-
-    const fieldType = field.type || field.def?.type || 'string'
-    const isOptional = fieldType === 'optional'
-
-    let actualType = isOptional ? 'string' : fieldType
-    let actualDescription = field.description
-
-    if (isOptional && field.def?.innerType) {
-      const innerType = field.def.innerType
-      actualType = innerType.type || innerType.def?.type || 'string'
-      // Get description from inner type if not on wrapper
-      if (!actualDescription && innerType.description) {
-        actualDescription = innerType.description
-      }
-    }
-
-    properties[key] = {
-      type: zodTypeToJsonSchemaType(actualType)
-    }
-
-    if (actualDescription) {
-      properties[key].description = actualDescription
-    }
-
-    if (field.def?.values) {
-      properties[key].enum = field.def.values
-    }
-
-    if (!isOptional) {
-      required.push(key)
-    }
-  }
-
   const tool: Tool = {
     type: 'function',
     name: input.name,
     description: input.description,
     ...(input.deferLoading !== undefined && { deferLoading: input.deferLoading }),
     ...(input.group !== undefined && { group: input.group }),
-    parameters: {
-      type: 'object',
-      properties,
-      required: required.length > 0 ? required : undefined
-    }
+    parameters: zodToToolParameters(input.parameters)
   }
 
   return toolSchema.parse(tool)

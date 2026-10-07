@@ -149,33 +149,13 @@ runs:
         echo "Assembling the $REDIST_ARCH toolkit"
 
         # QVAC-24470: PINNED TO 13.0.3 ON PURPOSE. DO NOT BUMP TO THE NEWEST.
-        #
-        # A card with no -real entry in CMAKE_CUDA_ARCHITECTURES runs from the
-        # -virtual PTX, and the DRIVER, not the runtime, JITs that PTX. A driver
-        # only accepts PTX from its own release or older, so the nvcc used here
-        # sets the minimum driver version every such card needs.
-        #
-        # Measured 2026-09-03 on both DGX Spark boxes, GB10 sm_121, driver
-        # 580.173.02, with a 13.2.51 build:
-        #
-        #   CUDA error: the provided PTX was compiled with an unsupported toolchain
-        #     in ggml_cuda_kernel_can_use_pdl, cudaFuncGetAttributes
-        #   [exit 134]
-        #
-        # On the earlier arch list, sm_121 was above every entry in the arm64
-        # tier, so it had to JIT, and the driver refused PTX newer than itself.
-        # That box has CUDA 13.3 installed and it made no difference: a runtime
-        # library and the driver's PTX JIT are separate things.
-        #
-        # 13.0.3 ships cuda_cudart 13.0.96, which is exactly what those boxes
-        # carry, so its PTX is what their driver was built to take. Going older
-        # is not free either: 120a-real needs CUDA 12.8+ and 121a-real needs
-        # 12.9+, so an older toolkit would drop the cubins for the 5090 and GB10.
-        #
-        # Bumping this is a COMPATIBILITY decision, not a chore. It raises the
-        # minimum driver for every JIT-served card, and nothing in CI catches it
-        # because the runners' drivers are new. Re-run the arch sweep on the
-        # Spark boxes before changing it.
+        # A card with no -real cubin runs the -virtual PTX, which the driver
+        # JITs, and a driver only accepts PTX from its own release or older. So
+        # this nvcc sets the minimum driver for every JIT-served card. 13.2 PTX
+        # was refused by the DGX Spark driver 580.173 ("PTX was compiled with an
+        # unsupported toolchain"). Older is no better: 120a-real needs 12.8+ and
+        # 121a-real needs 12.9+. Nothing in CI catches a bump, since the
+        # runners' drivers are new, so re-run the arch sweep on the Spark first.
         COMPONENTS_linux_x86_64="\
         cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.0.88-archive.tar.xz 48e35be3cfbf4b4fbc16828eaec8a7048ee789403049dc409f7b643d6259cf7a
         libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.0.88-archive.tar.xz 17ef1665b63670887eeba7d908da5669fa8c66bb73b5b4c1367f49929c086353
@@ -339,8 +319,8 @@ runs:
         echo "CUDA prefix: $cuda_prefix"
         echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
         echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
-        # Matches the port's QVAC_FABRIC_CUDA_TOOLKIT. The qvac triplets hash it
-        # into qvac-fabric's ABI and the port requires the pinned nvcc when set.
+        # The qvac triplets hash it into qvac-fabric's ABI, and with it set the
+        # port requires the pinned nvcc.
         echo "QVAC_CUDA_TOOLKIT=$CUDA_VERSION-$CUDA_TARGET" >> "$GITHUB_ENV"
         echo "$cuda_prefix/bin" >> "$GITHUB_PATH"
         # vcpkg scrubs the environment, so the port's enable_language(CUDA)

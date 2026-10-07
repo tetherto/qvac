@@ -13,6 +13,7 @@ import { QvacErrorAddonASRGgml, ERR_CODES } from "../../lib/error";
 import { resolveBackendsDir } from "../../lib/backends";
 import { END_OF_INPUT } from "../../lib/constants";
 import { normalizeAudioStream, type ByteFormat } from "../../lib/audio";
+import { assertNoRunOptions } from "../parakeet/driver";
 import type {
   ASRRunOutput,
   ASRStreamOutput,
@@ -22,6 +23,7 @@ import type {
 import type {
   ASRGgmlFiles,
   ASRGgmlReloadConfig,
+  ASRRunOptions,
   ASRStreamingOptions,
   AsrDriver,
   DriverContext,
@@ -262,7 +264,9 @@ export class WhisperDriver implements AsrDriver {
 
   async run(
     audio: NormalizedAudioStream,
+    options: ASRRunOptions = {},
   ): Promise<QvacResponse<ASRRunOutput>> {
+    assertNoRunOptions(options, "whisper");
     const addon = this._requiredAddon();
     this._pendingJobId = await addon.append({
       type: "audio",

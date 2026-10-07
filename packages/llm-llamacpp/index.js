@@ -97,6 +97,7 @@ const GENERATION_PARAM_KEYS = new Set([
     "grammar",
     "json_schema",
     "tool_choice",
+    "parallel_tool_calls",
     "reasoning_budget",
     "remove_thinking_from_context",
 ]);
@@ -144,6 +145,10 @@ function normalizeGenerationParams(generationParams) {
     if (sanitized.tool_choice !== undefined &&
         (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)) {
         throw new TypeError('generationParams.tool_choice must be "auto", "none", "required" or a declared function name');
+    }
+    if (sanitized.parallel_tool_calls !== undefined &&
+        typeof sanitized.parallel_tool_calls !== "boolean") {
+        throw new TypeError("generationParams.parallel_tool_calls must be a boolean when provided");
     }
     const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
     const hasJsonSchema = sanitized.json_schema !== undefined &&

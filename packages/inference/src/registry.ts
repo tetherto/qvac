@@ -1,3 +1,8 @@
+import {
+  handleStartRpcServer,
+  handleStopRpcServer,
+  handleDiscoverRpcServers
+} from '@/handlers/rpc-server'
 import { type Request } from '@/schemas/index'
 import { dispatchPluginReply, dispatchPluginStream } from '@/handlers/plugin-dispatch'
 import { handleLoadModel } from '@/handlers/load-model/index'
@@ -58,6 +63,9 @@ function finetuneSupportsProgress(request: Request): boolean {
 }
 
 export const registry: Record<string, HandlerEntry> = {
+  startRpcServer: { type: 'reply', handler: handleStartRpcServer },
+  stopRpcServer: { type: 'reply', handler: handleStopRpcServer },
+  discoverRpcServers: { type: 'reply', handler: handleDiscoverRpcServers },
   // Reply
   heartbeat: {
     type: 'reply',

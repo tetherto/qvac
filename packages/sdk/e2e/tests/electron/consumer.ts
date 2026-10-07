@@ -1,9 +1,9 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import * as os from 'node:os'
 import mqtt from 'mqtt'
 import {
   ConsumerBase,
   createExecutor,
-  SkipExecutor,
   loadConfig,
   loadTests,
   buildMqttConnectionConfig,
@@ -12,47 +12,7 @@ import {
   startNodeMemoryPoller,
   type TestDefinition
 } from '@qvac/test-suite'
-import {
-  profiler,
-  LLAMA_3_2_1B_INST_Q4_0,
-  LLAMA_3_2_1B_INST_Q4_0_SHARD,
-  GTE_LARGE_FP16,
-  GTE_LARGE_335M_FP16_SHARD,
-  WHISPER_TINY,
-  VAD_SILERO_5_1_2,
-  QWEN3_1_7B_INST_Q4,
-  OCR_CRAFT,
-  OCR_LATIN,
-  OCR_DOCTR,
-  BERGAMOT_EN_FR,
-  BERGAMOT_EN_ES,
-  BERGAMOT_ES_EN,
-  BERGAMOT_EN_IT,
-  MARIAN_EN_HI_INDIC_200M_Q4_0,
-  MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
-  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
-  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
-  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
-  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
-  TTS_CODEC_DECODER_AUDIO8_Q8_0,
-  TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
-  TTS_ENHANCER_LAVASR_FP16,
-  TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q4_0,
-  PARAKEET_CTC_0_6B_Q4_0,
-  PARAKEET_UNIFIED_0_6B_Q4_0,
-  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
-  PARAKEET_EOU_120M_V1_Q4_0,
-  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
-  QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
-  GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  BCI_WINDOWED
-} from '@qvac/sdk'
+import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
@@ -77,6 +37,7 @@ import { ConfigReloadExecutor } from '../shared/executors/node/config-reload-exe
 import { NodeLoggingExecutor } from '../shared/executors/node/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
 import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
+import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
@@ -96,388 +57,30 @@ import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
 import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
 
-const isSnapConsumer = process.env['QVAC_TEST_PLATFORM'] === 'snap-linux'
+import * as MODEL_CONSTANTS from '@qvac/sdk'
+import { RESOURCE_TABLE } from '../shared/resource-table.js'
+import { applyResourceTable } from '../shared/resource-table-types.js'
+import { policyFor } from '../shared/platform-policy.js'
 
-const resources = new ResourceManager({
-  downloadTarget: 'desktop'
-})
+/** Where the shared table's `$asset` placeholders point on this platform. */
+function resolveTableAsset(kind: string, file: string): string {
+  return path.resolve(process.cwd(), `assets/${kind}`, file)
+}
 
-resources.define('llm', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048 }
-})
+// Download plan and unload settling come from the shared platform policy, not from a literal here
+// -- see tests/shared/platform-policy.ts.
+const resources = new ResourceManager(policyFor('electron'))
 
-resources.define('llm-small-ctx', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 512 }
-})
-
-resources.define('llm-batch', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llm',
-  config: { verbosity: 0, ctx_size: 4096, parallel: 4 }
-})
-
-resources.define('tools-batch', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llm',
-  config: { ctx_size: 4096, tools: true, parallel: 2 }
-})
-
-resources.define('embeddings', {
-  constant: GTE_LARGE_FP16,
-  type: 'llamacpp-embedding'
-})
-
-resources.define('whisper', {
-  constant: WHISPER_TINY,
-  type: 'whispercpp-transcription',
-  config: {
-    vadModelSrc: VAD_SILERO_5_1_2,
-    audio_format: 'f32le',
-    strategy: 'greedy',
-    language: 'en',
-    translate: false,
-    no_timestamps: false,
-    single_segment: false,
-    temperature: 0.0,
-    suppress_blank: true,
-    suppress_nst: true,
-    vad_params: {
-      threshold: 0.35,
-      min_speech_duration_ms: 200,
-      min_silence_duration_ms: 150,
-      max_speech_duration_s: 30.0,
-      speech_pad_ms: 600,
-      samples_overlap: 0.3
-    }
+// One table, shared with every other client, applied here.
+applyResourceTable(
+  RESOURCE_TABLE,
+  'electron',
+  (dep, definition) => resources.define(dep, definition as never),
+  {
+    const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],
+    asset: (kind, file) => resolveTableAsset(kind, file)
   }
-})
-
-resources.define('tools', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('tools-qwen35', {
-  constant: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('tools-gemma4', {
-  constant: GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('ocr', {
-  constant: OCR_LATIN,
-  type: 'ggml-ocr',
-  // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time).
-  // Mirrors desktop so Electron covers the same OCR model/plugin path.
-  config: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
-})
-
-// DocTR pipeline (QVAC-22514 regression): deliberately no pipelineType and no
-// detectorModelSrc — loading must auto-infer pipelineType: "doctr" and derive
-// the DBNet detector from the recognizer src. Mirrors desktop.
-resources.define('doctr', {
-  constant: OCR_DOCTR,
-  type: 'ggml-ocr'
-})
-
-// Classification ships bundled weights inside @qvac/classification-ggml,
-// so no registry constant / pre-download is required.
-resources.define('classification', {
-  type: 'ggml-classification'
-})
-
-resources.define('echo', {
-  type: 'echo',
-  modelSrc: '',
-  skipPreDownload: true
-})
-
-resources.define('sharded-embeddings', {
-  constant: GTE_LARGE_335M_FP16_SHARD,
-  type: 'llamacpp-embedding',
-  skipPreDownload: true
-})
-
-resources.define('sharded-llm', {
-  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048 },
-  skipPreDownload: true
-})
-
-resources.define('indictrans-en-hi', {
-  constant: MARIAN_EN_HI_INDIC_200M_Q4_0,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'IndicTrans',
-    from: 'eng_Latn',
-    to: 'hin_Deva'
-  }
-})
-
-resources.define('indictrans-hi-en', {
-  constant: MARIAN_HI_EN_INDIC_200M_Q4_0,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'IndicTrans',
-    from: 'hin_Deva',
-    to: 'eng_Latn'
-  }
-})
-
-resources.define('bergamot-en-fr', {
-  constant: BERGAMOT_EN_FR,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'en',
-    to: 'fr'
-  }
-})
-
-resources.define('bergamot-en-es', {
-  constant: BERGAMOT_EN_ES,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'en',
-    to: 'es'
-  }
-})
-
-resources.define('bergamot-es-it-pivot', {
-  constant: BERGAMOT_ES_EN,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'es',
-    to: 'it',
-    pivotModel: {
-      modelSrc: BERGAMOT_EN_IT,
-      beamsize: 4,
-      temperature: 0.3
-    }
-  }
-})
-
-resources.define('tts-chatterbox', {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'chatterbox',
-    language: 'en',
-    useGPU: true,
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
-    streamChunkTokens: 25,
-    streamFirstChunkTokens: 10,
-    cfmSteps: 1,
-    referenceAudioSrc: path.resolve(process.cwd(), 'assets/audio', 'transcription-short-wav.wav')
-  }
-})
-
-resources.define('tts-parler', {
-  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'parler',
-    useGPU: true,
-    seed: 42,
-    topK: 1,
-    maxFrames: 430,
-    streamChunkTokens: 43,
-    streamFirstChunkTokens: 20
-  }
-})
-
-resources.define('tts-parler-indic', {
-  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'parler',
-    useGPU: true,
-    seed: 42,
-    topK: 1,
-    maxFrames: 430,
-    normalizeNumbers: true
-  }
-})
-
-resources.define('tts-cosyvoice3', {
-  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'cosyvoice3',
-    useGPU: true,
-    seed: 42
-  }
-})
-
-// Same model with native chunk streaming engaged, so the streaming e2e can
-// exercise the native 24 kHz chunk path rather than generic SDK streaming.
-resources.define('tts-cosyvoice3-native-stream', {
-  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'cosyvoice3',
-    useGPU: true,
-    seed: 42,
-    streamChunkTokens: 25,
-    streamFirstChunkTokens: 10
-  }
-})
-
-resources.define('tts-audio8', {
-  constant: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'audio8',
-    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
-    greedy: true,
-    maxFrames: 130,
-    seed: 42
-  }
-})
-
-resources.define('tts-supertonic', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true
-  }
-})
-
-resources.define('tts-supertonic-multilingual', {
-  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'es',
-    voice: 'F1',
-    useGPU: true
-  }
-})
-
-// Supertonic resampled to 8 kHz via `outputSampleRate`; paired with the
-// native-rate `tts-supertonic` resource by the outputSampleRate ratio test.
-resources.define('tts-supertonic-8k', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true,
-    outputSampleRate: 8000
-  }
-})
-
-// Supertonic with the LavaSR denoiser (runs first, rate-preserving) + enhancer
-// (bandwidth-extends to 48 kHz). The LavaSR GGUFs are registry constants, so the
-// resource manager's config walk pre-downloads them automatically.
-resources.define('tts-supertonic-enhanced', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true,
-    lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16,
-    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16
-  }
-})
-
-resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-unified', {
-  constant: PARAKEET_UNIFIED_0_6B_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-indic-conformer', {
-  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
-  type: 'parakeet-transcription',
-  config: { language: 'hi' }
-})
-
-resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('bci', {
-  constant: BCI_WINDOWED,
-  type: 'bci-whispercpp-transcription',
-  config: {
-    whisperConfig: { language: 'en', temperature: 0.0 },
-    miscConfig: { caption_enabled: false },
-    // Sample 2 (neural-not-too-controversial.bin) was recorded on session
-    // day 1; day_idx selects the matching day-specific projection matrices.
-    bciConfig: { day_idx: 1 }
-  }
-})
-
-resources.define('vision', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 4096,
-    image_no_upscale: 'on',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vision-batch', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 2048,
-    parallel: 2,
-    image_no_upscale: 'on',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vision-upscale', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 4096,
-    image_no_upscale: 'off',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
+)
 
 function readJsonConfig(configPath: string) {
   return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>
@@ -535,47 +138,17 @@ export async function runSnapRefreshProbe() {
   await executeSnapRefreshProbe(ensureElectronE2EConfig)
 }
 
-const snapStorageHandler = isSnapConsumer
-  ? new SnapStorageExecutor()
-  : new SkipExecutor(
-      /^snap-storage-/,
-      'Snap storage tests require the strict-confined Snap consumer'
-    )
+// Registered unconditionally: the catalog declares the snap-storage tests skipped everywhere but
+// the Snap leg, and the consumer decides that before it dispatches to any executor, so this never
+// runs outside Snap.
+const snapStorageHandler = new SnapStorageExecutor()
 
 export const executor = createExecutor({
   handlers: [
     snapStorageHandler,
-    // Electron keeps the stable desktop/shared surface enabled, but excludes
-    // suites that are resource-heavy or incompatible with the packaged
-    // Electron worker lifecycle.
-    new SkipExecutor(
-      /^(diffusion-|addon-logging-diffusion$)/,
-      'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^world-/,
-      'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^audio-(gen|edit|understand)-/,
-      'AudioGen e2e is desktop-only: the ACE-Step stack is four GGUFs, too heavy for the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^finetune-/,
-      'Electron skips finetune tests because training operations take too long for the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^no-lingering-bare-/,
-      'Electron skips no-lingering-bare tests because they spawn and terminate standalone Bare workers outside the packaged app lifecycle'
-    ),
-    new SkipExecutor(
-      /^worker-restart-/,
-      'Electron skips the kv-cache worker-restart test because it asserts on Bare worker processes outside the packaged app lifecycle'
-    ),
-    new SkipExecutor(
-      /^vla-/,
-      'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
-    ),
+    // What Electron excludes -- resource-heavy suites, and anything that asserts on worker
+    // processes outside the packaged app lifecycle -- is declared in the catalog now; see
+    // tests/platform-skips.ts.
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
@@ -587,6 +160,7 @@ export const executor = createExecutor({
     new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
+    new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
@@ -613,6 +187,7 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),

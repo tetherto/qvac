@@ -1,0 +1,92 @@
+name: PR Checks (SDK Kotlin)
+
+on:
+  pull_request:
+    paths:
+      - 'packages/sdk-kotlin/**'
+      - 'packages/inference/package.json'
+      - 'packages/inference/src/schemas/**'
+      - 'packages/sdk/src/worker/**'
+      - 'packages/sdk/e2e/conformance/**'
+      - 'packages/sdk/contract/**'
+      - 'packages/sdk/package.json'
+      - '.github/workflows/pr-checks-sdk-kotlin.yml'
+      - '.github/workflows/publish-sdk-kotlin.yml'
+      - '.github/workflows/on-pr-sdk-kotlin-e2e.yml'
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/sdk-kotlin
+
+jobs:
+  check:
+    name: Contract, tests, artifacts, consumer
+    runs-on: ubuntu-latest
+    # Non-blocking until QVAC-25125 makes it required.
+    continue-on-error: true
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+        with:
+          packages: platform-tools
+
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;29.0.14206865'
+
+      - name: Verify contract and JVM behavior
+        run: ./gradlew --no-daemon checkVersionAlignment checkContract jvmTest
+
+      - name: Verify Android source build
+        run: >-
+          ./gradlew --no-daemon
+          :android-example:testDebugUnitTest
+          :android-example:assembleDebug
+          :android-example:compileDebugAndroidTestKotlin
+
+      - name: Publish release-shaped artifacts locally
+        run: ./gradlew --no-daemon verifyMavenPublications
+
+      - name: Verify standalone Maven consumer
+        run: ./scripts/verify-maven-consumers.sh
+
+      - name: Upload Maven repository and example APK
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: qvac-sdk-kotlin-${{ github.sha }}
+          path: |
+            packages/sdk-kotlin/build/maven-repository
+            packages/sdk-kotlin/android-example/build/outputs/apk/debug/*.apk
+            packages/sdk-kotlin/consumer-smoke/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7

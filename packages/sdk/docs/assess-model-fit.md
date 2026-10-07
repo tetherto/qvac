@@ -50,9 +50,10 @@ summed under one budget, so a set of candidates keeps the calibrated estimate
 that can be aggregated. A source that is not on disk and whose description
 cannot be fetched falls back the same way.
 
-The engine comes from the caller's `modelType`, and the load's own config is
-what the fitter reads: a completion load is fitted at its `ctx_size`, an
-embedding load at the context window the model declares.
+The engine comes from the caller's `modelType` when passed, and otherwise from
+`modelSrc` the same way `loadModel` infers it. The load's own config is what
+the fitter reads: a completion load is fitted at its `ctx_size`, an embedding
+load at the context window the model declares.
 
 The floor omits everything that only a real load can tell you — engine
 overhead, compute buffers, a completion's working peak — and all of those are
@@ -115,10 +116,11 @@ for (const model of result.models) {
 
 ### Each candidate is a load
 
-A candidate takes the same three parameters as `loadModel`: `modelSrc`,
-`modelType` and an optional `modelConfig`. The engine's own plugin resolves that
-config — the same handling and the same artifact keys a real load gets — so the
-fitter reads the settings the load would run with, and a compound load names its
+A candidate takes the same parameters as `loadModel`: `modelSrc`, optional
+`modelType`, and an optional `modelConfig`. `modelType` is inferred from
+`modelSrc` when omitted. The engine's own plugin resolves that config — the
+same handling and the same artifact keys a real load gets — so the fitter
+reads the settings the load would run with, and a compound load names its
 companion files through `modelConfig` the way `loadModel` does.
 
 Each source resolves to the registry's weightless description of the artifact,
@@ -346,10 +348,11 @@ under it, upper bound over it), and, with several discrete GPUs, a fit that
 holds on the largest card but not the smallest. In both cases the `estimate`
 and `budget` fields are present, so the caller can see how close it was.
 
-## Relationship to `@qvac/model-fit`
+## Relationship to the load-time probe
 
-`assessModelFit` is the zero-download tier: metadata only, available before a
-single byte is fetched. `@qvac/model-fit` is the post-download tier — it reads
-the real file and is the stronger evidence once you have it. They answer the
-same question at different points in the lifecycle, and neither replaces the
-other.
+`assessModelFit` is the pre-download tier: it reads the registry's weightless
+description of a model, so it answers before the weights exist locally. The
+probe `loadModel` runs, reported as `fitProbe` on `getLoadedModelInfo`, is the
+post-download tier — it reads the real file and is the stronger evidence once
+you have it. Both call the same engine fitter, at different points in the
+lifecycle, and neither replaces the other.
