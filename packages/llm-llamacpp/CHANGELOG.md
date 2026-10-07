@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.0] - 2026-10-06
+
+### Added
+
+- `generationParams.parallel_tool_calls` (boolean). `true` lets one response
+  carry several tool calls; unset or `false` keeps one
+  ([#4830](https://github.com/tetherto/qvac/pull/4830)).
+
 ## [0.56.0] - 2026-10-06
 
 ### Breaking
