@@ -1739,7 +1739,7 @@ importers:
         specifier: ^0.8.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.27.0
+        specifier: ^0.26.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: 0.43.0

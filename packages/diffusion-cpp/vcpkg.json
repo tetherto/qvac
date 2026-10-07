@@ -1,4 +1,6 @@
 {
+  "name": "qvac-diffusion-cpp",
+  "version-string": "0.26.0",
   "dependencies": [
     {
       "name": "ggml",
