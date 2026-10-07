@@ -51,11 +51,12 @@ struct SplitReasoning {
   std::string content;
 };
 
-// Cuts a reasoning block out of `content` the way thinking templates (Qwen3,
-// Qwen3.5) cut it out of an assistant message: the reasoning is the text
-// before the first `tags.close`, after the last `tags.open` in it, trimmed;
-// the answer is the text after the last `tags.close`, without its leading
-// newlines. `std::nullopt` when `content` has no `tags.close`.
+// Cuts a reasoning block out of `content` the way the streaming parser split
+// it: the reasoning is the text before the first `tags.close`, after the last
+// `tags.open` in it, trimmed; the answer is everything after that first
+// `tags.close`, without its leading newlines, so an answer that itself
+// contains the close tag comes back whole. `std::nullopt` when `content` has
+// no `tags.close`.
 [[nodiscard]] std::optional<SplitReasoning> splitReasoningFromContent(
     const std::string& content, const ReasoningTags& tags);
 

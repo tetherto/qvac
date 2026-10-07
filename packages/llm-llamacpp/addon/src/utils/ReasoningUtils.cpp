@@ -45,8 +45,7 @@ std::optional<SplitReasoning> splitReasoningFromContent(
       open != std::string::npos) {
     reasoning = reasoning.substr(open + tags.open.size());
   }
-  std::string answer =
-      content.substr(content.rfind(tags.close) + tags.close.size());
+  std::string answer = content.substr(firstClose + tags.close.size());
   answer.erase(0, answer.find_first_not_of('\n'));
   return SplitReasoning{
       .reasoning = trimmed(reasoning), .content = std::move(answer)};
