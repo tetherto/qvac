@@ -1,6 +1,8 @@
 'use strict'
 
+const os = require('bare-os')
 const path = require('bare-path')
+const proc = require('bare-process')
 const test = require('brittle')
 
 const { assessFit } = require('../../index.js')
@@ -8,6 +10,11 @@ const { ensureAudiogenModels, getBaseDir } = require('../utils/downloadModel')
 
 const TEST_TIMEOUT_MS = 1800000
 const VARIANT = 'turbo-q4'
+const MINIMAX_STAGES = ['lm', 'depth', 'cond', 'dit', 'vocoder']
+const MISSING_MINIMAX_LM = '/nonexistent/mm3-lm-q8_0.gguf'
+const MISSING_MINIMAX_SYNTH = '/nonexistent/mm3-synth-q8_0.gguf'
+const minimaxModelsDir = proc.env.AUDIOGEN_TEST_MINIMAX_MODELS_DIR
+const isMobile = os.platform() === 'android' || os.platform() === 'ios'
 
 function modelsDir() {
   return path.join(getBaseDir(), 'models')
@@ -72,13 +79,93 @@ test('a longer generation costs no less', { timeout: TEST_TIMEOUT_MS }, async (t
 })
 
 test('an engine with no fitter is an outcome, not a throw', (t) => {
-  const fit = assessFit({ engine: 'minimax', modelsDir: '/models/minimax' })
+  const fit = assessFit({ engine: 'stable-audio', modelsDir: '/models/stable-audio' })
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-engine')
-  t.is(fit.modelName, 'minimax')
+  t.is(fit.modelName, 'stable-audio')
   t.alike(fit.stages, [])
 })
+
+test('a MiniMax pair that cannot be read is an outcome, not a throw', (t) => {
+  const fit = assessFit({
+    engine: 'minimax',
+    lmPath: MISSING_MINIMAX_LM,
+    synthPath: MISSING_MINIMAX_SYNTH
+  })
+
+  t.is(fit.status, 'error')
+  t.is(fit.reason, isMobile ? 'unsupported-engine' : 'model-unreadable')
+})
+
+test('MiniMax takes a duration or a frame cap, not both', { skip: isMobile }, (t) => {
+  t.exception(
+    () =>
+      assessFit({
+        engine: 'minimax',
+        modelsDir: '/models/minimax',
+        durationSeconds: 10,
+        maxFrames: 250
+      }),
+    /not both/
+  )
+})
+
+test('a MiniMax frame cap that is not a whole count is refused', { skip: isMobile }, (t) => {
+  t.exception(
+    () => assessFit({ engine: 'minimax', modelsDir: '/models/minimax', maxFrames: 2.5 }),
+    /safe integer/
+  )
+})
+
+test(
+  'a MiniMax projection covers its stages',
+  { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
+  (t) => {
+    const fit = assessFit({
+      engine: 'minimax',
+      modelsDir: minimaxModelsDir,
+      device: 'cpu',
+      maxFrames: 300
+    })
+
+    t.comment(`status=${fit.status} reason=${fit.reason} device=${fit.deviceName}`)
+    t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
+    t.ok(fit.deviceIsCpu, "device: 'cpu' projects the CPU")
+    t.alike(
+      fit.stages.map((stage) => stage.name),
+      MINIMAX_STAGES
+    )
+    t.ok(fit.stagesResident, 'MiniMax keeps its stages resident')
+    const resident = fit.stages.reduce(
+      (total, stage) => total + stage.weightsBytes + stage.stateBytes + stage.computeBytes,
+      0
+    )
+    t.ok(fit.deviceBytes >= resident, 'the peak covers every resident stage')
+  }
+)
+
+test(
+  'a longer MiniMax generation costs more',
+  { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
+  (t) => {
+    const short = assessFit({
+      engine: 'minimax',
+      modelsDir: minimaxModelsDir,
+      device: 'cpu',
+      durationSeconds: 10
+    })
+    const long = assessFit({
+      engine: 'minimax',
+      modelsDir: minimaxModelsDir,
+      device: 'cpu',
+      durationSeconds: 120
+    })
+
+    t.ok(long.deviceBytes > short.deviceBytes, 'the LM cache grows with the frames')
+    t.ok(long.hostBytes > short.hostBytes, 'the waveform grows with the frames')
+  }
+)
 
 test('a model set that cannot be read is an outcome, not a throw', (t) => {
   const fit = assessFit({ ditPath: '/nonexistent/dit.gguf' })

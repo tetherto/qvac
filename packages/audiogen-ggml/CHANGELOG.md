@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `assessFit({ engine: 'minimax', ... })` projects a MiniMax-Music3 model pair
+  on desktop builds instead of returning `unsupported-engine`. It reads GGUF
+  metadata only, takes `device`, `maxFrames` or `durationSeconds`, and
+  `promptTokens`, and reports `lm`, `depth`, `cond`, `dit` and `vocoder` rows.
 - Engine options and results that the speech fabric's audiogen engines already
   provided but the addon did not expose:
   - ACE-Step generation metadata: a run reports what it rendered on the PCM
