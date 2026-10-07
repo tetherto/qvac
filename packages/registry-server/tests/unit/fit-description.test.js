@@ -15,6 +15,7 @@ const {
   DEFAULT_WHISPER_TENSORS,
   DEFAULT_INDICTRANS_TENSORS,
   DEFAULT_MARIAN_ITEMS,
+  DEFAULT_VAD_ENCODER_LAYERS,
   buildWhisperBin,
   buildWhisperVadBin,
   buildBciEmbedder,
@@ -128,9 +129,9 @@ test('a whisper VAD model is described by its layout and tensors', async (t) => 
   t.alike(metadata['whisper_vad.version'], [5, 1, 2])
   t.is(metadata['whisper_vad.n_window'], 512)
   t.is(metadata['whisper_vad.n_context'], 64)
-  t.alike(metadata['whisper_vad.encoder_in_channels'], [129, 128])
-  t.alike(metadata['whisper_vad.encoder_out_channels'], [128, 64])
-  t.alike(metadata['whisper_vad.encoder_kernel_size'], [3, 3])
+  t.alike(metadata['whisper_vad.encoder_in_channels'], [129, 128, 64, 64])
+  t.alike(metadata['whisper_vad.encoder_out_channels'], [128, 64, 64, 128])
+  t.alike(metadata['whisper_vad.encoder_kernel_size'], [3, 3, 3, 3])
   t.is(metadata['whisper_vad.lstm_hidden_size'], 128)
   t.is(metadata['whisper_vad.final_conv_out'], 1)
   t.alike(shapes(tensors), DEFAULT_WHISPER_TENSORS)
@@ -304,6 +305,11 @@ test('a model is only read with the readers of its own engine', async (t) => {
     'not a whisper file'
   )
   t.is(await rejects(t, 'vocab.spm', buildSentencePiece(), WHISPER_ENGINE), null, 'no spm reader')
+})
+
+test('a VAD file without the four encoder layers whisper.cpp builds yields no description', async (t) => {
+  const artifact = buildWhisperVadBin({ encoderLayers: DEFAULT_VAD_ENCODER_LAYERS.slice(0, 3) })
+  t.is(await rejects(t, 'ggml-silero-v5.1.2.bin', artifact, WHISPER_ENGINE), null)
 })
 
 test('an nmt.cpp model of a retired type yields no description', async (t) => {

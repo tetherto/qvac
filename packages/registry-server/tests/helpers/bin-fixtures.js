@@ -90,14 +90,26 @@ function buildWhisperBin({
   ])
 }
 
-function buildWhisperVadBin({ modelType = 'silero-16k', tensors = DEFAULT_WHISPER_TENSORS } = {}) {
+const DEFAULT_VAD_ENCODER_LAYERS = [
+  [129, 128, 3],
+  [128, 64, 3],
+  [64, 64, 3],
+  [64, 128, 3]
+]
+
+function buildWhisperVadBin({
+  modelType = 'silero-16k',
+  encoderLayers = DEFAULT_VAD_ENCODER_LAYERS,
+  tensors = DEFAULT_WHISPER_TENSORS
+} = {}) {
   const typeBytes = Buffer.from(modelType, 'utf8')
   return Buffer.concat([
     u32(GGML_FILE_MAGIC),
     i32(typeBytes.length),
     typeBytes,
     i32s([5, 1, 2, 512, 64]),
-    i32s([2, 129, 128, 3, 128, 64, 3]),
+    i32(encoderLayers.length),
+    i32s(encoderLayers.flat()),
     i32s([128, 128, 128, 1]),
     ...tensors.map(ggmlTensor)
   ])
@@ -280,6 +292,7 @@ module.exports = {
   DEFAULT_WHISPER_TENSORS,
   DEFAULT_INDICTRANS_TENSORS,
   DEFAULT_MARIAN_ITEMS,
+  DEFAULT_VAD_ENCODER_LAYERS,
   buildWhisperBin,
   buildWhisperVadBin,
   buildBciEmbedder,

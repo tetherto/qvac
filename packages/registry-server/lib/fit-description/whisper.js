@@ -39,7 +39,7 @@ const VAD_VERSION_FIELDS = 3
 const VAD_ENCODER_LAYER_FIELDS = ['in_channels', 'out_channels', 'kernel_size']
 const VAD_TAIL_FIELDS = ['lstm_input_size', 'lstm_hidden_size', 'final_conv_in', 'final_conv_out']
 const MAX_VAD_MODEL_TYPE_BYTES = 64
-const MAX_VAD_ENCODER_LAYERS = 64
+const VAD_ENCODER_LAYERS = 4
 
 function isBciHeader(hparams) {
   return hparams.n_mels > BCI_MEL_THRESHOLD
@@ -102,8 +102,8 @@ async function readInt32List(cursor, count) {
 
 async function readVadEncoderLayers(cursor) {
   const count = await cursor.i32()
-  if (count <= 0 || count > MAX_VAD_ENCODER_LAYERS) {
-    throw new FormatError(`VAD with ${count} encoder layers`)
+  if (count !== VAD_ENCODER_LAYERS) {
+    throw new FormatError(`VAD with ${count} encoder layers, not ${VAD_ENCODER_LAYERS}`)
   }
   const layers = []
   for (let i = 0; i < count; i++) {
