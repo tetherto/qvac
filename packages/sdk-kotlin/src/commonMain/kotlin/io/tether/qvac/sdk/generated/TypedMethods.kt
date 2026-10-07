@@ -42,6 +42,9 @@ fun QvacClient.completionOrchestrate(request: CompletionOrchestrateRequest, inpu
 fun QvacClient.completionStream(request: CompletionStreamRequest): Flow<CompletionStreamResponse> =
     streamTyped(request)
 
+suspend fun QvacClient.decide(request: DecideRequest): DecideResponse =
+    callTyped(request)
+
 suspend fun QvacClient.deleteCache(request: DeleteCacheRequest): DeleteCacheResponse =
     callTyped(request)
 

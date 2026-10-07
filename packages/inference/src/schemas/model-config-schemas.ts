@@ -8,6 +8,7 @@ import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 import { vlaConfigSchema } from '@/schemas/vla'
+import { decisionsConfigSchema } from '@/schemas/decisions'
 import { classificationConfigSchema } from '@/schemas/classification'
 import { ModelType, normalizeModelType, type CanonicalModelType } from '@/schemas/model-types'
 
@@ -27,6 +28,7 @@ export const MODEL_CONFIG_SCHEMA_BY_TYPE = {
   [ModelType.llamacppCompletion]: llmConfigBaseSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
+  [ModelType.llamacppDecisions]: decisionsConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigBaseSchema,
   [ModelType.nmtcppTranslation]: nmtConfigBaseSchema,
   [ModelType.ttsGgml]: ttsLoadConfigSchema,

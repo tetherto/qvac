@@ -23,6 +23,7 @@ import {
 import {
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISIONS,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_NMT,
@@ -74,6 +75,7 @@ export const constantsRegistry = {
   PluginId: z.enum({
     LLM: PLUGIN_LLM,
     EMBEDDING: PLUGIN_EMBEDDING,
+    DECISIONS: PLUGIN_DECISIONS,
     WHISPER: PLUGIN_WHISPER,
     BCI: PLUGIN_BCI,
     NMT: PLUGIN_NMT,
