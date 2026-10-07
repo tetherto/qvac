@@ -888,9 +888,10 @@ inline int64_t minimaxFramesFromDuration(double seconds) {
   if (seconds <= 0) {
     return 0;
   }
+  const double frames = std::round(seconds * K_MINIMAX_FRAMES_PER_SECOND);
   return std::max<int64_t>(
       K_MINIMAX_MIN_FRAMES,
-      std::llround(seconds * K_MINIMAX_FRAMES_PER_SECOND));
+      checkedSafeInteger(frames, "maxFrames derived from durationSeconds"));
 }
 
 inline tts_cpp::minimax::FitWorkload minimaxFitWorkload(FitRequest& request) {
