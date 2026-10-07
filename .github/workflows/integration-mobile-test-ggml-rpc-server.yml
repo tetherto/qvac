@@ -26,16 +26,6 @@ on:
         type: string
         required: false
         default: ""
-      android_devices:
-        description: "Comma-separated Device Farm models the Android leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
-      ios_devices:
-        description: "Comma-separated Device Farm models the iOS leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
   workflow_dispatch:
     inputs:
       platform:
@@ -52,7 +42,6 @@ on:
           - Google Pixel 9
           - Google Pixel 8
           - Samsung Galaxy S25 Ultra
-          - Samsung Galaxy S26 Ultra
         default: Google Pixel 9
       ios_device:
         description: iOS device used by a manual run
@@ -60,7 +49,6 @@ on:
         required: false
         options:
           - Apple iPhone 17
-          - Apple iPhone 17 Pro
           - Apple iPhone 16 Pro
           - Apple iPhone 15
         default: Apple iPhone 16 Pro
@@ -253,8 +241,8 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
-          scheduling-mode: ${{ (inputs.platform != '' || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '') && 'manual-devices' || 'single-pool' }}
-          device-models: ${{ inputs.platform == 'Android' && inputs.android_device || (inputs.platform == 'iOS' && inputs.ios_device || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || ''))) }}
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'single-pool' }}
+          device-models: ${{ inputs.platform == 'Android' && inputs.android_device || (inputs.platform == 'iOS' && inputs.ios_device || '') }}
           device-model-operator: EQUALS
 
       - name: Monitor Device Farm test run

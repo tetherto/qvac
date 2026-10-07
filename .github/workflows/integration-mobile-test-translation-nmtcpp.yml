@@ -33,16 +33,6 @@ on:
         type: string
         required: false
         default: ""
-      android_devices:
-        description: "Comma-separated Device Farm models the Android leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
-      ios_devices:
-        description: "Comma-separated Device Farm models the iOS leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
   # Manual on-demand path. A dispatched run targets ONE platform and the
   # device(s) chosen below — it never runs the full default pool. The
   # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
@@ -354,10 +344,10 @@ jobs:
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
           # workflow_dispatch: fan out across the chosen device(s).
-          # workflow_call: android_devices / ios_devices pin the leg; empty keeps dual-flagship.
-          scheduling-mode: ${{ (inputs.platform != '' || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '') && 'manual-devices' || 'dual-flagship' }}
-          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) }}
-          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || ((matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '' && 'EQUALS' || '') }}
+          # workflow_call: unchanged default (dual-flagship) behaviour.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'dual-flagship' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
           # NMT inference is heavier than the other addons; bump the per-job
           # Device Farm timeout from the 60-min default to match main.
           job-timeout-minutes: '120'

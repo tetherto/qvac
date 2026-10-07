@@ -106,16 +106,6 @@ on:
         type: string
         required: false
         default: ""
-      android_devices:
-        description: "Comma-separated Device Farm models the Android leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
-      ios_devices:
-        description: "Comma-separated Device Farm models the iOS leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
     # Additive outputs (QVAC weekend job): surface the monitor verdict so a
     # caller can aggregate per-platform pass/fail for reporting. The job itself
     # also fails the run directly on any test failure (no continue-on-error).
@@ -631,12 +621,12 @@ jobs:
           android-device-pool-arn: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
           ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
           # workflow_dispatch pins the run to the chosen device(s) (manual-devices).
-          # workflow_call: android_devices / ios_devices pin the leg (manual-devices);
-          # else single-device when device_model is set, else the sharded/dual-flagship default.
-          scheduling-mode: ${{ (inputs.platform != '' || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '') && 'manual-devices' || (inputs.device_model != '' && 'single-device' || 'dual-flagship') }}
-          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) }}
+          # workflow_call is unchanged: single-device when device_model is set,
+          # else the sharded/dual-flagship default.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || (inputs.device_model != '' && 'single-device' || 'dual-flagship') }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
           device-model: ${{ inputs.device_model }}
-          device-model-operator: ${{ inputs.device_model_operator || ((matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '' && 'EQUALS' || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
           device-manufacturer: ${{ inputs.device_manufacturer }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}

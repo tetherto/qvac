@@ -41,16 +41,6 @@ on:
         type: string
         required: false
         default: ""
-      android_devices:
-        description: "Comma-separated Device Farm models the Android leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
-      ios_devices:
-        description: "Comma-separated Device Farm models the iOS leg is pinned to (manual-devices, MODEL EQUALS). Empty keeps the default scheduling."
-        type: string
-        required: false
-        default: ""
   # Manual on-demand path. A dispatched run targets ONE platform and the
   # device(s) chosen below — it never runs the full default pool. The
   # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
@@ -427,11 +417,11 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
-          # On workflow_dispatch, pin the run to the chosen device(s). On
-          # workflow_call, android_devices / ios_devices pin the leg; empty keeps single-pool.
-          scheduling-mode: ${{ (inputs.platform != '' || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '') && 'manual-devices' || 'single-pool' }}
-          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || (matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) }}
-          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || ((matrix.platform == 'iOS' && inputs.ios_devices || (matrix.platform != 'iOS' && inputs.android_devices || '')) != '' && 'EQUALS' || '') }}
+          # On workflow_dispatch, pin the run to the chosen device(s); otherwise
+          # keep single-pool scheduling for workflow_call.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'single-pool' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
 
       - name: Monitor Device Farm test run
         id: monitor
