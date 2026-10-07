@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      dry_run:
+        description: "Run every check and `pnpm publish --dry-run`; publish, tag and release nothing."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -233,6 +238,30 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # The checks publish-inference.yml and publish-sdk.yml run before npm. The
+  # engine is not on npm yet, so the sdk check uses the workspace copy.
+  shared-runtime-libs:
+    name: Shared runtime libs resolve once
+    needs: [train]
+    if: needs.train.outputs.moved != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Check @qvac/inference
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/inference
+
+      - name: Check @qvac/sdk
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
+
   # Needs build-sdk-python so a stale generate.py stops npm too, as in
   # publish-sdk.yml.
   publish-npm:
@@ -243,10 +272,12 @@ jobs:
       - train
       - build
       - build-sdk-python
+      - shared-runtime-libs
     if: >-
       needs.authorize.outputs.allowed == 'true' &&
       needs.build.result == 'success' &&
       needs.build-sdk-python.result == 'success' &&
+      needs.shared-runtime-libs.result == 'success' &&
       needs.train.result == 'success' &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
@@ -302,7 +333,13 @@ jobs:
           PNPM_CONFIG_PROVENANCE: "true"
           MOVED: ${{ needs.train.outputs.moved }}
           NPM_TAG_INPUT: ${{ inputs.npm_tag }}
-        run: node .github/scripts/release-train.mjs publish "$MOVED" --tag="$NPM_TAG_INPUT"
+          DRY_RUN: ${{ inputs.dry_run == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--tag="$NPM_TAG_INPUT")
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          node .github/scripts/release-train.mjs publish "$MOVED" "${args[@]}"
 
   # tetherto-qvac-sdk ships at @qvac/sdk's version, so it publishes when the
   # train's GitHub release package moved. `published` is false on a re-run
@@ -329,7 +366,8 @@ jobs:
         ||
         (
           github.event_name == 'workflow_dispatch' &&
-          inputs.publish_pypi_only == true
+          inputs.publish_pypi_only == true &&
+          inputs.dry_run != true
         )
       )
     runs-on: ubuntu-latest
@@ -359,7 +397,7 @@ jobs:
     needs:
       - train
       - publish-npm
-    if: needs.publish-npm.result == 'success'
+    if: needs.publish-npm.result == 'success' && inputs.dry_run != true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

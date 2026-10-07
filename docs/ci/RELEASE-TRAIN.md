@@ -96,8 +96,16 @@ every push:
 - no `.nx/version-plans/` file is committed
 - on the PR only: npm does not have any moved version yet
 
-The build also fails when the train links a workspace package from outside the
-train at a version npm does not have.
+Before npm publish, the workflow also fails when:
+
+- the train links a workspace package from outside the train at a version npm
+  does not have
+- installing `@qvac/inference` or `@qvac/sdk` resolves a shared runtime library
+  to more than one version (`check-shared-runtime-libs.mjs`, as in
+  `publish-inference.yml` and `publish-sdk.yml`)
+
+`workflow_dispatch` with `dry_run: true` runs every check and
+`pnpm publish --dry-run`, and publishes, tags and releases nothing.
 
 ## Recovery
 
@@ -111,5 +119,8 @@ packages need different dist-tags the run stops; pass `npm_tag`.
 
 ## Before the first train
 
-npm trusted publishing names a workflow file. Register `release-train.yml` for
-every package in the train on npm, and for `tetherto-qvac-sdk` on PyPI.
+npm trusted publishing names a workflow file. Add `release-train.yml` as a
+trusted publisher for every package in the train on npm, and for
+`tetherto-qvac-sdk` on PyPI. Keep the per-package workflows registered too: npm
+allows up to 10 trusted publishers per package, and a single-package release
+still publishes through them.
