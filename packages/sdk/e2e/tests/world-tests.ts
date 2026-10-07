@@ -230,11 +230,8 @@ export const worldConcurrentStepRejected = createWorldTest(
 // load, so it only appears if the SDK really did drop the cancelled session and
 // rebuild it from the promoted pack. A session that survived the cancel would
 // deliver 12 and fail here.
-// Keeps its hand-written body. A cancel has to arrive while the block is genuinely in flight,
-// which means cancelling the started call by its own request id -- something a step cannot name.
-// Said as data it becomes a broad cancel on the model a fixed delay after dispatch, and on a fast
-// GPU the block finishes first: that is how it failed on the Windows desktop leg, reporting a
-// product defect for a race the body had created. The executor cancels `inFlight.requestId`.
+// Keeps its hand-written body: the cancel has to name the started call's request id, which a
+// step cannot. As data it became a broad cancel on a timer, and a fast GPU finished first.
 export const worldCancelThenReload = createWorldTest(
   'world-cancel-then-reload',
   { image: 'elephant.jpg', keys: ['W'] },

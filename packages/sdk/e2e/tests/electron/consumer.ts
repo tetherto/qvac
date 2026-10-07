@@ -4,6 +4,7 @@ import mqtt from 'mqtt'
 import {
   ConsumerBase,
   createExecutor,
+  hostPlatform,
   loadConfig,
   loadTests,
   buildMqttConnectionConfig,
@@ -71,14 +72,10 @@ function resolveTableAsset(kind: string, file: string): string {
 // -- see tests/shared/platform-policy.ts.
 const resources = new ResourceManager(policyFor('electron'))
 
-/** The OS this leg runs on, so the shared table can carry a per-OS config value. */
-const HOST_OS =
-  process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux'
-
 // One table, shared with every other client, applied here.
 applyResourceTable(
   RESOURCE_TABLE,
-  `electron-${HOST_OS}`,
+  hostPlatform('electron'),
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],
@@ -207,7 +204,7 @@ export const executor = createExecutor({
 export async function startElectronConsumer() {
   const runId = process.env['QVAC_TEST_RUN_ID']
   const configDir = process.env['QVAC_TEST_CONFIG_DIR']
-  const platform = process.env['QVAC_TEST_PLATFORM'] ?? `electron-${HOST_OS}`
+  const platform = process.env['QVAC_TEST_PLATFORM'] ?? hostPlatform('electron')
   const mqttBrokerOverride = process.env['QVAC_TEST_MQTT_BROKER']
 
   if (!runId) {

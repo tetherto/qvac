@@ -97,9 +97,8 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { langList: ['en'], detectorModelSrc: { $const: 'OCR_CRAFT' } }
   },
 
-  // `mainGpu` reaches the addon as `main-gpu`; index 0 either selects a GPU or falls back to
-  // CPU, so the text is the same on every desktop host. The backend differs with the hardware,
-  // which is what `configOn` is for -- the table is resolved against `<family>-<os>`.
+  // Index 0 selects a GPU or falls back to CPU, so the text is the same everywhere; only the
+  // backend follows the hardware.
   'ocr-main-gpu': {
     on: ['desktop', 'electron'],
     constant: { $const: 'OCR_LATIN' },
@@ -462,7 +461,7 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   diffusion: {
     // Every leg defines it for `model-fit-diffusion`; only desktop loads it.
-    skipPreDownloadOn: ['electron', 'snap', 'mobile'],
+    skipPreDownloadOn: ['electron', 'mobile'],
     constant: { $const: 'FLUX_2_KLEIN_4B_Q4_0' },
     type: 'sdcpp-generation',
     config: {
@@ -489,7 +488,7 @@ export const RESOURCE_TABLE: ResourceTable = {
 
   'audiogen-turbo': {
     // Every leg defines it for `model-fit-audiogen`; only desktop loads it.
-    skipPreDownloadOn: ['electron', 'snap', 'mobile'],
+    skipPreDownloadOn: ['electron', 'mobile'],
     type: 'audiogen-ggml',
     config: {
       textEncModelSrc: { $const: 'AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0' },

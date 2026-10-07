@@ -615,7 +615,6 @@
   "diffusion": {
     "skipPreDownloadOn": [
       "electron",
-      "snap",
       "mobile"
     ],
     "constant": {
@@ -663,7 +662,6 @@
   "audiogen-turbo": {
     "skipPreDownloadOn": [
       "electron",
-      "snap",
       "mobile"
     ],
     "type": "audiogen-ggml",

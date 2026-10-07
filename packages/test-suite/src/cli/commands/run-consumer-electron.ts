@@ -1,4 +1,3 @@
-import { hostPlatform } from '../utils/host-platform.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
@@ -6,6 +5,7 @@ import { config as loadDotenv } from 'dotenv'
 import { loadConfig } from '../../utils/config-loader.js'
 import { buildConsumerElectron } from './build-consumer-electron.js'
 import { toForgePlatform } from '../utils/electron-utils.js'
+import { hostPlatform } from '../utils/host-platform.js'
 
 interface ConsumerElectronOptions {
   runId: string

@@ -1,4 +1,3 @@
-import { hostPlatform } from '../utils/host-platform.js'
 import { config as loadDotenv } from 'dotenv'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -9,6 +8,7 @@ import { startNodeMemoryPoller } from '../../core/node-memory-poller.js'
 import { loadConfig } from '../../utils/config-loader.js'
 import { loadTests } from '../../utils/test-loader.js'
 import { buildMqttConnectionConfig, createMqttClient } from '../../utils/mqtt-connection.js'
+import { hostPlatform } from '../utils/host-platform.js'
 
 function readArg(args: string[], name: string): string | undefined {
   const prefix = `--${name}=`

@@ -1,5 +1,5 @@
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
-import { createExecutor, type TestDefinition } from '@qvac/test-suite'
+import { createExecutor, hostPlatform, type TestDefinition } from '@qvac/test-suite'
 import { createStepBindings } from '../shared/step-bindings.js'
 import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
@@ -65,14 +65,10 @@ function resolveTableAsset(kind: string, file: string): string {
 // -- see tests/shared/platform-policy.ts.
 const resources = new ResourceManager(policyFor('desktop'))
 
-/** The OS this leg runs on, so the shared table can carry a per-OS config value. */
-const HOST_OS =
-  process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux'
-
 // One table, shared with every other client, applied here.
 applyResourceTable(
   RESOURCE_TABLE,
-  `desktop-${HOST_OS}`,
+  hostPlatform('desktop'),
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],

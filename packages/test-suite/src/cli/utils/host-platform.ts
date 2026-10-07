@@ -1,11 +1,6 @@
 /**
- * The platform label a JS consumer registers with.
- *
- * A definition's `skip.platforms` is matched by segment, and a coarse entry widens over the OS
- * only: `desktop` covers `desktop-linux`, while `desktop-linux` covers nothing but itself. A
- * consumer that registers as plain `desktop` therefore matches no per-OS rule at all, and a
- * policy written as "Core ML runs on macOS and iOS only" quietly runs everywhere. Snap and the
- * mobile consumers have always carried their OS; these two now do too.
+ * The platform label a JS consumer registers with. `skip.platforms` matches by segment and widens
+ * over the OS only, so a leg that registers plain `desktop` matches no per-OS rule.
  */
 export function hostOs(): 'macos' | 'windows' | 'linux' {
   if (process.platform === 'darwin') return 'macos'

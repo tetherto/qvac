@@ -39,9 +39,8 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
         return await this.resources.ensureLoaded('llm')
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        const recovering = /exited mid-request|aborted|ECONNRESET|socket|not connected/i.test(
-          message
-        )
+        const recovering =
+          /exited mid-request|ECONNRESET|not connected|connection (closed|reset)/i.test(message)
         if (!recovering || Date.now() >= deadline) throw error
         await new Promise<void>((resolve) => setTimeout(resolve, 250))
       }
@@ -101,10 +100,8 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
       }
 
       await this.resources.evictAll()
-      // The claim is about what survives a restart, not about what makes the worker exit.
-      // Unloading every model usually ends it, but anything else still attached -- a profiling
-      // subscription, a log stream a later test opened -- keeps it alive, and then this test
-      // would report a product failure for a harness detail. So: ask first, insist after.
+      // The claim is what survives a restart, not what ends the worker: anything else still
+      // attached keeps it alive. Ask first, insist after.
       let during = await waitForBareChildren(process.pid, (pids) => pids.length === 0, 15_000)
       let ended = 'by unloading every model'
       if (during.length !== 0) {
@@ -115,8 +112,9 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
             /* already gone */
           }
         }
+        const killed = during.join(', ')
         during = await waitForBareChildren(process.pid, (pids) => pids.length === 0, 30_000)
-        ended = `by terminating ${before[0]} after it outlived its models`
+        ended = `by terminating ${killed}, which outlived its models`
       }
       if (during.length !== 0) {
         return {
@@ -128,9 +126,8 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
         }
       }
 
-      // The client notices the dead worker as an aborted connection, and a load issued while it
-      // is still tearing the old one down fails with that abort rather than with anything about
-      // this test. Retry until it has a worker to talk to again.
+      // A load issued while the client is still tearing down the dead worker fails with that
+      // abort, not with anything about this test.
       modelId = await this.loadThroughRestart()
       const after = await waitForBareChildren(process.pid, (pids) => pids.length === 1)
       if (after.length !== 1 || after[0] === before[0]) {

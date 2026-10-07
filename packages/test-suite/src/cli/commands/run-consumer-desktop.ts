@@ -1,8 +1,8 @@
-import { hostPlatform } from '../utils/host-platform.js'
 import * as path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from '../../utils/config-loader.js'
+import { hostPlatform } from '../utils/host-platform.js'
 
 interface ConsumerOptions {
   runId: string
