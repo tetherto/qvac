@@ -81,6 +81,18 @@ export interface MossFitRequest extends TtsFitCommon {
   mossCodecEncoderPath?: string
 }
 
+export interface MossSoundEffectFitRequest extends TtsFitCommon {
+  engineType: 'moss-sfx'
+  mossSoundEffectPath: string
+  prompt: string
+  seconds: number
+  negativePrompt?: string
+  steps?: number
+  guidance?: number
+  shift?: number
+  threads?: number
+}
+
 export type TtsFitRequest =
   | SupertonicFitRequest
   | ParlerFitRequest
@@ -88,6 +100,7 @@ export type TtsFitRequest =
   | Audio8FitRequest
   | CosyvoiceFitRequest
   | MossFitRequest
+  | MossSoundEffectFitRequest
 
 /** The voice engines a fit can be asked for, read off the request union. */
 export type TtsFitEngine = TtsFitRequest['engineType']

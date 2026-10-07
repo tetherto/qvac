@@ -97,8 +97,8 @@ jobs:
     needs: matrix
     if: needs.matrix.outputs.any == 'true'
     runs-on: ${{ matrix.runner || matrix.os }}
-    # Native C++ builds on GPU self-hosted runners; without this a wedged job
-    # holds a scarce runner for GitHub default 6h. Matches reusable-prebuilds.
+    # Cap native C++ builds so a wedged job cannot hold a runner for the
+    # GitHub default of 6h. Matches reusable-prebuilds.
     timeout-minutes: 120
     environment: release
     permissions:
