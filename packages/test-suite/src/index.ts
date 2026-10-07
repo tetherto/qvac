@@ -30,7 +30,6 @@ export {
 export type { QueueEmpty, RegisterAck, TestPrepare, TestQueueItem } from './schemas/messages.js'
 
 // Helper function exports
-export { hostOs, hostPlatform } from './cli/utils/host-platform.js'
 export { defineTests } from './core/define-tests.js'
 export { defineConfig } from './types/config.js'
 

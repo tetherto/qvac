@@ -1,5 +1,5 @@
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
-import { createExecutor, hostPlatform, type TestDefinition } from '@qvac/test-suite'
+import { createExecutor, type TestDefinition } from '@qvac/test-suite'
 import { createStepBindings } from '../shared/step-bindings.js'
 import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
@@ -55,6 +55,7 @@ import * as MODEL_CONSTANTS from '@qvac/sdk'
 import { RESOURCE_TABLE } from '../shared/resource-table.js'
 import { applyResourceTable } from '../shared/resource-table-types.js'
 import { policyFor } from '../shared/platform-policy.js'
+import { hostPlatform } from '../shared/host-platform.js'
 
 /** Where the shared table's `$asset` placeholders point on this platform. */
 function resolveTableAsset(kind: string, file: string): string {

@@ -19,8 +19,9 @@ is off on iOS for ONNX/CoreML OOM, parakeet streaming is off on Android as
 flaky. A vocabulary that could not say "iOS but not Android" would force those
 back into consumer code, which is exactly what this moves away from.
 
-A JS consumer builds its own label from `hostPlatform(family)` in `@qvac/test-suite`, so a new
-one carries its OS without being told to.
+Every client names its own label, and the two places that need it must agree: the runner
+decides what the leg registers with, and `tests/shared/host-platform.ts` decides which `configOn`
+entries the resource table applies. Both append the host OS to the family.
 
 ## Matching
 

@@ -4,7 +4,6 @@ import mqtt from 'mqtt'
 import {
   ConsumerBase,
   createExecutor,
-  hostPlatform,
   loadConfig,
   loadTests,
   buildMqttConnectionConfig,
@@ -62,6 +61,7 @@ import * as MODEL_CONSTANTS from '@qvac/sdk'
 import { RESOURCE_TABLE } from '../shared/resource-table.js'
 import { applyResourceTable } from '../shared/resource-table-types.js'
 import { policyFor } from '../shared/platform-policy.js'
+import { hostPlatform } from '../shared/host-platform.js'
 
 /** Where the shared table's `$asset` placeholders point on this platform. */
 function resolveTableAsset(kind: string, file: string): string {
