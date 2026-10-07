@@ -26,6 +26,8 @@ fun QvacClient.`completionOrchestrate`(request: io.tether.qvac.sdk.generated.sch
 
 fun QvacClient.`completionStream`(request: io.tether.qvac.sdk.generated.schema.CompletionStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.CompletionStreamResponse> = streamTyped(request)
 
+suspend fun QvacClient.`decide`(request: io.tether.qvac.sdk.generated.schema.DecideRequest): io.tether.qvac.sdk.generated.schema.DecideResponse = callTyped(request)
+
 suspend fun QvacClient.`deleteCache`(request: io.tether.qvac.sdk.generated.schema.DeleteCacheRequest): io.tether.qvac.sdk.generated.schema.DeleteCacheResponse = callTyped(request)
 
 fun QvacClient.`diffusionStream`(request: io.tether.qvac.sdk.generated.schema.DiffusionStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.DiffusionStreamResponse> = streamTyped(request)

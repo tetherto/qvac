@@ -351,6 +351,8 @@ enum class ModelType {
     bciWhispercppTranscription,
     @SerialName("llamacpp-embedding")
     llamacppEmbedding,
+    @SerialName("llamacpp-decisions")
+    llamacppDecisions,
     @SerialName("nmtcpp-translation")
     nmtcppTranslation,
     @SerialName("onnx-tts")
@@ -377,6 +379,8 @@ enum class PluginId {
     LLM,
     @SerialName("@qvac/sdk/llamacpp-embedding/plugin")
     EMBEDDING,
+    @SerialName("@qvac/sdk/llamacpp-decisions/plugin")
+    DECISIONS,
     @SerialName("@qvac/sdk/whispercpp-transcription/plugin")
     WHISPER,
     @SerialName("@qvac/sdk/bci-whispercpp-transcription/plugin")
@@ -677,6 +681,24 @@ enum class VectorIndexStorage {
 
 @Serializable
 class Verbosity
+
+@Serializable
+data class DecideRequest(
+    val head_max_len: Long? = null,
+    val max_len: Long? = null,
+    val modelId: String? = null,
+    val questions: Map<String, JsonElement>? = null,
+    val requestId: String? = null,
+    val state: JsonElement? = null,
+    val states: List<JsonElement>? = null,
+    val type: String? = null,
+)
+
+@Serializable
+data class DecideResponse(
+    val result: JsonElement,
+    val type: String,
+)
 
 @Serializable
 data class DeleteCacheRequest(

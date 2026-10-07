@@ -1,0 +1,77 @@
+---
+title: Laya decisions
+icon: ListChecks
+description: Answer choice, ordinal-score, and statement-probability questions about text for routing and evaluation via Laya.
+schemaType: HowTo
+---
+
+## Overview
+
+Laya decisions use [`@qvac/embed-llamacpp`](https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp) with the Fabric LLM inference engine. Load a Laya model using `modelType: "llamacpp-decisions"` and `modelConfig: { device: "cpu" }` or `{ device: "gpu" }`.
+
+[`decide()`](/sdk/reference/api#decide) answers typed questions about a state. Pass `state` for one result, or `states` for an array of results in input order. A state can be text, a number, a boolean, structured JSON, or a conversation array. Top-level `null` is not accepted.
+
+The result contains `answers`, keyed by your question IDs, and `usage` with token counts and truncation information. Each answer includes confidence information. Decisions return one aggregate result without a token stream.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`decide()`](/sdk/reference/api#decide)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+Use a Laya decision checkpoint in GGUF format. Supported checkpoint families include Laya, Laya multilingual, and Laya typed decisions. An embedding-only GGUF cannot answer decision questions.
+
+Pass a local file path or another supported model source to `loadModel()`. For checkpoints split into multiple GGUF files, see [Sharded models](/sdk/models/sharded-models).
+
+## Questions and token budgets
+
+Each entry in `questions` has a `type` and `instructions`:
+
+* `choice` selects a label from `criteria`, which can be an array of labels or an object mapping labels to descriptions. The answer contains `choice` and a probability per label.
+* `score` estimates an ordinal level from `criteria`, an array of descriptions ordered from lowest to highest. The answer contains the expected `score`, a `legend`, and probabilities.
+* `noul` estimates the probability that a statement holds. The answer contains `noul`. Optional `criteria` describe the true and false options, and `labels` change the text shown for them.
+
+`option_order` changes the order in which the model sees options. Answers still use the original option order. `max_len` sets the token budget per sequence, and `head_max_len` sets the budget for a question and its options. Omit them to use the checkpoint's budgets. Inspect `usage.truncated`, `usage.truncated_questions`, and `usage.state_tokens_dropped` to detect truncation.
+
+The load-time `batch_size` controls tokens per forward pass; each sequence must fit within it. `threads`, `threads-batch`, `gpu_layers`, and `flash_attn` control execution. Context size, pooling, and parallelism are fixed by Laya and cannot be configured.
+
+## Cancellation and concurrency
+
+The promise returned by [`decide()`](/sdk/reference/api#decide) exposes `requestId` before you await it. Pass that ID to [`cancel()`](/sdk/reference/api#cancel) to interrupt the request. Its promise rejects with `InferenceCancelledError` after the native response settles.
+
+Each loaded model accepts one decision request at a time. A concurrent call rejects with `RequestRejectedByPolicyError` and leaves the active request running. Use `states` to evaluate several states in one request. See [Cancellation](/sdk/runtime/cancellation) for broad cancellation by model ID.
+
+## Example
+
+The following script loads a Laya GGUF and answers choice, urgency-score, and refund-probability questions about a support ticket:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/laya-decisions.js title="laya-decisions.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/laya-decisions.ts title="laya-decisions.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published. See the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>

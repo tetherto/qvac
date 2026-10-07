@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
+import { decisionsConfigSchema } from '@/schemas/decisions'
 import { ModelType } from '@/schemas/model-types'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
 import { whisperConfigSchema, parakeetConfigSchema } from '@/schemas/transcription-config'
@@ -48,6 +49,7 @@ export const deviceConfigDefaultsSchema = z
     // Canonical keys
     [ModelType.llamacppCompletion]: llmConfigBaseSchema.optional(),
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
+    [ModelType.llamacppDecisions]: decisionsConfigSchema.partial().optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
