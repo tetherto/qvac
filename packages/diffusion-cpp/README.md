@@ -10,7 +10,7 @@ The package exposes four JS entry points:
 | API                    | Entry point                                 | Use case                                                                        |
 | ---------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
 | `ImgStableDiffusion`   | `@qvac/diffusion-cpp`                       | Text-to-image, image-to-image, FLUX.2 reference fusion, optional ESRGAN upscale |
-| `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video                                      |
+| `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan, LTX, and MiniMax-H3 text-to-video / image-to-video                          |
 | `WorldStableDiffusion` | `@qvac/diffusion-cpp/world`                 | ABot-World interactive walk: block-by-block generation under keyboard input     |
 | `EsrganUpscaler`       | named export from `@qvac/diffusion-cpp`     | Standalone PNG/JPEG upscaling                                                   |
 
@@ -29,6 +29,7 @@ The package exposes four JS entry points:
 - [Video API](#video-api)
   - [Video Files](#video-files)
   - [Video Parameters](#video-parameters)
+- [MiniMax-H3 Text-to-Video and Image-to-Video](#minimax-h3-text-to-video-and-image-to-video)
 - [LTX-2 Text-to-Video With Audio](#ltx-2-text-to-video-with-audio)
 - [ABot-World Interactive Walk](#abot-world-interactive-walk)
 - [ESRGAN Upscaler](#esrgan-upscaler)
@@ -51,6 +52,7 @@ The package exposes four JS entry points:
 | Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
 | Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
 | LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
+| MiniMax-H3 FL2VA ConvRot     | text-to-video, image-to-video + audio | Qwen3-VL text encoder, video VAE, audio VAE; see [H3 setup](#minimax-h3-text-to-video-and-image-to-video) |
 | ABot-World                   | interactive world walk                 | Causal block-by-block generation under keyboard input; see [ABot-World guide](docs/abot-world.md) |
 | ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
 
@@ -103,6 +105,7 @@ by the examples.
 | `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant        |
 | `./scripts/download-model-wan-i2v.sh` | Wan 2.1 I2V 14B + CLIP vision |
 | `./scripts/download-model-ltx.sh`     | LTX-2.3 video + audio files   |
+| `./scripts/download-minimax-h3-convrot.sh` | MiniMax-H3 FL2VA ConvRot T2V/I2V files |
 | `./scripts/download-model-abot.sh`    | ABot-World set into `test/model/abot` (from the [P2P model registry](docs/abot-world.md), no credentials) |
 
 The FLUX.2 [klein] default image example uses:
@@ -142,6 +145,8 @@ Downloads are resumable where supported by the script.
 | `npm run generate:video`                     | Wan text-to-video                           |
 | `npm run generate:ltx`                       | LTX-2.3 text-to-video with audio            |
 | `npm run generate:ltx-coffee`                | 9-second LTX Ingredients coffee example     |
+| `bare examples/generate-video-minimax-h3-comfy-t2v.js` | MiniMax-H3 text-to-video with audio |
+| `bare examples/generate-video-minimax-h3-comfy-i2v.js` | MiniMax-H3 image-to-video with audio |
 | `npm run generate:esrgan`                    | Image generation followed by ESRGAN upscale |
 | `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale                   |
 | `npm run walk:world`                         | ABot-World browser demo (generate + walk a world) |
