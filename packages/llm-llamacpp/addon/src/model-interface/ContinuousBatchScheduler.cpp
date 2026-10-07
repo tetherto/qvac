@@ -331,6 +331,12 @@ void ContinuousBatchScheduler::workerLoop() {
           failGroupLocked(queued.group, error);
         }
       }
+      // Parked conversations of other keys took no part in the failed step,
+      // so their state is what their last request committed: keep them the
+      // way an eviction does instead of letting `clearLocked` drop them.
+      for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+        evictParkedLocked(seqId);
+      }
       clearLocked();
       cancelRequested_.store(false);
     }
@@ -425,6 +431,28 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // scheduler cap, batcher's maxTokensPerSequence ceiling wins". That
   // ceiling is a hard invariant of the partitioned KV pool: an overrun is
   // an admit-time error (below), never a silent clamp.
+  //
+  // Take the incoming conversation out of the RAM tier before choosing a
+  // slot: evicting a parked one moves it into the tier, and with a tier that
+  // fits one conversation that would push this one out. Put back on any exit
+  // that did not use it.
+  std::optional<SlotStateCacheEntry> kept;
+  if (ramTier_ && ramTier_->enabled() && !request.cacheKey.empty() &&
+      std::ranges::none_of(parked_, [&](const auto& parked) {
+        return parked.has_value() && parked->cacheKey == request.cacheKey;
+      })) {
+    kept = ramTier_->take(request.cacheKey);
+  }
+  ScopeGuard keptGuard([this, &kept, &request]() noexcept {
+    if (kept.has_value()) {
+      try {
+        (void)ramTier_->insert(request.cacheKey, std::move(*kept));
+      } catch (...) {
+        logTeardownFailureNoexcept(
+            "returning an unused RAM-tier state failed", 0, nullptr);
+      }
+    }
+  });
   const auto maybeSeqId = chooseSeqIdLocked(request.cacheKey);
   if (!maybeSeqId.has_value()) {
     throw qvac_errors::StatusError(
@@ -487,22 +515,20 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     }
   }
   if (!isCacheLoaded && !key.empty()) {
-    std::optional<SlotStateCacheEntry> kept;
-    if (ramTier_) {
+    if (!kept.has_value() && ramTier_) {
       kept = ramTier_->take(key);
     }
-    if (kept.has_value()) {
-      const bool usable =
-          !(kept->activeCacheSavedToDisk &&
-            persistedCacheBackingStoreMissing(key));
-      if (usable &&
-          llama_state_seq_set_data_ext(
-              shared_.lctx,
-              kept->state.data(),
-              kept->state.size(),
-              static_cast<llama_seq_id>(seqId),
-              0) != 0 &&
-          driver->adoptResidentState(kept->ledgerWords)) {
+    // From here the entry is either restored or dropped, never put back.
+    keptGuard.dismiss();
+    if (kept.has_value() && !(kept->activeCacheSavedToDisk &&
+                              persistedCacheBackingStoreMissing(key))) {
+      const bool applied = llama_state_seq_set_data_ext(
+                               shared_.lctx,
+                               kept->state.data(),
+                               kept->state.size(),
+                               static_cast<llama_seq_id>(seqId),
+                               0) != 0;
+      if (applied && driver->adoptResidentState(kept->ledgerWords)) {
         isCacheLoaded = true;
         activeCacheSavedToDisk = kept->activeCacheSavedToDisk;
         adoptedDirtyState = kept->dirty;
@@ -511,7 +537,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         ++ramTierHits_;
       } else {
         clearSeqKv(seqId);
+        SlotStateCache::saveUnrestored(key, *kept, applied);
       }
+    } else if (kept.has_value()) {
+      clearSeqKv(seqId);
     }
   }
   if (!isCacheLoaded) {

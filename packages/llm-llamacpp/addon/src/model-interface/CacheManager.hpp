@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -29,7 +30,8 @@ struct ParsedPromptPayload {
 
 namespace qvac_lib_inference_addon_llama::batching {
 class SlotStateCache;
-}
+struct SlotStateCacheEntry;
+} // namespace qvac_lib_inference_addon_llama::batching
 
 class CacheManager {
 public:
@@ -64,6 +66,10 @@ public:
   /// is not ephemeral. Run when the model is reloaded or unloaded.
   void flushForUnload();
 
+  /// `flushForUnload` for a reset the caller must not survive silently
+  /// (finetune): same conditions, but a failed write throws.
+  void saveBeforeReset();
+
   enum class SaveOutcome { NotHere, Written, Current };
 
   /// The caller's explicit save (`saveCache`): writes the active conversation
@@ -78,13 +84,19 @@ public:
   void discard(const std::string& cacheKey);
 
 private:
+  /// The active conversation has turns its file lacks and may be written:
+  /// dirty, not ephemeral, not empty, and its file was not deleted.
+  bool hasTurnsToFlush();
   void saveActiveCacheForTransition();
   /// Moves the active conversation into the RAM tier; false when the tier is
   /// off or the state does not fit it.
   bool moveActiveCacheToRamTier();
-  /// Restores `sessionPath_` from the RAM tier; false when it holds nothing
-  /// usable for it.
-  bool restoreFromRamTier();
+  /// Restores `sessionPath_` from `entry`, already taken from the RAM tier;
+  /// false when there is none or it is not usable.
+  bool restoreFromRamTier(
+      std::optional<
+          qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry>
+          entry);
   /// Checks a state just put in memory against its ledger `stateTokens` and
   /// adopts it, rolling the sequence back when it does not match. False for a
   /// pre-ledger state; throws for a malformed one.

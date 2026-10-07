@@ -18,6 +18,8 @@
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "addon/LlmErrors.hpp"
+#include "inference-addon-cpp/Logger.hpp"
+#include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
 
@@ -105,7 +107,8 @@ public:
     std::scoped_lock lock(mutex_);
     size_t written = 0;
     for (auto& [key, entry] : entries_) {
-      if (entry.dirty && !entry.ephemeral && writeBack(key, entry)) {
+      if (entry.dirty && !entry.ephemeral &&
+          writeBack(key, entry) == WriteBackResult::Written) {
         entry.dirty = false;
         entry.activeCacheSavedToDisk = true;
         ++written;
@@ -194,6 +197,9 @@ public:
         out.write(
             reinterpret_cast<const char*>(entry.state.data() + offset),
             static_cast<std::streamsize>(entry.state.size() - offset));
+        // Close first: its final flush can fail too, and a short file must
+        // never be promoted.
+        out.close();
         if (!out) {
           throw std::runtime_error("short write");
         }
@@ -207,6 +213,28 @@ public:
     }
   }
 
+  /// A taken entry for `key` that could not be restored, so it is about to
+  /// be dropped. If its state was not applied, its bytes are intact: a dirty,
+  /// non-ephemeral entry is written, as the tier would write it on eviction.
+  /// If the state applied but its ledger was rejected, the pair is
+  /// inconsistent and writing it would replace the file with one that cannot
+  /// load: a dirty entry's loss is only logged.
+  static void saveUnrestored(
+      const std::string& key, const SlotStateCacheEntry& entry,
+      bool stateApplied) {
+    if (!entry.dirty || entry.ephemeral) {
+      return;
+    }
+    if (!stateApplied) {
+      (void)writeBack(key, entry);
+      return;
+    }
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "[SlotStateCache] RAM-tier state for '" + key +
+            "' was rejected; its unsaved turns are dropped");
+  }
+
 private:
   /// Marker `llama_state_seq_get_data` writes first (llama-context.cpp
   /// `io_magic`), followed by the source `llama_seq_id`.
@@ -214,21 +242,31 @@ private:
   static constexpr size_t K_GET_DATA_PREFIX_BYTES =
       sizeof(uint32_t) + sizeof(llama_seq_id);
 
+  enum class WriteBackResult { Written, CallerDeleted, Failed };
+
   /// A caller that deleted the file this state came from dropped the
-  /// conversation; do not bring it back.
-  static bool
+  /// conversation; do not bring it back. A failed write is logged; the
+  /// unsaved turns are then only in this entry.
+  static WriteBackResult
   writeBack(const std::string& key, const SlotStateCacheEntry& entry) {
     if (entry.activeCacheSavedToDisk &&
         CacheManager::persistedBackingStoreMissing(key)) {
-      return false;
+      return WriteBackResult::CallerDeleted;
     }
-    return writeStateFile(key, entry);
+    if (writeStateFile(key, entry)) {
+      return WriteBackResult::Written;
+    }
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "[SlotStateCache] writing a RAM-tier cache state to its cacheKey '" +
+            key + "' failed");
+    return WriteBackResult::Failed;
   }
 
   void dropOldestLocked() {
     auto& [key, entry] = entries_.front();
     if (entry.dirty && !entry.ephemeral) {
-      writeBack(key, entry);
+      (void)writeBack(key, entry);
     }
     entries_.pop_front();
   }

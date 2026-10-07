@@ -95,6 +95,14 @@ bool CacheManager::handleCache(
     }
   }
 
+  // Take the incoming conversation out of the RAM tier before the outgoing
+  // one goes in, so a tier that fits one conversation does not evict it.
+  std::optional<qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry>
+      incoming;
+  if (ramTier_ && ramTier_->enabled()) {
+    incoming = ramTier_->take(cacheKey);
+  }
+
   if (hasActiveCache() && sessionPath_ != cacheKey) {
     QLOG_IF(
         Priority::DEBUG,
@@ -103,7 +111,14 @@ bool CacheManager::handleCache(
             __func__,
             sessionPath_.c_str(),
             cacheKey.c_str()));
-    saveActiveCacheForTransition();
+    try {
+      saveActiveCacheForTransition();
+    } catch (...) {
+      if (incoming.has_value()) {
+        (void)ramTier_->insert(cacheKey, std::move(*incoming));
+      }
+      throw;
+    }
   } else {
     resetStateCallback_(true);
   }
@@ -120,7 +135,7 @@ bool CacheManager::handleCache(
 
   try {
     // RAM tier first (set by `restoreFromRamTier`), then the file.
-    bool loaded = restoreFromRamTier();
+    bool loaded = restoreFromRamTier(std::move(incoming));
     if (!loaded) {
       loaded = loadCache();
       activeCacheSavedToDisk_ = loaded;
@@ -381,12 +396,9 @@ bool CacheManager::moveActiveCacheToRamTier() {
   }
 }
 
-bool CacheManager::restoreFromRamTier() {
-  if (!ramTier_ || !ramTier_->enabled()) {
-    return false;
-  }
-  std::optional<qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry>
-      entry = ramTier_->take(sessionPath_);
+bool CacheManager::restoreFromRamTier(
+    std::optional<qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry>
+        entry) {
   if (!entry.has_value()) {
     return false;
   }
@@ -400,10 +412,14 @@ bool CacheManager::restoreFromRamTier() {
   if (llama_state_seq_set_data_ext(
           ctx, entry->state.data(), entry->state.size(), seq, 0) == 0) {
     resetStateCallback_(true);
+    qvac_lib_inference_addon_llama::batching::SlotStateCache::saveUnrestored(
+        sessionPath_, *entry, /*stateApplied=*/false);
     return false;
   }
   try {
     if (!acceptLoadedState(entry->ledgerWords, sessionPath_ + " (RAM)")) {
+      qvac_lib_inference_addon_llama::batching::SlotStateCache::saveUnrestored(
+          sessionPath_, *entry, /*stateApplied=*/true);
       return false;
     }
   } catch (const std::exception& ex) {
@@ -414,6 +430,8 @@ bool CacheManager::restoreFromRamTier() {
             __func__,
             sessionPath_.c_str(),
             ex.what()));
+    qvac_lib_inference_addon_llama::batching::SlotStateCache::saveUnrestored(
+        sessionPath_, *entry, /*stateApplied=*/true);
     return false;
   }
   if (auto* driver = dynamic_cast<SequenceDriver*>(llmContext_);
@@ -425,10 +443,20 @@ bool CacheManager::restoreFromRamTier() {
   return true;
 }
 
+bool CacheManager::hasTurnsToFlush() {
+  return hasActiveCache() && activeCacheDirty_ && !activeEphemeral_ &&
+         llmContext_->getNPast() != 0 &&
+         !discardActiveCacheIfBackingStoreMissing();
+}
+
+void CacheManager::saveBeforeReset() {
+  if (hasTurnsToFlush()) {
+    saveCache();
+  }
+}
+
 void CacheManager::flushForUnload() {
-  if (!hasActiveCache() || !activeCacheDirty_ || activeEphemeral_ ||
-      llmContext_->getNPast() == 0 ||
-      discardActiveCacheIfBackingStoreMissing()) {
+  if (!hasTurnsToFlush()) {
     return;
   }
   try {
