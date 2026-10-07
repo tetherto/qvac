@@ -699,12 +699,8 @@ const char* selectionPathName(backend_selection::SelectionPath path) {
 /// Record the candidate and why it won this stage. Final placement is logged
 /// after model initialization.
 ///
-/// QVAC-23763: this replaces the four prose lines ("Chosen GPU CUDA", "Chosen
-/// %s Backend (backend override)", …). Three integration suites matched that
-/// prose, which coupled them to log wording and could only ever prove that an
-/// override bound - not which backend actually won, nor why a higher-priority
-/// one did not. Named fields make both assertable. The stats now carry the
-/// family and skip reason, but the device name is only in this log.
+/// QVAC-23763: the device name is only in this log; stats carry family and
+/// skip reason.
 void emitSelectionLog(
     const BackendInterface& bckI, const backend_selection::SelectionTrace& t) {
   std::string text = string_format(
@@ -1127,9 +1123,8 @@ backend_selection::BackendFamilyCode backend_selection::backendFamilyCodeOf(
   if (::backendNameMatchesFamily(deviceName, "rpc")) {
     return BackendFamilyCode::Rpc;
   }
-  // Same substring matching the `backend` override uses, so a device that an
-  // override can name is reported under the family that named it. Order
-  // matters only for rocm/hip, which are the same family under two spellings.
+  // Same substring matching the `backend` override uses, so a device an
+  // override can name reports under that family.
   if (::backendNameMatchesFamily(deviceName, "cuda")) {
     return BackendFamilyCode::Cuda;
   }
@@ -2111,15 +2106,9 @@ backend_selection::splitModeDeviceNamesDetailed(
     out.registries.push_back(candidate.registry);
   }
 
-  // QVAC-23763: a split whose devices span more than one registry. Once an
-  // uncovered NVIDIA card is refused by CUDA but still registered by Vulkan,
-  // this stops being a mixed-vendor curiosity and becomes any single-vendor box
-  // with mixed generations - a 5090 with an older card still in a slot, say.
-  //
-  // Membership is deliberately unchanged: dropping the foreign-registry card
-  // was considered and rejected, because #4126 chose to keep a second physical
-  // card that only another backend registers. Recorded for callers; the
-  // user-facing warning comes from SplitDeviceSelection::heterogeneous.
+  // QVAC-23763: flag a split spanning registries, e.g. a card CUDA refused but
+  // Vulkan registers. Membership unchanged on purpose. The user-facing warning
+  // reads SplitDeviceSelection::heterogeneous.
   for (const std::string& registry : out.registries) {
     if (registry != out.registries.front()) {
       out.heterogeneous = true;

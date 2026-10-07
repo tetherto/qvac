@@ -16,10 +16,8 @@ const STOP_REASONS = [
     "sequenceLimit",
     "contextOverflow",
 ];
-// QVAC-23763. Index-matched to the C++ BackendFamilyCode enum
-// (utils/BackendSelection.hpp). `backendDevice` only says cpu/gpu, so a load
-// that silently moved from one GPU backend to another is invisible without
-// this. Append when the enum grows; never renumber.
+// QVAC-23763. Index-matched to BackendFamilyCode in
+// utils/BackendSelection.hpp; append, never renumber.
 const BACKEND_FAMILIES = [
     "none",
     "cpu",

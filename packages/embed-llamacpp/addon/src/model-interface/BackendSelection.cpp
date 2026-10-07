@@ -1473,10 +1473,9 @@ backend_selection::splitModeDeviceNamesDetailed(
     out.registries.push_back(candidate.registry);
   }
 
-  // QVAC-23763: a split spanning more than one registry. Membership is
-  // deliberately unchanged - #4126 keeps a card only another backend
-  // registers. Recorded for callers; the user-facing warning comes from
-  // SplitDeviceSelection::heterogeneous.
+  // QVAC-23763: flag a split spanning registries, e.g. a card CUDA refused but
+  // Vulkan registers. Membership unchanged on purpose. The user-facing warning
+  // reads SplitDeviceSelection::heterogeneous.
   for (const std::string& registry : out.registries) {
     if (registry != out.registries.front()) {
       out.heterogeneous = true;

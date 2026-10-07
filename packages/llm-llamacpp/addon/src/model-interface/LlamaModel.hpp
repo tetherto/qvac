@@ -449,8 +449,8 @@ private:
       qvac_lib_inference_addon_cpp::kNoJobId};
 
   int64_t runtimeBackendDevice_ = 0;
-  /// QVAC-23763: which GPU backend family ran, and why a higher-priority one
-  /// did not. Reported alongside backendDevice, which is only cpu/gpu.
+  /// QVAC-23763: backend family holding the layers and why a higher-priority
+  /// one was skipped. Numeric, see BackendFamilyCode.
   int64_t runtimeBackendFamily_ = 0;
   int64_t runtimeBackendSkipReason_ = 0;
 

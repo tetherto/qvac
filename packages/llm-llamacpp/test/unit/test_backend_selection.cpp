@@ -2551,7 +2551,7 @@ TEST_F(
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// ---- selection trace and reporting (QVAC-23763 R12) ----
+// ---- selection trace and reporting (QVAC-23763) ----
 
 TEST_F(BackendSelectionTest, BackendFamilyCodeOfClassifiesEachFamily) {
   EXPECT_EQ(
@@ -2590,9 +2590,8 @@ TEST_F(BackendSelectionTest, BackendFamilyCodeOfHandlesCpuAndUnknown) {
       BackendFamilyCode::Other);
 }
 
-// ROCm must not be read as CUDA. The names are close enough that a substring
-// check in the wrong order would conflate them, and that would report an AMD
-// card as NVIDIA in the stats.
+// ggml-hip is built from the ggml-cuda sources, so pin that an AMD card never
+// reports as cuda in the stats.
 TEST_F(BackendSelectionTest, BackendFamilyCodeOfDoesNotConfuseRocmWithCuda) {
   EXPECT_NE(
       backendFamilyCodeOf(BackendType::GPU, "rocm0"), BackendFamilyCode::Cuda);
@@ -2658,7 +2657,7 @@ TEST_F(BackendSelectionTest, TraceIgnoresExcludedCandidatesBelowTheWinner) {
   EXPECT_EQ(choice.trace.skippedReason, ExclusionReason::None);
 }
 
-// ---- heterogeneous split detection (QVAC-23763 R15) ----
+// ---- heterogeneous split detection (QVAC-23763) ----
 
 static backend_selection::SplitDeviceSelection splitSelectionFor(
     MockBackendInterface& mockBackend, const std::string& selectedDeviceName) {
@@ -2666,9 +2665,8 @@ static backend_selection::SplitDeviceSelection splitSelectionFor(
   return getSplitDeviceSelection(bckI, selectedDeviceName, {});
 }
 
-// The §11b trace from the review, pinned: a 5090 kept on CUDA beside a card
-// CUDA refused but Vulkan still registers. The split spans two backends and an
-// even tensor-split would pace the model to the slower one.
+// A 5090 on CUDA beside a card CUDA refused but Vulkan still registers: the
+// split spans two backends.
 TEST_F(BackendSelectionTest, SplitSelectionFlagsAHeterogeneousSplit) {
   mockBackend.addDevice(withDeviceId(
       createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),

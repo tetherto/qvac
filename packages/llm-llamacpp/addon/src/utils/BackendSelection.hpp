@@ -151,8 +151,7 @@ enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
 /// inference-addon-cpp widened, which is separately published with several
 /// consumers. The device *name* therefore stays in the structured log.
 ///
-/// The values are contractual - the JS side maps them back - so append here,
-/// never renumber.
+/// The JS side maps these values back, so append, never renumber.
 enum class BackendFamilyCode : std::uint8_t {
   None = 0,
   Cpu = 1,
@@ -367,7 +366,7 @@ bool gpuBackendSupportsRowSplit();
 /// @brief `splitModeDeviceNames()` plus each device's registry.
 ///
 /// QVAC-23763: records whether the split spans more than one registry. No
-/// production caller reads it; the user-facing warning comes from
+/// production caller yet; the user-facing warning reads
 /// @c SplitDeviceSelection::heterogeneous.
 struct SplitDeviceList {
   std::vector<std::string> names;

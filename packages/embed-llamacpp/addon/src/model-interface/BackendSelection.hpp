@@ -239,7 +239,7 @@ std::vector<std::string> splitModeDeviceNames(
 /// @brief `splitModeDeviceNames()` plus each device's registry.
 ///
 /// QVAC-23763: records whether the split spans more than one registry. No
-/// production caller reads it; the user-facing warning comes from
+/// production caller yet; the user-facing warning reads
 /// @c SplitDeviceSelection::heterogeneous. Same shape as llm-llamacpp's.
 struct SplitDeviceList {
   std::vector<std::string> names;

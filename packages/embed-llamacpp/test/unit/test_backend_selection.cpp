@@ -1693,11 +1693,10 @@ TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsThrows) {
       qvac_errors::StatusError);
 }
 
-// ---- selection trace (QVAC-23763 R12) ----
+// ---- selection trace (QVAC-23763) ----
 //
-// embed reports no backend stats of its own, so there is no backendFamily
-// counterpart here. The trace is still populated, because the structured log
-// line is built from it and because a future embed stats surface would read it.
+// embed reports backendDevice but no backendFamily, so there is no family test
+// here. The trace still feeds the structured log line.
 
 TEST_F(BackendSelectionTest, TracePopulatedOnCascade) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
@@ -1729,7 +1728,7 @@ TEST_F(BackendSelectionTest, TraceOnCpu) {
   EXPECT_TRUE(choice.trace.selectedName.empty());
 }
 
-// ---- heterogeneous split detection (QVAC-23763 R15) ----
+// ---- heterogeneous split detection (QVAC-23763) ----
 
 static backend_selection::SplitDeviceSelection splitSelectionFor(
     MockBackendInterface& mockBackend, const std::string& selectedDeviceName) {
