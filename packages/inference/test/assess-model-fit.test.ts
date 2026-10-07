@@ -592,13 +592,13 @@ test('assess: a companion artifact missing from the catalog yields unknown', (t)
 })
 
 // ---------------------------------------------------------------------------
-// Computed floor — the zero-fetch gate on uncalibrated platforms
+// Computed floor — the zero-fetch gate where no engine answered
 // ---------------------------------------------------------------------------
 
-// Every term calibration adds on top of the weights and the KV cache is
-// non-negative, so a floor with all of them at zero holds on any platform and
-// any backend. That is what lets it refuse a model without a fixture; it is
-// also why it can never confirm one.
+// Every term a load adds on top of the weights and the KV cache is
+// non-negative, so a floor counting only those two holds on any platform and
+// any backend. That is what lets it refuse without a measurement, and why it
+// can never confirm.
 
 test('computeFloor: a llama.cpp floor is the weights plus the KV cache at the narrowest default width', (t) => {
   const elements = 32 * 8 * 256 * 4096
@@ -668,9 +668,9 @@ test('computeFloor: without a sized KV cache the floor is the weights alone', (t
   t.is(tts.bytes, 123, 'an engine with no estimator still has a file size')
 })
 
-test('assess: an uncalibrated platform refuses from the computed floor and never confirms a fit', (t) => {
+test('assess: a model with no engine verdict refuses from the computed floor and never confirms a fit', (t) => {
   // An 8 GiB phone with 2 GiB in use: 6 GiB available, the mobile reserve
-  // capped at 1 GiB, a 5 GiB budget. No fixture for android-arm64.
+  // capped at 1 GiB, a 5 GiB budget.
   const phone = resources({ totalBytes: 8 * GIB, usedBytes: 2 * GIB })
   const kv = Math.ceil(32 * 8 * 256 * 4096 * Q8_0)
   const assess = (artifactBytes: number) =>
@@ -701,7 +701,7 @@ test('assess: an uncalibrated platform refuses from the computed floor and never
   t.is(justOver.verdict, 'likely-too-large', 'one byte over is')
 
   // A model far inside the budget is still unknown: the floor cannot say what
-  // the load adds on top, and that is the whole reason calibration exists.
+  // the load adds on top.
   const tiny = assess(10 * MIB)
   t.is(tiny.verdict, 'unknown')
   t.is(tiny.evidence, 'computed-only')
@@ -761,7 +761,7 @@ test('assess: iOS refuses from the floor once the per-process allowance is known
   t.is(tooLarge.budget?.availableAfterReserveBytes, 2 * GIB)
 
   const small = assess(1 * GIB, perProcess)
-  t.is(small.verdict, 'unknown', 'inside the allowance is still not a fit without calibration')
+  t.is(small.verdict, 'unknown', 'inside the allowance is still not a fit without a measurement')
 })
 
 test('assess: an unrecognized platform still refuses from the floor', (t) => {
