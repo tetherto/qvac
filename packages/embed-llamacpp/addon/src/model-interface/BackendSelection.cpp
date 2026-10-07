@@ -463,9 +463,7 @@ Enumeration enumerateCandidates(
 /// Mark the candidates this load cannot use. Never erases: marking rather than
 /// removing is what stops an override resurrecting a ruled-out device.
 ///
-/// embed has none of llm-llamacpp's Adreno/BitNet/finetune rules, so only the
-/// capability filter can fire here - and nothing populates its constraints yet,
-/// because embed exposes no cache-type config. Kept so the two files match.
+/// embed sets no KV constraints yet, so nothing is excluded here.
 void applyExclusions(
     const BackendInterface& bckI, Enumeration& enumeration,
     const backend_selection::BackendRequest& req) {
@@ -887,15 +885,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     return choice;
   };
 
-  // QVAC-23763: an explicit `backend` override wins over the cascade below, but
-  // only over candidates that survived: firstUsable() and the loop here skip
-  // excluded ones. embed has no guards to be ordered against today, but keeping
-  // the rule structural rather than positional is what lets this file stay a
-  // copy of llm-llamacpp's, where it matters.
-  //
-  // Skipped entirely for a CPU load: no devices are enumerated, so the block
-  // could only reach its warning, which would be noise on a deliberate
-  // device:'cpu' request.
+  // QVAC-23763: an override only considers candidates that survived exclusion.
+  // Skipped for a CPU load, where it could only warn.
   if (!request.backendOverride.empty() &&
       request.preferred == BackendType::GPU) {
     for (const std::string& family : request.backendOverride) {
@@ -1245,13 +1236,9 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
 
 bool backend_selection::gpuBackendSupportsRowSplit(
     const BackendInterface& bckI) {
-  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
-  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
-  // does not support split buffers" on the first one whose backend registry
-  // lacks `ggml_backend_split_buffer_type`. So require all of them, not any
-  // one, and treat "no GPU devices at all" as unsupported.
-  //
-  // No production caller: split-mode 'row' is rejected at config time.
+  // Fabric throws on the first device whose registry lacks split buffers, so
+  // require all of them. No production caller: split-mode 'row' is rejected at
+  // load.
   size_t gpuDevices = 0;
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
@@ -1366,20 +1353,11 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     return {selectedDeviceName};
   }
 
-  // Dedupe by device_id rather than scoping to the selected registry. The
-  // hazard this list exists for is one physical card registering under two
-  // backends; scoping by registry also dropped a *second* physical card on a
-  // mixed-vendor host, an NVIDIA plus a discrete AMD say, which is the very
-  // population split mode is for. Preferring the selected registry on a tie
-  // keeps an explicit `backend` override binding, which an unfiltered list
-  // would not: qvac-fabric's own dedupe keeps whichever backend registered
-  // first, and CUDA loads before Vulkan.
-  // Deduping needs EVERY selected-registry device to publish a bus id. One that
-  // does not leaves no key to match its twin in another registry by, and a
-  // partial key list is worse than none: the cross-registry skip below would
-  // not fire, so the id-less device and its id-bearing twin would both be
-  // emitted, naming one physical card twice. Fall back to registry scoping for
-  // the whole list in that case.
+  // Dedupe by device_id, not by registry, so a second physical card on a
+  // mixed-vendor host stays in the split. Ties go to the selected registry so a
+  // `backend` override still binds. If any selected-registry device has no bus
+  // id its twin cannot be matched, so fall back to registry scoping for the
+  // whole list rather than name one card twice.
   bool selectedRegistryHasAllIds = true;
   std::vector<std::string> selectedIds;
   for (const auto& candidate : devices) {

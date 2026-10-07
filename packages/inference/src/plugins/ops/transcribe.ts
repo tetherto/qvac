@@ -180,6 +180,9 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
     }),
     ...(stats?.encoderOnCoreml !== undefined && {
       encoderOnCoreml: stats.encoderOnCoreml
+    }),
+    ...(stats?.encoderUsedCoreml !== undefined && {
+      encoderUsedCoreml: stats.encoderUsedCoreml
     })
   }
 }

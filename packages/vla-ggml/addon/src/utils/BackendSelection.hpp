@@ -18,9 +18,6 @@ namespace vla_backend_selection {
 // An unknown NAME throws; a known name with no device attached is legitimate,
 // e.g. cuda on a Vulkan-only host, and falls through to the next entry. "auto"
 // is accepted and dropped, so it contributes no preference.
-//
-// BEHAVIOUR CHANGE: any value other than "cpu" used to mean "pick the best
-// device", so a typo went unnoticed. It now throws.
 std::vector<std::string> parseBackendOverride(const std::string& backendStr);
 
 /// Parse the native binding's backendRequired value. Empty means false.
@@ -62,12 +59,9 @@ void loadBackendsOnce(const std::string& backendsDir);
 //   Non-Adreno GPU         -> accept (Vulkan on desktop / Mali, Metal on
 //                                Apple)
 //
-// Among accepted devices the order is CUDA, then HIP/ROCm, then anything else.
-// QVAC-23763 puts CUDA ahead of HIP deliberately: the HIP preference in
-// BackendSelection.cpp assumes a single AMD-GPU target, and its ASSUMPTION
-// comment flags the mixed-vendor host as where it picks the wrong device. CUDA
-// only appears on NVIDIA hardware, so preferring it resolves that case.
-// AMD-only hosts still get HIP, since no CUDA device is present.
+// Among accepted devices the order is CUDA, then HIP/ROCm, then the first other
+// GPU. CUDA first covers a mixed NVIDIA and AMD host only when the CUDA backend
+// registers; an NVIDIA GPU seen only through Vulkan still loses to ROCm.
 //
 // `backendOverride`, when non-empty, restricts the choice to those families in
 // priority order, then falls through to the normal order if none match. The

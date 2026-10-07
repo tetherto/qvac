@@ -23,7 +23,7 @@ add_executable(
   test_sd_vid_gen_handlers.cpp
   test_sd_video_frames.cpp
   test_video_model_capabilities.cpp
-  test_stb_image_security.cpp
+  test_image_decoding_limits.cpp
   test_wan_video.cpp
   test_avi_writer.cpp
   test_world_session.cpp

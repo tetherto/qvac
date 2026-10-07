@@ -1,13 +1,14 @@
 # @qvac/asr-ggml
 
 Multi-engine automatic speech recognition for QVAC runtime applications on the
-[Bare](#glossary) runtime. One npm package and one native prebuild serve two
+[Bare](#glossary) runtime. One npm package and one native prebuild serve three
 ggml-based ASR engines behind a single class, `ASRGgml`:
 
 | Engine | Native library | Good for |
 | --- | --- | --- |
 | **Whisper** | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Multilingual offline transcription, translation, Silero-VAD-segmented live capture |
 | **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer / Nemotron) | Low-latency streaming ASR, native end-of-turn detection, up to 8-speaker diarization |
+| **MOSS-Transcribe-Diarize** | the same parakeet engine of `speech-cpp` (OpenMOSS MOSS-Transcribe-Diarize) | One-pass transcription of whole recordings with speaker labels, timestamps and per-request hotwords (Spanish and Chinese) |
 
 This package replaces `@qvac/transcription-whispercpp` and
 `@qvac/transcription-parakeet`. See [CHANGELOG.md](CHANGELOG.md) for the
@@ -24,6 +25,7 @@ breaking changes the merge introduced.
   - [Whisper — VAD streaming `runStreaming()`](#whisper--vad-streaming-runstreaming)
   - [Parakeet — batch `run()`](#parakeet--batch-run)
   - [Parakeet — duplex streaming `runStreaming()`](#parakeet--duplex-streaming-runstreaming)
+  - [MOSS-Transcribe-Diarize — batch `run()` with hotwords](#moss-transcribe-diarize--batch-run-with-hotwords)
 - [Engine Selection](#engine-selection)
 - [API Surface](#api-surface)
 - [Assessing fit](#assessing-fit)
@@ -91,6 +93,25 @@ Upstream `.nemo` checkpoints are NVIDIA's; see the
 [Parakeet model cards](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2)
 for the per-checkpoint NVIDIA Open Model License terms.
 
+### MOSS-Transcribe-Diarize (`engine: 'moss-transcribe'`)
+
+One `.gguf` holding a Whisper-shaped encoder, a 4x merge adaptor and a
+Qwen3-0.6B decoder, converted from
+[OpenMOSS-Team/MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize)
+(Apache-2.0). It transcribes a whole recording in one pass and returns
+timestamped segments labelled with the speaker (`S01`, `S02`, ...).
+
+| File | Size | Notes |
+|------|-----:|-------|
+| `moss-transcribe-diarize-q8_0.gguf` | ~0.98 GB | Recommended: the same WER/CER as f16 |
+| `moss-transcribe-diarize-f16.gguf` | ~1.8 GB | Reference precision |
+| `moss-transcribe-diarize-q5_0.gguf` | ~0.64 GB | Smallest; within 1.5 points of f16 |
+
+It is validated for Spanish (2.1-3.9 % WER) and Chinese (9.4-12.1 % CER) on
+2- to 30-minute files; English is not usable (the reference model itself
+skips whole spans). A GGUF sniffs as parakeet, so always pass
+`engine: 'moss-transcribe'`.
+
 ## Choosing a model
 
 Pick a **specific checkpoint**, not only an engine. Whisper and Parakeet
@@ -107,6 +128,7 @@ language coverage, translation, and diarization.
 | Fast English-only, no punctuation | `parakeet-ctc-0.6b` | Lowest decode cost in the Parakeet family; no PnC. |
 | Indic-language ASR (Hindi and other Indic ids) | `indic-conformer-ctc` | Pass `parakeetConfig.language` (e.g. `"hi"`). Same Parakeet engine; GGUF lives under `indic_conformer/` in the registry. |
 | Offline 4-speaker diarization | `sortformer-4spk-v1` | Default offline diarization head. |
+| Spanish or Chinese transcript with speakers and timestamps in one pass, spelling your names and terms | `moss-transcribe-diarize-q8_0.gguf` (`engine: 'moss-transcribe'`) | Whole recordings only (no streaming); `run(audio, { hotwords })` biases the spelling of proper nouns and domain terms per request. |
 | Streaming 4-speaker diarization | `diar_streaming_sortformer_4spk-v2.1` | AOSC keeps speaker slots across silence; prefer over v1 for live streams. |
 | Offline or streaming diarization with up to 8 speakers | `Nemotron-3-Diarization.q8_0.gguf` | Use the official GGUF with the Parakeet engine; the model type is detected automatically. |
 | Broadest language set + translate-to-English | `ggml-large-v3-turbo.bin` (or `ggml-small.bin` on edge) | Whisper: ~99 languages, translation, Silero-VAD live capture. Turbo is the accuracy/speed sweet spot; use `tiny`/`base` only when size dominates. |
@@ -348,6 +370,38 @@ await response
 Only one streaming session may be open per instance; a concurrent `run()` or
 `runStreaming()` throws `STREAMING_SESSION_ACTIVE` (6020).
 
+### MOSS-Transcribe-Diarize — batch `run()` with hotwords
+
+```javascript
+const model = new ASRGgml({
+  files: { model: './models/moss-transcribe-diarize-q8_0.gguf' },
+  config: {
+    engine: 'moss-transcribe',
+    mossTranscribeConfig: { useGPU: true, maxThreads: 4 }
+  }
+})
+
+await model.load()
+
+const response = await model.run(float32Samples, {   // Float32Array, 16 kHz mono
+  hotwords: ['Tether', 'QVAC', 'vcpkg', 'Parakeet']  // optional, per request
+})
+await response
+  .onUpdate((segments) => {
+    for (const s of segments) console.log(`[${s.start}-${s.end}] ${s.speaker}: ${s.text}`)
+  })
+  .await()
+```
+
+The whole recording is transcribed in one pass, so `runStreaming()` and
+`reload()` reject with `NOT_SUPPORTED` (6019). Per-call options:
+
+- `hotwords`: up to 64 names or terms of up to 64 UTF-8 bytes each, appended to
+  the model's default instruction, so they come out spelled as given;
+- `prompt`: replaces the default instruction (not combined with `hotwords`);
+- `maxNewTokens`: bounds the generated tokens (unset or 0 keeps the model
+  default).
+
 ## Engine Selection
 
 The engine is resolved **once, in the constructor**, from three sources in
@@ -372,8 +426,10 @@ Validation and sniffing both target the file the driver actually opens: for
 whisper that is `config.path` when set, otherwise `files.model`; parakeet only
 ever loads `files.model`.
 
-`getEngineType()` reports the resolved engine; `ASRGgml.ENGINE_WHISPER` and
-`ASRGgml.ENGINE_PARAKEET` are available as statics.
+`getEngineType()` reports the resolved engine; `ASRGgml.ENGINE_WHISPER`,
+`ASRGgml.ENGINE_PARAKEET` and `ASRGgml.ENGINE_MOSS_TRANSCRIBE` are available as
+statics. A MOSS-Transcribe-Diarize GGUF sniffs as parakeet, so pass
+`engine: 'moss-transcribe'` explicitly.
 
 ## API Surface
 
@@ -383,7 +439,7 @@ Every verb has one signature and one meaning regardless of engine.
 | --- | --- |
 | `new ASRGgml({ files, config?, engine?, enableStats?, logger?, exclusiveRun? })` | Resolves the engine, validates model files and the engine config vocabulary. Throws on any problem — nothing is deferred to `load()`. |
 | `load()` | Creates the native instance and activates the model. Calling it on a loaded instance unloads first. Throws `INSTANCE_DESTROYED` after `destroy()`. |
-| `run(audio)` | Batch transcription. Returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). |
+| `run(audio, options?)` | Batch transcription. Returns a `QvacResponse`; drain it with `onUpdate(cb)` (push) or `iterate()` (pull). `options` (`hotwords`, `prompt`, `maxNewTokens`) is moss-transcribe only; the other engines reject a non-empty object. |
 | `runStreaming(audio, opts?)` | Duplex/VAD-segmented streaming. Resolves once the native session is open; `opts` is the engine's streaming vocabulary. |
 | `reload(newConfig?)` | Applies an engine-scoped partial config in place where possible. Rejects with `NOT_SUPPORTED` (6019) on an engine whose driver has no native reload. |
 | `cancel(jobId?)` | Cancels the active job **and fails it**, so a draining `iterate()` throws. The native verb takes no id; `jobId` is accepted for source compatibility only. |
@@ -391,9 +447,9 @@ Every verb has one signature and one meaning regardless of engine.
 | `addon` | The native interface, or `undefined` before `load()` (not cleared by `unload()`, as in both pre-merge packages). Escape hatch for a native hard cancel that stops the decode *without* failing the job (what the SDK's model-wide `cancel` uses). Not otherwise part of the supported surface. |
 | `unload()` / `destroy()` | Release the model / retire the instance. |
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
-| `getEngineType()` | `'whisper'` \| `'parakeet'`. |
+| `getEngineType()` | `'whisper'` \| `'parakeet'` \| `'moss-transcribe'`. |
 | `getBackendInfo()` | `BackendInfo` or `null` before `load()`. |
-| `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). Neither engine implements a correct pause/resume. |
+| `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). No engine implements a correct pause/resume. |
 
 Constructor options:
 
@@ -431,6 +487,9 @@ Engine-specific segment fields:
   same data in structured form: a streamed diarization segment carries
   `speakerId`, and the offline transcript carries
   `speakerSegments: [{ speakerId, start, end }]`, one entry per text line.
+- MOSS-Transcribe-Diarize segments carry `speaker` (the model's `"S01"`,
+  `"S02"`, ... label) and `speakerId` (the same speaker, 0-based), with
+  `start`/`end` in seconds.
 
 ## Assessing fit
 
@@ -604,9 +663,27 @@ For four-speaker streaming diarization, use the Sortformer v2.1 GGUF. For up to
 eight speakers, use Nemotron 3 Diarization. Both enable their speaker cache
 from GGUF metadata. Sortformer v1 remains the four-speaker offline default.
 
+For Nemotron 3 Diarization, `longFormWindowFrames` sets when offline input
+switches from one pass to the speaker cache in 30 s chunks. 0 picks 90 s; a
+negative value always runs one pass, which mixes up speakers past about two
+minutes and fails past 400 s. With `prewarm`, the load runs one offline pass
+and one streaming chunk.
+
+### MOSS-Transcribe-Diarize: `config.mossTranscribeConfig`
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
+| `useGPU` | `false` | Use the linked ggml GPU backend (Metal / Vulkan / OpenCL / CUDA). |
+| `backendsDir` | package `prebuilds/` | Directory of the dynamically loaded ggml backends. |
+
+Any other key throws `INVALID_CONFIG` (24015). Prompt, hotwords and the token
+bound are per call; see
+[MOSS-Transcribe-Diarize — batch `run()` with hotwords](#moss-transcribe-diarize--batch-run-with-hotwords).
+
 ## Audio Input
 
-Both engines take **16 kHz mono** audio. `run()` and `runStreaming()` accept a
+Every engine takes **16 kHz mono** audio. `run()` and `runStreaming()` accept a
 stream, an iterable, a single chunk, or an array of chunks. A chunk's *class*
 decides how it is interpreted:
 
@@ -654,7 +731,7 @@ including CPU-only and non-NVIDIA machines — skip the module and fall back
 to Vulkan or CPU instead of failing to load the addon. CUDA is compiled
 *alongside* Vulkan rather than replacing it; ggml registers CUDA ahead of
 Vulkan, so a `use_gpu` / `useGPU` request lands on CUDA when a supported
-device is present and falls back to Vulkan otherwise. Both engines report
+device is present and falls back to Vulkan otherwise. Every engine reports
 the winner through `getBackendInfo()` as `backendId: 2` (`BackendId.CUDA`).
 
 On x64 a CUDA build's module targets **compute capability 7.5 and newer**,
@@ -673,8 +750,9 @@ nvcc's clang host-compiler setup lives in
 `vcpkg-overlays/toolchains/linux-clang.cmake`, shared by every addon that
 compiles the CUDA backend.
 
-Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
-parakeet needs `parakeetConfig.useGPU: true`.
+Every engine defaults to CPU: whisper needs `contextParams.use_gpu: true`,
+parakeet needs `parakeetConfig.useGPU: true` and moss-transcribe needs
+`mossTranscribeConfig.useGPU: true`.
 
 
 For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
@@ -884,7 +962,7 @@ npm test                              # complete standard gate
 npm run test:all                      # same aggregate, named explicitly
 npm run test:unit
 npm run test:package                  # packed tarball and consumer contract
-npm run test:integration              # standard suites for both engines
+npm run test:integration              # standard suites for every engine
 npm run test:integration:whisper
 npm run test:integration:parakeet
 npm run test:cpp                      # native gtest suite
@@ -906,6 +984,12 @@ are skipped when `NO_GPU=true`, as on the CPU-only CI rows.
 `test:integration:live-stream-simulation` runs only the long-lived Whisper
 stream test; the misspelled `test:integration:live-stream-simultion` remains
 as a temporary alias.
+
+The MOSS-Transcribe-Diarize integration test (`moss-transcribe.test.js`, part of
+`test:integration:parakeet`) runs when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` points
+at a GGUF and is skipped otherwise; the C++ suite transcribes a real recording
+when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` and `QVAC_TEST_MOSS_TRANSCRIBE_AUDIO`
+(16 kHz s16le raw) are set.
 
 Typical loop: `npm install && npm run build && npm run test:integration`.
 
@@ -1037,6 +1121,10 @@ Parakeet:
 - [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
 - [`examples/parakeet-decode-audio.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
 
+MOSS-Transcribe-Diarize:
+
+- [`examples/moss-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/moss-transcribe.js) — speaker-labelled transcript of a WAV or raw 16 kHz file, with optional `--hotwords "a,b"` and `--gpu`
+
 The npm tarball includes the dependency-clean Whisper quickstart. The other
 examples are repository examples. Run their matching commands from a source
 checkout:
@@ -1057,6 +1145,7 @@ npm run example:parakeet:mic
 npm run example:parakeet:mic-diarize
 npm run example:parakeet:mic-diarize-aosc
 npm run example:parakeet:decode-audio
+npm run example:moss-transcribe -- --model <gguf> --audio <file>
 ```
 
 The published quickstart uses the Bare global for arguments and exit handling

@@ -96,28 +96,16 @@ struct BackendInterface {
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
-  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs.
-  // Kept so this struct stays a copy of llm-llamacpp's, which is what makes the
-  // two BackendSelection.cpp files diffable.
-  //
-  // The production initialisers in this package deliberately leave it null.
-  // embed exposes no cache-type config, so nothing populates
-  // LoadConstraints::kvCacheTypes and the probe would never be consulted;
-  // wiring it would be dead code. Null means "unknown" and fails OPEN, so that
-  // is safe - but it also means **whoever adds cache-type support to embed must
-  // set this**, or the filter will silently do nothing.
-  //
-  // Deliberately last so existing initialisers keep compiling.
+  // QVAC-23763: KV-cache capability probe. Left null in embed because it has no
+  // cache-type config. Null fails open, so whoever adds cache-type support must
+  // set it. Last so positional initialisers compile.
   bool (*deviceSupportsKvCacheType)(
       ggml_backend_dev_t device, enum ggml_type kvType);
 };
 
 /// @brief Why a candidate device was passed over.
 ///
-/// QVAC-23763: llm-llamacpp expresses the Adreno/BitNet/finetune guards and the
-/// KV-cache capability filter through this. embed has none of those rules
-/// today, so only None is ever set - the enum exists to keep the two
-/// implementations the same shape.
+/// QVAC-23763: embed sets only None today.
 enum class ExclusionReason : std::uint8_t {
   None = 0,
   KvCacheTypeUnsupported,
@@ -234,8 +222,9 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 /// GPU/iGPU device's backend provides split buffers, because qvac-fabric
 /// requires split buffers from each device it distributes over and throws on
 /// the first one that lacks them. No production caller: split-mode 'row' is
-/// rejected at config time. As of qvac-fabric v10069 only SYCL provides split
-/// buffers, so this is false in every shipped configuration.
+/// rejected at config time. As of qvac-fabric v11018 only SYCL and Hexagon
+/// provide split buffers, and the port builds neither, so this is false in
+/// every shipped configuration.
 bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
 /// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
@@ -246,18 +235,9 @@ bool gpuBackendSupportsRowSplit();
 /// discrete GPU, deduplicated by `props.device_id` so a card registered under
 /// two backends is named once, preferring @p selectedDeviceName's registry.
 ///
-/// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
-/// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
-/// `--device` would spread a single card across two backends. Deduping rather
-/// than scoping to one registry keeps a second physical card on a mixed-vendor
-/// host, and preferring the selected registry keeps a `backend` override
-/// binding, which omitting `--device` would not.
-///
-/// A device whose backend publishes no bus id falls back to registry scoping,
-/// since it cannot be matched against its own duplicate.
-///
-/// Empty when every GPU/iGPU device comes from one registry and no backend
-/// family is required, or when @p selectedDeviceName matches nothing.
+/// QVAC-23763: one NVIDIA card registers as both CUDA0 and Vulkan0. Empty when
+/// every GPU/iGPU device comes from one registry and no backend family is
+/// required, or when @p selectedDeviceName matches nothing.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});

@@ -15,5 +15,7 @@
     "custom-echo-plugin/plugin"
   ],
   "registryDownloadMaxRetries": 10,
-  "registryStreamTimeoutMs": 600000
+  "registryStreamTimeoutMs": 600000,
+  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider",
+  "fitStubBudgetMs": 120000
 }

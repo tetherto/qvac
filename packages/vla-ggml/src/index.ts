@@ -646,10 +646,9 @@ class VlaModel {
     this._nativeLoggerActive = false;
   }
 
-  // QVAC-23763: `backend` now also takes a comma-separated GPU priority list,
-  // e.g. "cuda" or "cuda,vulkan". "auto" and "cpu" keep their meaning. The
-  // family names are validated natively so the list stays in one place; this
-  // check only rejects the shapes that never reach the addon.
+  // `backend` is 'auto', 'cpu', or a comma-separated GPU priority list such as
+  // 'cuda,vulkan'. Family names are validated natively; this only rejects
+  // shapes that never reach the addon.
   async load({
     backend = "auto",
     backendRequired = false,
@@ -1084,7 +1083,7 @@ namespace VlaModel {
    * Which backend `load()` should use. QVAC-23763.
    *
    * - `"auto"` (default): pick the best available device, preferring CUDA, then
-   *   HIP/ROCm, then Vulkan or Metal, then CPU.
+   *   HIP/ROCm, then the first other accepted GPU, then CPU.
    * - `"cpu"`: skip GPU selection entirely.
    * - a comma-separated GPU family list, e.g. `"cuda"` or `"cuda,vulkan"`:
    *   try those families in order, then fall back to the normal order if none

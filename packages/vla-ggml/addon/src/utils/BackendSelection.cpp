@@ -18,17 +18,13 @@ namespace vla_backend_selection {
 
 namespace {
 
-// Backend families qvac-fabric can register a GPU device for. "cpu" is absent
-// on purpose: the addon layer strips `backend: 'cpu'` into forceCpu before this
-// is reached, so it is not a GPU family name here. See the header for why this
-// differs from llm-llamacpp and embed-llamacpp.
+// GPU families qvac-fabric can register. "cpu" is handled before this, see the
+// header.
 constexpr std::array<std::string_view, 7> KNOWN_GPU_BACKEND_FAMILIES = {
     "cuda", "vulkan", "metal", "opencl", "hip", "rocm", "sycl"};
 
-// Trimmed from each family. \r matters: a value from a CRLF config file would
-// otherwise throw "unknown backend 'cuda\r'", which renders identically to the
-// accepted spelling. normaliseBackendSelector in AddonJs.hpp trims the whole
-// value but not each entry.
+// Trimmed per entry, \r included, so a CRLF config value 'cuda\r' is not
+// rejected.
 constexpr std::string_view K_BACKEND_TRIM = " \t\r\n\v\f";
 
 } // namespace
@@ -80,10 +76,7 @@ std::vector<std::string> parseBackendOverride(const std::string& backendStr) {
               "'auto' for the default order.\n");
     }
     // ggml's HIP build names its devices "ROCm%d" (GGML_CUDA_NAME in
-    // ggml-cuda.h), so a family kept as "hip" matches no device name at all and
-    // the override silently falls through to the default order. Canonicalise to
-    // the spelling ggml reports; the default preference block below already
-    // treats the two as one family.
+    // ggml-cuda.h), so "hip" would match no device. Canonicalise to "rocm".
     if (family == "hip") {
       family = "rocm";
     }
@@ -332,9 +325,7 @@ ggml_backend_dev_t pickBestGpuDevice(
     return adrenoOpenClDev;
   }
 
-  // CUDA ahead of HIP: see the header. A CUDA device only appears on NVIDIA
-  // hardware, which covers the mixed-vendor case the HIP comment above flags as
-  // picking the wrong device. AMD-only hosts are unaffected.
+  // CUDA ahead of HIP, see the header.
   if (cudaDev != nullptr) {
     QLOG_IF(
         Priority::INFO,

@@ -1572,9 +1572,8 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
-// The two guards above have a second arm each, and neither was pinned. Both
-// matter for QVAC-23763: the override loop skips any candidate a guard marked
-// excluded, and all four arms have to keep working.
+// Second arm of each guard. The override loop skips excluded candidates, so
+// all four arms must hold.
 
 // BitNet TQ on Adreno <800 is CPU only (TQ kernels run faster there), so no
 // override may reach a GPU. The 800+ arm of this guard is pinned above.
@@ -1640,7 +1639,7 @@ TEST_F(
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
-// ---- the capability filter (QVAC-23763 R9/R10) ----
+// ---- the capability filter ----
 
 static BackendChoice chooseWithKvTypes(
     MockBackendInterface& mockBackend,

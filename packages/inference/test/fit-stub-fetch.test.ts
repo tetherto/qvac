@@ -8,9 +8,11 @@ import type { AbortSignal } from 'bare-abort-controller'
 
 import {
   fetchFitStub,
+  fetchFitStubSet,
   type FitBlobBinding,
   type FitStubEntry,
-  type FitStubRef
+  type FitStubRef,
+  type FitStubSet
 } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
 
 const REF: FitStubRef = {
@@ -166,6 +168,133 @@ test('a stub that does not match the recorded digest is rejected', async functio
     t.ok(res.message?.includes('hashes to'), 'the digest mismatch is named')
   }
   t.alike(fs.readdirSync(cacheDir), [], 'the corrupt stub is not kept')
+})
+
+const COSYVOICE_SET: FitStubSet = {
+  primary: {
+    name: 'cosyvoice3-llm-q8_0.gguf',
+    sha256Checksum: 'a'.repeat(64),
+    registryPath: 'models/cosy_voice/cosyvoice3-llm-q8_0.gguf',
+    registrySource: 's3',
+    targetName: 'cosyvoice3-llm-q8_0.gguf'
+  },
+  others: [
+    {
+      name: 'cosyvoice3-flow-f32.gguf',
+      sha256Checksum: 'b'.repeat(64),
+      registryPath: 'models/cosy_voice/cosyvoice3-flow-f32.gguf',
+      registrySource: 's3',
+      targetName: 'cosyvoice3-flow-f32.gguf'
+    },
+    {
+      name: 'voice.gguf',
+      sha256Checksum: 'd'.repeat(64),
+      registryPath: 'models/cosy_voice/voice-en.gguf',
+      registrySource: 's3',
+      targetName: 'voice.gguf'
+    },
+    {
+      name: 'vocab.json',
+      sha256Checksum: 'e'.repeat(64),
+      registryPath: 'models/cosy_voice/vocab.json',
+      registrySource: 's3',
+      targetName: 'vocab.json'
+    }
+  ]
+}
+
+test('a companion set is staged into one directory under its target names', async function (t) {
+  const cacheDir = tempDir()
+
+  const res = await fetchFitStubSet(COSYVOICE_SET, {
+    cacheDir,
+    getEntry: async () => ENTRY,
+    downloadBlob: writesStub().downloadBlob
+  })
+
+  t.is(res.status, 'ready')
+  if (res.status !== 'ready') return
+
+  t.is(path.basename(res.path), 'cosyvoice3-llm-q8_0.gguf', 'the primary keeps its target name')
+  t.alike(
+    fs.readdirSync(path.dirname(res.path)).sort(),
+    ['cosyvoice3-flow-f32.gguf', 'cosyvoice3-llm-q8_0.gguf', 'vocab.json', 'voice.gguf'],
+    'every member is staged beside the primary'
+  )
+})
+
+test('a companion without a description does not fail the set', async function (t) {
+  const cacheDir = tempDir()
+
+  const res = await fetchFitStubSet(COSYVOICE_SET, {
+    cacheDir,
+    getEntry: async (registryPath) => (registryPath.endsWith('vocab.json') ? {} : ENTRY),
+    downloadBlob: writesStub().downloadBlob
+  })
+
+  t.is(res.status, 'ready')
+  if (res.status !== 'ready') return
+
+  t.absent(
+    fs.readdirSync(path.dirname(res.path)).includes('vocab.json'),
+    'the member with no fit blob is left out'
+  )
+})
+
+test('a set whose primary has no description stages nothing', async function (t) {
+  const cacheDir = tempDir()
+
+  const res = await fetchFitStubSet(COSYVOICE_SET, {
+    cacheDir,
+    getEntry: async (registryPath) =>
+      registryPath.endsWith('cosyvoice3-llm-q8_0.gguf') ? {} : ENTRY,
+    downloadBlob: writesStub().downloadBlob
+  })
+
+  t.is(res.status, 'unavailable')
+  if (res.status === 'unavailable') t.is(res.reason, 'no-fit-blob')
+  t.alike(fs.readdirSync(cacheDir), [], 'no staging directory is left behind')
+})
+
+test('a set that outlives the budget after its primary leaves nothing behind', async function (t) {
+  const cacheDir = tempDir()
+  const primary = COSYVOICE_SET.primary.targetName
+
+  const res = await fetchFitStubSet(COSYVOICE_SET, {
+    cacheDir,
+    budgetMs: 50,
+    getEntry: async () => ENTRY,
+    downloadBlob: async (_binding: FitBlobBinding, outputFile: string, signal?: AbortSignal) => {
+      fs.writeFileSync(outputFile, STUB_BYTES)
+      if (path.basename(outputFile) !== primary) {
+        await new Promise<void>((resolve) => {
+          signal?.addEventListener('abort', () => resolve())
+        })
+      }
+    }
+  })
+
+  t.is(res.status, 'unavailable')
+  if (res.status === 'unavailable') t.is(res.reason, 'timed-out')
+  await settle(20)
+  t.alike(fs.readdirSync(cacheDir), [], 'the staged primary is gone')
+})
+
+test('a set whose primary fails to download leaves nothing behind', async function (t) {
+  const cacheDir = tempDir()
+
+  const res = await fetchFitStubSet(COSYVOICE_SET, {
+    cacheDir,
+    getEntry: async () => ENTRY,
+    downloadBlob: async (_binding, outputFile) => {
+      fs.writeFileSync(outputFile, Buffer.from('half'))
+      throw new Error('peer went away')
+    }
+  })
+
+  t.is(res.status, 'unavailable')
+  if (res.status === 'unavailable') t.is(res.reason, 'download-failed')
+  t.alike(fs.readdirSync(cacheDir), [], 'the staging directory is gone')
 })
 
 function settle(ms: number) {

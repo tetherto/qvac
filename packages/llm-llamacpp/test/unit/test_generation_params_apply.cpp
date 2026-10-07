@@ -223,6 +223,22 @@ TEST(TemplateDerivedSamplingTest, ToolChoiceDoesNotCountAsSamplerOverride) {
          "common_sampler_init in applyGenerationParamsToContext";
 }
 
+TEST(
+    TemplateDerivedSamplingTest,
+    ParallelToolCallsDoesNotCountAsSamplerOverride) {
+  GenerationParams overrides;
+  overrides.parallel_tool_calls = false;
+  EXPECT_FALSE(overrides.hasOverrides())
+      << "parallel_tool_calls is a render override, like tool_choice";
+}
+
+TEST(TemplateDerivedSamplingTest, ParallelToolCallsReachesRenderOverrides) {
+  GenerationParams overrides;
+  EXPECT_FALSE(renderOverridesFrom(overrides).parallelToolCalls.has_value());
+  overrides.parallel_tool_calls = false;
+  EXPECT_EQ(renderOverridesFrom(overrides).parallelToolCalls, false);
+}
+
 TEST(TemplateDerivedSamplingTest, OutputFormatGrammarSuppressesToolGrammar) {
   common_params params = paramsWithoutReasoningBudget();
   params.sampling.grammar =
