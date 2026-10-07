@@ -3,6 +3,7 @@
 const path = require('bare-path')
 const { cleanupIntegrationCacheFiles, ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+const overflow = require('./_context-overflow')
 const os = require('bare-os')
 const LlmLlamacpp = require('../../index.js')
 
@@ -247,6 +248,63 @@ safeTest(
 
     t.ok(turn2.response.length > 0, 'full-history continuation should generate')
     t.ok(toNumber(turn2.stats.CacheTokens) > 0, 'reconciled cache should remain resident')
+  }
+)
+
+// A generation that fills the window while reasoning stops with
+// `stopReason=contextOverflow` and keeps what it produced; a prompt that cannot
+// fit at all throws. The model must stay usable after either one.
+safeTest(
+  'Qwen3 reasoning surfaces context overflow on both paths and recovers',
+  { timeout: 600_000 },
+  async (t) => {
+    const { inference } = await setupReasoningModel(t, false, {
+      configOverrides: {
+        // Sizing and assertions are shared with `api-behavior.test.js`.
+        ctx_size: String(overflow.CTX_SIZE),
+        n_predict: String(overflow.PREDICT),
+        // darwin-x64 Metal cannot decode again after a ContextOverflow throw.
+        ...(isDarwinX64 ? { device: 'cpu' } : {})
+      }
+    })
+
+    // The prompt lands just inside the window and `predict` exceeds the room
+    // left, so the stop is always the full context, never the prediction cap.
+    const { stats, response } = await runCompletionWithStats(
+      inference,
+      [{ role: 'user', content: overflow.fillerPrompt() }],
+      { generationParams: { predict: overflow.PREDICT } }
+    )
+    t.comment(`overflow turn stats: ${JSON.stringify(stats)}`)
+
+    overflow.assertStoppedByFullContext(t, stats, response)
+
+    // A message that cannot fit on its own is rejected before any decode.
+    let prefillError = null
+    try {
+      await runCompletionWithStats(
+        inference,
+        [{ role: 'user', content: overflow.oversizedPrompt() }],
+        {
+          generationParams: { reasoning_budget: 0 }
+        }
+      )
+    } catch (err) {
+      prefillError = err
+    }
+    overflow.assertPromptAloneRejected(t, prefillError)
+
+    const recovery = await runCompletionWithStats(
+      inference,
+      [{ role: 'user', content: 'Say ok.' }],
+      {
+        generationParams: { reasoning_budget: 0 }
+      }
+    )
+    t.ok(
+      recovery.response.length > 0,
+      'model should recover and generate after a context-overflow failure'
+    )
   }
 )
 

@@ -1718,6 +1718,198 @@ TEST_F(
   fs::remove(cachePath);
 }
 
+namespace {
+
+using qvac_lib_inference_addon_llama::batching::DriverFactory;
+using OutputFn = std::function<void(const std::string&)>;
+
+/// Delegates every hook to the real driver, except that `onCancel` throws.
+class ThrowingCancelDriver : public SequenceDriver {
+public:
+  explicit ThrowingCancelDriver(std::unique_ptr<SequenceDriver> inner)
+      : inner_(std::move(inner)) {}
+
+  [[nodiscard]] llama_pos getNPast() const override {
+    return inner_->getNPast();
+  }
+  [[nodiscard]] llama_pos getKvCellsUsed() const override {
+    return inner_->getKvCellsUsed();
+  }
+  [[nodiscard]] int32_t getToolDefinitionsDropped() const override {
+    return inner_->getToolDefinitionsDropped();
+  }
+  [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
+    return inner_->getGenerationStopReason();
+  }
+  void setRenderOverrides(RenderOverrides overrides) override {
+    inner_->setRenderOverrides(std::move(overrides));
+  }
+  void setCacheReconciliationEnabled(bool enabled) override {
+    inner_->setCacheReconciliationEnabled(enabled);
+  }
+  void setCacheCheckpointPolicy(
+      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
+      override {
+    inner_->setCacheCheckpointPolicy(policy);
+  }
+  PrefillPlan preparePrefill(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools,
+      const std::vector<std::vector<uint8_t>>& media,
+      const std::vector<PlannedMedia>& mediaPlan, bool isCacheLoaded,
+      bool isPrefillOnlyRequest) override {
+    return inner_->preparePrefill(
+        chatMsgs, tools, media, mediaPlan, isCacheLoaded, isPrefillOnlyRequest);
+  }
+  llama_pos evalMediaSegment(size_t mediaIndex, llama_pos pos) override {
+    return inner_->evalMediaSegment(mediaIndex, pos);
+  }
+  void adoptCheckpoints(
+      qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
+    inner_->adoptCheckpoints(std::move(checkpoints));
+  }
+  qvac_lib_inference_addon_llama::cache::Checkpoints
+  releaseCheckpoints() override {
+    return inner_->releaseCheckpoints();
+  }
+  void captureHistoryCheckpoint(llama_pos pos) override {
+    inner_->captureHistoryCheckpoint(pos);
+  }
+  void
+  onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override {
+    inner_->onPrefillComplete(currentPos, prefillTokenCount);
+  }
+  void syncPosition(llama_pos currentPos) override {
+    inner_->syncPosition(currentPos);
+  }
+  SequenceStepResult onLogitsReady(
+      int logitIdx, unsigned generatedAfterAccept,
+      const OutputFn& outputCallback, LlamaBatch* inlineDecodeBatch) override {
+    return inner_->onLogitsReady(
+        logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
+  }
+  void onSequenceEnd(const OutputFn& outputCallback) override {
+    inner_->onSequenceEnd(outputCallback);
+  }
+  [[nodiscard]] bool onGenerationFinished(
+      const OutputFn& outputCallback,
+      GenerationStopReason terminalReason) override {
+    return inner_->onGenerationFinished(outputCallback, terminalReason);
+  }
+  [[nodiscard]] bool onCancel(const OutputFn&) override {
+    throw std::runtime_error("injected driver teardown failure");
+  }
+  [[nodiscard]] bool onFailure(const OutputFn& outputCallback) override {
+    return inner_->onFailure(outputCallback);
+  }
+  [[nodiscard]] bool loadCache(const std::string& cacheKey) override {
+    return inner_->loadCache(cacheKey);
+  }
+  [[nodiscard]] bool
+  adoptResidentState(const std::vector<llama_token>& stateTokens) override {
+    return inner_->adoptResidentState(stateTokens);
+  }
+  [[nodiscard]] std::vector<llama_token> residentStateTokens() const override {
+    return inner_->residentStateTokens();
+  }
+  void saveCache(const std::string& cacheKey) const override {
+    inner_->saveCache(cacheKey);
+  }
+  void snapshotPreRequestCursor() override {
+    inner_->snapshotPreRequestCursor();
+  }
+  void snapshotPreRequestRollbackAnchor() override {
+    inner_->snapshotPreRequestRollbackAnchor();
+  }
+  [[nodiscard]] bool shouldPersistAfterFinalize() const override {
+    return inner_->shouldPersistAfterFinalize();
+  }
+
+private:
+  std::unique_ptr<SequenceDriver> inner_;
+};
+
+} // namespace
+
+/// `cancelSlotLocked` is noexcept and runs the driver teardown from the
+/// StepUnlockGuard destructor when the cancel lands in the decode unlock
+/// window. A throwing teardown must be contained there: the cancelled slot is
+/// freed, its group completes, and the sibling sequence finishes normally.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    PerSlotCancelSwallowsThrowingDriverTeardown) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // Admission is in submission order, so the second prompt owns seqId 1.
+  constexpr uint32_t kCancelSeqId = 1;
+
+  const DriverFactory original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original](const common_params& params, uint32_t seqId, llama_pos ceiling)
+          -> std::unique_ptr<SequenceDriver> {
+        std::unique_ptr<SequenceDriver> driver =
+            original(params, seqId, ceiling);
+        if (seqId != kCancelSeqId) {
+          return driver;
+        }
+        return std::make_unique<ThrowingCancelDriver>(std::move(driver));
+      });
+
+  std::atomic<bool> readyToCancel = false;
+  std::atomic<bool> cancelIssued = false;
+  std::atomic<bool> cancelHitOccupied = false;
+
+  // Cancel from inside the decode unlock window, so the throwing teardown
+  // runs in the StepUnlockGuard destructor's reconcile.
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler,
+      [scheduler, &readyToCancel, &cancelIssued, &cancelHitOccupied](
+          llama_context* ctx, llama_batch& batch) {
+        if (readyToCancel.load() && !cancelIssued.exchange(true)) {
+          const auto admissionId =
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
+          cancelHitOccupied.store(admissionId.has_value());
+          if (admissionId.has_value()) {
+            scheduler->cancel(kCancelSeqId, *admissionId);
+          }
+        }
+        return llama_decode(ctx, batch);
+      });
+
+  auto promptA =
+      makePrompt("Write a long, detailed paragraph about redwood forests.");
+  auto promptB =
+      makePrompt("Write a long, detailed paragraph about coral reefs.");
+  promptB.outputCallback = [&readyToCancel](const std::string&) {
+    readyToCancel.store(true);
+  };
+
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
+  // Returning at all proves the throw did not std::terminate the process.
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  ASSERT_TRUE(cancelIssued.load())
+      << "test setup: seqId 1 never reached the cancel arming point";
+  ASSERT_TRUE(cancelHitOccupied.load())
+      << "the cancel must hit the still-occupied seqId 1, or the throwing "
+         "teardown never ran";
+  EXPECT_FALSE(outputs[0].empty())
+      << "sibling sequence (seqId 0) must finish normally despite the "
+         "throwing teardown on seqId 1";
+}
+
 /// SeqIds are recycled slot indices: when a request drains, the worker frees
 /// its slot and may admit an unrelated request into the same seqId within one
 /// mutex hold. A canceller that captured a job's seqId while that job was
