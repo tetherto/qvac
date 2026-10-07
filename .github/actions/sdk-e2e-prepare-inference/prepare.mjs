@@ -42,9 +42,11 @@ function appendSummary(lines) {
   fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
 }
 
+// npm is a .cmd shim on Windows, which Node only spawns through a shell.
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
     encoding: "utf8",
+    shell: process.platform === "win32",
     stdio: options.capture ? ["ignore", "pipe", "inherit"] : "inherit",
     ...options,
   });

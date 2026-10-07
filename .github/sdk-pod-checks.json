@@ -37,8 +37,7 @@
   },
   {
     "package": "ai-sdk-provider",
-    "path": "packages/ai-sdk-provider",
-    "pkg_manager": "bun"
+    "path": "packages/ai-sdk-provider"
   },
   {
     "package": "test-suite",

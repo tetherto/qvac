@@ -20,9 +20,21 @@ const DEPENDENCY = '@qvac/inference'
 // 128 + signal number.
 const SIGNAL_EXIT_CODES = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
 
+// `npm run` exports the parent's config as npm_config_* and the child npm
+// would honour it (an `--omit=dev` on the outer run would drop the SDK's
+// devDependencies), so those are stripped. npm is a .cmd shim on Windows,
+// which Node only spawns through a shell.
+function childEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('npm_config_'))
+  )
+}
+
 function run(command, args, cwd, capture = false) {
   return execFileSync(command, args, {
     cwd,
+    env: childEnv(),
+    shell: process.platform === 'win32',
     stdio: capture ? ['inherit', 'pipe', 'inherit'] : 'inherit',
     encoding: 'utf8'
   })

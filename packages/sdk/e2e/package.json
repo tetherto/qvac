@@ -6,7 +6,7 @@
   "main": "dist/tests/electron/main.js",
   "description": "SDK tests using QVAC test framework",
   "scripts": {
-    "prepare:sdk": "cd .. && (npm install --ignore-scripts && npm run build); cd e2e",
+    "prepare:sdk": "node scripts/prepare-sdk.mjs",
     "build": "npm run clean && tsc && npm run emit:resource-table",
     "bundle:sdk": "node scripts/bundle-sdk.mjs",
     "install:build": "npm install --install-links && npm run build",
