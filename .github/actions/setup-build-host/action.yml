@@ -44,10 +44,19 @@ runs:
         fi
         ndk="${ANDROID_HOME}/ndk/${NDK_VERSION}"
         if [ ! -d "$ndk" ]; then
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            echo "::error::NDK ${NDK_VERSION} is not installed and $sdkmanager is missing"
+            exit 1
+          fi
           echo "NDK ${NDK_VERSION} not on this image; installing"
-          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" > /dev/null
+          "$sdkmanager" --install "ndk;${NDK_VERSION}"
         fi
-        revision=$(sed -n 's/^Pkg.Revision *= *//p' "$ndk/source.properties")
+        if [ ! -f "$ndk/source.properties" ]; then
+          echo "::error::$ndk/source.properties is missing; the NDK install is incomplete"
+          exit 1
+        fi
+        revision=$(sed -n 's/^Pkg\.Revision *= *//p' "$ndk/source.properties")
         if [ "$revision" != "$NDK_VERSION" ]; then
           echo "::error::expected NDK ${NDK_VERSION} at $ndk, found '${revision}'"
           exit 1
