@@ -1,4 +1,5 @@
 #include "fit/LlamaLoadConfig.hpp"
+#include "fit/LlamaLoadConfigParse.hpp"
 
 #include <algorithm>
 #include <array>
@@ -109,18 +110,6 @@ const std::array<std::string_view, 18> UNSUPPORTED_KEY_PARTS = {
     "stream",
 };
 
-std::string lower(std::string value) {
-  std::ranges::transform(value, value.begin(), [](unsigned char character) {
-    return static_cast<char>(std::tolower(character));
-  });
-  return value;
-}
-
-std::string canonicalKey(std::string key) {
-  std::ranges::replace(key, '_', '-');
-  return lower(std::move(key));
-}
-
 bool keyIsUnsupported(const std::string& key) {
   return std::ranges::any_of(UNSUPPORTED_KEY_PARTS, [&](std::string_view part) {
     return key.find(part) != std::string::npos;
@@ -154,23 +143,6 @@ llama_load_mode parseLoadMode(const std::string& value) {
         "'mlock', 'mmap+mlock', or 'dio'");
   }
   return mode->second;
-}
-
-int parseInteger(const std::string& value, const std::string& key) {
-  size_t consumed = 0;
-  long long parsed = 0;
-  try {
-    parsed = std::stoll(value, &consumed);
-  } catch (const std::exception&) {
-    throw std::invalid_argument(
-        "model-fit: config." + key + " must be an integer string");
-  }
-  if (consumed != value.size() || parsed < std::numeric_limits<int>::min() ||
-      parsed > std::numeric_limits<int>::max()) {
-    throw std::invalid_argument(
-        "model-fit: config." + key + " must be an integer string");
-  }
-  return static_cast<int>(parsed);
 }
 
 LlamaConfigMap canonicalizeConfig(const LlamaConfigMap& config) {

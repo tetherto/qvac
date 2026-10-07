@@ -284,3 +284,13 @@ jobs:
         run: |
           set -euo pipefail
           npm run test:cpp:run
+
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run
