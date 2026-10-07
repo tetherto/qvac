@@ -450,8 +450,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   auto request = args.getJsObject(0, "request");
   const auto detector =
       request.getProperty<js::String>(env, "pathDetector").as<std::string>(env);
-  const auto recognizer =
-      request.getProperty<js::String>(env, "pathRecognizer").as<std::string>(env);
+  const auto recognizer = request.getProperty<js::String>(env, "pathRecognizer")
+                              .as<std::string>(env);
   OcrConfig config;
   applyMainGpu(env, request, config);
   applyBackendDevice(env, request, config);
@@ -460,12 +460,14 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     config.backendsDir = dir->as<std::string>(env);
   }
   uint64_t margin = 0;
-  if (auto value = request.getOptionalProperty<js::Number>(env, "marginBytes")) {
+  if (auto value =
+          request.getOptionalProperty<js::Number>(env, "marginBytes")) {
     const double n = value->as<double>(env);
     if (!std::isfinite(n) || n < 0 || std::trunc(n) != n ||
         n > 9007199254740991.0) {
-      throw StatusError{general_error::InvalidArgument,
-                        "marginBytes must be a non-negative safe integer"};
+      throw StatusError{
+          general_error::InvalidArgument,
+          "marginBytes must be a non-negative safe integer"};
     }
     margin = static_cast<uint64_t>(n);
   }
@@ -475,11 +477,26 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   out.setProperty(env, "reason", js::String::create(env, fit.reason));
   out.setProperty(env, "deviceName", js::String::create(env, fit.deviceName));
   out.setProperty(env, "report", js::String::create(env, fit.report));
-  out.setProperty(env, "deviceBytes", js::Number::create(env, static_cast<double>(fit.deviceBytes)));
-  out.setProperty(env, "hostBytes", js::Number::create(env, static_cast<double>(fit.hostBytes)));
-  out.setProperty(env, "weightsBytes", js::Number::create(env, static_cast<double>(fit.weightsBytes)));
-  out.setProperty(env, "deviceFreeBytes", js::Number::create(env, static_cast<double>(fit.deviceFreeBytes)));
-  out.setProperty(env, "deviceTotalBytes", js::Number::create(env, static_cast<double>(fit.deviceTotalBytes)));
+  out.setProperty(
+      env,
+      "deviceBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceBytes)));
+  out.setProperty(
+      env,
+      "hostBytes",
+      js::Number::create(env, static_cast<double>(fit.hostBytes)));
+  out.setProperty(
+      env,
+      "weightsBytes",
+      js::Number::create(env, static_cast<double>(fit.weightsBytes)));
+  out.setProperty(
+      env,
+      "deviceFreeBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceFreeBytes)));
+  out.setProperty(
+      env,
+      "deviceTotalBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceTotalBytes)));
   return out;
 }
 JSCATCH

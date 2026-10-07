@@ -25,8 +25,8 @@ struct OcrFitResult {
 };
 
 // Inspect tensor descriptors only; no tensor data or image is loaded.
-std::optional<OcrFitFootprint> inspectOcrGguf(
-    const std::string& path, const char* requiredTensor);
+std::optional<OcrFitFootprint>
+inspectOcrGguf(const std::string& path, const char* requiredTensor);
 
 // Advisory weight-load check. Unknown placement or memory yields status=error.
 OcrFitResult assessOcrFit(
