@@ -1507,6 +1507,55 @@ TEST(CacheSlidingWindowTest, RollbackPastTheWindowRestartsCold) {
   EXPECT_EQ(fromCache, fromScratch)
       << "the turn after a rollback past the window must match a cold run";
 
+  cached.reset();
+  fs::remove(cacheFile);
+}
+
+// The window check must not fire when nothing past the rollback target was
+// decoded: a long history whose window cache has wrapped keeps its cursor.
+TEST(CacheSlidingWindowTest, RollbackWithTheWindowIntactKeepsTheCache) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_intact_rollback_cache.bin";
+  fs::remove(cacheFile);
+
+  // ~2.5k tokens: past the window cache, so its oldest cells are reused.
+  auto model = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(model->isLoaded());
+  LlamaModel::Prompt primer;
+  primer.input = slidingWindowBrief(-1);
+  primer.prefill = true;
+  primer.cacheKey = cacheFile.string();
+  EXPECT_TRUE(model->processPrompt(primer).empty());
+
+  LlmContext* context = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(context, nullptr);
+  const llama_pos primed = context->getNPast();
+  ASSERT_GT(primed, 1024);
+
+  // Stopped before its first prefill batch, so the request rolls back having
+  // decoded nothing past its target (one token short of the primer, re-decoded
+  // for fresh logits).
+  LlamaModel::Prompt stopped;
+  stopped.input = primer.input;
+  stopped.cacheKey = cacheFile.string();
+  context->stop();
+  try {
+    (void)model->processPrompt(stopped);
+  } catch (const std::exception&) {
+    // How the cancel surfaces does not matter; the state it leaves does.
+  }
+
+  EXPECT_EQ(context->getNPast(), primed - 1)
+      << "a rollback that decoded nothing past its target must keep the cache";
+
+  model.reset();
   fs::remove(cacheFile);
 }
 
