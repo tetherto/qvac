@@ -48,7 +48,9 @@ const DURING_INFERENCE_DRAIN_MS = 1_000
 const CONCURRENT_DRAIN_MS = 3_000
 const RELOAD_DRAIN_MS = 5_000
 // Bounded wait for a trigger to wind down so the next test doesn't inherit an in-flight job.
-const TRIGGER_JOIN_GRACE_MS = 8_000
+// Sized for the slowest one -- whisper inside the packaged app -- since the claim is log flow,
+// not latency.
+const TRIGGER_JOIN_GRACE_MS = 30_000
 // Cap completion length — logging tests only need log flow, not a full response.
 const LOGGING_TRIGGER_PREDICT_TOKENS = 20
 

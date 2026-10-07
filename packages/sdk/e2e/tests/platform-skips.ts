@@ -191,9 +191,28 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── the RPC server ───────────────────────────────────────────────────────
+  {
+    match: /^rpc-server-(?!device-map)/,
+    skip: {
+      reason:
+        'The strict-confined Snap has no libibverbs.so.1, so startRpcServer refuses before any of these reaches the SDK',
+      platforms: ['snap']
+    }
+  },
+
+  // ── the OCR GPU-selection check ──────────────────────────────────────────
+  {
+    match: /^ocr-main-gpu-/,
+    skip: {
+      reason:
+        'The plugin strips main-gpu on single-GPU devices, and the ocr-main-gpu resource is desktop and Electron only',
+      platforms: ['mobile', 'desktop-python']
+    }
+  },
+
   // ── model fit ────────────────────────────────────────────────────────────
-  // The assessment describes a load without running one, so it runs everywhere. The probe
-  // reads the projection back off a resident model, so it only runs where that model loads.
+  // The assessment needs no load and runs everywhere; the probe reads a resident model.
   {
     match: /^model-fit-(?:probe-)?(?:audiogen|diffusion)$/,
     skip: {
@@ -283,22 +302,9 @@ const RULES: Rule[] = [
     }
   },
   {
-    match: [
-      'ocr-sign-image',
-      'ocr-chart-image',
-      'ocr-no-text-image',
-      'ocr-large-image',
-      'ocr-low-quality',
-      'ocr-mixed-language',
-      'ocr-single-language',
-      'ocr-blurry-text',
-      'ocr-horizontally-inverted',
-      'ocr-vertically-inverted',
-      'ocr-misaligned-text',
-      'ocr-multi-sized-text',
-      'ocr-multiple-fonts',
-      'addon-logging-ocr'
-    ],
+    // The whole family: the app was jetsammed at 1892 MB, and evicting the model did not bring
+    // the footprint down, so listing ids individually only moved where the leg died.
+    match: /^(ocr-|addon-logging-ocr$)/,
     skip: { reason: 'OCR disabled on iOS (ONNX/CoreML OOM)', platforms: ['mobile-ios'] }
   }
 ]

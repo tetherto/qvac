@@ -36,9 +36,9 @@ export interface ResourceEntry {
    */
   skipPreDownload?: boolean
   /**
-   * Platforms that skip the pre-download for this entry while still defining it. A leg that never
-   * loads the model still needs the definition -- `assessModelFit` describes a load without
-   * running it -- but must not pay for the weights.
+   * Platforms that skip the pre-download for this entry while still defining it: a leg that never
+   * loads the model still needs the definition, but must not pay for the weights. Named by app
+   * family, as `on` is -- the Snap runs the Electron app, so it resolves `electron`.
    */
   skipPreDownloadOn?: string[]
 }
