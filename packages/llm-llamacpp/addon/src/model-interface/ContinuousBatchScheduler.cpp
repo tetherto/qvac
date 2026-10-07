@@ -349,6 +349,10 @@ void ContinuousBatchScheduler::workerLoop() {
     if (cancelRequested_.exchange(false)) {
       cancelPendingLocked();
     } else {
+      // A request that finished in the step above freed its key: a save or
+      // discard waiting for it runs now, before the next request on that key
+      // is admitted and adopts the state.
+      serviceSaveJobsLocked();
       admitPendingIntoFreeSlotsLocked();
     }
   }
