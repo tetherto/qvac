@@ -1,5 +1,5 @@
 import { getModel } from '@/runtime/model-registry'
-import { getRequestRegistry } from '@/runtime/request-context'
+import { getRequestRegistry, withRequestContext } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { InferenceCancelledError, InvalidResponseError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
@@ -21,11 +21,12 @@ export async function decide(request: DecideRequest) {
     kind: 'decisions',
     modelId
   })
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
   if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const model = getModel(modelId) as unknown as LayaDecisions
   const onAbort = () => {
     model.cancel().catch((error: unknown) => {
-      getEngineLogger().warn(
+      requestLogger.warn(
         `Laya cancel failed: ${error instanceof Error ? error.message : String(error)}`
       )
     })

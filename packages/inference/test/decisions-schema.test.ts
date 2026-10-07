@@ -9,7 +9,7 @@ import {
 import {
   transformDecisionsConfig,
   decisionsModelFiles
-} from '@/plugins/builtin/llamacpp-decisions/model'
+} from '@/plugins/builtin/llamacpp-decisions/helpers'
 
 const questions = {
   team: {
