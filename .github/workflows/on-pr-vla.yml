@@ -28,6 +28,7 @@ on:
       # on-pr carve-out: on-pr-nx.yml will not build this package, so a
       # template-only change has to start this orchestrator itself.
       - "cmake/qvac-addon/**"
+  merge_group:
   workflow_dispatch:
 
   workflow_call:
@@ -379,7 +380,7 @@ jobs:
   publish-prebuild-status:
     # Posts qvac/prebuild-vla for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
     needs: [prebuild, prebuild-artifact-reuse, ci-router]
-    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    if: always() && !cancelled() && (github.event_name == 'pull_request_target' || github.event_name == 'merge_group')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -398,7 +399,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           PREBUILD_RESULT: ${{ needs.prebuild.result }}
           REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
           # A skipped prebuild is only a pass when ci-router succeeded and chose
@@ -414,7 +415,7 @@ jobs:
   publish-cpp-test-status:
     # Posts qvac/cpp-tests-vla for Merge Guard's verify-cpp-tests.
     needs: [cpp-tests, ci-router]
-    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    if: always() && !cancelled() && (github.event_name == 'pull_request_target' || github.event_name == 'merge_group')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -431,7 +432,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
           REUSE_HIT: ''
           CI_ROUTER_RESULT: ${{ needs.ci-router.result }}

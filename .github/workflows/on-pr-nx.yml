@@ -13,6 +13,7 @@ on:
     paths:
       - "packages/**"
       - "cmake/qvac-addon/**"
+  merge_group:
   workflow_dispatch:
     inputs:
       repository:
@@ -556,7 +557,7 @@ jobs:
     # `!= '[]'` expands the strategy to an empty list and errors the run.
     if: >-
       always() && !cancelled() &&
-      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || github.event_name == 'merge_group') &&
       needs.matrix.result == 'success' &&
       needs.matrix.outputs.prebuilds != '' &&
       needs.matrix.outputs.prebuilds != '[]'
@@ -581,7 +582,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           # A linking failure must red the status, same fold main uses.
           PREBUILD_RESULT: ${{ needs.verify-prebuild-linking.result == 'failure' && 'failure' || needs.prebuild.result }}
           REUSE_HIT: ''
@@ -598,7 +599,7 @@ jobs:
     needs: [cpp-tests, ci-router, matrix]
     if: >-
       always() && !cancelled() &&
-      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || github.event_name == 'merge_group') &&
       needs.matrix.result == 'success' &&
       needs.matrix.outputs.cpptests != '' &&
       needs.matrix.outputs.cpptests != '[]'
@@ -623,7 +624,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
           REUSE_HIT: ''
           CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
