@@ -2,6 +2,11 @@ name: PR Checks (SDK Kotlin)
 
 on:
   pull_request:
+    # Mirror on-pr-nx.yml: Merge Guard fires on labeled/ready_for_review and uses
+    # pull_request.updated_at as the freshness bar, so this producer must re-run on
+    # those events too — otherwise a label marks the qvac/sdk-kotlin status stale
+    # and verify-sdk-kotlin waits to its deadline for a fresh one.
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     paths:
       - 'packages/sdk-kotlin/**'
       - 'packages/inference/package.json'
