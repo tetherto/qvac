@@ -2018,7 +2018,7 @@ test('RPC server prebuilds consume PR-built npm Fabric artifacts', () => {
   assert.match(nxPrebuilds, /reuse-workflow-file:\s*\$\{\{ inputs\.reuse-workflow-file \}\}/)
   assert.match(
     nxPrebuilds,
-    /fabric-overlay-artifact:\s*\$\{\{ contains\(fromJSON\(inputs\.fabric-consumers\), matrix\.package\) && inputs\.fabric-overlay-artifact \|\| '' \}\}/,
+    /fabric-overlay-artifact:\s*\$\{\{ contains\(fromJSON\(inputs\.fabric-consumers \|\| '\[\]'\), matrix\.package\) && inputs\.fabric-overlay-artifact \|\| '' \}\}/,
   )
   assert.ok(fabricConsumers.includes('ggml-rpc-server'), 'the RPC server must receive the PR-built Fabric overlay')
   assert.match(
