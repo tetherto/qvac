@@ -16,6 +16,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- Whisper `assessFit` takes the registry's weightless descriptions of a
+  whisper model and its Silero VAD model as `modelPath` and `vadModelPath`,
+  and projects them exactly as it projects the files, so a whisper load can be
+  assessed before it is downloaded.
 - MOSS-Transcribe-Diarize engine (`engine: 'moss-transcribe'`, OpenMOSS
   MOSS-Transcribe-Diarize): one pass over a whole recording returns
   timestamped segments with the speaker label (`speaker: 'S01'`) and a 0-based
