@@ -58,7 +58,7 @@
     "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"addon-unavailable.js\" \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" && lunte \"addon-unavailable.js\" \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
+    "lint:js": "prettier --check \"addon-unavailable.js\" \"binding.js\" \"binding-published.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" && lunte \"addon-unavailable.js\" \"binding.js\" \"binding-published.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
