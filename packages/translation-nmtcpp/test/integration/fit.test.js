@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+const os = require('bare-os')
 const path = require('bare-path')
 const TranslationNmtcpp = require('../../index.js')
 const { ensureIndicTransModel, ensureBergamotModel, TEST_TIMEOUT } = require('./utils')
@@ -28,6 +29,31 @@ test('fit reports a missing model without loading it', (t) => {
   t.is(result.status, 'error')
   t.is(result.reason, 'model-unreadable')
   t.is(result.modelBytes, 0)
+})
+
+test('fit reads model, pivot, and vocab files below a Unicode directory', (t) => {
+  const dir = path.join(os.tmpdir(), `nmt-fit-${process.pid}-${Date.now()}-módèles-日本語`)
+  fs.mkdirSync(dir, { recursive: true })
+  try {
+    const files = {
+      model: path.join(dir, 'model.intgemm.bin'),
+      pivotModel: path.join(dir, 'pivot.intgemm.bin'),
+      srcVocab: path.join(dir, 'src.spm'),
+      dstVocab: path.join(dir, 'dst.spm'),
+      pivotSrcVocab: path.join(dir, 'pivot-src.spm'),
+      pivotDstVocab: path.join(dir, 'pivot-dst.spm')
+    }
+    for (const file of Object.values(files)) fs.writeFileSync(file, Buffer.alloc(64))
+
+    const fit = TranslationNmtcpp.assessFit({
+      files,
+      config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
+    })
+    t.is(fit.modelBytes, 64 * 6)
+    t.ok(!fit.report.includes('unreadable'), 'every UTF-8 path was inspected')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 function checkRealModelFit(t, request) {
@@ -69,6 +95,24 @@ test(
       files: { model },
       config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
     })
+  }
+)
+
+test(
+  'fit gives an empty canonical GPU backend precedence over its alias',
+  { timeout: TEST_TIMEOUT },
+  async (t) => {
+    const model = await ensureIndicTransModel()
+    const files = { model }
+    const config = { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: true }
+    const automatic = TranslationNmtcpp.assessFit({ files, config })
+    const conflicting = TranslationNmtcpp.assessFit({
+      files,
+      config: { ...config, gpu_backend: '', gpuBackend: 'no-such-backend' }
+    })
+    t.is(conflicting.status, automatic.status)
+    t.is(conflicting.reason, automatic.reason)
+    t.is(conflicting.backend, automatic.backend)
   }
 )
 

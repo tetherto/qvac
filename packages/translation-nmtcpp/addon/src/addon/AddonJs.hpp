@@ -149,14 +149,16 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   uint64_t requiredBytes = 0;
   uint64_t freeBytes = 0;
   namespace fs = std::filesystem;
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
+  const fs::path modelPath = fs::u8path(path);
   std::error_code ec;
-  if (fs::is_regular_file(path, ec)) {
-    modelBytes = fs::file_size(path, ec);
+  if (fs::is_regular_file(modelPath, ec)) {
+    modelBytes = fs::file_size(modelPath, ec);
   }
   if (ec || modelBytes < 64 || modelBytes > 9007199254740991ULL) {
     report = "Translation model file is missing, incomplete, or unreadable";
   } else if (modelType == "IndicTrans") {
-    std::ifstream stream(path, std::ios::binary);
+    std::ifstream stream(modelPath, std::ios::binary);
     uint32_t magic = 0;
     stream.read(reinterpret_cast<char*>(&magic), sizeof(magic));
     if (!stream || magic != GGML_FILE_MAGIC) {
@@ -172,11 +174,13 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     const std::string pivot =
         pivotValue ? pivotValue->as<std::string>(env) : "";
     if (!pivot.empty()) {
-      if (modelType != "Bergamot" || !fs::is_regular_file(pivot, ec)) {
+      // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
+      const fs::path pivotPath = fs::u8path(pivot);
+      if (modelType != "Bergamot" || !fs::is_regular_file(pivotPath, ec)) {
         reason = "unsupported-config";
         report = "Pivot fit requires two readable Bergamot model files";
       } else {
-        const uint64_t pivotBytes = fs::file_size(pivot, ec);
+        const uint64_t pivotBytes = fs::file_size(pivotPath, ec);
         if (ec || pivotBytes > 9007199254740991ULL - modelBytes) {
           report = "Pivot model file is unreadable";
         } else {
@@ -198,11 +202,13 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       }
       auto value = files.getOptionalProperty<js::String>(env, key);
       const std::string vocab = value ? value->as<std::string>(env) : "";
-      if (vocab.empty() || !fs::is_regular_file(vocab, ec)) {
+      // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
+      const fs::path vocabPath = fs::u8path(vocab);
+      if (vocab.empty() || !fs::is_regular_file(vocabPath, ec)) {
         report = std::string("Bergamot vocabulary is missing: ") + key;
         return;
       }
-      const uint64_t bytes = fs::file_size(vocab, ec);
+      const uint64_t bytes = fs::file_size(vocabPath, ec);
       if (ec || bytes > 9007199254740991ULL - modelBytes) {
         report = std::string("Bergamot vocabulary is unreadable: ") + key;
         return;
@@ -227,9 +233,11 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     NmtBackendsHandle backends(backendsDir, openclCacheDir);
     ggml_backend_dev_t device = nullptr;
     if (useGpu) {
-      const std::string gpuBackend = !optionString("gpu_backend").empty()
-                                         ? optionString("gpu_backend")
-                                         : optionString("gpuBackend");
+      const auto canonicalBackend =
+          config.getOptionalProperty<js::String>(env, "gpu_backend");
+      const std::string gpuBackend =
+          canonicalBackend ? canonicalBackend->as<std::string>(env)
+                           : optionString("gpuBackend");
       const auto ordinal = optionNumber("gpu_device")
                                .value_or(optionNumber("gpuDevice").value_or(0));
       if (!std::isfinite(ordinal) || std::trunc(ordinal) != ordinal ||

@@ -40,6 +40,19 @@ function isAbsoluteModelPath(modelPath) {
         /^[A-Za-z]:[\\/]/.test(modelPath) ||
         modelPath.startsWith("\\\\"));
 }
+function normalizeGpuAliases(config) {
+    for (const [canonical, alias] of [
+        ["use_gpu", "useGPU"],
+        ["gpu_backend", "gpuBackend"],
+        ["gpu_device", "gpuDevice"],
+        ["op_offload_min_batch", "opOffloadMinBatch"],
+    ]) {
+        if (config[canonical] === undefined && config[alias] !== undefined) {
+            config[canonical] = config[alias];
+        }
+        delete config[alias];
+    }
+}
 class QvacIndicTransResponse extends infer_base_1.QvacResponse {
     processor;
     dstLang;
@@ -116,10 +129,12 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         if (typeof binding.assessFit !== "function") {
             throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
         }
+        const config = { ...request.config };
+        normalizeGpuAliases(config);
         return binding.assessFit({
             ...request,
             config: {
-                ...request.config,
+                ...config,
                 backendsDir: request.config.backendsDir ?? resolveBackendsDir(),
             },
         });
@@ -322,25 +337,7 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         // expects snake_case (mirrors nmt_context_params field names), so we
         // translate camelCase → snake_case here. snake_case takes precedence
         // when both are present (explicit user choice wins over alias).
-        if (otherConfig.use_gpu === undefined && otherConfig.useGPU !== undefined) {
-            otherConfig.use_gpu = otherConfig.useGPU;
-        }
-        if (otherConfig.gpu_backend === undefined &&
-            otherConfig.gpuBackend !== undefined) {
-            otherConfig.gpu_backend = otherConfig.gpuBackend;
-        }
-        if (otherConfig.gpu_device === undefined &&
-            otherConfig.gpuDevice !== undefined) {
-            otherConfig.gpu_device = otherConfig.gpuDevice;
-        }
-        if (otherConfig.op_offload_min_batch === undefined &&
-            otherConfig.opOffloadMinBatch !== undefined) {
-            otherConfig.op_offload_min_batch = otherConfig.opOffloadMinBatch;
-        }
-        delete otherConfig.useGPU;
-        delete otherConfig.gpuBackend;
-        delete otherConfig.gpuDevice;
-        delete otherConfig.opOffloadMinBatch;
+        normalizeGpuAliases(otherConfig);
         if (otherConfig.backendsDir === undefined) {
             otherConfig.backendsDir = resolveBackendsDir();
         }
