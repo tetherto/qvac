@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Metadata-only `assessFit()` for MOSS-SoundEffect, with required model path,
+  prompt and duration, shared generation controls, and host/device memory estimates.
+
 - MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
   48 kHz sound effects of up to 30 seconds from a text description, from one
   GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
