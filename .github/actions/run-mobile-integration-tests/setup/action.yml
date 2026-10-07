@@ -259,14 +259,17 @@ runs:
         # bundle can only be trusted if it is a build of THIS addon. Matters most
         # for the legacy bare `prebuilds` name, which carries no addon in it.
         # Flag a foreign stem rather than a missing expected one, so an addon
-        # whose binary is named differently is not failed for that alone.
+        # whose binary is named differently is not failed for that alone. A split
+        # addon names each host's module after its platform package
+        # (qvac__<addon>-<host>, every iOS host sharing qvac__<addon>-ios).
         EXPECTED="qvac__$(basename "$ADDON_WORKDIR")"
         for dir in $EXPECTED_DIRS; do
           FOREIGN=""
+          case "$dir" in ios-*) suffix=ios ;; *) suffix="$dir" ;; esac
           for f in "prebuilds/$dir"/qvac__*; do
             [ -e "$f" ] || continue
             stem="$(basename "$f")"; stem="${stem%%.*}"
-            [ "$stem" = "$EXPECTED" ] && { FOREIGN=""; break; }
+            { [ "$stem" = "$EXPECTED" ] || [ "$stem" = "$EXPECTED-$suffix" ]; } && { FOREIGN=""; break; }
             FOREIGN="$stem"
           done
           if [ -n "$FOREIGN" ]; then
