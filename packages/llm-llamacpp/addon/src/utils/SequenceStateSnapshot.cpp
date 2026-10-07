@@ -20,6 +20,7 @@
 #include <llama.h>
 
 #include "common/common.h"
+#include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
@@ -38,7 +39,8 @@ uint64_t currentProcessId() noexcept {
 // state, so on POSIX they live in a private directory `mkdtemp` creates with
 // mode 0700 under the temp dir, unreadable by other users whatever the umask
 // or the predictable file names. Windows' temp dir is already per user. The
-// directory is removed at exit once its files are gone.
+// directory is removed at exit once its files are gone. When `mkdtemp` fails
+// there is no private directory, and disk snapshots fall back to memory.
 class SnapshotDirectory {
 public:
   SnapshotDirectory() {
@@ -71,11 +73,41 @@ public:
   [[nodiscard]] const std::filesystem::path& path() const noexcept {
     return path_;
   }
+  /// Snapshot files may go here: always on Windows, only in the directory
+  /// `mkdtemp` created on POSIX.
+  [[nodiscard]] bool usable() const noexcept {
+#ifdef _WIN32
+    return true;
+#else
+    return owned_;
+#endif
+  }
 
 private:
   std::filesystem::path path_;
   bool owned_ = false;
 };
+
+const SnapshotDirectory& snapshotDirectory() {
+  static const SnapshotDirectory directory;
+  return directory;
+}
+
+// Disk storage without a private directory would write conversation state
+// under predictable names in the shared temp dir: use memory instead.
+SnapshotStorage effectiveStorage(SnapshotStorage requested) {
+  if (requested != SnapshotStorage::Disk || snapshotDirectory().usable()) {
+    return requested;
+  }
+  static std::atomic<bool> warned{false};
+  if (!warned.exchange(true)) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "could not create a private snapshot directory; cache checkpoints "
+        "are kept in memory instead of on disk");
+  }
+  return SnapshotStorage::Memory;
+}
 
 // Produce a per-process unique temp file path for a snapshot. PID
 // disambiguates across processes, `seqId` disambiguates concurrent
@@ -83,9 +115,8 @@ private:
 // counter disambiguates back-to-back captures within the same slot.
 std::string makeUniqueSnapshotPath(llama_seq_id seqId) {
   static std::atomic<uint64_t> counter{0};
-  static const SnapshotDirectory directory;
   const auto id = counter.fetch_add(1, std::memory_order_relaxed);
-  const std::filesystem::path& base = directory.path();
+  const std::filesystem::path& base = snapshotDirectory().path();
   const std::string filename = "qvac_llamacpp_seq_" +
                                std::to_string(currentProcessId()) + "_" +
                                std::to_string(static_cast<int>(seqId)) + "_" +
@@ -245,6 +276,7 @@ bool snapshotSequenceState(
     out.setScope(scope);
     return true;
   }
+  storage = effectiveStorage(storage);
 
   if (scope == SnapshotScope::Partial) {
     // There is no file variant of the partial API, so both storages copy the
