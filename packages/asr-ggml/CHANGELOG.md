@@ -43,6 +43,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   than 90 s keep stable speakers: a single pass mixed speakers up past about
   two minutes and failed past 400 s. `assessFit` no longer crashes on
   Nemotron 3 Diarization models. Same models, same API.
+- Raise the `speech-cpp` floor to `2026-10-07#1`, whose whisper fitter reads
+  the registry's weightless descriptions. Transcription is unchanged.
 
 ### Fixed
 
