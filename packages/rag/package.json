@@ -74,7 +74,7 @@
   ],
   "devDependencies": {
     "@qvac/embed-llamacpp": "^0.44.0",
-    "@qvac/llm-llamacpp": "^0.56.0",
+    "@qvac/llm-llamacpp": "^0.57.0",
     "@qvac/registry-client": "^0.6.0",
     "@types/brittle": "^3.5.0",
     "bare": "*",
