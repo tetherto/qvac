@@ -48,10 +48,10 @@ bool usesMultipleDevices(
 
   ggml_backend_dev_t detectionDevice = selected.device;
   if (config.detectionBackendDevice.has_value()) {
-    detectionDevice = ocr_backend_selection::selectBackendDevice(
-                          *config.detectionBackendDevice, config.gpuDevice,
-                          config.mainGpu)
-                          .device;
+    detectionDevice =
+        ocr_backend_selection::selectBackendDevice(
+            *config.detectionBackendDevice, config.gpuDevice, config.mainGpu)
+            .device;
   } else if (isMaliVulkan(selected)) {
     detectionDevice =
         ocr_backend_selection::selectBackendDevice(BackendDevice::CPU).device;
