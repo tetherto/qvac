@@ -35,22 +35,7 @@ bool WorldSessionModel::isLoaded() const noexcept {
   return session_ != nullptr;
 }
 
-void WorldSessionModel::load() {
-  if (isLoaded()) {
-    return;
-  }
-  qvac_lib_inference_addon_sd::validateWorldPlacement(
-      config_.paramsBackend, config_.maxVram);
-  if (config_.ditModelPath.empty() || config_.taehvPath.empty() ||
-      config_.scenePath.empty()) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "world session requires ditModelPath, taehvPath and scenePath");
-  }
-
-  const auto tLoadStart = std::chrono::steady_clock::now();
-  qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
-
+sd_abot_session_params_v2_t WorldSessionModel::sessionParams() const {
   sd_abot_session_params_v2_t params;
   sd_abot_session_params_v2_init(&params);
   params.dit_model_path = config_.ditModelPath.c_str();
@@ -68,6 +53,36 @@ void WorldSessionModel::load() {
       config_.paramsBackend.empty() ? nullptr : config_.paramsBackend.c_str();
   params.max_vram = config_.maxVram.empty() ? nullptr : config_.maxVram.c_str();
   params.stream_layers = config_.streamLayers;
+  return params;
+}
+
+sd_fit_status_t
+WorldSessionModel::assessFit(int walkSteps, sd_fit_result_t& result) const {
+  qvac_lib_inference_addon_sd::validateWorldPlacement(
+      config_.paramsBackend, config_.maxVram);
+  qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
+  const auto params = sessionParams();
+  sd_abot_fit_workload_t workload;
+  sd_abot_fit_workload_init(&workload);
+  workload.walk_steps = walkSteps;
+  return sd_abot_fit_params(&params, &workload, &result);
+}
+
+void WorldSessionModel::load() {
+  if (isLoaded()) {
+    return;
+  }
+  qvac_lib_inference_addon_sd::validateWorldPlacement(
+      config_.paramsBackend, config_.maxVram);
+  if (config_.ditModelPath.empty() || config_.taehvPath.empty() ||
+      config_.scenePath.empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "world session requires ditModelPath, taehvPath and scenePath");
+  }
+  const auto tLoadStart = std::chrono::steady_clock::now();
+  qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
+  const auto params = sessionParams();
   if (config_.streamLayers &&
       !qvac_lib_inference_addon_sd::maxVramSpecHasNonZeroBudget(
           config_.maxVram)) {

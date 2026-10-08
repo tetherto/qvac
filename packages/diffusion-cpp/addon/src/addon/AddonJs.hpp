@@ -562,6 +562,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   using namespace std;
 
   JsArgsParser args(env, info);
+  const auto mode = args.getMapEntry(0, "mode");
 
   SdCtxConfig config{};
   config.modelPath = args.getMapEntry(0, "path");
@@ -582,7 +583,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       args.getMapEntry(0, "embeddingsConnectorsPath");
 
   auto configMap = args.getSubmap(0, "config");
-  applySdCtxHandlers(config, configMap);
+  if (mode != "world") {
+    applySdCtxHandlers(config, configMap);
+  }
 
   auto request = args.getJsObject(0, "request")
                      .getOptionalProperty<js::Object>(env, "request");
@@ -603,9 +606,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
     return value->as<double>(env);
   };
-  const auto mode = args.getMapEntry(0, "mode");
   workload.upscaleOnly = mode == "upscale";
-  bool rejected = !mode.empty() && mode != "diffusion" && mode != "upscale";
+  bool rejected = !mode.empty() && mode != "diffusion" && mode != "upscale" &&
+                  mode != "world";
   auto count =
       [&](const char* name, double lo, double hi) -> std::optional<int> {
     auto value = number(name);
@@ -633,6 +636,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto repeats = count("upscaleRepeats", 1, 64)) {
     workload.upscaleRepeats = *repeats;
   }
+  const auto walkSteps = count("walkSteps", 1, 1000000).value_or(100);
   if (request.has_value()) {
     if (auto tiling =
             request->getOptionalProperty<js::Boolean>(env, "vaeTiling")) {
@@ -656,6 +660,24 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   SdModel::FitOutcome outcome;
   if (rejected) {
     outcome.reason = "unsupported-config";
+  } else if (mode == "world") {
+    WorldSessionConfig worldConfig;
+    worldConfig.ditModelPath = args.getMapEntry(0, "path");
+    worldConfig.taehvPath = args.getMapEntry(0, "taehvPath");
+    worldConfig.scenePath = args.getMapEntry(0, "scenePath");
+    applyWorldSessionHandlers(worldConfig, configMap);
+    const WorldSessionModel model{std::move(worldConfig)};
+    sd_fit_result_t fit{};
+    struct FitResultGuard {
+      sd_fit_result_t& result;
+      ~FitResultGuard() { sd_fit_result_free(&result); }
+    } guard{fit};
+    outcome.status = model.assessFit(walkSteps, fit);
+    outcome.reason = outcome.status == SD_FIT_SUCCESS   ? "fits"
+                     : outcome.status == SD_FIT_FAILURE ? "does-not-fit"
+                                                        : "model-unreadable";
+    if (fit.report)
+      outcome.report = fit.report;
   } else {
     const SdModel model{std::move(config)};
     outcome = model.assessFit(workload);

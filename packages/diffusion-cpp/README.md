@@ -799,6 +799,15 @@ For standalone ESRGAN, use `mode: 'upscale'`, `files: { esrgan }` and the same c
 
 For post-generation upscaling, include `files.esrgan` and the `upscaler_*` config fields in the diffusion request. The estimate includes ESRGAN weights retained alongside diffusion, including GPU staging when its parameters are offloaded to CPU. Set `workload.upscaleRepeats` to the number of passes to assess.
 
+For ABot, use `mode: 'world'`, the same `files: { model, taehv, scene }` and
+`config` as `WorldSession`, and `workload: { walkSteps: 100 }`. The default is
+100 walk steps; an explicit value must be a whole number from 1 to 1,000,000.
+The scene header supplies the resolution and reference slots. The check sizes
+the configured placement, including CPU offload, graph cuts, KV caches, the
+decoder and retained latent history. It does not change generation settings
+or limit the walk. Scene creation with umT5 and the Wan VAE is outside this
+session estimate.
+
 A `changed` of `true` comes with `status: "does-not-fit"` — the configuration as given does not fit, and the engine reached a placement only by moving modules between backends. A `paramsBackend` of `*=cpu` is the exception: the engine replans every module for it, so the plan is compared against the placement that load already uses, and an equal one is `fits`.
 
 A model the engine cannot read is `status: "error"` with `reason: "model-unreadable"`; only a broken request throws.

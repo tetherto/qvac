@@ -19,6 +19,10 @@ function assessFit(request) {
         ? { model: request.files.esrgan, esrgan: request.files.esrgan }
         : request.files;
     (0, file_paths_1.assertFilePaths)(files);
+    if (request.mode === 'world') {
+        (0, file_paths_1.assertAbsolute)('taehv', request.files.taehv);
+        (0, file_paths_1.assertAbsolute)('scene', request.files.scene);
+    }
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
     const binding = require('./binding.js');
     if (typeof binding.assessFit !== 'function') {
@@ -35,7 +39,11 @@ function assessFit(request) {
         .map(([key, value]) => [key, String(value)]));
     return binding.assessFit({
         ...(0, file_paths_1.toFilePaths)(files),
-        mode: standalone ? 'upscale' : 'diffusion',
+        ...(request.mode === 'world' && {
+            taehvPath: request.files.taehv,
+            scenePath: request.files.scene
+        }),
+        mode: request.mode ?? 'diffusion',
         config,
         request: request.workload ?? {}
     });

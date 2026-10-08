@@ -1,5 +1,6 @@
 import type { DiffusionFiles, EsrganFiles, EsrganUpscalerConfig, SdConfig } from './index';
 import type { DiffusionVideoFiles } from './file-paths';
+import type { WorldConfig, WorldFiles } from './world';
 export interface DiffusionFitWorkload {
     /** Token count drives the text-encoder memory; a default stands in when absent. */
     prompt?: string;
@@ -27,6 +28,14 @@ export interface EsrganFitRequest {
     config?: EsrganUpscalerConfig;
     workload?: Pick<DiffusionFitWorkload, 'width' | 'height' | 'upscaleRepeats'>;
 }
+export interface WorldFitRequest {
+    mode: 'world';
+    files: WorldFiles;
+    config?: WorldConfig;
+    workload?: {
+        walkSteps?: number;
+    };
+}
 export type DiffusionFitStatus = 'fits' | 'does-not-fit' | 'error';
 export type DiffusionFitReason = 'fits' | 'does-not-fit' | 'model-unreadable' | 'unsupported-config';
 export interface DiffusionFitResult {
@@ -53,4 +62,4 @@ export interface DiffusionFitResult {
  * A model the engine cannot read is `status: "error"`; only a broken request
  * throws.
  */
-export declare function assessFit(request: DiffusionFitRequest | EsrganFitRequest): DiffusionFitResult;
+export declare function assessFit(request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest): DiffusionFitResult;

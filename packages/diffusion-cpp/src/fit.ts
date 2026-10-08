@@ -4,7 +4,8 @@ import path = require('bare-path')
 
 import type { DiffusionFiles, EsrganFiles, EsrganUpscalerConfig, SdConfig } from './index'
 import type { DiffusionVideoFiles } from './file-paths'
-import { assertFilePaths, toFilePaths } from './file-paths'
+import { assertAbsolute, assertFilePaths, toFilePaths } from './file-paths'
+import type { WorldConfig, WorldFiles } from './world'
 
 export interface DiffusionFitWorkload {
   /** Token count drives the text-encoder memory; a default stands in when absent. */
@@ -34,6 +35,13 @@ export interface EsrganFitRequest {
   files: EsrganFiles
   config?: EsrganUpscalerConfig
   workload?: Pick<DiffusionFitWorkload, 'width' | 'height' | 'upscaleRepeats'>
+}
+
+export interface WorldFitRequest {
+  mode: 'world'
+  files: WorldFiles
+  config?: WorldConfig
+  workload?: { walkSteps?: number }
 }
 
 export type DiffusionFitStatus = 'fits' | 'does-not-fit' | 'error'
@@ -69,12 +77,18 @@ interface FitBinding {
  * A model the engine cannot read is `status: "error"`; only a broken request
  * throws.
  */
-export function assessFit(request: DiffusionFitRequest | EsrganFitRequest): DiffusionFitResult {
+export function assessFit(
+  request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest
+): DiffusionFitResult {
   const standalone = request.mode === 'upscale'
   const files = standalone
     ? { model: request.files.esrgan, esrgan: request.files.esrgan }
     : request.files
   assertFilePaths(files)
+  if (request.mode === 'world') {
+    assertAbsolute('taehv', request.files.taehv)
+    assertAbsolute('scene', request.files.scene)
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
   const binding = require('./binding.js') as Partial<FitBinding>
@@ -84,7 +98,7 @@ export function assessFit(request: DiffusionFitRequest | EsrganFitRequest): Diff
 
   // The native side reads the config sub-object as a string map, the same way
   // createInstance does.
-  const merged: SdConfig | EsrganUpscalerConfig = { ...request.config }
+  const merged: SdConfig | EsrganUpscalerConfig | WorldConfig = { ...request.config }
   if (!merged.backendsDir) {
     merged.backendsDir = path.join(__dirname, 'prebuilds')
   }
@@ -96,7 +110,11 @@ export function assessFit(request: DiffusionFitRequest | EsrganFitRequest): Diff
 
   return binding.assessFit({
     ...toFilePaths(files),
-    mode: standalone ? 'upscale' : 'diffusion',
+    ...(request.mode === 'world' && {
+      taehvPath: request.files.taehv,
+      scenePath: request.files.scene
+    }),
+    mode: request.mode ?? 'diffusion',
     config,
     request: request.workload ?? {}
   })
