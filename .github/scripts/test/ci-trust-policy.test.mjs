@@ -1133,6 +1133,20 @@ test("merge guard fails closed when the PR was not authorized", () => {
   }
 });
 
+test("bare-major check fails the workflow and stays out of the required merge guard", () => {
+  const guard = read(".github/workflows/pr-gate-merge.yml");
+  assert.doesNotMatch(
+    guard,
+    /bare-majors/,
+    "a bare-major failure must not feed qvac-merge-guard",
+  );
+
+  const workflow = read(".github/workflows/bare-majors.yml");
+  assert.match(workflow, /check-bare-majors\.mjs/);
+  assert.match(onBlock(workflow), /pull_request:/);
+  assert.doesNotMatch(onBlock(workflow), /pull_request_target/);
+});
+
 test("merge guard cancels superseded in-flight runs", () => {
   const source = read(".github/workflows/pr-gate-merge.yml");
   // verify-prebuilds uses a static per-run freshness threshold, so an older

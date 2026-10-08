@@ -78,7 +78,7 @@
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-process": "^4.2.2",
-    "bare-subprocess": "^5.2.3",
+    "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
