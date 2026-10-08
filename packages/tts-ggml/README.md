@@ -1111,6 +1111,12 @@ await response.onUpdate((data) => {
 }).await()
 ```
 
+When `maxNewTokens` is omitted, MOSS-Speech uses the remaining model context
+after the prompt instead of an implicit 1000-token budget. The JavaScript API
+currently accepts explicit budgets from 1 to 4096; the native engine also
+checks that the requested budget fits the remaining context. `maxReplySeconds`
+is optional and defaults to no time cut.
+
 The user turn is either `audio` (with `sampleRate`) or the run `input` text,
 not both; each entry of `messages` carries exactly one of `text` or `audio`
 (with its `sampleRate`).  Every call is one exchange: pass the earlier turns in
@@ -1444,13 +1450,20 @@ Runnable demos under `examples/`:
 | `moss-speech.js` | MOSS-Speech speech-to-speech: answers a spoken question WAV with a 24 kHz spoken reply (optionally in the voice of a second WAV). Set `QVAC_TTS_MOSS_SPEECH_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SPEECH_TEXT=1` for a text-only answer. `bare examples/moss-speech.js test/reference-audio/jfk.wav` |
 | `moss-dialogue-tts.js` | MOSS-TTSD multi-speaker dialogue from one 24 kHz reference per speaker; the text opens with each reference's transcript. Set `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-dialogue-tts.js "[S1] What alice.wav says. [S2] What bob.wav says. [S1] Hi. [S2] Hello." alice.wav bob.wav` |
 
-The two streaming examples feed PCM into a single long-running
+The streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
-per-chunk spawn gaps — install one of them (`brew install sox` or
-`brew install ffmpeg` on macOS) to enable playback.  Absent a player
-the demos still run and write the concatenated wav.
+per-chunk spawn gaps. Playback needs one of those players (`brew install sox`
+or `brew install ffmpeg` on macOS) and `bare-subprocess`, a development
+dependency: run `npm install bare-subprocess` when you run the examples from
+an installed package. Without them the demos still run and write the
+concatenated wav.
 
 ## Testing
+
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. The deterministic C++ tier remains a
+required gate. See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
 
 ```bash
 npm run test:unit               # mocked binding; fast
