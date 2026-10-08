@@ -14,6 +14,29 @@ const MODEL_PATH =
 
 const EMBEDDER_PATH = path.join(path.dirname(MODEL_PATH), 'bci-embedder.bin')
 
+const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures')
+const MODEL_DESCRIPTION_PATH = path.join(FIXTURES_DIR, 'ggml-bci-windowed.fit.gguf')
+const EMBEDDER_DESCRIPTION_PATH = path.join(FIXTURES_DIR, 'bci-embedder.fit.gguf')
+
+const SMALL_EMBEDDER_DIR = path.join(__dirname, '..', '..', 'addon', 'tests', 'fixtures')
+const SMALL_EMBEDDER_PATH = path.join(SMALL_EMBEDDER_DIR, 'bci-embedder-small.bin')
+const SMALL_EMBEDDER_DESCRIPTION_PATH = path.join(SMALL_EMBEDDER_DIR, 'bci-embedder-small.fit.gguf')
+const SMALL_EMBEDDER_HOST_BYTES = 332
+
+const PROJECTED_FIELDS = [
+  'status',
+  'modelType',
+  'deviceName',
+  'deviceTotalBytes',
+  'deviceBytes',
+  'weightsBytes',
+  'kvBytes',
+  'computeBytes',
+  'hostOverflowBytes',
+  'hostBytes',
+  'embedderBytes'
+]
+
 const hasModel = fs.existsSync(MODEL_PATH)
 const requireModel = os.hasEnv('BCI_REQUIRE_MODEL') && os.getEnv('BCI_REQUIRE_MODEL') === '1'
 
@@ -47,32 +70,91 @@ test('a projection is internally consistent', (t) => {
   )
 })
 
-test('the embedder is sized from disk and left out of the projection', (t) => {
+test('the embedder is part of the host demand', (t) => {
   if (skipWithoutModel(t)) return
   if (!fs.existsSync(EMBEDDER_PATH)) {
     t.pass('no embedder on this runner')
     return
   }
 
-  const bare = assessFit({ modelPath: MODEL_PATH })
-  const withEmbedder = assessFit({ modelPath: MODEL_PATH, embedderPath: EMBEDDER_PATH })
+  const small = assessFit({ modelPath: MODEL_PATH, embedderPath: SMALL_EMBEDDER_PATH })
+  const full = assessFit({ modelPath: MODEL_PATH, embedderPath: EMBEDDER_PATH })
 
-  t.is(bare.embedderFileBytes, 0, 'no embedder was named')
-  t.is(
-    withEmbedder.embedderFileBytes,
-    fs.statSync(EMBEDDER_PATH).size,
-    'the embedder is reported at its size on disk'
+  t.ok(full.embedderBytes > small.embedderBytes, 'the embedder weights were measured')
+  t.ok(
+    full.embedderBytes < fs.statSync(EMBEDDER_PATH).size,
+    'only what the embedder keeps, not the convolution weights it drops'
   )
-  t.is(withEmbedder.deviceBytes, bare.deviceBytes, 'the embedder is outside the device demand')
-  t.is(withEmbedder.hostBytes, bare.hostBytes, 'and outside the host demand')
+  t.is(full.deviceBytes, small.deviceBytes, 'the embedder is outside the device demand')
+  t.is(
+    full.hostBytes - small.hostBytes,
+    full.embedderBytes - small.embedderBytes,
+    'and inside the host demand'
+  )
 })
 
-test('an embedder path that does not exist reports zero', (t) => {
+test('with no embedder named, the one beside the model is measured', (t) => {
+  if (skipWithoutModel(t)) return
+  if (!fs.existsSync(EMBEDDER_PATH)) {
+    t.pass('no embedder on this runner')
+    return
+  }
+
+  const colocated = assessFit({ modelPath: MODEL_PATH })
+  const named = assessFit({ modelPath: MODEL_PATH, embedderPath: EMBEDDER_PATH })
+
+  t.is(colocated.embedderBytes, named.embedderBytes)
+  t.is(colocated.hostBytes, named.hostBytes)
+})
+
+test('a model with no embedder beside it is an outcome, not a throw', (t) => {
+  const fit = assessFit({ modelPath: MODEL_DESCRIPTION_PATH })
+
+  t.is(fit.status, 'error')
+  t.is(fit.reason, 'embedder-unreadable', 'a load would not find the embedder either')
+})
+
+test('the registry descriptions project like the model and embedder they describe', (t) => {
+  if (skipWithoutModel(t)) return
+  if (!fs.existsSync(EMBEDDER_PATH)) {
+    t.pass('no embedder on this runner')
+    return
+  }
+
+  const files = assessFit({ modelPath: MODEL_PATH, embedderPath: EMBEDDER_PATH })
+  const descriptions = assessFit({
+    modelPath: MODEL_DESCRIPTION_PATH,
+    embedderPath: EMBEDDER_DESCRIPTION_PATH
+  })
+
+  for (const field of PROJECTED_FIELDS) {
+    t.is(descriptions[field], files[field], `${field} matches`)
+  }
+})
+
+test('an embedder description measures like the embedder file', (t) => {
+  const file = assessFit({ modelPath: '/nonexistent/model.bin', embedderPath: SMALL_EMBEDDER_PATH })
+  const description = assessFit({
+    modelPath: '/nonexistent/model.bin',
+    embedderPath: SMALL_EMBEDDER_DESCRIPTION_PATH
+  })
+
+  t.is(
+    file.embedderBytes,
+    SMALL_EMBEDDER_HOST_BYTES,
+    'projections, session map and projection cache'
+  )
+  t.is(description.embedderBytes, file.embedderBytes)
+})
+
+test('an embedder that cannot be read is an outcome, not a throw', (t) => {
   if (skipWithoutModel(t)) return
 
   const fit = assessFit({ modelPath: MODEL_PATH, embedderPath: '/nonexistent/embedder.bin' })
 
-  t.is(fit.embedderFileBytes, 0)
+  t.is(fit.status, 'error')
+  t.is(fit.reason, 'embedder-unreadable')
+  t.is(fit.embedderBytes, 0)
 })
 
 test('a model that cannot be read is an outcome, not a throw', (t) => {
@@ -94,7 +176,7 @@ test('every projected field is present on an unreadable model', (t) => {
     'computeBytes',
     'hostOverflowBytes',
     'hostBytes',
-    'embedderFileBytes'
+    'embedderBytes'
   ]) {
     t.is(typeof fit[field], 'number', `${field} is a number`)
   }
