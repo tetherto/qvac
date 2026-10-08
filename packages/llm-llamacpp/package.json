@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.55.1",
+  "version": "0.57.0",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -73,12 +73,12 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.19.0",
-    "@qvac/fabric-ios": "^0.19.0",
+    "@qvac/fabric-android-arm64": "^0.20.0",
+    "@qvac/fabric-ios": "^0.20.0",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-process": "^4.2.2",
-    "bare-subprocess": "^5.2.3",
+    "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",

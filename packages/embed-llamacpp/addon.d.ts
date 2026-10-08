@@ -81,6 +81,12 @@ export type MappedAddonEvent = {
  * event names (caller logs and skips dispatch).
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+export declare function pickPrimaryGgufPath(files: string[]): string;
 export declare function resolveBackendsDir(): string;
 /** An interface between the Bare C++ addon and the JS runtime. */
 export declare class BertInterface implements Addon {

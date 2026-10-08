@@ -134,6 +134,12 @@ test('generationParamsSchema: accepts tool_choice modes and a tool name, rejects
   )
 })
 
+test('generationParamsSchema: accepts a boolean parallel_tool_calls only', (t) => {
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: true }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: false }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: 'true' }).success, false)
+})
+
 const weatherTool = {
   type: 'function' as const,
   name: 'get_weather',

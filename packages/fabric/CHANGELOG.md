@@ -13,6 +13,20 @@
     the load mode replaces them.
   - RPC servers keep backend tensor extras.
 
+## [0.19.1] - 2026-10-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `10549.5.3`. No API change for
+  this package:
+  - Fixed an OpenCL abort (`CL_INVALID_KERNEL`) in argsort when a backend user
+    such as the RPC server runs it before `supports_op`, which broke MoE expert
+    selection behind an RPC server.
+  - The RPC server keeps backend tensor extras, so OpenCL works behind an RPC
+    server.
+  - Fixed the `ggml-cpu` build with clang-cl.
+  - Added Laya decision model support.
+
 ## [0.19.0] - 2026-09-30
 
 ### Changed

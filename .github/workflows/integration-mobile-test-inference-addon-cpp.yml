@@ -302,7 +302,7 @@ jobs:
       # rather than `./.github/actions/...` because this job checks out untrusted PR code
       # at $GITHUB_WORKSPACE, where a relative path would run the fork's copy.
       - name: Setup build host (Android NDK + toolchain env)
-        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        uses: tetherto/qvac/.github/actions/setup-build-host@23b88abe0199936c8bc4995938be4433d1c35a39
         with:
           platform: android
           arch: arm64

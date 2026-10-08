@@ -36,6 +36,11 @@ on:
         type: string
         required: false
         default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
+        type: string
+        required: false
+        default: ""
   # Manual on-demand path. A dispatched run targets ONE platform and the
   # device(s) chosen below — it never runs the full default pool. The
   # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
@@ -88,6 +93,11 @@ on:
         default: ""
       prebuild_run_id:
         description: "Run id whose `prebuilds` artifact to install — the route for testing YOUR OWN PR on a device. Point it at the on-pr-embed-llamacpp run that already built your prebuilds (the number at the end of that run's URL); no tmp-* branch, no publish, no hand-assembled package name. Takes precedence over `package`, and fails the run if that artifact is missing or expired rather than falling back to @latest. Mutually exclusive with `package`."
+        type: string
+        required: false
+        default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
         type: string
         required: false
         default: ""
@@ -298,6 +308,9 @@ jobs:
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
         with:
+          # Empty keeps the published @qvac/fabric runtime.
+          fabric-prebuild-run-id: ${{ inputs.fabric_prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/embed-llamacpp'
           addon-npm-name: '@qvac/embed-llamacpp'
@@ -319,6 +332,26 @@ jobs:
           output-map: ${{ runner.temp }}/embed-url-map.json
           mode: presign
 
+      # The Laya GGUF (laya.test.js) has no Hugging Face source, so it is not in
+      # the manifest above; presign its US-bucket object for the pre-stage steps
+      # below, as ocr-ggml presigns its S3-only models.
+      - name: Configure AWS credentials (us-west-2) for the Laya model
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Presign Laya model (US bucket)
+        working-directory: addon/packages/embed-llamacpp
+        env:
+          MODEL_S3_BUCKET: tether-ai-dev-us
+          AWS_REGION: us-west-2
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: |
+          chmod +x scripts/generate-laya-presigned-url.sh
+          ./scripts/generate-laya-presigned-url.sh
+
       # Generate the model pre-stage script. The Device Farm host has reliable
       # network; it downloads embed's models and pushes them to a platform-local
       # staging dir so the phone never fetches from huggingface.co
@@ -330,6 +363,7 @@ jobs:
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
+          PRESTAGE_S3_MODELS: ${{ runner.temp }}/laya-model-urls.json
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -345,6 +379,7 @@ jobs:
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
+          PRESTAGE_S3_MODELS: ${{ runner.temp }}/laya-model-urls.json
         run: |
           node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {
