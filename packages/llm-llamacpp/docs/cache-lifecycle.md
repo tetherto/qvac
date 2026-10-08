@@ -157,7 +157,11 @@ is refused when the cells in front of it were already evicted (the same
 a truncated window, so the prompt is reprocessed from scratch instead. A
 rollback applies the same test to its target before trimming: when the request
 decoded past the window, the sequence is cleared and the next turn starts cold.
-Those models take no checkpoints yet.
+Those models take no checkpoints yet, so the cold path is the common one where
+the template rewrites earlier answers: gpt-oss renders a past answer
+differently from how it was generated, and thinking Gemma 4 drops its
+reasoning, so their next turn diverges inside the previous answer and
+reprocesses the whole conversation once that answer is longer than the window.
 
 A prefill-only request whose whole prompt is already resident has nothing to
 decode. It is admitted with an empty plan and commits immediately, on the
@@ -380,12 +384,15 @@ against the state it describes: a corrupt current-format file is an error
 
 Every write, whichever path triggers it, does the same two steps:
 
-1. The state and the ledger are written to `<cacheKey>.tmp`. On failure the
-   temporary file is deleted and `UnableToSaveSessionFile` is raised.
+1. The state and the ledger are written to `<cacheKey>.tmp`. A write that
+   fails, or leaves the file shorter than the state (a failed final flush),
+   deletes the temporary file and raises `UnableToSaveSessionFile`.
 2. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
    and macOS, `MoveFileExW` with replace and write-through on Windows. Until
-   that step succeeds the old file is untouched, so a crash never leaves a
-   half-written cache. A `cacheKey` that names a directory fails the write.
+   that step succeeds the old file is untouched, so a process crash never
+   leaves a half-written cache. The file is not synced to disk first, so a
+   power loss or an OS crash right after a write can still leave it short.
+   A `cacheKey` that names a directory fails the write.
 
 The RAM tier writes the same file format from its copy of the state, so a
 file written from RAM loads exactly like one written from a sequence.

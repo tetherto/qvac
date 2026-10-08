@@ -276,7 +276,8 @@ it since its file was last written or loaded). Checkpoints are never written
 to the file.
 
 Every write goes to `<cacheKey>.tmp` first and then replaces `<cacheKey>` in
-one rename, so a crash or a failed write never leaves a half-written file.
+one rename, so a process crash or a failed write never leaves a half-written
+file. The file is not synced to disk, so a power loss right after a write can.
 [How the `cacheKey` file is
 written](cache-lifecycle.md#how-the-cachekey-file-is-written) lists every
 write on both paths in detail.
@@ -307,7 +308,9 @@ await model.saveCache('session.bin') // session.bin now holds the conversation
 
 Because it runs after `run()` returns, another request on the same key can be
 served first, and the file then holds that turn as well. It is always a
-committed state.
+committed state. `run()` returns once the request is accepted, not once it
+ran: a request still queued is not waited for, so read the response to the
+end before `saveCache` when the file must hold that turn.
 
 ### `discardCache(cacheKey)`
 

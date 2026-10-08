@@ -791,7 +791,9 @@ const LlmLlamacpp = class LlmLlamacpp {
      * the active single-prompt conversation, a batch conversation kept in its
      * slot, or one in the RAM tier. Resolves once the file is written. When a
      * request on that key is running it waits for it to finish, so the file
-     * always holds a committed state. Resolves without writing when the file
+     * always holds a committed state. A request still queued is not waited
+     * for: `run()` resolves when the request is accepted, so read its response
+     * to the end before saving when the file must hold that turn. Resolves without writing when the file
      * already holds the conversation. Rejects when nothing is cached under the
      * key and no file exists, or when the write fails (the conversation then
      * stays in memory, still unsaved, so the call can be retried). Writes

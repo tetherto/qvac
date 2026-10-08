@@ -57,9 +57,10 @@ interface LlmLlamacpp {
     unload(): Promise<void>;
     /**
      * Write the conversation kept in memory for `cacheKey` to that file now.
-     * Waits for a request running on that key, writes only when the file lacks
-     * turns, and rejects when nothing is cached under the key or the write
-     * fails (the conversation then stays in memory, still unsaved).
+     * Waits for a request running on that key, not one still queued, so read a
+     * response to the end first. Writes only when the file lacks turns, and
+     * rejects when nothing is cached under the key or the write fails (the
+     * conversation then stays in memory, still unsaved).
      */
     saveCache(cacheKey: string): Promise<void>;
     /**
