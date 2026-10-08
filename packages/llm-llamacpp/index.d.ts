@@ -117,6 +117,13 @@ declare namespace LlmLlamacpp {
     }
     interface LlamaConfig {
         device?: string;
+        /**
+         * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
+         * Accepted names: cuda, vulkan, metal, opencl, plus
+         * `auto` for no preference. An unrecognised name is rejected; a recognised
+         * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+         */
+        backend?: string;
         gpu_layers?: NumericLike;
         ctx_size?: NumericLike;
         system_prompt?: string;
@@ -349,6 +356,12 @@ declare namespace LlmLlamacpp {
          * `"required"` or a function name without tools throws.
          */
         tool_choice?: "auto" | "none" | "required" | (string & {});
+        /**
+         * Whether one response may carry more than one tool call. `true` lets the
+         * template and the tool-call grammar accept several; unset or `false`
+         * keeps one. Ignored when the prompt carries no tools.
+         */
+        parallel_tool_calls?: boolean;
         /**
          * Per-request reasoning channel budget. `-1` keeps the model's reasoning
          * channel on; `0` disables it for this request; any positive integer caps

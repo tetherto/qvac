@@ -706,7 +706,7 @@ published model set yet; supply your own to opt in.
 | Model | Sidecar next to the GGUF | Stage on Core ML | Runs on ggml instead | Force ggml |
 | --- | --- | --- | --- | --- |
 | Supertonic 1 / 2 / 3 | `<model>-vocoder.mlmodelc` | vocoder, in 64-latent-frame windows | GGUFs whose vocoder weights are stored below 8 bits (`q4_0`) | `SUPERTONIC_COREML_DISABLE=1` |
-| Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
+| Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows synthesised while the language model is still generating, so only the last one is left after it; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
 | Chatterbox, Parler, CosyVoice3, MOSS, MOSS-SoundEffect, MOSS-Speech, LavaSR | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
@@ -1180,7 +1180,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `voice` / `voiceName`     | string     | —          | Supertonic voice id (e.g. `'F1'`, `'M1'`); Parler template speaker name (e.g. `'Laura'`, `'Rohit'`) |
 | `voiceJsonPath`           | string     | —          | Supertonic-only: external voice JSON (`{ style_ttl, style_dp }`, e.g. a cloned voice) that overrides `voice`; the engine checks the tensor sizes against the model |
 | `prewarmText`             | string     | —          | Supertonic-only: text synthesized once at load so GPU pipelines compile, and a Core ML vocoder sidecar specializes, before the first `run()` (skipped on a plain CPU run); use a representative length. Wins over the `vulkanCacheDir` default pre-warm |
-| `vulkanDevice`            | number     | 0          | Supertonic / CosyVoice3 Vulkan adapter, also used by their LavaSR enhancer: `0` = first, `N` = the Nth, `-1` = auto-pick by free VRAM preferring a discrete GPU |
+| `vulkanDevice`            | number     | 0          | Supertonic / CosyVoice3 Vulkan adapter, also used by their LavaSR enhancer: `0` = first, `N` = the Nth, `-1` = auto-pick by free VRAM preferring a discrete GPU. Audio8 always auto-picks |
 | `flowCutPrompt`           | boolean    | `false`    | CosyVoice3-only: attention-only prompt frames in the flow — faster, with output that deviates slightly from the reference |
 | `steps` / `numInferenceSteps` | number | GGUF default | Supertonic vector-estimator CFM steps (`0` = GGUF default) |
 | `noiseNpyPath`            | string     | —          | Supertonic: optional fixed CFM noise `.npy` for reproducibility |
@@ -1352,6 +1352,7 @@ fit.report
 | `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
 | `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
 | `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+| `moss-sfx` | Required `mossSoundEffectPath` | Required `prompt`, `seconds`; optional `negativePrompt`, `steps`, `guidance`, `shift`, `threads` |
 
 Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
 
@@ -1359,9 +1360,33 @@ Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the 
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
 
-A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS is the one voice in that state. A broken request, or a host with no native binding, throws.
+A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS Delay has no SDK fit projection on this baseline. MOSS-SoundEffect is supported. A broken request, or a host with no native binding, throws.
 
 The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
+
+### MOSS-SoundEffect fit
+
+```js
+const fit = TTSGgml.assessFit({
+  engineType: 'moss-sfx',
+  mossSoundEffectPath: './moss-sfx-v2-q8_0.gguf',
+  prompt: 'Rain falling on a tin roof.',
+  seconds: 8,
+  useGPU: false
+})
+console.log(fit.report)
+```
+
+The fitter uses generation's tokenizer, request validation and graph builders,
+without loading weights or generating audio. It supports full and metadata-only
+GGUF files. `negativePrompt`, `steps`, `guidance` and `shift` keep their generation
+semantics; `marginBytes` keeps the shared 256 MiB default. DiT processes the model's
+full latent duration even for a short output. Requested seconds size decoder
+windows and audio buffers. The shared compute arena is counted at its peak:
+`lmComputeBytes` covers text/DiT, `codecComputeBytes` any additional VAE demand.
+Host memory includes conditioning, temporary arrays and CPU fallback buffers.
+
+Run `bare examples/moss-sfx-fit.js ./moss-sfx-v2-q8_0.gguf "Rain on a roof." 8`.
 
 ## Examples
 
@@ -1448,6 +1473,27 @@ its codec), and the C++ suite answers a short spoken turn when
 To stress-test long inputs, set `INPUT_SENTENCES=medium` (or `long`)
 and re-run the integration suite — `addon.test.js` reads the env var to
 pick its sentence corpus from `test/data/sentences-{medium,long}.js`.
+
+### Fuzzing
+
+The JS-adapter config string parsers have a [Google FuzzTest][fuzztest]
+target, `tts-config-parse-fuzz`. Fuzzing is Linux-only: it needs clang with
+libFuzzer and AddressSanitizer, plus the [build-from-source](#build-from-source)
+prerequisites. The target does not link tts-cpp, so it runs with full ASan and
+LeakSanitizer.
+
+```bash
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- TtsConfigParseFuzz.ParseFloatNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
 
 ## Build from source
 

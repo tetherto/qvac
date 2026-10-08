@@ -347,7 +347,7 @@ describe('openaiToolsToSdk', () => {
     assert.equal(result[1]!.name, 'fn_b')
   })
 
-  it('normalizes composite types like ["string", "null"] to "string"', () => {
+  it('keeps nullable type arrays like ["string", "null"]', () => {
     const tools = [
       {
         type: 'function',
@@ -367,12 +367,12 @@ describe('openaiToolsToSdk', () => {
     ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
-    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
-    assert.equal(props.properties['path']!.type, 'string')
-    assert.equal(props.properties['glob']!.type, 'string')
+    const props = result[0]!.parameters as { properties: Record<string, { type: unknown }> }
+    assert.deepEqual(props.properties['path']!.type, ['string', 'null'])
+    assert.deepEqual(props.properties['glob']!.type, ['string', 'null'])
   })
 
-  it('normalizes ["integer", "null"] to "integer"', () => {
+  it('drops unrecognized members of a type array', () => {
     const tools = [
       {
         type: 'function',
@@ -382,7 +382,7 @@ describe('openaiToolsToSdk', () => {
           parameters: {
             type: 'object',
             properties: {
-              limit: { type: ['integer', 'null'] }
+              limit: { type: ['integer', 'date', 'null'] }
             }
           }
         }
@@ -390,8 +390,31 @@ describe('openaiToolsToSdk', () => {
     ]
     const result = openaiToolsToSdk(tools)
     assert.ok(result)
-    const props = result[0]!.parameters as { properties: Record<string, { type: string }> }
-    assert.equal(props.properties['limit']!.type, 'integer')
+    const props = result[0]!.parameters as { properties: Record<string, { type: unknown }> }
+    assert.deepEqual(props.properties['limit']!.type, ['integer', 'null'])
+  })
+
+  it('leaves anyOf properties and nested keywords as declared', () => {
+    const when = { anyOf: [{ type: 'string' }, { type: 'null' }] }
+    const stops = {
+      type: 'array',
+      items: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+    }
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'plan',
+          description: 'Plan',
+          parameters: { type: 'object', properties: { when, stops } }
+        }
+      }
+    ]
+    const result = openaiToolsToSdk(tools)
+    assert.ok(result)
+    const props = result[0]!.parameters as { properties: Record<string, unknown> }
+    assert.deepEqual(props.properties['when'], when)
+    assert.deepEqual(props.properties['stops'], stops)
   })
 
   it('falls back to "string" for unrecognized types', () => {

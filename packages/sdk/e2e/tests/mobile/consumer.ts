@@ -1,52 +1,8 @@
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { Platform } from 'react-native'
-import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
+import { createExecutor } from '@qvac/test-suite/mobile'
 import type { TestDefinition } from '@qvac/test-suite'
-import {
-  profiler,
-  LLAMA_3_2_1B_INST_Q4_0,
-  LLAMA_3_2_1B_INST_Q4_0_SHARD,
-  GTE_LARGE_FP16,
-  GTE_LARGE_335M_FP16_SHARD,
-  WHISPER_TINY,
-  VAD_SILERO_5_1_2,
-  QWEN3_1_7B_INST_Q4,
-  OCR_CRAFT,
-  OCR_LATIN,
-  BERGAMOT_EN_FR,
-  BERGAMOT_EN_ES,
-  BERGAMOT_ES_EN,
-  BERGAMOT_EN_IT,
-  MARIAN_EN_HI_INDIC_200M_Q4_0,
-  MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
-  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
-  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
-  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
-  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
-  TTS_CODEC_DECODER_AUDIO8_Q8_0,
-  TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
-  TTS_ENHANCER_LAVASR_FP16,
-  TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q4_0,
-  PARAKEET_CTC_0_6B_Q4_0,
-  PARAKEET_UNIFIED_0_6B_Q4_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
-  PARAKEET_EOU_120M_V1_Q4_0,
-  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
-  SMOLVLA_LIBERO_VISION_Q8,
-  BCI_WINDOWED,
-  FLUX_2_KLEIN_4B_Q4_0,
-  FLUX_2_KLEIN_4B_VAE,
-  QWEN3_4B_Q4_K_M,
-  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
-  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
-  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
-  AUDIOGEN_VAE_BF16
-} from '@qvac/sdk'
+import { profiler } from '@qvac/sdk'
 import { ResourceManager } from '../shared/resource-manager.js'
 import { collectTestDeps } from '../shared/collect-test-deps.js'
 import { resolveBundledAssetUri } from './asset-uri.js'
@@ -86,441 +42,66 @@ import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
-const resources = new ResourceManager({
-  downloadTarget: 'mobile',
-  // Mobile (iOS + Android) needs a tick after each unloadModel for the
-  // kernel to actually release pages / reclaim mmap regions — without
-  // it, the next test's load arrives while the previous model's RSS is
-  // still resident and either the GGML allocator crashes (iOS) or
-  // Scudo's mmap fails with "internal map failure" (Android). Empirically
-  // 200ms is enough; desktop doesn't need it.
-  unloadSettleMs: 200
-})
+import * as MODEL_CONSTANTS from '@qvac/sdk'
+import { RESOURCE_TABLE } from '../shared/resource-table.js'
+import { applyResourceTable } from '../shared/resource-table-types.js'
+import { policyFor } from '../shared/platform-policy.js'
 
-resources.define('llm', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048 }
-})
-
-resources.define('llm-small-ctx', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 512 }
-})
-
-resources.define('llm-batch', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llm',
-  config: { verbosity: 0, ctx_size: 4096, parallel: 4 }
-})
-
-resources.define('tools-batch', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llm',
-  config: { ctx_size: 4096, tools: true, parallel: 2 }
-})
-
-resources.define('embeddings', {
-  constant: GTE_LARGE_FP16,
-  type: 'llamacpp-embedding'
-})
-
-resources.define('whisper', {
-  constant: WHISPER_TINY,
-  type: 'whispercpp-transcription',
-  config: {
-    vadModelSrc: VAD_SILERO_5_1_2,
-    audio_format: 'f32le',
-    strategy: 'greedy',
-    language: 'en',
-    translate: false,
-    no_timestamps: false,
-    single_segment: false,
-    temperature: 0.0,
-    suppress_blank: true,
-    suppress_nst: true,
-    vad_params: {
-      threshold: 0.35,
-      min_speech_duration_ms: 200,
-      min_silence_duration_ms: 150,
-      max_speech_duration_s: 30.0,
-      speech_pad_ms: 600,
-      samples_overlap: 0.3
-    }
+/** Where the shared table's `$asset` placeholders point on this platform. */
+async function resolveTableAsset(kind: string, file: string): Promise<string> {
+  // @ts-ignore - assets.ts is generated at consumer build time, three levels
+  // up from dist/tests/mobile/.
+  const assets = await import('../../../assets')
+  const registry = (assets as Record<string, Record<string, number> | undefined>)[kind]
+  const assetModule = registry?.[file]
+  if (assetModule === undefined) {
+    throw new Error(`bundled asset not in registry: ${kind}/${file}`)
   }
-})
-
-resources.define('tools', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('ocr', {
-  constant: OCR_LATIN,
-  type: 'ggml-ocr',
-  // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time
-  // and downloaded on-device, making the first OCR test cold-start time out on
-  // mobile). Mirrors the whisper VAD companion-download pattern.
-  // canvasSize caps CRAFT's detection canvas to bound peak memory on
-  // high-resolution pages (e.g. the 4K ocr-large-image), which otherwise OOMs
-  // the device. 1280 is the ocr-ggml-recommended cap for mobile targets.
-  config: { langList: ['en'], detectorModelSrc: OCR_CRAFT, canvasSize: 1280 }
-})
-
-async function resolveClassificationWeightsPath() {
-  // @ts-ignore - Metro turns the bundled GGUF file into an asset module.
-  // This path is relative to dist/tests/mobile/consumer.js after tsc.
-  const assetModule = require('../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf')
   return await resolveBundledAssetUri(assetModule)
 }
 
-// Classification ships bundled weights inside @qvac/classification-ggml,
-// so no registry constant / pre-download is required. On mobile the weight
-// file must still be resolved as a Metro asset and passed explicitly because
-// the Bare worker bundle does not expose package data files at __dirname.
-resources.define('classification', {
-  type: 'ggml-classification',
-  config: async () => ({
-    modelPath: await resolveClassificationWeightsPath()
-  })
-})
-
-resources.define('echo', {
-  type: 'echo',
-  modelSrc: '',
-  skipPreDownload: true
-})
-
-resources.define('sharded-embeddings', {
-  constant: GTE_LARGE_335M_FP16_SHARD,
-  type: 'llamacpp-embedding',
-  skipPreDownload: true
-})
-
-resources.define('sharded-llm', {
-  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048 },
-  skipPreDownload: true
-})
-
-resources.define('indictrans-en-hi', {
-  constant: MARIAN_EN_HI_INDIC_200M_Q4_0,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'IndicTrans',
-    from: 'eng_Latn',
-    to: 'hin_Deva'
-  }
-})
-
-resources.define('indictrans-hi-en', {
-  constant: MARIAN_HI_EN_INDIC_200M_Q4_0,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'IndicTrans',
-    from: 'hin_Deva',
-    to: 'eng_Latn'
-  }
-})
-
-resources.define('bergamot-en-fr', {
-  constant: BERGAMOT_EN_FR,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'en',
-    to: 'fr'
-  }
-})
-
-resources.define('bergamot-en-es', {
-  constant: BERGAMOT_EN_ES,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'en',
-    to: 'es'
-  }
-})
-
-resources.define('bergamot-es-it-pivot', {
-  constant: BERGAMOT_ES_EN,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'es',
-    to: 'it',
-    pivotModel: {
-      modelSrc: BERGAMOT_EN_IT,
-      beamsize: 4,
-      temperature: 0.3
-    }
-  }
-})
-
-/** Look up a bundled audio file by name and resolve it to a POSIX path. */
-async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
-  // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
-  const assets = await import('../../../assets')
-  const assetModule = assets.audio?.[filename]
-  if (!assetModule) {
-    console.warn(`[tts-chatterbox] reference audio not in registry: ${filename}`)
-    return undefined
-  }
-  try {
-    return await resolveBundledAssetUri(assetModule)
-  } catch (err) {
-    console.warn(`[tts-chatterbox] failed to resolve ${filename}:`, err)
-    return undefined
-  }
+/**
+ * Every `$packageAsset` the table names, written out statically. Metro resolves
+ * `require` while it bundles, so a template literal fails the whole build.
+ */
+const PACKAGE_ASSETS: Record<string, number> = {
+  // @ts-ignore - Metro turns the bundled data file into an asset module.
+  '@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf': require('../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf')
 }
 
-resources.define('tts-chatterbox', {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
-  type: 'tts-ggml',
-  config: async () => ({
-    ttsEngine: 'chatterbox',
-    language: 'en',
-    useGPU: true,
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
-    streamChunkTokens: 25,
-    streamFirstChunkTokens: 10,
-    cfmSteps: 1,
-    referenceAudioSrc: await resolveBundledAudioUri('transcription-short-wav.wav')
-  })
-})
-
-resources.define('tts-parler', {
-  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'parler',
-    useGPU: true,
-    seed: 42,
-    topK: 1,
-    maxFrames: 430,
-    streamChunkTokens: 43,
-    streamFirstChunkTokens: 20
+/** A data file inside an installed package, as a bundled-asset URI. */
+async function resolveTablePackageAsset(pkg: string, file: string): Promise<string> {
+  const assetModule = PACKAGE_ASSETS[`${pkg}/${file}`]
+  if (assetModule === undefined) {
+    throw new Error(
+      `package asset not bundled on mobile: ${pkg}/${file} -- ` +
+        'add it to PACKAGE_ASSETS in tests/mobile/consumer.ts'
+    )
   }
-})
+  return await resolveBundledAssetUri(assetModule)
+}
 
-resources.define('tts-parler-indic', {
-  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'parler',
-    useGPU: true,
-    seed: 42,
-    topK: 1,
-    maxFrames: 430,
-    normalizeNumbers: true
+// Download plan and the unload settling mobile needs -- and why it needs it -- come from the shared
+// platform policy; see tests/shared/platform-policy.ts.
+const resources = new ResourceManager(policyFor('mobile'))
+
+// One table, shared with every other client, applied here.
+applyResourceTable(
+  RESOURCE_TABLE,
+  'mobile',
+  (dep, definition) => resources.define(dep, definition as never),
+  {
+    const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],
+    asset: (kind, file) => resolveTableAsset(kind, file),
+    packageAsset: (pkg, file) => resolveTablePackageAsset(pkg, file)
   }
-})
-
-resources.define('tts-cosyvoice3', {
-  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'cosyvoice3',
-    useGPU: true,
-    seed: 42
-  }
-})
-
-// Same model with native chunk streaming engaged, so the streaming e2e can
-// exercise the native 24 kHz chunk path rather than generic SDK streaming.
-resources.define('tts-cosyvoice3-native-stream', {
-  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'cosyvoice3',
-    useGPU: true,
-    seed: 42,
-    streamChunkTokens: 25,
-    streamFirstChunkTokens: 10
-  }
-})
-
-resources.define('tts-audio8', {
-  constant: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'audio8',
-    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
-    greedy: true,
-    maxFrames: 130,
-    seed: 42
-  }
-})
-
-resources.define('tts-supertonic', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true
-  }
-})
-
-resources.define('tts-supertonic-multilingual', {
-  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'es',
-    voice: 'F1',
-    useGPU: true
-  }
-})
-
-// Supertonic resampled to 8 kHz via `outputSampleRate`; paired with the
-// native-rate `tts-supertonic` resource by the outputSampleRate ratio test.
-resources.define('tts-supertonic-8k', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true,
-    outputSampleRate: 8000
-  }
-})
-
-// Supertonic with the LavaSR denoiser (runs first, rate-preserving) + enhancer
-// (bandwidth-extends to 48 kHz). The LavaSR GGUFs are registry constants, so the
-// resource manager's config walk pre-downloads them automatically.
-resources.define('tts-supertonic-enhanced', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true,
-    lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16,
-    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16
-  }
-})
-
-resources.define('bci', {
-  constant: BCI_WINDOWED,
-  type: 'bci-whispercpp-transcription',
-  skipPreDownload: true,
-  config: {
-    whisperConfig: { language: 'en', temperature: 0.0 },
-    miscConfig: { caption_enabled: false },
-    bciConfig: { day_idx: 1 }
-  }
-})
-
-resources.define('diffusion', {
-  constant: FLUX_2_KLEIN_4B_Q4_0,
-  type: 'sdcpp-generation',
-  skipPreDownload: true,
-  config: {
-    device: 'gpu',
-    threads: 4,
-    prediction: 'flux2_flow',
-    llmModelSrc: QWEN3_4B_Q4_K_M,
-    vaeModelSrc: FLUX_2_KLEIN_4B_VAE
-  }
-})
-
-resources.define('audiogen-turbo', {
-  type: 'audiogen-ggml',
-  skipPreDownload: true,
-  config: {
-    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
-    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
-    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
-    vaeModelSrc: AUDIOGEN_VAE_BF16,
-    useGPU: true,
-    inferenceSteps: 8
-  }
-})
-
-resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-unified', {
-  constant: PARAKEET_UNIFIED_0_6B_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('vision', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 4096,
-    image_no_upscale: 'on',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vision-batch', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 2048,
-    parallel: 2,
-    image_no_upscale: 'on',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vision-upscale', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 4096,
-    image_no_upscale: 'off',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vla', {
-  constant: SMOLVLA_LIBERO_VISION_Q8,
-  type: 'ggml-vla',
-  config: { backend: 'cpu' }
-})
+)
 // NOTE: no "vla-pi05" resource on mobile by design — the pi05 q_aggressive
 // GGUF is 3.9 GB, which exceeds the iOS jetsam per-process limit (~3 GB →
 // OOM kill) and is deferred on Android Device Farm until a CDN-fronted
-// mirror exists. The pi05 e2e tests are skipped on mobile (see below);
+// mirror exists. The pi05 e2e tests are skipped on mobile by the catalog;
 // defining the resource here would make `downloadAllOnce` pre-fetch the
 // 3.9 GB model even though the tests never run. Desktop covers pi05.
-
-function skipTests(testIds: string[], reason: string) {
-  return new SkipExecutor(new RegExp(`^(${testIds.join('|')})$`), reason)
-}
 
 // The download-resilience HTTP test reaches flaky-lan-server.mjs on the desktop,
 // which is the same machine as the MQTT broker. consumer-config.ts is generated
@@ -622,113 +203,8 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
-    // Mobile platform skips (before real executors -- first match wins)
-    new SkipExecutor(
-      /^snap-storage-/,
-      'Snap storage tests require the strict-confined Snap consumer'
-    ),
-    new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
-    new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
-    new SkipExecutor(
-      /^world-/,
-      'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route'
-    ),
-    new SkipExecutor(
-      /^multi-gpu-/,
-      'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)'
-    ),
-    new SkipExecutor(
-      /^tools-(?!simple-function$|no-function-match$)/,
-      'Tools test disabled on mobile'
-    ),
-    new SkipExecutor(
-      /^deferred-tools-(?!prompt-cost$|load-then-call$)/,
-      'Deferred tools: only the smoke cases run on mobile (no tools-qwen35 resource, model reloads too slow)'
-    ),
-    new SkipExecutor(
-      /^(diffusion-|addon-logging-diffusion$)/,
-      'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
-    ),
-    new SkipExecutor(
-      /^model-fit-probe-bci$/,
-      'BCI addon tests are desktop-only until mobile support is enabled; the smoke assessment needs no load and still runs'
-    ),
-    new SkipExecutor(
-      /^model-fit-probe-(?:audiogen|diffusion)$/,
-      'Reading the projection needs a resident model, and both sets are too heavy to load on Device Farm devices; the smoke assessment needs no load and still runs'
-    ),
-    new SkipExecutor(
-      /^audio-(gen|edit|understand)-/,
-      'ACE-Step AudioGen loads four large GGUFs and is covered by desktop e2e'
-    ),
-    new SkipExecutor(
-      /^vla-pi05-/,
-      'π₀.₅ q_aggressive GGUF (3.9 GB) exceeds the iOS jetsam ~3 GB per-process limit (OOM) and is deferred on Android Device Farm until a CDN-fronted mirror exists; SmolVLA covers mobile VLA, desktop covers pi05'
-    ),
-    new SkipExecutor(
-      /^translation-bergamot-.+-cache-reload$/,
-      'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
-    ),
-    new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
-    new SkipExecutor(
-      /^parakeet-indic-conformer-/,
-      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
-    ),
-    ...(Platform.OS === 'android'
-      ? [new SkipExecutor(/^parakeet-unified-coreml-ios$/, 'Core ML requires iOS')]
-      : []),
-    new SkipExecutor(
-      /^vla-groot-/,
-      'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
-    ),
-    new SkipExecutor(
-      /^(ocr-doctr-|model-load-ocr-doctr$)/,
-      'DocTR OCR e2e is desktop-only; the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined on mobile'
-    ),
-    skipTests(
-      [
-        'tts-cosyvoice3-emotion-conditioning',
-        'tts-cosyvoice3-streaming',
-        'tts-cosyvoice3-native-streaming',
-        'tts-cosyvoice3-sentence-streaming',
-        'tts-cosyvoice3-duplex-streaming'
-      ],
-      'Redundant CosyVoice3 e2e coverage overlapping other TTS tests, and slow on Device Farm; only tts-cosyvoice3-default and tts-cosyvoice3-invalid-emotion are kept on mobile'
-    ),
-    ...(Platform.OS === 'android'
-      ? [
-          skipTests(
-            ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
-            'Parakeet streaming EOU/iterator recovery is flaky on Android'
-          ),
-          skipTests(['tts-audio8-coreml'], 'Core ML runs on macOS and iOS only')
-        ]
-      : []),
-    ...(Platform.OS === 'ios'
-      ? [
-          // QVAC-19557: Chatterbox TTS variants OOM on iOS Device Farm under the current memory budget.
-          // new SkipExecutor(/^tts-chatterbox-/, "Chatterbox TTS is flaky on iOS under Device Farm memory pressure (OOM)"),
-          skipTests(
-            [
-              'ocr-sign-image',
-              'ocr-chart-image',
-              'ocr-no-text-image',
-              'ocr-large-image',
-              'ocr-low-quality',
-              'ocr-mixed-language',
-              'ocr-single-language',
-              'ocr-blurry-text',
-              'ocr-horizontally-inverted',
-              'ocr-vertically-inverted',
-              'ocr-misaligned-text',
-              'ocr-multi-sized-text',
-              'ocr-multiple-fonts',
-              'addon-logging-ocr'
-            ],
-            'OCR disabled on iOS (ONNX/CoreML OOM)'
-          )
-        ]
-      : []),
+    // Mobile platform policy -- which suites are off, and on which OS -- is declared in the catalog
+    // now; see tests/platform-skips.ts.
 
     // Real executors
     new ModelLoadingExecutor(resources),

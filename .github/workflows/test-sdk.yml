@@ -20,6 +20,10 @@ on:
         description: "Desktop tests"
         type: boolean
         default: true
+      python:
+        description: "Python tests"
+        type: boolean
+        default: false
       electron:
         description: "Electron tests"
         type: boolean
@@ -36,17 +40,19 @@ on:
         description: "iOS tests (Device Farm)"
         type: boolean
         default: true
+      # workflow_dispatch allows at most 25 inputs and adding the Python leg put
+      # this workflow on that ceiling, so three dispatch-only inputs went:
+      # the `custom` suite choice with `suite-custom`, and `device-farm-timeout`.
+      # A dispatched run therefore takes the 120 minute Device Farm default; the
+      # input still exists on workflow_call, so the callers that set it are
+      # unaffected.
       suite:
-        description: "Test suite (full = all tests; custom uses Custom suites)"
+        description: "Test suite (full = all tests)"
         type: choice
         options:
           - full
           - smoke
-          - custom
         default: full
-      suite-custom:
-        description: "Custom suites (comma-separated; used only when suite is custom)"
-        type: string
       exclude-suite:
         description: "Suites to exclude (comma-separated, e.g. slow,flaky)"
         type: string
@@ -93,10 +99,6 @@ on:
         description: "Desktop/Electron/Snap connection timeout (seconds)"
         type: number
         default: 60
-      device-farm-timeout:
-        description: "Device Farm run timeout (minutes)"
-        type: number
-        default: 120
       device-farm-start-timeout:
         description: "Wait for Device Farm run to start (minutes)"
         type: number
@@ -121,24 +123,10 @@ on:
         description: "Advanced: Snap runners (JSON array)"
         type: string
         default: '["qvac-ubuntu2204-x64-gpu"]'
-      # One input, not a boolean plus a runner list: workflow_dispatch allows at
-      # most 25 inputs and this workflow is at the ceiling. Picking a single
-      # runner is what a re-run after a busy-host warning needs anyway.
-      calibration:
-        description: "Run the assessModelFit calibration harness (~30 min per platform warm; first run also downloads ~7.5 GiB of models)"
-        type: choice
-        options:
-          - "off"
-          - all
-          - qvac-macos26-arm64-gpu-calibration
-          - qvac-ubuntu2204-x64-gpu-calibration
-          - qvac-win25-x64-gpu-calibration
-          # darwin-x64 and linux-arm64 have no self-hosted host and need none:
-          # a hosted runner is a fresh VM per job. Both labels already run
-          # llm-llamacpp's own integration tests.
-          - macos-15-large
-          - ubuntu-22.04-arm
-        default: "off"
+      python-platforms:
+        description: "Advanced: Python runners (JSON array)"
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
 
   workflow_call:
     inputs:
@@ -228,12 +216,13 @@ jobs:
       run-desktop: ${{ steps.resolve.outputs.run-desktop }}
       run-electron: ${{ steps.resolve.outputs.run-electron }}
       run-snap: ${{ steps.resolve.outputs.run-snap }}
+      run-python: ${{ steps.resolve.outputs.run-python }}
       run-android: ${{ steps.resolve.outputs.run-android }}
       run-ios: ${{ steps.resolve.outputs.run-ios }}
-      run-e2e: ${{ steps.resolve.outputs.run-e2e }}
       desktop-platforms: ${{ steps.plan.outputs.desktop-platforms }}
       electron-platforms: ${{ steps.plan.outputs.electron-platforms }}
       snap-platforms: ${{ steps.plan.outputs.snap-platforms }}
+      python-platforms: ${{ steps.plan.outputs.python-platforms }}
       filter-android: ${{ steps.plan.outputs.filter-android }}
       filter-ios: ${{ steps.plan.outputs.filter-ios }}
     steps:
@@ -244,13 +233,12 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           TARGETS: ${{ inputs.targets }}
           RUN_DESKTOP: ${{ inputs.desktop }}
+          RUN_PYTHON: ${{ inputs.python }}
           RUN_ELECTRON: ${{ inputs.electron }}
           RUN_SNAP: ${{ inputs.snap }}
           RUN_ANDROID: ${{ inputs.android }}
           RUN_IOS: ${{ inputs.ios }}
-          RUN_CALIBRATION: ${{ inputs.calibration }}
           SUITE: ${{ inputs.suite }}
-          SUITE_CUSTOM: ${{ inputs.suite-custom }}
         run: |
           set -euo pipefail
 
@@ -258,13 +246,12 @@ jobs:
             RESOLVED_SUITE=
           elif [ -z "$SUITE" ]; then
             RESOLVED_SUITE=
-          elif [ "$SUITE" = "custom" ]; then
-            RESOLVED_SUITE="$SUITE_CUSTOM"
           else
             RESOLVED_SUITE="$SUITE"
           fi
 
           RESOLVED_DESKTOP=false
+          RESOLVED_PYTHON=false
           RESOLVED_ELECTRON=false
           RESOLVED_SNAP=false
           RESOLVED_ANDROID=false
@@ -272,21 +259,15 @@ jobs:
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             RESOLVED_DESKTOP="$RUN_DESKTOP"
+            RESOLVED_PYTHON="$RUN_PYTHON"
             RESOLVED_ELECTRON="$RUN_ELECTRON"
             RESOLVED_SNAP="$RUN_SNAP"
             RESOLVED_ANDROID="$RUN_ANDROID"
             RESOLVED_IOS="$RUN_IOS"
 
-            # Calibration counts as a selection: it wants a host to itself, so a
-            # calibration-only dispatch is the normal way to run it.
-            RESOLVED_CALIBRATION=false
-            if [ "${RUN_CALIBRATION:-off}" != "off" ]; then
-              RESOLVED_CALIBRATION=true
-            fi
-
-            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_CALIBRATION}"
+            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_PYTHON}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}"
             if [ "$SELECTED" = "falsefalsefalsefalsefalsefalse" ]; then
-              echo "::error::Select at least one platform to test, or enable calibration."
+              echo "::error::Select at least one platform to test."
               exit 1
             fi
           else
@@ -298,6 +279,13 @@ jobs:
                 ;;
               desktop)
                 RESOLVED_DESKTOP=true
+                ;;
+              python)
+                RESOLVED_PYTHON=true
+                ;;
+              "desktop + python")
+                RESOLVED_DESKTOP=true
+                RESOLVED_PYTHON=true
                 ;;
               electron)
                 ;;
@@ -339,6 +327,7 @@ jobs:
                   fi
                   case "$ITEM" in
                     desktop) RESOLVED_DESKTOP=true; MATCHED=true ;;
+                    python) RESOLVED_PYTHON=true; MATCHED=true ;;
                     electron) RESOLVED_ELECTRON=true; MATCHED=true ;;
                     snap) RESOLVED_SNAP=true; MATCHED=true ;;
                     android) RESOLVED_ANDROID=true; MATCHED=true ;;
@@ -358,22 +347,14 @@ jobs:
             esac
           fi
 
-          # Lets the prepare jobs skip on a calibration-only dispatch: the
-          # calibration job builds packages/inference itself and never consumes
-          # a resolved inference or test-suite artifact.
-          RESOLVED_E2E=true
-          if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}" = "falsefalsefalsefalsefalse" ]; then
-            RESOLVED_E2E=false
-          fi
-
           {
             echo "suite=$RESOLVED_SUITE"
             echo "run-desktop=$RESOLVED_DESKTOP"
             echo "run-electron=$RESOLVED_ELECTRON"
             echo "run-snap=$RESOLVED_SNAP"
+            echo "run-python=$RESOLVED_PYTHON"
             echo "run-android=$RESOLVED_ANDROID"
             echo "run-ios=$RESOLVED_IOS"
-            echo "run-e2e=$RESOLVED_E2E"
           } >> "$GITHUB_OUTPUT"
 
       - name: Apply rerun plan
@@ -384,6 +365,7 @@ jobs:
           DESKTOP_PLATFORMS: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
           ELECTRON_PLATFORMS: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
           SNAP_PLATFORMS: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
+          PYTHON_PLATFORMS: ${{ inputs.python-platforms }}
         run: |
           const fs = require('fs');
 
@@ -439,6 +421,16 @@ jobs:
             'desktop-platforms': JSON.stringify(narrow('desktop', process.env.DESKTOP_PLATFORMS)),
             'electron-platforms': JSON.stringify(narrow('electron', process.env.ELECTRON_PLATFORMS)),
             'snap-platforms': JSON.stringify(narrow('snap', process.env.SNAP_PLATFORMS)),
+            // The fallback is not dead code: `workflow_call` does not carry
+            // this input, and the rerun test drives this script with its own
+            // env. Both need a default that matches the dispatch one.
+            'python-platforms': JSON.stringify(
+              narrow(
+                'python',
+                process.env.PYTHON_PLATFORMS ||
+                  '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+              )
+            ),
             'filter-android': filterFor('android', 'android'),
             'filter-ios': filterFor('ios', 'ios'),
           };
@@ -451,7 +443,6 @@ jobs:
   prepare-inference:
     name: Resolve inference source
     needs: resolve
-    if: needs.resolve.outputs.run-e2e == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -537,7 +528,6 @@ jobs:
   prepare-test-suite:
     name: Resolve test-suite source
     needs: resolve
-    if: needs.resolve.outputs.run-e2e == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -624,6 +614,37 @@ jobs:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       platforms: ${{ needs.resolve.outputs.desktop-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  # The Python client running the same catalog the desktop leg runs. Its own
+  # leg rather than a second consumer in the desktop run: the producer hands
+  # the queue to the first registrant, so two clients in one run would split
+  # the catalog rather than both answer it.
+  python-tests:
+    needs: [resolve, prepare-inference, prepare-test-suite]
+    if: needs.resolve.outputs.run-python == 'true'
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: python
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ needs.resolve.outputs.python-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
@@ -800,117 +821,3 @@ jobs:
       test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
     secrets: inherit
 
-  # Deliberately not a workflow_call input: the PR label path must never trigger
-  # seven model loads per platform.
-  #
-  # Measurement wants a quiet host. The harness reads its own process RSS, so a
-  # co-scheduled job does not inflate the numbers — but it can create memory
-  # pressure that evicts this process's mapped pages and DEFLATES the persistent
-  # deltas, which is the dangerous direction for an upper bound. The
-  # `*-calibration` labels guarantee that: a runner hook drain-stops the sibling
-  # agents on the host when this job starts and restarts them when it ends, so
-  # the job owns the machine for the duration. Two contract points with that
-  # hook: the job id below MUST stay `calibration` (the hook matches
-  # GITHUB_JOB), and the run holds the whole host, so dispatch during off-peak
-  # windows. The harness's busy-host warnings remain as a backstop — do not
-  # ship a fixture from a warned run.
-  #
-  # The hosted labels in the matrix need none of that: a fresh VM per job
-  # already owns its machine.
-  calibration:
-    if: github.event_name == 'workflow_dispatch' && inputs.calibration != 'off'
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: >-
-          ${{ fromJSON(inputs.calibration == 'all'
-            && '["qvac-macos26-arm64-gpu-calibration", "qvac-ubuntu2204-x64-gpu-calibration", "qvac-win25-x64-gpu-calibration", "macos-15-large", "ubuntu-22.04-arm"]'
-            || format('["{0}"]', inputs.calibration)) }}
-    runs-on: ${{ matrix.platform }}
-    # Expected completion: ~30 min warm (validated darwin-arm64 runs measured
-    # ~15 min for the 21 loads, plus install and build) — the first run on a
-    # runner also downloads ~7.5 GiB of models from the registry, so the
-    # ceiling budgets for a cold run on a slow connection.
-    timeout-minutes: 180
-    permissions:
-      contents: read
-    steps:
-      - name: Manual Workspace Cleanup
-        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
-        shell: bash
-        working-directory: .
-        if: runner.environment != 'github-hosted'
-
-      # Deliberately no `test-version` here: this job executes the checked-out
-      # code on a persistent runner, so it only ever builds the ref the
-      # workflow was dispatched on — the dispatch branch picker is the way to
-      # choose what to calibrate (CodeQL: cache poisoning via untrusted ref).
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 22
-
-      # No registry tokens: packages/inference has no @tetherto-scoped
-      # dependencies, so a plain public-npmjs install is all this needs.
-      - name: Install and build inference
-        shell: bash
-        working-directory: packages/inference
-        run: |
-          npm install
-          npm run build
-
-      - name: Run calibration harness
-        id: calibrate
-        shell: bash
-        working-directory: packages/inference
-        run: |
-          # The harness names the fixture after the runtime's platform triple,
-          # in a directory that already holds every other platform's fixture —
-          # so the upload has to name the one file this run writes, or a run
-          # that wrote nothing would ship a stale fixture under this platform's
-          # artifact name. Recorded before the harness runs so the path is still
-          # available when it exits non-zero.
-          PLATFORM=$(node -p "process.platform + '-' + process.arch")
-          # Glob so a GPU pass, which keys its fixture by backend as well, is
-          # collected alongside the CPU one. It also matches fixtures already
-          # committed, so read the log's `wrote` lines before shipping one.
-          echo "fixture=packages/inference/src/resources/model-fit/calibration/$PLATFORM*.ts" >> "$GITHUB_OUTPUT"
-          # Invoke the repo-pinned bare by path: npx/PATH can resolve a global
-          # bare too old for TypeScript type-stripping.
-          node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write
-
-      # Best-effort second pass with the model resident on the GPU. Only the
-      # CPU-forced platforms need it: Apple silicon already calibrates on Metal,
-      # and its unified memory is bounded by the system basis. Non-fatal — a
-      # host whose GPU memory is not device-scoped simply yields no GPU fixture.
-      - name: Run GPU calibration harness
-        if: ${{ !contains(matrix.platform, 'macos') }}
-        continue-on-error: true
-        shell: bash
-        working-directory: packages/inference
-        run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --gpu
-
-      # Third pass, for the ordinary consumer desktop: the model pinned to the
-      # integrated GPU, which allocates out of system RAM, so RSS stays the
-      # counter. Run everywhere — the harness exits in seconds on a host that
-      # cannot honour it.
-      - name: Run integrated-GPU calibration harness
-        continue-on-error: true
-        shell: bash
-        working-directory: packages/inference
-        run: node node_modules/bare/bin/bare scripts/calibrate-model-fit.ts --write --igpu
-
-      - name: Upload fixture
-        # A failed gate still writes a fixture (`validated: false`), and that is
-        # worth auditing. The harness's earlier aborts write nothing at all, and
-        # then this step finding no file is the accurate outcome.
-        if: success() || failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: calibration-fixture-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.calibrate.outputs.fixture }}
-          if-no-files-found: error
-          retention-days: 30

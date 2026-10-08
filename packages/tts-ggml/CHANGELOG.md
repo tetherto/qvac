@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Metadata-only `assessFit()` for MOSS-SoundEffect, with required model path,
+  prompt and duration, shared generation controls, and host/device memory estimates.
+
 - MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
   48 kHz sound effects of up to 30 seconds from a text description, from one
   GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
@@ -22,18 +25,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `systemPrompt`, a reply voice (`replyVoice`), `maxReplySeconds`,
   `maxNewTokens`, `textReply` and sampling controls; there is no streaming.
   Desktop, with a GPU.
+- Bounded FuzzTest coverage for the JS-adapter config string parsers
+  (`parseIntString`, `parseFloatString`). Linux C++ CI runs the suite after
+  unit tests. The parsers compile without tts-cpp, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-06#2`. Parler-TTS reuses its
+  decode-step memory plan instead of rebuilding it before every step; output
+  is unchanged.
+- Raise the `speech-cpp` and `ggml-speech` floors to `2026-10-06`. Supertonic
+  synthesis is unchanged on every backend this package builds.
 - Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
   the ggml changes of the QVAC LLM stack, so both build from the same backend
   code. Same models, same backends, no API change.
-- Raise the `speech-cpp` floor to `2026-10-02`, the revision that ships the
+- Raise the `speech-cpp` floor to `2026-10-02#1`, the revision that ships the
   MOSS-SoundEffect and MOSS-Speech engines. It also runs Parler-TTS 1.6x to
   2.4x faster on the CPU backend (flash attention over the KV cache, a
   multi-threaded GELU, and on macOS/iOS the codec's convolutions on
   Accelerate) and keeps the Audio8 Core ML codec on the Neural Engine. Same
   models, same API.
+- Audio8 is faster on Apple silicon: its language model's projections are
+  fused at load (1.24-1.28x end to end on Metal on an M3 Ultra, 1.04-1.06x
+  on an M4), and the Core ML codec now synthesises during generation rather
+  than after it (1.36-1.42x on an M3 Ultra, 1.06-1.16x on an M4). Output is
+  unchanged on Metal. With several Vulkan adapters, Audio8 now runs on a
+  discrete GPU rather than on the first adapter listed, which on a desktop
+  with an integrated GPU was the iGPU.
+- Raise `bare-subprocess` to `^6.2.1`. Its `spawnSync` now returns an `error`
+  instead of throwing when a command cannot start, and exit events report
+  signal names. `examples/pcm-chunk-player.js` checks for that error, so it
+  still falls back to another player when `ffplay` or `play` is missing.
 
 ### Fixed
 
@@ -41,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports more free device memory than total once the process has allocated
   past the GPU's recommended working set, which made a model that does not fit
   report `fits`. Synthesis is unchanged.
+- Audio8 with `useGPU: true` no longer aborts on Snapdragon 8 Elite (Adreno
+  830) phones: its KV-cache write no longer needs a strided copy, which the
+  OpenCL backend could not run there.
 
 ## [0.10.1] - 2026-09-29
 
