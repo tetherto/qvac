@@ -308,7 +308,7 @@ jobs:
         # Fast fail: this is just apt + toolchain env (< 5m); a stall is a
         # github-hosted apt-lock hang, so bound it instead of hanging the job.
         timeout-minutes: 20
-        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        uses: tetherto/qvac/.github/actions/setup-build-host@23b88abe0199936c8bc4995938be4433d1c35a39
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}

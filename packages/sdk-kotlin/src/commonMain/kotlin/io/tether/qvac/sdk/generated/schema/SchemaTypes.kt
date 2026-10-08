@@ -10239,7 +10239,7 @@ sealed class AnyResponse {
 internal object AnyResponseSerializer : KSerializer<AnyResponse> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AnyResponse")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"verdict\",\"basis\",\"execution\",\"models\",\"reasons\",\"assumptions\",\"type\"],\"properties\":{\"verdict\":{\"type\":\"string\",\"enum\":[\"likely-fits\",\"likely-too-large\",\"unknown\"]},\"basis\":{\"type\":\"string\",\"enum\":[\"system-memory\",\"process-memory\",\"device-memory\",\"device-budget\"]},\"execution\":{\"type\":\"string\",\"enum\":[\"sequential\",\"concurrent\"]},\"evidence\":{\"type\":\"string\",\"enum\":[\"calibration\",\"computed-only\",\"native-fit\"]},\"budget\":{\"type\":\"object\",\"required\":[\"totalBytes\",\"usedBytes\",\"availableBytes\",\"reservedBytes\",\"availableAfterReserveBytes\"],\"properties\":{\"totalBytes\":{\"type\":\"number\"},\"usedBytes\":{\"type\":\"number\"},\"availableBytes\":{\"type\":\"number\"},\"reservedBytes\":{\"type\":\"number\"},\"availableAfterReserveBytes\":{\"type\":\"number\"}}},\"estimate\":{\"type\":\"object\",\"required\":[\"lowerBoundBytes\",\"upperBoundBytes\"],\"properties\":{\"lowerBoundBytes\":{\"type\":\"number\"},\"upperBoundBytes\":{\"type\":\"number\"}}},\"floorBytes\":{\"type\":\"number\"},\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"verdict\",\"reasons\"]}},\"reasons\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"assumptions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"verdict\",\"basis\",\"execution\",\"models\",\"reasons\",\"assumptions\",\"type\"],\"properties\":{\"verdict\":{\"type\":\"string\",\"enum\":[\"likely-fits\",\"likely-too-large\",\"unknown\"]},\"basis\":{\"type\":\"string\",\"enum\":[\"system-memory\",\"process-memory\",\"device-memory\",\"device-budget\"]},\"execution\":{\"type\":\"string\",\"enum\":[\"sequential\",\"concurrent\"]},\"evidence\":{\"type\":\"string\",\"enum\":[\"computed-only\",\"native-fit\"]},\"budget\":{\"type\":\"object\",\"required\":[\"totalBytes\",\"usedBytes\",\"availableBytes\",\"reservedBytes\",\"availableAfterReserveBytes\"],\"properties\":{\"totalBytes\":{\"type\":\"number\"},\"usedBytes\":{\"type\":\"number\"},\"availableBytes\":{\"type\":\"number\"},\"reservedBytes\":{\"type\":\"number\"},\"availableAfterReserveBytes\":{\"type\":\"number\"}}},\"floorBytes\":{\"type\":\"number\"},\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"verdict\",\"reasons\"]}},\"reasons\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"assumptions\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioEditStream\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"data\":{\"type\":\"string\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"bitsPerSample\":{\"type\":\"integer\"},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioGenStream\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"data\":{\"type\":\"string\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"bitsPerSample\":{\"type\":\"integer\"},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioUnderstand\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"],\"properties\":{\"caption\":{\"type\":\"string\"},\"bpm\":{\"type\":\"number\"},\"duration\":{\"type\":\"number\"},\"keyscale\":{\"type\":\"string\"},\"timesignature\":{\"type\":\"string\"},\"vocalLanguage\":{\"type\":\"string\"},\"audioCodes\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
@@ -10410,7 +10410,6 @@ data class AssessModelFitResponse(
     @SerialName("execution") val `execution`: AssessModelFitResponseExecution,
     @SerialName("evidence") val `evidence`: AssessModelFitResponseEvidence? = null,
     @SerialName("budget") val `budget`: AssessModelFitResponseBudget? = null,
-    @SerialName("estimate") val `estimate`: AssessModelFitResponseEstimate? = null,
     @SerialName("floorBytes") val `floorBytes`: Double? = null,
     @SerialName("models") val `models`: List<AssessModelFitResponseModelsItem>,
     @SerialName("reasons") val `reasons`: List<String>,
@@ -10442,7 +10441,6 @@ enum class AssessModelFitResponseExecution {
 
 @Serializable
 enum class AssessModelFitResponseEvidence {
-    @SerialName("calibration") `CALIBRATION`,
     @SerialName("computed-only") `COMPUTEDONLY`,
     @SerialName("native-fit") `NATIVEFIT`,
 }
@@ -10457,17 +10455,10 @@ data class AssessModelFitResponseBudget(
 )
 
 @Serializable
-data class AssessModelFitResponseEstimate(
-    @SerialName("lowerBoundBytes") val `lowerBoundBytes`: Double,
-    @SerialName("upperBoundBytes") val `upperBoundBytes`: Double,
-)
-
-@Serializable
 data class AssessModelFitResponseModelsItem(
     @SerialName("name") val `name`: String,
     @SerialName("verdict") val `verdict`: AssessModelFitResponseModelsItemVerdict,
     @SerialName("evidence") val `evidence`: AssessModelFitResponseModelsItemEvidence? = null,
-    @SerialName("estimate") val `estimate`: AssessModelFitResponseModelsItemEstimate? = null,
     @SerialName("floorBytes") val `floorBytes`: Double? = null,
     @SerialName("estimatorVersion") val `estimatorVersion`: String? = null,
     @SerialName("device") val `device`: String? = null,
@@ -10483,16 +10474,9 @@ enum class AssessModelFitResponseModelsItemVerdict {
 
 @Serializable
 enum class AssessModelFitResponseModelsItemEvidence {
-    @SerialName("calibration") `CALIBRATION`,
     @SerialName("computed-only") `COMPUTEDONLY`,
     @SerialName("native-fit") `NATIVEFIT`,
 }
-
-@Serializable
-data class AssessModelFitResponseModelsItemEstimate(
-    @SerialName("lowerBoundBytes") val `lowerBoundBytes`: Double,
-    @SerialName("upperBoundBytes") val `upperBoundBytes`: Double,
-)
 
 @Serializable
 data class AudioEditStreamResponse(
