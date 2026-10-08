@@ -15,6 +15,17 @@ namespace qvac_lib_inference_addon_llama::utils {
   return isRecurrent || isHybrid || isDeepSeekV4;
 }
 
+// Sliding-window models (without `swa_full`) can trim a KV tail, but only
+// while the window in front of the trim point is still resident: decoding
+// past it evicts cells no trim brings back. They take the same end-of-history
+// checkpoints as the models above (the snapshot holds the window cells), so a
+// turn that diverges behind the window restores one instead of reprocessing
+// the whole conversation. Rollback stays a tail trim.
+[[nodiscard]] inline bool
+takesSlidingWindowCheckpoints(int32_t nSwa, bool swaFull) noexcept {
+  return nSwa > 0 && !swaFull;
+}
+
 // Which part of the sequence those snapshots hold: only what a tail trim
 // cannot rebuild (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`); a restore puts it
 // back and trims the rest to the snapshot's position. That holds for every
@@ -33,6 +44,8 @@ namespace qvac_lib_inference_addon_llama::utils {
 //     unfinished block at the snapshot lives in the compressor state, which
 //     the snapshot holds. Fabric's own llama-server restores DeepSeek V4 the
 //     same way.
+//   * sliding window (fabric `llama_kv_cache_iswa`): the window cells; the
+//     full-attention cells are trimmed.
 [[nodiscard]] inline SnapshotScope untrimmableSnapshotScope() noexcept {
   return SnapshotScope::Partial;
 }

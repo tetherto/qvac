@@ -101,11 +101,13 @@ message, so the next prompt holds only the answers. Without the split, a
 template that reads only `reasoning_content` (DeepSeek V4, Gemma 4) would print
 the reasoning as part of the answer.
 
-### Checkpoints on hybrid and recurrent models
+### Checkpoints on hybrid, recurrent and sliding-window models
 
 Pure-attention models restore a matching prefix by trimming the KV tail.
 Hybrid and recurrent models (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...)
-cannot, so the addon keeps process-local checkpoints per sequence. A cached
+cannot, and sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`)
+cannot once the window in front of the prefix was evicted, so the addon keeps
+process-local checkpoints per sequence on all of them. A cached
 request that commits keeps one: the state at the end of the chat history,
 just before the generation prompt (`<|im_start|>assistant\n<think>\n` on
 Qwen3.5). The prefill stops there for a moment to take it. The state from
@@ -127,9 +129,10 @@ on a fresh slot.
 A checkpoint holds only the part of the memory a tail trim cannot rebuild,
 and a restore trims the rest back to its position: the recurrent state on
 recurrent and hybrid models, the sliding-window cells and compressor states
-on DeepSeek V4. Its size is therefore fixed by the model, not the context
-(about 20 MB on Qwen3.5-0.8B). Three load-config fields bound the footprint.
-None of them has any effect on pure-attention models.
+on DeepSeek V4, the window cells on sliding-window models. Its size is
+therefore fixed by the model, not the context (about 20 MB on Qwen3.5-0.8B).
+Three load-config fields bound the footprint. None of them has any effect on
+other pure-attention models.
 
 - `cache_checkpoints`: how many to keep per sequence (default 1, maximum
   1024). Each committed request adds one, at the end of its history, before

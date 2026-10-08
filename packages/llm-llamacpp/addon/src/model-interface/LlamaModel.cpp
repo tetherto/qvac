@@ -338,8 +338,9 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   if (mdl == nullptr || ctx == nullptr) {
     return;
   }
-  // Only models that cannot trim a KV tail keep checkpoints; a budget on a
-  // pure-attention model is inert and needs no validation.
+  // Only models that cannot trim a KV tail, and sliding-window models, keep
+  // checkpoints; a budget on any other model is inert and needs no
+  // validation.
   const std::optional<std::string> architecture =
       utils::getModelArchitecture(mdl);
   const bool isDeepSeekV4 = architecture.has_value() &&
@@ -347,7 +348,9 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   if (!utils::needsFullStateSnapshot(
           llama_model_is_recurrent(mdl),
           llama_model_is_hybrid(mdl),
-          isDeepSeekV4)) {
+          isDeepSeekV4) &&
+      !utils::takesSlidingWindowCheckpoints(
+          llama_model_n_swa(mdl), state.llmContext_->getParams().swa_full)) {
     return;
   }
   const uint32_t perSeqTokens = llama_n_ctx_seq(ctx);

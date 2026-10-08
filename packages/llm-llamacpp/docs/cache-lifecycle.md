@@ -154,14 +154,16 @@ Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) keep only the
 last `n_swa` positions in their window layers. A trim back to the shared prefix
 is refused when the cells in front of it were already evicted (the same
 `llama_memory_seq_pos_min` test llama-server uses): the suffix would attend to
-a truncated window, so the prompt is reprocessed from scratch instead. A
-rollback applies the same test to its target before trimming: when the request
-decoded past the window, the sequence is cleared and the next turn starts cold.
-Those models take no checkpoints yet, so the cold path is the common one where
-the template rewrites earlier answers: gpt-oss renders a past answer
-differently from how it was generated, and thinking Gemma 4 drops its
-reasoning, so their next turn diverges inside the previous answer and
-reprocesses the whole conversation once that answer is longer than the window.
+a truncated window. Those models therefore take the same end-of-history
+checkpoints as hybrid models, holding the window cells, and reconciliation
+restores the longest one within the shared prefix; the restore trims the
+full-attention cells past it. Without a usable checkpoint the prompt is
+reprocessed from scratch. This is the common case where the template rewrites
+earlier answers: gpt-oss renders a past answer differently from how it was
+generated, and thinking Gemma 4 drops its reasoning, so their next turn
+diverges inside the previous answer. A rollback applies the same test to its
+target before trimming: when the request decoded past the window, the sequence
+is cleared and the next turn starts cold.
 
 A prefill-only request whose whole prompt is already resident has nothing to
 decode. It is admitted with an empty plan and commits immediately, on the

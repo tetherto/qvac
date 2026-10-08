@@ -1564,6 +1564,61 @@ TEST(CacheSlidingWindowTest, RollbackWithTheWindowIntactKeepsTheCache) {
   fs::remove(cacheFile);
 }
 
+// A sliding-window model takes an end-of-history checkpoint, holding the
+// window at that point. A regenerate after an answer longer than the window
+// diverges behind it: the checkpoint brings the window back instead of a cold
+// reprocess of the whole conversation.
+TEST(CacheSlidingWindowTest, RegenerateBehindTheWindowRestoresTheCheckpoint) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+
+  auto model = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(model->isLoaded());
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+  llama_context* lctx = text->getCtx();
+  const int32_t nSwa = llama_model_n_swa(llama_get_model(lctx));
+  ASSERT_GT(nSwa, 0);
+
+  // The answer outgrows the window, so the end of the history is no longer
+  // in it when the turn commits.
+  LlamaModel::Prompt first;
+  first.input = slidingWindowBrief(-1);
+  first.cacheKey = cacheFile.string();
+  first.generationParams.grammar = R"(root ::= "lighthouse " root)";
+  first.generationParams.n_predict = nSwa + 100;
+  ASSERT_FALSE(model->processPrompt(first).empty());
+  const llama_pos afterFirst = text->getNPast();
+
+  LlamaModel::Prompt regenerate;
+  regenerate.input = first.input;
+  regenerate.cacheKey = cacheFile.string();
+  ASSERT_FALSE(model->processPrompt(regenerate).empty());
+  EXPECT_GT(text->lastCacheReuseForTesting(), static_cast<size_t>(1024))
+      << "the regenerate reprocessed the conversation instead of restoring "
+         "the end-of-history checkpoint (first turn ended at "
+      << afterFirst << ")";
+
+  const llama_pos nPast = text->getNPast();
+  const llama_pos posMin =
+      llama_memory_seq_pos_min(llama_get_memory(lctx), text->getSeqId());
+  EXPECT_GE(posMin, 0);
+  EXPECT_LE(posMin, std::max<llama_pos>(0, nPast - nSwa))
+      << "the restored window does not cover the cursor at " << nPast;
+
+  model.reset();
+  fs::remove(cacheFile);
+}
+
 namespace {
 
 test_common::TestModelPath hybridModelPath() {

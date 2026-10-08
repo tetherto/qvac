@@ -300,7 +300,10 @@ declare namespace LlmLlamacpp {
          * conversation needs at least k + 1; with the default 1, editing the last
          * user message reprocesses everything. `0` keeps and takes none (every
          * divergent turn is a cold prefill), the maximum is 1024.
-         * Ignored on pure-attention models, which never take checkpoints.
+         * Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+         * them too: their checkpoints hold the window cells, restored when a
+         * turn diverges behind the window. Ignored on other pure-attention
+         * models, which never take checkpoints.
          * Also accepted as `cache-checkpoints`; supplying both is an error.
          */
         cache_checkpoints?: NumericLike;

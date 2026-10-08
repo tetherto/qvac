@@ -187,6 +187,10 @@ void MtmdLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
+  slidingWindowCheckpoints_ =
+      (model != nullptr) && !needsFullStateSnapshot_ &&
+      qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
+          llama_model_n_swa(model), params_.swa_full);
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -495,7 +499,7 @@ void MtmdLlmContext::tokenizeChat(
   // TextLlmContext::tokenizeChat.
   generationPromptTokens_ = 0;
   const size_t nChunks = chunks.size();
-  if (needsFullStateSnapshot_ && cacheReconciliationEnabled_ &&
+  if (takesHistoryCheckpoints() && cacheReconciliationEnabled_ &&
       inputs.add_generation_prompt && nChunks > 0 &&
       mtmd_input_chunk_get_type(chunks[nChunks - 1]) ==
           MTMD_INPUT_CHUNK_TYPE_TEXT) {
@@ -1505,16 +1509,32 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
     // The rollback target moves to the divergence point (see the same branch
     // in TextLlmContext::reconcilePrompt); no snapshot is written.
     llama_pos reusePos = residentLedger_.positions(reuseTarget);
+    bool restored = false;
     if (!canTrimSequenceTo(modelCtx_.lctx, reusePos)) {
-      // Sliding-window cells before the divergence are gone (see
+      // Sliding-window cells before the divergence are gone; restore a
+      // checkpoint within the shared prefix, or go cold (see
       // TextLlmContext::reconcilePrompt).
+      const size_t sharedEntries = reuseTarget;
       reuseTarget = 0;
       reuse = 0;
       reusePos = 0;
       checkpoint = "cold";
+      for (CacheCheckpoint* candidate : cache::usableCheckpointsLongestFirst(
+               cacheCheckpoints_, fullLedger, sharedEntries)) {
+        if (restoreSequenceState(modelCtx_.lctx, seqId_, candidate->state)) {
+          residentLedger_ = candidate->ledger;
+          reuse = residentLedger_.entries.size();
+          reusePos = residentLedger_.positions();
+          checkpoint = std::to_string(reuse);
+          restored = true;
+          break;
+        }
+      }
     }
-    clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
-    residentLedger_.truncate(reuseTarget);
+    if (!restored) {
+      clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
+      residentLedger_.truncate(reuseTarget);
+    }
     current_.pos = reusePos;
     refreshCurrentCacheTokensFromMemory();
     preRequestLedger_ = residentLedger_;
@@ -1600,7 +1620,7 @@ void MtmdLlmContext::commitCacheRequest() {
 }
 
 void MtmdLlmContext::captureHistoryCheckpoint(llama_pos pos) {
-  if (!needsFullStateSnapshot_ || !cacheRequestActive_ ||
+  if (!takesHistoryCheckpoints() || !cacheRequestActive_ ||
       historyCheckpointEntries_ == 0) {
     return;
   }

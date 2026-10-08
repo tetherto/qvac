@@ -180,7 +180,7 @@ public:
 
   void adoptCheckpoints(
       qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
-    if (needsFullStateSnapshot_) {
+    if (takesHistoryCheckpoints()) {
       cacheCheckpoints_ = std::move(checkpoints);
     }
   }
@@ -421,6 +421,13 @@ private:
   // ModelMemoryPolicy.hpp (recurrent, hybrid, DeepSeek V4, ...); every
   // non-standard memory layout must be added there, not at call sites.
   bool needsFullStateSnapshot_ = false;
+  // A sliding-window model: it trims for rollback but takes end-of-history
+  // checkpoints (see `takesSlidingWindowCheckpoints`).
+  bool slidingWindowCheckpoints_ = false;
+
+  [[nodiscard]] bool takesHistoryCheckpoints() const noexcept {
+    return needsFullStateSnapshot_ || slidingWindowCheckpoints_;
+  }
 
   // Tracks whether the current request is prefill-only so the cache
   // transaction can commit immediately after successful prefill.
