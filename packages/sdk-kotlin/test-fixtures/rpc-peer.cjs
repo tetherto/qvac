@@ -4,7 +4,7 @@ const RPC = require('bare-rpc')
 const env = JSON.parse(process.argv.at(-1))
 const endpoint = new URL(env.QVAC_IPC_SOCKET_PATH)
 const socket = net.connect(Number(endpoint.port), endpoint.hostname, () => {
-  if (env.QVAC_IPC_AUTH_TOKEN) socket.write(env.QVAC_IPC_AUTH_TOKEN + '\n')
+  if (process.env.QVAC_IPC_AUTH_TOKEN) socket.write(process.env.QVAC_IPC_AUTH_TOKEN + '\n')
 })
 let resolveInputClosed
 const inputClosed = new Promise(resolve => { resolveInputClosed = resolve })

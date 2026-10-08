@@ -168,6 +168,7 @@ Worker-backed clients use the same JSON request/response envelopes over differen
 - TypeScript Node/Bun/Electron clients use `bare-rpc` over a Unix socket or Windows named pipe.
 - Expo clients use `bare-rpc` over the BareKit worklet IPC bridge.
 - Python clients use `bare-rpc-python` over loopback TCP (`127.0.0.1:0`) because asyncio has no cross-platform Unix-socket/named-pipe server.
+  Any local user can reach a loopback port, so the worker first sends a per-session token it receives in `QVAC_IPC_AUTH_TOKEN` (environment, not argv); the client drops every connection that does not present it.
 
 In-process Bare (`@qvac/inference`) bypasses sockets and calls the dispatch layer directly.
 

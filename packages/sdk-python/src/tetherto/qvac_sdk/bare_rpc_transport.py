@@ -8,8 +8,13 @@ in the socket family: the Node client uses a Unix domain socket (or a
 server for either (`start_unix_server` is Unix-only). So this binds a
 loopback TCP port (`127.0.0.1:0`) on every OS and hands the worker a
 `tcp://127.0.0.1:<port>` endpoint. One code path everywhere, and Windows
-works without a named-pipe server. The port is loopback-only; the worker is
-the caller's own child process.
+works without a named-pipe server.
+
+Any local user can dial a loopback port, so the worker authenticates: it gets
+a per-session token in its environment (readable only by the same user or
+root, unlike argv) and writes it, newline-terminated, before any RPC frame.
+Only the first connection that presents it is wired to the RPC; the listener
+then closes.
 
 Locating the Bare binary and the worker's JS entry point is not this
 module's job — `command` is supplied by the caller. This is a thin
@@ -20,14 +25,19 @@ those artifacts into the installed package is a separate concern.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
+import secrets
 from collections.abc import AsyncIterable, AsyncIterator, Sequence
 from typing import Any
 
 import bare_rpc
 
 from .errors import reconstruct_error
+
+_IPC_TOKEN_ENV = "QVAC_IPC_AUTH_TOKEN"
+_HANDSHAKE_TIMEOUT = 10
 
 
 def _patch_bare_rpc_outgoing_destroy() -> None:
@@ -139,12 +149,24 @@ class BareRpcTransport:
 
     async def connect(self, *, timeout: float = 30) -> BareRpcTransport:
         connected: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        token = secrets.token_hex(32).encode("ascii")
+        rejected = 0
 
         async def on_client(
             reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         ) -> None:
+            nonlocal rejected
+            if not await self._authenticate(reader, token):
+                rejected += 1
+                writer.close()
+                return
+            if self._writer is not None:
+                writer.close()
+                return
             self._writer = writer
             self._read_task = asyncio.current_task()
+            assert self._server is not None
+            self._server.close()
             if not connected.done():
                 connected.set_result(None)
             # rpc is created right after the worker is spawned below, long
@@ -180,7 +202,9 @@ class BareRpcTransport:
         )
         try:
             self._proc = await asyncio.create_subprocess_exec(
-                *self._command, spawn_config
+                *self._command,
+                spawn_config,
+                env={**os.environ, _IPC_TOKEN_ENV: token.decode("ascii")},
             )
 
             def send(frame: bytes) -> None:
@@ -190,7 +214,16 @@ class BareRpcTransport:
                 self._writer.write(frame)
 
             self.rpc = bare_rpc.RPC(send=send)
-            await asyncio.wait_for(connected, timeout=timeout)
+            try:
+                await asyncio.wait_for(connected, timeout=timeout)
+            except asyncio.TimeoutError:
+                if rejected:
+                    raise asyncio.TimeoutError(
+                        f"worker did not authenticate within {timeout}s "
+                        f"({rejected} connection(s) rejected); a worker older "
+                        "than this client does not send the IPC token"
+                    ) from None
+                raise
             # Apply SDK config before any method call, mirroring the JS client's
             # `__init_config` on connect (server/rpc/handle-request.ts routes it).
             if self._config:
@@ -208,6 +241,16 @@ class BareRpcTransport:
             # loopback server bound above; otherwise the port stays open.
             await self.close()
             raise
+
+    @staticmethod
+    async def _authenticate(reader: asyncio.StreamReader, token: bytes) -> bool:
+        try:
+            presented = await asyncio.wait_for(
+                reader.readexactly(len(token) + 1), timeout=_HANDSHAKE_TIMEOUT
+            )
+        except (asyncio.IncompleteReadError, asyncio.TimeoutError, OSError):
+            return False
+        return hmac.compare_digest(presented, token + b"\n")
 
     async def close(self) -> None:
         if self._read_task:
