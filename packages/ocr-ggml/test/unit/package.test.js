@@ -10,6 +10,7 @@ test('package entry point exposes the public surface without loading the native 
   const pkgExports = require('../..')
 
   t.is(typeof pkgExports.OcrGgml, 'function', 'OcrGgml class is exported')
+  t.is(typeof pkgExports.assessFit, 'function', 'weight-load fit is exported')
   t.is(pkgExports.modelClass, pkgExports.OcrGgml, 'modelClass aliases OcrGgml')
   t.is(typeof pkgExports.QvacErrorAddonOcrGgml, 'function', 'QvacErrorAddonOcrGgml is exported')
   t.is(typeof pkgExports.ERR_CODES, 'object', 'ERR_CODES is exported')
@@ -24,7 +25,15 @@ test('published entrypoints only require declared runtime dependencies', (t) => 
   const pkg = require('../../package.json')
   const declared = pkg.dependencies || {}
 
-  const entrypoints = ['index.js', 'ocr-ggml.js', 'addonLogging.js', 'binding.js', 'lib/error.js']
+  const entrypoints = [
+    'index.js',
+    'ocr-ggml.js',
+    'addonLogging.js',
+    'fit.js',
+    'binding.js',
+    'lib/error.js',
+    'lib/backends-dir.js'
+  ]
   const requireRe = /require\((["'])([^"']+)\1\)/g
 
   for (const file of entrypoints) {

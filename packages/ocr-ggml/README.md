@@ -100,6 +100,32 @@ console.log(response.stats) // RuntimeStats (populated when opts.stats: true)
 await ocr.unload()
 ```
 
+### Check model weight fit
+
+`assessFit` reads the detector and recognizer GGUF tensor metadata without
+loading their weights. It checks a conservative weight-load estimate against
+the selected backend's currently free memory. It does **not** assess image
+decoding, detection or recognition graphs, or the number of text regions in a
+future image. A `fits` result therefore covers model weights only; `error`
+means the check could not reach a reliable capacity verdict.
+
+```js
+const { assessFit } = require('@qvac/ocr-ggml')
+
+const fit = assessFit({
+  pathDetector: '/abs/path/craft_mlt_25k.gguf',
+  pathRecognizer: '/abs/path/latin_g2.gguf',
+  backendDevice: 'cpu',
+  marginBytes: 1024 * 1024 * 1024
+})
+console.log(fit.status, fit.reason, fit.report)
+```
+
+Use the same `pipelineType`, `backendDevice`, `gpuDevice`, and `main-gpu`
+settings intended for the eventual `OcrGgml` load. DocTR configurations that
+place stages on different devices return `error` with `unsupported-config`
+until a multi-device weight estimate is available.
+
 The `doctr` pipeline is language-agnostic, so `langList` can be omitted
 entirely:
 
