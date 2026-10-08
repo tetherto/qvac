@@ -191,7 +191,8 @@
     "cmake-npm": "^1.1.0",
     "bare-url": "^2.1.6",
     "bare-https": "^3.0.0",
-    "bare-stream": "^2.7.0"
+    "bare-stream": "^2.7.0",
+    "bare-subprocess": "^6.2.1"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
@@ -204,7 +205,6 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
-    "bare-subprocess": "^6.2.1",
     "bare-url": "^2.4.3",
     "brittle": "^3.17.0"
   },

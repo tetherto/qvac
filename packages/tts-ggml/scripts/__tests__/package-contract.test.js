@@ -28,10 +28,13 @@ const runtimeProbes = [
   'bare-https',
   'bare-process',
   'bare-stream',
-  'bare-subprocess',
   'bare-url',
   'brittle'
 ]
+const lazilyLoadedDevDependencies = new Set(['@qvac/registry-client'])
+const lazilyLoadedDevDependenciesByFile = new Map([
+  ['examples/pcm-chunk-player.js', new Set(['bare-subprocess'])]
+])
 
 function runNpm(arguments_, cwd) {
   const result = spawnSync(npmCommand, arguments_, { cwd, encoding: 'utf8' })
@@ -88,14 +91,18 @@ function declaredPackagesFor(filePath) {
   return runtime
 }
 
+function isLazilyLoadedDevDependency(filePath, name) {
+  if (lazilyLoadedDevDependencies.has(name)) return true
+  return lazilyLoadedDevDependenciesByFile.get(filePath)?.has(name) === true
+}
+
 function undeclaredImports(filePath, declaredPackages) {
   if (!runtimeExtensions.has(path.extname(filePath))) return []
   const source = fs.readFileSync(path.join(packageRoot, filePath), 'utf8')
-  // Packed download helpers lazy-require this; it is a devDependency only.
   return externalSpecifiers(source)
     .map(packageName)
     .filter((name) => name !== packageJson.name && !declaredPackages.has(name))
-    .filter((name) => name !== '@qvac/registry-client')
+    .filter((name) => !isLazilyLoadedDevDependency(filePath, name))
     .map((name) => `${filePath}: ${name}`)
 }
 
@@ -161,6 +168,11 @@ test('WER helper uses asr-ggml as a development dependency', () => {
   assert.match(source, /@qvac\/asr-ggml/)
   assert.doesNotMatch(source, /transcription-whispercpp/)
   assert.match(source, /function loadAsrGgml/)
+})
+
+test('bare-subprocess is a development dependency', () => {
+  assert.equal(packageJson.dependencies['bare-subprocess'], undefined)
+  assert.equal(packageJson.devDependencies['bare-subprocess'], '^6.2.1')
 })
 
 test('published commands include their runtime files', () => {
