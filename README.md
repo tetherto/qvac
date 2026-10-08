@@ -282,7 +282,7 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 | **Transcription** | Speech-to-text via a [Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml), [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), or [MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize) (speaker-labelled transcripts with hotwords). |
 | **Speaker diarization** | Whisper tinydiarize speaker turns, four-speaker Sortformer, up to eight-speaker [Nemotron 3 Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization), and speaker-labelled MOSS-Transcribe-Diarize transcripts through [`@qvac/asr-ggml`](packages/asr-ggml/README.md). |
 | **Audio decoding** | [FFmpeg audio decoder](packages/decoder-audio/README.md) with streaming PCM output and a default 64 MiB decoded-output limit. |
-| **Text-to-Speech** | Speech synthesis, speech-to-speech replies and text-to-sound-effects generation via a GGML backend. |
+| **Text-to-Speech** | Speech synthesis, speech-to-speech replies and text-to-sound-effects generation via a GGML backend, with [memory preflight for MOSS-SoundEffect](packages/tts-ggml/README.md#moss-soundeffect-fit). |
 | **Translation** | Neural machine translation, via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
@@ -293,7 +293,7 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 
 QVAC's built-in P2P capabilities let you build unstoppable internet systems without depending on centralized infrastructure:
 
-- **Fetch models:** download AI models directly from peers through a distributed model registry, removing the need for centralized model hosting and distribution.
+- **Fetch models:** download AI models directly from peers through a distributed model registry, removing the need for centralized model hosting and distribution. The registry also serves weightless descriptions of models, their settings and tensor list without the weights, so whether a model fits in memory can be assessed before it is downloaded.
 - **Blind relays:** route traffic through relay peers when devices cannot connect directly across NATs and firewalls, keeping the network connected without centralized infrastructure.
 
 ## Resources

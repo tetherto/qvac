@@ -9,6 +9,7 @@
 
 #include "inference-addon-cpp/Errors.hpp"
 #include "js-interface/NumberConversion.hpp"
+#include "js-interface/TtsConfigParse.hpp"
 #include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml {
@@ -44,14 +45,7 @@ std::optional<int> readOptionalInt(
   }
   if (js::is<js::String>(env, raw)) {
     const std::string str = js::String::fromValue(raw).as<std::string>(env);
-    try {
-      return std::stoi(str);
-    } catch (const std::exception&) {
-      throw qvac_errors::StatusError(
-          general_error::InvalidArgument,
-          std::string("Property '") + key +
-              "' must be an integer (got non-numeric string \"" + str + "\")");
-    }
+    return parseIntString(str, key);
   }
   throw qvac_errors::StatusError(
       general_error::InvalidArgument,
@@ -77,14 +71,7 @@ std::optional<float> readOptionalFloat(
   }
   if (js::is<js::String>(env, raw)) {
     const std::string str = js::String::fromValue(raw).as<std::string>(env);
-    try {
-      return std::stof(str);
-    } catch (const std::exception&) {
-      throw qvac_errors::StatusError(
-          general_error::InvalidArgument,
-          std::string("Property '") + key +
-              "' must be a number (got non-numeric string \"" + str + "\")");
-    }
+    return parseFloatString(str, key);
   }
   throw qvac_errors::StatusError(
       general_error::InvalidArgument,

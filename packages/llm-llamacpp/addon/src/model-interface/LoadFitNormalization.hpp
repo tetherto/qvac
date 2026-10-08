@@ -79,10 +79,13 @@ struct SelectedBackend {
   bool isMetal = false;
 };
 
+/// Args: preferred type, main-gpu override, model metadata, isFinetuning,
+/// and the parsed `backend` priority list (empty when the caller did not set
+/// one). QVAC-23763.
 using BackendResolver = std::function<SelectedBackend(
     backend_selection::BackendType,
     const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
-    bool)>;
+    bool, const std::vector<std::string>&)>;
 
 // Registers the comma-separated 'host:port' endpoints as ggml RPC devices and
 // returns their process-global ggml device names in endpoint/device order.
@@ -127,7 +130,7 @@ void tuneLoadConfigMap(
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
-    bool isTensorSplit = false);
+    bool isCuda = false, bool isTensorSplit = false);
 
 void validateMobileMultiDeviceConfig(
     const ConfigMap& configFilemap, llama_split_mode splitMode);
@@ -135,6 +138,13 @@ void validateMobileMultiDeviceConfig(
 void canonicalizeCpuTensorBufferOverrides(
     std::vector<llama_model_tensor_buft_override>& overrides,
     ggml_backend_buffer_type_t parsedCpuBuft);
+
+// Load mode selected by one of llama's deprecated load flags (mmap, no-mmap,
+// direct-io, no-direct-io, mlock), which fabric's argument table no longer
+// has. std::nullopt for any other key; std::invalid_argument for a value the
+// flag does not take.
+std::optional<llama_load_mode>
+deprecatedLoadFlagMode(const std::string& flag, const std::string& value);
 
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,

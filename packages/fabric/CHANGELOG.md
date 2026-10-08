@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.20.1] - 2026-10-08
+
+### Added
+
+- CUDA backend in the linux-x64 (`libqvac-ggml-cuda.so`) and win32-x64 builds,
+  via `qvac-fabric[cuda-backend]` (`11018.0.0` -> `11018.0.0#1`). On Linux it
+  loads alongside Vulkan, and a host without an NVIDIA driver skips it and
+  falls back to Vulkan or CPU. No API change for this package.
+- An opt-in `cuda-jetson` feature (`QVAC_CUDA_JETSON`) that builds the CUDA 12
+  Jetson module for linux-arm64. Off by default, so the published linux-arm64
+  package does not carry it.
+
+## [0.20.0] - 2026-10-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `11018.0.0`, the rebase onto
+  upstream llama.cpp b11018:
+  - `common_fit_params` takes an extra-model argument, the common headers use
+    `common_json` instead of `nlohmann::ordered_json`, and the mtmd bitmap
+    helpers take an options argument. Native consumers must adapt.
+  - The `--mmap`, `--no-mmap` and `--direct-io` argument-parser flags are gone;
+    the load mode replaces them.
+  - RPC servers keep backend tensor extras.
+
+## [0.19.1] - 2026-10-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `10549.5.3`. No API change for
+  this package:
+  - Fixed an OpenCL abort (`CL_INVALID_KERNEL`) in argsort when a backend user
+    such as the RPC server runs it before `supports_op`, which broke MoE expert
+    selection behind an RPC server.
+  - The RPC server keeps backend tensor extras, so OpenCL works behind an RPC
+    server.
+  - Fixed the `ggml-cpu` build with clang-cl.
+  - Added Laya decision model support.
+
 ## [0.19.0] - 2026-09-30
 
 ### Changed

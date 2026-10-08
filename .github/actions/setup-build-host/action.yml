@@ -34,10 +34,38 @@ runs:
     - if: ${{ inputs.platform == 'android' }}
       name: Select Android NDK
       shell: bash
+      env:
+        # Pin every NDK selector because runner images move "latest" mid-rollout.
+        NDK_VERSION: 29.0.14206865
       run: |
-        echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
-        echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
-        echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        if [ -z "${ANDROID_HOME:-}" ]; then
+          echo "::error::ANDROID_HOME is unset; cannot select NDK ${NDK_VERSION}"
+          exit 1
+        fi
+        ndk="${ANDROID_HOME}/ndk/${NDK_VERSION}"
+        if [ ! -d "$ndk" ]; then
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            echo "::error::NDK ${NDK_VERSION} is not installed and $sdkmanager is missing"
+            exit 1
+          fi
+          echo "NDK ${NDK_VERSION} not on this image; installing"
+          "$sdkmanager" --install "ndk;${NDK_VERSION}"
+        fi
+        if [ ! -f "$ndk/source.properties" ]; then
+          echo "::error::$ndk/source.properties is missing; the NDK install is incomplete"
+          exit 1
+        fi
+        revision=$(sed -n 's/^Pkg\.Revision *= *//p' "$ndk/source.properties")
+        if [ "$revision" != "$NDK_VERSION" ]; then
+          echo "::error::expected NDK ${NDK_VERSION} at $ndk, found '${revision}'"
+          exit 1
+        fi
+        echo "Using NDK ${revision} at $ndk"
+        echo "ANDROID_NDK=$ndk" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_LATEST_HOME=$ndk" >> "$GITHUB_ENV"
 
     - if: ${{ runner.os == 'Linux' }}
       name: Maximize build space

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.18.1",
+  "version": "0.19.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -78,8 +78,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.19.0",
-    "@qvac/fabric-ios": "^0.19.0",
+    "@qvac/fabric-android-arm64": "^0.20.0",
+    "@qvac/fabric-ios": "^0.20.0",
     "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",
@@ -98,7 +98,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/fabric": "^0.19.0",
+    "@qvac/fabric": "^0.20.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",

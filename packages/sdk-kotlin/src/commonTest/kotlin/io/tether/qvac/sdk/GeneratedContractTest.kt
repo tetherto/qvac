@@ -35,14 +35,14 @@ class GeneratedContractTest {
 
     @Test
     fun generatesModelCatalogAndVersion() {
-        assertEquals("0.20.1", SDK_VERSION)
+        assertEquals("0.21.0", SDK_VERSION)
         assertTrue(Models.all.isNotEmpty())
         assertNotNull(Models.QWEN3_600M_INST_Q4)
     }
 
     @Test
     fun generatedErrorRegistryPreservesCollidingNames() {
-        assertEquals(138, ErrorCodes.all.size)
+        assertEquals(139, ErrorCodes.all.size)
         assertEquals(52002, ErrorCodes.lookup("MODEL_NOT_FOUND", 52002))
         assertEquals(19003, ErrorCodes.lookup("MODEL_NOT_FOUND", 19003))
         assertEquals(null, ErrorCodes.lookup("MODEL_NOT_FOUND"))

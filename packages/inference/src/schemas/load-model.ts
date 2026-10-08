@@ -20,7 +20,7 @@ import {
   ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
 } from './text-to-speech'
-import { ocrConfigSchema } from './ocr'
+import { ocrConfigSchema, refineOcrMainGpuSelector } from './ocr'
 import {
   modelSrcInputSchema,
   modelInputToSrcSchema,
@@ -59,6 +59,7 @@ export function isBuiltInModelType(modelType: unknown): boolean {
   return typeof modelType === 'string' && builtInModelTypes.has(modelType)
 }
 import { reloadConfigRequestSchema } from './reload-config'
+import { modelFitPolicySchema, type ModelFitPolicy } from './model-fit-policy'
 
 const MODEL_SRC_DESCRIPTION = `The model to load: a registry model constant for a built-in model, or a model source — ${MODEL_SOURCE_URI_HINT} — for HTTP, local, or P2P models.`
 
@@ -72,7 +73,8 @@ const loadModelCommonFields = {
       'Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.'
     ),
   requireHttpChecksum: z.boolean().optional(),
-  requireSecureTransport: z.boolean().optional()
+  requireSecureTransport: z.boolean().optional(),
+  modelFitPolicy: modelFitPolicySchema.optional()
 }
 
 const loadModelRequestCommonFields = {
@@ -205,7 +207,11 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
     .object({
       ...loadModelCommonFields,
       modelType: ocrModelTypeSchema,
-      modelConfig: ocrConfigSchema.partial().strict().optional()
+      modelConfig: ocrConfigSchema
+        .partial()
+        .strict()
+        .superRefine(refineOcrMainGpuSelector)
+        .optional()
     })
     .strict(),
   z
@@ -266,6 +272,7 @@ function optionalRequestFields(data: {
   fallbackSrc?: string | undefined
   requireHttpChecksum?: boolean | undefined
   requireSecureTransport?: boolean | undefined
+  modelFitPolicy?: ModelFitPolicy | undefined
   requestId?: string | undefined
 }) {
   return {
@@ -276,6 +283,7 @@ function optionalRequestFields(data: {
     ...(data.requireSecureTransport !== undefined && {
       requireSecureTransport: data.requireSecureTransport
     }),
+    ...(data.modelFitPolicy !== undefined && { modelFitPolicy: data.modelFitPolicy }),
     ...(data.requestId !== undefined && { requestId: data.requestId })
   }
 }
@@ -413,7 +421,11 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
     .object({
       ...loadModelRequestCommonFields,
       modelType: ocrModelTypeSchema,
-      modelConfig: ocrConfigSchema.partial().strict().optional()
+      modelConfig: ocrConfigSchema
+        .partial()
+        .strict()
+        .superRefine(refineOcrMainGpuSelector)
+        .optional()
     })
     .strict()
     .transform((data) => ({
@@ -550,6 +562,11 @@ const commonModelConfigSchema = z.object({
     .describe(
       'Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).'
     ),
+  modelFitPolicy: modelFitPolicySchema
+    .optional()
+    .describe(
+      "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`)."
+    ),
   requestId: z
     .string()
     .min(1)
@@ -614,7 +631,7 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema
 export const loadOcrModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.ggmlOcr),
-    modelConfig: ocrConfigSchema
+    modelConfig: ocrConfigSchema.superRefine(refineOcrMainGpuSelector)
   })
   .strict()
 
@@ -802,6 +819,7 @@ export type LoadModelDescriptorOnlyOptions = {
   modelConfig?: Record<string, unknown>
   seed?: boolean
   fallbackSrc?: string
+  modelFitPolicy?: ModelFitPolicy
   onProgress?: (progress: ModelProgressUpdate) => void
   logger?: Logger
 }
@@ -847,6 +865,7 @@ export type LoadModelDescriptorInferredOptions<S extends ModelDescriptor> = {
   modelConfig?: InferredConfig<S>
   seed?: boolean
   fallbackSrc?: string
+  modelFitPolicy?: ModelFitPolicy
   onProgress?: (progress: ModelProgressUpdate) => void
   logger?: Logger
 }

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const MILLISECONDS_PER_MINUTE = 60_000;
@@ -1133,6 +1133,20 @@ test("merge guard fails closed when the PR was not authorized", () => {
   }
 });
 
+test("bare-major check fails the workflow and stays out of the required merge guard", () => {
+  const guard = read(".github/workflows/pr-gate-merge.yml");
+  assert.doesNotMatch(
+    guard,
+    /bare-majors/,
+    "a bare-major failure must not feed qvac-merge-guard",
+  );
+
+  const workflow = read(".github/workflows/bare-majors.yml");
+  assert.match(workflow, /check-bare-majors\.mjs/);
+  assert.match(onBlock(workflow), /pull_request:/);
+  assert.doesNotMatch(onBlock(workflow), /pull_request_target/);
+});
+
 test("merge guard cancels superseded in-flight runs", () => {
   const source = read(".github/workflows/pr-gate-merge.yml");
   // verify-prebuilds uses a static per-run freshness threshold, so an older
@@ -1319,7 +1333,7 @@ test("publish-cpp-test-status stamps its run URL into target_url", () => {
 
 test("merge guard changes filter: ALL_PACKAGES and producer-less workflow paths", async () => {
   const { CARVED_OUT_PRODUCERS, CPP_TEST_KEYS, PREBUILD_KEYS } = await import(
-    join(root, ".github/scripts/prebuild-status/lib.mjs")
+    pathToFileURL(join(root, ".github/scripts/prebuild-status/lib.mjs")).href
   );
   const changes = jobBlock(read(".github/workflows/pr-gate-merge.yml"), "changes");
   const filters = {};
@@ -2004,7 +2018,7 @@ test('RPC server prebuilds consume PR-built npm Fabric artifacts', () => {
   assert.match(nxPrebuilds, /reuse-workflow-file:\s*\$\{\{ inputs\.reuse-workflow-file \}\}/)
   assert.match(
     nxPrebuilds,
-    /fabric-overlay-artifact:\s*\$\{\{ contains\(fromJSON\(inputs\.fabric-consumers\), matrix\.package\) && inputs\.fabric-overlay-artifact \|\| '' \}\}/,
+    /fabric-overlay-artifact:\s*\$\{\{ contains\(fromJSON\(inputs\.fabric-consumers \|\| '\[\]'\), matrix\.package\) && inputs\.fabric-overlay-artifact \|\| '' \}\}/,
   )
   assert.ok(fabricConsumers.includes('ggml-rpc-server'), 'the RPC server must receive the PR-built Fabric overlay')
   assert.match(
@@ -2967,7 +2981,7 @@ function eachCppTestsCacheStep(opts = {}) {
     if (!/\/cpp-tests?-/.test(path)) continue;
     if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue;
     const code = withoutComments(read(path));
-    const steps = code.split(/\n      - /);
+    const steps = code.split(/\n {6}- /);
     steps.forEach((step, index) => {
       if (!patterns.every((p) => p.test(step))) return;
       found.push({ path, code, steps, step, index });
@@ -3136,8 +3150,17 @@ test("cache policy: the toolchain fingerprint identifies vcpkg by version, not b
   if (!/vcpkg_version_raw="\$\("\$\{vcpkg_bin\}" version\)/.test(source)) {
     offenders.push("bash: the fingerprint never runs `vcpkg version`");
   }
-  if (!/\$vcpkgVersion\s*=\s*\(&\s*\$vcpkgBin\s+version/.test(source)) {
+  if (!/\$vcpkgVersionRaw\s*=\s*&\s*\$vcpkgBin\s+version\s*\n/.test(source)) {
     offenders.push("powershell: the fingerprint never runs `vcpkg version`");
+  }
+
+  // Trimming in the same pipeline closes vcpkg's stdout early, and the step
+  // then fails on its leftover exit code (QVAC-26572).
+  if (/\$vcpkgBin\)?\s+['"]?version['"]?\s*\)?\s*\|/.test(source)) {
+    offenders.push("powershell: `vcpkg version` is piped straight into a trim");
+  }
+  if (!/\$vcpkgVersionRaw\s*=\s*&\s*\$vcpkgBin\s+version\s*\n\s*if\s*\(\s*\$LASTEXITCODE\s+-ne\s+0/.test(source)) {
+    offenders.push("powershell: `vcpkg version`'s exit code is not checked");
   }
 
   // An empty version would hash to one constant on every host, which is the

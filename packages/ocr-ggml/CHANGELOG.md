@@ -6,6 +6,34 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Add `assessFit` to estimate whether EasyOCR or DocTR detector and recognizer
+  weights fit on the selected backend at model load time. The estimate excludes
+  image-dependent inference memory; unsupported split-device configurations
+  return an unavailable verdict.
+
+## [0.27.1] - 2026-10-08
+
+### Fixed
+
+- Rebuild Android prebuilds with NDK 29 to restore compatibility with the app's
+  C++ runtime and fix addon loading failures caused by the missing
+  `std::__ndk1::__hash_memory` symbol in the NDK 30 builds published in `0.27.0`.
+
+## [0.27.0] - 2026-10-06
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own. No API change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
 ## [0.26.1] - 2026-09-30
 
 ### Changed

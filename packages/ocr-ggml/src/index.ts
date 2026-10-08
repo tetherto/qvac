@@ -1,8 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import path = require("bare-path");
 import fs = require("bare-fs");
 import QvacLogger = require("@qvac/logging");
-import fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   createJobHandler,
@@ -20,6 +18,10 @@ import {
 } from "./ocr-ggml";
 import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
 import { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } from "./lib/main-gpu";
+import { resolveBackendsDir } from "./lib/backends-dir";
+import { assessFit } from "./fit";
+export type { OcrFitRequest, OcrFitResult } from "./fit";
+export { assessFit } from "./fit";
 
 /**
  * OCR pipeline backing the addon.
@@ -41,22 +43,6 @@ const DOCTR_INTERNAL_LANG_LIST = ["en"];
  * create-time failures to ERR_CODES.UNSUPPORTED_LANGUAGE.
  */
 const NATIVE_LANGUAGE_ERROR = /unsupported languages|only compatible with english/i;
-
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds, where the mobile packaging stages the backends. The native side
-// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir(): string {
-  // fabric's resolver only checks that the platform package resolves, not that
-  // its prebuilds are on disk.
-  const fabricRoot = fabricBackends.resolveBackendsDir();
-  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
-  return path.join(__dirname, "prebuilds");
-}
 
 export interface OcrGgmlParams {
   /**
@@ -663,6 +649,7 @@ export declare const addonLogging: unknown;
 
 module.exports = {
   OcrGgml,
+  assessFit,
   modelClass: OcrGgml,
   get modelFile() {
     return (require as unknown as { addon: { resolve(id: string): unknown } }).addon.resolve(".");

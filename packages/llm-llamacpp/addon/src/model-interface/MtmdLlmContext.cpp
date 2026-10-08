@@ -385,6 +385,9 @@ void MtmdLlmContext::tokenizeChat(
   if (!toolChoice.tools.empty()) {
     inputs.tools = std::move(toolChoice.tools);
     inputs.tool_choice = toolChoice.choice;
+    if (renderOverrides_.parallelToolCalls) {
+      inputs.parallel_tool_calls = *renderOverrides_.parallelToolCalls;
+    }
   }
   // See TextLlmContext::tokenizeChat: not const so the prompt and stop list
   // move out instead of being copied per request.
@@ -1353,7 +1356,8 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
                        visionContext(),
                        media.data(),
                        media.size(),
-                       /*placeholder=*/false)
+                       /*placeholder=*/false,
+                       mtmd_helper_init_opt_default())
                        .bitmap);
   if (!bmp.ptr) {
     resetMedia();
@@ -1389,7 +1393,8 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
   mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_file(
                        visionContext(),
                        fname.c_str(),
-                       /*placeholder=*/false)
+                       /*placeholder=*/false,
+                       mtmd_helper_init_opt_default())
                        .bitmap);
   if (!bmp.ptr) {
     resetMedia();

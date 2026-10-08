@@ -3,11 +3,11 @@ import os from 'bare-os'
 import type { ModelFitPlatform } from '@/resources/model-fit/types'
 
 /**
- * Maps the runtime's platform and architecture onto a calibration target.
+ * Maps the runtime's platform and architecture onto a platform this assessment
+ * covers.
  *
- * @returns `undefined` for any pair this feature has no calibration target for,
- *   which assesses as `unknown` rather than borrowing another platform's
- *   coefficients.
+ * @returns `undefined` for any pair outside that set, which assesses as
+ *   `unknown`.
  */
 export function detectPlatform(): ModelFitPlatform | undefined {
   const key = `${os.platform()}-${os.arch()}`
