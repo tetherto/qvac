@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.20.1] - 2026-10-08
+
+### Added
+
+- CUDA backend in the linux-x64 (`libqvac-ggml-cuda.so`) and win32-x64 builds,
+  via `qvac-fabric[cuda-backend]` (`11018.0.0` -> `11018.0.0#1`). On Linux it
+  loads alongside Vulkan, and a host without an NVIDIA driver skips it and
+  falls back to Vulkan or CPU. No API change for this package.
+- An opt-in `cuda-jetson` feature (`QVAC_CUDA_JETSON`) that builds the CUDA 12
+  Jetson module for linux-arm64. Off by default, so the published linux-arm64
+  package does not carry it.
+
 ## [0.20.0] - 2026-10-06
 
 ### Changed
