@@ -152,10 +152,25 @@ int parseAdrenoModel(const std::string& description) {
 
 ggml_backend_dev_t
 pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
+  static const DeviceInterface kGgmlDevices{
+      ggml_backend_dev_count,
+      ggml_backend_dev_get,
+      ggml_backend_dev_type,
+      ggml_backend_dev_name,
+      ggml_backend_dev_description};
+  return pickBestGpuDevice(kGgmlDevices, backendOverride);
+}
+
+ggml_backend_dev_t pickBestGpuDevice(
+    const DeviceInterface& devI,
+    const std::vector<std::string>& backendOverride) {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
-  const size_t n = ggml_backend_dev_count();
+  const size_t n = devI.devCount();
+  // A discrete GPU beats an integrated one, as in llm-llamacpp and
+  // embed-llamacpp.
   ggml_backend_dev_t fallbackGpu = nullptr;
+  ggml_backend_dev_t fallbackIgpu = nullptr;
   ggml_backend_dev_t hipDev = nullptr;
   ggml_backend_dev_t cudaDev = nullptr;
   // QVAC-23763: every device that passed the Adreno gate, paired with its
@@ -164,16 +179,16 @@ pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
   std::vector<std::pair<std::string, ggml_backend_dev_t>> accepted;
 
   for (size_t i = 0; i < n; ++i) {
-    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-    const enum ggml_backend_dev_type t = ggml_backend_dev_type(dev);
+    ggml_backend_dev_t dev = devI.devGet(i);
+    const enum ggml_backend_dev_type t = devI.devType(dev);
     if (t != GGML_BACKEND_DEVICE_TYPE_GPU &&
         t != GGML_BACKEND_DEVICE_TYPE_IGPU) {
       continue;
     }
 
-    const char* descRaw = ggml_backend_dev_description(dev);
+    const char* descRaw = devI.devDescription(dev);
     const std::string desc = descRaw ? descRaw : "";
-    const char* nameRaw = ggml_backend_dev_name(dev);
+    const char* nameRaw = devI.devName(dev);
     const std::string backendName = nameRaw ? nameRaw : "";
     std::string backendLower = backendName;
     std::transform(
@@ -261,8 +276,11 @@ pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
 
     accepted.emplace_back(backendLower, dev);
 
-    if (fallbackGpu == nullptr) {
+    if (t == GGML_BACKEND_DEVICE_TYPE_GPU && fallbackGpu == nullptr) {
       fallbackGpu = dev;
+    }
+    if (t == GGML_BACKEND_DEVICE_TYPE_IGPU && fallbackIgpu == nullptr) {
+      fallbackIgpu = dev;
     }
   }
 
@@ -302,7 +320,7 @@ pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
         "vla_backend_selection: preferring HIP/ROCm GPU (Vulkan is fallback)");
     return hipDev;
   }
-  return fallbackGpu;
+  return fallbackGpu != nullptr ? fallbackGpu : fallbackIgpu;
 }
 
 } // namespace vla_backend_selection

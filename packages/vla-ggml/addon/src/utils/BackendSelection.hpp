@@ -56,9 +56,14 @@ void loadBackendsOnce(const std::string& backendsDir);
 //   Non-Adreno GPU         -> accept (Vulkan on desktop / Mali, Metal on
 //                                Apple)
 //
-// Among accepted devices the order is CUDA, then HIP/ROCm, then the first other
-// GPU. CUDA first covers a mixed NVIDIA and AMD host only when the CUDA backend
-// registers; an NVIDIA GPU seen only through Vulkan still loses to ROCm.
+// Every other GPU or iGPU is accepted, ROCm, SYCL, non-Adreno OpenCL and RPC
+// included. That set is wider than llm-llamacpp and embed-llamacpp on purpose:
+// ROCm is the HIP Strix Halo target, which those addons do not ship.
+//
+// Among accepted devices the order is CUDA, then HIP/ROCm, then the first
+// discrete GPU, then the first iGPU. CUDA first covers a mixed NVIDIA and AMD
+// host only when the CUDA backend registers; an NVIDIA GPU seen only through
+// Vulkan still loses to ROCm.
 //
 // `backendOverride`, when non-empty, restricts the choice to those families in
 // priority order, then falls through to the normal order if none match. The
@@ -68,5 +73,19 @@ void loadBackendsOnce(const std::string& backendsDir);
 // the CPU backend.
 ggml_backend_dev_t
 pickBestGpuDevice(const std::vector<std::string>& backendOverride = {});
+
+// The ggml device calls pickBestGpuDevice() makes, so tests can feed it a fake
+// device list. The overload above passes the real ggml functions.
+struct DeviceInterface {
+  size_t (*devCount)();
+  ggml_backend_dev_t (*devGet)(size_t index);
+  enum ggml_backend_dev_type (*devType)(ggml_backend_dev_t device);
+  const char* (*devName)(ggml_backend_dev_t device);
+  const char* (*devDescription)(ggml_backend_dev_t device);
+};
+
+ggml_backend_dev_t pickBestGpuDevice(
+    const DeviceInterface& devI,
+    const std::vector<std::string>& backendOverride);
 
 } // namespace vla_backend_selection

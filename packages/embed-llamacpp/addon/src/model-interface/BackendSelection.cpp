@@ -116,6 +116,14 @@ bool isOpenClDevice(
       "opencl");
 }
 
+bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  return hasBackendFamily(
+      lowerCopy(bckI.ggml_backend_dev_name(dev)),
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
+      "rpc");
+}
+
 std::string
 deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -159,7 +167,15 @@ void emplaceIfValidDevice(
     std::vector<std::string>& cudaBackends,
     std::vector<std::string>& otherOpenClBackends,
     const DeviceDescription& devDescr,
-    const enum ggml_backend_dev_type backendTypeEnum, const bool isOpenCl) {
+    const enum ggml_backend_dev_type backendTypeEnum, const bool isOpenCl,
+    const bool isRpc) {
+  // RPC devices are intentionally excluded from automatic single-backend
+  // selection. They remain eligible for split modes through
+  // getSplitDeviceSelection().
+  if (isRpc) {
+    return;
+  }
+
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
     std::string text =
@@ -242,7 +258,8 @@ void tryEmplaceDevice(
         otherOpenClBackends,
         devDescr,
         backendTypeEnum,
-        isOpenCl);
+        isOpenCl,
+        isRpcDevice(bckI, dev));
   } else {
 #ifndef NDEBUG
     bckI.llamaLogCallback(
