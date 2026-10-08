@@ -59,6 +59,19 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
 
   await inference.load()
 
+  // Only a pin that binds logs "(backend override)" with parentheses; a pin
+  // that matches no device warns without them. Call after the first
+  // completion: backend selection is lazy, so the log is empty right after load.
+  function assertBackendPin() {
+    if (!config.backend || config.device !== 'gpu') {
+      return
+    }
+    t.ok(
+      specLogger.logs.some((l) => /\(backend override\)/.test(l)),
+      `${config.backend} backend pin took effect`
+    )
+  }
+
   t.teardown(async () => {
     try {
       specLogger.release()
@@ -68,7 +81,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
     }
   })
 
-  return { inference }
+  return { inference, assertBackendPin }
 }
 
 // Shared helper: Run a completion and collect response
@@ -723,11 +736,14 @@ safeTest(
 // untouched. Qwen3.5 thinking traces can exceed 1k tokens before
 // `</think>` closes, so we give a larger n_predict / ctx_size. Greedy
 // Qwen3.5-0.8B can loop inside `<think>` on the CPU backend; the budget
-// force-closes the span so these tests always have one to compact.
+// force-closes the span so these tests always have one to compact. On linux
+// x64, where CUDA is now preferred, they also pin Vulkan: whether the span
+// closes is not stable across backends.
 const QWEN35_REASONING_CONFIG = {
   ctx_size: '8192',
   n_predict: '3072',
-  reasoning_budget: '1024'
+  reasoning_budget: '1024',
+  ...(os.platform() === 'linux' && os.arch() === 'x64' ? { backend: 'vulkan' } : {})
 }
 
 // Qwen3.5 is a hybrid SSM family. The recurrent half is rolled back
@@ -743,7 +759,7 @@ safeTest(
     timeout: 900_000
   },
   async (t) => {
-    const { inference } = await setupReasoningModel(t, false, {
+    const { inference, assertBackendPin } = await setupReasoningModel(t, false, {
       modelDef: QWEN35_MODEL,
       configOverrides: QWEN35_REASONING_CONFIG
     })
@@ -751,6 +767,7 @@ safeTest(
     const messages = createInitialMessages()
 
     const { response, stats } = await runCompletionWithStats(inference, messages)
+    assertBackendPin()
     t.comment(`response (len=${response.length}): ${response.slice(0, 200)}...`)
     t.comment(`stats: ${JSON.stringify(stats)}`)
 
@@ -789,7 +806,7 @@ safeTest(
       } catch {}
     })
 
-    const { inference } = await setupReasoningModel(t, false, {
+    const { inference, assertBackendPin } = await setupReasoningModel(t, false, {
       modelDef: QWEN35_MODEL,
       configOverrides: QWEN35_REASONING_CONFIG
     })
@@ -800,6 +817,7 @@ safeTest(
       cacheKey: sessionPath,
       generationParams: { remove_thinking_from_context: true }
     })
+    assertBackendPin()
     t.comment(`turn 1 stats: ${JSON.stringify(t1.stats)}`)
     t.ok(
       toNumber(t1.stats.thinkingBlockDiscards) >= 1,

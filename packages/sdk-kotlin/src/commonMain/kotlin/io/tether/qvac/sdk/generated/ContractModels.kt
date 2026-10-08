@@ -880,6 +880,7 @@ data class HeartbeatResponse(
 data class LoadModelRequest(
     val fallbackSrc: String? = null,
     val modelConfig: JsonObject? = null,
+    val modelFitPolicy: String? = null,
     val modelId: String? = null,
     val modelName: String? = null,
     val modelSrc: JsonElement? = null,
