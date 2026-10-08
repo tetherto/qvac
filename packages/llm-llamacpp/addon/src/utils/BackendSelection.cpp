@@ -403,8 +403,8 @@ namespace {
 // that simply has no device on this machine (falls through). Deliberately does
 // NOT include "cpu": the CPU path is `device`, and accepting two spellings for
 // it would make `device: 'gpu', backend: 'cpu'` ambiguous.
-constexpr std::array<std::string_view, 7> KNOWN_GPU_BACKEND_FAMILIES = {
-    "cuda", "vulkan", "metal", "opencl", "hip", "rocm", "sycl"};
+constexpr std::array<std::string_view, 4> KNOWN_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl"};
 
 // Trimmed from each family. \r matters: a value from a CRLF config file would
 // otherwise throw "unknown backend 'cuda\r'", which renders identically to the
@@ -460,17 +460,10 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
           qvac_errors::general_error::InvalidArgument,
           string_format(
               "backend: unknown backend '%s'. Expected a comma-separated list "
-              "of cuda/vulkan/metal/opencl/hip/rocm/sycl or 'auto', for "
+              "of cuda/vulkan/metal/opencl or 'auto', for "
               "example "
               "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
               family.c_str()));
-    }
-    // ggml's HIP build names its devices "ROCm%d" (GGML_CUDA_NAME in
-    // ggml-cuda.h), so a family kept as "hip" matches no device name at all.
-    // Canonicalise to the spelling ggml actually reports; both spellings stay
-    // accepted on the way in, and the dedup below then merges "hip,rocm".
-    if (family == "hip") {
-      family = "rocm";
     }
     if (std::ranges::find(families, family) == families.end()) {
       families.emplace_back(std::move(family));
@@ -805,7 +798,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_description,
       ggml_backend_dev_name,
       ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
       llamaLogcallback};
   std::pair<BackendType, std::string> selected =
@@ -980,55 +972,9 @@ backend_selection::getSplitDeviceSelection() {
       ggml_backend_dev_description,
       ggml_backend_dev_name,
       ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
       nullptr};
   return getSplitDeviceSelection(bckI);
-}
-
-bool backend_selection::gpuBackendSupportsRowSplit(
-    const BackendInterface& bckI) {
-  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
-  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
-  // does not support split buffers" on the first one whose backend registry
-  // lacks `ggml_backend_split_buffer_type`. So require all of them, not any
-  // one, and treat "no GPU devices at all" as unsupported.
-  //
-  // No production caller: split-mode 'row' is rejected at load, and no shipped
-  // backend has split buffers.
-  size_t gpuDevices = 0;
-  const size_t totalDevices = bckI.ggml_backend_dev_count();
-  for (size_t i = 0; i < totalDevices; ++i) {
-    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
-    const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
-    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
-        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      continue;
-    }
-    ++gpuDevices;
-    ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-    if (reg == nullptr ||
-        bckI.ggml_backend_reg_get_proc_address(
-            reg, "ggml_backend_split_buffer_type") == nullptr) {
-      return false;
-    }
-  }
-  return gpuDevices > 0;
-}
-
-bool backend_selection::gpuBackendSupportsRowSplit() {
-  BackendInterface bckI{
-      ggml_backend_dev_count,
-      ggml_backend_dev_backend_reg,
-      ggml_backend_dev_get,
-      ggml_backend_reg_name,
-      ggml_backend_dev_description,
-      ggml_backend_dev_name,
-      ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
-      ggml_backend_dev_get_props,
-      nullptr};
-  return gpuBackendSupportsRowSplit(bckI);
 }
 
 void backend_selection::applyAdrenoRestrictions(
@@ -1224,7 +1170,6 @@ backend_selection::splitModeDeviceNames(const std::string& selectedDeviceName) {
       ggml_backend_dev_description,
       ggml_backend_dev_name,
       ggml_backend_dev_type,
-      ggml_backend_reg_get_proc_address,
       ggml_backend_dev_get_props,
       nullptr};
   return backend_selection::splitModeDeviceNames(bckI, selectedDeviceName);

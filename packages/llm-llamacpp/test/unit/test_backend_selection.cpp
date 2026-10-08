@@ -23,10 +23,6 @@ struct MockDevice {
   std::string backend_name;
   std::string regName;
   enum ggml_backend_dev_type type;
-  /// Whether this device's backend registry exposes
-  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
-  /// SYCL does as of qvac-fabric v10549, so this defaults to false.
-  bool hasSplitBuffers = false;
   /// `ggml_backend_dev_props::device_id` is the PCI bus id published by both
   /// CUDA and Vulkan and unique per physical card. Empty means ggml reported
   /// null, which is the "cannot dedupe, keep it" case. Descriptions are NOT
@@ -103,7 +99,6 @@ public:
         &MockBackendInterface::staticDevDescription,
         &MockBackendInterface::staticDevName,
         &MockBackendInterface::staticDevType,
-        &MockBackendInterface::staticRegGetProcAddress,
         &MockBackendInterface::staticDevGetProps,
         &MockBackendInterface::staticLlamaLogCallback};
   }
@@ -181,22 +176,6 @@ private:
       return mockDev->type;
     }
     return GGML_BACKEND_DEVICE_TYPE_CPU;
-  }
-
-  // `static_dev_backend_reg` hands back the device pointer as the registry
-  // handle, so recover the MockDevice from it to answer per-device.
-  static void*
-  staticRegGetProcAddress(ggml_backend_reg_t reg, const char* name) {
-    if (g_currentInstance == nullptr || reg == nullptr || name == nullptr) {
-      return nullptr;
-    }
-    MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
-    if (dev->hasSplitBuffers &&
-        std::string(name) == "ggml_backend_split_buffer_type") {
-      // Callers only test the address for presence, so any non-null will do.
-      return reinterpret_cast<void*>(dev);
-    }
-    return nullptr;
   }
 
   // Only `device_id` is read by the code under test; a device with no id
@@ -1574,15 +1553,12 @@ TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsCpu) {
   EXPECT_THROW(parseBackendOverride("cpu"), qvac_errors::StatusError);
 }
 
-// ggml's HIP build reports its devices as "ROCm%d", so 'hip' has to arrive at
-// the matcher as "rocm" or it pins nothing.
-TEST_F(BackendSelectionTest, ParseBackendOverrideCanonicalisesHipToRocm) {
-  EXPECT_EQ(parseBackendOverride("hip"), (std::vector<std::string>{"rocm"}));
-  EXPECT_EQ(
-      parseBackendOverride("hip,rocm"), (std::vector<std::string>{"rocm"}));
-  EXPECT_EQ(
-      parseBackendOverride("cuda,HIP"),
-      (std::vector<std::string>{"cuda", "rocm"}));
+// ROCm and SYCL devices never pass isEligibleGpuDevice, so naming them would
+// pin nothing. Reject them like a misspelled name.
+TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsBackendsLlmCannotUse) {
+  EXPECT_THROW(parseBackendOverride("hip"), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride("rocm"), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride("cuda,sycl"), qvac_errors::StatusError);
 }
 
 // A blank value means the key was not configured, but a value made only of
