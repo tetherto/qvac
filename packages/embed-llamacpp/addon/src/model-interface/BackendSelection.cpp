@@ -301,8 +301,8 @@ namespace {
 // that simply has no device on this machine (falls through). Deliberately does
 // NOT include "cpu": the CPU path is `device`, and accepting two spellings for
 // it would make `device: 'gpu', backend: 'cpu'` ambiguous.
-constexpr std::array<std::string_view, 7> KNOWN_GPU_BACKEND_FAMILIES = {
-    "cuda", "vulkan", "metal", "opencl", "hip", "rocm", "sycl"};
+constexpr std::array<std::string_view, 4> KNOWN_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl"};
 
 // Trimmed from each family. \r matters: a value from a CRLF config file would
 // otherwise throw "unknown backend 'cuda\r'", which renders identically to the
@@ -358,17 +358,10 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
           qvac_errors::general_error::InvalidArgument,
           string_format(
               "backend: unknown backend '%s'. Expected a comma-separated list "
-              "of cuda/vulkan/metal/opencl/hip/rocm/sycl or 'auto', for "
+              "of cuda/vulkan/metal/opencl or 'auto', for "
               "example "
               "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
               family.c_str()));
-    }
-    // ggml's HIP build names its devices "ROCm%d" (GGML_CUDA_NAME in
-    // ggml-cuda.h), so a family kept as "hip" matches no device name at all.
-    // Canonicalise to the spelling ggml actually reports; both spellings stay
-    // accepted on the way in, and the dedup below then merges "hip,rocm".
-    if (family == "hip") {
-      family = "rocm";
     }
     if (std::ranges::find(families, family) == families.end()) {
       families.emplace_back(std::move(family));
@@ -392,7 +385,7 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "backend: '%s' names no backend. Expected a comma-separated list "
-            "of cuda/vulkan/metal/opencl/hip/rocm/sycl or 'auto', for example "
+            "of cuda/vulkan/metal/opencl or 'auto', for example "
             "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
             backendStr.c_str()));
   }

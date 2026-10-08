@@ -1061,12 +1061,13 @@ TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsCpu) {
   EXPECT_THROW(parseBackendOverride("cpu"), qvac_errors::StatusError);
 }
 
-// ggml's HIP build reports its devices as "ROCm%d", so 'hip' has to arrive at
-// the matcher as "rocm" or it pins nothing.
-TEST_F(BackendSelectionTest, ParseBackendOverrideCanonicalisesHipToRocm) {
-  EXPECT_EQ(parseBackendOverride("hip"), (std::vector<std::string>{"rocm"}));
-  EXPECT_EQ(
-      parseBackendOverride("hip,rocm"), (std::vector<std::string>{"rocm"}));
+// ROCm and SYCL devices never pass isEligibleGpuDevice, so naming them would
+// pin nothing. Reject them like a misspelled name.
+TEST_F(
+    BackendSelectionTest, ParseBackendOverrideRejectsBackendsEmbedCannotUse) {
+  EXPECT_THROW(parseBackendOverride("hip"), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride("rocm"), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride("cuda,sycl"), qvac_errors::StatusError);
 }
 
 // A blank value means the key was not configured, but a value made only of
