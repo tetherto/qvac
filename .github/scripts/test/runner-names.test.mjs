@@ -68,11 +68,12 @@ test('speech C++ test targets and standalone coverage workflows use the same CPU
   }
 })
 
-test('audiogen C++ test carve-out stays on a hosted CPU runner', () => {
+test('audiogen C++ test carve-out stays on the CPU runner', () => {
   const project = JSON.parse(readRepoFile('packages/audiogen-ggml/project.json'))
   assert.equal(project.targets['test:cpp'].options.ci.carveOut, true)
   const source = readRepoFile('.github/workflows/cpp-test-coverage-audiogen-ggml.yml')
-  assert.match(source, /runs-on: ubuntu-latest/)
+  assert.match(source, /runner: \$\{\{ needs.runner_names.outputs.linux_ubuntu2204_x64 \}\}/)
+  assert.doesNotMatch(source, /linux_ubuntu2204_x64_gpu/)
   assert.doesNotMatch(source, /runs-on:.*gpu/)
 })
 

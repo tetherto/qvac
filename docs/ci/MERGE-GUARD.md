@@ -79,7 +79,7 @@ A key belongs in `CPP_TEST_KEYS` only when its producer can actually fail:
 
 - `ocr-ggml` is excluded because its `test:cpp` target has no `options.ci`, so nothing posts its status and every ocr PR would time out.
 - `asr-ggml` and `bci-whispercpp` are excluded because their `test:cpp` is `continueOnError` with no `hardGateCommand`, so their status is always green. Give them a `hardGateCommand` (as `tts-ggml` has) before re-adding them.
-- `audiogen-ggml` is included, but its C++ suite is currently a stub that always passes. It is also deliberately absent from `PREBUILD_KEYS`, so its prebuild failures do not reach the required check. Because it is in the `changes` paths-filter, audiogen PRs do run `sanity-checks` inside the required check.
+- `audiogen-ggml` is included. It has no addon-level C++ unit tests yet, so its C++ lane runs only the bounded config-parse fuzz target, and a fuzz failure fails its status. It is also deliberately absent from `PREBUILD_KEYS`, so its prebuild failures do not reach the required check. Because it is in the `changes` paths-filter, audiogen PRs do run `sanity-checks` inside the required check.
 
 When you add a C++-test-bearing addon, add its key to `CPP_TEST_KEYS`, to the `changes` paths-filter in `pr-gate-merge.yml`, and to `ALL_PACKAGES` in the same job, and make sure its producer posts `qvac/cpp-tests-<key>` (`vla` for `packages/vla-ggml`). For a package built by `on-pr-nx`, the filter entry must list only `packages/<dir>/**`: `on-pr-nx` never triggers on a `.github/workflows/` path, so such an entry would wait to the deadline for a status nothing posts. `ci-trust-policy.test.mjs` enforces both rules.
 

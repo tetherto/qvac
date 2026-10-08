@@ -787,6 +787,28 @@ dispatches to the corresponding `audiogen-cpp` engine.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
   `speech-cpp[audiogen]` port.
 
+## Fuzzing
+
+The JS-adapter number parsers have a [Google FuzzTest][fuzztest] target,
+`audiogen-config-parse-fuzz`. Fuzzing is Linux-only: it needs clang with
+libFuzzer and AddressSanitizer, CMake 3.25 or newer, [vcpkg](https://vcpkg.io/)
+(set `VCPKG_ROOT`) and `bare-make`. The target does not link audiogen-cpp, so
+it runs with full ASan and LeakSanitizer.
+
+```bash
+npm install
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- AudiogenConfigParseFuzz.ParseFloatNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
+
 ## Benchmarking
 
 The package ships the Real-Time Factor benchmark it is measured with, so the
