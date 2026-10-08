@@ -19,7 +19,6 @@ data class AssessModelFitResponse(
     val assumptions: List<String>,
     val basis: String,
     val budget: JsonObject? = null,
-    val estimate: JsonObject? = null,
     val evidence: String? = null,
     val execution: String,
     val floorBytes: Double? = null,

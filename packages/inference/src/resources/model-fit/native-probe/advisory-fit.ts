@@ -70,6 +70,11 @@ export interface AdvisoryFitOptions {
   availableSystemBytes?: () => Promise<number | undefined>
   countsDeviceRows?: () => Promise<boolean>
   residentModelBytes?: () => Promise<number>
+  /**
+   * Bytes to hold back beyond what is resident, for models the caller counts
+   * as loaded alongside this one but that this worker does not yet hold.
+   */
+  extraResidentBytes?: number
 }
 
 const DISABLED_VALUES = new Set(['0', 'false', 'off', 'no'])
@@ -297,7 +302,9 @@ export async function runAdvisoryFitCheck(
     const mobile = await resolveMobile(options.mobile)
 
     const availableBytes = await (options.availableSystemBytes ?? defaultAvailableSystemBytes)()
-    const residentBytes = await (options.residentModelBytes ?? defaultResidentModelBytes)()
+    const residentBytes =
+      (await (options.residentModelBytes ?? defaultResidentModelBytes)()) +
+      (options.extraResidentBytes ?? 0)
     const residentReserveMiB = Math.ceil(residentBytes / BYTES_PER_MIB)
 
     // Always sent, even with a zero reserve: relying on the engine default for

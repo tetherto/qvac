@@ -101,6 +101,11 @@ on:
         type: string
         required: false
         default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
+        type: string
+        required: false
+        default: ""
     # Additive outputs (QVAC weekend job): surface the monitor verdict so a
     # caller can aggregate per-platform pass/fail for reporting. The job itself
     # also fails the run directly on any test failure (no continue-on-error).
@@ -174,6 +179,11 @@ on:
         default: ""
       prebuild_run_id:
         description: "Run id whose `prebuilds` artifact to install — the route for testing YOUR OWN PR on a device. Point it at the on-pr-llm-llamacpp run that already built your prebuilds (the number at the end of that run's URL); no tmp-* branch, no publish, no hand-assembled package name. Takes precedence over `package`, and fails the run if that artifact is missing or expired rather than falling back to @latest. Mutually exclusive with `package`."
+        type: string
+        required: false
+        default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact replaces the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
         type: string
         required: false
         default: ""
@@ -492,6 +502,9 @@ jobs:
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
         with:
+          # Empty keeps the published @qvac/fabric runtime.
+          fabric-prebuild-run-id: ${{ inputs.fabric_prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/llm-llamacpp'
           addon-npm-name: '@qvac/llm-llamacpp'
