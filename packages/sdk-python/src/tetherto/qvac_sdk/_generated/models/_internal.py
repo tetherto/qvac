@@ -17212,6 +17212,15 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
         int | None,
         Field(description="Walk RNG seed.", ge=-9007199254740991, le=9007199254740991),
     ] = None
+    fit_steps: Annotated[
+        int | None,
+        Field(
+            alias="fitSteps",
+            description="Walk steps covered by memory fit. Defaults to 100; does not limit generation or retained history.",
+            ge=1,
+            le=1000000,
+        ),
+    ] = None
     threads: Annotated[
         Literal[-1] | Threads | None,
         Field(description="CPU threads for the session. -1 = auto-detect (default)."),
@@ -17679,7 +17688,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     world: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigWorld | None,
         Field(
-            description="ABot-World session tuning — mode: 'world' only, rejected in every other mode. Forwarded to the native session as-is.",
+            description="ABot-World session tuning — mode: 'world' only, rejected in every other mode. Session settings reach the addon; fitSteps controls only memory fit.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigWorld",
         ),
     ] = None

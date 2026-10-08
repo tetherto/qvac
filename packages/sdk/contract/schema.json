@@ -16982,7 +16982,7 @@
                       ]
                     },
                     "world": {
-                      "description": "ABot-World session tuning — mode: 'world' only, rejected in every other mode. Forwarded to the native session as-is.",
+                      "description": "ABot-World session tuning — mode: 'world' only, rejected in every other mode. Session settings reach the addon; fitSteps controls only memory fit.",
                       "type": "object",
                       "properties": {
                         "seed": {
@@ -16990,6 +16990,12 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "fitSteps": {
+                          "description": "Walk steps covered by memory fit. Defaults to 100; does not limit generation or retained history.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
                         },
                         "threads": {
                           "description": "CPU threads for the session. -1 = auto-detect (default).",

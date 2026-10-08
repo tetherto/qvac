@@ -787,19 +787,48 @@ test('diffusion: carries the split text encoders and the VAE', (t) => {
   t.alike(plan.probe.request.workload, { vaeTiling: true })
 })
 
-test('diffusion: a standalone upscaler load has no fitter', (t) => {
+test('diffusion: standalone ESRGAN uses the primary checkpoint and matching load config', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.sdcppGeneration,
       modelPath: '/models/esrgan.pth',
-      modelConfig: { mode: 'upscale' },
+      modelConfig: {
+        mode: 'upscale',
+        device: 'cpu',
+        verbosity: 1,
+        upscaler: {
+          tile_size: 128,
+          direct: true,
+          offload_params_to_cpu: true,
+          threads: 4
+        }
+      },
+      artifacts: { vaeModelPath: '/models/unused.safetensors' },
       isShardedModel: false
     }),
-    { supported: false, detail: 'a standalone upscaler load has no fitter' }
+    {
+      supported: true,
+      probe: {
+        engine: 'diffusion-cpp',
+        request: {
+          mode: 'upscale',
+          files: { esrgan: '/models/esrgan.pth' },
+          config: {
+            device: 'cpu',
+            verbosity: 1,
+            upscaler_tile_size: 128,
+            upscaler_direct: true,
+            upscaler_offload_params_to_cpu: true,
+            upscaler_threads: 4
+          },
+          workload: { upscaleRepeats: 1 }
+        }
+      }
+    }
   )
 })
 
-test('diffusion: a world load is refused', (t) => {
+test('diffusion: a world without a resolved scene and decoder is refused', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.sdcppGeneration,
@@ -807,8 +836,52 @@ test('diffusion: a world load is refused', (t) => {
       modelConfig: { mode: 'world' },
       isShardedModel: false
     }),
-    { supported: false, detail: 'world loads are not representable' }
+    { supported: false, detail: 'ABot fit requires a resolved decoder and scene pack' }
   )
+})
+
+test('diffusion: ABot fit defaults to 100 steps and uses the walk artifacts', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.sdcppGeneration,
+    modelPath: '/models/abot.gguf',
+    modelConfig: { mode: 'world', world: { kvCache: true, offloadParamsToCpu: true } },
+    artifacts: {
+      taehvModelPath: '/models/tae.gguf',
+      seedScenePath: '/models/scene.safetensors',
+      t5XxlModelPath: '/models/t5.gguf'
+    },
+    isShardedModel: false
+  })
+  t.alike(plan, {
+    supported: true,
+    probe: {
+      engine: 'diffusion-cpp',
+      request: {
+        mode: 'world',
+        files: {
+          model: '/models/abot.gguf',
+          taehv: '/models/tae.gguf',
+          scene: '/models/scene.safetensors'
+        },
+        config: { kvCache: true, offloadParamsToCpu: true },
+        workload: { walkSteps: 100 }
+      }
+    }
+  })
+})
+
+test('diffusion: ABot fit steps affect only the projection workload', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.sdcppGeneration,
+    modelPath: '/models/abot.gguf',
+    modelConfig: { mode: 'world', world: { fitSteps: 20, numFramePerBlock: 3, backend: 'cpu' } },
+    artifacts: { taehvModelPath: '/models/tae.gguf', seedScenePath: '/models/scene.safetensors' },
+    isShardedModel: false
+  })
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'diffusion-cpp') return
+  t.alike(plan.probe.request.config, { numFramePerBlock: 3, backend: 'cpu' })
+  t.alike(plan.probe.request.workload, { walkSteps: 20 })
 })
 
 test('diffusion: a video load carries its companion set and a frame count', (t) => {
@@ -852,16 +925,62 @@ test('diffusion: an image load carries no frame count', (t) => {
   t.alike(plan.probe.request.workload, {})
 })
 
-test('diffusion: a configured upscaler is a second resident model the projection omits', (t) => {
+test('diffusion: a configured upscaler requires its resolved checkpoint', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.sdcppGeneration,
       modelPath: '/models/sdxl.safetensors',
-      modelConfig: { mode: 'diffusion', upscaler: { repeats: 2 } },
+      modelConfig: { mode: 'diffusion', upscaler: { tile_size: 64 } },
       isShardedModel: false
     }),
-    { supported: false, detail: 'a configured upscaler is not part of the projection' }
+    { supported: false, detail: 'the configured ESRGAN checkpoint is not resolved' }
   )
+})
+
+test('diffusion: combined ESRGAN carries its checkpoint, tuning and repeats', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.sdcppGeneration,
+    modelPath: '/models/sdxl.safetensors',
+    modelConfig: {
+      mode: 'diffusion',
+      upscaler: {
+        tile_size: 64,
+        direct: true,
+        offload_params_to_cpu: true,
+        threads: -1
+      }
+    },
+    artifacts: { esrganModelPath: '/models/esrgan.pth' },
+    isShardedModel: false
+  })
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'diffusion-cpp') return
+  t.alike(plan.probe.request.files, {
+    model: '/models/sdxl.safetensors',
+    esrgan: '/models/esrgan.pth'
+  })
+  t.alike(plan.probe.request.config, {
+    upscaler_tile_size: 64,
+    upscaler_direct: true,
+    upscaler_offload_params_to_cpu: true,
+    upscaler_threads: -1
+  })
+  t.alike(plan.probe.request.workload, { upscaleRepeats: 1 })
+})
+
+test('diffusion: video fit mirrors its loader by ignoring post-generation ESRGAN', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.sdcppGeneration,
+    modelPath: '/models/wan.safetensors',
+    modelConfig: { mode: 'video', upscaler: { tile_size: 64 } },
+    artifacts: { esrganModelPath: '/models/unused.pth' },
+    isShardedModel: false
+  })
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'diffusion-cpp') return
+  t.alike(plan.probe.request.files, { model: '/models/wan.safetensors' })
+  t.alike(plan.probe.request.config, {})
+  t.alike(plan.probe.request.workload, { videoFrames: 33 })
 })
 
 test('a model type with no fitter is refused by name', (t) => {
