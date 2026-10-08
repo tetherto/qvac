@@ -537,36 +537,12 @@ BertModelSetup setupParams(
     const BackendType preferredBackend =
         preferredBackendTypeFromString(deviceIt->second);
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
-    const std::vector<std::string> backendOverride =
-        tryBackendOverrideFromMap(configFilemap);
-    // The split path below does not apply the override, so reject the
-    // combination rather than silently run on another backend.
-    if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
-        splitMode != LLAMA_SPLIT_MODE_NONE) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          "'backend' cannot be combined with 'split-mode'.");
-    }
     std::pair<BackendType, std::string> chosenBackend{BackendType::CPU, "none"};
     SplitDeviceSelection splitSelection;
     bool isOpenCl = false;
     if (preferredBackend == BackendType::GPU &&
         splitMode != LLAMA_SPLIT_MODE_NONE) {
       splitSelection = getSplitDeviceSelection();
-      if (!splitSelection.droppedAmbiguousDevices.empty()) {
-        std::string message = "[BertModel] split leaves out ";
-        for (size_t index = 0;
-             index < splitSelection.droppedAmbiguousDevices.size();
-             ++index) {
-          message += (index > 0 ? ", " : "") +
-                     splitSelection.droppedAmbiguousDevices[index];
-        }
-        message += ": a device without a device id may be the same GPU under "
-                   "another backend\n";
-        llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
-      }
       if (!splitSelection.devices.empty()) {
         const SplitBackendTraits traits = splitBackendTraits(splitSelection);
         chosenBackend = {BackendType::GPU, traits.backendName};
@@ -585,8 +561,8 @@ BertModelSetup setupParams(
         llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
       }
     } else {
-      chosenBackend = chooseBackend(
-          preferredBackend, llamaLogCallback, mainGpu, backendOverride);
+      chosenBackend =
+          chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
       // Name-based: chooseBackend returns only a name, no registry handle.
       isOpenCl = chosenBackend.first == BackendType::GPU &&
                  chosenBackend.second.find("opencl") != std::string::npos;
@@ -646,9 +622,7 @@ BertModelSetup setupParams(
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
     }
-    // Erase by key so this stays correct if a later edit inserts into the map
-    // above, which can rehash it and invalidate deviceIt.
-    configFilemap.erase("device");
+    configFilemap.erase(deviceIt);
 
     // Disable flash attention by default when the chosen GPU backend is
     // OpenCL: it is not reliably supported there. Users who pass an

@@ -296,8 +296,7 @@ bool smolvlaCanMmapWeights(ggml_backend_t backend);
 // surface it so a load failure is diagnosable from the JS error alone.
 bool smolvlaLoadModel(
     const char* path, SmolvlaModel& model, bool forceCpu,
-    const std::string& backendsDir,
-    const std::vector<std::string>& backendOverride = {});
+    const std::string& backendsDir);
 
 // Free model resources. Idempotent — also called from
 // `smolvla_model::~smolvla_model`.

@@ -1403,8 +1403,7 @@ static GrootEmbodimentSelection grootResolveForModel(
 
 static std::unique_ptr<GrootModelInternal> grootLoadModel(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const VlaEmbodimentRequest& embodiment = {},
-    const std::vector<std::string>& backendOverride = {}) {
+    const VlaEmbodimentRequest& embodiment = {}) {
   vla_backend_selection::loadBackendsOnce(backendsDir);
   auto m = std::make_unique<GrootModelInternal>();
 
@@ -1423,8 +1422,7 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
   m->has_gpu = false;
 
   if (!forceCpu) {
-    ggml_backend_dev_t gpu =
-        vla_backend_selection::pickBestGpuDevice(backendOverride);
+    ggml_backend_dev_t gpu = vla_backend_selection::pickBestGpuDevice();
     if (gpu != nullptr) {
       ggml_backend_t gpuBackend = ggml_backend_dev_init(gpu, nullptr);
       if (gpuBackend != nullptr) {
@@ -2754,10 +2752,8 @@ struct ggml_tensor* grootBuildVisionBlockGraph(
 
 GrootModel::GrootModel(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const VlaEmbodimentRequest& embodiment,
-    const std::vector<std::string>& backendOverride)
-    : impl_(grootLoadModel(
-          ggufPath, forceCpu, backendsDir, embodiment, backendOverride)) {
+    const VlaEmbodimentRequest& embodiment)
+    : impl_(grootLoadModel(ggufPath, forceCpu, backendsDir, embodiment)) {
   hparams_.chunk_size = impl_->action_horizon;
   hparams_.action_dim = impl_->max_action_dim;
   hparams_.max_action_dim = impl_->max_action_dim;

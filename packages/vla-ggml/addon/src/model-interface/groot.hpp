@@ -573,8 +573,7 @@ public:
   GrootModel(
       const std::string& ggufPath, bool forceCpu,
       const std::string& backendsDir,
-      const VlaEmbodimentRequest& embodiment = {},
-      const std::vector<std::string>& backendOverride = {});
+      const VlaEmbodimentRequest& embodiment = {});
 
   ~GrootModel() override;
 

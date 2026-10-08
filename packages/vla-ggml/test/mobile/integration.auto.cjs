@@ -16,11 +16,6 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
-async function runBackendSelectionTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBackendSelectionTest')) return __FILTERED
-  return runIntegrationModule('../integration/backend-selection.test.js', options)
-}
-
 async function runEsmNamedExportsTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runEsmNamedExportsTest')) return __FILTERED
   return runIntegrationModule('../integration/esm-named-exports.test.js', options)

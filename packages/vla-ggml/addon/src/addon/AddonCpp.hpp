@@ -46,10 +46,9 @@ public:
   // path rather than relative to process CWD (required on mobile).
   explicit VlaModel(
       const std::string& ggufPath, bool forceCpu = false,
-      std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {},
-      const std::vector<std::string>& backendOverride = {})
+      std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {})
       : model_(createVlaModelFromGguf(
-            ggufPath, forceCpu, backendsDir, embodiment, backendOverride)) {
+            ggufPath, forceCpu, backendsDir, embodiment)) {
     // Canonical `backendDevice` encoding used across the inference addons
     // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Captured at load time so
     // `runtimeStats()` can report it without re-querying ggml.

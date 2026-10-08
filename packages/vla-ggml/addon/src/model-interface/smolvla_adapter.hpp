@@ -10,7 +10,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "model-interface/smolvla.hpp"
 #include "model-interface/vla_model.hpp"
@@ -24,8 +23,7 @@ public:
   // `backendsDir` are forwarded verbatim to `smolvla_load_model`.
   SmolvlaModelAdapter(
       const std::string& ggufPath, bool forceCpu,
-      const std::string& backendsDir,
-      const std::vector<std::string>& backendOverride = {});
+      const std::string& backendsDir);
 
   ~SmolvlaModelAdapter() override = default;
 
