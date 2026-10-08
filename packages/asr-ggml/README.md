@@ -493,7 +493,7 @@ Engine-specific segment fields:
 
 ## Assessing fit
 
-`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. Parakeet is GGUF, so the registry's weightless copy of a parakeet model answers the same as the model itself and the projection can run before it is downloaded. Whisper ships as `.bin`, which the registry has no weightless form for, so a whisper projection needs the file. It is a module export, not an instance method — nothing is loaded to call it.
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The registry publishes a weightless copy of each model, and passing it answers the same as passing the model itself, so the projection can run before the model is downloaded: for parakeet a GGUF without its data, for whisper and its Silero VAD model a GGUF description of the `.bin` (its settings, vocabulary sizes and tensor list, tens of KB). It is a module export, not an instance method — nothing is loaded to call it.
 
 ```js
 const ASRGgml = require('@qvac/asr-ggml')
@@ -525,7 +525,7 @@ fit.report
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
 | `backendsDir` | The prebuilds root. The backends are read from the per-target subdir under it, the same path a load reads. |
-| `vadModelPath` | Whisper: projected alongside the model. Omitted means no VAD. |
+| `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
 | `threads`, `longFormWindowFrames`, `longFormContextFrames` | Parakeet: as the load takes them. |

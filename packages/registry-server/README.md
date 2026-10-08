@@ -264,9 +264,10 @@ corestore/
 
 #### Weightless Descriptions
 
-Alongside every GGUF and safetensors artifact, ingest stores a weightless
-description of it, which is what an engine's dry-run fitter reads to project
-memory use before any weights are downloaded.
+Alongside every GGUF and safetensors artifact, and the `.bin` and `.spm`
+artifacts of the whisper.cpp, BCI and nmt.cpp engines, ingest stores a
+weightless description of it, which is what an engine's dry-run fitter reads to
+project memory use before any weights are downloaded.
 
 For a GGUF it is a short GGUF of its own: the tensor list and the settings,
 with the tokenizer tables left out. `tokenizer.ggml.model` is set to `none`,
@@ -282,9 +283,27 @@ Merkle verification as the weights, and the record points at it through the
 optional `fitBlobBinding` field. Clients that do not know the field ignore it; records
 without one keep working unchanged.
 
-Every file is described on its own, each shard of a split model included. Formats
-that interleave tensor data with the descriptions — whisper's `ggml` `.bin`
-among them — get no description and no pointer.
+The `.bin` and `.spm` formats interleave settings, vocabulary and tensor data,
+so each gets a reader of its own, picked by the record's `engine` and the
+file's magic. Its description is a GGUF with no data section: the file's header
+settings as typed keys under `general.architecture`, its tensors as tensor infos
+where they are ggml tensors, and each vocabulary as a token count and a
+histogram of token lengths, which is all a memory projection reads of it.
+`fit_description.version` and `fit_description.source_size` identify the
+description and the size of the file it describes.
+
+| Engine                           | Files                                                                             | `general.architecture`                               | Holds                                                                                                                                                                                     |
+| -------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@qvac/transcription-whispercpp` | whisper and Silero VAD `ggml` `.bin`                                              | `whisper`, `whisper_vad`                             | hparams, mel filter shape, vocabulary sizes, tensor list                                                                                                                                  |
+| `@qvac/bci-whispercpp`           | BCI whisper `.bin`, `bci-embedder.bin`                                            | `whisper`, `bci_embedder`                            | the whisper keys with the three BCI header fields; the embedder header and every weight array's length                                                                                    |
+| `@qvac/translation-nmtcpp`       | IndicTrans `ggml` `.bin`, Marian model and shortlist `.bin`, SentencePiece `.spm` | `nmt`, `marian`, `marian_shortlist`, `sentencepiece` | hparams, both vocabularies and embedded tokenizers as sizes, tensor list; the Marian config and item list; shortlist table sizes; piece count, piece length histogram and normalizer size |
+
+The whisper.cpp and BCI fitters read these descriptions. nmt.cpp has no fitter
+yet, so its descriptions are published ahead of one. A file that does not parse
+exactly to its end, or another engine's file under the same extension, gets no
+description and no pointer.
+
+Every file is described on its own, each shard of a split model included.
 
 Records without a pointer are filled in with `npm run fill:fit-blobs`. It reads
 each artifact from the blob core the record names, taking only blocks the writer
