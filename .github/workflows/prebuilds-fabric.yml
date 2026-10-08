@@ -49,10 +49,11 @@ jobs:
       # main, so linux-x64 would otherwise hard-fail the hip port. setup-rocm
       # prefers /opt/rocm when the host stamp matches; otherwise downloads.
       include-rocm: true
-      # QVAC-23763: build CUDA beside Vulkan and HIP. The arm64 job first builds
-      # the CUDA 13 server module, then adds the CUDA 12 Jetson module.
+      # QVAC-23763: build CUDA beside Vulkan and HIP. The CUDA 12 Jetson module
+      # is left out for now: with it the linux-arm64 package is over the npm
+      # publish limit.
       include-cuda: true
       include-cuda-win32: true
       include-cuda-arm64: true
-      include-cuda-arm64-jetson: true
+      include-cuda-arm64-jetson: false
     secrets: inherit
