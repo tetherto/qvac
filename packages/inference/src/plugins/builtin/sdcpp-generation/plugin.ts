@@ -1,9 +1,12 @@
+import {
+  flattenUpscalerKeys,
+  toEsrganAddonConfig
+} from '@/plugins/builtin/sdcpp-generation/upscaler-config'
 import ImgStableDiffusion, {
   EsrganUpscaler,
   VideoStableDiffusion,
   assessFit as diffusionAssessFit,
   type DiffusionFiles,
-  type EsrganUpscalerConfig,
   type SdConfig,
   type VideoStableDiffusionArgs
 } from '@qvac/diffusion-cpp'
@@ -63,39 +66,6 @@ type DiffusionArtifactKey =
   | 'esrganModelPath'
   | 'taehvModelPath'
   | 'seedScenePath'
-
-// Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
-// mapping. Used by both the diffusion-mode (post-generation upscaler) and the
-// standalone-upscale-mode branches; keeping the mapping in one place avoids
-// drift if `@qvac/diffusion-cpp` ever adds or renames an `upscaler_*` key.
-function flattenUpscalerKeys(upscaler: SdcppConfig['upscaler']): Partial<EsrganUpscalerConfig> {
-  if (!upscaler) return {}
-  return {
-    ...(upscaler.tile_size !== undefined && {
-      upscaler_tile_size: upscaler.tile_size
-    }),
-    ...(upscaler.direct !== undefined && {
-      upscaler_direct: upscaler.direct
-    }),
-    ...(upscaler.offload_params_to_cpu !== undefined && {
-      upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu
-    }),
-    ...(upscaler.threads !== undefined && {
-      upscaler_threads: upscaler.threads
-    })
-  }
-}
-
-// `mode: "upscale"` builds an EsrganUpscaler directly (not via SdCtx), so the
-// top-level `device` field has to be forwarded explicitly — it is not part of
-// the `upscaler.*` block.
-function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
-  return {
-    ...flattenUpscalerKeys(config.upscaler),
-    ...(config.device !== undefined && { device: config.device }),
-    ...(config.verbosity !== undefined && { verbosity: config.verbosity })
-  }
-}
 
 /**
  * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
@@ -423,6 +393,7 @@ export const diffusionPlugin = definePlugin({
       // stable-diffusion.cpp keys describe a sampler pipeline the walk session
       // does not have, and unknown keys are silently ignored natively — so
       // forwarding them would look supported and do nothing.
+      const { fitSteps: _fitSteps, ...worldConfig } = config.world ?? {}
       const model = createWorldSession({
         modelId,
         files: {
@@ -433,7 +404,7 @@ export const diffusionPlugin = definePlugin({
         // Cast rather than rebuild: `exactOptionalPropertyTypes` will not widen
         // the schema's `x?: T` into the addon's `x?: T` without it, and the
         // addon already drops undefined values before stringifying them.
-        config: (config.world ?? {}) as WorldConfig,
+        config: worldConfig as WorldConfig,
         encoders: {
           t5: artifacts['t5XxlModelPath'],
           vae: artifacts['vaeModelPath']

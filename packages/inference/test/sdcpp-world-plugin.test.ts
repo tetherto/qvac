@@ -1,4 +1,6 @@
 import test from 'brittle'
+import path from 'bare-path'
+import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 
 const resolveCtx = {
   resolveModelPath: async (src: unknown) => `/cache/${String(src)}`,
@@ -12,6 +14,15 @@ const WORLD_BASE = {
   t5XxlModelSrc: 'registry://hf/umt5-xxl-enc-q8_0.gguf',
   vaeModelSrc: 'registry://hf/wan2.2_vae_f16.gguf'
 }
+
+test('world fit length accepts whole walk steps without changing generation controls', (t) => {
+  const parsed = sdcppConfigSchema.parse({ mode: 'world', world: { fitSteps: 20, kvCache: true } })
+  t.alike(parsed.world, { fitSteps: 20, kvCache: true })
+  for (const fitSteps of [0, -1, 1.5, Infinity, 1000001]) {
+    t.is(sdcppConfigSchema.safeParse({ mode: 'world', world: { fitSteps } }).success, false)
+  }
+  t.is(sdcppConfigSchema.parse({ mode: 'world' }).world, undefined)
+})
 
 test('sdcpp plugin resolveConfig: world memory controls reach the addon unchanged', async (t) => {
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
@@ -288,7 +299,7 @@ test('sdcpp plugin createModel: world scene path is derived from a hash, not the
   // returns everything before the hyphen in "world-scenes" — the shared cache
   // directory — so the previous form asserted only that two paths live in the
   // same folder, which is true of any two calls and of two different models.
-  const modelHash = (p: string) => p.slice(p.lastIndexOf('/') + 1).split('-')[0]!
+  const modelHash = (p: string) => path.basename(p).split('-')[0]!
   t.is(
     modelHash(worldScenePath('stable-id')),
     modelHash(worldScenePath('stable-id')),
@@ -321,8 +332,8 @@ test('world session: a failed generation leaves the previous world in place', as
 
   // Staging must sit beside the pack: rename is only atomic within a filesystem.
   t.is(
-    session.stagingScenePath.slice(0, session.scenePath.lastIndexOf('/')),
-    session.scenePath.slice(0, session.scenePath.lastIndexOf('/')),
+    path.dirname(session.stagingScenePath),
+    path.dirname(session.scenePath),
     'staging file is a sibling of the pack it replaces'
   )
   t.not(session.stagingScenePath, session.scenePath, 'generation never writes over the live pack')

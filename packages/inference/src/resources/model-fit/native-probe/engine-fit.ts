@@ -1,7 +1,12 @@
 import type { AsrFitRequest, AsrFitResult } from '@qvac/asr-ggml'
 import type { AudiogenFitRequest, AudiogenFitResult } from '@qvac/audiogen-ggml'
 import type { BciFitRequest, BciFitResult } from '@qvac/bci-whispercpp'
-import type { DiffusionFitRequest, DiffusionFitResult } from '@qvac/diffusion-cpp'
+import type {
+  DiffusionFitRequest,
+  DiffusionFitResult,
+  EsrganFitRequest,
+  WorldFitRequest
+} from '@qvac/diffusion-cpp'
 import type { EmbedFitRequest, EmbedFitResult } from '@qvac/embed-llamacpp'
 import type LlmLlamacpp from '@qvac/llm-llamacpp'
 import type { TtsFitRequest, TtsFitResult } from '@qvac/tts-ggml'
@@ -18,7 +23,7 @@ export type FitProbeRequest =
   | { engine: 'bci-whispercpp'; request: BciFitRequest }
   | { engine: 'tts-ggml'; request: TtsFitRequest }
   | { engine: 'audiogen-ggml'; request: AudiogenFitRequest }
-  | { engine: 'diffusion-cpp'; request: DiffusionFitRequest }
+  | { engine: 'diffusion-cpp'; request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest }
 
 export type FitProbeEngine = FitProbeRequest['engine']
 

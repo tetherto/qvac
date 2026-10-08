@@ -1,23 +1,17 @@
 import type { DiffusionFiles, SdConfig } from '@qvac/diffusion-cpp'
+import type { WorldConfig } from '@qvac/diffusion-cpp/world'
 
 import type { SdcppConfig } from '@/schemas/index'
 import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
+import {
+  flattenUpscalerKeys,
+  toEsrganAddonConfig
+} from '@/plugins/builtin/sdcpp-generation/upscaler-config'
 
 export interface DiffusionFitRequestParams {
   modelPath: string
   modelConfig: unknown
   artifacts?: Record<string, string> | undefined
-}
-
-/**
- * Modes whose load the projection would not describe.
- *
- * `upscale` is an ESRGAN checkpoint, which has no fitter. `world` assembles a
- * TAEHV preview decoder and a seed scene that the fit request has no place for.
- */
-const UNFITTABLE_MODES: Record<string, string> = {
-  upscale: 'a standalone upscaler load has no fitter',
-  world: 'world loads are not representable'
 }
 
 /**
@@ -31,17 +25,50 @@ export function createDiffusionFitRequest(params: DiffusionFitRequestParams): Fi
   const config = (params.modelConfig ?? {}) as SdcppConfig
   const artifacts = params.artifacts ?? {}
 
-  const unfittable = config.mode === undefined ? undefined : UNFITTABLE_MODES[config.mode]
-  if (unfittable !== undefined) return { supported: false, detail: unfittable }
+  if (config.mode === 'world') {
+    const taehv = artifacts['taehvModelPath']
+    const scene = artifacts['seedScenePath']
+    if (taehv === undefined || scene === undefined) {
+      return { supported: false, detail: 'ABot fit requires a resolved decoder and scene pack' }
+    }
+    const { fitSteps = 100, ...worldConfig } = config.world ?? {}
+    return {
+      supported: true,
+      probe: {
+        engine: 'diffusion-cpp',
+        request: {
+          mode: 'world',
+          files: { model: params.modelPath, taehv, scene },
+          config: worldConfig as WorldConfig,
+          workload: { walkSteps: fitSteps }
+        }
+      }
+    }
+  }
 
-  // A configured upscaler adds a second resident model the projection does not
-  // account for.
-  if (config.upscaler !== undefined) {
-    return { supported: false, detail: 'a configured upscaler is not part of the projection' }
+  if (config.mode === 'upscale') {
+    return {
+      supported: true,
+      probe: {
+        engine: 'diffusion-cpp',
+        request: {
+          mode: 'upscale',
+          files: { esrgan: params.modelPath },
+          config: toEsrganAddonConfig(config),
+          workload: { upscaleRepeats: 1 }
+        }
+      }
+    }
+  }
+
+  const upscaler = config.mode === 'video' ? undefined : config.upscaler
+  if (upscaler !== undefined && artifacts['esrganModelPath'] === undefined) {
+    return { supported: false, detail: 'the configured ESRGAN checkpoint is not resolved' }
   }
 
   const files: DiffusionFiles & { clipVision?: string } = {
     model: params.modelPath,
+    ...(upscaler !== undefined && { esrgan: artifacts['esrganModelPath']! }),
     ...(artifacts['clipLModelPath'] !== undefined && { clipL: artifacts['clipLModelPath'] }),
     ...(artifacts['clipGModelPath'] !== undefined && { clipG: artifacts['clipGModelPath'] }),
     ...(artifacts['t5XxlModelPath'] !== undefined && { t5Xxl: artifacts['t5XxlModelPath'] }),
@@ -71,10 +98,11 @@ export function createDiffusionFitRequest(params: DiffusionFitRequestParams): Fi
       engine: 'diffusion-cpp',
       request: {
         files,
-        config: engineConfig as SdConfig,
+        config: { ...engineConfig, ...flattenUpscalerKeys(upscaler) } as SdConfig,
         workload: {
           ...(config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling }),
-          ...(config.mode === 'video' && { videoFrames: DEFAULT_VIDEO_FRAMES })
+          ...(config.mode === 'video' && { videoFrames: DEFAULT_VIDEO_FRAMES }),
+          ...(upscaler !== undefined && { upscaleRepeats: 1 })
         }
       }
     }
