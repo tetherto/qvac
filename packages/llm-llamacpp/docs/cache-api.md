@@ -276,8 +276,8 @@ it since its file was last written or loaded). Checkpoints are never written
 to the file.
 
 Every write goes to `<cacheKey>.tmp` first and then replaces `<cacheKey>` in
-one rename, so a process crash or a failed write never leaves a half-written
-file. The file is not synced to disk, so a power loss right after a write can.
+one rename after it is synced to disk, so a crash, a power loss or a failed
+write never leaves a half-written file.
 [How the `cacheKey` file is
 written](cache-lifecycle.md#how-the-cachekey-file-is-written) lists every
 write on both paths in detail.

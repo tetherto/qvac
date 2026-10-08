@@ -1154,7 +1154,11 @@ void TextLlmContext::resetToolDefinitionsDropped() {
 }
 
 std::vector<llama_token> TextLlmContext::cacheStateTokens() const {
-  return cache::serialize(residentLedger_, nPast_, nPast_);
+  return cache::serialize(
+      residentLedger_,
+      nPast_,
+      nPast_,
+      cache::modelFingerprint(llama_get_model(modelCtx_.lctx)));
 }
 
 void TextLlmContext::restoreCacheStateTokens(
@@ -1603,7 +1607,10 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   });
 
   stateTokens.resize(tokenCount);
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size()) ||
+      !cache::writtenByModel(
+          stateTokens,
+          cache::modelFingerprint(llama_get_model(modelCtx_.lctx)))) {
     clearCacheReconciliationState();
     return false;
   }

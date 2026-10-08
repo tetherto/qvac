@@ -2055,7 +2055,11 @@ bool MtmdLlmContext::onFailure(
 /// sequence-state file. Media entries retain both their logical position span
 /// and physical KV-cell usage, which diverge for M-RoPE models.
 std::vector<llama_token> MtmdLlmContext::cacheStateTokens() const {
-  return cache::serialize(residentLedger_, current_.pos, current_.cacheTokens);
+  return cache::serialize(
+      residentLedger_,
+      current_.pos,
+      current_.cacheTokens,
+      cache::modelFingerprint(llama_get_model(modelCtx_.lctx)));
 }
 
 void MtmdLlmContext::restoreCacheStateTokens(
@@ -2225,7 +2229,10 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   });
 
   stateTokens.resize(tokenCount);
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size()) ||
+      !cache::writtenByModel(
+          stateTokens,
+          cache::modelFingerprint(llama_get_model(modelCtx_.lctx)))) {
     clearCacheReconciliationState();
     return false;
   }

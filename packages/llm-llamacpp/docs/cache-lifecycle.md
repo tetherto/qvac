@@ -372,27 +372,32 @@ The file is a standard llama.cpp sequence-state file
 | Part | Contents |
 |---|---|
 | llama.cpp header | magic, format version, number of tokens that follow |
-| ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
+| ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, a fingerprint of the model that wrote it; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
 
 The state is always written in full, unlike the partial snapshots and
 checkpoints, which are never written into the file. A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
-(`UnableToLoadSessionFile`), and a file without a ledger is a cold miss.
+(`UnableToLoadSessionFile`), and a file without a ledger is a cold miss. So
+is a file written by another model whose cache has the same shape (another
+quantization, a fine-tune): its fingerprint (description, size, parameter
+count, training context, shape, vocabulary, RoPE scale) does not match. A file
+written before the fingerprint existed carries 0 and is accepted.
 
 ### How a write is done
 
-Every write, whichever path triggers it, does the same two steps:
+Every write, whichever path triggers it, does the same three steps:
 
 1. The state and the ledger are written to `<cacheKey>.tmp`. A write that
    fails, or leaves the file shorter than the state (a failed final flush),
    deletes the temporary file and raises `UnableToSaveSessionFile`.
-2. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
-   and macOS, `MoveFileExW` with replace and write-through on Windows. Until
-   that step succeeds the old file is untouched, so a process crash never
-   leaves a half-written cache. The file is not synced to disk first, so a
-   power loss or an OS crash right after a write can still leave it short.
-   A `cacheKey` that names a directory fails the write.
+2. The temporary file is synced to disk (`fsync`, `FlushFileBuffers` on
+   Windows); a failed sync deletes it and raises `UnableToSaveSessionFile`.
+3. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
+   and macOS, followed by a sync of the directory, and `MoveFileExW` with
+   replace and write-through on Windows. Until that step succeeds the old
+   file is untouched, so a crash or a power loss never leaves a half-written
+   cache. A `cacheKey` that names a directory fails the write.
 
 The RAM tier writes the same file format from its copy of the state, so a
 file written from RAM loads exactly like one written from a sequence.

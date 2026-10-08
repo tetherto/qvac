@@ -82,6 +82,20 @@ TEST(CacheLedger, RejectsTokensOutsideTheVocab) {
   EXPECT_THROW(cache::requireTokensInVocab(negative, 100), std::runtime_error);
 }
 
+// Header word 7 carries the writer's model fingerprint: another model's file
+// is refused, and a file written before the fingerprint existed is accepted.
+TEST(CacheLedger, ModelFingerprintTravelsInTheHeader) {
+  const cache::Ledger ledger = cache::fromTokens({1, 2, 3});
+  const auto stamped = cache::serialize(ledger, 3, 3, 0xabcdU);
+  EXPECT_TRUE(cache::writtenByModel(stamped, 0xabcdU));
+  EXPECT_FALSE(cache::writtenByModel(stamped, 0x1234U));
+  EXPECT_NO_THROW((void)cache::deserialize(stamped.data(), stamped.size()));
+
+  const auto unstamped = cache::serialize(ledger, 3, 3);
+  EXPECT_TRUE(cache::writtenByModel(unstamped, 0x1234U));
+  EXPECT_NE(cache::modelFingerprint(nullptr), 0U);
+}
+
 TEST(CacheLedger, RecognizesLegacyPayloadAsUnmarked) {
   const llama_token legacy[] = {12, 12, 12, 12};
   EXPECT_FALSE(cache::hasMarker(legacy, std::size(legacy)));

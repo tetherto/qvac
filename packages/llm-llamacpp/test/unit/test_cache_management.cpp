@@ -2166,6 +2166,70 @@ TEST(CacheRuntimeStatsTest, FullyCachedPromptReportsItsPromptWork) {
   fs::remove(cacheFile);
 }
 
+// A cache file records the model that wrote it. Another model with the same
+// cache shape (another quant, a fine-tune) loads it as a cold miss instead of
+// continuing from KV it did not compute. The file here is stamped with a
+// foreign fingerprint, which is what such a model sees.
+TEST(CacheModelFingerprintTest, AnotherModelsFileIsAColdMiss) {
+  const std::string path =
+      test_common::BaseTestModelPath::get("Qwen3-0.6B-Q8_0.gguf");
+  if (!fs::exists(path)) {
+    GTEST_SKIP() << "Qwen3-0.6B-Q8_0.gguf not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "8";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string modelPath = path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+
+  const fs::path cacheFile = "model_fingerprint_cache.bin";
+  const fs::path otherKey = "model_fingerprint_other.bin";
+  fs::remove(cacheFile);
+  const std::string input =
+      R"([{"role":"user","content":"Name one colour of the rainbow."}])";
+  const auto run = [&](const fs::path& key) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = key.string();
+    prompt.prefill = true;
+    return model->processPrompt(prompt);
+  };
+  ASSERT_NO_THROW((void)run(cacheFile));
+  model->saveCache(cacheFile.string());
+  // Switching keys moves the conversation out, so the next request on
+  // `cacheFile` loads it from the file.
+  ASSERT_NO_THROW((void)run(otherKey));
+  ASSERT_NO_THROW((void)run(cacheFile));
+  EXPECT_GT(text->lastCacheReuseForTesting(), 0u)
+      << "test setup: the file was not reused by the model that wrote it";
+
+  ASSERT_NO_THROW((void)run(otherKey));
+  {
+    // GGSQ magic, version and token count, then the ledger: word 7 is at
+    // byte 12 + 7 * 4.
+    std::fstream file(
+        cacheFile, std::ios::in | std::ios::out | std::ios::binary);
+    file.seekp(12 + (7 * 4));
+    const int32_t foreign = 0x5eed;
+    file.write(reinterpret_cast<const char*>(&foreign), sizeof(foreign));
+  }
+  ASSERT_NO_THROW((void)run(cacheFile))
+      << "another model's file must be a cold miss, not an error";
+  EXPECT_EQ(text->lastCacheReuseForTesting(), 0u)
+      << "the file of another model was reused";
+
+  fs::remove(cacheFile);
+  fs::remove(otherKey);
+}
+
 // Batch mode gives every request a fresh slot driver, so the checkpoints
 // must outlive it in the scheduler to reach the next turn on the same
 // cacheKey. The prefill stops at the end of the history for the capture.
