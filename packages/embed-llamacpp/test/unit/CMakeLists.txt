@@ -104,4 +104,3 @@ add_test(NAME EmbedModelTests COMMAND addon-test)
 set_tests_properties(EmbedModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 900)
-

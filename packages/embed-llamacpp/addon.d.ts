@@ -9,6 +9,8 @@ export interface GGMLConfig {
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
+    /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, hip, rocm, sycl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
+    backend?: string;
     /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
     "split-mode"?: "none" | "layer";
     "tensor-split"?: string;
