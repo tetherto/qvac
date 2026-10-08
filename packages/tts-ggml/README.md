@@ -1111,6 +1111,12 @@ await response.onUpdate((data) => {
 }).await()
 ```
 
+When `maxNewTokens` is omitted, MOSS-Speech uses the remaining model context
+after the prompt instead of an implicit 1000-token budget. The JavaScript API
+currently accepts explicit budgets from 1 to 4096; the native engine also
+checks that the requested budget fits the remaining context. `maxReplySeconds`
+is optional and defaults to no time cut.
+
 The user turn is either `audio` (with `sampleRate`) or the run `input` text,
 not both; each entry of `messages` carries exactly one of `text` or `audio`
 (with its `sampleRate`).  Every call is one exchange: pass the earlier turns in
