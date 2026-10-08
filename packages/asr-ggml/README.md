@@ -992,6 +992,11 @@ npm run build:cuda     # same, with the CUDA backend compiled in (needs nvcc)
 
 ### Test
 
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. C++ test failures block the merge guard.
+See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
+
 ```bash
 npm test                              # complete standard gate
 npm run test:all                      # same aggregate, named explicitly
