@@ -38,6 +38,7 @@ const configRegistry: QvacConfig = {
   httpDownloadConcurrency: undefined,
   requireHttpChecksum: undefined,
   requireSecureTransport: undefined,
+  modelFitPolicy: undefined,
   registryDownloadMaxRetries: undefined,
   registryStreamTimeoutMs: undefined,
   fitStubBudgetMs: undefined,
@@ -115,6 +116,11 @@ export function setConfig(config: QvacConfig) {
   if (config.requireSecureTransport !== undefined && config.requireSecureTransport !== null) {
     configRegistry.requireSecureTransport = config.requireSecureTransport
     logger.info(`Require secure transport: ${config.requireSecureTransport}`)
+  }
+
+  if (config.modelFitPolicy !== undefined && config.modelFitPolicy !== null) {
+    configRegistry.modelFitPolicy = config.modelFitPolicy
+    logger.info(`Model fit policy: ${config.modelFitPolicy}`)
   }
 
   if (

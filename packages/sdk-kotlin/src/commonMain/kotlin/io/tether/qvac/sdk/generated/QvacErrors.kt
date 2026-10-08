@@ -90,6 +90,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("MODEL_FILE_NOT_FOUND", reportedCode, message, payload)
     class ServerModelFileNotFoundInDir(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_FILE_NOT_FOUND_IN_DIR", reportedCode, message, payload)
+    class ServerModelFitRefused(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("MODEL_FIT_REFUSED", reportedCode, message, payload)
     class ServerModelLoadFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("MODEL_LOAD_FAILED", reportedCode, message, payload)
     class ServerModelNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -327,6 +329,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "MODEL_FILE_LOCATE_FAILED" && (code == null || code == 52203) -> QvacKnownException.ServerModelFileLocateFailed(message, payload, code)
     name == "MODEL_FILE_NOT_FOUND" && (code == null || code == 52201) -> QvacKnownException.ServerModelFileNotFound(message, payload, code)
     name == "MODEL_FILE_NOT_FOUND_IN_DIR" && (code == null || code == 52202) -> QvacKnownException.ServerModelFileNotFoundInDir(message, payload, code)
+    name == "MODEL_FIT_REFUSED" && (code == null || code == 52212) -> QvacKnownException.ServerModelFitRefused(message, payload, code)
     name == "MODEL_LOAD_FAILED" && (code == null || code == 52200) -> QvacKnownException.ServerModelLoadFailed(message, payload, code)
     name == "MODEL_NOT_FOUND" && code == 52002 -> QvacKnownException.ServerModelNotFound(message, payload, code)
     name == "MODEL_NOT_LOADED" && (code == null || code == 52003) -> QvacKnownException.ServerModelNotLoaded(message, payload, code)
