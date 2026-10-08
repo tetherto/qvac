@@ -176,13 +176,23 @@ safeTest('MTP with an image prompt', { timeout: 900_000 }, async (t) => {
   }
 })
 
-safeTest('spec-type rejects types other than draft-mtp', { timeout: 300_000 }, async (t) => {
+safeTest('spec-type rejects types other than draft-mtp and draft-dflash', { timeout: 300_000 }, async (t) => {
   const model = new LlmLlamacpp({
     files: { model: [await modelPath(MTP_MODEL)] },
     config: baseConfig({ 'spec-type': 'ngram-simple' }),
     logger: null
   })
-  await t.exception(model.load(), /must be "none" or "draft-mtp"/)
+  await t.exception(model.load(), /must be "none", "draft-mtp" or "draft-dflash"/)
+  await model.unload().catch(() => {})
+})
+
+safeTest('draft-dflash requires spec-draft-model', { timeout: 300_000 }, async (t) => {
+  const model = new LlmLlamacpp({
+    files: { model: [await modelPath(MTP_MODEL)] },
+    config: baseConfig({ 'spec-type': 'draft-dflash' }),
+    logger: null
+  })
+  await t.exception(model.load(), /requires spec-draft-model/)
   await model.unload().catch(() => {})
 })
 

@@ -49,6 +49,36 @@ TEST(SpeculativeConfigTest, ParsesDraftMtpAndConsumesKeys) {
   EXPECT_TRUE(config.empty());
 }
 
+TEST(SpeculativeConfigTest, ParsesDraftDflashWithItsDraftModel) {
+  ConfigMap config{
+      {"spec_type", "draft-dflash"},
+      {"spec-draft-model", "/models/dflash.gguf"},
+      {"spec-draft-n-max", "15"}};
+  const SpeculativeConfig parsed = parseSpeculativeConfig(config);
+  EXPECT_TRUE(parsed.enabled());
+  EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH);
+  EXPECT_EQ(parsed.draftModelPath, "/models/dflash.gguf");
+  EXPECT_EQ(parsed.draftNMax, 15);
+  EXPECT_TRUE(config.empty());
+}
+
+TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
+  EXPECT_THROW(parse({{"spec-type", "draft-dflash"}}), std::invalid_argument);
+  EXPECT_THROW(
+      parse(
+          {{"spec-type", "draft-dflash"}, {"spec-draft-model", "dflash.gguf"}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-type", "draft-dflash"}, {"spec_draft_model", ""}}),
+      std::invalid_argument);
+  // A draft model belongs to draft-dflash only.
+  EXPECT_THROW(
+      parse({{"spec-type", "draft-mtp"}, {"spec-draft-model", "/m/d.gguf"}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-draft-model", "/m/d.gguf"}}), std::invalid_argument);
+}
+
 TEST(SpeculativeConfigTest, NoneIsAcceptedAndDisables) {
   EXPECT_FALSE(parse({{"spec_type", "none"}}).enabled());
 }
@@ -154,6 +184,39 @@ TEST(SpeculativeConfigTest, FitCountsTheMtpContextLikeTheLoad) {
   EXPECT_TRUE(extra->shares_model);
   EXPECT_STREQ(extra->path_model, "/models/target.gguf");
   EXPECT_EQ(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
+  EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
+}
+
+TEST(SpeculativeConfigTest, ApplyPlacesTheDraftModelLikeTheTarget) {
+  common_params params;
+  params.n_gpu_layers = 12;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,
+          .draftModelPath = "/models/dflash.gguf"},
+      params);
+  ASSERT_EQ(params.speculative.types.size(), 1u);
+  EXPECT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH);
+  EXPECT_TRUE(params.speculative.has_dft());
+  EXPECT_EQ(params.speculative.draft.mparams.path, "/models/dflash.gguf");
+  EXPECT_EQ(params.speculative.draft.n_gpu_layers, 12);
+}
+
+TEST(SpeculativeConfigTest, FitCountsTheDflashModelOnItsOwn) {
+  common_params params;
+  params.model.path = "/models/target.gguf";
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,
+          .draftModelPath = "/models/dflash.gguf"},
+      params);
+  const auto fit = SpeculativeFitModel::create(params);
+  ASSERT_NE(fit, nullptr);
+  const common_fit_extra_model* extra = fit->extra();
+  // The draft model has weights of its own and a plain context.
+  EXPECT_FALSE(extra->shares_model);
+  EXPECT_STREQ(extra->path_model, "/models/dflash.gguf");
+  EXPECT_NE(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
 }
 

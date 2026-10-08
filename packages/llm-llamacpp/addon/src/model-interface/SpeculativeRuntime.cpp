@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <mutex>
 #include <stdexcept>
 #include <unordered_map>
@@ -48,6 +49,12 @@ bool hasType(
   return false;
 }
 
+// The speculative types the addon creates a draft context for: an MTP head
+// on the target's weights, or a separate draft model (DFlash).
+bool hasDraftContext(const common_params_speculative& params) {
+  return hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_MTP) || params.has_dft();
+}
+
 // Target context -> its speculative runtime, so the sequence-state helpers
 // (snapshots, the RAM tier, cache files) reach the draft context without
 // threading it through every call. Written at load and unload only.
@@ -83,11 +90,33 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
           takeConfigKey(config, SPEC_TYPE_KEY, SPEC_TYPE_KEY_DASHED)) {
     if (type->second == "draft-mtp") {
       result.type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP;
+    } else if (type->second == "draft-dflash") {
+      result.type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH;
     } else if (type->second != "none") {
       throw std::invalid_argument(
-          type->first + " must be \"none\" or \"draft-mtp\", got: \"" +
+          type->first +
+          " must be \"none\", \"draft-mtp\" or \"draft-dflash\", got: \"" +
           type->second + "\"");
     }
+  }
+  if (const auto draftModel = takeConfigKey(
+          config, SPEC_DRAFT_MODEL_KEY, SPEC_DRAFT_MODEL_KEY_DASHED)) {
+    if (result.type != COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) {
+      throw std::invalid_argument(
+          draftModel->first + " requires spec-type \"draft-dflash\"");
+    }
+    if (draftModel->second.empty() ||
+        !std::filesystem::path(draftModel->second).is_absolute()) {
+      throw std::invalid_argument(
+          draftModel->first + " must be an absolute path, got: \"" +
+          draftModel->second + "\"");
+    }
+    result.draftModelPath = draftModel->second;
+  }
+  if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH &&
+      result.draftModelPath.empty()) {
+    throw std::invalid_argument(
+        "spec-type \"draft-dflash\" requires spec-draft-model");
   }
   const common_params_speculative_draft defaults;
   if (const auto nMax = takeConfigKey(
@@ -109,7 +138,8 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
                               result.draftPMin.has_value();
   if (hasDraftOption && !result.enabled()) {
     throw std::invalid_argument(
-        "spec-draft-* options require spec-type \"draft-mtp\"");
+        "spec-draft-* options require spec-type \"draft-mtp\" or "
+        "\"draft-dflash\"");
   }
   const int32_t nMax = result.draftNMax.value_or(defaults.n_max);
   if (result.draftNMin.value_or(defaults.n_min) > nMax) {
@@ -135,6 +165,13 @@ void applySpeculativeConfig(
   if (config.draftPMin.has_value()) {
     params.speculative.draft.p_min = *config.draftPMin;
   }
+  if (!config.draftModelPath.empty()) {
+    // llama-server's -md, with -ngld / -devd following the target model:
+    // the addon's device and gpu-layers settings apply to both models.
+    params.speculative.draft.mparams.path = config.draftModelPath;
+    params.speculative.draft.n_gpu_layers = params.n_gpu_layers;
+    params.speculative.draft.devices = params.devices;
+  }
 
   // server_output_limits: a verification step reads one output per drafted
   // token plus the sampled one, for every sequence.
@@ -152,28 +189,32 @@ void applySpeculativeConfig(
 
 std::unique_ptr<SpeculativeFitModel>
 SpeculativeFitModel::create(const common_params& params) {
-  if (!hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP)) {
+  if (!hasDraftContext(params.speculative)) {
     return nullptr;
   }
   // Same construction as fabric's common_init_from_params fit.
+  const bool hasDraftModel = params.speculative.has_dft();
   std::unique_ptr<SpeculativeFitModel> model(new SpeculativeFitModel());
   model->params_ = common_base_params_to_speculative(params);
   model->mparams_ = common_model_params_to_llama(model->params_);
   model->cparams_ = common_context_params_to_llama(model->params_);
-  model->cparams_.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+  if (hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP)) {
+    model->cparams_.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+  }
   model->cparams_.n_rs_seq = 0;
   model->extra_ = {
       /*.path_model   =*/model->params_.model.path.c_str(),
       /*.mparams      =*/&model->mparams_,
       /*.cparams      =*/&model->cparams_,
-      /*.shares_model =*/true, // the MTP context runs on the target's weights
+      // an MTP context runs on the target's weights, a draft model on its own
+      /*.shares_model =*/!hasDraftModel,
   };
   return model;
 }
 
 std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     common_params& params, llama_model* modelTgt, llama_context* ctxTgt) {
-  if (!hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_MTP)) {
+  if (!hasDraftContext(params.speculative)) {
     return nullptr;
   }
 
@@ -184,13 +225,25 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     common_params paramsDft = common_base_params_to_speculative(params);
     runtime->specInit_ =
         common_speculative_init_from_params(paramsDft, modelTgt, ctxTgt);
+    if (params.speculative.has_dft() &&
+        runtime->specInit_->model() == nullptr) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadModel),
+          "[Speculative] failed to load the draft model '" +
+              paramsDft.model.path + "'\n");
+    }
     runtime->ctxDft_ = runtime->specInit_->context();
     if (runtime->ctxDft_ == nullptr) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(UnableToLoadModel),
-          "[Speculative] failed to create the MTP context; the model has no "
-          "MTP layers or they could not be loaded\n");
+          params.speculative.has_dft()
+              ? std::string(
+                    "[Speculative] failed to create the draft context\n")
+              : std::string(
+                    "[Speculative] failed to create the MTP context; the model "
+                    "has no MTP layers or they could not be loaded\n"));
     }
     params.speculative.draft.ctx_tgt = ctxTgt;
     params.speculative.draft.ctx_dft = runtime->ctxDft_;

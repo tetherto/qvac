@@ -694,7 +694,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     return errorResult("unsupported-config");
   }
 
-  // An MTP draft context is fitted next to the model, as the load does.
+  // A draft context (MTP, or a DFlash draft model) is fitted next to the
+  // model, as the load does.
   const auto speculativeFit =
       qvac_lib_inference_addon_llama::speculative::SpeculativeFitModel::create(
           loadParams);

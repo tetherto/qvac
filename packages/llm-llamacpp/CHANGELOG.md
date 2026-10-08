@@ -44,6 +44,11 @@
   and continuous batching, with `cacheKey` conversations. Runtime stats report
   `draftTokens` and `draftAcceptedTokens`. Qwen3.6-27B-MTP decodes about 2.4x
   faster on a single sequence on a Radeon 8060S.
+- DFlash speculative decoding: `spec-type: 'draft-dflash'` with
+  `spec-draft-model` (absolute path, also `spec_draft_model`), as
+  llama-server's `--spec-type draft-dflash -md <model>`. The DFlash model is
+  loaded next to the model, placed like it (`device`, `gpu-layers`) and
+  counted by `assessFit`; drafting otherwise works as for MTP.
 
 ### Changed
 

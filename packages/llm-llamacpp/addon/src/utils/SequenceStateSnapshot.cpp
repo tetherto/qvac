@@ -380,8 +380,8 @@ bool snapshotSequenceState(
           lctx, seqId, nPastAt, out, storage, scope, directory)) {
     return false;
   }
-  // The draft side always stays in memory: the MTP draft context holds one
-  // attention layer, a small fraction of the target state.
+  // The draft side always stays in memory: the draft context (one MTP layer,
+  // or a small DFlash model) holds a small fraction of the target state.
   if (nPastAt > 0) {
     out.adoptDraft(
         speculative::captureDraftSequenceState(lctx, seqId, flagsFor(scope)));
