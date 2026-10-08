@@ -39,7 +39,7 @@ let _hasAplay
 function syncOk (cmd, args) {
   try {
     const r = spawnSync(cmd, args, { stdio: ['ignore', 'ignore', 'ignore'] })
-    return (r.status | 0) === 0
+    return !r.error && r.status === 0
   } catch {
     return false
   }

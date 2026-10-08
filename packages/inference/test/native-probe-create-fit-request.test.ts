@@ -285,6 +285,13 @@ test('completion: a CPU load carries no device-memory evidence', (t) => {
   })
 })
 
+test('completion: a clustered load is refused', (t) => {
+  t.alike(completionRequest({ 'rpc-servers': '10.0.0.2:50052,10.0.0.3:50052' }), {
+    supported: false,
+    detail: 'unsupported load setting: rpc-servers'
+  })
+})
+
 // A cache type llama does not have is llama's to reject, at the point where it
 // knows which types this build carries.
 test('completion: an unknown KV cache type travels to the engine', (t) => {
@@ -792,20 +799,57 @@ test('diffusion: a standalone upscaler load has no fitter', (t) => {
   )
 })
 
-// Their file sets carry an audio VAE, embeddings connectors, a preview decoder
-// and a seed scene, none of which the fit request has a place for.
-test('diffusion: video and world loads are refused', (t) => {
-  for (const mode of ['video', 'world'] as const) {
-    t.alike(
-      createFitRequest({
-        modelType: ModelType.sdcppGeneration,
-        modelPath: '/models/wan.safetensors',
-        modelConfig: { mode },
-        isShardedModel: false
-      }),
-      { supported: false, detail: `${mode} loads are not representable` }
-    )
-  }
+test('diffusion: a world load is refused', (t) => {
+  t.alike(
+    createFitRequest({
+      modelType: ModelType.sdcppGeneration,
+      modelPath: '/models/wan.safetensors',
+      modelConfig: { mode: 'world' },
+      isShardedModel: false
+    }),
+    { supported: false, detail: 'world loads are not representable' }
+  )
+})
+
+test('diffusion: a video load carries its companion set and a frame count', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.sdcppGeneration,
+    modelPath: '/models/ltx.gguf',
+    modelConfig: { mode: 'video', vae_tiling: true },
+    artifacts: {
+      llmModelPath: '/models/gemma.gguf',
+      vaeModelPath: '/models/video_vae.safetensors',
+      audioVaeModelPath: '/models/audio_vae.safetensors',
+      embeddingsConnectorsModelPath: '/models/connectors.safetensors'
+    },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  if (plan.probe.engine !== 'diffusion-cpp') return
+  t.alike(plan.probe.request.files, {
+    model: '/models/ltx.gguf',
+    llm: '/models/gemma.gguf',
+    vae: '/models/video_vae.safetensors',
+    audioVae: '/models/audio_vae.safetensors',
+    embeddingsConnectors: '/models/connectors.safetensors'
+  })
+  t.alike(plan.probe.request.workload, { vaeTiling: true, videoFrames: 33 })
+})
+
+test('diffusion: an image load carries no frame count', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.sdcppGeneration,
+    modelPath: '/models/flux.safetensors',
+    modelConfig: { mode: 'diffusion' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  if (plan.probe.engine !== 'diffusion-cpp') return
+  t.alike(plan.probe.request.workload, {})
 })
 
 test('diffusion: a configured upscaler is a second resident model the projection omits', (t) => {

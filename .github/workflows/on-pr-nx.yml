@@ -148,9 +148,13 @@ jobs:
         shell: bash
         env:
           M: ${{ steps.compute.outputs.matrix }}
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGED_FILES: ${{ runner.temp }}/nx-changed-files.raw
         run: |
+          set -euo pipefail
+          # Speech cpp-lint needs a changed source/header, not a dependency bump.
+          node .github/actions/nx-project-matrix/cpp-lint-selection.mjs >> "$GITHUB_OUTPUT"
           {
-            echo "cpplint=$(echo "$M" | jq -c '[.[] | select(.hasCppLint == true)]')"
             # TS checks run PR-head code, so they live in the unprivileged
             # on-pr-<pkg>-ts.yml workflows; we only await their check run. The
             # slug is not the package name, and diffusion predates the shared
