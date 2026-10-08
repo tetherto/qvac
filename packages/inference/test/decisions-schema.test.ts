@@ -4,8 +4,10 @@ import {
   decisionsConfigSchema,
   loadModelOptionsToRequestSchema,
   loadModelSrcRequestSchema,
+  deviceConfigDefaultsSchema,
   ModelType
 } from '@/schemas/index'
+import { resolveModelConfigWithContext } from '@/runtime/model-config-utils'
 import {
   transformDecisionsConfig,
   decisionsModelFiles
@@ -89,7 +91,7 @@ test('Laya config accepts only supported context options and preserves native de
     }
   )
   for (const bad of [
-    {},
+    { device: 'cuda' },
     { device: 'gpu', ctx_size: 512 },
     { device: 'cpu', threads: 1.5 },
     { device: 'cpu', 'split-mode': 'row' }
@@ -103,10 +105,48 @@ test('Laya config accepts only supported context options and preserves native de
   })
   t.alike(loaded.modelConfig, config)
   t.ok(loadModelSrcRequestSchema.safeParse(loaded).success)
-  t.absent(
-    loadModelOptionsToRequestSchema.safeParse({
+})
+
+test('Laya loads without a device and resolves GPU before calling the addon', (t) => {
+  const context = { runtime: 'node' as const, platform: 'darwin' as const }
+  for (const modelConfig of [undefined, {}, { device: undefined }, { threads: 0 }]) {
+    const request = loadModelOptionsToRequestSchema.parse({
       modelSrc: '/tmp/laya.gguf',
-      modelType: ModelType.llamacppDecisions
-    }).success
-  )
+      modelType: ModelType.llamacppDecisions,
+      ...(modelConfig === undefined ? {} : { modelConfig })
+    })
+    t.ok(loadModelSrcRequestSchema.safeParse(request).success)
+    t.alike(request.modelConfig, modelConfig)
+    const resolved = resolveModelConfigWithContext<Parameters<typeof transformDecisionsConfig>[0]>(
+      ModelType.llamacppDecisions,
+      request.modelConfig ?? {},
+      context,
+      []
+    )
+    t.is(transformDecisionsConfig(resolved).device, 'gpu')
+    if (modelConfig?.threads !== undefined) t.is(resolved.threads, modelConfig.threads)
+  }
+})
+
+test('Laya device patterns and explicit device choices override the GPU default', (t) => {
+  const context = { runtime: 'node' as const, platform: 'darwin' as const }
+  const defaults = { [ModelType.llamacppDecisions]: { threads: 2 } }
+  t.alike(deviceConfigDefaultsSchema.parse(defaults), defaults)
+  const patterns = [
+    {
+      name: 'CPU device',
+      match: {},
+      defaults: { [ModelType.llamacppDecisions]: { device: 'cpu' as const } }
+    }
+  ]
+  const resolve = (config: Record<string, unknown>, withPattern = false) =>
+    resolveModelConfigWithContext<Parameters<typeof transformDecisionsConfig>[0]>(
+      ModelType.llamacppDecisions,
+      config,
+      context,
+      withPattern ? patterns : []
+    )
+  t.is(transformDecisionsConfig(resolve({ device: 'cpu' })).device, 'cpu')
+  t.is(transformDecisionsConfig(resolve({}, true)).device, 'cpu')
+  t.is(transformDecisionsConfig(resolve({ device: 'gpu' }, true)).device, 'gpu')
 })

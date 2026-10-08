@@ -11713,7 +11713,7 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     ]
 
 
-class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
+class LoadModelSrcRequestLlamacppDecisionsModelFitPolicy(Enum):
     log = "log"
     refuse = "refuse"
     off = "off"
@@ -11751,12 +11751,12 @@ class LoadModelSrcRequestLlamacppDecisionsModelConfig(GeneratedBaseModel):
         extra="forbid",
     )
     device: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfigDevice,
+        LoadModelSrcRequestLlamacppDecisionsModelConfigDevice | None,
         Field(
-            description="Required compute device.",
+            description="Compute device. Default 'gpu'.",
             title="LoadModelSrcRequestLlamacppDecisionsModelConfigDevice",
         ),
-    ]
+    ] = None
     gpu_layers: Annotated[
         int | None,
         Field(
@@ -11867,11 +11867,11 @@ class LoadModelSrcRequestLlamacppDecisions(GeneratedBaseModel):
         ),
     ] = None
     model_fit_policy: Annotated[
-        LoadModelSrcRequestNmtcppTranslationModelFitPolicy | None,
+        LoadModelSrcRequestLlamacppDecisionsModelFitPolicy | None,
         Field(
             alias="modelFitPolicy",
             description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
-            title="LoadModelSrcRequestNmtcppTranslationModelFitPolicy",
+            title="LoadModelSrcRequestLlamacppDecisionsModelFitPolicy",
         ),
     ] = None
     request_id: Annotated[
@@ -11886,11 +11886,17 @@ class LoadModelSrcRequestLlamacppDecisions(GeneratedBaseModel):
         "llamacpp-decisions"
     )
     model_config_: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfig,
+        LoadModelSrcRequestLlamacppDecisionsModelConfig | None,
         Field(
             alias="modelConfig", title="LoadModelSrcRequestLlamacppDecisionsModelConfig"
         ),
-    ]
+    ] = None
+
+
+class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
@@ -12889,6 +12895,14 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
         Field(
             alias="requireSecureTransport",
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestNmtcppTranslationModelFitPolicy",
         ),
     ] = None
     request_id: Annotated[

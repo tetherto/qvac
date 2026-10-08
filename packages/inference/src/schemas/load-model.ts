@@ -49,7 +49,7 @@ import {
 } from './model-types'
 import { sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
-import { decisionsConfigSchema } from './decisions'
+import { decisionsConfigBaseSchema } from './decisions'
 import { classificationConfigSchema } from './classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
@@ -100,7 +100,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.bciWhispercppTranscription, configKeys(bciConfigSchema)],
   [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
   [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
-  [ModelType.llamacppDecisions, configKeys(decisionsConfigSchema)],
+  [ModelType.llamacppDecisions, configKeys(decisionsConfigBaseSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
     ModelType.ttsGgml,
@@ -160,7 +160,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
     .object({
       ...loadModelCommonFields,
       modelType: z.literal(ModelType.llamacppDecisions),
-      modelConfig: decisionsConfigSchema
+      modelConfig: decisionsConfigBaseSchema.optional()
     })
     .strict(),
   z
@@ -486,7 +486,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
     .object({
       ...loadModelRequestCommonFields,
       modelType: z.literal(ModelType.llamacppDecisions),
-      modelConfig: decisionsConfigSchema
+      modelConfig: decisionsConfigBaseSchema.optional()
     })
     .strict()
     .transform((data) => ({
@@ -634,7 +634,10 @@ export const loadParakeetModelRequestSchema = commonModelConfigSchema
   .strict()
 
 export const loadDecisionsModelRequestSchema = commonModelConfigSchema
-  .extend({ modelType: z.literal(ModelType.llamacppDecisions), modelConfig: decisionsConfigSchema })
+  .extend({
+    modelType: z.literal(ModelType.llamacppDecisions),
+    modelConfig: decisionsConfigBaseSchema.optional()
+  })
   .strict()
 
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema

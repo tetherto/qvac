@@ -5,7 +5,7 @@
 
 import type { TtsEngine } from '@qvac/sdk'
 
-export type Modality = 'chat' | 'embedding' | 'transcription' | 'speech' | 'image'
+export type Modality = 'chat' | 'embedding' | 'transcription' | 'speech' | 'image' | 'decision'
 
 export interface ServeModelEntry {
   model?: string
@@ -37,6 +37,13 @@ export const MODALITIES: ModalityInfo[] = [
   { id: 'chat', label: 'Chat (LLM)', role: 'chat', addon: 'llm', pick: true },
   { id: 'embedding', label: 'Embedding', role: 'embedding', addon: 'embeddings', pick: true },
   {
+    id: 'decision',
+    label: 'Decision (System One)',
+    role: 'embedding',
+    addon: 'llamacpp-decisions',
+    pick: true
+  },
+  {
     id: 'transcription',
     label: 'Speech-to-text (transcription)',
     role: 'transcription',
@@ -57,6 +64,7 @@ export function modalityInfo(id: Modality): ModalityInfo {
 export const RECOMMENDED: Partial<Record<Modality, string>> = {
   chat: 'QWEN3_600M_INST_Q4',
   embedding: 'EMBEDDINGGEMMA_300M_Q4_0',
+  decision: 'LAYA_MULTILINGUAL_322M_Q8_0',
   transcription: 'WHISPER_TINY_Q8_0',
   image: 'SD_V2_1_1B_Q8_0'
 }
@@ -167,6 +175,7 @@ export function buildEntry(modality: Modality, constantName?: string): BuiltEntr
 
   const entry: ServeModelEntry = { model: name, preload: false }
   if (modality === 'image') entry.config = { prediction: 'v' }
+  if (modality === 'decision') entry.type = 'llamacpp-decisions'
   return { aliasBase: name, entry, addon: info.addon }
 }
 

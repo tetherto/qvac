@@ -24,7 +24,16 @@ const load: LoadModelOptions = {
   modelType: 'llamacpp-decisions',
   modelConfig: { device: 'cpu', threads: 0 }
 }
-void [single, batch, union, load]
+const defaultLoad: LoadModelOptions = {
+  modelSrc: '/models/laya.gguf',
+  modelType: 'llamacpp-decisions'
+}
+const configLoad: LoadModelOptions = {
+  modelSrc: '/models/laya.gguf',
+  modelType: 'llamacpp-decisions',
+  modelConfig: { threads: 0 }
+}
+void [single, batch, union, load, defaultLoad, configLoad]
 
 // @ts-expect-error A state and a batch cannot be sent together.
 decide({ modelId: 'laya', state: 'Refund', states: ['Refund'], questions })

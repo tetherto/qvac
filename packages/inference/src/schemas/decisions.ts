@@ -150,9 +150,9 @@ export const decideResponseSchema = z.object({
   result: layaResponseSchema
 })
 
-export const decisionsConfigSchema = z
+export const decisionsConfigBaseSchema = z
   .object({
-    device: z.enum(['cpu', 'gpu']).describe('Required compute device.'),
+    device: z.enum(['cpu', 'gpu']).optional().describe("Compute device. Default 'gpu'."),
     gpu_layers: z
       .number()
       .int()
@@ -197,6 +197,18 @@ export const decisionsConfigSchema = z
       .describe('Writable OpenCL kernel cache directory, required on Android.')
   })
   .strict()
+
+export type DecisionsConfigInput = z.infer<typeof decisionsConfigBaseSchema>
+
+export const DECISIONS_CONFIG_DEFAULTS = {
+  device: 'gpu'
+} as const satisfies Partial<DecisionsConfigInput>
+
+export const decisionsConfigSchema = decisionsConfigBaseSchema.transform((data) => ({
+  ...DECISIONS_CONFIG_DEFAULTS,
+  ...data,
+  device: data.device ?? DECISIONS_CONFIG_DEFAULTS.device
+}))
 
 export type LayaState = z.infer<typeof layaStateSchema>
 export type LayaQuestion = z.infer<typeof layaQuestionSchema>

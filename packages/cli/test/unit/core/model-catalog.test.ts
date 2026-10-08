@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ModelConstant } from '@qvac/sdk'
+import { LAYA_MULTILINGUAL_322M_Q8_0 } from '@qvac/sdk'
 import { createModelRegistry } from '@/serve/core/model-registry'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import { buildCatalog, filterCatalog, paginate } from '@/serve/core/model-catalog'
@@ -43,6 +44,24 @@ function resolved(over: Partial<ResolvedModelEntry> & { alias: string }): Resolv
 }
 
 describe('model-catalog', () => {
+  it('lists Laya models under their registry addon role', () => {
+    const embedding = constant('EMBEDDING', { addon: 'embeddings', engine: 'llamacpp-embedding' })
+    const catalog = buildCatalog(
+      serveConfig(new Map()),
+      createModelRegistry(),
+      new Map<string, ModelConstant>([
+        [LAYA_MULTILINGUAL_322M_Q8_0.name, LAYA_MULTILINGUAL_322M_Q8_0],
+        [embedding.name, embedding]
+      ])
+    )
+    assert.deepEqual(filterCatalog(catalog, { role: 'decision' }), [])
+    assert.ok(catalog.every((entry) => entry.addon === 'embeddings'))
+    assert.deepEqual(
+      filterCatalog(catalog, { role: 'embedding' }).map((entry) => entry.id),
+      ['EMBEDDING', LAYA_MULTILINGUAL_322M_Q8_0.name]
+    )
+  })
+
   it('marks a built-in constant not_configured / not usable, with size + role', () => {
     const cat = buildCatalog(
       serveConfig(new Map()),

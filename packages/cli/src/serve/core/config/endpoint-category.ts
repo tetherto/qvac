@@ -6,6 +6,7 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   embeddings: 'embedding',
   embedding: 'embedding',
   'llamacpp-embedding': 'embedding',
+  'llamacpp-decisions': 'decision',
   whisper: 'transcription',
   'whispercpp-transcription': 'transcription',
   'whispercpp-audio-translation': 'audio-translation',

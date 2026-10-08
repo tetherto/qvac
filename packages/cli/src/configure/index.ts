@@ -150,6 +150,9 @@ export async function runConfigure(options: ConfigureOptions): Promise<void> {
       )
     }
   }
-  print('\n   Run:  qvac serve --openai')
+  const hasDecisionModels = Object.values(config.serve?.models ?? {}).some(
+    (entry) => entry.type === 'llamacpp-decisions'
+  )
+  print(`\n   Run:  qvac serve --openai${hasDecisionModels ? ' --systemone' : ''}`)
   print(`   Docs: ${CONFIG_DOCS_URL}`)
 }
