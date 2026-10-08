@@ -32,6 +32,20 @@ std::optional<MainGpu> parseMainGpu(const std::string& mainGpuStr);
 std::optional<MainGpu>
 tryMainGpuFromMap(std::unordered_map<std::string, std::string>& configFilemap);
 
+/// @brief Parse a `backend` override into a lowercased priority list, e.g.
+/// "CUDA,Vulkan" -> {"cuda", "vulkan"}.
+///
+/// An unknown name is a config mistake and throws StatusError(InvalidArgument).
+/// A known name with no device attached is legitimate, asking for cuda on a
+/// Vulkan-only host say, and falls through to the next entry. "auto" is
+/// accepted and dropped, so it parses to no preference.
+std::vector<std::string> parseBackendOverride(const std::string& backendStr);
+
+/// @brief Extract and erase the `backend` key from a config map.
+/// Returns an empty vector when the key is absent.
+std::vector<std::string> tryBackendOverrideFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap);
+
 using llamaLogCallbackF =
     void (*)(ggml_log_level level, const char* text, void* userData);
 
@@ -44,6 +58,9 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
+  // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
+  // physical card registered under two backends from two distinct cards. May
+  // be null; that path then falls back to scoping by registry.
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
@@ -54,11 +71,22 @@ std::pair<BackendType, std::string> chooseBackend(
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
     std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
-    bool* outIsMaliGpu = nullptr);
+    bool* outIsMaliGpu = nullptr,
+    const std::vector<std::string>& backendOverride = {});
 
 /// @brief Choose the backend to use for the model based on GPU device and
-/// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
-/// Vulkan backend. Uses CPU if no GPU backends are available.
+/// available backends. Prefer OpenCL backend for Adreno GPUs, then CUDA on
+/// NVIDIA, otherwise Vulkan. Uses CPU if no GPU backends are available.
+///
+/// The CUDA preference is stated here rather than inherited: qvac-fabric loads
+/// cuda before vulkan and registration is an unsorted push_back, so CUDA
+/// already happens to enumerate first. Relying on that would make backend
+/// choice a silent function of ggml's load order. QVAC-23763.
+///
+/// @p backendOverride, when non-empty, restricts the choice to those backend
+/// families in priority order (e.g. {"cuda", "vulkan"}). Entries with no device
+/// present are skipped; if none match, selection falls through to the normal
+/// cascade rather than failing, because an absent device is not a config error.
 ///
 /// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
 ///   - Adreno 800+: prefer Vulkan over OpenCL
@@ -77,7 +105,8 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
     std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
-    bool* outIsMaliGpu = nullptr);
+    bool* outIsMaliGpu = nullptr,
+    const std::vector<std::string>& backendOverride = {});
 
 /// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
@@ -90,12 +119,20 @@ struct SplitDevice {
   std::optional<int> adrenoVersion;
   bool isOpenCl = false;
   bool isMetal = false;
+  std::string deviceId;
 };
 
 struct SplitDeviceSelection {
   std::vector<SplitDevice> devices;
   size_t sourceGpuCount = 0;
   std::vector<std::string> rejectedDevices;
+  // Discrete devices left out as a possible twin of a kept one, so the same
+  // card is not split across two backends. An explicit `devices` list may
+  // still name them.
+  std::vector<SplitDevice> dedupedTwins;
+  // The subset dropped only because a twin could not be ruled out, with no
+  // device id to compare. The caller warns about them.
+  std::vector<std::string> droppedAmbiguousDevices;
 };
 
 /// @brief The authoritative allowlisted device set for multi-GPU modes.
@@ -113,6 +150,50 @@ SplitDeviceSelection getSplitDeviceSelection();
 void applyAdrenoRestrictions(
     SplitDeviceSelection& selection, const ModelMetaData& metadata,
     bool isFinetuning);
+
+/// @brief The device names for a multi-GPU split: every discrete GPU,
+/// deduplicated by `props.device_id` so a card registered under two backends is
+/// named once, preferring @p selectedDeviceName's registry.
+///
+/// QVAC-23763: one NVIDIA card registers as both CUDA0 and Vulkan0. Empty when
+/// every GPU/iGPU device comes from one registry, and when
+/// @p selectedDeviceName matches nothing.
+///
+/// No production caller yet: split loads pin device handles from
+/// `getSplitDeviceSelection()` instead.
+std::vector<std::string> splitModeDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName);
+
+/// @brief `splitModeDeviceNames()` against the real ggml backend registry.
+std::vector<std::string>
+splitModeDeviceNames(const std::string& selectedDeviceName);
+
+/// @brief Inputs to the CUDA PTX JIT cache check, gathered from the
+/// environment so the policy below stays testable.
+struct JitCacheEnv {
+  bool cacheDisabled = false; ///< CUDA_CACHE_DISABLE is set to something truthy
+  bool haveCacheDir = false;  ///< a cache directory could be resolved at all
+  bool cacheDirWritable = false; ///< that directory, or its nearest existing
+                                 ///< ancestor, passes a write check
+};
+
+/// @brief Whether to warn that CUDA will re-JIT its kernels on every start.
+///
+/// QVAC-24470: a device with no `-real` cubin in the build reaches the kernels
+/// by JITting the `-virtual` PTX, and the driver caches the result under
+/// `$HOME/.nv/ComputeCache`. Measured on a DGX Spark at sm_121, before the
+/// build shipped a 121a-real cubin: 27.3 s to first token cold against 143.9 ms
+/// warm. Where that cache cannot persist, a container with no writable `$HOME`
+/// being the usual case, the full cost is paid on every process start.
+///
+/// It is not a crash, so no backend guard catches it, and to a user it is
+/// indistinguishable from a hang. Warning is all this can do; removing the cost
+/// means shipping a `-real` cubin for the architecture.
+bool shouldWarnAboutJitCache(const JitCacheEnv& env);
+
+/// @brief `shouldWarnAboutJitCache()` against the real environment. Always
+/// false off Linux; the Windows cache check is not implemented.
+bool shouldWarnAboutJitCache();
 
 /// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
 ///
