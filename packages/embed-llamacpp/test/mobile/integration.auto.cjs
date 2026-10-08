@@ -185,6 +185,11 @@ async function runIdMapIndexTest (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/id-map-index.test.js', options)
 }
 
+async function runLayaTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLayaTest')) return __FILTERED
+  return runIntegrationModule('../integration/laya.test.js', options)
+}
+
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runModelLoadingTest')) return __FILTERED
   return runIntegrationModule('../integration/model-loading.test.js', options)

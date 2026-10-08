@@ -23,6 +23,10 @@
           "artifactNamePrefix": "fabric-",
           "includeVulkanSdk": true,
           "includeRocm": true,
+          "includeCuda": true,
+          "includeCudaWin32": true,
+          "includeCudaArm64": true,
+          "includeCudaArm64Jetson": true,
           "linuxExtraPackages": "libibverbs-dev"
         }
       },
