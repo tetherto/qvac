@@ -7961,6 +7961,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon {
 @Serializable
 data class LoadModelSrcRequestSdcppGenerationModelConfigWorld(
     @SerialName("seed") val `seed`: Long? = null,
+    @SerialName("fitSteps") val `fitSteps`: Long? = null,
     @SerialName("threads") val `threads`: LoadModelSrcRequestSdcppGenerationModelConfigWorldThreads? = null,
     @SerialName("backend") val `backend`: String? = null,
     @SerialName("numFramePerBlock") val `numFramePerBlock`: Long? = null,
