@@ -2134,6 +2134,35 @@ TEST_F(BackendSelectionTest, SplitDevices_KeepsVirtualCudaDevices) {
       getSplitDeviceNames(bckI), (std::vector<std::string>{"CUDA0", "CUDA1"}));
 }
 
+// GGML_CUDA_DEVICES=4 on two cards: CUDA reports "-v<N>" ids, Vulkan the bare
+// id of the same cards. The Vulkan aliases are twins, the CUDA devices stay.
+TEST_F(BackendSelectionTest, SplitDevices_DropsVulkanAliasOfVirtualCuda) {
+  const std::pair<const char*, const char*> cuda[] = {
+      {"CUDA0", "0000:01:00.0-v0"},
+      {"CUDA1", "0000:02:00.0-v1"},
+      {"CUDA2", "0000:01:00.0-v2"},
+      {"CUDA3", "0000:02:00.0-v3"}};
+  for (const auto& [name, id] : cuda) {
+    mockBackend.addDevice(withDeviceId(
+        MockDevice(
+            "NVIDIA RTX 5090", name, GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA"),
+        id));
+  }
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 5090", "vulkan0"), "0000:01:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDevice("NVIDIA RTX 5090", "vulkan1"), "0000:02:00.0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  EXPECT_EQ(
+      getSplitDeviceNames(bckI),
+      (std::vector<std::string>{"CUDA0", "CUDA1", "CUDA2", "CUDA3"}));
+  ASSERT_EQ(selection.dedupedTwins.size(), 2u);
+  EXPECT_EQ(selection.dedupedTwins[0].name, "vulkan0");
+  EXPECT_EQ(selection.dedupedTwins[1].name, "vulkan1");
+  EXPECT_TRUE(selection.droppedAmbiguousDevices.empty());
+}
+
 // sourceGpuIndex is the ordinal among GPU/IGPU devices, not the registry
 // index: CPU and ACCEL entries interleaved with the GPUs must not shift it.
 TEST_F(BackendSelectionTest, SplitDevices_TracksRawGpuIndices) {

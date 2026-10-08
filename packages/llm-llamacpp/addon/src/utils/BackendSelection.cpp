@@ -6,6 +6,7 @@
 #include <optional>
 #include <regex>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <variant>
 #include <vector>
@@ -124,6 +125,20 @@ struct DeviceDescription {
     }
   }
 };
+
+// ggml-cuda appends "-v<N>" to the PCI bus id of each virtual device it
+// emulates under GGML_CUDA_DEVICES, while Vulkan reports the bare id of the
+// same card. Strip it to compare physical cards across backends.
+std::string physicalDeviceId(const std::string& deviceId) {
+  const size_t pos = deviceId.rfind("-v");
+  if (pos == std::string::npos || pos + 2 == deviceId.size() ||
+      !std::all_of(deviceId.begin() + pos + 2, deviceId.end(), [](char c) {
+        return std::isdigit(static_cast<unsigned char>(c)) != 0;
+      })) {
+    return deviceId;
+  }
+  return deviceId.substr(0, pos);
+}
 
 std::string lowerCopy(const char* value) {
   if (value == nullptr) {
@@ -835,6 +850,10 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
   std::vector<SplitDevice> discrete;
   std::vector<SplitDevice> integrated;
   std::unordered_set<std::string> seenDiscrete;
+  // Physical card id -> registry that kept it. Virtual CUDA devices share a
+  // card within one registry and stay distinct; another registry's device on
+  // that card is a twin.
+  std::unordered_map<std::string, std::string> physicalOwner;
   bool discreteWithoutId = false;
 
   const size_t totalDevices = bckI.ggml_backend_dev_count();
@@ -901,11 +920,18 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
     // A null device_id cannot be deduped against; keep the device rather than
     // dropping it, since omitting a real GPU is worse than a duplicate. This
     // mirrors fabric, whose find_if only matches when both ids are non-null.
-    if (deviceId.empty() || seenDiscrete.insert(deviceId).second) {
+    bool isTwin = false;
+    if (!deviceId.empty()) {
+      const auto [owner, inserted] =
+          physicalOwner.try_emplace(physicalDeviceId(deviceId), registryName);
+      isTwin = !seenDiscrete.insert(deviceId).second ||
+               (!inserted && owner->second != registryName);
+    }
+    if (isTwin) {
+      result.dedupedTwins.emplace_back(std::move(selected));
+    } else {
       discreteWithoutId = discreteWithoutId || deviceId.empty();
       discrete.emplace_back(std::move(selected));
-    } else {
-      result.dedupedTwins.emplace_back(std::move(selected));
     }
   }
   // One card can register under CUDA and under Vulkan. The dedupe above needs

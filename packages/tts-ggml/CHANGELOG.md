@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Metadata-only `assessFit()` for MOSS-SoundEffect, with required model path,
+  prompt and duration, shared generation controls, and host/device memory estimates.
+
 - MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
   48 kHz sound effects of up to 30 seconds from a text description, from one
   GGUF (`files.mossSoundEffect`, or `moss-sfx-*.gguf` in `modelDir`). `run()`
@@ -22,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `systemPrompt`, a reply voice (`replyVoice`), `maxReplySeconds`,
   `maxNewTokens`, `textReply` and sampling controls; there is no streaming.
   Desktop, with a GPU.
+- Bounded FuzzTest coverage for the JS-adapter config string parsers
+  (`parseIntString`, `parseFloatString`). Linux C++ CI runs the suite after
+  unit tests. The parsers compile without tts-cpp, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
 
 ### Changed
 
