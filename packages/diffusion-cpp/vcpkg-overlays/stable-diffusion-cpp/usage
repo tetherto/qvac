@@ -1,0 +1,16 @@
+The package stable-diffusion-cpp provides CMake integration:
+
+  find_package(stable-diffusion-cpp CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE stable-diffusion::stable-diffusion)
+
+The following header is available:
+  #include <stable-diffusion.h>   // main C API
+
+For image I/O (stb_image, stb_image_write), depend on the stb vcpkg package
+directly rather than relying on headers bundled in this port.
+
+GPU backends are controlled through the ggml dependency:
+  metal  - Metal GPU backend (macOS/iOS, auto-enabled on Apple)
+  vulkan - Vulkan GPU backend
+  cuda   - CUDA GPU backend
+  opencl - OpenCL GPU backend (Android/Adreno)

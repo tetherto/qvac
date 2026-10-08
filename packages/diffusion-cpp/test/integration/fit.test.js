@@ -22,6 +22,91 @@ function tempFile(t, name, contents) {
   return filePath
 }
 
+function esrganHeader(t) {
+  const header = {}
+  let offset = 0
+  function convolution(name, input, output) {
+    for (const [suffix, shape, dtype] of [
+      ['weight', [output, input, 3, 3], 'F16'],
+      ['bias', [output], 'F32']
+    ]) {
+      const bytes = shape.reduce((size, dim) => size * dim, dtype === 'F16' ? 2 : 4)
+      header[`${name}.${suffix}`] = { dtype, shape, data_offsets: [offset, offset + bytes] }
+      offset += bytes
+    }
+  }
+  convolution('conv_first', 3, 64)
+  for (let block = 1; block <= 3; block++) {
+    for (let layer = 1; layer <= 5; layer++) {
+      convolution(`body.0.rdb${block}.conv${layer}`, 64 + (layer - 1) * 32, layer === 5 ? 64 : 32)
+    }
+  }
+  for (const name of ['conv_body', 'conv_up1', 'conv_up2', 'conv_hr']) {
+    convolution(name, 64, 64)
+  }
+  convolution('conv_last', 64, 3)
+  const json = Buffer.from(JSON.stringify(header))
+  const length = Buffer.alloc(8)
+  length.writeBigUInt64LE(BigInt(json.length))
+  return tempFile(t, 'esrgan.fit.safetensors', Buffer.concat([length, json]))
+}
+
+test('standalone ESRGAN projects a CPU load from headers without weights', (t) => {
+  const esrgan = esrganHeader(t)
+  const fit = assessFit({
+    mode: 'upscale',
+    files: { esrgan },
+    config: { device: 'cpu', upscaler_tile_size: 16 },
+    workload: { width: 128, height: 96, upscaleRepeats: 2 }
+  })
+  t.is(fit.status, 'fits')
+  t.is(fit.changed, false)
+  t.ok(fit.report.includes('upscaler'))
+  t.ok(fit.report.includes('host memory'))
+})
+
+test('standalone ESRGAN validates paths and workload numbers', async (t) => {
+  await t.exception.all(
+    () => assessFit({ mode: 'upscale', files: { esrgan: 'relative.safetensors' } }),
+    TypeError
+  )
+  const esrgan = esrganHeader(t)
+  for (const workload of [{ upscaleRepeats: 0 }, { upscaleRepeats: 1.5 }, { width: Infinity }]) {
+    const fit = assessFit({ mode: 'upscale', files: { esrgan }, workload })
+    t.is(fit.status, 'error')
+    t.is(fit.reason, 'unsupported-config')
+  }
+  const unreadable = assessFit({
+    mode: 'upscale',
+    files: { esrgan: '/missing/esrgan.safetensors' }
+  })
+  t.is(unreadable.reason, 'model-unreadable')
+})
+
+test('standalone ESRGAN sizes full-image RAM even when tiles stay small', (t) => {
+  const esrgan = esrganHeader(t)
+  const request = {
+    mode: 'upscale',
+    files: { esrgan },
+    config: { device: 'cpu', upscaler_tile_size: 16 }
+  }
+  const small = assessFit({ ...request, workload: { width: 128, height: 96 } })
+  const large = assessFit({ ...request, workload: { width: 4096, height: 4096 } })
+  t.is(small.status, 'fits')
+  const repeated = assessFit({
+    ...request,
+    workload: { width: 1024, height: 1024, upscaleRepeats: 2 }
+  })
+  function hostMiB(fit) {
+    const match = fit.report.match(/host memory:.*projected use (\d+) MiB/)
+    t.ok(match, 'host memory projection is reported')
+    return match ? Number(match[1]) : 0
+  }
+  t.ok(hostMiB(large) >= 4080, 'the full image buffers need 4080 MiB despite small tiles')
+  t.ok(hostMiB(repeated) >= 4083, 'repeated scaling includes intermediate and final images')
+  t.ok(hostMiB(large) > hostMiB(small))
+})
+
 test('an unreadable model returns an error outcome', (t) => {
   const fit = assessFit({ files: { model: '/nonexistent/model.gguf' } })
 
@@ -88,6 +173,19 @@ safeTest('a real model projects a verdict', { timeout: 600_000, skip }, async (t
   t.is(fit.reason, fit.status, 'a verdict reports itself as its reason')
   t.ok(fit.report.length > 0, 'the engine reported its placement')
 })
+
+safeTest(
+  'generation fit includes its retained ESRGAN model',
+  { timeout: 600_000, skip },
+  async (t) => {
+    const model = await ensureModelPath({ modelName: MODEL_NAME })
+    const esrgan = esrganHeader(t)
+    const fit = assessFit({ files: { model, esrgan }, workload: { width: 512, height: 512 } })
+    t.ok(fit.status === 'fits' || fit.status === 'does-not-fit')
+    t.ok(fit.report.includes('upscaler'), 'combined measurement includes ESRGAN')
+    t.ok(fit.report.includes('host memory'), 'combined measurement includes upscaler image buffers')
+  }
+)
 
 safeTest('the workload sizes the projection', { timeout: 600_000, skip }, async (t) => {
   const model = await ensureModelPath({ modelName: MODEL_NAME })

@@ -758,7 +758,7 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 
 ## Assessing fit
 
-`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data, so a GGUF file set can be the registry's weightless copy and the projection can run before anything is downloaded. A safetensors file is still read against its declared tensor data, so a header-only copy of one comes back as `status: "error"`. It is a module export, not an instance method — nothing is loaded to call it.
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data, so GGUF and safetensors files can be the registry's header-only copies and the projection can run before weights are downloaded. It is a module export, not an instance method — nothing is loaded to call it.
 
 ```js
 const { assessFit } = require('@qvac/diffusion-cpp')
@@ -789,10 +789,15 @@ fit.report // per-device, per-module memory table, suitable for logging
 | `vaeTiling` | `false` | Tiled decoding trades speed for a much smaller VAE arena. |
 | `vaeTileSizeX`, `vaeTileSizeY` | 512 | The tile geometry, in pixels. |
 | `vaeTileOverlap` | 0.5 | Fraction of a tile used as the overlap seam. |
+| `upscaleRepeats` | 1 | ESRGAN passes, each applying the checkpoint's scale factor. |
 
 Every number must be finite, whole and in range; anything else is `status: "error"` with `reason: "unsupported-config"`.
 
 The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, or a `paramsBackend` naming individual modules is `reason: "unsupported-config"`.
+
+For standalone ESRGAN, use `mode: 'upscale'`, `files: { esrgan }` and the same config as `EsrganUpscaler`. This mode supports `device: 'cpu'`. `workload.width` and `height` describe the input image. The estimate includes weights, the tiled graph and full-image RAM buffers; smaller tiles do not remove full-image allocations.
+
+For post-generation upscaling, include `files.esrgan` and the `upscaler_*` config fields in the diffusion request. The estimate includes ESRGAN weights retained alongside diffusion, including GPU staging when its parameters are offloaded to CPU. Set `workload.upscaleRepeats` to the number of passes to assess.
 
 A `changed` of `true` comes with `status: "does-not-fit"` — the configuration as given does not fit, and the engine reached a placement only by moving modules between backends. A `paramsBackend` of `*=cpu` is the exception: the engine replans every module for it, so the plan is compared against the placement that load already uses, and an equal one is `fits`.
 
