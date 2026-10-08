@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: ''
+      fabric_run_id:
+        description: "Run ID of an on-pr-fabric dispatch on the same commit. Its fabric-prebuilds artifact is overlaid instead of the released @qvac/fabric."
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -204,7 +209,8 @@ jobs:
       # Only wait when on-pr-fabric will actually publish. Every downstream
       # clause reads this, not fabric_stack, so the two cannot drift into a
       # 120-minute poll for an artifact nobody builds.
-      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target' }}
+      # A dispatch opts in by naming the fabric run that built the artifact.
+      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && (github.event_name == 'pull_request_target' || (github.event_name == 'workflow_dispatch' && inputs.fabric_run_id != '')) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -233,10 +239,54 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Wait for fabric-prebuilds from on-pr-fabric
+        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/wait-and-download-fabric-prebuilds
         with:
           github-token: ${{ github.token }}
           head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Wait for fabric-prebuilds from the named on-pr-fabric run
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ inputs.fabric_run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::fabric_run_id must be a numeric run ID, got '$SOURCE_RUN_ID'"
+            exit 1
+          fi
+          read -r path sha < <(gh api "repos/$REPO/actions/runs/$SOURCE_RUN_ID" --jq '"\(.path) \(.head_sha)"')
+          if [ "$path" != ".github/workflows/on-pr-fabric.yml" ] || [ "$sha" != "$EXPECTED_SHA" ]; then
+            echo "::error::run $SOURCE_RUN_ID is $path at $sha, expected on-pr-fabric.yml at $EXPECTED_SHA"
+            exit 1
+          fi
+          # Both runs can be dispatched together, so wait for the artifact.
+          deadline=$(( $(date +%s) + 120 * 60 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            count=$(gh api "repos/$REPO/actions/runs/$SOURCE_RUN_ID/artifacts?name=fabric-prebuilds" --jq '.total_count')
+            if [ "$count" -gt 0 ]; then
+              exit 0
+            fi
+            status=$(gh api "repos/$REPO/actions/runs/$SOURCE_RUN_ID" --jq '.status')
+            if [ "$status" = "completed" ]; then
+              echo "::error::run $SOURCE_RUN_ID completed without a fabric-prebuilds artifact"
+              exit 1
+            fi
+            sleep 60
+          done
+          echo "::error::timed out waiting for fabric-prebuilds from run $SOURCE_RUN_ID"
+          exit 1
+      - name: Download fabric-prebuilds from the named on-pr-fabric run
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
+          run-id: ${{ inputs.fabric_run_id }}
+          github-token: ${{ github.token }}
       - name: Re-publish fabric-prebuilds for downstream jobs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -388,6 +438,7 @@ jobs:
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: ${{ matrix.workdir }}
       include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
+      include-cuda-sdk: ${{ matrix.includeCudaSdk == true }}
       # Without this the lint lane compiles against the released @qvac/fabric.
       # Only npm fabric consumers have node_modules/@qvac/fabric to overlay.
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && contains(fromJSON(needs.matrix.outputs.fabricconsumers), matrix.package) && 'fabric-prebuilds' || '' }}

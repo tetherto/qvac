@@ -143,10 +143,10 @@ test('advisory fit: reports a projected fit with its plan and footprint', async 
   t.is(calls.length, 1)
   t.is((calls[0]?.[0] as FitProbeRequest).engine, 'llm-llamacpp')
   t.is(records[0]?.level, 'info')
-  t.ok(records[0]?.message.includes('advisory only'))
+  t.ok(records[0]?.message.includes('projected to fit'))
 })
 
-test('advisory fit: reports a projected insufficiency without denying the load', async (t) => {
+test('advisory fit: reports a projected insufficiency', async (t) => {
   const { logger, records } = recordingLogger()
   const { runFit } = fitReturning({
     status: 'completed',
@@ -169,7 +169,7 @@ test('advisory fit: reports a projected insufficiency without denying the load',
     projection: FIT_PROJECTION
   })
   t.is(records[0]?.level, 'warn')
-  t.ok(records[0]?.message.includes('the load continues unchanged'))
+  t.ok(records[0]?.message.includes('projected not to fit'))
   t.ok(records[0]?.message.includes('device 5120 MiB'))
 })
 
@@ -251,23 +251,6 @@ test('advisory fit: dispatches a speech load to its own engine', async (t) => {
 
   t.is(calls.length, 1)
   t.is((calls[0]?.[0] as FitProbeRequest).engine, 'tts-ggml')
-})
-
-test('advisory fit: the env opt-out disables the check without logging', async (t) => {
-  const { logger, records } = recordingLogger()
-  const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
-
-  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    enabled: false,
-    mobile: false,
-    residentModelBytes: zeroResident,
-    runFit,
-    logger
-  })
-
-  t.alike(outcome, { ...PROVENANCE, verdict: 'unknown', reason: 'disabled' })
-  t.is(calls.length, 0)
-  t.is(records.length, 0)
 })
 
 test('advisory fit: runs the fitter on mobile', async (t) => {

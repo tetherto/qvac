@@ -1601,7 +1601,7 @@ test('assess: an undecided probe leaves the model to its floor', (t) => {
           verdict: 'unknown',
           basis: 'native-probe',
           estimatorVersion: 'native-probe-v2',
-          reason: 'disabled'
+          reason: 'unsupported-load'
         }
       }
     ]
@@ -1609,7 +1609,9 @@ test('assess: an undecided probe leaves the model to its floor', (t) => {
 
   t.is(result.evidence, 'computed-only')
   t.ok(
-    result.reasons.some((r) => r.includes('reached no verdict for') && r.includes('disabled')),
+    result.reasons.some(
+      (r) => r.includes('reached no verdict for') && r.includes('unsupported-load')
+    ),
     'the model that reached no verdict is named beside the fallback'
   )
 })
