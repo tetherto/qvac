@@ -58,6 +58,34 @@ describe('load-manager', () => {
     assert.equal(reg.getEntry('m')?.sdkModelId, 'sdk-1')
   })
 
+  it('forwards an alias modelFitPolicy to the SDK load, and omits it when unset', async () => {
+    const reg = createModelRegistry()
+    const base = {
+      sdkType: 'llamacpp',
+      endpointCategory: 'chat',
+      config: {}
+    }
+    reg.register('strict', {
+      ...base,
+      modelSrc: 'hyper://example.invalid/strict',
+      modelFitPolicy: 'refuse'
+    })
+    reg.register('plain', { ...base, modelSrc: 'hyper://example.invalid/plain' })
+
+    const seen: Parameters<LoadModelFn>[0][] = []
+    const load: LoadModelFn = (opts) => {
+      seen.push(opts)
+      return Promise.resolve(`sdk-${seen.length}`)
+    }
+    const mgr = createLoadManager(reg, logger, OPTS, () => load)
+
+    await mgr.load('strict')
+    await mgr.load('plain')
+
+    assert.equal(seen[0]?.modelFitPolicy, 'refuse')
+    assert.equal(seen[1] !== undefined && 'modelFitPolicy' in seen[1], false)
+  })
+
   it('dedups concurrent loads of the same alias into one SDK load', async () => {
     const reg = registry('m')
     let calls = 0

@@ -131,6 +131,16 @@ export function mapAddonEvent(
   return null;
 }
 
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+export function pickPrimaryGgufPath(files: string[]): string {
+  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
+  return files.find((p) => SHARD_REGEX.test(p)) || files[0];
+}
+
 // The ggml compute backends ship next to the @qvac/fabric runtime
 // (<root>/<host>/qvac__fabric). We deliberately do not copy them into this
 // addon to avoid duplicating tens of MB per fabric consumer. On desktop,

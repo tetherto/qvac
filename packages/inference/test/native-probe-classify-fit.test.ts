@@ -191,6 +191,60 @@ test('the llama breakdown sums every device the demand is charged to', (t) => {
   t.is(outcome.projection?.computeBytes, 256 * 1024 ** 2)
 })
 
+test('the llama projection keeps a row per device, host excluded', (t) => {
+  const rows = [
+    { ...device('CPU', 1024 ** 3), contextBytes: 256 * 1024 ** 2, computeBytes: 0 },
+    { ...device('CUDA0', 3 * 1024 ** 3), contextBytes: 1024 ** 3, computeBytes: 256 * 1024 ** 2 },
+    { ...device('CUDA1', 2 * 1024 ** 3), contextBytes: 512 * 1024 ** 2, computeBytes: 0 },
+    { ...device('host', 1024 ** 3), contextBytes: 1024 ** 3, computeBytes: 1024 ** 3 }
+  ]
+
+  const outcome = classifyFit(llama(rows), PROVENANCE)
+  const devices = outcome.projection?.devices
+
+  t.is(devices?.length, 3, 'the host row is carried by hostBytes instead')
+  t.alike(
+    devices?.map((d) => d.name),
+    ['CPU', 'CUDA0', 'CUDA1']
+  )
+  t.is(outcome.projection?.deviceName, 'CUDA0', 'deviceName names the first non-CPU row')
+  t.is(devices?.[1]?.weightsBytes, 3 * 1024 ** 3)
+  t.is(devices?.[1]?.contextBytes, 1024 ** 3)
+  t.is(devices?.[2]?.weightsBytes, 2 * 1024 ** 3)
+
+  const summed = devices?.reduce((total, d) => total + d.weightsBytes, 0)
+  t.is(summed, outcome.projection?.weightsBytes, 'the flattened total sums the rows')
+})
+
+test('an engine other than llama carries no device rows', (t) => {
+  const outcome = classifyFit(
+    {
+      engine: 'tts-ggml',
+      result: {
+        status: 'fits',
+        reason: 'fits',
+        modelVariant: 'chatterbox-t3-turbo',
+        deviceName: 'Metal',
+        deviceIsCpu: false,
+        deviceSharesHostMemory: true,
+        deviceFreeBytes: 20 * 1024 ** 3,
+        deviceTotalBytes: 24 * 1024 ** 3,
+        deviceBytes: 2 * 1024 ** 3,
+        weightsBytes: 1024 ** 3,
+        stateBytes: 0,
+        lmComputeBytes: 0,
+        codecComputeBytes: 0,
+        hostBytes: 0,
+        lavasrFileBytes: 0,
+        report: 'table'
+      }
+    },
+    PROVENANCE
+  )
+
+  t.absent(outcome.projection?.devices)
+})
+
 test('an engine reporting only a total has no breakdown', (t) => {
   const outcome = classifyFit(
     {

@@ -285,6 +285,13 @@ test('completion: a CPU load carries no device-memory evidence', (t) => {
   })
 })
 
+test('completion: a clustered load is refused', (t) => {
+  t.alike(completionRequest({ 'rpc-servers': '10.0.0.2:50052,10.0.0.3:50052' }), {
+    supported: false,
+    detail: 'unsupported load setting: rpc-servers'
+  })
+})
+
 // A cache type llama does not have is llama's to reject, at the point where it
 // knows which types this build carries.
 test('completion: an unknown KV cache type travels to the engine', (t) => {
