@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Metadata-only `assessFit()` for MOSS-TTS and MOSS-TTSD, including reference
+  encoding, batch or native streaming workloads, and host/device memory estimates.
+  MOSS fit requests require both backbone and codec decoder paths.
+
 - Metadata-only `assessFit()` for MOSS-SoundEffect, with required model path,
   prompt and duration, shared generation controls, and host/device memory estimates.
 

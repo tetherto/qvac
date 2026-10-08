@@ -93,6 +93,22 @@ async function pocketCompletionMetadata(pocket: TTSGgml): Promise<void> {
 }
 void [firstAudioMs, pocketOutput, pocketCompletionMetadata]
 
+const mossFitWithoutDecoder = {
+  engineType: 'moss' as const,
+  mossBackbonePath: './moss-tts-delay-f16.gguf',
+  promptRows: 128,
+  referenceSamples: 0,
+  streaming: false
+}
+const mossFitRequest: TTSGgml.MossFitRequest = {
+  ...mossFitWithoutDecoder,
+  mossCodecDecoderPath: './moss-codec-decoder-f16.gguf'
+}
+const mossFitResult: TTSGgml.TtsFitResult = TTSGgml.assessFit(mossFitRequest)
+// @ts-expect-error MOSS fit requires a decoder even without reference audio
+TTSGgml.assessFit(mossFitWithoutDecoder)
+void mossFitResult
+
 const mossSfxWorkload = {
   engineType: 'moss-sfx' as const,
   prompt: 'Rain on a tin roof.',
