@@ -293,7 +293,7 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 
 QVAC's built-in P2P capabilities let you build unstoppable internet systems without depending on centralized infrastructure:
 
-- **Fetch models:** download AI models directly from peers through a distributed model registry, removing the need for centralized model hosting and distribution.
+- **Fetch models:** download AI models directly from peers through a distributed model registry, removing the need for centralized model hosting and distribution. The registry also serves weightless descriptions of models, their settings and tensor list without the weights, so whether a model fits in memory can be assessed before it is downloaded.
 - **Blind relays:** route traffic through relay peers when devices cannot connect directly across NATs and firewalls, keeping the network connected without centralized infrastructure.
 
 ## Resources
