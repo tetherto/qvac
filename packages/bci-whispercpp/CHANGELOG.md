@@ -7,13 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `assessFit` takes the registry's weightless descriptions of the model and
+  the embedder in place of the files, and projects them identically, so a load
+  can be assessed before it is downloaded.
+
 ### Changed
 
+- `assessFit` counts the embedder: the host RAM it keeps is reported as
+  `embedderBytes` (replacing `embedderFileBytes`, its size on disk), is
+  included in `hostBytes`, and is part of the verdict on devices that share
+  system RAM. With no `embedderPath` it reads `bci-embedder.bin` next to the
+  model, as a load does, and an embedder that cannot be read is an `error`
+  outcome with reason `embedder-unreadable`.
 - Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
   the ggml changes of the QVAC LLM stack, so both build from the same backend
   code. Same models, same backends, no API change.
 - Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29, preserving the
   QVAC seed, BCI windowed-attention and streaming/VAD patches.
+- Raise the `speech-cpp` floor to `2026-10-07#1`, whose whisper fitter reads
+  the registry's weightless descriptions. Transcription is unchanged.
 
 ### Fixed
 
