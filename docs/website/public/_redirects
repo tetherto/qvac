@@ -306,6 +306,9 @@
 /sdk/v0.18/        /sdk/v0.18/index.html        200
 /sdk/v0.18         /sdk/v0.18/                  301
 /sdk/v0.18/*       /sdk/v0.18/:splat/index.html 200
+/cli/v0.15/        /cli/v0.15/index.html        200
+/cli/v0.15         /cli/v0.15/                  301
+/cli/v0.15/*       /cli/v0.15/:splat/index.html 200
 /cli/v0.14/        /cli/v0.14/index.html        200
 /cli/v0.14         /cli/v0.14/                  301
 /cli/v0.14/*       /cli/v0.14/:splat/index.html 200
