@@ -701,9 +701,50 @@ PrefillPlan TextLlmContext::preparePrefill(
   std::vector<llama_token> inputTokens;
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
 
+  // Per-slot usable window: the partitioned per-sequence cap in batch mode,
+  // else the full context. Overflow must measure against this so the driver
+  // agrees with the scheduler about what fits.
+  const llama_pos ceiling = ctxCeiling();
+
+  // exceedsContextWindow mirrors the scheduler's admission, so the driver never
+  // rejects a prompt the scheduler already let in.
+  const auto throwIfOverflows = [&](llama_pos cached, size_t nTokens) {
+    if (exceedsContextWindow(
+            static_cast<llama_pos>(nTokens), ceiling, isPrefillOnlyRequest)) {
+      std::string errorMsg = string_format(
+          "[TextLlm] context overflow at batch prefill step: prompt tokens "
+          "%zu, max context tokens %d\n",
+          nTokens,
+          ceiling);
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+    // Cached conversation plus this prompt: the context is full, and there is
+    // nothing to evict any more, so the request cannot proceed.
+    if (exceedsContextWindow(
+            cached + static_cast<llama_pos>(nTokens),
+            ceiling,
+            isPrefillOnlyRequest)) {
+      std::string errorMsg = string_format(
+          "[TextLlm] context overflow at batch prefill step: cached tokens %d "
+          "plus prompt tokens %zu exceed the max context tokens %d\n",
+          cached,
+          nTokens,
+          ceiling);
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+  };
+
   std::optional<size_t> checkpointAt;
   if (cacheReconciliationEnabled_) {
     const size_t fullSize = inputTokens.size();
+    // Reconciliation trims or replaces the cached conversation, so a prompt
+    // that cannot fit is refused before it, against the prefix it shares
+    // with the cache. A text ledger has one position per entry.
+    const size_t shared =
+        cache::commonPrefix(residentLedger_, cache::fromTokens(inputTokens));
+    throwIfOverflows(static_cast<llama_pos>(shared), fullSize - shared);
     beginCacheRequest();
     inputTokens = reconcilePrompt(inputTokens, isPrefillOnlyRequest);
     // Only the generation prompt follows the history, so the history ends
@@ -717,40 +758,7 @@ PrefillPlan TextLlmContext::preparePrefill(
     }
   }
 
-  const size_t nTokens = inputTokens.size();
-
-  // Per-slot usable window: the partitioned per-sequence cap in batch mode,
-  // else the full context. Overflow must measure against this so the driver
-  // agrees with the scheduler about what fits.
-  const llama_pos ceiling = ctxCeiling();
-
-  // exceedsContextWindow mirrors the scheduler's admission, so the driver never
-  // rejects a prompt the scheduler already let in.
-  if (exceedsContextWindow(
-          static_cast<llama_pos>(nTokens), ceiling, isPrefillOnlyRequest)) {
-    std::string errorMsg = string_format(
-        "[TextLlm] context overflow at batch prefill step: prompt tokens %zu, "
-        "max context tokens %d\n",
-        nTokens,
-        ceiling);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
-  // Cached conversation plus this prompt: the context is full, and there is
-  // nothing to evict any more, so the request cannot proceed.
-  if (exceedsContextWindow(
-          nPast_ + static_cast<llama_pos>(nTokens),
-          ceiling,
-          isPrefillOnlyRequest)) {
-    std::string errorMsg = string_format(
-        "[TextLlm] context overflow at batch prefill step: cached tokens %d "
-        "plus prompt tokens %zu exceed the max context tokens %d\n",
-        nPast_,
-        nTokens,
-        ceiling);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
+  throwIfOverflows(nPast_, inputTokens.size());
 
   return PrefillPlan{
       .tokens = std::move(inputTokens), .checkpointAtTextTokens = checkpointAt};
@@ -1617,7 +1625,7 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
       seqId_,
       stateTokens.data(),
       stateTokens.size());
-  if (savedBytes == 0) {
+  if (!CacheManager::savedCompletely(tmpCacheKey, savedBytes)) {
     std::error_code ec;
     std::filesystem::remove(tmpCacheKey, ec);
     throw qvac_errors::StatusError(

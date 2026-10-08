@@ -322,13 +322,13 @@ void ContinuousBatchScheduler::workerLoop() {
       const std::exception_ptr error = std::current_exception();
       for (const auto& slot : slots_) {
         if (slot.has_value() && slot->group) {
-          failGroupLocked(slot->group, error);
+          failGroupLocked(slot->group, error, SaveCachePolicy::Skip);
         }
       }
       QueuedRequest queued;
       while (pending_.try_dequeue(queued)) {
         if (queued.group) {
-          failGroupLocked(queued.group, error);
+          failGroupLocked(queued.group, error, SaveCachePolicy::Skip);
         }
       }
       // Parked conversations of other keys took no part in the failed step,
@@ -368,7 +368,8 @@ void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
       const uint32_t seqId = submitLocked(std::move(queued));
       (void)seqId;
     } catch (...) {
-      failGroupLocked(group, std::current_exception());
+      failGroupLocked(
+          group, std::current_exception(), SaveCachePolicy::KeepAdopted);
     }
   };
   const auto keyBusy = [this](const QueuedRequest& queued) {
@@ -760,7 +761,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
                       qvac_lib_inference_addon_llama::errors::Cancelled),
                   "ContinuousBatchScheduler: request cancelled before it "
                   "could run (queued behind the parallel limit when its "
-                  "group was cancelled)")));
+                  "group was cancelled)")),
+          SaveCachePolicy::Save);
     }
     // Not covered by failGroupLocked when the group was already settled by
     // an earlier refusal (its early-out skips the teardown loop), so tear
@@ -854,30 +856,10 @@ void ContinuousBatchScheduler::failSlotLocked(
     return;
   }
   if (slot->group) {
-    failGroupLocked(slot->group, error);
+    failGroupLocked(slot->group, error, SaveCachePolicy::KeepAdopted);
     return;
   }
-  if (slot->driver) {
-    // Same rationale as cancelSlotLocked/drainFinishedLocked: sync the
-    // driver cursor to the batcher's `currentPos` before onCancel so a
-    // mid-prefill failure trims the exact partial-prefill KV span. When
-    // there is no admitted request (`req == nullptr`) the driver's own
-    // cursor is authoritative and we leave it untouched.
-    const Request* req = batcher_.requestAt(seqId);
-    if (req != nullptr) {
-      slot->driver->syncPosition(req->currentPos);
-    }
-    // Rollback-ok signal is intentionally discarded: this failure path
-    // never keeps the state (the slot is not parkable) — a subsequent
-    // `batcher_.cancel` wipes the sequence via `clearSeqKv`.
-    (void)slot->driver->onFailure({});
-    if (req != nullptr) {
-      accumulateSlotRuntimeStats(*slot, *req);
-    }
-  }
-  notifyDoneNoexcept(seqId);
-  batcher_.cancel(seqId, [this](uint32_t sid) { clearSeqKv(sid); });
-  freeSlot(seqId);
+  cancelSlotLocked(seqId, SaveCachePolicy::KeepAdopted);
 }
 
 ContinuousBatchScheduler::StepUnlockGuard::StepUnlockGuard(
@@ -1106,7 +1088,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
             "llama_decode returned non-zero: " + std::to_string(decodeRc)));
 
     for (const auto& group : affectedGroups) {
-      failGroupLocked(group, decodeError);
+      failGroupLocked(group, decodeError, SaveCachePolicy::KeepAdopted);
     }
 
     return false;
@@ -1424,7 +1406,8 @@ void ContinuousBatchScheduler::applyGroupQueuedCancelLocked(
                   qvac_lib_inference_addon_llama::errors::Cancelled),
               "ContinuousBatchScheduler: request cancelled before it "
               "could run (queued behind the parallel limit when its "
-              "group was cancelled)")));
+              "group was cancelled)")),
+      SaveCachePolicy::Save);
 }
 
 void ContinuousBatchScheduler::recordPendingGroupCancel(
@@ -1467,10 +1450,9 @@ void ContinuousBatchScheduler::cancelSlotLocked(
     // The cleanup tail below (notifyDone/freeSlot) runs regardless, so the
     // slot is always freed.
     //
-    // `savePolicy == Skip` never keeps the state: error-recovery callers
-    // (see `failGroupLocked`) arrive here after the driver has already thrown
-    // from a state-mutating hook, so live memory and driver accounting are
-    // unhealthy. See `SaveCachePolicy` in the header for the full rationale.
+    // `Skip` never keeps the state; `KeepAdopted` rolls the request back and
+    // keeps only the conversation the slot was admitted with. See
+    // `SaveCachePolicy` in the header.
     try {
       // Align the driver's KV cursor with the batcher's authoritative
       // `req->currentPos` before onCancel so the tail trim matches the
@@ -1484,18 +1466,20 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       if (req != nullptr) {
         slots_[seqId]->driver->syncPosition(req->currentPos);
       }
-      const bool rollbackOk = slots_[seqId]->driver->onCancel({});
+      const bool failed = savePolicy != SaveCachePolicy::Save;
+      const bool rollbackOk = failed ? slots_[seqId]->driver->onFailure({})
+                                     : slots_[seqId]->driver->onCancel({});
       if (req != nullptr) {
         accumulateSlotRuntimeStats(*slots_[seqId], *req);
       }
       // A user cancel during generation commits the cached request, so the
       // slot keeps that progress. It is not kept when the driver could not
       // leave live memory coherent (`rollbackOk == false`). A cancel that
-      // ended in a rollback (`shouldPersistAfterFinalize()` false) keeps the
-      // conversation the request started from, as it was before it.
-      if (savePolicy == SaveCachePolicy::Save && rollbackOk) {
+      // ended in a rollback (`shouldPersistAfterFinalize()` false), and a
+      // failed request, keep the conversation the request started from.
+      if (savePolicy != SaveCachePolicy::Skip && rollbackOk) {
         auto& cancelled = *slots_[seqId];
-        if (cancelled.driver->shouldPersistAfterFinalize()) {
+        if (!failed && cancelled.driver->shouldPersistAfterFinalize()) {
           cancelled.parkable = !cancelled.cacheKey.empty();
         } else if (cancelled.adoptedState && cancelled.driver->getNPast() > 0) {
           cancelled.parkable = !cancelled.cacheKey.empty();
@@ -1645,8 +1629,8 @@ void ContinuousBatchScheduler::completeGroupRequestLocked(
 }
 
 void ContinuousBatchScheduler::failGroupLocked(
-    const std::shared_ptr<BatchGroup>& group,
-    std::exception_ptr error) noexcept {
+    const std::shared_ptr<BatchGroup>& group, std::exception_ptr error,
+    SaveCachePolicy savePolicy) noexcept {
   if (!group || group->done) {
     return;
   }
@@ -1662,14 +1646,11 @@ void ContinuousBatchScheduler::failGroupLocked(
   // completeGroupRequestLocked inside notifyDone no-ops rather than
   // double-counting.
   //
-  // Pass `SaveCachePolicy::Skip`: this is the error-recovery path, so the
-  // driver's live state may be inconsistent (e.g. a hybrid-recurrent
-  // rollback failure clears the sequence and throws), and persisting that
-  // state would silently overwrite the user's previous on-disk cache with an
-  // empty/broken one. Graceful-cancel callers keep the default `Save`.
+  // A slot can hold the only copy of turns its `cacheKey` file lacks, so only
+  // state of unknown health (`Skip`) is cleared; see `SaveCachePolicy`.
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value() && slots_[seqId]->group == group) {
-      cancelSlotLocked(seqId, SaveCachePolicy::Skip);
+      cancelSlotLocked(seqId, savePolicy);
     }
   }
   workCv_.notify_all();
@@ -1693,7 +1674,8 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
                       qvac_lib_inference_addon_llama::errors::Cancelled),
                   "ContinuousBatchScheduler: request cancelled before it "
                   "could run (queued behind the parallel limit when cancel "
-                  "was requested)")));
+                  "was requested)")),
+          SaveCachePolicy::Save);
     }
   }
   cancelKeyDeferredLocked();
@@ -1713,7 +1695,8 @@ void ContinuousBatchScheduler::cancelKeyDeferredLocked() noexcept {
                       qvac_lib_inference_addon_llama::errors::Cancelled),
                   "ContinuousBatchScheduler: request cancelled before it "
                   "could run (waiting for an earlier request on its "
-                  "cacheKey when cancel was requested)")));
+                  "cacheKey when cancel was requested)")),
+          SaveCachePolicy::Save);
     }
   }
 }
@@ -1756,6 +1739,20 @@ std::vector<uint32_t> ContinuousBatchScheduler::parkedSeqIds() const {
     }
   }
   return ids;
+}
+
+void ContinuousBatchScheduler::clearUnparkedSequences() {
+  std::scoped_lock lock(mutex_);
+  if (llama_memory_t mem = llama_get_memory(shared_.lctx); mem != nullptr) {
+    const auto nSeqMax = static_cast<uint32_t>(llama_n_seq_max(shared_.lctx));
+    for (uint32_t seqId = 0; seqId < nSeqMax; ++seqId) {
+      if (seqId < parked_.size() && parked_[seqId].has_value()) {
+        continue;
+      }
+      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+    }
+  }
+  llama_perf_context_reset(shared_.lctx);
 }
 
 void ContinuousBatchScheduler::evictParked(uint32_t seqId) {
@@ -1877,7 +1874,7 @@ bool ContinuousBatchScheduler::writeStateToFileLocked(
         static_cast<llama_seq_id>(seqId),
         ledgerWords.data(),
         ledgerWords.size());
-    if (written == 0) {
+    if (!CacheManager::savedCompletely(tmp, written)) {
       std::error_code ec;
       std::filesystem::remove(tmp, ec);
       logTeardownFailureNoexcept(
@@ -1901,12 +1898,13 @@ void ContinuousBatchScheduler::writeStateToFileOrThrowLocked(
     uint32_t seqId, const std::string& cacheKey,
     const std::vector<llama_token>& ledgerWords) {
   const std::string tmp = cacheKey + ".tmp";
-  if (llama_state_seq_save_file(
-          shared_.lctx,
-          tmp.c_str(),
-          static_cast<llama_seq_id>(seqId),
-          ledgerWords.data(),
-          ledgerWords.size()) == 0) {
+  const size_t written = llama_state_seq_save_file(
+      shared_.lctx,
+      tmp.c_str(),
+      static_cast<llama_seq_id>(seqId),
+      ledgerWords.data(),
+      ledgerWords.size());
+  if (!CacheManager::savedCompletely(tmp, written)) {
     std::error_code ec;
     std::filesystem::remove(tmp, ec);
     throw qvac_errors::StatusError(

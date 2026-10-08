@@ -13,7 +13,11 @@
   been removed from the addon API, together with the obsolete
   `RuntimeStats.thinkingBlockDiscards` counter. Current SDK releases still send
   delta prompts/tools and still expose that option, so they are intentionally
-  incompatible with this addon until the SDK migration lands.
+  incompatible with this addon until the SDK migration lands. Sliding-window
+  models take no checkpoints yet, so on gpt-oss and thinking Gemma 4, whose
+  templates render a past answer differently from how it was generated, a
+  turn after an answer longer than the window reprocesses the whole
+  conversation.
 - `runOptions.saveCacheToDisk` has been removed; passing it throws a
   `TypeError`. A cached conversation stays in memory and is written to its
   `cacheKey` file only when it would otherwise be lost with unsaved turns
@@ -130,6 +134,9 @@
 - A single-prompt cache load on a parallel model no longer trims every
   sequence to the loaded length (`llama_memory_seq_rm` on seq `-1`), which
   truncated the batch slots' conversations; it trims its own sequence.
+- A `cacheKey` write whose final flush failed (a full disk) could replace the
+  last good file with a truncated one that every later load rejected. The
+  written size is now checked before the file is replaced.
 
 - The multimodal context now decides whether a model needs full-state
   snapshots through the same `needsFullStateSnapshot` policy as the text
@@ -176,10 +183,10 @@
   immediately.
 - On sliding-window models (Gemma 3/4, gpt-oss) a cached turn that diverges
   behind the attention window is reprocessed instead of trimmed onto evicted
-  window cells, which made the model answer from a truncated context. A
-  rolled-back request (context overflow, cancel during prefill, decode error)
-  that decoded past the window likewise leaves the cache cold instead of
-  claiming the evicted cells.
+  window cells, which would make the model answer from a truncated context. A
+  rolled-back request (cancel during prefill, decode error) that decoded past
+  the window likewise leaves the cache cold instead of claiming the evicted
+  cells.
 - Pure-attention models never write a full-state temp-file snapshot any more.
   A rolled-back request drops what it added with a tail trim; when
   reconciliation had trimmed a diverging history first, the rollback lands on

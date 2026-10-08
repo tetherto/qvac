@@ -537,6 +537,43 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   tokenizeChat(chatMsgs, tools, chunks, isCacheLoaded);
 
   const mtmd_input_chunks* chunksPtr = chunks.ptr.get();
+  const llama_pos ceiling = ctxCeiling();
+  const auto throwIfOverflows = [&](llama_pos cachedPositions,
+                                    llama_pos cachedTokens,
+                                    llama_pos nPositions,
+                                    llama_pos nTokens) {
+    if (exceedsContextWindow(nTokens, ceiling, isPrefillOnlyRequest_) ||
+        exceedsContextWindow(nPositions, ceiling, isPrefillOnlyRequest_)) {
+      std::string errorMsg = string_format(
+          "[MtmdLlm] context overflow at prefill step (%d tokens, %d "
+          "positions, max %d)\n",
+          nTokens,
+          nPositions,
+          ceiling);
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+    // Cached conversation plus this prompt: the context is full, and there is
+    // nothing to evict any more, so the request cannot proceed. Both measures
+    // are checked because M-RoPE media occupies more KV cells than positions.
+    if (exceedsContextWindow(
+            cachedPositions + nPositions, ceiling, isPrefillOnlyRequest_) ||
+        exceedsContextWindow(
+            cachedTokens + nTokens, ceiling, isPrefillOnlyRequest_)) {
+      std::string errorMsg = string_format(
+          "[MtmdLlm] context overflow at prefill step: cached %d positions / "
+          "%d KV cells plus %d positions / %d KV cells of prompt exceed the "
+          "max context tokens %d\n",
+          cachedPositions,
+          cachedTokens,
+          nPositions,
+          nTokens,
+          ceiling);
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+  };
+
   PrefillPlan reconciledPlan;
   if (cacheReconciliationEnabled_) {
     PrefillPlan fullPlan;
@@ -557,6 +594,17 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       }
     }
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
+    // Reconciliation trims or replaces the cached conversation, so a prompt
+    // that cannot fit is refused before it, against the prefix it shares
+    // with the cache.
+    const size_t shared = cache::commonPrefix(residentLedger_, fullLedger);
+    const llama_pos sharedPositions = fullLedger.positions(shared);
+    const llama_pos sharedTokens = fullLedger.cacheTokens(shared);
+    throwIfOverflows(
+        sharedPositions,
+        sharedTokens,
+        fullLedger.positions() - sharedPositions,
+        fullLedger.cacheTokens() - sharedTokens);
     beginCacheRequest();
     reconciledPlan = reconcilePrompt(std::move(fullPlan), fullLedger, prefill);
   }
@@ -568,37 +616,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   const llama_pos nPositions = cacheReconciliationEnabled_
                                    ? reconciledPlan.totalPositions()
                                    : mtmd_helper_get_n_pos(chunksPtr);
-  const llama_pos ceiling = ctxCeiling();
-  if (exceedsContextWindow(nTokens, ceiling, isPrefillOnlyRequest_) ||
-      exceedsContextWindow(nPositions, ceiling, isPrefillOnlyRequest_)) {
-    std::string errorMsg = string_format(
-        "[MtmdLlm] context overflow at prefill step (%d tokens, %d positions, "
-        "max %d)\n",
-        nTokens,
-        nPositions,
-        ceiling);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
-  // Cached conversation plus this prompt: the context is full, and there is
-  // nothing to evict any more, so the request cannot proceed. Both measures
-  // are checked because M-RoPE media occupies more KV cells than positions.
-  if (exceedsContextWindow(
-          current_.pos + nPositions, ceiling, isPrefillOnlyRequest_) ||
-      exceedsContextWindow(
-          current_.cacheTokens + nTokens, ceiling, isPrefillOnlyRequest_)) {
-    std::string errorMsg = string_format(
-        "[MtmdLlm] context overflow at prefill step: cached %d positions / %d "
-        "KV cells plus %d positions / %d KV cells of prompt exceed the max "
-        "context tokens %d\n",
-        current_.pos,
-        current_.cacheTokens,
-        nPositions,
-        nTokens,
-        ceiling);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
+  throwIfOverflows(current_.pos, current_.cacheTokens, nPositions, nTokens);
 
   snapshotPreRequestCursor();
 
@@ -1742,8 +1760,27 @@ PrefillPlan MtmdLlmContext::preparePrefill(
     }
   }
 
+  const auto throwIfOverflows = [&](llama_pos nPositions, llama_pos nTokens) {
+    // M-RoPE media spans fewer positions than the KV cells it occupies, so
+    // both totals must clear the ceiling independently.
+    if (exceedsContextWindow(nPositions, ctxCeiling(), isPrefillOnlyRequest) ||
+        exceedsContextWindow(nTokens, ctxCeiling(), isPrefillOnlyRequest)) {
+      std::string errorMsg = string_format(
+          "[MtmdLlm] context overflow at batch prefill step: prompt spans %d "
+          "positions / %d KV cells, max context tokens %d\n",
+          nPositions,
+          nTokens,
+          ctxCeiling());
+      throw qvac_errors::StatusError(
+          ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+  };
+
   if (cacheReconciliationEnabled_) {
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
+    // Reconciliation trims or replaces the cached conversation, so a prompt
+    // that cannot fit even with its shared prefix reused is refused before it.
+    throwIfOverflows(fullLedger.positions(), fullLedger.cacheTokens());
     beginCacheRequest();
     plan = reconcilePrompt(std::move(plan), fullLedger, isPrefillOnlyRequest);
     if (historyCheckpointEntries_ > 0) {
@@ -1768,21 +1805,7 @@ PrefillPlan MtmdLlmContext::preparePrefill(
         "last media item");
   }
 
-  // M-RoPE media spans fewer positions than the KV cells it occupies, so both
-  // totals must clear the ceiling independently.
-  if (exceedsContextWindow(
-          plan.totalPositions(), ctxCeiling(), isPrefillOnlyRequest) ||
-      exceedsContextWindow(
-          plan.totalKvTokens(), ctxCeiling(), isPrefillOnlyRequest)) {
-    std::string errorMsg = string_format(
-        "[MtmdLlm] context overflow at batch prefill step: prompt spans %d "
-        "positions / %d KV cells, max context tokens %d\n",
-        plan.totalPositions(),
-        plan.totalKvTokens(),
-        ctxCeiling());
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
+  throwIfOverflows(plan.totalPositions(), plan.totalKvTokens());
 
   // mtmd::input_chunks has a user-declared destructor and therefore no
   // move assignment; transfer the owning pointer directly.
@@ -2224,7 +2247,7 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
       seqId_,
       stateTokens.data(),
       stateTokens.size());
-  if (savedBytes == 0) {
+  if (!CacheManager::savedCompletely(tmpCacheKey, savedBytes)) {
     std::error_code ec;
     std::filesystem::remove(tmpCacheKey, ec);
     throw qvac_errors::StatusError(

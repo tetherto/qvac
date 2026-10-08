@@ -1453,29 +1453,18 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
       if (state_->cacheManager_.has_value()) {
         state_->cacheManager_->invalidate();
       }
-      if (llama_context* lctx = getContext(); lctx != nullptr) {
+      // Conversations the scheduler parked for their next request on the same
+      // cacheKey are its own state, not single-prompt leftovers. No batch job
+      // is in flight, but the worker can still run a save or discard job, so
+      // the wipe and the perf counter reset run under the scheduler's lock.
+      // batchRuntimeStatsLocked() deliberately never resets the counters: it
+      // runs under a shared stateMtx_ while peers may be mid-decode.
+      if (state_->batchScheduler_) {
+        state_->batchScheduler_->clearUnparkedSequences();
+      } else if (llama_context* lctx = getContext(); lctx != nullptr) {
         if (llama_memory_t mem = llama_get_memory(lctx); mem != nullptr) {
-          // Conversations the scheduler parked for their next request on the
-          // same cacheKey are its own state, not single-prompt leftovers.
-          std::vector<uint32_t> parked;
-          if (state_->batchScheduler_) {
-            parked = state_->batchScheduler_->parkedSeqIds();
-          }
-          const int nSeqMax = llama_n_seq_max(lctx);
-          for (int seqId = 0; seqId < nSeqMax; seqId++) {
-            if (std::ranges::find(parked, static_cast<uint32_t>(seqId)) !=
-                parked.end()) {
-              continue;
-            }
-            llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
-          }
+          llama_memory_seq_rm(mem, -1, -1, -1);
         }
-        // Clear stale llama perf counters (single-prompt leftovers or a
-        // previous batch epoch) here, at the only point that is exclusive
-        // with respect to the scheduler: no batch job is in flight, so the
-        // worker is idle — the same reasoning that makes the KV wipe above
-        // safe. batchRuntimeStatsLocked() deliberately never resets them:
-        // it runs under a shared stateMtx_ while peers may be mid-decode.
         llama_perf_context_reset(lctx);
       }
     }

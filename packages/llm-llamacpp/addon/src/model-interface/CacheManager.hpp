@@ -50,6 +50,10 @@ public:
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;
   static void atomicPromoteFile(const std::string& from, const std::string& to);
+  /// `llama_state_seq_save_file` wrote all `savedBytes` to `path`. Its count
+  /// includes bytes still buffered when the file was closed, and the close
+  /// result is not checked, so a failed final flush shows only in the size.
+  static bool savedCompletely(const std::string& path, size_t savedBytes);
   /// The file at `path` (or its directory) is gone or empty: a caller that
   /// deleted it dropped the conversation it held.
   static bool persistedBackingStoreMissing(const std::string& path);

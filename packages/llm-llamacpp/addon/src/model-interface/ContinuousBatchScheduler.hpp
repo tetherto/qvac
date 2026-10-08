@@ -425,6 +425,12 @@ public:
   /// state kept for the next request on its `cacheKey`).
   [[nodiscard]] std::vector<uint32_t> parkedSeqIds() const;
 
+  /// Clears every sequence that holds no parked conversation and resets the
+  /// llama perf counters. Runs under the scheduler lock, so a queued save or
+  /// discard job never touches the context at the same time. For the batch
+  /// entry, when no batch job is in flight.
+  void clearUnparkedSequences();
+
   /// Moves the conversation parked on `seqId` out of the way: unsaved turns
   /// are written to its `cacheKey` file, the state goes to the RAM tier when
   /// enabled, and the sequence is cleared. For callers that need the raw
@@ -636,9 +642,6 @@ private:
   slotOwnedByLocked(uint32_t seqId, uint64_t admissionId) const noexcept;
   void
   completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group) noexcept;
-  void failGroupLocked(
-      const std::shared_ptr<BatchGroup>& group,
-      std::exception_ptr error) noexcept;
   void cancelPendingLocked();
   void clearLocked() noexcept;
   /// Policy for `cancelSlotLocked`. `Save` is the default and matches the
@@ -647,13 +650,20 @@ private:
   /// streamed tokens, and the slot keeps that committed state for the
   /// caller's `cacheKey`.
   ///
-  /// `Skip` is the error-recovery variant: after an unexpected driver
-  /// throw the slot's live memory and logical accounting are already
-  /// unhealthy (for example after a refused recurrent-state restore).
-  /// Keeping that state would let a later write overwrite the user's
-  /// on-disk cache with an inconsistent/empty state, so error-recovery
-  /// callers pass `Skip` and the sequence is cleared.
-  enum class SaveCachePolicy { Save, Skip };
+  /// `KeepAdopted` is the request-failure variant (decode error, failed
+  /// admission, failed driver hook): the driver rolls the request back with
+  /// `onFailure`, and when that leaves memory coherent the slot keeps the
+  /// conversation it was admitted with, as the drain does. That conversation
+  /// may hold turns its `cacheKey` file does not have yet.
+  ///
+  /// `Skip` is for state of unknown health (the worker's catch-all): the
+  /// sequence is cleared and the last written file stays as it was.
+  enum class SaveCachePolicy { Save, KeepAdopted, Skip };
+
+  /// Settle `group` with `error` and tear down its slots with `savePolicy`.
+  void failGroupLocked(
+      const std::shared_ptr<BatchGroup>& group, std::exception_ptr error,
+      SaveCachePolicy savePolicy) noexcept;
 
   /// Tear down a single slot (cancel path). `noexcept`: callers run it from
   /// the StepUnlockGuard destructor and the worker loop, so the teardown itself

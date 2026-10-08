@@ -2137,7 +2137,8 @@ std::vector<uint8_t> readFileBytes(const fs::path& path) {
 
 /// Error-recovery cancel must not save a cache from an unhealthy driver
 /// state. When a decode fails mid-batch, `failGroupLocked` tears each
-/// affected slot down through `cancelSlotLocked(SaveCachePolicy::Skip)`.
+/// affected slot down through `cancelSlotLocked(SaveCachePolicy::KeepAdopted)`,
+/// which rolls the request back and keeps only the conversation it adopted.
 /// Graceful cancellation may still carry the default `Save` policy, but the
 /// rolled-back driver's commit decision vetoes persistence. This test forces
 /// the decode-error path by injecting a failing `decodeFunc_` while a batch is
@@ -2200,8 +2201,7 @@ TEST_F(
 
   // Any decode returning non-zero drives the scheduler through
   // stepLocked -> markAllFinished(DecodeError) -> failGroupLocked ->
-  // cancelSlotLocked(..., Skip). That is the exact error-recovery leg
-  // the SaveCachePolicy::Skip fix protects.
+  // cancelSlotLocked(..., KeepAdopted).
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
       [](llama_context* /*ctx*/, llama_batch& /*b*/) { return -1; });
@@ -2235,8 +2235,8 @@ TEST_F(
       << std::chrono::duration_cast<std::chrono::nanoseconds>(
              postFailMtime - primedMtime)
              .count()
-      << "ns. cancelSlotLocked must pass SaveCachePolicy::Skip on the "
-         "error-recovery leg so nothing is kept over the last good cache.";
+      << "ns. The error-recovery leg must keep only the adopted, already "
+         "written conversation, never the failed request's state.";
 
   // Secondary regression guard: even if a future save ever became a
   // no-op-when-bytes-match, this still catches the class of bugs
@@ -2248,6 +2248,41 @@ TEST_F(
       << "PRIMED CACHE BYTES DIVERGED after error recovery: the failing "
          "batch's post-throw state overwrote the warm baseline on disk.";
 
+  fs::remove(cachePath);
+}
+
+/// A failed request rolls back to the conversation it adopted. That
+/// conversation can hold turns its file does not have yet, so it stays in
+/// memory and `saveCache` can still write it.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDecodeErrorKeepsTheUnsavedConversation) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "8";
+  auto model = loadModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-decode-err-keep-" + uniqueTestId() + ".bin");
+  auto turn = makePrompt("Name one planet.");
+  turn.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> firstTurn{turn};
+  (void)model->processPromptBatch(firstTurn);
+  ASSERT_FALSE(fs::exists(cachePath)) << "a request must not write its file";
+
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler,
+      [](llama_context* /*ctx*/, llama_batch& /*b*/) { return -1; });
+  auto failing = makePrompt("Name one planet and its moon.");
+  failing.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> failingTurn{std::move(failing)};
+  EXPECT_ANY_THROW((void)model->processPromptBatch(failingTurn));
+
+  EXPECT_NO_THROW(model->saveCache(cachePath.string()))
+      << "the decode error dropped the unsaved first turn";
+  EXPECT_TRUE(fs::exists(cachePath));
   fs::remove(cachePath);
 }
 

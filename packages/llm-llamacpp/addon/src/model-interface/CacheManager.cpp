@@ -541,12 +541,13 @@ void CacheManager::writeCacheFile(const std::string& path) {
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
   const std::vector<llama_token> stateTokens = llmContext_->cacheStateTokens();
-  if (llama_state_seq_save_file(
-          ctx,
-          tmpPath.c_str(),
-          llmContext_->getSeqId(),
-          stateTokens.data(),
-          stateTokens.size()) == 0) {
+  const size_t savedBytes = llama_state_seq_save_file(
+      ctx,
+      tmpPath.c_str(),
+      llmContext_->getSeqId(),
+      stateTokens.data(),
+      stateTokens.size());
+  if (!savedCompletely(tmpPath, savedBytes)) {
     std::error_code ec;
     std::filesystem::remove(tmpPath, ec);
     throw qvac_errors::StatusError(
@@ -558,6 +559,15 @@ void CacheManager::writeCacheFile(const std::string& path) {
             path.c_str()));
   }
   atomicPromoteFile(tmpPath, path);
+}
+
+bool CacheManager::savedCompletely(const std::string& path, size_t savedBytes) {
+  if (savedBytes == 0) {
+    return false;
+  }
+  std::error_code ec;
+  const auto size = std::filesystem::file_size(path, ec);
+  return !ec && size == savedBytes;
 }
 
 void CacheManager::atomicPromoteFile(

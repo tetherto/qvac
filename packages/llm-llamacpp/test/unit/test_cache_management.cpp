@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include "model-interface/CacheManager.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/SequenceDriver.hpp"
 #include "model-interface/TextLlmContext.hpp"
@@ -1684,6 +1685,79 @@ TEST(CacheHistoryCheckpointTest, HybridThinkingChatReusesTheHistory) {
   }
 
   expectAnswersFromTheWholeChat(last);
+
+  fs::remove(cacheFile);
+}
+
+// A cache file is promoted only when it holds every byte the save reported:
+// a failed final flush leaves it short.
+TEST(CacheManagerFiles, SavedCompletelyChecksTheSizeOnDisk) {
+  const fs::path path =
+      fs::temp_directory_path() / "qvac_saved_completely_check.bin";
+  {
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out << std::string(100, 'x');
+  }
+  EXPECT_TRUE(CacheManager::savedCompletely(path.string(), 100));
+  EXPECT_FALSE(CacheManager::savedCompletely(path.string(), 105))
+      << "a short file was accepted";
+  EXPECT_FALSE(CacheManager::savedCompletely(path.string(), 0));
+  fs::remove(path);
+  EXPECT_FALSE(CacheManager::savedCompletely(path.string(), 100));
+}
+
+// A prompt that cannot fit is refused before reconciliation changes the cache:
+// an edit that diverges at the first message would otherwise clear the hybrid
+// model's memory and land the rollback on that empty state.
+TEST(CacheHistoryCheckpointTest, OverflowingEditLeavesTheCacheAsItWas) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "512";
+  config["n_predict"] = "16";
+  config["temp"] = "0";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+
+  const fs::path cacheFile = "overflow_edit_cache.bin";
+  fs::remove(cacheFile);
+  const auto run = [&](const std::string& input) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheFile.string();
+    return model->processPrompt(prompt);
+  };
+
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const std::string first = run(chatInput(chat));
+  ASSERT_FALSE(first.empty());
+  const llama_pos cached = text->getNPast();
+  ASSERT_GT(cached, 0);
+
+  std::string longEdit = "Name three colours of the sky.";
+  for (int i = 0; i < 600; ++i) {
+    longEdit += " word";
+  }
+  EXPECT_ANY_THROW(run(chatInput({{"user", longEdit}})));
+  EXPECT_EQ(text->getNPast(), cached)
+      << "the refused prompt changed the cached conversation";
+
+  chat.emplace_back("assistant", first);
+  chat.emplace_back("user", "Which of them is warmest?");
+  ASSERT_FALSE(run(chatInput(chat)).empty());
+  EXPECT_GT(text->lastCacheReuseForTesting(), 0u)
+      << "the next turn found no cached conversation to reuse";
 
   fs::remove(cacheFile);
 }
