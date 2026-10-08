@@ -4,6 +4,15 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add `assessFit` to estimate whether EasyOCR or DocTR detector and recognizer
+  weights fit on the selected backend at model load time. The estimate excludes
+  image-dependent inference memory; unsupported split-device configurations
+  return an unavailable verdict.
+
 ## [0.27.0] - 2026-10-06
 
 ### Changed
