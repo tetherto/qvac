@@ -1201,8 +1201,8 @@ importers:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-subprocess:
-        specifier: ^5.2.3
-        version: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^6.1.0
+        version: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url:
         specifier: ^2.1.6
         version: 2.4.6
@@ -15369,7 +15369,7 @@ snapshots:
   bare-inspect@3.1.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
       bare-ansi-escapes: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      bare-type: 1.1.0
+      bare-type: 1.4.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -15410,7 +15410,7 @@ snapshots:
       bare-os: 3.9.3
       bare-path: 3.1.1
       bare-semver: 1.1.0
-      bare-subprocess: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-subprocess: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url: 2.5.4
       paparam: 1.10.1
     transitivePeerDependencies:
