@@ -132,7 +132,7 @@ The longer treatment, including how a GPU changes which memory the budget measur
 
 Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. Desktop runs it in a disposable child process. Mobile, which cannot spawn one, runs it on a worker thread.
 
-The probe is advisory too. No verdict blocks or changes the load: `does-not-fit` is logged and the load runs unchanged, and a crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
+A crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
 
 [`getLoadedModelInfo()`](/sdk/reference/api#getloadedmodelinfo) returns the outcome as `fitProbe`:
 - `verdict` — `fit`, `does-not-fit`, or `unknown`. These are unhedged, unlike the verdicts above, because the probe measured this build against this file.
@@ -141,7 +141,22 @@ The probe is advisory too. No verdict blocks or changes the load: `does-not-fit`
 - `plan` — the placement it projected, where the fitter resolved one: `nCtx`, `nGpuLayers`, `nGpuDevices`.
 - `projection` — what the fitter measured, present on `fit` and `does-not-fit` alike. Engines do not all measure the same things, so every field is optional: `deviceBytes` and `hostBytes` for the peaks, `weightsBytes`, `contextBytes` and `computeBytes` within `deviceBytes` where the engine separates them, `deviceFreeBytes` and `deviceTotalBytes`, and `report`, the engine's own memory table.
 
-The probe is on by default. Set the `QVAC_ADVISORY_MODEL_FIT=0` environment variable to skip it, and `fitProbe` is then absent.
+### `modelFitPolicy`
+
+Pass it to `loadModel()` for one load, or set it in the engine config for every load.
+
+- `log` (default) — the verdict is reported and the load proceeds.
+- `refuse` — a load the fitter projects will not fit is rejected with `MODEL_FIT_REFUSED` before the addon allocates anything. Only `does-not-fit` refuses; `unknown` never does, so a load is never refused for lack of evidence.
+- `off` — the probe does not run, and `fitProbe` is then absent.
+
+```typescript
+await loadModel({
+  modelSrc: QWEN3_8B_INST_Q4_K_M,
+  modelType: 'llamacpp-completion',
+  modelConfig: { ctx_size: 8192 },
+  modelFitPolicy: 'refuse'
+})
+```
 
 ## Examples
 

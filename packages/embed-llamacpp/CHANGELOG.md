@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.45.0] - 2026-10-08
+
+### Added
+
+- `LayaDecisions` runs Laya decision models (`laya`, `laya-multilingual`,
+  `laya-typed-decisions`): an encoder with a decision head that answers
+  `choice`, `score` and `noul` questions about a text, a structured state or a
+  conversation, one forward pass per question. Requests and responses are
+  Laya's own JSON, typed in TypeScript; `states` answers several states in one
+  call ([#4848](https://github.com/tetherto/qvac/pull/4848)).
+
+  ```js
+  const { LayaDecisions } = require('@qvac/embed-llamacpp')
+  const laya = new LayaDecisions({ files: { model: [path] }, config: { device: 'gpu' } })
+  await laya.load()
+  const [result] = await (await laya.run({ state, questions })).await()
+  ```
+
+- Laya load options are an allowlist: `device` is required, `threads` and
+  `threads-batch` may not exceed the CPU count, and any other key fails with
+  `InvalidConfiguration`.
+- New error codes `UnsupportedModel`, for a GGUF that is not a Laya checkpoint
+  (detected before its weights load), and `InvalidRequest`.
+- `LayaInterface`, `mapLayaEvent` and `pickPrimaryGgufPath` are exported.
+
+### Changed
+
+- The load path `GGMLBert` uses moved into a `LlamaModelLoader` shared with
+  Laya. Embeddings are unchanged; native log lines about the load
+  configuration now start with `[LlamaModelLoader]` instead of `[BertModel]`.
+
 ## [0.44.0] - 2026-10-06
 
 ### Breaking
