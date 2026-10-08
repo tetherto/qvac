@@ -22,9 +22,9 @@ class JvmBareRpcTransportProcessTest {
     }
 
     @Test
-    fun launchesAnUnauthenticatedWorkerAndSendsRuntimeContext() = runBlocking {
-        // Default connect: no auth token, and the worker must receive an
-        // __init_config carrying this client's runtime context.
+    fun authenticatesByDefaultAndSendsRuntimeContext() = runBlocking {
+        // The worker must receive an __init_config carrying this client's
+        // runtime context, after the token handshake.
         val transport = JvmBareRpcTransport.connect(command = workerCommand())
         val client = QvacClient(transport)
 
@@ -35,10 +35,10 @@ class JvmBareRpcTransportProcessTest {
     }
 
     @Test
-    fun authenticatesWhenRequested() = runBlocking {
+    fun connectsWithoutAuthenticationWhenOptedOut() = runBlocking {
         val transport = JvmBareRpcTransport.connect(
             command = workerCommand(),
-            authenticated = true,
+            authenticated = false,
             runtimeContext = null,
         )
         val client = QvacClient(transport)
@@ -60,10 +60,8 @@ private object FakeJvmWorker {
             ?.get(1)
             ?.toInt()
             ?: error("worker endpoint missing")
-        val authToken = Regex("\\\"QVAC_IPC_AUTH_TOKEN\\\":\\\"([^\\\"]+)\\\"")
-            .find(environment)
-            ?.groupValues
-            ?.get(1)
+        check("QVAC_IPC_AUTH_TOKEN" !in environment) { "auth token leaked into argv" }
+        val authToken = System.getenv("QVAC_IPC_AUTH_TOKEN")
 
         val socket = if (authToken != null) {
             // A racing loopback connection without the inherited capability is rejected.

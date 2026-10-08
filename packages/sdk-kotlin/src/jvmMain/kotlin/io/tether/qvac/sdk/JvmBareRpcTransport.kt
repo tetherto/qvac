@@ -157,7 +157,7 @@ class JvmBareRpcTransport internal constructor(
             runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
             rpcLimits: BareRpcLimits = BareRpcLimits(),
-            authenticated: Boolean = false,
+            authenticated: Boolean = true,
         ): JvmBareRpcTransport {
             return connect(
                 command = listOf(bareExecutable, workerPath),
@@ -177,7 +177,7 @@ class JvmBareRpcTransport internal constructor(
             runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
             rpcLimits: BareRpcLimits = BareRpcLimits(),
-            authenticated: Boolean = false,
+            authenticated: Boolean = true,
         ): JvmBareRpcTransport {
             require(command.isNotEmpty()) { "worker command must not be empty" }
             require(timeoutMs > 0) { "timeoutMs must be positive" }
@@ -191,13 +191,14 @@ class JvmBareRpcTransport internal constructor(
                 val authToken = UUID.randomUUID().toString() + UUID.randomUUID().toString()
                 val workerEnvironment = buildJsonObject {
                     put("QVAC_IPC_SOCKET_PATH", endpoint)
-                    if (authenticated) put("QVAC_IPC_AUTH_TOKEN", authToken)
                     put("HOME_DIR", homeDirectory)
                 }.toString()
 
-                process = ProcessBuilder(command + workerEnvironment)
-                    .redirectErrorStream(true)
-                    .start()
+                val processBuilder = ProcessBuilder(command + workerEnvironment).redirectErrorStream(true)
+                // Environment, not argv: other local users can read a process's argv.
+                processBuilder.environment().remove(IPC_AUTH_TOKEN_ENV)
+                if (authenticated) processBuilder.environment()[IPC_AUTH_TOKEN_ENV] = authToken
+                process = processBuilder.start()
                 diagnostics = WorkerDiagnostics(process.inputStream)
                 val socket = withContext(Dispatchers.IO) {
                     if (authenticated) acceptAuthenticatedWorker(server, authToken, timeoutMs)
@@ -305,5 +306,6 @@ class JvmBareRpcTransport internal constructor(
         private const val SHUTDOWN_TIMEOUT_MS = 10_000L
         private const val PROCESS_EXIT_TIMEOUT_SECONDS = 5L
         private const val MAX_AUTH_TOKEN_BYTES = 256
+        private const val IPC_AUTH_TOKEN_ENV = "QVAC_IPC_AUTH_TOKEN"
     }
 }
