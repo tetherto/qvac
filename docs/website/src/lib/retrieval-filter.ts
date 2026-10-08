@@ -22,6 +22,16 @@
  * which is what "unscoped queries favour the current line" comes to in a
  * filter. The switcher remains the way into an older line.
  *
+ * A current line is admitted by its `current_line` flag, never by its version,
+ * because a cut changes that version while the URLs it applies to do not: the
+ * outgoing line's pages keep answering at the version-less paths until the
+ * crawler returns. Naming the version would ask the index for a line no record
+ * carries yet, and since the filter is enforced by retrieval, the collection
+ * would answer nothing at all until the next crawl. Matching the flag makes a
+ * cut cost freshness instead — the previous line answers for that window.
+ * A reader who pinned an older line is still matched by version, which is
+ * what pinning means.
+ *
  * @see https://docs.inkeep.com/cloud/ui-components/customization-guides/filters
  */
 
@@ -39,8 +49,13 @@ import {
 
 /** The clauses of the filter, in the MongoDB-style shape Inkeep matches on. */
 type Match = { $in: string[] };
-/** A collection paired with one of its lines, so a version alone matches nothing. */
-type LineClause = { $and: [{ collection: Match }, { line: Match }] };
+/**
+ * Which line of a collection a clause admits: the current one by its flag, an
+ * older one by its version.
+ */
+type LineMatch = { line: Match } | { current_line: Match };
+/** A collection paired with one of its lines, so a line alone matches nothing. */
+type LineClause = { $and: [{ collection: Match }, LineMatch] };
 /** A whole collection, for the ones that publish no lines. */
 type CollectionClause = { collection: Match };
 type Clause = LineClause | CollectionClause;
@@ -53,6 +68,8 @@ export interface RetrievalFilter {
 export interface AllowedLine {
   collection: string;
   line: string;
+  /** Whether that line is the collection's current one. */
+  current: boolean;
 }
 
 /**
@@ -72,22 +89,29 @@ export function allowedLines(pathname: string): AllowedLine[] {
     if (!collection) return [];
 
     const current = getCurrentLine(software);
+    const currentVersion = current ? versionOfFolder(current.folder) : null;
     const line =
       collection === readersCollection && readersVersion
         ? readersVersion
-        : current
-          ? versionOfFolder(current.folder)
-          : null;
+        : currentVersion;
 
-    return line ? [{ collection, line }] : [];
+    if (!line) return [];
+    return [{ collection, line, current: line === currentVersion }];
   });
 }
 
 /** The filter to send with a query issued from `pathname`. */
 export function retrievalFilter(pathname: string): RetrievalFilter {
   const lines = allowedLines(pathname).map(
-    ({ collection, line }): LineClause => ({
-      $and: [{ collection: { $in: [collection] } }, { line: { $in: [line] } }],
+    ({ collection, line, current }): LineClause => ({
+      $and: [
+        { collection: { $in: [collection] } },
+        // `'true'` because the attribute is a meta tag, so Inkeep holds it as
+        // a string; the operator rejects a boolean. See `inkeepMetaTags`.
+        current
+          ? { current_line: { $in: ['true'] } }
+          : { line: { $in: [line] } },
+      ],
     }),
   );
 
