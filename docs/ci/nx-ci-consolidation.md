@@ -70,6 +70,10 @@ For `asr-ggml`, `tts-ggml`, `audiogen-ggml`, and `bci-whispercpp`, PR-time cpp-l
 
 Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` builds its native addon on the Ubuntu 22.04 CPU runner, with trusted vcpkg and per-package compiler caches and two build workers. Addon-level C++ tests remain a stub. Default-branch pushes or dispatches warm the AudioGen caches. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
 
+AudioGen non-PR runs pin checkout to the triggering repository and commit, and
+reject inputs requesting other code. Caller-selected PR-head checkouts are
+limited to PR events, whose cache scope cannot write default-branch entries.
+
 The consolidated coverage lane restores vcpkg binaries from the host cache and
 the package's keyed cache, including its build mode, triplets, and toolchain
 fingerprint. Only trusted default-branch builds write shared caches. Pushes to

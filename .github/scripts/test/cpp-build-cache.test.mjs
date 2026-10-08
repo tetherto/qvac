@@ -88,6 +88,35 @@ test('AudioGen native build restores caches, limits builds and propagates failur
   }
 })
 
+test('AudioGen rejects alternate code in cache-writing events before checkout', () => {
+  const source = readFileSync(join(ROOT, '.github/workflows/cpp-test-coverage-audiogen-ggml.yml'), 'utf8').replaceAll('\r\n', '\n')
+  const blocks = source.split('\n      - ')
+  const validation = blocks.find((text) => text.startsWith('name: Validate checkout inputs for cache-writing events\n'))
+  assert.match(validation, /if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'/)
+  const body = validation.split('        run: |\n')[1].split('\n')
+    .filter((line) => line.startsWith('          ')).map((line) => line.slice(10)).join('\n')
+  const env = { ...process.env, EVENT_REPOSITORY: 'tetherto/qvac', EVENT_REF: 'refs/heads/main',
+    EVENT_REF_NAME: 'main', EVENT_SHA: 'trusted-sha', SOURCE_REPOSITORY: '', SOURCE_REF: '' }
+  for (const [repository, ref, expected] of [
+    ['', '', 0], ['tetherto/qvac', 'main', 0], ['', 'refs/heads/main', 0], ['', 'trusted-sha', 0],
+    ['attacker/qvac', '', 1], ['', 'untrusted-sha', 1], ['', 'refs/pull/1/head', 1],
+    ['', 'main\nINJECTED=true', 1],
+  ]) {
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', body], {
+      encoding: 'utf8', env: { ...env, SOURCE_REPOSITORY: repository, SOURCE_REF: ref },
+    })
+    assert.equal(result.status, expected, result.stderr + result.stdout)
+  }
+  const trusted = blocks.find((text) => text.startsWith('name: Checkout repository\n'))
+  assert.match(trusted, /ref: \$\{\{ github.sha \}\}/)
+  assert.match(trusted, /repository: \$\{\{ github.repository \}\}/)
+  assert.doesNotMatch(trusted, /inputs\./)
+  const pr = blocks.find((text) => text.startsWith('name: Checkout PR code\n'))
+  assert.match(pr, /if: github.event_name == 'pull_request' \|\| github.event_name == 'pull_request_target'/)
+  assert.match(pr, /ref: \$\{\{ inputs.ref \|\| github.ref \}\}/)
+  assert.ok(source.indexOf('Validate checkout inputs') < source.indexOf('name: Checkout repository'))
+})
+
 test('compiler caches are isolated per package and use compiler contents', () => {
   const settings = configureCppBuild(environment())
   assert.equal(settings.CCACHE_DIR, join(tmpdir(), 'cpp-ccache', 'asr-ggml'))

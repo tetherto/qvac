@@ -45,6 +45,27 @@ jobs:
             cppBuildJobs: 2
             hasCcache: true
     steps:
+      - name: Validate checkout inputs for cache-writing events
+        if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+        shell: bash
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.repository }}
+          SOURCE_REF: ${{ inputs.ref }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_NAME: ${{ github.ref_name }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SOURCE_REPOSITORY" ] && [ "$SOURCE_REPOSITORY" != "$EVENT_REPOSITORY" ]; then
+            echo '::error::Non-PR builds must use the triggering repository.'
+            exit 1
+          fi
+          case "$SOURCE_REF" in
+            ""|"$EVENT_REF"|"$EVENT_REF_NAME"|"$EVENT_SHA") ;;
+            *) echo '::error::Non-PR builds must use the triggering revision.'; exit 1 ;;
+          esac
+
       - name: Manual Workspace Cleanup
         if: runner.environment != 'github-hosted'
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -52,6 +73,15 @@ jobs:
         working-directory: .
 
       - name: Checkout repository
+        if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout PR code
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
