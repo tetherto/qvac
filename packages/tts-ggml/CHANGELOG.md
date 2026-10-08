@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-07`. CosyVoice3 with GPU offload on
+  Android (OpenCL on Adreno) no longer aborts in the language model's first
+  step, which the `2026-10-06` `ggml-speech` floor would otherwise cause. Other
+  engines are unchanged.
 - Raise the `speech-cpp` floor to `2026-10-06#2`. Parler-TTS reuses its
   decode-step memory plan instead of rebuilding it before every step; output
   is unchanged.
