@@ -202,8 +202,8 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       bare-pack:
-        specifier: ^1.4.7
-        version: 1.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
+        specifier: ^2.2.3
+        version: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
       brittle:
         specifier: ^3.17.0
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -850,9 +850,15 @@ importers:
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
-      standard:
-        specifier: ^17.0.0
-        version: 17.1.2(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(supports-color@8.1.1)
+      lunte:
+        specifier: ^1.8.4
+        version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
+      prettier-config-holepunch:
+        specifier: ^2.0.0
+        version: 2.0.0(prettier@3.9.6)
 
   packages/ggml-rpc-server:
     dependencies:
@@ -1065,7 +1071,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
-        version: link:../diffusion-cpp
+        version: 0.26.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: 0.43.0
         version: 0.43.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1095,7 +1101,7 @@ importers:
         version: 3.5.0
       bare:
         specifier: '*'
-        version: 1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@1.6.0)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
+        version: 1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
       bare-console:
         specifier: '*'
         version: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -1139,12 +1145,18 @@ importers:
       brittle:
         specifier: 3.10.0
         version: 3.10.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
+      lunte:
+        specifier: ^1.8.4
+        version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       nyc:
         specifier: 17.1.0
         version: 17.1.0(supports-color@8.1.1)
-      standard:
-        specifier: 17.1.2
-        version: 17.1.2(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(supports-color@8.1.1)
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
+      prettier-config-holepunch:
+        specifier: ^2.0.0
+        version: 2.0.0(prettier@3.9.6)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -1426,9 +1438,15 @@ importers:
       brittle:
         specifier: ^3.10.1
         version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
-      standard:
-        specifier: 17.1.0
-        version: 17.1.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(supports-color@8.1.1)
+      lunte:
+        specifier: ^1.8.4
+        version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
+      prettier-config-holepunch:
+        specifier: ^2.0.0
+        version: 2.0.0(prettier@3.9.6)
 
   packages/rag:
     dependencies:
@@ -1474,10 +1492,10 @@ importers:
     devDependencies:
       '@qvac/embed-llamacpp':
         specifier: ^0.43.0
-        version: link:../embed-llamacpp
+        version: 0.43.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/llm-llamacpp':
         specifier: ^0.55.0
-        version: link:../llm-llamacpp
+        version: 0.55.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -1486,7 +1504,7 @@ importers:
         version: 3.5.0
       bare:
         specifier: '*'
-        version: 1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@1.6.0)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+        version: 1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
       bare-abort-controller:
         specifier: ^1.1.2
         version: 1.1.2
@@ -1740,7 +1758,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.26.0
-        version: link:../diffusion-cpp
+        version: 0.26.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: 0.43.0
         version: 0.43.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2129,8 +2147,8 @@ importers:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-subprocess:
-        specifier: ^5.2.1
-        version: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^6.2.1
+        version: 6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url:
         specifier: ^2.4.3
         version: 2.4.6
@@ -4313,6 +4331,10 @@ packages:
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
 
+  '@qvac/diffusion-cpp@0.26.0':
+    resolution: {integrity: sha512-Flvf3ciJuyqHE4Rlghz/0/HQ0rUc5JY1aQEKFZlwVC7rVhIWXH9pC87ZsWB3mQ2mfqdV+f/qOYW/U+q2HrdCaw==}
+    engines: {bare: '>=1.24.0'}
+
   '@qvac/dl-base@0.1.1':
     resolution: {integrity: sha512-AacmpwhUrgWQGO8dqlBNk8SLaxjWZlwBdnoj26cTVHA/L5zHAh9PisxuVbsSrXpigv342t2+PwmJv5ZH9GN97Q==}
     deprecated: 'Deprecated: no longer maintained; removed from the QVAC monorepo.'
@@ -5510,8 +5532,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-module-traverse@1.8.3:
-    resolution: {integrity: sha512-Iykt1899FOo0lpejEwAUK50fYIzQ18uiJFqybgZvIIqnZSV0/0GhJp+3w3Vx5hTVeTIROF8UmTUB5jHNs65PAg==}
+  bare-module-traverse@2.4.4:
+    resolution: {integrity: sha512-zK4bDxqeD15Tvu/C5B1Mi/epl9PavjIhU3SVh5RhDb4Hpet6applPVX8Q9rinu7nT80yzgSSlBn0exzJaNXv0A==}
     peerDependencies:
       bare-buffer: '*'
       bare-url: '*'
@@ -5521,8 +5543,8 @@ packages:
       bare-url:
         optional: true
 
-  bare-module-traverse@2.4.4:
-    resolution: {integrity: sha512-zK4bDxqeD15Tvu/C5B1Mi/epl9PavjIhU3SVh5RhDb4Hpet6applPVX8Q9rinu7nT80yzgSSlBn0exzJaNXv0A==}
+  bare-module-traverse@2.5.9:
+    resolution: {integrity: sha512-cAkJxUYfdaBvYS1N8g8evHmNNDtJD+PbZYXLBxF9Plg8EantwmUMwFe2EGFw96+VcVo2ot/8aIX+4aedH44NCg==}
     peerDependencies:
       bare-buffer: '*'
       bare-url: '*'
@@ -5557,20 +5579,20 @@ packages:
     resolution: {integrity: sha512-fF4Q7QsyKVF5Rj0qvI8BgUNjqzC2JvQlpTaPLjVJVxYVUX5Zr9un+y3w1HmA4nNKdFmRBT8z/WmrjvXzXVerKQ==}
     engines: {bare: '>=1.14.0'}
 
-  bare-pack@1.5.1:
-    resolution: {integrity: sha512-ACc5Tx3p3LMD4ov2GYQSe1kKTyvNqzXTjdO+USL/5kD9r77VBTn0y+W7Cl5j3xp8u/REs5NoOCHyK+ykaMpwGA==}
+  bare-pack@2.2.1:
+    resolution: {integrity: sha512-7w9tcotjBxT31Azwqr/gq5acO//8cMxiNwtNccLvIhu0ZmlEXvqrBsZfUJ9P3i+Nd13/7DOY1bLcq+4lCcqzqQ==}
     hasBin: true
     peerDependencies:
-      bare-buffer: '*'
-      bare-url: '*'
+      bare-buffer: ^3.6.0
+      bare-url: ^2.4.0
     peerDependenciesMeta:
       bare-buffer:
         optional: true
       bare-url:
         optional: true
 
-  bare-pack@2.2.1:
-    resolution: {integrity: sha512-7w9tcotjBxT31Azwqr/gq5acO//8cMxiNwtNccLvIhu0ZmlEXvqrBsZfUJ9P3i+Nd13/7DOY1bLcq+4lCcqzqQ==}
+  bare-pack@2.2.3:
+    resolution: {integrity: sha512-wjfjKAXmhy3gjIBFVgQovyBgUqEi7zLxCwCbGTL7dSBEBe9admssLSZoUTki+0xyCBSh9dcfBT4TQwXgme9jSA==}
     hasBin: true
     peerDependencies:
       bare-buffer: ^3.6.0
@@ -5727,6 +5749,10 @@ packages:
     resolution: {integrity: sha512-AZjEERyqF7kAuudlmgrweT2KwwWM0LsGG4Gx/bWyFwJrKU7E3wNG8c09z2DIrdw93p3vDtfOX8fyHOcXfy5m+g==}
     engines: {bare: '>=1.2.0'}
 
+  bare-structured-clone@2.0.1:
+    resolution: {integrity: sha512-F/n/etzjf4YlW4OCF0kpe0H6UOcCXZg0LrPMCY2dP9fg2R7fME5crkmQlM1Hl62iKipMQFaT9S2eSyx0tBCJ8g==}
+    engines: {bare: '>=1.2.0'}
+
   bare-stylize@0.0.1:
     resolution: {integrity: sha512-l3MjmIl476bWijYWf3RbE+osl4iuXSOMudzp0vAqzIK7gPgn/+G3oAxp8Oin9CFF911KBP0LO9kts8Ci8mGZaQ==}
 
@@ -5741,6 +5767,15 @@ packages:
 
   bare-subprocess@6.1.0:
     resolution: {integrity: sha512-8L6KtbmreDy4Fc1BdDqaDo9fg0nbedUmTSFQxYPV0uHIM2BBAX8+E0LyMDKgkk0I+mlKto80WYzOnIhT8VDdOg==}
+    engines: {bare: '>=1.7.0'}
+    peerDependencies:
+      bare-buffer: '*'
+    peerDependenciesMeta:
+      bare-buffer:
+        optional: true
+
+  bare-subprocess@6.2.1:
+    resolution: {integrity: sha512-/gim6zMN5Yd6gL2Rv4TBGn8MHKqVaYo6igLHkHz5QsWyQMHUfpuPXgB2bkrU848BCwj89/xRcwUQhvSV6i940A==}
     engines: {bare: '>=1.7.0'}
     peerDependencies:
       bare-buffer: '*'
@@ -5792,6 +5827,10 @@ packages:
   bare-type@1.1.0:
     resolution: {integrity: sha512-LdtnnEEYldOc87Dr4GpsKnStStZk3zfgoEMXy8yvEZkXrcCv9RtYDrUYWFsBQHtaB0s1EUWmcvS6XmEZYIj3Bw==}
     engines: {bare: '>=1.2.0'}
+
+  bare-type@1.4.0:
+    resolution: {integrity: sha512-6anDbVGruQLK8m6zxlCPNkUuxXnzChT1aOmJbFRjEGn8MWZqviFP6vGi9NAnG8aRXyRAfXIGLlBJwYGa4Ylcug==}
+    engines: {bare: '>=1.32.0'}
 
   bare-url@2.4.6:
     resolution: {integrity: sha512-iQxPClE07hETVpbRoX7JXX3v/ZQViCxe/SYCxylRLzdEx1xJAufPptfiOqR8tqiCtmbtMDANKWszzjLu1PMAZQ==}
@@ -13519,6 +13558,14 @@ snapshots:
       which-runtime: 1.4.0
     optional: true
 
+  '@qvac/diffusion-cpp@0.26.0(bare-abort-controller@1.1.2)':
+    dependencies:
+      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
+      '@qvac/logging': 0.1.1
+      bare-path: 3.1.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+
   '@qvac/dl-base@0.1.1(bare-abort-controller@1.1.2)':
     dependencies:
       '@qvac/logging': 0.1.1
@@ -15411,15 +15458,6 @@ snapshots:
     optionalDependencies:
       bare-url: 2.5.4
 
-  bare-module-traverse@1.8.3(bare-buffer@3.6.2)(bare-url@2.5.4):
-    dependencies:
-      bare-addon-resolve: 1.10.1(bare-url@2.5.4)
-      bare-module-lexer: 1.6.3(bare-buffer@3.6.2)(bare-url@2.5.4)
-      bare-module-resolve: 1.12.4(bare-url@2.5.4)
-    optionalDependencies:
-      bare-buffer: 3.6.2
-      bare-url: 2.5.4
-
   bare-module-traverse@2.4.4(bare-buffer@3.6.2)(bare-url@2.4.6):
     dependencies:
       bare-addon-resolve: 1.10.1(bare-url@2.4.6)
@@ -15429,6 +15467,16 @@ snapshots:
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-url: 2.4.6
+
+  bare-module-traverse@2.5.9(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-addon-resolve: 1.10.1(bare-url@2.5.4)
+      bare-mime: 1.0.0
+      bare-module-lexer: 1.6.3(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-module-resolve: 1.12.4(bare-url@2.5.4)
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.5.4
 
   bare-module@5.0.3(bare-buffer@3.6.2):
     dependencies:
@@ -15464,23 +15512,6 @@ snapshots:
 
   bare-os@3.9.3: {}
 
-  bare-pack@1.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
-    dependencies:
-      bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4)
-      bare-bundle-id: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-url@2.5.4)
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-module-traverse: 1.8.3(bare-buffer@3.6.2)(bare-url@2.5.4)
-      bare-path: 3.1.1
-      paparam: 1.10.1
-      promaphore: 1.0.0
-    optionalDependencies:
-      bare-buffer: 3.6.2
-      bare-url: 2.5.4
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-events
-      - react-native-b4a
-
   bare-pack@2.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
       bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -15493,6 +15524,23 @@ snapshots:
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-url: 2.4.6
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-events
+      - react-native-b4a
+
+  bare-pack@2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4):
+    dependencies:
+      bare-bundle: 1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-bundle-id: 1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-bundle@1.10.0(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-url@2.5.4)
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-module-traverse: 2.5.9(bare-buffer@3.6.2)(bare-url@2.5.4)
+      bare-path: 3.1.1
+      paparam: 1.10.1
+      promaphore: 1.0.0
+    optionalDependencies:
+      bare-buffer: 3.6.2
+      bare-url: 2.5.4
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-events
@@ -15857,6 +15905,15 @@ snapshots:
     transitivePeerDependencies:
       - react-native-b4a
 
+  bare-structured-clone@2.0.1:
+    dependencies:
+      bare-buffer: 3.6.2
+      bare-type: 1.4.0
+      bare-url: 2.5.4
+      compact-encoding: 3.3.0
+    transitivePeerDependencies:
+      - react-native-b4a
+
   bare-stylize@0.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
       bare-ansi-escapes: 2.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -15889,6 +15946,21 @@ snapshots:
       bare-structured-clone: 1.6.0
       bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
       bare-url: 2.4.6
+    optionalDependencies:
+      bare-buffer: 3.6.2
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - react-native-b4a
+
+  bare-subprocess@6.2.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2):
+    dependencies:
+      bare-env: 3.0.1
+      bare-events: 2.9.1(bare-abort-controller@1.1.2)
+      bare-os: 3.9.3
+      bare-pipe: 4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-structured-clone: 2.0.1
+      bare-tcp: 2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))
+      bare-url: 2.5.4
     optionalDependencies:
       bare-buffer: 3.6.2
     transitivePeerDependencies:
@@ -15959,6 +16031,8 @@ snapshots:
       - bare-url
 
   bare-type@1.1.0: {}
+
+  bare-type@1.4.0: {}
 
   bare-url@2.4.6:
     dependencies:
@@ -16038,25 +16112,25 @@ snapshots:
       - bare-events
       - react-native-b4a
 
-  bare@1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@1.6.0)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare@1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
     dependencies:
       bare-runtime: 1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-structured-clone: 1.6.0
+      bare-structured-clone: 2.0.1
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.4.6
 
-  bare@1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@1.6.0)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
+  bare@1.31.2(bare-buffer@3.6.2)(bare-console@6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)))(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-runtime@1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4))(bare-structured-clone@2.0.1)(bare-timers@3.2.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
       bare-runtime: 1.30.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
     optionalDependencies:
       bare-buffer: 3.6.2
       bare-console: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-structured-clone: 1.6.0
+      bare-structured-clone: 2.0.1
       bare-timers: 3.2.1(bare-abort-controller@1.1.2)
       bare-url: 2.5.4
 
@@ -17476,13 +17550,6 @@ snapshots:
       eslint-plugin-n: 15.7.0(eslint@8.57.1(supports-color@8.1.1))
       eslint-plugin-promise: 6.6.0(eslint@8.57.1(supports-color@8.1.1))
 
-  eslint-config-standard@17.1.0(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1))(eslint-plugin-n@15.7.0(eslint@8.57.1(supports-color@8.1.1)))(eslint-plugin-promise@6.6.0(eslint@8.57.1(supports-color@8.1.1)))(eslint@8.57.1(supports-color@8.1.1)):
-    dependencies:
-      eslint: 8.57.1(supports-color@8.1.1)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1)
-      eslint-plugin-n: 15.7.0(eslint@8.57.1(supports-color@8.1.1))
-      eslint-plugin-promise: 6.6.0(eslint@8.57.1(supports-color@8.1.1))
-
   eslint-import-context@0.1.9(unrs-resolver@1.12.2):
     dependencies:
       get-tsconfig: 4.14.0
@@ -17552,16 +17619,6 @@ snapshots:
       eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
       eslint-import-resolver-node: 0.3.10(supports-color@8.1.1)
       eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
-    transitivePeerDependencies:
-      - supports-color
-
-  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint-import-resolver-node@0.3.10(supports-color@8.1.1))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1):
-    dependencies:
-      debug: 3.2.7(supports-color@8.1.1)
-    optionalDependencies:
-      '@typescript-eslint/parser': 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
-      eslint: 8.57.1(supports-color@8.1.1)
-      eslint-import-resolver-node: 0.3.10(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -17670,35 +17727,6 @@ snapshots:
       eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
       eslint-import-resolver-node: 0.3.10(supports-color@8.1.1)
       eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint-import-resolver-node@0.3.10(supports-color@8.1.1))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
-      hasown: 2.0.4
-      is-core-module: 2.16.2
-      is-glob: 4.0.3
-      minimatch: 3.1.5
-      object.fromentries: 2.0.8
-      object.groupby: 1.0.3
-      object.values: 1.2.1
-      semver: 6.3.1
-      string.prototype.trimend: 1.0.10
-      tsconfig-paths: 3.15.0
-    optionalDependencies:
-      '@typescript-eslint/parser': 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
-    transitivePeerDependencies:
-      - eslint-import-resolver-typescript
-      - eslint-import-resolver-webpack
-      - supports-color
-
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1):
-    dependencies:
-      '@rtsao/scc': 1.1.0
-      array-includes: 3.1.9
-      array.prototype.findlastindex: 1.2.6
-      array.prototype.flat: 1.3.3
-      array.prototype.flatmap: 1.3.3
-      debug: 3.2.7(supports-color@8.1.1)
-      doctrine: 2.1.0
-      eslint: 8.57.1(supports-color@8.1.1)
-      eslint-import-resolver-node: 0.3.10(supports-color@8.1.1)
-      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint-import-resolver-node@0.3.10(supports-color@8.1.1))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1)
       hasown: 2.0.4
       is-core-module: 2.16.2
       is-glob: 4.0.3
@@ -20261,7 +20289,7 @@ snapshots:
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-subprocess: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.4.6
+      bare-url: 2.5.4
       bare-utils: 1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
       - bare-abort-controller
@@ -22915,46 +22943,12 @@ snapshots:
       - eslint-import-resolver-webpack
       - supports-color
 
-  standard@17.1.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(supports-color@8.1.1):
-    dependencies:
-      eslint: 8.57.1(supports-color@8.1.1)
-      eslint-config-standard: 17.1.0(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1))(eslint-plugin-n@15.7.0(eslint@8.57.1(supports-color@8.1.1)))(eslint-plugin-promise@6.6.0(eslint@8.57.1(supports-color@8.1.1)))(eslint@8.57.1(supports-color@8.1.1))
-      eslint-config-standard-jsx: 11.0.0(eslint-plugin-react@7.37.5(eslint@8.57.1(supports-color@8.1.1)))(eslint@8.57.1(supports-color@8.1.1))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1)
-      eslint-plugin-n: 15.7.0(eslint@8.57.1(supports-color@8.1.1))
-      eslint-plugin-promise: 6.6.0(eslint@8.57.1(supports-color@8.1.1))
-      eslint-plugin-react: 7.37.5(eslint@8.57.1(supports-color@8.1.1))
-      standard-engine: 15.1.0
-      version-guard: 1.1.3
-    transitivePeerDependencies:
-      - '@typescript-eslint/parser'
-      - eslint-import-resolver-typescript
-      - eslint-import-resolver-webpack
-      - supports-color
-
   standard@17.1.2(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(supports-color@8.1.1):
     dependencies:
       eslint: 8.57.1(supports-color@8.1.1)
       eslint-config-standard: 17.1.0(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1))(eslint-plugin-n@15.7.0(eslint@8.57.1(supports-color@8.1.1)))(eslint-plugin-promise@6.6.0(eslint@8.57.1(supports-color@8.1.1)))(eslint@8.57.1(supports-color@8.1.1))
       eslint-config-standard-jsx: 11.0.0(eslint-plugin-react@7.37.5(eslint@8.57.1(supports-color@8.1.1)))(eslint@8.57.1(supports-color@8.1.1))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1)
-      eslint-plugin-n: 15.7.0(eslint@8.57.1(supports-color@8.1.1))
-      eslint-plugin-promise: 6.6.0(eslint@8.57.1(supports-color@8.1.1))
-      eslint-plugin-react: 7.37.5(eslint@8.57.1(supports-color@8.1.1))
-      standard-engine: 15.1.0
-      version-guard: 1.1.3
-    transitivePeerDependencies:
-      - '@typescript-eslint/parser'
-      - eslint-import-resolver-typescript
-      - eslint-import-resolver-webpack
-      - supports-color
-
-  standard@17.1.2(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(supports-color@8.1.1):
-    dependencies:
-      eslint: 8.57.1(supports-color@8.1.1)
-      eslint-config-standard: 17.1.0(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1))(eslint-plugin-n@15.7.0(eslint@8.57.1(supports-color@8.1.1)))(eslint-plugin-promise@6.6.0(eslint@8.57.1(supports-color@8.1.1)))(eslint@8.57.1(supports-color@8.1.1))
-      eslint-config-standard-jsx: 11.0.0(eslint-plugin-react@7.37.5(eslint@8.57.1(supports-color@8.1.1)))(eslint@8.57.1(supports-color@8.1.1))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1)
       eslint-plugin-n: 15.7.0(eslint@8.57.1(supports-color@8.1.1))
       eslint-plugin-promise: 6.6.0(eslint@8.57.1(supports-color@8.1.1))
       eslint-plugin-react: 7.37.5(eslint@8.57.1(supports-color@8.1.1))

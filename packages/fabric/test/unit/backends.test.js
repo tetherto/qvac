@@ -5,11 +5,7 @@ const assert = require('node:assert/strict')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { evaluate, packageRoot } = require('./helpers')
-const {
-  PREBUILT_HOSTS,
-  hostPlatformPackage,
-  resolveBackendsDirFrom
-} = require('../../backends.js')
+const { PREBUILT_HOSTS, hostPlatformPackage, resolveBackendsDirFrom } = require('../../backends.js')
 
 const slicerUrl = pathToFileURL(
   path.resolve(packageRoot, '../../scripts/ci/slice-platform-packages.mjs')
@@ -18,7 +14,7 @@ const slicerUrl = pathToFileURL(
 const FABRIC_ROOT = '/app/node_modules/@qvac/fabric'
 const PLATFORM_ROOT = '/app/node_modules/@qvac/fabric-linux-x64'
 
-function sources (overrides = {}) {
+function sources(overrides = {}) {
   return {
     host: 'linux-x64',
     resolveLocalAddon: () => null,
@@ -29,26 +25,33 @@ function sources (overrides = {}) {
 }
 
 test('a runtime in this package wins over the platform package', () => {
-  const dir = resolveBackendsDirFrom(sources({
-    resolveLocalAddon: () => FABRIC_ROOT + '/prebuilds/linux-x64/qvac__fabric.bare'
-  }))
+  const dir = resolveBackendsDirFrom(
+    sources({
+      resolveLocalAddon: () => FABRIC_ROOT + '/prebuilds/linux-x64/qvac__fabric.bare'
+    })
+  )
 
   assert.equal(dir, FABRIC_ROOT + '/prebuilds')
 })
 
 test('a versioned runtime in this package resolves to the same root', () => {
-  const dir = resolveBackendsDirFrom(sources({
-    resolveLocalAddon: () => FABRIC_ROOT + '/prebuilds/linux-x64/qvac__fabric@0.18.0.bare'
-  }))
+  const dir = resolveBackendsDirFrom(
+    sources({
+      resolveLocalAddon: () => FABRIC_ROOT + '/prebuilds/linux-x64/qvac__fabric@0.18.0.bare'
+    })
+  )
 
   assert.equal(dir, FABRIC_ROOT + '/prebuilds')
 })
 
 test('Windows paths resolve to the prebuilds root', () => {
-  const dir = resolveBackendsDirFrom(sources({
-    host: 'win32-x64',
-    resolveLocalAddon: () => 'C:\\app\\node_modules\\@qvac\\fabric\\prebuilds\\win32-x64\\qvac__fabric.bare'
-  }))
+  const dir = resolveBackendsDirFrom(
+    sources({
+      host: 'win32-x64',
+      resolveLocalAddon: () =>
+        'C:\\app\\node_modules\\@qvac\\fabric\\prebuilds\\win32-x64\\qvac__fabric.bare'
+    })
+  )
 
   assert.equal(dir, 'C:\\app\\node_modules\\@qvac\\fabric\\prebuilds')
 })
@@ -58,11 +61,13 @@ test('without a local runtime the platform package addon/ prebuilds are used', (
 })
 
 test('a linked mobile runtime is not treated as a prebuilds directory', () => {
-  const dir = resolveBackendsDirFrom(sources({
-    host: 'ios-arm64',
-    resolveLocalAddon: () => 'linked:qvac__fabric.0.18.0.framework/qvac__fabric.0.18.0',
-    resolveManifest: () => null
-  }))
+  const dir = resolveBackendsDirFrom(
+    sources({
+      host: 'ios-arm64',
+      resolveLocalAddon: () => 'linked:qvac__fabric.0.18.0.framework/qvac__fabric.0.18.0',
+      resolveManifest: () => null
+    })
+  )
 
   assert.equal(dir, null)
 })
@@ -96,7 +101,8 @@ test('resolveBackendsDir consults Bare for the local runtime and the platform pa
       throw new Error(`unexpected require(${specifier})`)
     }
     fakeRequire.resolve = (specifier) => {
-      if (specifier === '@qvac/fabric-darwin-arm64/package') return '/n/@qvac/fabric-darwin-arm64/package.json'
+      if (specifier === '@qvac/fabric-darwin-arm64/package')
+        return '/n/@qvac/fabric-darwin-arm64/package.json'
       throw new Error('MODULE_NOT_FOUND')
     }
     fakeRequire.addon = () => notCalled()
@@ -110,6 +116,6 @@ test('resolveBackendsDir consults Bare for the local runtime and the platform pa
   assert.equal(exports.resolveBackendsDir(), '/n/@qvac/fabric-darwin-arm64/addon/prebuilds')
 })
 
-function notCalled () {
+function notCalled() {
   throw new Error('should not have been reached')
 }
