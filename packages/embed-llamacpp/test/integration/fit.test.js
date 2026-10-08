@@ -1,9 +1,13 @@
 'use strict'
 
+const os = require('bare-os')
 const path = require('bare-path')
 const test = require('brittle')
 const EmbedLlamacpp = require('../../index.js')
 const { ensureModel, getModelConfigs } = require('./utils')
+
+const platform = os.platform()
+const isMobile = platform === 'ios' || platform === 'android'
 
 const MODEL_NAME = getModelConfigs()[0]?.modelName ?? 'embeddinggemma-300M-Q8_0.gguf'
 
@@ -82,12 +86,19 @@ const EVERY_SETTING = {
   'flash-attn': 'auto'
 }
 
+const MOBILE_REFUSED = ['main-gpu', 'split-mode', 'tensor-split']
+
 test('every setting a load carries reaches the fitter', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
 
   for (const [key, value] of Object.entries(EVERY_SETTING)) {
     const fit = assess(file, { [key]: value })
-    t.not(fit.reason, 'unsupported-config', `${key} is a shape the engine accepts`)
+
+    if (isMobile && MOBILE_REFUSED.includes(key)) {
+      t.is(fit.reason, 'unsupported-config', `${key} is refused on mobile`)
+    } else {
+      t.not(fit.reason, 'unsupported-config', `${key} is a shape the engine accepts`)
+    }
   }
 })
 

@@ -153,6 +153,18 @@ export class ModelFileNotFoundInDirError extends QvacErrorBase {
   }
 }
 
+export class ModelFitRefusedError extends QvacErrorBase {
+  constructor(modelType: string, reason: string, detail?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        ERROR_CODES.MODEL_FIT_REFUSED,
+        detail === undefined ? [modelType, reason] : [modelType, reason, detail],
+        cause
+      )
+    )
+  }
+}
+
 export class ModelFileLocateFailedError extends QvacErrorBase {
   constructor(modelType: string, modelPath: string, cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.MODEL_FILE_LOCATE_FAILED, [modelType, modelPath], cause))

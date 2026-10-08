@@ -66,6 +66,12 @@ Per target, common fields (see any `packages/*/project.json`):
 
 Per-run overrides are possible via the action's `overrides` input, but only for fields a package already declares (validated, so a PR can't inject new CI behaviour).
 
+For `asr-ggml`, `tts-ggml`, `audiogen-ggml`, and `bci-whispercpp`, PR-time cpp-lint additionally requires a changed C/C++ source or header (`.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, or `.hxx`) inside that package. The filter uses API-reported paths, including deleted files and previous paths for renames. Vcpkg version-only bumps skip cpp-lint, and the merge guard accepts that skipped job. Manual dispatch retains the affected packages' cpp-lint lanes.
+
+Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` has a hosted CPU stub until addon-level C++ tests exist. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
+
+Package config is read from the trusted base ref. After merging a runner change into `main`, start a new run for an existing PR to resolve the updated matrix; already queued jobs retain the labels selected by their original run.
+
 ## Fork safety
 
 `on-pr-nx.yml` runs on `pull_request_target` — the base-repo workflow with secrets, against fork code. The rule: **base = control surface, head = code-under-test.**

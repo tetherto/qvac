@@ -146,7 +146,7 @@ class VideoStableDiffusion {
         });
     }
     async _load() {
-        this.logger.info('Starting Wan video model load');
+        this.logger.info('Starting video model load');
         const configurationParams = {
             path: '',
             diffusionModelPath: this._files.model,
@@ -170,7 +170,7 @@ class VideoStableDiffusion {
             await this.addon.activate();
         }
         catch (loadError) {
-            this.logger.error('Error during Wan video model load:', loadError);
+            this.logger.error('Error during video model load:', loadError);
             try {
                 await this.addon?.unload?.();
             }
@@ -178,7 +178,7 @@ class VideoStableDiffusion {
             this.addon = null;
             throw loadError;
         }
-        this.logger.info('Wan video model load completed successfully');
+        this.logger.info('Video model load completed successfully');
     }
     _createAddon(configurationParams) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
@@ -220,7 +220,10 @@ class VideoStableDiffusion {
         const { mode } = params;
         const dimensionsImplicit = params.width == null && params.height == null;
         const isLtx = this._isLtx();
-        const alignTo = isLtx ? 32 : 16;
+        // H3 uses an LLM companion; the audio VAE is optional. Native validation
+        // inspects the loaded checkpoint, including renamed safetensors.
+        const isH3Files = !!this._files.llm && !isLtx;
+        const alignTo = isLtx || isH3Files ? 32 : 16;
         const width = params.width;
         const height = params.height;
         const widthBad = width != null &&
@@ -392,7 +395,7 @@ class VideoStableDiffusion {
             this.logger.warn('vace_strength was set but control_frames is not provided — ' +
                 'vace_strength will have no effect.');
         }
-        if (mode === 'img2vid' && !isLtx && !this._files.clipVision) {
+        if (mode === 'img2vid' && !isLtx && !isH3Files && !this._files.clipVision) {
             throw new TypeError(`mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
                 'Download clip_vision_h.safetensors from ' +
                 'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +

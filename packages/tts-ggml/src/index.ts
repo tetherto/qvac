@@ -34,6 +34,7 @@ import {
   assessFit as assessFitImpl,
   type Audio8FitRequest,
   type MossFitRequest,
+  type MossSoundEffectFitRequest,
   type ChatterboxFitRequest,
   type CosyvoiceFitRequest,
   type ParlerFitRequest,
@@ -5035,6 +5036,7 @@ type NamespaceParlerFit = ParlerFitRequest;
 type NamespaceChatterboxFit = ChatterboxFitRequest;
 type NamespaceAudio8Fit = Audio8FitRequest;
 type NamespaceMossFit = MossFitRequest;
+type NamespaceMossSoundEffectFit = MossSoundEffectFitRequest;
 type NamespaceCosyvoiceFit = CosyvoiceFitRequest;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the established class namespace API.
@@ -5068,6 +5070,7 @@ namespace TTSGgml {
   export type ChatterboxFitRequest = NamespaceChatterboxFit;
   export type Audio8FitRequest = NamespaceAudio8Fit;
   export type MossFitRequest = NamespaceMossFit;
+  export type MossSoundEffectFitRequest = NamespaceMossSoundEffectFit;
   export type CosyvoiceFitRequest = NamespaceCosyvoiceFit;
 
   export const resolveBackendsDir = resolveBackendsDirImpl;
