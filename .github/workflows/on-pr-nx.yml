@@ -323,7 +323,7 @@ jobs:
       pull-requests: write
       id-token: write
       actions: read
-    uses: tetherto/qvac/.github/workflows/prebuilds-nx.yml@30c01f873688e2adba6e8f44316c4034b50abec7
+    uses: ./.github/workflows/prebuilds-nx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
@@ -360,7 +360,7 @@ jobs:
       pull-requests: write
       actions: read
       id-token: write
-    uses: tetherto/qvac/.github/workflows/cpp-tests-nx.yml@30c01f873688e2adba6e8f44316c4034b50abec7
+    uses: ./.github/workflows/cpp-tests-nx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
@@ -384,7 +384,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: tetherto/qvac/.github/workflows/integration-test-nx.yml@30c01f873688e2adba6e8f44316c4034b50abec7
+    uses: ./.github/workflows/integration-test-nx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
