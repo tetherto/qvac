@@ -4,12 +4,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const process = require('bare-process')
 const { LayaDecisions } = require('../../index.js')
-const { ensureModel, safeTest } = require('./utils')
-
-// No Laya GGUF is pinned in models.manifest.json yet, so the tests that run a
-// model need LAYA_TEST_MODEL to point at one (the variable the C++ tests read too).
-const LAYA_MODEL = process.env.LAYA_TEST_MODEL ? path.resolve(process.env.LAYA_TEST_MODEL) : null
-const skip = !LAYA_MODEL
+const { ensureModel, ensurePrestagedLayaModel, safeTest } = require('./utils')
 
 // Load options are checked before the file is read, so the config tests below
 // need no Laya model and run everywhere.
@@ -20,6 +15,19 @@ const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isMobile = platform === 'ios' || platform === 'android'
+
+// The Laya GGUF is not in models.manifest.json (no Hugging Face source). On
+// desktop the tests that run a model read LAYA_TEST_MODEL (the variable the C++
+// tests read too) and skip without it; on mobile they use the copy the Device
+// Farm host pre-staged, and fail when it is missing rather than skip.
+const skip = !isMobile && !process.env.LAYA_TEST_MODEL
+let layaModel = null
+function layaModelPath() {
+  layaModel ??= process.env.LAYA_TEST_MODEL
+    ? Promise.resolve(path.resolve(process.env.LAYA_TEST_MODEL))
+    : ensurePrestagedLayaModel()
+  return layaModel
+}
 
 const CPU = { device: 'cpu' }
 // As the other embed tests: these runners load on the CPU.
@@ -46,7 +54,7 @@ const STATES = [
 ]
 
 async function withLaya(t, config, fn, opts = { stats: true }) {
-  const laya = new LayaDecisions({ files: { model: [LAYA_MODEL] }, config, opts })
+  const laya = new LayaDecisions({ files: { model: [await layaModelPath()] }, config, opts })
   try {
     await laya.load()
     return await fn(laya)
