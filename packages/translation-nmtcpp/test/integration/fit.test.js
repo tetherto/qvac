@@ -4,6 +4,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
+const process = require('bare-process')
 const TranslationNmtcpp = require('../../index.js')
 const { ensureIndicTransModel, ensureBergamotModel, TEST_TIMEOUT } = require('./utils')
 
