@@ -1425,6 +1425,11 @@ the demos still run and write the concatenated wav.
 
 ## Testing
 
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. The deterministic C++ tier remains a
+required gate. See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
+
 ```bash
 npm run test:unit               # mocked binding; fast
 npm run test:integration        # spins up the real engine; needs models
