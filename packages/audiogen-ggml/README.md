@@ -8,6 +8,14 @@ on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 
 ## How it works
 
+The C++ CI carve-out builds the native addon on the Ubuntu 22.04 CPU runner,
+reusing vcpkg and compiler caches with two build workers. Addon-level C++ tests
+remain a stub. Only trusted default-branch builds save shared caches; pushes
+affecting AudioGen or its cache configuration and manual dispatches warm them.
+Non-PR runs build the triggering commit and reject inputs selecting another
+repository or revision. PR events retain caller-selected PR-head checkouts.
+See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet).
+
 Under the hood the model runs a small pipeline, and the addon just drives it and
 hands you the audio:
 
@@ -739,6 +747,35 @@ and `vaePath` name them individually and win over it.
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host
 bytes compete with device bytes.
+
+### MiniMax-Music3
+
+`engine: 'minimax'` projects a MiniMax-Music3 pair on desktop builds, with the
+same result shape. `modelsDir` holds the pair; `lmPath` and `synthPath` name the
+two GGUFs and win over it. The weights and the synthesis graphs stay resident
+between runs and the LM's cache is rebuilt by each run, so `deviceBytes` is the
+peak of repeated generations, and the `stages` rows are `lm`, `depth`, `cond`,
+`dit` and `vocoder`.
+
+```js
+const fit = assessFit({
+  engine: 'minimax',
+  modelsDir: '/models/minimax-music3',
+  device: 'gpu',
+  durationSeconds: 120,
+  promptTokens: 900
+})
+```
+
+| Option | Description |
+| --- | --- |
+| `device` | `'cpu'`, `'gpu'` or `'auto'`, as `config.device` takes it. Without it, `gpuLayers` greater than 0 projects `'auto'` and anything else `'cpu'`. |
+| `durationSeconds`, `maxFrames` | The generation length, as `run()` takes it (25 frames per second); one or the other. Defaults to 300 frames. |
+| `promptTokens` | Tokenized prompt length: caption, lyrics and template. Defaults to 1024. A prompt above the checkpoint's limit, or one that leaves too little context for the frames, is `workload-too-large`. |
+| `threads`, `backendsDir`, `marginBytes` | As for ACE-Step. |
+
+On Android and iOS, where MiniMax-Music3 is unavailable, `engine: 'minimax'`
+comes back as `status: "error"` with `reason: "unsupported-engine"`.
 
 A model the engine cannot read is `status: "error"`; a broken request, or a
 host with no native binding, throws.

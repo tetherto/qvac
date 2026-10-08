@@ -134,6 +134,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIConfig.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/EmbedderFit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/NeuralProcessor.cpp
 )
 
@@ -160,6 +161,7 @@ if(BUILD_TESTING)
   set(CORE_SRCS
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIConfig.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/BCIModel.cpp
+      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/EmbedderFit.cpp
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bci/NeuralProcessor.cpp
   )
 
@@ -179,7 +181,12 @@ if(BUILD_TESTING)
   add_executable(
       test-bci-core
       ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
+      ${PROJECT_SOURCE_DIR}/addon/tests/test_embedder_fit.cpp
       ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
+  )
+
+  target_compile_definitions(test-bci-core PRIVATE
+      BCI_TEST_FIXTURES_DIR="${PROJECT_SOURCE_DIR}/addon/tests/fixtures"
   )
 
   target_include_directories(test-bci-core PRIVATE

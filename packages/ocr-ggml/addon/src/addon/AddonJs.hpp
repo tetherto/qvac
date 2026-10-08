@@ -39,6 +39,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "model-interface/OcrFit.hpp"
 #include "model-interface/OcrTypes.hpp"
 #include "model-interface/Pipeline.hpp"
 #include "model-interface/easyocr/pipeline/steps.hpp"
@@ -191,6 +192,15 @@ void applyMainGpu(
       "'integrated'"};
 }
 
+void applyGpuDevice(
+    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
+    OcrConfig& config) {
+  using namespace qvac_lib_inference_addon_cpp;
+  if (auto value = params.getOptionalProperty<js::Number>(env, "gpuDevice")) {
+    config.gpuDevice = static_cast<int>(value->as<double>(env));
+  }
+}
+
 // Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal' | 'opencl').
 // Default keeps CPU inference; 'vulkan' (Linux/Windows/Android), 'metal'
 // (Apple) and 'opencl' (Android/Adreno) request a matching GPU with transparent
@@ -202,22 +212,21 @@ void applyBackendDevice(
   using namespace qvac_lib_inference_addon_cpp;
   auto optBackendDevice =
       params.getOptionalProperty<js::String>(env, "backendDevice");
-  if (!optBackendDevice) {
-    return;
-  }
-  const auto backendDevice = optBackendDevice->as<std::string>(env);
-  if (backendDevice == "vulkan") {
-    config.backendDevice = BackendDevice::VULKAN;
-  } else if (backendDevice == "metal") {
-    config.backendDevice = BackendDevice::METAL;
-  } else if (backendDevice == "opencl") {
-    config.backendDevice = BackendDevice::OPENCL;
-  } else if (backendDevice == "cpu") {
-    config.backendDevice = BackendDevice::CPU;
-  } else {
-    throw StatusError{
-        general_error::InvalidArgument,
-        "backendDevice must be 'cpu', 'vulkan', 'metal', or 'opencl'"};
+  if (optBackendDevice) {
+    const auto backendDevice = optBackendDevice->as<std::string>(env);
+    if (backendDevice == "vulkan") {
+      config.backendDevice = BackendDevice::VULKAN;
+    } else if (backendDevice == "metal") {
+      config.backendDevice = BackendDevice::METAL;
+    } else if (backendDevice == "opencl") {
+      config.backendDevice = BackendDevice::OPENCL;
+    } else if (backendDevice == "cpu") {
+      config.backendDevice = BackendDevice::CPU;
+    } else {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "backendDevice must be 'cpu', 'vulkan', 'metal', or 'opencl'"};
+    }
   }
 
   // Optional toggle for the DocTR recognizer CPU-assist worker. When omitted,
@@ -339,11 +348,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       optThreads) {
     config.nThreads = static_cast<int>(optThreads->as<double>(env));
   }
-  if (auto optGpuDevice =
-          args1.getOptionalProperty<js::Number>(env, "gpuDevice");
-      optGpuDevice) {
-    config.gpuDevice = static_cast<int>(optGpuDevice->as<double>(env));
-  }
+  applyGpuDevice(env, args1, config);
   if (auto optBackendsDir =
           args1.getOptionalProperty<js::String>(env, "backendsDir");
       optBackendsDir) {
@@ -441,6 +446,64 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JsInterface::getInstance(env, args.at(0))
       .addonCpp->runJob(std::any(std::move(modelInput)));
   return nullptr;
+}
+JSCATCH
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+  const auto detector =
+      request.getProperty<js::String>(env, "pathDetector").as<std::string>(env);
+  const auto recognizer = request.getProperty<js::String>(env, "pathRecognizer")
+                              .as<std::string>(env);
+  OcrConfig config;
+  applyMainGpu(env, request, config);
+  applyGpuDevice(env, request, config);
+  applyBackendDevice(env, request, config);
+  applyPipelineMode(env, request, config);
+  if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
+    config.backendsDir = dir->as<std::string>(env);
+  }
+  uint64_t margin = 0;
+  if (auto value =
+          request.getOptionalProperty<js::Number>(env, "marginBytes")) {
+    const double n = value->as<double>(env);
+    if (!std::isfinite(n) || n < 0 || std::trunc(n) != n ||
+        n > 9007199254740991.0) {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "marginBytes must be a non-negative safe integer"};
+    }
+    margin = static_cast<uint64_t>(n);
+  }
+  const auto fit = ocr_fit::assessOcrFit(detector, recognizer, config, margin);
+  auto out = js::Object::create(env);
+  out.setProperty(env, "status", js::String::create(env, fit.status));
+  out.setProperty(env, "reason", js::String::create(env, fit.reason));
+  out.setProperty(env, "deviceName", js::String::create(env, fit.deviceName));
+  out.setProperty(env, "report", js::String::create(env, fit.report));
+  out.setProperty(
+      env,
+      "deviceBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceBytes)));
+  out.setProperty(
+      env,
+      "hostBytes",
+      js::Number::create(env, static_cast<double>(fit.hostBytes)));
+  out.setProperty(
+      env,
+      "weightsBytes",
+      js::Number::create(env, static_cast<double>(fit.weightsBytes)));
+  out.setProperty(
+      env,
+      "deviceFreeBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceFreeBytes)));
+  out.setProperty(
+      env,
+      "deviceTotalBytes",
+      js::Number::create(env, static_cast<double>(fit.deviceTotalBytes)));
+  return out;
 }
 JSCATCH
 
