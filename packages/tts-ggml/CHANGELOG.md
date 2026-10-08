@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `systemPrompt`, a reply voice (`replyVoice`), `maxReplySeconds`,
   `maxNewTokens`, `textReply` and sampling controls; there is no streaming.
   Desktop, with a GPU.
+- Bounded FuzzTest coverage for the JS-adapter config string parsers
+  (`parseIntString`, `parseFloatString`). Linux C++ CI runs the suite after
+  unit tests. The parsers compile without tts-cpp, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
 
 ### Changed
 

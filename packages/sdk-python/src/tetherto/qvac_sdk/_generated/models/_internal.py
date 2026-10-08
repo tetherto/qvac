@@ -237,7 +237,6 @@ class AssessModelFitResponseExecution(Enum):
 
 
 class AssessModelFitResponseEvidence(Enum):
-    calibration = "calibration"
     computed_only = "computed-only"
     native_fit = "native-fit"
 
@@ -280,14 +279,6 @@ class AssessModelFitResponseBudget(GeneratedBaseModel):
     ]
 
 
-class AssessModelFitResponseEstimate(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    lower_bound_bytes: Annotated[float, Field(alias="lowerBoundBytes")]
-    upper_bound_bytes: Annotated[float, Field(alias="upperBoundBytes")]
-
-
 class AssessModelFitResponseModelsItemVerdict(Enum):
     likely_fits = "likely-fits"
     likely_too_large = "likely-too-large"
@@ -295,17 +286,8 @@ class AssessModelFitResponseModelsItemVerdict(Enum):
 
 
 class AssessModelFitResponseModelsItemEvidence(Enum):
-    calibration = "calibration"
     computed_only = "computed-only"
     native_fit = "native-fit"
-
-
-class AssessModelFitResponseModelsItemEstimate(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    lower_bound_bytes: Annotated[float, Field(alias="lowerBoundBytes")]
-    upper_bound_bytes: Annotated[float, Field(alias="upperBoundBytes")]
 
 
 class AssessModelFitResponseModelsItem(GeneratedBaseModel):
@@ -322,13 +304,6 @@ class AssessModelFitResponseModelsItem(GeneratedBaseModel):
         Field(
             description="What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
             title="AssessModelFitResponseModelsItemEvidence",
-        ),
-    ] = None
-    estimate: Annotated[
-        AssessModelFitResponseModelsItemEstimate | None,
-        Field(
-            description="Two-sided bound from calibrated coefficients. Absent under computed-only evidence, or when this model assessed as `unknown` for want of any evidence.",
-            title="AssessModelFitResponseModelsItemEstimate",
         ),
     ] = None
     floor_bytes: Annotated[
@@ -382,7 +357,7 @@ class AssessModelFitResponse(GeneratedBaseModel):
     evidence: Annotated[
         AssessModelFitResponseEvidence | None,
         Field(
-            description="The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
+            description="The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or a floor, never a missing model.",
             title="AssessModelFitResponseEvidence",
         ),
     ] = None
@@ -391,13 +366,6 @@ class AssessModelFitResponse(GeneratedBaseModel):
         Field(
             description="Absent when memory evidence was unusable.",
             title="AssessModelFitResponseBudget",
-        ),
-    ] = None
-    estimate: Annotated[
-        AssessModelFitResponseEstimate | None,
-        Field(
-            description="Combined two-sided bound. Absent when the combined verdict is `unknown` for want of evidence, and under computed-only evidence, which has no upper bound.",
-            title="AssessModelFitResponseEstimate",
         ),
     ] = None
     floor_bytes: Annotated[
