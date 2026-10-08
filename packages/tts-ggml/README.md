@@ -1417,11 +1417,13 @@ Runnable demos under `examples/`:
 | `moss-speech.js` | MOSS-Speech speech-to-speech: answers a spoken question WAV with a 24 kHz spoken reply (optionally in the voice of a second WAV). Set `QVAC_TTS_MOSS_SPEECH_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SPEECH_TEXT=1` for a text-only answer. `bare examples/moss-speech.js test/reference-audio/jfk.wav` |
 | `moss-dialogue-tts.js` | MOSS-TTSD multi-speaker dialogue from one 24 kHz reference per speaker; the text opens with each reference's transcript. Set `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-dialogue-tts.js "[S1] What alice.wav says. [S2] What bob.wav says. [S1] Hi. [S2] Hello." alice.wav bob.wav` |
 
-The two streaming examples feed PCM into a single long-running
+The streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
-per-chunk spawn gaps — install one of them (`brew install sox` or
-`brew install ffmpeg` on macOS) to enable playback.  Absent a player
-the demos still run and write the concatenated wav.
+per-chunk spawn gaps. Playback needs one of those players (`brew install sox`
+or `brew install ffmpeg` on macOS) and `bare-subprocess`, a development
+dependency: run `npm install bare-subprocess` when you run the examples from
+an installed package. Without them the demos still run and write the
+concatenated wav.
 
 ## Testing
 
