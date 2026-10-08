@@ -23,3 +23,14 @@ test('decisions are a typed unary method in the generated client contract', (t) 
   t.ok(contractValidate('constants.ModelType', ModelType.llamacppDecisions).valid)
   t.ok(contractValidate('constants.PluginId', PLUGIN_DECISIONS).valid)
 })
+
+test('decision loads accept omitted device in the generated client contract', (t) => {
+  const load = {
+    type: 'loadModel',
+    modelSrc: '/models/laya.gguf',
+    modelType: ModelType.llamacppDecisions
+  }
+  t.ok(contractValidate('loadModel.request', load).valid)
+  t.ok(contractValidate('loadModel.request', { ...load, modelConfig: {} }).valid)
+  t.ok(contractValidate('loadModel.request', { ...load, modelConfig: { device: 'cpu' } }).valid)
+})
