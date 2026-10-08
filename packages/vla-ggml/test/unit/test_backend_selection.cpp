@@ -243,22 +243,6 @@ TEST(VlaBackendSelection, IgpuUsedWhenNoDgpu) {
       "Vulkan0");
 }
 
-TEST(VlaBackendSelection, DiscreteVulkanBeatsIntegratedCuda) {
-  EXPECT_EQ(
-      pick(
-          {{"CUDA0", "NVIDIA GB10", kIgpu},
-           {"Vulkan0", "NVIDIA RTX 4090", kGpu}}),
-      "Vulkan0");
-}
-
-TEST(VlaBackendSelection, IntegratedCudaBeatsIntegratedVulkan) {
-  EXPECT_EQ(
-      pick(
-          {{"Vulkan0", "Intel Iris Xe", kIgpu},
-           {"CUDA0", "NVIDIA GB10", kIgpu}}),
-      "CUDA0");
-}
-
 TEST(VlaBackendSelection, OverrideCannotPickAdrenoVulkan) {
   EXPECT_EQ(pick({{"Vulkan0", "Adreno (TM) 830", kGpu}}, {"vulkan"}), "");
 }

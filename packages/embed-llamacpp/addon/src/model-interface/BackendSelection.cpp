@@ -195,21 +195,12 @@ void emplaceIfValidDevice(
     otherOpenClBackends.emplace_back(devDescr.gpuBackend);
   } else {
     logEmplaceGpuBackend(devDescr.gpuBackend);
-    if (isCuda && backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
+    if (isCuda) {
       cudaBackends.emplace_back(devDescr.gpuBackend);
     } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
       gpuBackends.emplace_back(devDescr.gpuBackend);
     } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      // A discrete GPU beats an integrated CUDA one (Jetson, GB10), and CUDA
-      // still leads among integrated GPUs.
-      const auto firstNonCuda =
-          isCuda ? std::ranges::find_if(
-                       igpuBackends,
-                       [](const std::string& name) {
-                         return name.find("cuda") == std::string::npos;
-                       })
-                 : igpuBackends.end();
-      igpuBackends.insert(firstNonCuda, devDescr.gpuBackend);
+      igpuBackends.emplace_back(devDescr.gpuBackend);
     }
   }
 }

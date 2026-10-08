@@ -1556,22 +1556,6 @@ TEST_F(BackendSelectionTest, OverrideBindsIntegratedCuda) {
   EXPECT_FALSE(loggedOverrideMiss(mockBackend));
 }
 
-// A discrete GPU beats an integrated CUDA one (Jetson, GB10), and CUDA still
-// leads among integrated GPUs.
-TEST_F(BackendSelectionTest, DiscreteVulkanBeatsIntegratedCuda) {
-  mockBackend.addDevice(createIGPUDevice("NVIDIA GB10", CUDA0_BACK));
-  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
-  auto result = chooseWithOverride(mockBackend, {});
-  expectChosen(result, BackendType::GPU, "vulkan0");
-}
-
-TEST_F(BackendSelectionTest, IntegratedCudaBeatsIntegratedVulkan) {
-  mockBackend.addDevice(createIGPUDevice("Intel Iris Xe", VULKAN0_BACK));
-  mockBackend.addDevice(createIGPUDevice("NVIDIA GB10", CUDA0_BACK));
-  auto result = chooseWithOverride(mockBackend, {});
-  expectChosen(result, BackendType::GPU, "cuda0");
-}
-
 // ---- parseBackendOverride ----
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {
