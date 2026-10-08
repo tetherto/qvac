@@ -6228,6 +6228,49 @@
                       "description": "Device memory installed.",
                       "type": "number"
                     },
+                    "devices": {
+                      "description": "One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Device name as the engine registered it."
+                          },
+                          "totalBytes": {
+                            "type": "number",
+                            "description": "Device memory installed."
+                          },
+                          "freeBytes": {
+                            "type": "number",
+                            "description": "Device memory free when the probe ran."
+                          },
+                          "weightsBytes": {
+                            "type": "number",
+                            "description": "Model weights placed on this device."
+                          },
+                          "contextBytes": {
+                            "type": "number",
+                            "description": "Context and KV cache placed on this device."
+                          },
+                          "computeBytes": {
+                            "type": "number",
+                            "description": "Compute buffers placed on this device."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "totalBytes",
+                          "freeBytes",
+                          "weightsBytes",
+                          "contextBytes",
+                          "computeBytes"
+                        ],
+                        "additionalProperties": false,
+                        "title": "NativeProbeFitProjectionDevicesItem"
+                      }
+                    },
                     "report": {
                       "description": "The engine's own per-module memory table, suitable for a log line.",
                       "type": "string"
