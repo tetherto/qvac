@@ -366,6 +366,7 @@ private:
     struct LastRunInfo {
       bool wasPrefill = false;
       bool wasBatch = false;
+      bool cacheSaveFailed = false;
     };
     /// Atomic so concurrent `processPrompt*` callers (which hold only a shared
     /// lock on `stateMtx_`) publish the mode flags in one trivially-copyable

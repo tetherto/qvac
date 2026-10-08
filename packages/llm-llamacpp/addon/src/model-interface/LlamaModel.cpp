@@ -899,6 +899,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // stats on different attribution rules.
       {"thinkingBlockDiscards", observed.thinkingBlockDiscards},
       {"toolDefinitionsDropped", observed.toolDefinitionsDropped},
+      {"cacheSaveFailed", observed.cacheSaveFailed},
       // visionEncodeMs/Tiles intentionally omitted, matching
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
@@ -1172,12 +1173,15 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   if (shouldSaveCache) {
     try {
       maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
-    } catch (...) {
-      // The request completed, but the active cache key could not be flushed.
-      // Drop both live state and the active cache session so the next prompt
-      // does not retry the same failing path or keep using an unsaved session.
+    } catch (const std::exception& e) {
+      // callers read `cacheSaveFailed` to stop trusting the older file on disk
+      QLOG_IF(
+          Priority::WARNING,
+          string_format("KV cache not saved, answer kept: %s\n", e.what()));
       resetAndInvalidateActiveCache();
-      throw;
+      auto lastRun = state_->lastRun_.load(std::memory_order_relaxed);
+      lastRun.cacheSaveFailed = true;
+      state_->lastRun_.store(lastRun, std::memory_order_relaxed);
     }
   }
 
@@ -1419,6 +1423,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"promptTokens", stats.promptTokens},
       {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
       {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
+      {"cacheSaveFailed", stats.cacheSaveFailed},
       // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
@@ -1480,6 +1485,9 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
       {"toolDefinitionsDropped",
        static_cast<int64_t>(state_->llmContext_->getToolDefinitionsDropped())},
+      {"cacheSaveFailed",
+       static_cast<int64_t>(
+           state_->lastRun_.load(std::memory_order_relaxed).cacheSaveFailed)},
       // Why the generation stopped, as the numeric GenerationStopReason
       // value; addon.js maps it to a string (same pattern as
       // backendDevice). Prefill-only requests report None rather than

@@ -1349,3 +1349,60 @@ test('completion: loading a deferred tool leaves the prefix block untouched', as
   unregisterModel(modelId)
   clearRegistry()
 })
+
+// A failed save leaves the previous cache file in place, so a turn the addon
+// reports as unsaved must not move the cached boundary past that file.
+test('completion: kv-cache resends a turn whose cache save failed', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-save-failed-${Date.now()}`
+  const calls: RecordedCall[] = []
+  let run = 0
+  registerModel(modelId, {
+    model: {
+      run(prompt: unknown, opts?: { cacheKey?: string; saveCacheToDisk?: boolean }) {
+        run += 1
+        calls.push({ messages: prompt as RecordedCall['messages'], prefill: false })
+        const saveFails = run === 2
+        const written =
+          !saveFails && opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
+            ? writeCacheFile(opts.cacheKey)
+            : Promise.resolve()
+        return {
+          iterate: async function* () {
+            await written
+            yield 'Noted.'
+          },
+          await: () => written,
+          stats: saveFails ? { cacheSaveFailed: 1 } : { cacheSaveFailed: 0 }
+        }
+      }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const complete = completer(modelId, 'save-failed-key')
+  const first = user('My name is Ada.')
+  const second = user('I live in Tbilisi.')
+  await complete([first])
+  await complete([first, assistant('Noted.'), second])
+  await complete([
+    first,
+    assistant('Noted.'),
+    second,
+    assistant('Noted.'),
+    user('Where do I live?')
+  ])
+
+  t.is(calls.length, 3, 'every turn reached the model')
+  t.ok(
+    calls[2]!.messages.some((msg) => msg.content === second.content),
+    'the turn after a failed save resends what the older cache file lacks'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})

@@ -1506,6 +1506,14 @@ namespace LlmLlamacpp {
      */
     toolDefinitionsDropped: number;
     /**
+     * Number of requests whose KV cache could not be written to disk (for
+     * example, a full disk). The answer is still returned; only the cache is
+     * lost, and the file at `cacheKey` still holds the last successful save,
+     * so it is behind this request. Per-inference for single requests; summed
+     * across completed slots for batch requests.
+     */
+    cacheSaveFailed: number;
+    /**
      * How busy the shared backend was, not a property of your request: the
      * mean number of sequences decoded together, weighted by the tokens each
      * engine step carried so the figure tracks how much traffic shared the

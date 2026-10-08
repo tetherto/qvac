@@ -81,6 +81,7 @@ struct ObservedRequestStats {
   /// it.
   int64_t thinkingBlockDiscards = 0;
   int64_t toolDefinitionsDropped = 0;
+  int64_t cacheSaveFailed = 0;
   /// Why this request's generation stopped. Per-sequence, so it is honest for
   /// a single request; `nullopt` when unknown (never finalized) or when a
   /// group's requests disagree, since one reason cannot describe many.
@@ -175,6 +176,7 @@ struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
   int64_t thinkingBlockDiscards = 0;
   int64_t toolDefinitionsDropped = 0;
+  int64_t cacheSaveFailed = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
 

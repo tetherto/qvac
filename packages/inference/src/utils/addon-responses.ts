@@ -12,6 +12,8 @@ export interface LlmStats {
   // Renders in this request that provably left the supplied tool definitions
   // out; 0 when no tools were sent.
   toolDefinitionsDropped?: number
+  // Requests whose KV cache could not be written; the file on disk is behind.
+  cacheSaveFailed?: number
   backendDevice?: 'cpu' | 'gpu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'

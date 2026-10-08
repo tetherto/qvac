@@ -1,8 +1,7 @@
-// One job's terminal cache-save failure must stay that job's failure. The
-// drain-time save throw (e.g. a cacheKey under a missing directory) fails
-// only the offending slot's group: a failed file write corrupts nothing
-// shared, so a concurrent job on another slot keeps decoding to completion
-// and the scheduler keeps admitting new work — no whole-scheduler teardown.
+// A job's terminal cache-save failure costs only its cache. The drain-time
+// save failure (e.g. a cacheKey under a missing directory) keeps the job's
+// answer and reports `cacheSaveFailed`, a concurrent job on another slot keeps
+// decoding to completion, and the scheduler keeps admitting new work.
 
 #include <atomic>
 #include <chrono>
@@ -14,7 +13,6 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
@@ -73,11 +71,10 @@ protected:
 
 } // namespace
 
-/// Job A finishes and its terminal cache save throws (cacheKey parent
-/// directory does not exist). Job B, mid-generation on another slot, must
-/// run to completion with its own output, and the scheduler must admit new
-/// work afterwards. Only A's caller sees UnableToSaveSessionFile.
-TEST_F(SaveFailureContainmentTest, SaveFailureFailsOnlyOffendingJob) {
+/// Job A finishes and its terminal cache save fails (cacheKey parent
+/// directory does not exist). A still gets its answer and the flag, job B on
+/// another slot runs to completion, and the scheduler admits new work after.
+TEST_F(SaveFailureContainmentTest, SaveFailureKeepsAnswerAndSparesOtherJobs) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
@@ -111,19 +108,20 @@ TEST_F(SaveFailureContainmentTest, SaveFailureFailsOnlyOffendingJob) {
   auto failing = makePrompt("Say hi.");
   failing.cacheKey = badCachePath.string();
   failing.saveCacheToDisk = true;
-  // A 4-token run drains (and its save throws) roughly 250 tokens before
+  // A 4-token run drains (and its save fails) roughly 250 tokens before
   // the survivor's essay can finish.
   failing.generationParams.n_predict = 4;
 
-  try {
-    model->processPromptBatch(std::vector<LlamaModel::Prompt>{failing});
-    FAIL() << "expected UnableToSaveSessionFile for the failing job";
-  } catch (const qvac_errors::StatusError& e) {
-    EXPECT_NE(
-        std::string(e.codeString()).find("UnableToSaveSessionFile"),
-        std::string::npos)
-        << "unexpected error for the failing job: " << e.what();
-  }
+  std::vector<std::string> failingOutputs;
+  ASSERT_NO_THROW(
+      failingOutputs =
+          model->processPromptBatch(std::vector<LlamaModel::Prompt>{failing}))
+      << "a failed cache save must not discard the finished answer";
+  ASSERT_EQ(failingOutputs.size(), 1u);
+  EXPECT_FALSE(failingOutputs[0].empty());
+  EXPECT_GE(
+      test_common::getStatValue(model->runtimeStats(), "cacheSaveFailed"),
+      1.0);
 
   if (survivorFuture.wait_for(std::chrono::seconds(120)) !=
       std::future_status::ready) {

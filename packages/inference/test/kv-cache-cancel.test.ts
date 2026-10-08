@@ -117,6 +117,20 @@ test('shouldCommitCachedTurn: completed turn with tokens commits', (t) => {
   )
 })
 
+test('shouldCommitCachedTurn: failed cache save does not commit', (t) => {
+  t.is(
+    shouldCommitCachedTurn({
+      aborted: false,
+      producedTokens: true,
+      generatedTokens: 12,
+      predict: 64,
+      stoppedAtContextBoundary: false,
+      cacheSaveFailed: true
+    }),
+    false
+  )
+})
+
 test('shouldCommitCachedTurn: token-budget stop rolls back', (t) => {
   t.is(
     shouldCommitCachedTurn({
