@@ -60,10 +60,10 @@ void loadBackendsOnce(const std::string& backendsDir);
 // included. That set is wider than llm-llamacpp and embed-llamacpp on purpose:
 // ROCm is the HIP Strix Halo target, which those addons do not ship.
 //
-// Among accepted devices the order is CUDA, then HIP/ROCm, then the first
-// discrete GPU, then the first iGPU. CUDA first covers a mixed NVIDIA and AMD
-// host only when the CUDA backend registers; an NVIDIA GPU seen only through
-// Vulkan still loses to ROCm.
+// Among accepted devices the order is a discrete CUDA GPU, then HIP/ROCm, then
+// the first discrete GPU, then an integrated CUDA GPU, then the first iGPU.
+// CUDA first covers a mixed NVIDIA and AMD host only when the CUDA backend
+// registers; an NVIDIA GPU seen only through Vulkan still loses to ROCm.
 //
 // `backendOverride`, when non-empty, restricts the choice to those families in
 // priority order, then falls through to the normal order if none match. The

@@ -173,6 +173,7 @@ ggml_backend_dev_t pickBestGpuDevice(
   ggml_backend_dev_t fallbackIgpu = nullptr;
   ggml_backend_dev_t hipDev = nullptr;
   ggml_backend_dev_t cudaDev = nullptr;
+  ggml_backend_dev_t cudaIgpu = nullptr;
   // QVAC-23763: every device that passed the Adreno gate, paired with its
   // lowercased backend name, so an override can only ever choose among devices
   // the gate already accepted.
@@ -270,8 +271,13 @@ ggml_backend_dev_t pickBestGpuDevice(
     // QVAC-23763: ggml-cuda names its devices "CUDA%d". ggml-hip reports
     // "ROCm%d" instead, so this cannot collide with the AMD device above.
     const bool isCuda = backendLower.find("cuda") != std::string::npos;
-    if (isCuda && cudaDev == nullptr) {
+    // A discrete GPU beats an integrated CUDA one (Jetson, GB10), and CUDA
+    // still leads among integrated GPUs.
+    if (isCuda && t == GGML_BACKEND_DEVICE_TYPE_GPU && cudaDev == nullptr) {
       cudaDev = dev;
+    }
+    if (isCuda && t == GGML_BACKEND_DEVICE_TYPE_IGPU && cudaIgpu == nullptr) {
+      cudaIgpu = dev;
     }
 
     accepted.emplace_back(backendLower, dev);
@@ -320,7 +326,10 @@ ggml_backend_dev_t pickBestGpuDevice(
         "vla_backend_selection: preferring HIP/ROCm GPU (Vulkan is fallback)");
     return hipDev;
   }
-  return fallbackGpu != nullptr ? fallbackGpu : fallbackIgpu;
+  if (fallbackGpu != nullptr) {
+    return fallbackGpu;
+  }
+  return cudaIgpu != nullptr ? cudaIgpu : fallbackIgpu;
 }
 
 } // namespace vla_backend_selection
