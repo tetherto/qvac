@@ -1,0 +1,213 @@
+---
+title: Assess model fit
+icon: MemoryStick
+description: Check whether a model is likely to fit in memory before downloading it.
+schemaType: HowTo
+---
+
+## Overview
+
+[`assessModelFit()`](/sdk/reference/api#assessmodelfit) answers one question before anything is downloaded: is this model likely to fit in memory? For every candidate it runs the engine's own fitter — against the artifact where it is already on disk, and otherwise against the registry's weightless description of it, tens of KB, the tensor list with no data section. It also reads the model constant metadata together with a fresh memory sample, and returns a verdict for each candidate plus one for the set.
+
+It is **advisory**. It never downloads weights or loads a model, and it does not block [`loadModel()`](/sdk/reference/api#loadmodel), reserve memory, pick a model for you, or make any claim about speed.
+
+<Callout type="info">
+A catalog model constant or a path already on disk gets a verdict.
+</Callout>
+
+## Functions
+
+1. [`assessModelFit()`](/sdk/reference/api#assessmodelfit) — describe the loads you are considering, as `loadModel()` takes them.
+2. [`downloadAsset()`](/sdk/reference/api#downloadasset) or [`loadModel()`](/sdk/reference/api#loadmodel) — fetch whichever candidate you picked.
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Parameters
+
+```ts
+assessModelFit({
+  models: [
+    {
+      modelSrc: QWEN3_8B_INST_Q4_K_M,
+      modelType: "llm",
+      modelConfig: { ctx_size: 8192 },
+    },
+  ],
+  execution: "sequential",
+});
+```
+
+### `models`
+
+The candidates, at least one. They are assessed together, against a single budget. Each takes the same parameters as [`loadModel()`](/sdk/reference/api#loadmodel):
+
+- `modelSrc` — the model, as `loadModel()` takes it. A catalog constant resolves to the registry's weightless description of the artifact; a path already on disk is read directly.
+- `modelType` — optional. The engine that would run the load, inferred from `modelSrc` when omitted, as `loadModel()` infers it. Required only where the source names no engine.
+- `modelConfig` — optional. The config `loadModel()` would be given, including the companion model sources a compound load needs.
+
+The engine's own plugin resolves that config, so the settings the fitter reads are the ones the load would run with, and the same object can be handed to `loadModel()` afterwards. The estimator reads its workload from the same config: `ctx_size` for a token context, `duration_ms` for an audio window.
+
+### `execution`
+
+Either `sequential` or `concurrent`:
+- `sequential`: counts every model as resident but adds only the largest single working peak.
+- `concurrent`: adds every peak.
+
+The mode describes what you intend to do so the numbers match your plan — the SDK does not schedule, serialize, or reserve anything on the strength of it.
+
+Defaults to `sequential`.
+
+### `policy`
+
+How much memory to withhold from the budget as headroom, left for the rest of the system:
+
+- `interactive-v1`: withholds 20% of the memory free at the time of the call, capped at 2 GiB on desktop and 1 GiB on mobile. Right now, it is the only accepted value and it applies by default, so passing it is optional.
+
+## Returns
+
+The result answers for the whole set, and `result.models` repeats the same shape for each candidate. These are the fields to branch on.
+
+### `verdict`
+
+| Verdict | Meaning |
+| --- | --- |
+| `likely-fits` | The measured demand is within the memory budget. |
+| `likely-too-large` | The demand exceeds the budget, or an engine refused it. |
+| `unknown` | The evidence does not support either claim. |
+
+### `evidence`
+
+What backs the verdict.
+
+| `evidence` | What it is | Can say |
+| --- | --- | --- |
+| `native-fit` | The engine's own fitter, run against the artifact on disk, or against the registry's weightless description of it. | any verdict |
+| `computed-only` | A floor from catalog facts alone — artifact bytes, plus the KV cache for llama.cpp models — reported as `floorBytes`. | `likely-too-large` or `unknown` |
+
+`native-fit` is the answer the loader itself would give on this machine. The fitter reports the bytes it would allocate, and those bytes compose: each candidate is measured on its own, and the set is summed under one budget according to `execution`. A refusal from the fitter stands on its own, whatever the arithmetic says, because it knows things the byte total does not carry.
+
+`computed-only` is the fallback wherever the fitter reaches no verdict. A set rests on its weakest evidence, so one `computed-only` model makes the whole result `computed-only`.
+
+Read `evidence` alongside the verdict, because the same `unknown` can mean different things:
+- Under `native-fit`, the numbers came out too close to call.
+- Under `computed-only`, nothing measured this load, so the answer says nothing about whether the model fits.
+
+That difference matters once you act on the result. Hiding the `likely-too-large` candidates works the same way under both, since that verdict is trustworthy either way. Telling a user that a model will fit needs `native-fit`; the computed floor never produces `likely-fits`.
+
+### `basis`
+
+The memory the verdict was weighed against:
+
+- `system-memory` — device RAM and system-wide use. Desktop, and Android, whose low-memory killer acts system-wide.
+- `process-memory` — the app's own ceiling. iOS, where jetsam terminates an app on its own footprint against a limit well below device RAM.
+- `device-memory` — a discrete GPU's own memory, when the model would execute there.
+- `device-budget` — on Windows, the GPU memory the OS grants this process, since a card's readings there are per-process rather than device-wide.
+
+Both device bases additionally require the `system-memory` budget to hold, because a GPU load is paid for in system RAM too.
+
+### `device`
+
+Per model: where that load resolved to execute, `gpu` or `cpu`, after the device defaults this host applies for itself. Absent for an engine that expresses no placement.
+
+Read it alongside `evidence`. The llama fitters read device memory alone and decline a `cpu` load, so one there carries no `native-fit` and falls back to the computed floor. The speech and voice fitters answer for a `cpu` load like any other.
+
+### `reasons`
+
+Every `unknown` names its cause here — on the model when the cause is that model, on the result when it is the machine. A verdict that fell back because the fitter produced nothing says so, and names what the fitter reported. The ones you are most likely to meet:
+- The fitter could not be asked, or ran and declined — the reason names what it reported.
+- The model is not a catalog constant, so there is no resource profile to read.
+- The model's engine has no fitter, so nothing sizes the load beyond its weights.
+
+## Where verdicts are available
+
+`native-fit` evidence — and with it any `likely-fits` — exists wherever the engine's own fitter runs: every platform that ships that engine's addon, mobile included, for a source on disk or with a published registry description.
+
+The fitter covers `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`, `parakeet-transcription`, `bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml` and `sdcpp-generation`. Audiogen and diffusion report no byte breakdown, so a `fit` from them falls back to the floor while a refusal still stands.
+
+Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers `nmtcpp-translation`, `onnx-tts`, `ggml-ocr`, `ggml-vla` and `ggml-classification`, sharded models, multimodal completion loads naming a projection model, and any source whose registry description cannot be fetched.
+
+The longer treatment, including how a GPU changes which memory the budget measures, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
+
+## Load-time probe
+
+Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. Desktop runs it in a disposable child process. Mobile, which cannot spawn one, runs it on a worker thread.
+
+A crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
+
+[`getLoadedModelInfo()`](/sdk/reference/api#getloadedmodelinfo) returns the outcome as `fitProbe`:
+- `verdict` — `fit`, `does-not-fit`, or `unknown`. These are unhedged, unlike the verdicts above, because the probe measured this build against this file.
+- `engine` — the engine package whose fitter ran.
+- `reason` and `message` — why the probe reached that verdict.
+- `plan` — the placement it projected, where the fitter resolved one: `nCtx`, `nGpuLayers`, `nGpuDevices`.
+- `projection` — what the fitter measured, present on `fit` and `does-not-fit` alike. Engines do not all measure the same things, so every field is optional: `deviceBytes` and `hostBytes` for the peaks, `weightsBytes`, `contextBytes` and `computeBytes` within `deviceBytes` where the engine separates them, `deviceFreeBytes` and `deviceTotalBytes`, and `report`, the engine's own memory table.
+
+### `modelFitPolicy`
+
+Pass it to `loadModel()` for one load, or set it in the engine config for every load.
+
+- `log` (default) — the verdict is reported and the load proceeds.
+- `refuse` — a load the fitter projects will not fit is rejected with `MODEL_FIT_REFUSED` before the addon allocates anything. Only `does-not-fit` refuses; `unknown` never does, so a load is never refused for lack of evidence.
+- `off` — the probe does not run, and `fitProbe` is then absent.
+
+```typescript
+await loadModel({
+  modelSrc: QWEN3_8B_INST_Q4_K_M,
+  modelType: 'llamacpp-completion',
+  modelConfig: { ctx_size: 8192 },
+  modelFitPolicy: 'refuse'
+})
+```
+
+## Examples
+
+### Assess before download
+
+The following script asks which of five Qwen3 models this machine is likely to run at 8192 tokens of context, printing the budget basis, each verdict against the model's size on disk, and the reasons behind every `unknown`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/assess-model-fit.js title="assess-model-fit.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/assess-model-fit.ts title="assess-model-fit.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Load-time probe
+
+The following script loads Qwen3.5 0.8B at 4k context, which the fitter projects to fit, and reprints the `[advisory-fit:…]` verdicts from the SDK log stream. Set `QVAC_FIT_DEMO_ATTEMPT_OVERSIZED=1` to also load gpt-oss-20B at 128k context with an f32 KV cache, which it projects not to fit and loads anyway:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/advisory-model-fit.js title="advisory-model-fit.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/advisory-model-fit.ts title="advisory-model-fit.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>

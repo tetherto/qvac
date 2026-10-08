@@ -294,6 +294,9 @@
 # one, it would not reach the bare form anyway, and a literal line makes a
 # cut visible in the diff. `scripts/cut-line.ts` writes all three rules of
 # the line a cut preserves.
+/sdk/v0.21/        /sdk/v0.21/index.html        200
+/sdk/v0.21         /sdk/v0.21/                  301
+/sdk/v0.21/*       /sdk/v0.21/:splat/index.html 200
 /sdk/v0.20/        /sdk/v0.20/index.html        200
 /sdk/v0.20         /sdk/v0.20/                  301
 /sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200
