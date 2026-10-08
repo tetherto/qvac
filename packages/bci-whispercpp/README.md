@@ -315,14 +315,14 @@ In streaming `delta` mode each segment is annotated with `windowStartTimestep`. 
 
 ## Assessing fit
 
-`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The model ships as `.bin`, which the registry has no weightless form for, so the projection needs the file on disk. It is a module export, not an instance method — nothing is loaded to call it.
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The model and the embedder ship as `.bin`; for each, the QVAC registry also publishes a weightless description (a GGUF holding the file's settings and array sizes, tens of KB), and passing it projects exactly as passing the file does, so a load can be assessed before it is downloaded. It is a module export, not an instance method — nothing is loaded to call it.
 
 ```js
 const { assessFit } = require('@qvac/bci-whispercpp')
 
 const fit = assessFit({
   modelPath: '/models/bci-whisper.bin',
-  embedderPath: '/models/embedder.gguf',
+  embedderPath: '/models/bci-embedder.bin',
   audioSeconds: 300,
   decoders: 5
 })
@@ -336,15 +336,16 @@ fit.weightsBytes
 fit.kvBytes
 fit.computeBytes
 fit.hostBytes
+fit.embedderBytes
 fit.report
 ```
 
-This covers the whisper half of the load. `embedderFileBytes` reports the embedder's size on disk, 0 when no path was given. The embedder has no fitter, so that figure is a size on disk. It is counted in neither `deviceBytes` nor `hostBytes`.
+The projection covers the whisper model and the embedder. `embedderBytes` is the host RAM the embedder keeps: its day and month projections, its session map and the dense projection it caches per day. It is counted in `hostBytes`, and on a device that shares system RAM it is part of the verdict. An embedder that cannot be read is `status: "error"` with reason `embedder-unreadable`.
 
 | Option | Description |
 | --- | --- |
-| `modelPath` | **Required.** Absolute path to the BCI model. |
-| `embedderPath` | Sized alongside the projection; reported as `embedderFileBytes`. |
+| `modelPath` | **Required.** Absolute path to the BCI model, or to its weightless description. |
+| `embedderPath` | The embedder, or its weightless description. Its host RAM is reported as `embedderBytes` and counted in `hostBytes`. Omitted, `bci-embedder.bin` next to `modelPath` is read, as a load reads it. |
 | `audioSeconds` | Longest single transcribe the projection must cover. |
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, the projection runs on the GPU, matching what the load does. |
 | `gpuDevice` | As the load takes it. |
@@ -352,7 +353,7 @@ This covers the whisper half of the load. `embedderFileBytes` reports the embedd
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to whisper's own headroom. |
 | `backendsDir` | Where the dynamically-loaded ggml backends live. Defaults to the directory a real load uses, since the native side registers backends once per process. |
 
-A model the fitter cannot read is `status: "error"`; a broken request, or a host with no native binding, throws.
+A model or embedder the fitter cannot read is `status: "error"`; a broken request, or a host with no native binding, throws.
 
 ## Tests
 
