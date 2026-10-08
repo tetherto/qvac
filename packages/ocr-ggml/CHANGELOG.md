@@ -4,6 +4,14 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.1] - 2026-10-08
+
+### Fixed
+
+- Rebuild Android prebuilds with NDK 29 to restore compatibility with the app's
+  C++ runtime and fix addon loading failures caused by the missing
+  `std::__ndk1::__hash_memory` symbol in the NDK 30 builds published in `0.27.0`.
+
 ## [0.27.0] - 2026-10-06
 
 ### Changed
