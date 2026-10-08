@@ -83,6 +83,10 @@ class TypeGraph:
             return primitives[typ]
         if typ == "array":
             return "List<" + self.resolve(schema.get("items", {}), hint + "Item") + ">"
+        if typ == "object" and schema.get("properties") and schema.get("additionalProperties", False) is not False:
+            # Typed but explicitly open, like a tool's JSON Schema `parameters`: a
+            # data class would drop every key it does not declare, so keep it whole.
+            return "JsonObject"
         if typ == "object" and not schema.get("properties") and schema.get("additionalProperties", True) is not False:
             additional = schema.get("additionalProperties", {})
             return "Map<String, " + self.resolve(additional, hint + "Value") + ">"

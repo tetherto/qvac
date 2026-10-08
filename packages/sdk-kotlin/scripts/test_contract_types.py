@@ -13,6 +13,18 @@ class ContractTypesTest(unittest.TestCase):
         graph = TypeGraph({"$defs": {"A": {"type": "object", "additionalProperties": True}}})
         self.assertEqual("Map<String, JsonElement>", graph.roots["A"])
 
+    def test_open_object_with_properties_keeps_every_key(self):
+        graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"tool": {
+            "type": "object", "properties": {"type": {"type": "string"}}, "additionalProperties": {}
+        }}}}})
+        self.assertIn("val `tool`: JsonObject?", graph.render())
+
+    def test_closed_object_with_properties_stays_a_data_class(self):
+        graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"cfg": {
+            "type": "object", "properties": {"n": {"type": "integer"}}, "additionalProperties": False
+        }}}}})
+        self.assertIn("class ACfg(", graph.render())
+
     def test_unresolved_reference_fails(self):
         with self.assertRaisesRegex(ValueError, "Unresolved"):
             TypeGraph({"$defs": {"A": {"$ref": "#/$defs/missing"}}})
