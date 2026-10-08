@@ -15,4 +15,5 @@ benchmarks
 index.js
 addon.js
 addonLogging.js
+laya.js
 src

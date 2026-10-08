@@ -18,3 +18,5 @@ export {
 // tools such as the CLI's `qvac configure` document every addon's config
 // without a hand-maintained per-addon list.
 export { configSchemaForModelType, MODEL_CONFIG_SCHEMA_BY_TYPE } from '@qvac/inference/surface'
+
+export { modelFitPolicySchema, type ModelFitPolicy } from '@qvac/inference/surface'
