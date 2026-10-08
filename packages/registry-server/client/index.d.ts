@@ -42,9 +42,12 @@ export interface QVACModelEntry {
    * engine's dry-run fitter reads, with none of the weights.
    *
    * - For a GGUF it is a short GGUF holding the tensor list and the settings
-   *   without the tokenizer tables; for a safetensors it is the JSON header.
-   * - Present for GGUF and safetensors artifacts, every shard of a split model
-   *   included; absent for other formats and when it could not be built.
+   *   without the tokenizer tables; for a safetensors it is the JSON header;
+   *   for the `.bin` and `.spm` artifacts of the whisper.cpp, BCI and nmt.cpp
+   *   engines it is a GGUF with no data section holding the file's settings,
+   *   tensor list and vocabulary sizes.
+   * - Present for those formats, every shard of a split model included; absent
+   *   for other formats and when it could not be built.
    * - Written to the writer's active blob core, which is not always the one
    *   holding the weights; `downloadBlob` takes the binding directly.
    * - `sha256` covers the description, not the artifact it came from.
