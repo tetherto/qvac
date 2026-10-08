@@ -1,4 +1,5 @@
 import type { ModelConstant } from '@qvac/sdk'
+import { modelFitPolicySchema, type ModelFitPolicy } from '@qvac/sdk/schemas'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from '@/serve/core/config/aliases/sdcpp-video'
 import { normalizeEndpointCategory } from '@/serve/core/config/endpoint-category'
@@ -10,6 +11,7 @@ export interface ConstantModelEntry {
   type?: string
   default?: boolean
   preload?: boolean
+  modelFitPolicy?: string
   config?: Record<string, unknown>
 }
 
@@ -18,6 +20,7 @@ export interface ExplicitModelEntry {
   type: string
   default?: boolean
   preload?: boolean
+  modelFitPolicy?: string
   config?: Record<string, unknown>
 }
 
@@ -126,6 +129,7 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
     preload: entry.preload !== false,
+    ...modelFitPolicyOf(alias, entry.modelFitPolicy),
     config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
 }
@@ -154,8 +158,25 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
     endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
     preload: entry.preload === true,
+    ...modelFitPolicyOf(alias, entry.modelFitPolicy),
     config: resolveNestedModelSrcConstants(resolved.config, `serve.models.${alias}.config`)
   }
+}
+
+function modelFitPolicyOf(
+  alias: string,
+  value: string | undefined
+): { modelFitPolicy?: ModelFitPolicy } {
+  if (value === undefined) return {}
+  const parsed = modelFitPolicySchema.safeParse(value)
+  if (!parsed.success) {
+    throw new Error(
+      `serve.models.${alias}.modelFitPolicy: expected one of ${modelFitPolicySchema.options
+        .map((option) => `"${option}"`)
+        .join(', ')}, got "${value}"`
+    )
+  }
+  return { modelFitPolicy: parsed.data }
 }
 
 export function resolveDefaults(models: Map<string, ResolvedModelEntry>): Map<string, string> {
