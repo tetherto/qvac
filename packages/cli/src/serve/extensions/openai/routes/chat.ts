@@ -152,6 +152,9 @@ in place of the object form — is rejected with \`invalid_tool_choice\`. A tool
 that sets \`defer_loading\` cannot be named: its schema is not in the prompt, so
 there is nothing to constrain. Name \`tool_search\` instead.
 
+**\`parallel_tool_calls\`**: \`true\` (default) lets one response carry several
+tool calls; \`false\` limits it to one.
+
 **Deferred tools**: a \`tools[]\` entry may set \`defer_loading: true\` (and an
 optional \`group\`), keeping its parameter schema out of the prompt until the
 model asks for it. The model sees a compact catalog carried by a built-in

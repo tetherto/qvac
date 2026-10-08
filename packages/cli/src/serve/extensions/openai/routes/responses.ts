@@ -83,6 +83,9 @@ addressable via GET / DELETE / input_items.
 \`{ type: 'function', name }\` to force one tool. \`required\` and a named tool
 constrain generation with the chat template's tool grammar.
 
+**\`parallel_tool_calls\`**: \`true\` (default) lets one response carry several
+tool calls; \`false\` limits it to one.
+
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
 (\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
 and terminates **without** a \`[DONE]\` sentinel (per the spec).

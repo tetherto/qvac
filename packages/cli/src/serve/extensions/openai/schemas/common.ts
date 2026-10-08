@@ -98,6 +98,7 @@ export interface GenerationParams {
   remove_thinking_from_context?: boolean
   /** `auto` | `none` | `required` | a declared tool's name. */
   tool_choice?: string
+  parallel_tool_calls?: boolean
 }
 
 export type ResponseFormat =
@@ -271,6 +272,20 @@ export function withToolChoice(
 ): GenerationParams | undefined {
   if (choice === undefined) return params
   return { ...(params ?? {}), tool_choice: choice }
+}
+
+/**
+ * Fold `parallel_tool_calls` into the generation params for a request with
+ * tools. Unset means `true`, as in the OpenAI API; the SDK's own default is a
+ * single call, so it is always sent explicitly.
+ */
+export function withParallelToolCalls(
+  params: GenerationParams | undefined,
+  parallel: boolean | undefined,
+  tools: Tool[] | undefined
+): GenerationParams | undefined {
+  if (!tools || tools.length === 0) return params
+  return { ...(params ?? {}), parallel_tool_calls: parallel ?? true }
 }
 
 function toolChoiceToSdk(raw: unknown): string {
