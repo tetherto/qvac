@@ -63,8 +63,12 @@ const MEMORY_KEYS: Record<LlamaLoadKind, readonly string[]> = {
   embedding: ['gpu_layers', 'batch_size', 'flash_attn', 'main-gpu', 'split-mode', 'tensor-split']
 }
 
-/** Shapes the SDK resolves elsewhere; reaching here means they were not. */
-const UNSUPPORTED_KEYS: readonly string[] = ['lora', 'projection_model_src']
+/**
+ * Shapes the SDK resolves elsewhere, and `rpc-servers`, which it resolves
+ * nowhere: the fit request reaches one local machine, so a load spread over
+ * remote GPUs would be measured against hardware the caller never named.
+ */
+const UNSUPPORTED_KEYS: readonly string[] = ['lora', 'projection_model_src', 'rpc-servers']
 
 export function llamaLoadKindFor(modelType: CanonicalModelType): LlamaLoadKind | undefined {
   if (modelType === ModelType.llamacppCompletion) return 'completion'

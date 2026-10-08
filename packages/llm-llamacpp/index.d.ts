@@ -117,6 +117,13 @@ declare namespace LlmLlamacpp {
     }
     interface LlamaConfig {
         device?: string;
+        /**
+         * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
+         * Accepted names: cuda, vulkan, metal, opencl, plus
+         * `auto` for no preference. An unrecognised name is rejected; a recognised
+         * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+         */
+        backend?: string;
         gpu_layers?: NumericLike;
         ctx_size?: NumericLike;
         system_prompt?: string;
