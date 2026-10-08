@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Metadata-only `assessFit()` for MOSS-TTS and MOSS-TTSD, including reference
+  encoding, batch or native streaming workloads, and host/device memory estimates.
+  MOSS fit requests require both backbone and codec decoder paths.
+
 - Metadata-only `assessFit()` for MOSS-SoundEffect, with required model path,
   prompt and duration, shared generation controls, and host/device memory estimates.
 
@@ -66,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MOSS-Speech calls that omit `maxNewTokens` use the remaining model context
+  after the prompt instead of an implicit 1000-token reply budget.
 - Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
   reports more free device memory than total once the process has allocated
   past the GPU's recommended working set, which made a model that does not fit
