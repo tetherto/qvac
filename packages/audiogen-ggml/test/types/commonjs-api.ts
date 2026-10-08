@@ -5,8 +5,11 @@ import {
   ERR_CODES,
   QvacErrorAudioGen,
   RepaintMode,
+  assessFit,
   detectEngineType,
   type AudioGenEngine,
+  type AudiogenFitRequest,
+  type AudiogenFitStatus,
   type AudiogenGenerationMetadata,
   type AudiogenMinimaxDevice,
   type AudiogenOutputChunk,
@@ -72,6 +75,15 @@ const strictMinimax = new AudioGen({
   config: { device }
 })
 const perRunSchedule = audioGen.run('lo-fi', { inferenceSteps: 12, shift: 2.5 })
+const minimaxFit: AudiogenFitRequest = {
+  engine: ENGINE_MINIMAX,
+  lmPath: '/models/mm3-lm.gguf',
+  synthPath: '/models/mm3-synth.gguf',
+  device,
+  maxFrames: 300,
+  promptTokens: 900
+}
+const minimaxVerdict: AudiogenFitStatus = assessFit(minimaxFit).status
 function readMetadata(stats: AudiogenStats): number | undefined {
   const metadata: AudiogenGenerationMetadata | undefined = stats.metadata
   return metadata === undefined
@@ -89,5 +101,6 @@ void editSession
 void editResponse
 void strictMinimax
 void perRunSchedule
+void minimaxVerdict
 void readMetadata
 void operationType
