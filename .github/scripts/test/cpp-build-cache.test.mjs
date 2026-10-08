@@ -34,6 +34,60 @@ test('coverage builds cap CMake and vcpkg concurrency together', () => {
   }
 })
 
+test('documented TTS dispatch exercises matrix flattening and override validation', () => {
+  const doc = readFileSync(join(ROOT, 'docs/ci/nx-ci-consolidation.md'), 'utf8')
+  const overrides = doc.match(/-f overrides='([^']+)'/)[1]
+  const action = readFileSync(join(ROOT, '.github/actions/nx-project-matrix/action.yml'), 'utf8').replaceAll('\r\n', '\n')
+  const body = action.slice(action.lastIndexOf('      run: |\n') + '      run: |\n'.length)
+    .split('\n').map((line) => line.slice(8)).join('\n')
+  const directory = mkdtempSync(join(tmpdir(), 'cpp-dispatch-'))
+  const output = join(directory, 'output')
+  try {
+    // Native Windows jq writes CRLF; Linux runners use LF.
+    const jqWrapper = "jq() { command jq \"$@\" | tr -d '\\r'; }\n"
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', jqWrapper + body], {
+      cwd: ROOT, encoding: 'utf8',
+      env: { ...process.env, INPUT_TARGET: 'test:cpp', INPUT_PACKAGES: '["tts-ggml"]',
+        INPUT_OVERRIDES: overrides, INPUT_CONFIG_REF: 'HEAD', INPUT_BASE_REF: 'HEAD',
+        INPUT_HEAD_REF: 'HEAD', GITHUB_OUTPUT: output.replaceAll('\\', '/') },
+    })
+    assert.equal(result.status, 0, result.stderr + result.stdout)
+    const matrix = JSON.parse(readFileSync(output, 'utf8').match(/^matrix=(.+)$/m)[1])
+    assert.equal(matrix.length, 1)
+    assert.equal(matrix[0].os, 'ubuntu-24.04')
+    assert.equal(matrix[0].runner, 'qvac-ubuntu2404-x64-gpu')
+    assert.equal(matrix[0].cppBuildJobs, 2)
+    assert.equal(matrix[0].platform, 'linux')
+    assert.equal(matrix[0].arch, 'x64')
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('AudioGen native build restores caches, limits builds and propagates failures', () => {
+  const source = readFileSync(join(ROOT, '.github/workflows/cpp-test-coverage-audiogen-ggml.yml'), 'utf8')
+  assert.doesNotMatch(source, /fuzz-ready|needs.detect|fuzz:build|fuzz:run/)
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'packages/audiogen-ggml/package.json'), 'utf8'))
+  assert.ok(manifest.scripts['build:native'])
+  assert.match(source, /cppBuildJobs: 2/)
+  assert.match(source, /hasCcache: true/)
+  assert.match(source, /vcpkg-binary-cache-dir/)
+  assert.match(source, /vcpkg-toolchain-fingerprint/)
+  assert.match(source, /configure-cpp-build.mjs/)
+  assert.match(source, /npm run build:native/)
+  assert.match(source, /No addon-level C\+\+ tests yet/)
+  assert.doesNotMatch(source, /continue-on-error/)
+  const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c',
+    'npm() { return 134; }\nnpm run build:native'], { encoding: 'utf8' })
+  assert.equal(result.status, 134, result.stderr)
+  for (const name of ['Save vcpkg cache (trusted contexts)', 'Save ccache (trusted contexts)']) {
+    const block = source.split('\n      - ').find((text) => text.startsWith(`name: ${name}\n`))
+    assert.match(block, /github.event.repository.default_branch/)
+    assert.match(block, /inputs.repository == github.repository/)
+    assert.match(block, /inputs.ref == github.ref_name/)
+  }
+})
+
 test('compiler caches are isolated per package and use compiler contents', () => {
   const settings = configureCppBuild(environment())
   assert.equal(settings.CCACHE_DIR, join(tmpdir(), 'cpp-ccache', 'asr-ggml'))

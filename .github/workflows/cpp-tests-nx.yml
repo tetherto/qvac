@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       overrides:
-        description: 'JSON package CI overrides, e.g. platforms or cppBuildJobs, for runner comparisons.'
+        description: 'JSON package CI overrides, e.g. os, runner or cppBuildJobs, for runner comparisons.'
         required: false
         type: string
         default: '{}'

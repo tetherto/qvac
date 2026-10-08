@@ -68,7 +68,7 @@ Per-run overrides are possible via the action's `overrides` input, but only for 
 
 For `asr-ggml`, `tts-ggml`, `audiogen-ggml`, and `bci-whispercpp`, PR-time cpp-lint additionally requires a changed C/C++ source or header (`.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, or `.hxx`) inside that package. The filter uses API-reported paths, including deleted files and previous paths for renames. Vcpkg version-only bumps skip cpp-lint, and the merge guard accepts that skipped job. Manual dispatch retains the affected packages' cpp-lint lanes.
 
-Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` has a hosted CPU stub until addon-level C++ tests exist. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
+Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` builds its native addon on the Ubuntu 22.04 CPU runner, with trusted vcpkg and per-package compiler caches and two build workers. Addon-level C++ tests remain a stub. Default-branch pushes or dispatches warm the AudioGen caches. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
 
 The consolidated coverage lane restores vcpkg binaries from the host cache and
 the package's keyed cache, including its build mode, triplets, and toolchain
@@ -100,7 +100,7 @@ without changing its default CPU routing:
 
 ```bash
 gh workflow run cpp-tests-nx.yml --ref main -f packages='["tts-ggml"]' \
-  -f overrides='{"tts-ggml":{"platforms":[{"os":"ubuntu-24.04","platform":"linux","arch":"x64","runner":"qvac-ubuntu2404-x64-gpu"}],"cppBuildJobs":2}}'
+  -f overrides='{"tts-ggml":{"os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64-gpu","cppBuildJobs":2}}'
 ```
 
 Package config is read from the trusted base ref. After merging a runner change into `main`, start a new run for an existing PR to resolve the updated matrix; already queued jobs retain the labels selected by their original run.
