@@ -1,0 +1,194 @@
+name: SDK E2E node prepare
+description: >-
+  Install and build the SDK and the packages/sdk/e2e consumer for a
+  runner-hosted SDK e2e leg: registries, the resolved inference and test-suite,
+  MQTT certificates, then both installs and builds. Shared by
+  test-node-sdk.yml and test-snap-sdk.yml; anything one family alone needs
+  stays in its own workflow.
+
+# Reads NPM_TOKEN and GITHUB_TOKEN from the job environment, as the calling
+# jobs already export them for every step.
+
+inputs:
+  project-directory:
+    description: "Root project directory (where package.json lives)"
+    required: true
+  working-directory:
+    description: "Consumer / test runner directory"
+    required: true
+  inference-source:
+    description: "Resolved inference source"
+    required: false
+    default: manifest
+  inference-dependency-spec:
+    description: "Resolved inference package spec for npm"
+    required: false
+    default: ""
+  inference-artifact-name:
+    description: "Branch inference tarball artifact"
+    required: false
+    default: ""
+  inference-provenance:
+    description: "Immutable inference source identity"
+    required: false
+    default: ""
+  test-suite-source:
+    description: "Resolved test-suite source"
+    required: false
+    default: manifest
+  test-suite-dependency-spec:
+    description: "Resolved test-suite package spec for npm"
+    required: false
+    default: ""
+  test-suite-artifact-name:
+    description: "Branch test-suite tarball artifact"
+    required: false
+    default: ""
+  test-suite-provenance:
+    description: "Immutable test-suite source identity"
+    required: false
+    default: ""
+  mqtt-ca-cert:
+    description: "MQTT CA certificate (PEM); empty = none"
+    required: false
+    default: ""
+  mqtt-client-cert:
+    description: "MQTT client certificate (PEM); empty = none"
+    required: false
+    default: ""
+  mqtt-client-key:
+    description: "MQTT client key (PEM); empty = none"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Configure npm registries
+      shell: node {0}
+      env:
+        PROJECT_DIRECTORY: ${{ inputs.project-directory }}
+      run: |
+        const fs = require('fs');
+        const path = require('path');
+
+        if (!process.env.NPM_TOKEN) { console.log('❌ NPM_TOKEN is empty'); process.exit(1); }
+        if (!process.env.GITHUB_TOKEN) { console.log('❌ GITHUB_TOKEN is empty'); process.exit(1); }
+
+        const lines = [
+          'registry=https://registry.npmjs.org/',
+          '@qvac:registry=https://registry.npmjs.org/',
+          '@tetherto:registry=https://npm.pkg.github.com/',
+          `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
+          `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
+        ];
+        const npmrc = lines.join('\n');
+        const target = path.join(process.env.PROJECT_DIRECTORY, '.npmrc');
+        fs.writeFileSync(target, npmrc, 'utf8');
+        console.log(`.npmrc configured at ${target}`);
+
+    - name: Apply resolved inference
+      uses: ./.github/actions/sdk-e2e-prepare-inference
+      with:
+        source: ${{ inputs.inference-source }}
+        dependency-spec: ${{ inputs.inference-dependency-spec }}
+        artifact-name: ${{ inputs.inference-artifact-name }}
+        project-directory: ${{ inputs.project-directory }}
+        provenance: ${{ inputs.inference-provenance }}
+
+    - name: Apply resolved test-suite
+      uses: ./.github/actions/sdk-e2e-prepare-test-suite
+      with:
+        source: ${{ inputs.test-suite-source }}
+        dependency-spec: ${{ inputs.test-suite-dependency-spec }}
+        artifact-name: ${{ inputs.test-suite-artifact-name }}
+        project-directory: ${{ inputs.working-directory }}
+        provenance: ${{ inputs.test-suite-provenance }}
+
+    - name: Setup MQTT certificates
+      shell: node {0}
+      env:
+        CA_CERT: ${{ inputs.mqtt-ca-cert }}
+        CLIENT_CERT: ${{ inputs.mqtt-client-cert }}
+        CLIENT_KEY: ${{ inputs.mqtt-client-key }}
+      run: |
+        const fs = require('fs');
+        const path = require('path');
+        const os = require('os');
+
+        const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
+        fs.mkdirSync(certsDir, { recursive: true });
+
+        const caCert = (process.env.CA_CERT || '').trim();
+        const clientCert = (process.env.CLIENT_CERT || '').trim();
+        const clientKey = (process.env.CLIENT_KEY || '').trim();
+
+        if (caCert) {
+          const caPath = path.join(certsDir, 'ca.crt');
+          fs.writeFileSync(caPath, caCert, 'utf8');
+          fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
+          console.log('✅ CA certificate written');
+        }
+
+        if (clientCert) {
+          const certPath = path.join(certsDir, 'client.crt');
+          fs.writeFileSync(certPath, clientCert, 'utf8');
+          fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CERT_PATH=${certPath}\n`, 'utf8');
+          console.log('✅ Client certificate written');
+        }
+
+        if (clientKey) {
+          const keyPath = path.join(certsDir, 'client.key');
+          fs.writeFileSync(keyPath, clientKey, 'utf8');
+          fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_KEY_PATH=${keyPath}\n`, 'utf8');
+          console.log('✅ Client key written');
+        }
+
+    # The runner's default shell for each OS, as these ran before they moved
+    # into this action: composite steps must name one.
+    - name: Install dependencies (root)
+      shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+      working-directory: ${{ inputs.project-directory }}
+      run: bun install
+
+    - name: Build project (root)
+      shell: node {0}
+      working-directory: ${{ inputs.project-directory }}
+      run: |
+        const { execSync } = require('child_process');
+        const fs = require('fs');
+
+        const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+        if (packageJson.scripts && packageJson.scripts.build) {
+          console.log('Building root project...');
+          execSync('bun run build', { stdio: 'inherit' });
+        } else {
+          console.log('⚠️  No build script found in root package.json - skipping');
+        }
+
+    - name: Copy .npmrc to consumer directory
+      shell: node {0}
+      env:
+        PROJECT_DIRECTORY: ${{ inputs.project-directory }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: |
+        const fs = require('fs');
+        const path = require('path');
+        const projectDir = process.env.PROJECT_DIRECTORY;
+        const consumerDir = process.env.WORKING_DIRECTORY;
+        if (consumerDir !== projectDir) {
+          const source = path.join(projectDir, '.npmrc');
+          const npmrcContent = fs.readFileSync(source, 'utf8');
+          fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
+          console.log('.npmrc copied to consumer directory');
+        }
+
+    - name: Install dependencies (consumer)
+      shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+      working-directory: ${{ inputs.working-directory }}
+      run: npm install --install-links
+
+    - name: Build project (consumer)
+      shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+      working-directory: ${{ inputs.working-directory }}
+      run: bun run build

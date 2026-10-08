@@ -1,0 +1,158 @@
+name: SDK E2E node results
+description: >-
+  Tear down and publish one runner-hosted SDK e2e leg: stop a consumer that
+  outlived the run, upload its log and results, and compare them against a
+  base branch baseline when one is found. Every step runs whatever happened before it, so the
+  caller invokes this under always(). Shared by test-node-sdk.yml and
+  test-snap-sdk.yml; the artifact names are the results-<family>-<platform>
+  contract that sdk-e2e-report-finalize and sdk-e2e-base-state read.
+
+inputs:
+  family:
+    description: "SDK e2e family (desktop, electron, python, snap)"
+    required: true
+  platform:
+    description: "Platform key of the leg (linux, windows, macos)"
+    required: true
+  working-directory:
+    description: "Consumer / test runner directory"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Stop consumer (safety)
+      if: always()
+      shell: node {0}
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        const fs = require('fs');
+        if (!fs.existsSync('consumer.pid')) {
+          console.log('ℹ️  No consumer.pid file found');
+          return;
+        }
+
+        const pid = parseInt(fs.readFileSync('consumer.pid', 'utf8').trim());
+        console.log(`Found consumer PID: ${pid}`);
+
+        try {
+          process.kill(pid, 0);
+        } catch (e) {
+          console.log('ℹ️  Consumer process already terminated');
+          return;
+        }
+
+        try {
+          process.kill(pid, 'SIGTERM');
+          console.log('✅ Sent SIGTERM to consumer');
+        } catch (e) {
+          console.log(`⚠️  Failed to kill consumer: ${e.message}`);
+        }
+
+    - name: Upload consumer logs
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      with:
+        name: consumer-log-${{ inputs.family }}-${{ inputs.platform }}
+        path: ${{ inputs.working-directory }}/consumer.log
+        retention-days: 7
+
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      with:
+        name: results-${{ inputs.family }}-${{ inputs.platform }}
+        path: ${{ inputs.working-directory }}/reports/
+        retention-days: 30
+
+    - name: Download baseline for this platform (best-effort)
+      if: always() && github.event.pull_request.base.ref != ''
+      uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+      continue-on-error: true
+      with:
+        workflow: test-node-sdk.yml
+        branch: ${{ github.event.pull_request.base.ref }}
+        name: baseline-${{ inputs.family }}-${{ inputs.platform }}
+        path: ${{ inputs.working-directory }}/baseline
+        github_token: ${{ github.token }}
+        if_no_artifact_found: warn
+
+    - name: Compare vs baseline
+      if: always()
+      shell: node {0}
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        const fs = require('fs');
+        const path = require('path');
+        const { execSync } = require('child_process');
+
+        if (!fs.existsSync('baseline')) {
+          console.log('No baseline directory - skipping compare.');
+          process.exit(0);
+        }
+        const baselineFiles = fs.readdirSync('baseline').filter((f) => f.endsWith('.json'));
+        if (baselineFiles.length === 0) {
+          console.log('Baseline directory contains no json files - skipping compare.');
+          process.exit(0);
+        }
+        if (!fs.existsSync('reports')) {
+          console.log('No reports directory - skipping compare.');
+          process.exit(0);
+        }
+        const currentFiles = fs.readdirSync('reports')
+          .filter((f) => f.startsWith('results-') && f.endsWith('.json'));
+        if (currentFiles.length === 0) {
+          console.log('No current results json - skipping compare.');
+          process.exit(0);
+        }
+
+        const baseline = path.join('baseline', baselineFiles[0]);
+        const current = path.join('reports', currentFiles[0]);
+        const output = `comparison-${process.env.PLATFORM}.json`;
+        execSync(
+          `npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "${output}"`,
+          { stdio: 'inherit' }
+        );
+
+    - name: Format comparison
+      if: always()
+      shell: node {0}
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        const fs = require('fs');
+        const { execSync } = require('child_process');
+
+        const platform = process.env.PLATFORM;
+        const input = `comparison-${platform}.json`;
+        if (!fs.existsSync(input)) {
+          console.log('No comparison json - skipping format.');
+          process.exit(0);
+        }
+        execSync(
+          `npx qvac-test report:format --input "${input}" --format markdown --output "section-${platform}.md"`,
+          { stdio: 'inherit' }
+        );
+
+    - name: Upload report section
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      with:
+        name: report-section-${{ inputs.family }}-${{ inputs.platform }}
+        path: |
+          ${{ inputs.working-directory }}/section-*.md
+          ${{ inputs.working-directory }}/comparison-*.json
+        retention-days: 7
+        if-no-files-found: ignore
+
+    - name: Upload baseline (main/develop only)
+      if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      with:
+        name: baseline-${{ inputs.family }}-${{ inputs.platform }}
+        path: ${{ inputs.working-directory }}/reports/results-*.json
+        retention-days: 90
+        overwrite: true

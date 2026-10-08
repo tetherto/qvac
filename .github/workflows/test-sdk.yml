@@ -380,7 +380,7 @@ jobs:
             }
           }
 
-          // Same runner-label -> platform-key mapping as test-node-sdk.yml.
+          // Same runner-label -> platform-key mapping as the sdk-e2e-node-leg action.
           function platformKey(label) {
             const s = String(label).toLowerCase();
             if (s.includes('win')) return 'windows';
@@ -693,9 +693,8 @@ jobs:
   snap-tests:
     needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-snap == 'true'
-    uses: ./.github/workflows/test-node-sdk.yml
+    uses: ./.github/workflows/test-snap-sdk.yml
     with:
-      consumer: snap
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       platforms: ${{ needs.resolve.outputs.snap-platforms }}
