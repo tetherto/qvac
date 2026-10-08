@@ -76,8 +76,7 @@ export function configureDecisionsResource(resources: ResourceManager, modelPath
   }
   resources.define('decisions', {
     modelSrc: modelPath,
-    type: 'llamacpp-decisions',
-    config: { device: 'cpu' }
+    type: 'llamacpp-decisions'
   })
   return new DecisionsExecutor(resources)
 }

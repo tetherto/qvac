@@ -13770,9 +13770,9 @@
                   "type": "object",
                   "properties": {
                     "device": {
+                      "description": "Compute device. Default 'gpu'.",
                       "type": "string",
                       "enum": ["cpu", "gpu"],
-                      "description": "Required compute device.",
                       "title": "LoadModelSrcRequestLlamacppDecisionsModelConfigDevice"
                     },
                     "gpu_layers": {
@@ -13841,12 +13841,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["device"],
                   "additionalProperties": false,
                   "title": "LoadModelSrcRequestLlamacppDecisionsModelConfig"
                 }
               },
-              "required": ["type", "modelSrc", "modelType", "modelConfig"],
+              "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestLlamacppDecisions"
             },

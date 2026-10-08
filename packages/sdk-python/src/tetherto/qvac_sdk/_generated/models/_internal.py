@@ -12624,12 +12624,12 @@ class LoadModelSrcRequestLlamacppDecisionsModelConfig(GeneratedBaseModel):
         extra="forbid",
     )
     device: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfigDevice,
+        LoadModelSrcRequestLlamacppDecisionsModelConfigDevice | None,
         Field(
-            description="Required compute device.",
+            description="Compute device. Default 'gpu'.",
             title="LoadModelSrcRequestLlamacppDecisionsModelConfigDevice",
         ),
-    ]
+    ] = None
     gpu_layers: Annotated[
         int | None,
         Field(
@@ -12759,11 +12759,17 @@ class LoadModelSrcRequestLlamacppDecisions(GeneratedBaseModel):
         "llamacpp-decisions"
     )
     model_config_: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfig,
+        LoadModelSrcRequestLlamacppDecisionsModelConfig | None,
         Field(
             alias="modelConfig", title="LoadModelSrcRequestLlamacppDecisionsModelConfig"
         ),
-    ]
+    ] = None
+
+
+class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
