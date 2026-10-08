@@ -13,7 +13,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -121,6 +124,42 @@ class QvacCompletionApiTest {
 
         assertTrue(call.canInvoke)
         assertEquals("sunny in Rome", call.invoke().jsonPrimitive.content)
+    }
+
+    @Test
+    fun toolParametersSchemaIsSentAsWritten() {
+        val schema = buildJsonObject {
+            put("type", "object")
+            putJsonObject("properties") {
+                putJsonObject("stops") {
+                    put("type", "array")
+                    putJsonObject("items") {
+                        put("type", "object")
+                        putJsonObject("properties") { putJsonObject("name") { put("type", "string") } }
+                    }
+                }
+                putJsonObject("budget") {
+                    putJsonArray("anyOf") {
+                        add(buildJsonObject { put("type", "number") })
+                        add(buildJsonObject { put("type", "null") })
+                    }
+                }
+            }
+        }
+        val tool = QvacTool(name = "plan_trip", description = "Plan a trip", parametersSchema = schema)
+        assertEquals(schema, tool.toJson()["parameters"])
+    }
+
+    @Test
+    fun toolRejectsParametersSchemaAlongsideFlatParameters() {
+        assertFailsWith<IllegalArgumentException> {
+            QvacTool(
+                name = "plan_trip",
+                description = "Plan a trip",
+                parameters = mapOf("city" to QvacToolParameter(QvacToolParameterType.STRING)),
+                parametersSchema = buildJsonObject { put("type", "object") },
+            )
+        }
     }
 
     @Test

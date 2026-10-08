@@ -387,6 +387,10 @@ tool calls, final statistics, stop reason, and cancellation. Tool definitions
 can carry suspend handlers; `client.completion.orchestrate(...)` executes the
 worker-owned multi-turn tool loop and returns the same run type.
 
+A tool describes flat parameters with `parameters` and `required`, or passes a
+complete JSON Schema object as `parametersSchema` for nested `properties`,
+`items`, `anyOf` or `$defs`; that object is sent as written.
+
 `run()` intentionally accumulates the complete result, including streams not
 collected by the caller. Its memory usage grows with output. Use the cold
 `completion.stream(...)` or generated stream methods for incremental processing
