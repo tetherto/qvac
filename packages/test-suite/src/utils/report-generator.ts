@@ -536,6 +536,16 @@ export function generateHtmlReport(data: ReportData): string {
 				<div class="value" style="color: #f59e0b;">${skippedCount}</div>
 			</div>
 			${
+        incompleteCount > 0
+          ? `
+			<div class="stat-card" style="border-left: 3px solid #7c3aed;">
+				<h3>Incomplete</h3>
+				<div class="value" style="color: #5b21b6;">${incompleteCount}</div>
+				<div style="font-size:11px; color:#5b21b6; margin-top:4px;">no body or binding here</div>
+			</div>`
+          : ''
+      }
+			${
         retriedCount > 0
           ? `
 			<div class="stat-card" style="border-left: 3px solid #d97706; background: #fffbeb;">
@@ -708,6 +718,9 @@ export function generateHtmlReport(data: ReportData): string {
           const consumer = data.consumers.get(consumerId)
           const passed = tests.filter((t) => t.outcome === 'success').length
           const failed = tests.filter((t) => t.outcome === 'failure').length
+          const skipped = tests.filter((t) => t.outcome === 'skipped').length
+          const incomplete = tests.filter((t) => t.outcome === 'incomplete').length
+          const ran = tests.length - skipped - incomplete
           const avgDuration = tests.reduce((sum, t) => sum + t.duration, 0) / tests.length
           const shortId = consumerId.split('-').slice(1, 3).join('-')
 
@@ -721,7 +734,9 @@ export function generateHtmlReport(data: ReportData): string {
 							<span>Total Tests: ${tests.length}</span>
 							<span>✅ Passed: ${passed}</span>
 							<span>❌ Failed: ${failed}</span>
-							<span>Success Rate: ${((passed / tests.length) * 100).toFixed(1)}%</span>
+							<span>⏭️ Skipped: ${skipped}</span>
+							<span>🚫 Incomplete: ${incomplete}</span>
+							<span>Success Rate: ${ran > 0 ? ((passed / ran) * 100).toFixed(1) : '0.0'}%</span>
 							<span>Avg Duration: ${(avgDuration / 1000).toFixed(1)}s</span>
 						</div>
 					</div>

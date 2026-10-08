@@ -407,3 +407,28 @@ TEST(MossRealGguf, StreamingDeliversOrderedChunksThenOneLastMarker) {
   EXPECT_EQ(stream.lastMarkers, 1);
   expectSequentialIndices(stream.chunkIndices);
 }
+
+TEST(MossFitConfig, ValidatesCountsWithoutOpeningModelsOrReferences) {
+  MossConfig cfg;
+  cfg.backbonePath = "/not-downloaded/moss.gguf";
+  cfg.codecDecoderPath = "/not-downloaded/decoder.gguf";
+  cfg.referenceAudio = "/not-recorded/reference.wav";
+  EXPECT_NO_THROW(MossModel::validateFitConfig(cfg));
+  cfg.threads = -1;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+  cfg.threads = 0;
+  cfg.durationTokens = -1;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+  cfg.durationTokens = 0;
+  cfg.streamChunkFrames = -1;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+}
+
+TEST(MossFitConfig, RejectsConflictingGpuIntentLikeRuntime) {
+  MossConfig cfg;
+  cfg.useGpu = true;
+  cfg.nGpuLayers = 0;
+  EXPECT_THROW(MossModel::validateFitConfig(cfg), StatusError);
+  cfg.nGpuLayers = 1;
+  EXPECT_NO_THROW(MossModel::validateFitConfig(cfg));
+}

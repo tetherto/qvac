@@ -11,9 +11,10 @@ const PREBUILDS_DIR = bare_path_1.default.join(__dirname, '..', 'prebuilds');
  * Projects a BCI load against the memory free right now, reading model
  * metadata and never weight data.
  *
- * Covers the whisper half of the load. A model the fitter cannot read comes
- * back as `status: "error"`; a broken request, or a host with no native
- * binding, throws.
+ * Covers the whisper model and the embedder, from the files or from the
+ * registry's weightless descriptions of them. A model or embedder the fitter
+ * cannot read comes back as `status: "error"`; a broken request, or a host
+ * with no native binding, throws.
  *
  * The backend directory defaults to the one a real load uses. The native side
  * registers backends once per process, so a fit that let it fall back to the
