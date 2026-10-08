@@ -6,12 +6,9 @@
 // Device Farm legs on main, not one. Post-merge phone runs are not part of how
 // mobile is tested here — the on-demand dispatch lane is — so a Device Farm run
 // firing on every merge is spend with no reader, which the device-minute
-// programme exists to remove. decoder-audio via
-// mobile-gate-decoder-audio, and asr-ggml, bci-whispercpp and tts-ggml because
-// post-build-gate opens on a GPR publish too, not only npm, and publish-gpr
-// accepted publish_main. Those three set postIntegrationOnGpr in their
-// project.json, so the gate handed them post-publish-integration and a
-// mobile-post-publish-* Device Farm run on every main push.
+// programme exists to remove. decoder-audio, asr-ggml, bci-whispercpp and
+// tts-ggml set postIntegrationOnGpr in project.json, so post-build-gate
+// hands them desktop and mobile integration tests after a GPR publish too.
 //
 // Restoring them would mean a Device Farm run per main push across four
 // addons. The PR-time lane keeps the coverage.

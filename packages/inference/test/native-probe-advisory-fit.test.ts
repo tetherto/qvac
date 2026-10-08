@@ -372,6 +372,21 @@ test('advisory fit: reserves resident model bytes through the fit margin', async
   t.is(marginOf(calls[0]?.[0] as FitProbeRequest), (1024 + 10752) * 1024 * 1024)
 })
 
+test('advisory fit: a caller can hold back bytes nothing has loaded yet', async (t) => {
+  const { logger } = recordingLogger()
+  const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
+
+  await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    mobile: false,
+    residentModelBytes: () => Promise.resolve(2 * 1024 * 1024 * 1024),
+    extraResidentBytes: 4 * 1024 * 1024 * 1024,
+    runFit,
+    logger
+  })
+
+  t.is(marginOf(calls[0]?.[0] as FitProbeRequest), (1024 + 2048 + 4096) * 1024 * 1024)
+})
+
 test('advisory fit: always sends the explicit base margin, even with nothing resident', async (t) => {
   const { logger } = recordingLogger()
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })

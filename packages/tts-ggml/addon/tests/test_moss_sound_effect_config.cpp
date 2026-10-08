@@ -145,6 +145,25 @@ TEST(MossSoundEffectValidate, UseGpuNGpuLayersConflictRejected) {
   EXPECT_THROW(MossSoundEffectModel{cfg}, StatusError);
 }
 
+TEST(MossSoundEffectFitConfig, MissingFileDoesNotPreventMetadataProjection) {
+  MossSoundEffectConfig cfg;
+  cfg.modelPath = "/nonexistent/moss-sfx.gguf";
+  EXPECT_NO_THROW(MossSoundEffectModel::validateFitConfig(cfg));
+}
+
+TEST(MossSoundEffectFitConfig, NegativeThreadsRejected) {
+  auto cfg = stubConfig();
+  cfg.threads = -1;
+  EXPECT_THROW(MossSoundEffectModel::validateFitConfig(cfg), StatusError);
+}
+
+TEST(MossSoundEffectFitConfig, ConflictingGpuSettingsRejected) {
+  auto cfg = stubConfig();
+  cfg.useGpu = true;
+  cfg.nGpuLayers = 0;
+  EXPECT_THROW(MossSoundEffectModel::validateFitConfig(cfg), StatusError);
+}
+
 TEST(MossSoundEffectEngineOptions, MapsModelThreadsAndGpu) {
   auto cfg = stubConfig();
   cfg.threads = CONFIGURED_THREADS;
