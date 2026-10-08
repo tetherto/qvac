@@ -368,4 +368,21 @@ TEST(SequenceStateSnapshotTest, RequireSnapshotDirectoryUsesTheGivenBase) {
         << e.what();
   }
 }
+
+TEST(SequenceStateSnapshotTest, RemovedSnapshotDirectoryIsCreatedAgain) {
+  ScratchBase base("checkpoint_dir_purged");
+  ASSERT_NO_THROW(requireSnapshotDirectory(base.path().string()));
+  for (const auto& entry : fs::directory_iterator(base.path())) {
+    fs::remove_all(entry.path());
+  }
+  ASSERT_TRUE(fs::is_empty(base.path()));
+
+  ASSERT_NO_THROW(requireSnapshotDirectory(base.path().string()));
+  size_t created = 0;
+  for (const auto& entry : fs::directory_iterator(base.path())) {
+    EXPECT_TRUE(entry.is_directory());
+    ++created;
+  }
+  EXPECT_EQ(created, 1u) << "the removed private directory was not recreated";
+}
 #endif

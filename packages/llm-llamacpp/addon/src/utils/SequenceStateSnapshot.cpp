@@ -60,13 +60,16 @@ public:
   SnapshotDirectories(const SnapshotDirectories&) = delete;
   SnapshotDirectories& operator=(const SnapshotDirectories&) = delete;
 
-  // An empty `requestedBase` is the OS temp dir. A directory never changes
-  // once created and map nodes are stable, so the reference stays valid
-  // without the lock.
-  const std::filesystem::path& require(const std::string& requestedBase) {
+  // An empty `requestedBase` is the OS temp dir. A directory removed while the
+  // process runs (an OS cache purge, the user clearing the app's cache) is
+  // created again under its base; a base that is gone still fails.
+  std::filesystem::path require(const std::string& requestedBase) {
     std::scoped_lock lock(mutex_);
     if (const auto it = dirs_.find(requestedBase); it != dirs_.end()) {
-      return it->second.path;
+      std::error_code ec;
+      if (std::filesystem::is_directory(it->second.path, ec)) {
+        return it->second.path;
+      }
     }
     std::filesystem::path base = requestedBase;
     if (base.empty()) {
@@ -88,7 +91,8 @@ public:
 #ifndef _WIN32
     dir.owned = true;
 #endif
-    return dirs_.emplace(requestedBase, std::move(dir)).first->second.path;
+    return dirs_.insert_or_assign(requestedBase, std::move(dir))
+        .first->second.path;
   }
 
 private:
@@ -114,7 +118,7 @@ std::string
 makeUniqueSnapshotPath(llama_seq_id seqId, const std::string& directory) {
   static std::atomic<uint64_t> counter{0};
   const auto id = counter.fetch_add(1, std::memory_order_relaxed);
-  const std::filesystem::path& base = snapshotDirectories().require(directory);
+  const std::filesystem::path base = snapshotDirectories().require(directory);
   const std::string filename = "qvac_llamacpp_seq_" +
                                std::to_string(currentProcessId()) + "_" +
                                std::to_string(static_cast<int>(seqId)) + "_" +
