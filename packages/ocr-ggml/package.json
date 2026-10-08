@@ -82,7 +82,7 @@
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
     "bare-stream": "^2.7.0",
-    "bare-subprocess": "^5.2.1",
+    "bare-subprocess": "^6.2.1",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",

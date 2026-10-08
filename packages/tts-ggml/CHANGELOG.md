@@ -57,10 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged on Metal. With several Vulkan adapters, Audio8 now runs on a
   discrete GPU rather than on the first adapter listed, which on a desktop
   with an integrated GPU was the iGPU.
-- Raise `bare-subprocess` to `^6.2.1`. Its `spawnSync` now returns an `error`
-  instead of throwing when a command cannot start, and exit events report
-  signal names. `examples/pcm-chunk-player.js` checks for that error, so it
-  still falls back to another player when `ffplay` or `play` is missing.
+- `bare-subprocess` and `brittle` are now development dependencies, so
+  installing the package installs neither. The streaming examples play audio
+  live only when `bare-subprocess` is installed (`npm install bare-subprocess`);
+  without it they print that hint and log the chunks without playing them. The
+  published integration tests need `brittle` from the app that runs them, as
+  the mobile test app already provides.
 
 ### Fixed
 
