@@ -57,10 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged on Metal. With several Vulkan adapters, Audio8 now runs on a
   discrete GPU rather than on the first adapter listed, which on a desktop
   with an integrated GPU was the iGPU.
-- `bare-subprocess` is now a development dependency, so installing the package
-  no longer installs it. The streaming examples play audio live only when it is
-  installed (`npm install bare-subprocess`); without it they print that hint
-  and log the chunks without playing them.
+- `bare-subprocess` and `brittle` are now development dependencies, so
+  installing the package installs neither. The streaming examples play audio
+  live only when `bare-subprocess` is installed (`npm install bare-subprocess`);
+  without it they print that hint and log the chunks without playing them. The
+  published integration tests need `brittle` from the app that runs them, as
+  the mobile test app already provides.
 
 ### Fixed
 
