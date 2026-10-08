@@ -157,7 +157,7 @@ jobs:
 
       - name: Install npm dependencies
         working-directory: ${{ matrix.workdir }}
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Build native addon
         id: cpp-build
