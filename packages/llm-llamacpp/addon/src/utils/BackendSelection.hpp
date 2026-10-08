@@ -58,8 +58,6 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
-  void* (*ggml_backend_reg_get_proc_address)(
-      ggml_backend_reg_t reg, const char* name);
   // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
   // physical card registered under two backends from two distinct cards. May
   // be null; that path then falls back to scoping by registry.
@@ -152,20 +150,6 @@ SplitDeviceSelection getSplitDeviceSelection();
 void applyAdrenoRestrictions(
     SplitDeviceSelection& selection, const ModelMetaData& metadata,
     bool isFinetuning);
-
-/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
-/// True only when at least one GPU device is present AND every available
-/// GPU/iGPU device's backend provides split buffers, because qvac-fabric
-/// requires split buffers from each device it distributes over and throws on
-/// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v11018 only SYCL and Hexagon provide split
-/// buffers, and the port builds neither, so this is false in every shipped
-/// configuration.
-bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
-
-/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
-/// registry.
-bool gpuBackendSupportsRowSplit();
 
 /// @brief The device names for a multi-GPU split: every discrete GPU,
 /// deduplicated by `props.device_id` so a card registered under two backends is
