@@ -318,12 +318,6 @@ We welcome contributions! Feel free to open a pull request, report bugs, or shar
 
 See [CONTRIBUTING](./CONTRIBUTING.md) for details.
 
-Speech C++ CI reuses vcpkg binaries and compiler caches warmed by trusted
-default-branch builds, with bounded build parallelism on CPU runners. ASR and
-BCI C++ failures block the merge guard. See the
-[C++ CI configuration](docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
-for cache warming and build resource settings.
-
 ### Deterministic code-quality audit
 
 Run `pnpm quality:audit` to analyze JavaScript and TypeScript structure, module
