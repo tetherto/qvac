@@ -658,6 +658,24 @@ jobs:
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
 
+      # Linux only, after coverage is archived. fuzz:build reconfigures the
+      # tree, so it must not run before the coverage report is saved. Packages
+      # without fuzz:build/fuzz:run skip. This step is not continue-on-error:
+      # a fuzz failure fails the job that publishes qvac/cpp-tests-<pkg>.
+      # No ASAN_OPTIONS here; the fuzz runner sets its own posture.
+      - name: Build and run bounded fuzz targets
+        if: matrix.platform == 'linux'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! node -e 'const s=require("./package.json").scripts||{}; if(!s["fuzz:build"]||!s["fuzz:run"]) process.exit(1)'; then
+            echo "No fuzz scripts; skipping bounded fuzz."
+            exit 0
+          fi
+          npm run fuzz:build
+          npm run fuzz:run
+
   # Carve-out packages have bespoke C++ test flows; routed to their own reusable
   # when nx flags them affected via options.ci carveOut:true.
   cpp-tests-llm:
