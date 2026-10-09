@@ -7,7 +7,7 @@ schemaType: HowTo
 
 ## Overview
 
-[`assessModelFit()`](/sdk/reference/api#assessmodelfit) answers one question before anything is downloaded: is this model likely to fit in memory? It reads the model constant metadata together with a fresh memory sample, and returns a verdict for each candidate plus one for the set. For a single candidate it also runs the engine's own fitter, against the artifact where it is already on disk, and otherwise against the registry's weightless description of it — tens of KB, the tensor list with no data section.
+[`assessModelFit()`](/sdk/reference/api#assessmodelfit) answers one question before anything is downloaded: is this model likely to fit in memory? For every candidate it runs the engine's own fitter — against the artifact where it is already on disk, and otherwise against the registry's weightless description of it, tens of KB, the tensor list with no data section. It also reads the model constant metadata together with a fresh memory sample, and returns a verdict for each candidate plus one for the set.
 
 It is **advisory**. It never downloads weights or loads a model, and it does not block [`loadModel()`](/sdk/reference/api#loadmodel), reserve memory, pick a model for you, or make any claim about speed.
 
@@ -71,8 +71,8 @@ The result answers for the whole set, and `result.models` repeats the same shape
 
 | Verdict | Meaning |
 | --- | --- |
-| `likely-fits` | The conservative upper bound is within the memory budget. |
-| `likely-too-large` | Even the optimistic lower bound exceeds the budget. |
+| `likely-fits` | The measured demand is within the memory budget. |
+| `likely-too-large` | The demand exceeds the budget, or an engine refused it. |
 | `unknown` | The evidence does not support either claim. |
 
 ### `evidence`
@@ -82,16 +82,17 @@ What backs the verdict.
 | `evidence` | What it is | Can say |
 | --- | --- | --- |
 | `native-fit` | The engine's own fitter, run against the artifact on disk, or against the registry's weightless description of it. | any verdict |
-| `calibration` | A two-sided `estimate` from coefficients measured on this platform. | any verdict |
 | `computed-only` | A floor from catalog facts alone — artifact bytes, plus the KV cache for llama.cpp models — reported as `floorBytes`. | `likely-too-large` or `unknown` |
 
-`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single candidate, and only where every source the load names is a path on disk or has a registry description; a set of candidates, and a source that is not on disk and whose description cannot be fetched, keep the calibrated estimate.
+`native-fit` is the answer the loader itself would give on this machine. The fitter reports the bytes it would allocate, and those bytes compose: each candidate is measured on its own, and the set is summed under one budget according to `execution`. A refusal from the fitter stands on its own, whatever the arithmetic says, because it knows things the byte total does not carry.
+
+`computed-only` is the fallback wherever the fitter reaches no verdict. A set rests on its weakest evidence, so one `computed-only` model makes the whole result `computed-only`.
 
 Read `evidence` alongside the verdict, because the same `unknown` can mean different things:
-- Under `calibration`, the numbers came out too close to call.
-- Under `computed-only`, this platform has no measurements at all, so the answer says nothing about whether the model fits.
+- Under `native-fit`, the numbers came out too close to call.
+- Under `computed-only`, nothing measured this load, so the answer says nothing about whether the model fits.
 
-That difference matters once you act on the result. Hiding the `likely-too-large` candidates works the same way under all three, since that verdict is trustworthy either way. Telling a user that a model will fit needs `native-fit` or `calibration`; the computed floor never produces `likely-fits`.
+That difference matters once you act on the result. Hiding the `likely-too-large` candidates works the same way under both, since that verdict is trustworthy either way. Telling a user that a model will fit needs `native-fit`; the computed floor never produces `likely-fits`.
 
 ### `basis`
 
@@ -108,30 +109,30 @@ Both device bases additionally require the `system-memory` budget to hold, becau
 
 Per model: where that load resolved to execute, `gpu` or `cpu`, after the device defaults this host applies for itself. Absent for an engine that expresses no placement.
 
-Read it alongside `evidence`. The llama fitters read device memory alone and decline a `cpu` load, so one there carries no `native-fit` — its verdict comes from `calibration` where this platform has coefficients, and from the computed floor where it does not. The speech and voice fitters answer for a `cpu` load like any other.
+Read it alongside `evidence`. The llama fitters read device memory alone and decline a `cpu` load, so one there carries no `native-fit` and falls back to the computed floor. The speech and voice fitters answer for a `cpu` load like any other.
 
 ### `reasons`
 
 Every `unknown` names its cause here — on the model when the cause is that model, on the result when it is the machine. A verdict that fell back because the fitter produced nothing says so, and names what the fitter reported. The ones you are most likely to meet:
-- No validated calibration for this platform, or for the GPU placement the model would use.
+- The fitter could not be asked, or ran and declined — the reason names what it reported.
 - The model is not a catalog constant, so there is no resource profile to read.
-- The model's engine has no estimator, so nothing sizes the load beyond its weights.
+- The model's engine has no fitter, so nothing sizes the load beyond its weights.
 
 ## Where verdicts are available
 
-`calibration` evidence — and with it any `likely-fits` — exists only where coefficients have been measured on real hardware and validated against a held-out model. Today that is LLM workloads (`llamacpp-completion`, `llamacpp-embedding`) on desktop, except `win32-arm64`. Where a GPU would run the model, the platform also needs a fixture measured on that placement.
+`native-fit` evidence — and with it any `likely-fits` — exists wherever the engine's own fitter runs: every platform that ships that engine's addon, mobile included, for a source on disk or with a published registry description.
 
-Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers Android, iOS, `win32-arm64`, audio workloads, and every engine with no estimator yet.
+The fitter covers `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`, `parakeet-transcription`, `bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml` and `sdcpp-generation`. Audiogen and diffusion report no byte breakdown, so a `fit` from them falls back to the floor while a refusal still stands.
 
-`native-fit` is independent of calibration. Wherever the engine's own fitter runs — every platform that ships that engine's addon, mobile included — a single candidate on disk or with a published description gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
+Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers `nmtcpp-translation`, `onnx-tts`, `ggml-ocr`, `ggml-vla` and `ggml-classification`, sharded models, multimodal completion loads naming a projection model, and any source whose registry description cannot be fetched.
 
-The per-platform calibration matrix, which changes with every release, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
+The longer treatment, including how a GPU changes which memory the budget measures, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
 
 ## Load-time probe
 
 Once the weights are on disk, [`loadModel()`](/sdk/reference/api#loadmodel) runs the same engine fitter against the real file and the resolved load settings before it loads. It is the stronger evidence once you have the file. Desktop runs it in a disposable child process. Mobile, which cannot spawn one, runs it on a worker thread.
 
-The probe is advisory too. No verdict blocks or changes the load: `does-not-fit` is logged and the load runs unchanged, and a crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
+A crash, timeout, or unsupported configuration resolves to no verdict. Verdicts appear on the SDK log stream as `[advisory-fit:…]` lines.
 
 [`getLoadedModelInfo()`](/sdk/reference/api#getloadedmodelinfo) returns the outcome as `fitProbe`:
 - `verdict` — `fit`, `does-not-fit`, or `unknown`. These are unhedged, unlike the verdicts above, because the probe measured this build against this file.
@@ -140,7 +141,22 @@ The probe is advisory too. No verdict blocks or changes the load: `does-not-fit`
 - `plan` — the placement it projected, where the fitter resolved one: `nCtx`, `nGpuLayers`, `nGpuDevices`.
 - `projection` — what the fitter measured, present on `fit` and `does-not-fit` alike. Engines do not all measure the same things, so every field is optional: `deviceBytes` and `hostBytes` for the peaks, `weightsBytes`, `contextBytes` and `computeBytes` within `deviceBytes` where the engine separates them, `deviceFreeBytes` and `deviceTotalBytes`, and `report`, the engine's own memory table.
 
-The probe is on by default. Set the `QVAC_ADVISORY_MODEL_FIT=0` environment variable to skip it, and `fitProbe` is then absent.
+### `modelFitPolicy`
+
+Pass it to `loadModel()` for one load, or set it in the engine config for every load.
+
+- `log` (default) — the verdict is reported and the load proceeds.
+- `refuse` — a load the fitter projects will not fit is rejected with `MODEL_FIT_REFUSED` before the addon allocates anything. Only `does-not-fit` refuses; `unknown` never does, so a load is never refused for lack of evidence.
+- `off` — the probe does not run, and `fitProbe` is then absent.
+
+```typescript
+await loadModel({
+  modelSrc: QWEN3_8B_INST_Q4_K_M,
+  modelType: 'llamacpp-completion',
+  modelConfig: { ctx_size: 8192 },
+  modelFitPolicy: 'refuse'
+})
+```
 
 ## Examples
 

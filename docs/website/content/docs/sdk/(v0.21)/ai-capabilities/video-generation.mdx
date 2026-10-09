@@ -84,7 +84,7 @@ Size and frame constraints:
 - On **LTX-2**, `video_frames` must satisfy `8*k + 1` (e.g. `25`, `121`, `241`), with a maximum of **257**.
 - On **LTX-2** with `reference_images`, the minimum `video_frames` rises to **121**.
 - On **MiniMax-H3**, `width` and `height` must be multiples of **32**, `video_frames` must satisfy `17*k + 5`, and `fps` must be **24**. Loading `audioVaeModelSrc` adds synchronized audio at **32 kHz**; omit it for silent video.
-  </Callout>
+</Callout>
 
 The returned `stats` includes `hasAudio` (`true` when the output AVI carries a muxed audio track) and `audioSampleRate` (Hz of that track, `0` when there is no audio).
 
