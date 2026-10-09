@@ -23,41 +23,39 @@
 
 namespace {
 
-js_value_t *backendsDir(js_env_t *env, js_callback_info_t * /*info*/) {
-  const char *dir = qvac_fabric_backends_dir();
-  js_value_t *result = nullptr;
-  if (js_create_string_utf8(env, reinterpret_cast<const utf8_t *>(dir),
-                            std::strlen(dir), &result) != 0) {
+js_value_t* backendsDir(js_env_t* env, js_callback_info_t* /*info*/) {
+  const char* dir = qvac_fabric_backends_dir();
+  js_value_t* result = nullptr;
+  if (js_create_string_utf8(
+          env, reinterpret_cast<const utf8_t*>(dir), std::strlen(dir), &result) !=
+      0) {
     return nullptr;
   }
   return result;
 }
 
-js_value_t *loadBackends(js_env_t *env, js_callback_info_t * /*info*/) {
+js_value_t* loadBackends(js_env_t* env, js_callback_info_t* /*info*/) {
   const size_t count = qvac_fabric_load_backends();
-  js_value_t *result = nullptr;
+  js_value_t* result = nullptr;
   if (js_create_uint32(env, static_cast<uint32_t>(count), &result) != 0) {
     return nullptr;
   }
   return result;
 }
 
-int exportFunction(js_env_t *env, js_value_t *exports, const char *name,
-                   js_function_cb cb) {
-  js_value_t *fn = nullptr;
+int exportFunction(
+    js_env_t* env, js_value_t* exports, const char* name, js_function_cb cb) {
+  js_value_t* fn = nullptr;
   int err = js_create_function(env, name, std::strlen(name), cb, nullptr, &fn);
-  if (err != 0)
-    return err;
+  if (err != 0) return err;
   return js_set_named_property(env, exports, name, fn);
 }
 
 js_value_t* qvacFabricExports(js_env_t* env, js_value_t* exports) {
   // Consumers `require('@qvac/fabric')` to register and load this module before
   // their own addon resolves its DT_NEEDED on it.
-  if (exportFunction(env, exports, "backendsDir", backendsDir) != 0)
-    return nullptr;
-  if (exportFunction(env, exports, "loadBackends", loadBackends) != 0)
-    return nullptr;
+  if (exportFunction(env, exports, "backendsDir", backendsDir) != 0) return nullptr;
+  if (exportFunction(env, exports, "loadBackends", loadBackends) != 0) return nullptr;
   return exports;
 }
 
