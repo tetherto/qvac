@@ -496,3 +496,4 @@ returns a real projection rather than `ERROR`.
   VLM/OCR models, so treat those as "unknown".
 - The per-device byte breakdown (`projection`) comes from one extra no-alloc
   probe after the fit, so a result costs roughly two probes instead of one.
+
