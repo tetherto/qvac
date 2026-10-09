@@ -1128,11 +1128,12 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   batcher_.advance(prefillCompleteFn());
   // Verified before any deferred teardown, so a slot torn down below is
-  // synced to memory that already dropped its rejected draft tail.
+  // synced to memory that already dropped its rejected draft tail. A slot
+  // with a pending teardown streams nothing from its verified run.
   verifySpeculativeDraftsLocked();
   // A cancel or clear recorded during the decode is applied here, once
   // `advance()` has counted the chunk into `currentPos`, and before anything
-  // is sampled or streamed for the slot. Applied earlier, a teardown would sync
+  // is sampled for the slot. Applied earlier, a teardown would sync
   // the driver to a cursor one chunk behind live memory, and a cancel that
   // commits would save a cache whose metadata does not match its contents.
   applyDeferredTeardownLocked();
@@ -1261,7 +1262,13 @@ void ContinuousBatchScheduler::verifySpeculativeDraftsLocked() {
           "ContinuousBatchScheduler: missing slot state for drafted seqId " +
               std::to_string(seqId));
     }
-    auto outputCallback = [&slot, seqId](const std::string& text) {
+    // Verification runs before deferred teardown, so a cancel recorded during
+    // the decode has not been applied yet; nothing more is streamed for it,
+    // as on the plain path, which samples only after teardown.
+    auto outputCallback = [this, &slot, seqId](const std::string& text) {
+      if (teardownPendingForLocked(seqId)) {
+        return;
+      }
       if (slot->group) {
         slot->group->outputs[slot->outputIndex] += text;
       }
@@ -1569,6 +1576,33 @@ bool ContinuousBatchScheduler::slotOwnedByLocked(
 bool ContinuousBatchScheduler::hasPendingCancels() const {
   std::scoped_lock pendingLock(pendingCancelsMtx_);
   return !pendingSlotCancels_.empty() || !pendingGroupCancels_.empty();
+}
+
+bool ContinuousBatchScheduler::teardownPendingForLocked(uint32_t seqId) const {
+  if (cancelRequested_.load() || clearRequested_) {
+    return true;
+  }
+  if (seqId >= slots_.size() || !slots_[seqId].has_value()) {
+    return true;
+  }
+  const SlotState& slot = *slots_[seqId];
+  std::scoped_lock pendingLock(pendingCancelsMtx_);
+  for (const PendingSlotCancel& pending : pendingSlotCancels_) {
+    if (pending.seqId == seqId && pending.admissionId == slot.admissionId) {
+      return true;
+    }
+  }
+  // Same condition `applyGroupQueuedCancelLocked` fails the group on.
+  const auto& group = slot.group;
+  if (group && group->tag != 0 && !group->done &&
+      group->admittedCount < group->totalCount) {
+    for (const uint64_t tag : pendingGroupCancels_) {
+      if (tag == group->tag) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 void ContinuousBatchScheduler::cancelSlotLocked(

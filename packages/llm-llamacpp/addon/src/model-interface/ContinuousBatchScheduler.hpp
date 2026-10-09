@@ -653,6 +653,10 @@ private:
   /// Whether any deferred cancel (per-slot or per-group) is waiting to be
   /// applied by the worker.
   [[nodiscard]] bool hasPendingCancels() const;
+  /// Whether the next `applyDeferredTeardownLocked` (or the cancel-all flag)
+  /// will tear down `seqId`'s current admission. Output produced before that
+  /// teardown runs must not reach the caller.
+  [[nodiscard]] bool teardownPendingForLocked(uint32_t seqId) const;
   /// Settle a tagged group that still has queued requests. The apply half of
   /// `cancelGroupQueued`, re-resolving the tag because the group may have
   /// finished, or become fully admitted, between record and apply.
