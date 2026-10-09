@@ -19,47 +19,40 @@ export function selectExportTarget(entry: SdkExportEntry | undefined): string | 
 function readPackageExports(packagePath: string): Record<string, SdkExportEntry> {
   try {
     const raw = fs.readFileSync(path.join(packagePath, 'package.json'), 'utf8')
-    const pkg = JSON.parse(raw) as {
-      exports?: Record<string, SdkExportEntry>
-    }
+    const pkg = JSON.parse(raw) as { exports?: Record<string, SdkExportEntry> }
     return pkg.exports ?? {}
   } catch {
     return {}
   }
 }
 
-// bare-pack rewrites the worker's Node builtins to their bare-* equivalents
-// (os -> bare-os, fs -> bare-fs, ...) and resolves them relative to wherever
-// the generated entry imports the SDK from. A bare specifier resolves against
-// the consumer project, so a hoisted/symlinked SDK (pnpm, workspaces) whose
-// bare-* deps live in a parent node_modules becomes unreachable. Importing each
-// SDK subpath via its resolved file under the SDK's realpath anchors that
-// resolution next to the bare-* deps instead.
+export function sdkImportsMap(sdkPath: string, sdkName: string): Record<string, string> {
+  const imports: Record<string, string> = {}
+  for (const [subpath, entry] of Object.entries(readPackageExports(sdkPath))) {
+    if (subpath.includes('*')) continue
+    const target = selectExportTarget(entry)
+    if (target === null) continue
+    const specifier = subpath === '.' ? sdkName : `${sdkName}/${subpath.slice(2)}`
+    imports[specifier] = pathToFileURL(path.join(sdkPath, target)).href
+  }
+  return imports
+}
+
+/**
+ * Maps `<sdkName>/<subpath>` to the file the SDK at `sdkPath` exports for it,
+ * so a worker entry reaches an SDK that the project's own `node_modules` does
+ * not resolve to. Other specifiers pass through.
+ */
 export function createSdkImportResolver(
   sdkPath: string,
   sdkName: string
 ): (specifier: string) => string {
-  let resolvedSdkPath = sdkPath
-  try {
-    resolvedSdkPath = fs.realpathSync(sdkPath)
-  } catch {
-    // Keep sdkPath as-is if it cannot be canonicalized.
-  }
-
-  const anchors = [{ prefix: `${sdkName}/`, root: resolvedSdkPath }]
-  const resolved = anchors.map(({ prefix, root }) => ({
-    prefix,
-    root,
-    exports: readPackageExports(root)
-  }))
+  const prefix = `${sdkName}/`
+  const exports = readPackageExports(sdkPath)
 
   return (specifier) => {
-    for (const { prefix, root, exports } of resolved) {
-      if (!specifier.startsWith(prefix)) continue
-      const subpath = `./${specifier.slice(prefix.length)}`
-      const target = selectExportTarget(exports[subpath])
-      return target ? pathToFileURL(path.join(root, target)).href : specifier
-    }
-    return specifier
+    if (!specifier.startsWith(prefix)) return specifier
+    const target = selectExportTarget(exports[`./${specifier.slice(prefix.length)}`])
+    return target ? pathToFileURL(path.join(sdkPath, target)).href : specifier
   }
 }

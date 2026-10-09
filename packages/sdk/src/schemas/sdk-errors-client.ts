@@ -39,8 +39,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   MULTIPLE_SDK_INSTALLATIONS: 50607,
   WORKER_PLUGINS_NOT_REGISTERED: 50608,
   BUNDLE_VERIFICATION_FAILED: 50609,
-  BARE_PACK_NOT_INSTALLED: 50610,
-  BARE_PACK_ERROR: 50611,
+  BUNDLE_FAILED: 50611,
   INVALID_PLUGIN_SPECIFIER: 50612,
   BARE_IMPORTS_MAP_NOT_FOUND: 50613,
   BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
@@ -189,15 +188,10 @@ const clientErrorDefinitions: ErrorCodesMap = {
     message: (bundlePath: string) =>
       `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`
   },
-  [SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED]: {
-    name: 'BARE_PACK_NOT_INSTALLED',
-    message:
-      'bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack'
-  },
-  [SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR]: {
-    name: 'BARE_PACK_ERROR',
-    message: (exitCode: number, entryPath: string, outputPath: string) =>
-      `bare-pack exited with code ${exitCode}\n\n  Entry file: ${entryPath}\n  Output file: ${outputPath}\n\n  Run bare-pack manually for more details.`
+  [SDK_CLIENT_ERROR_CODES.BUNDLE_FAILED]: {
+    name: 'BUNDLE_FAILED',
+    message: (entryPath: string, reason: string) =>
+      `Bundling the worker failed\n\n  Entry file: ${entryPath}\n  Reason: ${reason}`
   },
   [SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED]: {
     name: 'BARE_PACK_NODE_UNSUPPORTED',
