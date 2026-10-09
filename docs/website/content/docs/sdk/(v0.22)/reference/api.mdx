@@ -2483,30 +2483,27 @@ and read `error.code` / `error.cause`. Code ranges:
 | `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
 | `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
 | `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed: … |
-| `RPC_INIT_TIMEOUT` | 50204 | RPC initialization timed out after …ms — the worker process may have failed to start |
 | `WORKER_CRASHED` | 50205 | Bare worker exited mid-request (code=…, signal=…) — in-flight calls were aborted |
 | `WORKER_SHUTDOWN` | 50206 | SDK is shutting down — in-flight RPC call aborted |
-| `WORKER_STARTUP_FAILED` | 50207 | …\\n\\nWorker stderr:\\n… |
+| `WORKER_STARTUP_FAILED` | 50207 | … |
 | `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev |
 | `WORKER_FILE_NOT_FOUND` | 50601 | Worker file not found at … |
 | `CONFIG_FILE_NOT_FOUND` | 50602 | Config file not found. Searched: …. Create qvac.config.json, qvac.config.js, or qvac.config.ts in your project root. |
 | `CONFIG_FILE_INVALID` | 50603 | Config file at … is invalid: … |
 | `CONFIG_FILE_PARSE_FAILED` | 50604 | Failed to parse config file at …: … |
 | `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed: … |
-| `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered. Pear apps must spawn … as the worker entry. Run \\ |
 | `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found: …. Remove all but one to avoid conflicts. |
-| `WORKER_PLUGINS_NOT_REGISTERED` | 50608 | @qvac/inference |
 | `BUNDLE_VERIFICATION_FAILED` | 50609 | qvac verify bundle reported error-level issues for …. See the CLI output above for the failing addons/hosts; resolve them before shipping. |
-| `BARE_PACK_NOT_INSTALLED` | 50610 | bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack |
-| `BARE_PACK_ERROR` | 50611 | bare-pack exited with code …\\n\\n Entry file: …\\n Output file: …\\n\\n Run bare-pack manually for more details. |
 | `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
 | `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
-| `BARE_RUNTIME_BINARY_NOT_FOUND` | 50614 | Could not load the Bare runtime binary for …-…. The platform package "bare-runtime-…-…" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \\ |
 | `HOST_PREBUILDS_INSTALL_REFUSED` | 50615 | Cannot install the addon platform packages automatically: …. |
 | `HOST_PREBUILDS_INSTALL_FAILED` | 50616 | Installing the addon platform packages failed: … |
 | `ADDON_LINK_FAILED` | 50617 | Linking the native addons failed\\n\\n Hosts: …\\n Reason: … |
 | `BARE_PACK_NODE_UNSUPPORTED` | 50618 | bare-pack needs Node …; found Node v…. Upgrade Node and run the bundle again. |
 | `HOST_PREBUILDS_MISSING` | 50619 | #host-addon |
+| `REACT_NATIVE_BARE_KIT_UNSUPPORTED` | 50620 | The react-native worker bundle needs react-native-bare-kit …; found …. Upgrade react-native-bare-kit and run the bundle again. |
+| `BUNDLE_FAILED` | 50621 | Bundling the worker failed\\n\\n Entry file: …\\n Reason: … |
+| `BUNDLE_TARGET_NOT_INSTALLED` | 50622 | The … target needs …, which the project does not have. Install it and run the bundle again. |
 | `PROFILER_INVALID_CAPACITY` | 50800 | Profiler invalid capacity |
 
 ### Server errors

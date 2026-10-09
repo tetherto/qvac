@@ -294,7 +294,8 @@ Desktop JVM worker hosting is experimental. The client resolves the same worker
 tiers as Python: explicit paths, `QVAC_WORKER_PATH`/`QVAC_BARE_PATH`,
 `QVAC_SDK_DIR`, a local `node_modules`, the versioned managed cache, and a global
 npm installation. It requires a worker whose version matches this client and
-runs it over a loopback channel. Android uses its embedded BareKit worker and is
+runs it as bare-sidecar's Bare runtime with the SDK's TCP shim, which connects
+back to a loopback port. Android uses its embedded BareKit worker and is
 unaffected.
 
 ```kotlin
@@ -321,8 +322,9 @@ version on first use; cached packages are re-checked. The transport launches
 `bare` and creates a loopback-only TCP endpoint. The worker authenticates with a
 per-session token passed in its environment, and the transport rejects any
 other local connection before a frame is exchanged. A worker whose `@qvac/sdk`
-`package.json` does not declare `"qvacIpcAuthentication": "token-v1"` is refused;
-`connect(..., authenticated = false)` is the only way to run one.
+`package.json` does not declare `"qvacIpcAuthentication": "token-v1"` is refused.
+`connect(command = ..., authenticated = false)` runs a worker command of your own
+without the token.
 
 Worker stdout/stderr are continuously drained into `transport.recentWorkerLogs`
 (a bounded 16K-character tail); `isWorkerAlive` reports the child process state.
