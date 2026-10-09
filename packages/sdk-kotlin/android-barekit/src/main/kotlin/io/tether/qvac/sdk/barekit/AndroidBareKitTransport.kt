@@ -5,11 +5,13 @@ import io.tether.qvac.sdk.QvacTransport
 import io.tether.qvac.sdk.QvacRuntimeProfile
 import io.tether.qvac.sdk.QvacWorkerStartException
 import io.tether.qvac.sdk.RpcLimits
+import io.tether.qvac.sdk.StowChannel
 import io.tether.qvac.sdk.WorkerRpc
 import io.tether.qvac.sdk.requireSuccessfulWorkerControlResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -23,6 +25,7 @@ import to.holepunch.bare.kit.Worklet
 
 class AndroidBareKitTransport private constructor(
     private val rpc: WorkerRpc,
+    private val stow: StowChannel,
     private val channel: BareKitRpcChannel,
     private val worklet: Worklet,
     override val runtimeProfile: QvacRuntimeProfile,
@@ -50,7 +53,7 @@ class AndroidBareKitTransport private constructor(
             closed = true
 
             withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) {
-                runCatching { rpc.call(buildJsonObject { put("type", "__shutdown__") }) }
+                runCatching { stow.terminate() }
             }
             runCatching { rpc.close() }
             runCatching { channel.close() }
@@ -108,36 +111,32 @@ class AndroidBareKitTransport private constructor(
             var rpc: WorkerRpc? = null
 
             try {
-                val arguments = arrayOf(
-                    "qvac-sdk-kotlin",
-                    "worker.js",
-                    buildJsonObject { put("HOME_DIR", homeDirectory) }.toString(),
-                )
                 context.assets.open(assetName).use { source ->
-                    worklet.start(assetName, source, arguments)
+                    worklet.start(assetName, source, emptyArray())
                 }
 
                 val connectedChannel = BareKitRpcChannel(IPC(worklet))
                 channel = connectedChannel
-                val connectedRpc = WorkerRpc(read = connectedChannel::read, send = connectedChannel::write, limits = rpcLimits)
+                val stow = StowChannel(receive = connectedChannel::read, send = connectedChannel::write)
+                withTimeout(START_TIMEOUT_MS) { stow.awaitReady() }
+                val connectedRpc = WorkerRpc(read = stow::read, send = stow::write, limits = rpcLimits)
                 rpc = connectedRpc
                 val transport = AndroidBareKitTransport(
                     connectedRpc,
+                    stow,
                     connectedChannel,
                     worklet,
                     AndroidRuntimeProfile.load(context),
                 )
-                val effectiveRuntimeContext = androidRuntimeContext(runtimeContext)
-                if (config.isNotEmpty() || effectiveRuntimeContext.isNotEmpty()) {
-                    val response = transport.call(
-                        buildJsonObject {
-                            put("type", "__init_config")
-                            if (config.isNotEmpty()) put("config", config)
-                            put("runtimeContext", effectiveRuntimeContext)
-                        },
-                    )
-                    requireSuccessfulWorkerControlResponse("configuration", response)
-                }
+                val response = transport.call(
+                    buildJsonObject {
+                        put("type", "__init_config")
+                        if (config.isNotEmpty()) put("config", config)
+                        put("runtimeContext", androidRuntimeContext(runtimeContext))
+                        put("homeDir", homeDirectory)
+                    },
+                )
+                requireSuccessfulWorkerControlResponse("configuration", response)
                 return transport
             } catch (error: Throwable) {
                 withContext(NonCancellable) {
@@ -154,5 +153,6 @@ class AndroidBareKitTransport private constructor(
         private const val DEFAULT_MEMORY_LIMIT_BYTES = 0
         private const val DEFAULT_LINGER_MS = 30_000
         private const val SHUTDOWN_TIMEOUT_MS = 10_000L
+        private const val START_TIMEOUT_MS = 30_000L
     }
 }
