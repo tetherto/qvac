@@ -175,23 +175,49 @@ export function seedConfiguredSystemPrompt<T extends { role: string; content: st
 
 type CacheRunOptions = Pick<RunOptions, 'cacheKey'>
 
-type CacheSavingModel = AnyModel & { saveCache?(cacheKey: string): Promise<void> }
+type CacheOwningModel = AnyModel & {
+  saveCache?(cacheKey: string): Promise<void>
+  discardCache?(cacheKey: string): Promise<void>
+}
+
+// The addon refuses to save a key it holds nothing for — a cold turn it rolled
+// back — with `InvalidArgument`. As with its other status errors, an
+// asynchronous rejection carries the message alone.
+function isNothingCachedRejection(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const code = (error as { code?: unknown }).code
+  if (code !== undefined) {
+    return typeof code === 'string' && /^\[\s*[\w.-]+\s*::\s*InvalidArgument\s*\]$/.test(code)
+  }
+  const message = (error as { message?: unknown }).message
+  return typeof message === 'string' && /no conversation is cached/.test(message)
+}
 
 /**
  * Write the conversation the addon holds for `cachePath` to that file. The
  * session commits on the file, and a saved conversation is one the addon drops
- * once `deleteCache` removes the file. A rejection is expected when the addon
- * kept nothing (a cold turn rolled back); the commit then finds no file.
+ * once `deleteCache` removes the file. A cold turn the addon rolled back has
+ * nothing to write, and the commit then finds no file. Any other rejection is
+ * a write that failed: the file is behind the conversation, which the next
+ * turn re-decodes.
  */
 async function saveCacheFile(model: AnyModel, cachePath: string, log: Logger): Promise<void> {
-  const saveCache = (model as CacheSavingModel).saveCache
-  if (!saveCache) return
+  const saveCache = (model as CacheOwningModel).saveCache
+  if (!saveCache) {
+    log.debug(`[kv-cache] model has no saveCache; nothing written for ${cachePath}`)
+    return
+  }
   try {
     await saveCache.call(model, cachePath)
     logCacheSave(cachePath)
   } catch (error) {
-    log.debug(
-      `[kv-cache] saveCache did not write ${cachePath}: ${error instanceof Error ? error.message : String(error)}`
+    const detail = error instanceof Error ? error.message : String(error)
+    if (isNothingCachedRejection(error)) {
+      log.debug(`[kv-cache] saveCache had nothing to write for ${cachePath}: ${detail}`)
+      return
+    }
+    log.warn(
+      `[kv-cache] saveCache failed; the file is behind the conversation and the next turn re-decodes what it lacks. path=${cachePath} error=${detail}`
     )
   }
 }
@@ -375,11 +401,19 @@ export async function* completion(
 
   // ---- KV-cache path. The session owns every bookkeeping layer; the handler
   // registers one deferred unwind that `commitTurn` short-circuits. The addon
-  // leaves the file consistent whatever the outcome — it commits or rewinds the
-  // request itself — so the unwind keeps it (`releaseTurn`) except where the
-  // file has no key to live under. ----
+  // leaves the file consistent whatever the outcome — it commits or rolls back
+  // the request itself — so the unwind keeps it (`releaseTurn`) except where
+  // the file has no key to live under. A rollback also drops the addon's copy
+  // of the conversation, which a later key switch or unload would otherwise
+  // write back to the deleted path. ----
 
-  const session = createKvCacheSession(modelId, { logger: requestLogger })
+  const discardCache = (model as CacheOwningModel).discardCache
+  const session = createKvCacheSession(modelId, {
+    logger: requestLogger,
+    ...(discardCache && {
+      discardCache: (cachePath: string) => discardCache.call(model, cachePath)
+    })
+  })
   const configHash = generateConfigHash(extractSystemPrompt(history))
 
   let turn: TurnHandle
@@ -420,11 +454,11 @@ export async function* completion(
     dialect,
     setActiveResponse
   )
-  await saveCacheFile(model, turn.cachePath, requestLogger)
 
   if (typeof kvCache === 'string') {
     // Custom-key path: the file holds whatever the addon kept, cancelled and
     // stopped turns included.
+    await saveCacheFile(model, turn.cachePath, requestLogger)
     await session.commitTurn(turn, { kind: 'static' })
     return result
   }
@@ -434,7 +468,7 @@ export async function* completion(
   // Tool-call turns: the auto-cache key is derived from
   // `result.responseText`, which here is raw tool-call markup rather
   // than a clean assistant message. There's no safe post-response key
-  // to rename to, so we let the deferred rollback drop the file. Once
+  // to rename to, so the deferred rollback drops the turn, unwritten. Once
   // we support auto-cache for structured assistant/tool turns,
   // this becomes a normal commit path.
   if (result.toolCalls.length > 0) {
@@ -455,10 +489,13 @@ export async function* completion(
   if (!shouldRename) {
     // A cancelled, empty or cut-off reply is not one the caller will send
     // back as-is, so there is no post-response key to move to. The file stays
-    // under the history it was found by.
+    // under the history it was found by, holding what the addon kept. A first
+    // turn found no file, and one it wrote now would only be rolled back.
+    if (!turn.createdCache) await saveCacheFile(model, turn.cachePath, requestLogger)
     return result
   }
 
+  await saveCacheFile(model, turn.cachePath, requestLogger)
   const savedHistory = buildAutoCacheSaveHistory(
     history.map((msg) => ({
       role: msg.role,

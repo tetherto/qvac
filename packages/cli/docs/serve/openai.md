@@ -248,6 +248,8 @@ Same as `/v1/chat/completions`: `temperature`, `max_tokens`,
 `user`, `response_format`, and `n` when greater than `1`. Legacy OpenAI
 semantics for these (logprob distributions, prompt echo, best-of-N sampling,
 suffix insertion, multi-choice `n`) are not implemented.
+`remove_thinking_from_context` is also ignored: it is no longer a parameter,
+and the chat template decides how much earlier reasoning stays in the cache.
 
 ### Errors
 
