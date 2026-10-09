@@ -77,8 +77,7 @@ if (installHostPrebuilds(bundle.addons, 'android-arm64')) bundle = await bundleW
 const verification = await verifyBundle({
   projectRoot,
   addonsSource: bundle.bundlePath,
-  hosts: ['android-arm64'],
-  configPath
+  hosts: ['android-arm64']
 })
 
 if (hasErrors(verification)) {

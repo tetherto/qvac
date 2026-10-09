@@ -306,11 +306,8 @@ const FAILURE_RULES: readonly FailureRule[] = [
   },
   {
     id: 'bare-runtime',
-    matches: (_result, diagnostics) =>
-      /BARE_RUNTIME_BINARY_NOT_FOUND|BareRuntimeBinaryNotFoundError|Bare runtime binary.*not found/i.test(
-        diagnostics
-      ),
-    hint: 'The Bare runtime binary appears to be missing. Reinstall @qvac/sdk with lifecycle scripts enabled for this host.'
+    matches: (_result, diagnostics) => /Cannot find asset '#bare'/.test(diagnostics),
+    hint: 'bare-sidecar has no Bare program for this host. Reinstall @qvac/sdk so bare-sidecar is installed in full.'
   },
   {
     id: 'worker-handshake-timeout',

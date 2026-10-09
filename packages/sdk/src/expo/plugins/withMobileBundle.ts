@@ -122,7 +122,7 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
     }
   }
 
-  await runVerifier(projectRoot, result.bundlePath, configPath, platformHosts)
+  await runVerifier(projectRoot, result.bundlePath, platformHosts)
 
   copyWorker(path.dirname(result.harnessPath), path.join(sdkPackage.dir, 'dist', 'worker-mobile'))
 
@@ -159,17 +159,11 @@ function findConfigFile(projectRoot: string): string | null {
   return null
 }
 
-async function runVerifier(
-  projectRoot: string,
-  bundlePath: string,
-  configPath: string | null,
-  hosts: string[]
-) {
+async function runVerifier(projectRoot: string, bundlePath: string, hosts: string[]) {
   const result = await verifyBundle({
     projectRoot,
     addonsSource: bundlePath,
     hosts,
-    ...(configPath ? { configPath } : {}),
     onProgress: (message) => console.log(`🕚 QVAC: ${message}`)
   })
 

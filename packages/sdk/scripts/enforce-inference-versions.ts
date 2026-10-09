@@ -14,10 +14,6 @@
 //    below 1.0.0 (^0.19.0 is >=0.19.0 <0.20.0) but not from 1.0.0 up (^1.19.0
 //    also allows 1.20.0), so a tilde is required there.
 //
-// 3. Bare runtime. Every version allowed by the SDK's bare-runtime dependency
-//    must satisfy inference's engines.bare requirement, including versions
-//    retained by a consumer's existing lockfile.
-//
 // The second rule reads @qvac/sdk's manifest alone and never
 // packages/inference's version. The two move independently between releases —
 // the engine is published first and the SDK follows — so comparing them would
@@ -29,7 +25,6 @@
 import { readFileSync } from 'fs'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { subset, validRange } from 'semver'
 
 type Ranges = Record<string, string>
 
@@ -39,7 +34,6 @@ export interface Manifest {
   devDependencies?: Ranges
   peerDependencies?: Ranges
   peerDependenciesMeta?: Record<string, { optional?: boolean }>
-  engines?: Ranges
 }
 
 const dependency = '@qvac/inference'
@@ -138,32 +132,8 @@ export function checkSharedMajorMinor(sdkPkg: Manifest) {
   return []
 }
 
-export function checkBareRuntimeRange(inferencePkg: Manifest, sdkPkg: Manifest) {
-  const required = inferencePkg.engines?.['bare']
-  if (required === undefined) return []
-  if (validRange(required) === null) {
-    return [`@qvac/inference engines.bare "${required}" is not a valid semver range.`]
-  }
-
-  const runtime = sdkPkg.dependencies?.['bare-runtime']
-  if (runtime === undefined || validRange(runtime) === null) {
-    return [`${sdkManifest} must declare a valid bare-runtime dependency range.`]
-  }
-  if (!subset(runtime, required)) {
-    return [
-      `SDK bare-runtime "${runtime}" permits versions outside inference's engines.bare "${required}". ` +
-        'Align the runtime dependency so an existing consumer lockfile cannot retain an unsupported worker.'
-    ]
-  }
-  return []
-}
-
 export function collectVersionFailures(inferencePkg: Manifest, sdkPkg: Manifest) {
-  return [
-    ...checkAddonRanges(inferencePkg, sdkPkg),
-    ...checkSharedMajorMinor(sdkPkg),
-    ...checkBareRuntimeRange(inferencePkg, sdkPkg)
-  ]
+  return [...checkAddonRanges(inferencePkg, sdkPkg), ...checkSharedMajorMinor(sdkPkg)]
 }
 
 function readManifest(dir: string) {

@@ -48,11 +48,6 @@ export function registerVerifyCommand(program: Command): void {
     )
     .option('--host <target>', 'Target host (repeatable, at least one required)', collect, [])
     .option(
-      '--bare-runtime-version <semver>',
-      'Override detected Bare runtime version for ABI checks'
-    )
-    .option('-c, --config <path>', 'Config file path (default: auto-detect qvac.config.*)')
-    .option(
       '--project-root <path>',
       'Project root used to resolve bundle resolutions and runtime metadata (default: cwd)'
     )
@@ -60,14 +55,12 @@ export function registerVerifyCommand(program: Command): void {
     .option('-q, --quiet', 'Suppress success output')
     .option(
       '--offline',
-      'Skip GitHub and npm registry lookups (runtime detection for new react-native-bare-kit releases, override suggestions)'
+      'Skip GitHub and npm registry lookups (Bare version of new react-native-bare-kit releases, override suggestions)'
     )
     .action(
       async (options: {
         addonsSource: string
         host: string[]
-        bareRuntimeVersion?: string
-        config?: string
         projectRoot?: string
         json?: boolean
         quiet?: boolean
@@ -83,12 +76,6 @@ export function registerVerifyCommand(program: Command): void {
             projectRoot: options.projectRoot ?? process.cwd(),
             addonsSource: options.addonsSource,
             hosts: options.host
-          }
-          if (options.bareRuntimeVersion) {
-            verifyOptions.bareRuntimeVersion = options.bareRuntimeVersion
-          }
-          if (options.config) {
-            verifyOptions.configPath = options.config
           }
           if (options.offline) {
             verifyOptions.network = false

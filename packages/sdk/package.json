@@ -251,7 +251,6 @@
     "bare-pack": "^2.2.3",
     "bare-path": "^3.0.1",
     "bare-rpc": "^1.3.2",
-    "bare-runtime": "^1.30.3",
     "bare-sidecar": "^0.5.8",
     "bare-stow": "^0.1.6",
     "bare-stow-target-react-native": "^0.1.1",

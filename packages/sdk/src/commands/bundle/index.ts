@@ -57,9 +57,10 @@ export interface BundleSdkOptions {
    */
   installMissingPrebuilds?: boolean | undefined
   /**
-   * Check the bundled packages' engines.bare against the Bare runtime of each
-   * host and warn on a mismatch. Defaults to true; callers that run
-   * `verifyBundle` on the result can turn it off.
+   * For the `react-native` target, check the bundled packages' engines.bare
+   * against the Bare runtime in react-native-bare-kit and warn on a mismatch.
+   * Defaults to true; callers that run `verifyBundle` on the result can turn
+   * it off.
    */
   checkEngines?: boolean | undefined
   /** Allow network lookups during the engines check. Defaults to true. */
@@ -134,7 +135,6 @@ interface CheckBundleEnginesOptions {
   projectRoot: string
   bundlePath: string
   hosts: string[]
-  configPath: string | undefined
   network: boolean | undefined
   logger: Logger
 }
@@ -155,45 +155,39 @@ function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
 }
 
 async function checkBundleEngines(options: CheckBundleEnginesOptions) {
-  const { projectRoot, bundlePath, hosts, configPath, network, logger } = options
+  const { projectRoot, bundlePath, hosts, network, logger } = options
 
-  logger.info('\n🔎 Checking engines.bare against the Bare runtime of each host...')
+  logger.info('\n🔎 Checking engines.bare against the Bare runtime in react-native-bare-kit...')
   const result = await verifyBundle({
     projectRoot,
     addonsSource: bundlePath,
     hosts,
-    ...(configPath !== undefined ? { configPath } : {}),
     ...(network !== undefined ? { network } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
   })
 
-  const checkedHosts: string[] = []
-  for (const group of result.runtimes ?? []) {
-    const label = group.hosts.join(', ')
-    if (group.resolution.resolved) {
-      checkedHosts.push(...group.hosts)
-      logger.info(
-        `   ${label}: Bare ${group.resolution.runtime.version} (from ${formatRuntimeSource(group.resolution.runtime)})`
-      )
-    } else {
-      logger.warn(`engines.bare not checked for ${label}: ${group.resolution.error.reason}`)
-    }
+  const label = hosts.join(', ')
+  if (result.runtime === null) return
+  if (!result.runtime.resolved) {
+    logger.warn(`engines.bare not checked for ${label}: ${result.runtime.error.reason}`)
+    return
   }
+  logger.info(
+    `   ${label}: Bare ${result.runtime.runtime.version} (from ${formatRuntimeSource(result.runtime.runtime)})`
+  )
 
   const mismatches = result.issues.filter(
     (issue) => ENGINES_ISSUE_CODES.has(issue.code) && issue.level === 'error'
   )
   if (mismatches.length === 0) {
-    if (checkedHosts.length > 0) {
-      logger.info(`   No engines.bare mismatches for ${checkedHosts.join(', ')}`)
-    }
+    logger.info(`   No engines.bare mismatches for ${label}`)
     return
   }
 
   const lines = ['The bundle contains packages that require a newer Bare runtime:']
   for (const issue of mismatches) lines.push(`  - ${issue.message}`)
   lines.push('')
-  for (const advice of result.advice ?? []) lines.push(...formatEnginesAdvice(advice))
+  if (result.advice !== undefined) lines.push(...formatEnginesAdvice(result.advice))
   logger.warn(lines.join('\n').trimEnd())
 }
 
@@ -399,12 +393,11 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   const addons = await listBundledAddons({ bundlePath, projectRoot, logger, includeAudioDecoder })
   logger.info(`   Native addons (${addons.length}): ${addons.join(', ') || '(none)'}`)
 
-  if (options.checkEngines !== false) {
+  if (target === 'react-native' && options.checkEngines !== false) {
     await checkBundleEngines({
       projectRoot,
       bundlePath,
       hosts,
-      configPath: configPath ?? undefined,
       network: options.network,
       logger
     })

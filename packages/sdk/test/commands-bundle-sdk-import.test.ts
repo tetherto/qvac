@@ -177,7 +177,7 @@ describe('bundleSdk', () => {
   it('writes the entry, the harness and the bundle for this host', async (t) => {
     const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
 
-    const result = await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
 
     assert.equal(result.target, 'bare-sidecar')
     assert.deepEqual(result.hosts, [HOST])
@@ -193,7 +193,7 @@ describe('bundleSdk', () => {
     const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
     writeFile(path.join(workerDir, 'stale.bare'), '')
 
-    await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    await bundleSdk({ projectRoot, configPath, quiet: true })
 
     assert.ok(!fs.existsSync(path.join(workerDir, 'stale.bare')))
   })
@@ -215,7 +215,7 @@ describe('bundleSdk', () => {
       })
     )
 
-    const result = await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
     await assertDecoderExcludedFromBundle(result)
 
     writeFile(
@@ -236,8 +236,7 @@ describe('bundleSdk', () => {
     const explicitlyDeferred = await bundleSdk({
       projectRoot,
       configPath,
-      defer: ['bare-ffmpeg'],
-      checkEngines: false
+      defer: ['bare-ffmpeg']
     })
     await assertDecoderExcludedFromBundle(explicitlyDeferred)
     assert.ok(warnings.some((message) => message.includes('cannot decode compressed audio files')))
@@ -257,7 +256,7 @@ describe('bundleSdk', () => {
       JSON.stringify({ plugins: ['@qvac/sdk/audiogen-ggml/plugin'], includeAudioDecoder: false })
     )
 
-    const result = await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
 
     await assertDecoderExcludedFromBundle(result)
   })
@@ -280,7 +279,7 @@ describe('bundleSdk', () => {
       "import addon from 'split-addon'\nexport const llmPlugin = { addon }\n"
     )
 
-    const result = await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
 
     assert.match(JSON.stringify((await readBundle(result.bundlePath)).resolutions), /deferred:\./)
   })
@@ -290,7 +289,7 @@ describe('bundleSdk', () => {
     writeFile(configPath, JSON.stringify({ plugins: ['missing-package/plugin'] }))
 
     await assert.rejects(
-      bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false }),
+      bundleSdk({ projectRoot, configPath, quiet: true }),
       (error: unknown) =>
         error instanceof UnexpectedDeferredImportsError &&
         error.message.includes('missing-package/plugin')

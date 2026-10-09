@@ -162,8 +162,7 @@ function resolved(
 
 /**
  * Bare version the app runs on mobile: the one compiled into the bare-kit
- * binaries that react-native-bare-kit ships, not any `bare-runtime` package
- * in node_modules.
+ * binaries that react-native-bare-kit ships.
  *
  * Checks the built-in table, then the installed iOS framework's Info.plist,
  * and only then GitHub.

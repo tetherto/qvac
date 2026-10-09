@@ -88,10 +88,6 @@ function writeMobileProject(
     name: 'react-native-bare-kit',
     version: options.reactNativeBareKit ?? '0.14.5'
   })
-  writePackage(projectRoot, 'node_modules/bare-runtime', {
-    name: 'bare-runtime',
-    version: '1.33.4'
-  })
   writePackage(projectRoot, 'node_modules/bare-inspect', {
     name: 'bare-inspect',
     version: '3.1.10',
@@ -138,14 +134,10 @@ function writeMixedHostBundle(projectRoot: string, options: { linkedOnDesktop: b
     engines: { bare: '>=1.32.0' }
   })
   writePrebuilds(addon, ['ios-arm64', 'darwin-arm64'])
-  // Mobile Bare 1.33.1 satisfies the addon; desktop bare-runtime 1.24.2 does not.
+  // Bare 1.29.4 does not satisfy the addon's engines.bare.
   writePackage(projectRoot, 'node_modules/react-native-bare-kit', {
     name: 'react-native-bare-kit',
-    version: '0.15.1'
-  })
-  writePackage(projectRoot, 'node_modules/bare-runtime', {
-    name: 'bare-runtime',
-    version: '1.24.2'
+    version: '0.14.5'
   })
   return bundlePath
 }
@@ -390,7 +382,7 @@ describe('createLimiter', () => {
 })
 
 describe('verifyBundle engines.bare against the mobile runtime', () => {
-  it('checks mobile hosts against react-native-bare-kit, not bare-runtime', async () => {
+  it('checks mobile hosts against react-native-bare-kit and skips desktop hosts', async () => {
     await withTempDir(async (dir) => {
       writeMobileProject(dir, { hosts: ['android-arm64', 'darwin-arm64'] })
       const progress: string[] = []
@@ -412,20 +404,10 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
       assert.equal(mismatches.length, 1)
       assert.match(mismatches[0]!.message, /runtime is 1\.29\.4 \(from react-native-bare-kit/)
 
-      assert.deepEqual(
-        result.runtimes?.map((group) => [
-          group.hosts,
-          group.resolution.resolved ? group.resolution.runtime.version : null
-        ]),
-        [
-          [['android-arm64'], '1.29.4'],
-          [['darwin-arm64'], '1.33.4']
-        ]
-      )
+      assert.equal(result.runtime?.resolved ? result.runtime.runtime.version : null, '1.29.4')
 
       assert.deepEqual(fetched, ['bare-type'])
-      assert.equal(result.advice?.length, 1)
-      const advice = result.advice![0]!
+      const advice = result.advice!
       assert.deepEqual(advice.hosts, ['android-arm64'])
       assert.equal(advice.requiredBare, '1.32.0')
       assert.equal(advice.upgrade?.to, '0.15.1')
@@ -461,7 +443,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
         fetchText: failingFetch(),
         fetchPackageMetadata: () => Promise.resolve(BARE_TYPE_METADATA)
       })
-      const override = result.advice?.[0]?.overrides[0]
+      const override = result.advice?.overrides[0]
       assert.equal(override?.version, '1.1.1')
       assert.deepEqual(JSON.parse(override?.snippet ?? 'null'), {
         overrides: { 'bare-inspect': { 'bare-type': '1.1.1' } }
@@ -505,8 +487,8 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
       const mismatch = result.issues.find((issue) => issue.code === 'engines-mismatch')
       assert.ok(mismatch)
       assert.match(mismatch.message, /bare-new-api@2\.0\.0 requires bare >=1\.40\.0/)
-      assert.equal(result.advice?.[0]?.upgrade, null)
-      assert.equal(result.advice?.[0]?.overrides[0]?.lookupSkipped, true)
+      assert.equal(result.advice?.upgrade, null)
+      assert.equal(result.advice?.overrides[0]?.lookupSkipped, true)
       assert.match(formatVerifyBundleResult(result), /without --offline/)
     })
   })
@@ -525,24 +507,24 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
         fetchPackageMetadata: () => Promise.reject(new Error('unexpected registry request'))
       })
       assert.ok(hasErrors(result))
-      assert.equal(result.advice?.[0]?.overrides[0]?.version, null)
-      assert.equal(result.advice?.[0]?.upgrade?.to, '0.15.1')
+      assert.equal(result.advice?.overrides[0]?.version, null)
+      assert.equal(result.advice?.upgrade?.to, '0.15.1')
       assert.ok(progress.every((message) => !message.startsWith('Looking up releases of')))
     })
   })
 
-  it('does not check an addon against the runtime of hosts that do not link it', async () => {
+  it('does not check an addon that only desktop hosts link', async () => {
     await withTempDir(async (dir) => {
-      const bundlePath = writeMixedHostBundle(dir, { linkedOnDesktop: false })
+      const bundlePath = writeMixedHostBundle(dir, { linkedOnDesktop: true })
       const result = await verifyBundle({
         projectRoot: dir,
         addonsSource: bundlePath,
-        hosts: ['ios-arm64', 'darwin-arm64'],
+        hosts: ['android-arm64', 'darwin-arm64'],
         network: false
       })
       assert.deepEqual(
         result.addons.map((addon) => addon.linkedHosts),
-        [['ios-arm64']]
+        [['darwin-arm64']]
       )
       assert.equal(
         result.issues.some((issue) => issue.code === 'abi-mismatch'),
@@ -551,7 +533,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
     })
   })
 
-  it('checks an addon against every runtime of hosts that link it', async () => {
+  it('checks an addon once against the mobile runtime when mobile and desktop hosts link it', async () => {
     await withTempDir(async (dir) => {
       const bundlePath = writeMixedHostBundle(dir, { linkedOnDesktop: true })
       const result = await verifyBundle({
@@ -562,11 +544,25 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
       })
       const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
       assert.equal(mismatches.length, 1)
-      assert.match(mismatches[0]!.message, /runtime is 1\.24\.2 \(from bare-runtime\)/)
+      assert.match(mismatches[0]!.message, /runtime is 1\.29\.4 \(from react-native-bare-kit/)
     })
   })
 
-  it('checks mobile hosts against bare-runtime when react-native-bare-kit is not installed', async () => {
+  it('runs no ABI check for desktop hosts', async () => {
+    await withTempDir(async (dir) => {
+      writeMobileProject(dir, { hosts: ['darwin-arm64'] })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        network: false
+      })
+      assert.deepEqual(result.issues, [])
+      assert.equal(result.runtime, null)
+    })
+  })
+
+  it('warns that engines.bare is unchecked when react-native-bare-kit is not installed', async () => {
     await withTempDir(async (dir) => {
       writeMobileProject(dir, { hosts: ['android-arm64'] })
       fs.rmSync(path.join(dir, 'node_modules', 'react-native-bare-kit'), { recursive: true })
@@ -577,7 +573,10 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
         network: false
       })
       assert.equal(hasErrors(result), false)
-      assert.equal(result.runtime?.resolved ? result.runtime.runtime.source : null, 'bare-runtime')
+      assert.equal(result.runtime?.resolved, false)
+      const warning = result.issues.find((issue) => issue.code === 'unknown-runtime-version')
+      assert.ok(warning)
+      assert.match(warning.message, /react-native-bare-kit is not installed/)
     })
   })
 })

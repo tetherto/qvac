@@ -588,13 +588,11 @@ async function runBundleAndVerify(commands, projectDir, options) {
   logger.info(`Running verifyBundle (hosts: ${hosts.join(', ')})...`)
   let verifyResult
   try {
-    const verifyOpts = {
+    verifyResult = await verifyBundle({
       projectRoot: projectDir,
       addonsSource: bundleResult.bundlePath,
       hosts
-    }
-    if (options.configPath) verifyOpts.configPath = options.configPath
-    verifyResult = await verifyBundle(verifyOpts)
+    })
   } catch (err) {
     throw new QvacForgePluginError(`verifyBundle threw: ${err?.message || err}`)
   }

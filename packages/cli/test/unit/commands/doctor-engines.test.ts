@@ -20,24 +20,13 @@ function writePackage(projectRoot: string, relDir: string, body: Record<string, 
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(body))
 }
 
-const DESKTOP_HOST = `${process.platform}-${process.arch}`
-
-function writeProject(
-  projectRoot: string,
-  options: { reactNativeBareKit?: string; bareRuntime?: string }
-): void {
+function writeProject(projectRoot: string, options: { reactNativeBareKit?: string }): void {
   writePackage(projectRoot, '.', { name: 'app', version: '1.0.0' })
   fs.writeFileSync(path.join(projectRoot, 'package-lock.json'), '{}')
   if (options.reactNativeBareKit !== undefined) {
     writePackage(projectRoot, 'node_modules/react-native-bare-kit', {
       name: 'react-native-bare-kit',
       version: options.reactNativeBareKit
-    })
-  }
-  if (options.bareRuntime !== undefined) {
-    writePackage(projectRoot, 'node_modules/bare-runtime', {
-      name: 'bare-runtime',
-      version: options.bareRuntime
     })
   }
   writePackage(projectRoot, 'node_modules/bare-inspect', {
@@ -54,7 +43,7 @@ function writeProject(
 }
 
 function writeMobileProject(projectRoot: string, reactNativeBareKit: string): void {
-  writeProject(projectRoot, { reactNativeBareKit, bareRuntime: '1.33.4' })
+  writeProject(projectRoot, { reactNativeBareKit })
 }
 
 describe('checkBareEngines', () => {
@@ -82,31 +71,21 @@ describe('checkBareEngines', () => {
     })
   })
 
-  it('does not check a mobile project against the desktop bare-runtime', async () => {
-    await withTempDir(async (dir) => {
-      writeProject(dir, { reactNativeBareKit: '0.15.1', bareRuntime: '1.24.2' })
-      const result = await checkBareEngines(dir, { network: false })
-      assert.equal(result.status, 'pass')
-      assert.doesNotMatch(result.value ?? '', new RegExp(DESKTOP_HOST))
-    })
-  })
-
-  it('fails a desktop project whose resolved bare-runtime is too old', async () => {
-    await withTempDir(async (dir) => {
-      writeProject(dir, { bareRuntime: '1.24.2' })
-      const result = await checkBareEngines(dir, { network: false })
-      assert.equal(result.status, 'fail')
-      assert.match(result.hint ?? '', new RegExp(`newer Bare than ${DESKTOP_HOST} runs`))
-      assert.match(result.hint ?? '', /runtime is 1\.24\.2 \(from bare-runtime\)/)
-    })
-  })
-
-  it('warns instead of passing when no runtime version is found', async () => {
+  it('skips a project without react-native-bare-kit', async () => {
     await withTempDir(async (dir) => {
       writeProject(dir, {})
       const result = await checkBareEngines(dir, { network: false })
+      assert.equal(result.status, 'skip')
+      assert.match(result.value ?? '', /not a phone project/)
+    })
+  })
+
+  it('warns instead of passing when the embedded Bare version is unknown', async () => {
+    await withTempDir(async (dir) => {
+      writeMobileProject(dir, '9.0.0')
+      const result = await checkBareEngines(dir, { network: false })
       assert.equal(result.status, 'warn')
-      assert.match(result.hint ?? '', new RegExp(`engines.bare not checked for ${DESKTOP_HOST}`))
+      assert.match(result.hint ?? '', /engines\.bare not checked for android-arm64, ios-arm64/)
     })
   })
 

@@ -231,42 +231,28 @@ function newestTableEntry() {
 }
 
 function buildUpgrade(runtime: BareRuntime, ranges: string[], requiredBare: string) {
-  if (runtime.source === 'react-native-bare-kit' && runtime.packageVersion !== undefined) {
-    const target = findReactNativeBareKitUpgrade(runtime.packageVersion, ranges)
-    if (target !== null) {
-      return {
-        upgrade: {
-          packageName: REACT_NATIVE_BARE_KIT,
-          from: runtime.packageVersion,
-          to: target.version,
-          bare: target.bare
-        },
-        upgradeHint:
-          `Upgrade ${REACT_NATIVE_BARE_KIT} to ${target.version} or newer ` +
-          `(embeds bare-kit ${target.bareKit}, Bare ${target.bare}).`
-      }
-    }
-    const newest = newestTableEntry()
+  const target = findReactNativeBareKitUpgrade(runtime.packageVersion, ranges)
+  if (target !== null) {
     return {
-      upgrade: null,
+      upgrade: {
+        packageName: REACT_NATIVE_BARE_KIT,
+        from: runtime.packageVersion,
+        to: target.version,
+        bare: target.bare
+      },
       upgradeHint:
-        `No ${REACT_NATIVE_BARE_KIT} release in the built-in table embeds Bare ${requiredBare} or newer` +
-        (newest === null
-          ? '.'
-          : `; the newest known, ${newest.version}, embeds Bare ${newest.bare}. Check for a newer release.`)
+        `Upgrade ${REACT_NATIVE_BARE_KIT} to ${target.version} or newer ` +
+        `(embeds bare-kit ${target.bareKit}, Bare ${target.bare}).`
     }
   }
-
-  if (runtime.source === 'bare-runtime' || runtime.source === 'bare') {
-    return {
-      upgrade: null,
-      upgradeHint: `Upgrade ${runtime.source} to ${requiredBare} or newer.`
-    }
-  }
-
+  const newest = newestTableEntry()
   return {
     upgrade: null,
-    upgradeHint: `The runtime version comes from ${runtime.source}; raise it to ${requiredBare} or newer if the target runtime allows it.`
+    upgradeHint:
+      `No ${REACT_NATIVE_BARE_KIT} release in the built-in table embeds Bare ${requiredBare} or newer` +
+      (newest === null
+        ? '.'
+        : `; the newest known, ${newest.version}, embeds Bare ${newest.bare}. Check for a newer release.`)
   }
 }
 

@@ -1,10 +1,6 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import {
-  resolveConfigFileInProject,
-  loadConfigFromPath
-} from '@/client/config-loader/resolve-config.node'
-import {
   createCollectDiagnostics,
   formatAddonId,
   type AddonSourceKind,
@@ -23,15 +19,11 @@ import {
 } from '@/commands/verify/prebuilds'
 import {
   checkAbi,
-  formatConfigLabel,
-  normalizeVersion,
-  resolveBareRuntime,
   type AbiIssue,
   type BareRuntimeResolution,
   type EnginesPackage
 } from '@/commands/verify/abi'
 import {
-  isReactNativeBareKitInstalled,
   resolveMobileBareRuntime,
   type FetchText,
   type ProgressFn
@@ -48,8 +40,6 @@ export interface VerifyBundleOptions {
   projectRoot: string
   addonsSource: string
   hosts: string[]
-  bareRuntimeVersion?: string
-  configPath?: string
   /**
    * Allow GitHub and npm registry requests: GitHub for a react-native-bare-kit
    * release newer than the built-in table, the registry only after a mismatch
@@ -63,32 +53,11 @@ export interface VerifyBundleOptions {
   fetchPackageMetadata?: FetchPackageMetadata
 }
 
-export interface RuntimeGroup {
-  hosts: string[]
-  resolution: BareRuntimeResolution
-}
-
 export interface InvalidSourceIssue {
   code: 'invalid-source'
   level: 'error'
   message: string
   addonsSource: string
-}
-
-export interface InvalidRuntimeVersionIssue {
-  code: 'invalid-runtime-version'
-  level: 'error'
-  message: string
-  providedValue: string
-  source: 'flag' | 'config'
-}
-
-export interface ConfigLoadFailedIssue {
-  code: 'config-load-failed'
-  level: 'warning'
-  message: string
-  configPath: string
-  reason: string
 }
 
 export interface InvalidPackageJsonIssue {
@@ -111,8 +80,6 @@ export type VerifyBundleIssue =
   | MissingPrebuildIssue
   | AbiIssue
   | InvalidSourceIssue
-  | InvalidRuntimeVersionIssue
-  | ConfigLoadFailedIssue
   | InvalidPackageJsonIssue
   | EmptyBundleResolutionsIssue
 
@@ -121,18 +88,20 @@ export interface VerifyBundleResult {
   resolvedAddonsSource: string
   sourceKind: AddonSourceKind | null
   hosts: string[]
-  /** Runtime of the first entry in `runtimes`: the mobile one when any host is mobile. */
+  /**
+   * Bare runtime of the mobile hosts, which ABI and engines.bare are checked
+   * against. Null without mobile hosts: desktop hosts run the Bare that
+   * bare-sidecar installs with the SDK.
+   */
   runtime: BareRuntimeResolution | null
-  /** Mobile and desktop hosts run different Bare builds, so each is resolved separately. */
-  runtimes?: RuntimeGroup[]
   addons: NativeAddon[]
   issues: VerifyBundleIssue[]
-  /** How to fix each runtime that fails an engines.bare range. */
-  advice?: EnginesAdvice[]
+  /** How to fix packages that fail the mobile runtime's engines.bare check. */
+  advice?: EnginesAdvice
 }
 
 export async function verifyBundle(options: VerifyBundleOptions): Promise<VerifyBundleResult> {
-  const { projectRoot, addonsSource, hosts, bareRuntimeVersion, configPath } = options
+  const { projectRoot, addonsSource, hosts } = options
   const resolvedAddonsSource = path.isAbsolute(addonsSource)
     ? addonsSource
     : path.resolve(projectRoot, addonsSource)
@@ -153,82 +122,6 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
           message: 'At least one host is required.'
         }
       ]
-    }
-  }
-
-  let invalidRuntimeVersion: InvalidRuntimeVersionIssue | null = null
-  if (bareRuntimeVersion !== undefined && normalizeVersion(bareRuntimeVersion) === null) {
-    invalidRuntimeVersion = {
-      code: 'invalid-runtime-version',
-      level: 'error',
-      providedValue: bareRuntimeVersion,
-      source: 'flag',
-      message:
-        `bareRuntimeVersion "${bareRuntimeVersion}" is not a valid semver. ` +
-        'Use a version like 1.15.0 (with optional v-prefix and pre-release tag) or omit it to use auto-detection.'
-    }
-  }
-
-  let configRuntimeVersion: string | undefined
-  let resolvedConfigPath: string | null = null
-  let configLoadFailed: ConfigLoadFailedIssue | null = null
-  try {
-    resolvedConfigPath = await resolveConfigFileInProject(projectRoot, configPath ?? undefined)
-    if (resolvedConfigPath !== null) {
-      const config = await loadConfigFromPath(resolvedConfigPath)
-      if (typeof config.bareRuntimeVersion === 'string') {
-        configRuntimeVersion = config.bareRuntimeVersion
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (configPath !== undefined) {
-      return {
-        addonsSource,
-        resolvedAddonsSource,
-        sourceKind: null,
-        hosts,
-        runtime: null,
-        addons: [],
-        issues: [
-          {
-            code: 'invalid-source',
-            level: 'error',
-            addonsSource,
-            message: `Failed to load config from '${configPath}': ${message}`
-          }
-        ]
-      }
-    }
-    if (resolvedConfigPath !== null) {
-      configLoadFailed = {
-        code: 'config-load-failed',
-        level: 'warning',
-        configPath: resolvedConfigPath,
-        reason: message,
-        message:
-          `Found ${formatConfigLabel(projectRoot, resolvedConfigPath)} but failed to load it: ${message}. ` +
-          'Falling back to auto-detection for Bare runtime; the project-pinned ' +
-          '`bareRuntimeVersion` is being ignored. Fix the config file or pass `configPath` explicitly to surface it as an error.'
-      }
-    }
-  }
-
-  if (
-    invalidRuntimeVersion === null &&
-    bareRuntimeVersion === undefined &&
-    configRuntimeVersion !== undefined &&
-    normalizeVersion(configRuntimeVersion) === null
-  ) {
-    invalidRuntimeVersion = {
-      code: 'invalid-runtime-version',
-      level: 'error',
-      providedValue: configRuntimeVersion,
-      source: 'config',
-      message:
-        `\`bareRuntimeVersion\` in ${formatConfigLabel(projectRoot, resolvedConfigPath ?? undefined)} ` +
-        `"${configRuntimeVersion}" is not a valid semver. ` +
-        'Use a version like 1.15.0 (with optional v-prefix and pre-release tag), or remove the field to use auto-detection.'
     }
   }
 
@@ -298,8 +191,6 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
   }
 
   const issues: VerifyBundleIssue[] = []
-  if (configLoadFailed !== null) issues.push(configLoadFailed)
-  if (invalidRuntimeVersion !== null) issues.push(invalidRuntimeVersion)
   issues.push(...buildInvalidPackageJsonIssues(diagnostics.invalidPackageJsons))
   if (sourceKind === 'bare-pack-bundle' && diagnostics.emptyResolutions) {
     issues.push({
@@ -319,64 +210,44 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
     issues.push(...prebuildIssues)
   }
 
+  const mobileHosts = hosts.filter(isMobileHost)
   let runtime: BareRuntimeResolution | null = null
-  let runtimes: RuntimeGroup[] | undefined
-  const advice: EnginesAdvice[] = []
-  if (invalidRuntimeVersion === null) {
-    const explicit =
-      bareRuntimeVersion !== undefined
-        ? { version: bareRuntimeVersion, source: 'flag' as const }
-        : configRuntimeVersion !== undefined
-          ? { version: configRuntimeVersion, source: 'config' as const }
-          : null
-    runtimes = await resolveRuntimeGroups({
+  let advice: EnginesAdvice | undefined
+  if (mobileHosts.length > 0) {
+    runtime = await resolveMobileBareRuntime({
       projectRoot,
-      hosts,
-      explicit,
       network: options.network,
       onProgress: options.onProgress,
       fetchText: options.fetchText
     })
-    runtime = runtimes[0]?.resolution ?? null
+    const abiIssues = checkAbi({
+      addons: addonsLinkedOn(addons, mobileHosts),
+      runtime,
+      packages: enginesPackages(diagnostics.packages)
+    })
+    issues.push(...abiIssues)
 
-    const packages = enginesPackages(diagnostics.packages)
-    const seen = new Set<string>()
-    for (const group of runtimes) {
-      const groupIssues = checkAbi({
-        addons: addonsLinkedOn(addons, group.hosts),
-        runtime: group.resolution,
-        packages
-      }).filter((issue) => {
-        if (seen.has(issue.message)) return false
-        seen.add(issue.message)
-        return true
+    const failures = abiIssues.flatMap((issue) =>
+      issue.code === 'abi-mismatch' || issue.code === 'engines-mismatch'
+        ? [
+            failureOf(
+              issue.code === 'abi-mismatch' ? issue.addon : issue.package,
+              issue.enginesBare
+            )
+          ]
+        : []
+    )
+    if (failures.length > 0 && runtime.resolved) {
+      advice = await buildEnginesAdvice({
+        projectRoot,
+        hosts: mobileHosts,
+        runtime: runtime.runtime,
+        failures,
+        packages: diagnostics.packages,
+        network: options.network,
+        onProgress: options.onProgress,
+        fetchPackageMetadata: options.fetchPackageMetadata
       })
-      issues.push(...groupIssues)
-
-      const failures = groupIssues.flatMap((issue) =>
-        issue.code === 'abi-mismatch' || issue.code === 'engines-mismatch'
-          ? [
-              failureOf(
-                issue.code === 'abi-mismatch' ? issue.addon : issue.package,
-                issue.enginesBare
-              )
-            ]
-          : []
-      )
-      if (failures.length > 0 && group.resolution.resolved) {
-        advice.push(
-          await buildEnginesAdvice({
-            projectRoot,
-            hosts: group.hosts,
-            runtime: group.resolution.runtime,
-            failures,
-            packages: diagnostics.packages,
-            network: options.network,
-            onProgress: options.onProgress,
-            fetchPackageMetadata: options.fetchPackageMetadata
-          })
-        )
-      }
     }
   }
 
@@ -389,8 +260,7 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
     addons,
     issues
   }
-  if (runtimes !== undefined) result.runtimes = runtimes
-  if (advice.length > 0) result.advice = advice
+  if (advice !== undefined) result.advice = advice
   return result
 }
 
@@ -405,7 +275,7 @@ function failureOf(id: string, enginesBare: string) {
 }
 
 /**
- * Addons a runtime group loads: those the bundle links on one of its hosts.
+ * Addons the given hosts load: those the bundle links on one of them.
  * Without link information (`linkedHosts` unset), every addon counts, as in
  * `checkPrebuilds`.
  */
@@ -427,62 +297,6 @@ function enginesPackages(records: PackageRecord[]): EnginesPackage[] {
     byId.set(id, pkg)
   }
   return [...byId.values()]
-}
-
-interface ResolveRuntimeGroupsOptions {
-  projectRoot: string
-  hosts: string[]
-  explicit: { version: string; source: 'flag' | 'config' } | null
-  network?: boolean | undefined
-  onProgress?: ProgressFn | undefined
-  fetchText?: FetchText | undefined
-}
-
-/**
- * Mobile hosts run the Bare build inside react-native-bare-kit; desktop hosts
- * run `bare-runtime` (or `bare`). An explicit version applies to every host.
- * Without react-native-bare-kit installed, mobile hosts fall back to the
- * desktop detection so projects that only bundle for mobile keep a runtime.
- */
-async function resolveRuntimeGroups(options: ResolveRuntimeGroupsOptions): Promise<RuntimeGroup[]> {
-  const { projectRoot, hosts, explicit } = options
-
-  if (explicit !== null) {
-    return [
-      {
-        hosts,
-        resolution: await resolveBareRuntime({
-          projectRoot,
-          explicitVersion: explicit.version,
-          explicitSource: explicit.source
-        })
-      }
-    ]
-  }
-
-  const mobileHosts = hosts.filter(isMobileHost)
-  const desktopHosts = hosts.filter((host) => !isMobileHost(host))
-  const groups: RuntimeGroup[] = []
-
-  if (mobileHosts.length > 0) {
-    groups.push({
-      hosts: mobileHosts,
-      resolution: isReactNativeBareKitInstalled(projectRoot)
-        ? await resolveMobileBareRuntime({
-            projectRoot,
-            network: options.network,
-            onProgress: options.onProgress,
-            fetchText: options.fetchText
-          })
-        : await resolveBareRuntime({ projectRoot })
-    })
-  }
-
-  if (desktopHosts.length > 0) {
-    groups.push({ hosts: desktopHosts, resolution: await resolveBareRuntime({ projectRoot }) })
-  }
-
-  return groups
 }
 
 function buildInvalidPackageJsonIssues(
@@ -554,29 +368,14 @@ export function formatVerifyBundleResult(result: VerifyBundleResult): string {
   sections.push(...formatMissingPrebuilds(result.issues))
   sections.push(...formatAbiMismatches(result.issues))
   sections.push(...formatEnginesMismatches(result.issues))
-  for (const advice of result.advice ?? []) sections.push(...formatEnginesAdvice(advice))
-  sections.push(...formatInvalidRuntimeVersions(result.issues))
+  if (result.advice !== undefined) sections.push(...formatEnginesAdvice(result.advice))
   sections.push(...formatMalformedEnginesBare(result.issues))
-  sections.push(...formatConfigLoadFailed(result.issues))
   sections.push(...formatInvalidPackageJsons(result.issues))
   sections.push(...formatEmptyBundleResolutions(result.issues))
   sections.push(...formatUnknownRuntime(result.issues))
   sections.push(...formatInvalidSources(result.issues))
 
   return sections.join('\n').trimEnd()
-}
-
-function formatConfigLoadFailed(issues: VerifyBundleIssue[]): string[] {
-  const matches = issues.filter(
-    (issue): issue is ConfigLoadFailedIssue => issue.code === 'config-load-failed'
-  )
-  if (matches.length === 0) return []
-  const lines = ['  Config load failed:']
-  for (const issue of matches) {
-    lines.push(`    - ${issue.message}`)
-  }
-  lines.push('')
-  return lines
 }
 
 function formatMissingPrebuilds(issues: VerifyBundleIssue[]): string[] {
@@ -662,19 +461,6 @@ function formatInvalidSources(issues: VerifyBundleIssue[]): string[] {
   )
   if (matches.length === 0) return []
   const lines = ['  Invalid source:']
-  for (const issue of matches) {
-    lines.push(`    - ${issue.message}`)
-  }
-  lines.push('')
-  return lines
-}
-
-function formatInvalidRuntimeVersions(issues: VerifyBundleIssue[]): string[] {
-  const matches = issues.filter(
-    (issue): issue is InvalidRuntimeVersionIssue => issue.code === 'invalid-runtime-version'
-  )
-  if (matches.length === 0) return []
-  const lines = ['  Invalid Bare runtime version:']
   for (const issue of matches) {
     lines.push(`    - ${issue.message}`)
   }

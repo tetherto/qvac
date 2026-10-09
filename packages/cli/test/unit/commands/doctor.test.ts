@@ -615,8 +615,13 @@ describe('deep SDK runtime probe', () => {
       /unsupported by this CPU/i
     )
     assert.match(
-      classifySdkRuntimeFailure(failedProbe({ stderr: 'BareRuntimeBinaryNotFoundError' })).hint,
-      /Bare runtime binary appears to be missing/i
+      classifySdkRuntimeFailure(
+        failedProbe({
+          stderr:
+            "Cannot find asset '#bare' imported from 'file:///app/node_modules/bare-sidecar/lib/bare.js'"
+        })
+      ).hint,
+      /bare-sidecar has no Bare program for this host/i
     )
     assert.match(
       classifySdkRuntimeFailure(failedProbe({ stderr: 'VCRUNTIME140.dll was not found' })).hint,
@@ -647,7 +652,13 @@ describe('deep SDK runtime probe', () => {
       [failedProbe({ stderr: 'VCRUNTIME140.dll was not found' }), 'visual-cpp-runtime'],
       [failedProbe({ stderr: 'vkCreateInstance failed' }), 'vulkan'],
       [failedProbe({ stderr: 'libnative.so: cannot open shared object file' }), 'shared-library'],
-      [failedProbe({ stderr: 'BareRuntimeBinaryNotFoundError' }), 'bare-runtime'],
+      [
+        failedProbe({
+          stderr:
+            "Cannot find asset '#bare' imported from 'file:///app/node_modules/bare-sidecar/lib/bare.js'"
+        }),
+        'bare-runtime'
+      ],
       [failedProbe({ outcome: 'timeout' }), 'worker-handshake-timeout'],
       [failedProbe({ outcome: 'spawn-error' }), 'spawn-error'],
       [failedProbe({ outcome: 'protocol-error' }), 'protocol-error'],
