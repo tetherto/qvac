@@ -85,7 +85,7 @@ jobs:
       - name: Checkout base
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ github.event.pull_request.base.sha || github.ref }}
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.ref }}
           fetch-depth: 0
 
       - name: Detect changed SDK pod packages
@@ -95,9 +95,9 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
         run: |
           # Fail closed: any error here (git fetch/diff, jq) fails the step and
           # therefore the whole "SDK Pod Checks" job — never a silent green.
@@ -126,8 +126,14 @@ jobs:
             # workflow_dispatch: run all packages
             PACKAGES="$ALL_PACKAGES"
           else
-            # Fetch PR head (available on the repo via pull refs)
-            git fetch origin "refs/pull/${PR_NUMBER}/head"
+            if [ -n "$PR_NUMBER" ]; then
+              # Fetch PR head (available on the repo via pull refs)
+              git fetch origin "refs/pull/${PR_NUMBER}/head"
+            else
+              # merge_group: no pull ref exists. Base and head are both in the
+              # payload and both reachable from this checkout.
+              git fetch -q origin "$BASE_SHA" "$HEAD_SHA"
+            fi
 
             # Filter to packages whose own path or a `depends_on` path changed.
             CHANGED_FILES=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
@@ -157,7 +163,7 @@ jobs:
         if: steps.detect.outputs.has_changes == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.ref }}
 
       - name: Setup Bun
         if: steps.detect.outputs.has_changes == 'true'
