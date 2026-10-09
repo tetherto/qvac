@@ -51,7 +51,7 @@ using namespace qvac_lib_inference_addon_llama::logging;
 namespace {
 
 // llama-server's `draft_n` / `draft_n_accepted` timings, reported only when
-// the model decodes speculatively.
+// the model decodes speculatively, and its acceptance log lines.
 void appendSpeculativeStats(
     qvac_lib_inference_addon_cpp::RuntimeStats& stats, bool enabled,
     const qvac_lib_inference_addon_llama::speculative::SpeculativeStats&
@@ -63,6 +63,34 @@ void appendSpeculativeStats(
       "draftTokens", static_cast<int64_t>(speculative.draftTokens));
   stats.emplace_back(
       "draftAcceptedTokens", static_cast<int64_t>(speculative.draftAccepted));
+  if (speculative.draftTokens == 0) {
+    return;
+  }
+  // llama-server's "draft acceptance" and per-position rate lines.
+  const auto verifySteps = static_cast<double>(speculative.verifySteps);
+  std::string perPos;
+  for (size_t i = 0;
+       speculative.verifySteps > 0 && i < speculative.acceptedPerPos.size();
+       ++i) {
+    perPos += string_format(
+        "%s%.3f",
+        i > 0 ? ", " : "",
+        static_cast<double>(speculative.acceptedPerPos[i]) / verifySteps);
+  }
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[Speculative] draft acceptance = %0.5f (%llu accepted / %llu "
+          "generated), mean len = %5.2f, acc per pos = (%s)\n",
+          static_cast<double>(speculative.draftAccepted) /
+              static_cast<double>(speculative.draftTokens),
+          static_cast<unsigned long long>(speculative.draftAccepted),
+          static_cast<unsigned long long>(speculative.draftTokens),
+          speculative.verifySteps > 0
+              ? 1.0 + static_cast<double>(speculative.draftAccepted) /
+                          verifySteps
+              : 1.0,
+          perPos.c_str()));
 }
 
 } // namespace
