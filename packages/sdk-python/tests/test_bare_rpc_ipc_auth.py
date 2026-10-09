@@ -162,6 +162,6 @@ async def test_wrong_token_is_rejected_and_connect_times_out(spawn) -> None:
     try:
         assert await asyncio.wait_for(reader.read(), timeout=5) == b""
         with pytest.raises(asyncio.TimeoutError, match="1 connection"):
-            await task
+            _ = await task
     finally:
         writer.close()
