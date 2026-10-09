@@ -445,7 +445,10 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result_ptr llamaInit);
+      common_init_result_ptr llamaInit,
+      std::unique_ptr<
+          qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+          speculative);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 

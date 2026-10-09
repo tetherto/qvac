@@ -3,9 +3,12 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <llama.h>
+
+#include "model-interface/SpeculativeRuntime.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
@@ -88,8 +91,20 @@ public:
   [[nodiscard]] bool hasPayload() const noexcept {
     return hasFile() || hasBuffer();
   }
-  // Payload size in bytes (file or buffer); 0 for a captured-empty snapshot.
-  [[nodiscard]] uint64_t bytes() const noexcept { return bytes_; }
+  // Payload size in bytes (file or buffer, plus the draft side); 0 for a
+  // captured-empty snapshot.
+  [[nodiscard]] uint64_t bytes() const noexcept {
+    return bytes_ + draft_.bytes();
+  }
+  // The speculative draft side captured with the target state (see
+  // `speculative::DraftSequenceState`); uncaptured when speculative decoding
+  // is off or for a captured-empty snapshot.
+  [[nodiscard]] const speculative::DraftSequenceState& draft() const noexcept {
+    return draft_;
+  }
+  void adoptDraft(speculative::DraftSequenceState draft) noexcept {
+    draft_ = std::move(draft);
+  }
   [[nodiscard]] const std::vector<uint8_t>& buffer() const noexcept {
     return buffer_;
   }
@@ -138,6 +153,7 @@ private:
   uint64_t bytes_ = 0;
   bool captured_ = false;
   SnapshotScope scope_ = SnapshotScope::Full;
+  speculative::DraftSequenceState draft_;
 };
 
 // Captures the state of `seqId` into `out`, recording `nPastAt` alongside it.

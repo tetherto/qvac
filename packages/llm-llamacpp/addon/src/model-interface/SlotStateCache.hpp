@@ -17,6 +17,7 @@
 
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
+#include "SpeculativeRuntime.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -31,6 +32,9 @@ struct SlotStateCacheEntry {
   /// `llama_state_seq_save_file` writes after its header.
   std::vector<uint8_t> state;
   std::vector<llama_token> ledgerWords;
+  /// The speculative draft side of the state, kept with it like
+  /// llama-server's prompt cache keeps the draft context's state.
+  speculative::DraftSequenceState draft;
   cache::Checkpoints checkpoints;
   /// Has turns its `cacheKey` file does not hold yet.
   bool dirty = false;
@@ -41,12 +45,13 @@ struct SlotStateCacheEntry {
   bool ephemeral = false;
 
   [[nodiscard]] uint64_t bytes() const noexcept {
-    uint64_t total = state.size() + ledgerWords.size() * sizeof(llama_token);
+    uint64_t total =
+        state.size() + draft.bytes() + ledgerWords.size() * sizeof(llama_token);
     for (const cache::Checkpoint& checkpoint : checkpoints) {
-      // Disk-stored checkpoints hold a temp-file path, not RAM.
-      if (checkpoint.state.hasBuffer()) {
-        total += checkpoint.state.bytes();
-      }
+      // Disk-stored checkpoints hold a temp-file path, not RAM; their
+      // speculative draft side always stays in RAM.
+      total += checkpoint.state.hasBuffer() ? checkpoint.state.bytes()
+                                            : checkpoint.state.draft().bytes();
     }
     return total;
   }

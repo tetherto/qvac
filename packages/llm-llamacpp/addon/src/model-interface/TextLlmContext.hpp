@@ -15,6 +15,8 @@
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
+#include "SpeculativeRuntime.hpp"
+#include "SpeculativeSequence.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
 
@@ -31,7 +33,11 @@ public:
   TextLlmContext(TextLlmContext&&) = delete;
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
-  TextLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
+  TextLlmContext(
+      common_params& commonParams, common_init_result_ptr llamaInit,
+      std::unique_ptr<
+          qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+          speculative = nullptr);
   TextLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
       llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
@@ -96,6 +102,27 @@ public:
    * Access the underlying llama model pointer.
    */
   llama_model* getModel() override { return modelCtx_.model; }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
+  getSpeculative() const override {
+    return modelCtx_.speculative;
+  }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeStats
+  speculativeStats() const override {
+    return spec_.stats();
+  }
+  [[nodiscard]] bool speculativeEnabled() const override {
+    return spec_.enabled();
+  }
+  bool prepareSpeculativeDraft(
+      llama_pos pos, llama_token sampled, unsigned generatedTokens) override;
+  void finishSpeculativeDraft() override { spec_.afterDraft(); }
+  [[nodiscard]] std::vector<llama_token> speculativeDraft() const override {
+    return spec_.draft();
+  }
+  void discardSpeculativeDraft() override { spec_.discardDraft(); }
+  DraftStepResult onDraftLogitsReady(
+      int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -251,9 +278,15 @@ private:
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
+   * @param unemittedTail - accepted tokens at the end of the sampler history
+   * that are not streamed yet (speculative verification accepts a run at
+   * once); they are left out of the check.
+   * @param emitted - the token being streamed; required when
+   * `unemittedTail > 0`, since it is then not the history's last token.
    * @return - true if the antiprompt is found, false otherwise.
    */
-  bool checkAntiprompt();
+  bool checkAntiprompt(
+      size_t unemittedTail = 0, llama_token emitted = LLAMA_TOKEN_NULL);
 
   /**
    * The Tokenize chat method. It tokenizes the chat.
@@ -327,8 +360,32 @@ private:
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch);
+  /// Streams a token the sampler already accepted and applies the stop
+  /// conditions; the part of `sampleFromLogits` after sampling, shared with
+  /// speculative verification, which samples several tokens at once.
+  /// `unemittedTail` counts the accepted tokens after `tokenId` (see
+  /// `checkAntiprompt`).
+  SequenceStepResult emitSampledToken(
+      llama_token tokenId, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch, size_t unemittedTail = 0);
+  /// Single-prompt generation loop with speculative decoding: llama-server's
+  /// draft / verify / accept cycle on top of the same per-token streaming and
+  /// stop handling as the plain loop. Sets `generationStopReason_` like the
+  /// plain loop and leaves cancels and the prediction budget to the caller.
+  void generateSpeculative(
+      const std::function<void(const std::string&)>& outputCallback,
+      unsigned& generatedAfterAccept);
+  /// Feeds a decoded target batch to the speculative state; throws when the
+  /// draft context fails to decode it.
+  void processSpeculativeBatch(const llama_batch& batch);
 
   common_init_result_ptr llamaInit_;
+  /// Owned speculative state of the single-prompt context; declared after
+  /// `llamaInit_` so the draft context goes before the target context.
+  std::unique_ptr<
+      qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative_;
   LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
 
@@ -362,6 +419,10 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  /// Speculative draft / verify state of this sequence; disabled when the
+  /// model has no speculative runtime.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeSequence spec_;
 
   // Reasoning channel detection state (Qwen3 / Gemma 4 / ...). Empty
   // tags when the active model has no recognised channel.

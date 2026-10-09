@@ -48,10 +48,15 @@ bool isFileInitialized(const std::filesystem::path& path) {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
-    common_params& commonParams, common_init_result_ptr llamaInit)
-    : llamaInit_(std::move(llamaInit)), params_(commonParams) {
+    common_params& commonParams, common_init_result_ptr llamaInit,
+    std::unique_ptr<
+        qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+        speculative)
+    : llamaInit_(std::move(llamaInit)), speculative_(std::move(speculative)),
+      params_(commonParams) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
+  modelCtx_.speculative = speculative_.get();
   initializeCommonState();
   initializeOwnedThreadpools();
 }
@@ -85,6 +90,7 @@ void TextLlmContext::initializeCommonState() {
   if (modelCtx_.vocab == nullptr) {
     modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
   }
+  spec_.bind(modelCtx_.speculative, seqId_);
 
   // Any model whose memory is not a plain positionally indexed KV cache
   // needs full-state snapshots, because `seq_rm` cannot remove an
@@ -245,13 +251,23 @@ void TextLlmContext::initializeOwnedThreadpools() {
   }());
 }
 
-bool TextLlmContext::checkAntiprompt() {
+bool TextLlmContext::checkAntiprompt(
+    size_t unemittedTail, llama_token emitted) {
   if (antipromptLower_.empty() && templateStops_.empty()) {
     return false;
   }
   constexpr int kNPrev = 32;
+  const int tail = static_cast<int>(unemittedTail);
   std::string lastOutput =
-      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
+      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev + tail);
+  if (tail > 0) {
+    // The history is the concatenation of token pieces, so dropping the
+    // unemitted run's pieces leaves the text up to `emitted`.
+    const size_t unemittedBytes =
+        common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, tail).size();
+    lastOutput.resize(
+        lastOutput.size() - std::min(unemittedBytes, lastOutput.size()));
+  }
 
   // Caller antiprompts fold case; template stops are compared raw. See
   // `matchesAnyStopString` for why the two must not share one rule, and
@@ -263,7 +279,8 @@ bool TextLlmContext::checkAntiprompt() {
   }
 
   // check for reverse prompt using special tokens
-  llama_token lastToken = common_sampler_last(smpl_.get());
+  const llama_token lastToken =
+      unemittedTail > 0 ? emitted : common_sampler_last(smpl_.get());
   for (auto token : antipromptTokens_) {
     if (token == lastToken) {
       return true;
@@ -659,6 +676,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
     }
+    processSpeculativeBatch(*textBatch);
 
     nPast_ += textBatch->n_tokens;
     lastPromptTokenCount_ += textBatch->n_tokens;
@@ -760,6 +778,7 @@ PrefillPlan TextLlmContext::preparePrefill(
 
   throwIfOverflows(nPast_, inputTokens.size());
 
+  spec_.setPromptEnd(nPast_ + static_cast<llama_pos>(inputTokens.size()));
   return PrefillPlan{
       .tokens = std::move(inputTokens), .checkpointAtTextTokens = checkpointAt};
 }
@@ -773,6 +792,12 @@ void TextLlmContext::onPrefillComplete(
     llama_pos currentPos, size_t prefillTokenCount) {
   nPast_ = currentPos;
   prefillComplete_ = true;
+  // The prompt is decoded: a new generation starts (llama-server's
+  // `common_speculative_begin` on the switch to generating). MTP drafts from
+  // the target's hidden states, not from the prompt tokens.
+  spec_.reset();
+  spec_.resetStats();
+  spec_.begin({});
   if (cacheRequestActive_) {
     residentLedger_ = pendingPromptLedger_;
     // Match llama-server's sampler initialization: after prefill, rebuild
@@ -847,8 +872,12 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
         .ok = true, .cancelled = true, .rollbackOk = onCancel(outputCallback)};
   }
 
-  while (params_.n_predict <= 0 ||
-         generatedAfterAccept < static_cast<unsigned>(params_.n_predict)) {
+  if (spec_.enabled()) {
+    generateSpeculative(outputCallback, generatedAfterAccept);
+  }
+  while (!spec_.enabled() &&
+         (params_.n_predict <= 0 ||
+          generatedAfterAccept < static_cast<unsigned>(params_.n_predict))) {
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
       return {
@@ -908,6 +937,235 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   return {.rollbackOk = rollbackOk};
 }
 
+void TextLlmContext::processSpeculativeBatch(const llama_batch& batch) {
+  if (modelCtx_.speculative != nullptr &&
+      !modelCtx_.speculative->process(batch)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        "[TextLlm] failed to process speculative batch\n");
+  }
+}
+
+void TextLlmContext::generateSpeculative(
+    const std::function<void(const std::string&)>& outputCallback,
+    unsigned& generatedAfterAccept) {
+  using qvac_lib_inference_addon_llama::speculative::SpeculativeSequence;
+  const auto& runtime = *spec_.runtime();
+  LlamaBatch batch(std::max(1, runtime.nDraftMax() + 1), 0, 1);
+  const auto budgetLeft = [&]() -> int32_t {
+    return params_.n_predict > 0
+               ? params_.n_predict - static_cast<int32_t>(generatedAfterAccept)
+               : -1;
+  };
+  const auto finish = [this](const SequenceStepResult& step) {
+    generationStopReason_ = step.contextOverflow
+                                ? GenerationStopReason::ContextOverflow
+                                : step.stopReason;
+  };
+
+  // The first token comes from the prompt logits, as in the plain loop.
+  ++generatedAfterAccept;
+  SequenceStepResult step =
+      onLogitsReady(-1, generatedAfterAccept, outputCallback, &batch);
+  if (step.contextOverflow || step.finished) {
+    finish(step);
+    return;
+  }
+  // `sampled` is streamed but not decoded yet (llama-server's `slot.sampled`).
+  llama_token sampled = step.token;
+
+  while (true) {
+    if (stopGeneration_.load()) {
+      // Like the plain loop: `sampled` was streamed, so the caller saw it.
+      ++lastGeneratedTokenCount_;
+      return;
+    }
+    if (params_.n_predict > 0 &&
+        generatedAfterAccept >= static_cast<unsigned>(params_.n_predict)) {
+      // The plain loop decodes the token it stops on for the prediction
+      // budget, so the sequence and the ledger hold it.
+      common_batch_clear(*batch);
+      common_batch_add(*batch, sampled, nPast_, {seqId_}, false);
+      if (llama_decode(modelCtx_.lctx, *batch) != 0) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(FailedToDecode),
+            "[TextLlm] failed to decode next token\n");
+      }
+      processSpeculativeBatch(*batch);
+      ++nPast_;
+      appendResidentToken(sampled);
+      ++lastGeneratedTokenCount_;
+      return;
+    }
+
+    const int nDraftMax =
+        SpeculativeSequence::maxDraft(ctxCeiling(), nPast_, budgetLeft());
+    if (spec_.prepareDraft(nDraftMax, nPast_, sampled, {})) {
+      SpeculativeSequence::draftPrepared(runtime);
+      spec_.afterDraft();
+    }
+
+    common_batch_clear(*batch);
+    const bool verifying = spec_.hasDraft();
+    if (verifying) {
+      spec_.addToBatch(*batch, sampled, nPast_);
+    } else {
+      common_batch_add(*batch, sampled, nPast_, {seqId_}, true);
+    }
+    // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
+    if (llama_decode(modelCtx_.lctx, *batch) != 0) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(FailedToDecode),
+          "[TextLlm] failed to decode next token\n");
+    }
+    processSpeculativeBatch(*batch);
+
+    if (!verifying) {
+      ++nPast_;
+      appendResidentToken(sampled);
+      ++lastGeneratedTokenCount_;
+      ++generatedAfterAccept;
+      step = onLogitsReady(-1, generatedAfterAccept, outputCallback, &batch);
+      if (step.contextOverflow || step.finished) {
+        finish(step);
+        return;
+      }
+      sampled = step.token;
+      continue;
+    }
+
+    const auto verified = spec_.verify(smpl_.get(), nPast_);
+    if (verified.replay) {
+      nPast_ = verified.keepTokens;
+      continue;
+    }
+
+    // The verification batch leaves `sampled` and every accepted token but
+    // the last resident; the last one is the new `sampled`.
+    ++nPast_;
+    appendResidentToken(sampled);
+    ++lastGeneratedTokenCount_;
+    const auto& ids = verified.ids;
+    for (size_t i = 0; i < ids.size(); ++i) {
+      const bool isLast = i + 1 == ids.size();
+      ++generatedAfterAccept;
+      if (contextWindowFull(nPast_, ctxCeiling())) {
+        step = {
+            .finished = true,
+            .contextOverflow = true,
+            .stopReason = GenerationStopReason::ContextOverflow};
+      } else {
+        step = emitSampledToken(
+            ids[i],
+            generatedAfterAccept,
+            outputCallback,
+            &batch,
+            ids.size() - 1 - i);
+      }
+      if (step.contextOverflow || step.finished) {
+        // The plain loop never decodes the token it stops on. Drop it and
+        // the accepted tokens after it so the sequence ends the same way;
+        // memory that cannot trim keeps them, and so does the ledger.
+        if (!isLast &&
+            !llama_memory_seq_rm(
+                llama_get_memory(modelCtx_.lctx), seqId_, nPast_, -1)) {
+          for (size_t j = i; j + 1 < ids.size(); ++j) {
+            ++nPast_;
+            appendResidentToken(ids[j]);
+          }
+        }
+        finish(step);
+        return;
+      }
+      if (isLast) {
+        sampled = ids[i];
+      } else {
+        ++nPast_;
+        appendResidentToken(ids[i]);
+        ++lastGeneratedTokenCount_;
+      }
+    }
+  }
+}
+
+bool TextLlmContext::prepareSpeculativeDraft(
+    llama_pos pos, llama_token sampled, unsigned generatedTokens) {
+  using qvac_lib_inference_addon_llama::speculative::SpeculativeSequence;
+  syncPosition(pos);
+  const int32_t nRemaining =
+      params_.n_predict > 0
+          ? params_.n_predict - static_cast<int32_t>(generatedTokens)
+          : -1;
+  return spec_.prepareDraft(
+      SpeculativeSequence::maxDraft(ctxCeiling(), nPast_, nRemaining),
+      nPast_,
+      sampled,
+      {});
+}
+
+DraftStepResult TextLlmContext::onDraftLogitsReady(
+    int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+    const std::function<void(const std::string&)>& outputCallback) {
+  DraftStepResult out;
+  nPast_ = posBefore;
+  spec_.setBatchStart(firstLogitIdx);
+  const auto verified = spec_.verify(smpl_.get(), posBefore);
+  if (verified.replay) {
+    nPast_ = verified.keepTokens;
+    out.replay = true;
+    out.newPos = nPast_;
+    return out;
+  }
+  // The sampled token is decoded now; record it.
+  syncPosition(posBefore + 1);
+  const auto& ids = verified.ids;
+  for (size_t i = 0; i < ids.size(); ++i) {
+    const bool isLast = i + 1 == ids.size();
+    SequenceStepResult step;
+    if (contextWindowFull(nPast_, ctxCeiling())) {
+      step = {
+          .finished = true,
+          .contextOverflow = true,
+          .stopReason = GenerationStopReason::ContextOverflow};
+      generationStopReason_ = GenerationStopReason::ContextOverflow;
+    } else {
+      step = emitSampledToken(
+          ids[i],
+          generatedBefore + static_cast<unsigned>(i) + 1,
+          outputCallback,
+          nullptr,
+          ids.size() - 1 - i);
+      out.tokens.push_back(ids[i]);
+    }
+    if (step.finished) {
+      // See generateSpeculative: the stop token is never decoded.
+      if (!isLast &&
+          !llama_memory_seq_rm(
+              llama_get_memory(modelCtx_.lctx), seqId_, nPast_, -1)) {
+        for (size_t j = i; j + 1 < ids.size(); ++j) {
+          ++nPast_;
+          appendResidentToken(ids[j]);
+        }
+      }
+      out.finished = true;
+      out.contextOverflow = step.contextOverflow;
+      out.stopReason = step.stopReason;
+      break;
+    }
+    if (isLast) {
+      holdPendingResidentToken(ids[i], nPast_);
+    } else {
+      appendResidentToken(ids[i]);
+      ++nPast_;
+    }
+  }
+  out.newPos = nPast_;
+  return out;
+}
+
 SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
@@ -953,7 +1211,14 @@ SequenceStepResult TextLlmContext::sampleFromLogits(
   const llama_token tokenId =
       common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
   common_sampler_accept(smpl_.get(), tokenId, true);
+  return emitSampledToken(
+      tokenId, generatedAfterAccept, outputCallback, inlineDecodeBatch);
+}
 
+SequenceStepResult TextLlmContext::emitSampledToken(
+    llama_token tokenId, unsigned generatedAfterAccept,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* inlineDecodeBatch, size_t unemittedTail) {
   std::string tokenStr =
       common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
   const std::string completeChars = utf8Buffer_.addToken(tokenStr);
@@ -993,7 +1258,7 @@ SequenceStepResult TextLlmContext::sampleFromLogits(
     stopReason = GenerationStopReason::Eos;
   } else if (reachedBudget) {
     stopReason = GenerationStopReason::PredictionLimit;
-  } else if (checkAntiprompt()) {
+  } else if (checkAntiprompt(unemittedTail, tokenId)) {
     stopReason = GenerationStopReason::Antiprompt;
   }
   const bool finished = stopReason != GenerationStopReason::None;
@@ -1588,6 +1853,8 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
         toString(UnableToLoadSessionFile),
         "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
   }
+  // Cache files hold the target state only, like llama-server's slot files.
+  speculative::resetDraftSequence(modelCtx_.lctx, seqId_);
 
   // load already wrote KV; roll back unless we accept
   ScopeGuard restoredKvGuard([this]() noexcept {

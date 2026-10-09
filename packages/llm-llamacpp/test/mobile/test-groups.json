@@ -31,7 +31,8 @@
       "runMultiInstanceTest",
       "runQwen35Test",
       "runTurboquantTest",
-      "runUtf8OutputTest"
+      "runUtf8OutputTest",
+      "runSpeculativeDecodingTest"
     ]
   },
   "android": {
@@ -54,7 +55,8 @@
     "funcShardC": [
       "runToolCallingTest",
       "runReasoningTest",
-      "runGenerationParamsTest"
+      "runGenerationParamsTest",
+      "runSpeculativeDecodingTest"
     ],
     "funcShardD": [
       "runGemma4Test"

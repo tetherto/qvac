@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- MTP speculative decoding, ported from llama-server: `spec-type: 'draft-mtp'`
+  (with `spec-draft-n-max`, `spec-draft-n-min`, `spec-draft-p-min`, also in
+  underscore spelling) drafts with the model's own multi-token-prediction head
+  and verifies each draft in one decode, on single prompts, multimodal prompts
+  and continuous batching, with `cacheKey` conversations. Runtime stats report
+  `draftTokens` and `draftAcceptedTokens`. `spec-draft-n-max` is lowered at
+  load to fit one `ubatch-size` and each sequence's share of `batch-size`.
+  Qwen3.6-27B-MTP decodes about 2.4x faster on a single sequence on a Radeon
+  8060S.
+- DFlash speculative decoding: `spec-type: 'draft-dflash'` with
+  `spec-draft-model` (absolute local path, also `spec_draft_model`), as
+  llama-server's `--spec-type draft-dflash -md <model>`. The DFlash model is
+  loaded next to the model, placed like it (`device`, `gpu-layers`) and
+  counted by `assessFit`; drafting otherwise works as for MTP.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.2` -> `^0.20.3`, which fixes the
+  Vulkan `TOP_K` device loss an MTP draft context's top-k sampler hit when
+  its logits were NaN (NVIDIA, reloading an MTP model with more sequences).
+
 ## [0.58.0] - 2026-10-09
 
 ### Breaking

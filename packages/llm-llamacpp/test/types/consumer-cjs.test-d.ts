@@ -172,6 +172,8 @@ const stats: LlmLlamacpp.RuntimeStats = {
   avgConcurrentSeq: 1,
   backendDevice: "gpu",
   stopReason: "eos",
+  draftTokens: 8,
+  draftAcceptedTokens: 6,
 };
 void stats;
 const numericLike: LlmLlamacpp.NumericLike = "42";

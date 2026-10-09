@@ -15,6 +15,8 @@
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
+#include "SpeculativeRuntime.hpp"
+#include "SpeculativeSequence.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Positional span paired with the KV-cell count it occupies. The two diverge
@@ -39,7 +41,11 @@ public:
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
    */
-  MtmdLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
+  MtmdLlmContext(
+      common_params& commonParams, common_init_result_ptr llamaInit,
+      std::unique_ptr<
+          qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+          speculative = nullptr);
 
   /// Per-slot driver constructor for the continuous-batching path. Does
   /// not own llama handles or the vision context; `sharedVision` must
@@ -115,6 +121,27 @@ public:
    * Access the underlying llama model pointer.
    */
   llama_model* getModel() override { return modelCtx_.model; }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
+  getSpeculative() const override {
+    return modelCtx_.speculative;
+  }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeStats
+  speculativeStats() const override {
+    return spec_.stats();
+  }
+  [[nodiscard]] bool speculativeEnabled() const override {
+    return spec_.enabled();
+  }
+  bool prepareSpeculativeDraft(
+      llama_pos pos, llama_token sampled, unsigned generatedTokens) override;
+  void finishSpeculativeDraft() override { spec_.afterDraft(); }
+  [[nodiscard]] std::vector<llama_token> speculativeDraft() const override {
+    return spec_.draft();
+  }
+  void discardSpeculativeDraft() override { spec_.discardDraft(); }
+  DraftStepResult onDraftLogitsReady(
+      int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -305,10 +332,12 @@ private:
 
   /**
    * The check antiprompt method. It checks the antiprompt.
+   * See TextLlmContext::checkAntiprompt for `unemittedTail` / `emitted`.
    *
    * @return - true if the antiprompt is found, false otherwise.
    */
-  bool checkAntiprompt();
+  bool checkAntiprompt(
+      size_t unemittedTail = 0, llama_token emitted = LLAMA_TOKEN_NULL);
 
   /**
    * The tokenize chat method. It tokenizes the chat.
@@ -386,6 +415,27 @@ private:
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch);
+  /// The part of `sampleFromLogits` after sampling; see
+  /// `TextLlmContext::emitSampledToken`.
+  SequenceStepResult emitSampledToken(
+      llama_token tokenId, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch, size_t unemittedTail = 0);
+  /// Single-prompt speculative generation loop; see
+  /// `TextLlmContext::generateSpeculative`. `nRemain` follows the plain
+  /// loop's prediction budget.
+  void generateSpeculative(
+      const std::function<void(const std::string&)>& outputCallback,
+      int& nRemain);
+  /// See `TextLlmContext::processSpeculativeBatch`.
+  void processSpeculativeBatch(const llama_batch& batch);
+  /// Encodes and decodes an audio chunk like `mtmd_helper_eval_chunk_single`,
+  /// handing each decoded batch to the speculative state.
+  int32_t evalAudioChunkSpeculative(
+      const mtmd_input_chunk* chunk, llama_pos nPast, llama_seq_id seqId,
+      llama_pos* newNPast);
+  /// Advances both cursors over one decoded text token.
+  void advanceDecodedTextToken(llama_token token);
 
   // Cancel-during-generation cleanup. On recurrent / hybrid memory, restores
   // the request-entry snapshot; pure-attention memory removes the decoded
@@ -410,6 +460,11 @@ private:
       const std::function<void(const std::string&)>& outputCallback);
 
   common_init_result_ptr llamaInit_;
+  /// Owned speculative state of the single-prompt context; declared after
+  /// `llamaInit_` so the draft context goes before the target context.
+  std::unique_ptr<
+      qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative_;
   mtmd::context_ptr ctxVision_;
   /// Non-owning vision context for per-slot batch drivers; null in
   /// single-prompt mode (where `ctxVision_` owns the mmproj).
@@ -448,6 +503,10 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  /// Speculative draft / verify state of this sequence; disabled when the
+  /// model has no speculative runtime.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeSequence spec_;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

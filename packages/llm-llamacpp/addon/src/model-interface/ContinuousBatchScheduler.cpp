@@ -21,6 +21,8 @@
 
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
+#include "SpeculativeRuntime.hpp"
+#include "SpeculativeSequence.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -534,6 +536,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
                                static_cast<llama_seq_id>(seqId),
                                0) != 0;
       if (applied && driver->adoptResidentState(kept->ledgerWords)) {
+        speculative::restoreDraftSequenceState(
+            shared_.lctx, static_cast<llama_seq_id>(seqId), kept->draft, 0);
         isCacheLoaded = true;
         activeCacheSavedToDisk = kept->activeCacheSavedToDisk;
         adoptedDirtyState = kept->dirty;
@@ -1051,7 +1055,17 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   // A media segment can complete right at a checkpoint stop.
   serviceCheckpointStopsLocked();
 
+  prepareSpeculativeDraftsLocked(lock);
+
   const auto fillResult = batcher_.fillBatch(batch_);
+  if (shared_.speculative != nullptr) {
+    for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
+      if (batcher_.draftDropped(seqId) && slots_[seqId].has_value() &&
+          slots_[seqId]->driver) {
+        slots_[seqId]->driver->discardSpeculativeDraft();
+      }
+    }
+  }
   if (fillResult.totalTokens == 0) {
     // A media segment serviced above can finish a slot (prefill-only
     // request or per-sequence cap) without leaving tokens to feed; drain
@@ -1061,6 +1075,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   }
 
   int decodeRc = 0;
+  bool speculativeFailed = false;
   std::chrono::steady_clock::duration decodeDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
@@ -1068,6 +1083,13 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
         timeDecodeStep(shared_.lctx, *batch_, decodeFunc_, synchronizeFunc_);
     decodeRc = decodeTiming.rc;
     decodeDuration = decodeTiming.duration;
+    // Every decoded target batch reaches the speculative state, prompt
+    // chunks included, as llama-server does after each decode.
+    if (decodeRc == 0 && shared_.speculative != nullptr &&
+        !shared_.speculative->process(*batch_)) {
+      speculativeFailed = true;
+      decodeRc = -1;
+    }
   }
 
   if (decodeRc != 0) {
@@ -1085,7 +1107,10 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
             ADDON_ID,
             qvac_lib_inference_addon_llama::errors::toString(
                 qvac_lib_inference_addon_llama::errors::FailedToDecode),
-            "llama_decode returned non-zero: " + std::to_string(decodeRc)));
+            speculativeFailed
+                ? std::string("failed to process speculative batch")
+                : "llama_decode returned non-zero: " +
+                      std::to_string(decodeRc)));
 
     for (const auto& group : affectedGroups) {
       failGroupLocked(group, decodeError, SaveCachePolicy::KeepAdopted);
@@ -1102,9 +1127,13 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
   batcher_.advance(prefillCompleteFn());
+  // Verified before any deferred teardown, so a slot torn down below is
+  // synced to memory that already dropped its rejected draft tail. A slot
+  // with a pending teardown streams nothing from its verified run.
+  verifySpeculativeDraftsLocked();
   // A cancel or clear recorded during the decode is applied here, once
   // `advance()` has counted the chunk into `currentPos`, and before anything
-  // is sampled or streamed for the slot. Applied earlier, a teardown would sync
+  // is sampled for the slot. Applied earlier, a teardown would sync
   // the driver to a cursor one chunk behind live memory, and a cancel that
   // commits would save a cache whose metadata does not match its contents.
   applyDeferredTeardownLocked();
@@ -1166,6 +1195,115 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
 
   drainFinishedLocked(lock);
   return true;
+}
+
+void ContinuousBatchScheduler::prepareSpeculativeDraftsLocked(
+    std::unique_lock<std::mutex>* lock) {
+  if (shared_.speculative == nullptr) {
+    return;
+  }
+  const auto generating = [this](uint32_t seqId) {
+    const Request* req = batcher_.requestAt(seqId);
+    return slots_[seqId].has_value() && slots_[seqId]->driver &&
+           slots_[seqId]->driver->speculativeEnabled() && req != nullptr &&
+           req->isGenerationPending() && !req->generatedTokens.empty();
+  };
+  std::vector<uint32_t> drafting;
+  for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
+    if (!generating(seqId)) {
+      continue;
+    }
+    const Request* req = batcher_.requestAt(seqId);
+    if (slots_[seqId]->driver->prepareSpeculativeDraft(
+            req->currentPos,
+            req->generatedTokens.back(),
+            static_cast<unsigned>(req->generatedTokens.size()))) {
+      drafting.push_back(seqId);
+    }
+  }
+  if (!drafting.empty()) {
+    const auto draftStart = std::chrono::steady_clock::now();
+    {
+      // Drafting writes into the drivers' draft buffers, so no slot may be
+      // torn down until it is done; see `TeardownDeferGuard`.
+      TeardownDeferGuard deferTeardown(*this);
+      StepUnlockGuard unlockGuard(*this, lock);
+      speculative::SpeculativeSequence::draftPrepared(*shared_.speculative);
+    }
+    stats_.recordSpeculativeStep(
+        0,
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - draftStart));
+    for (const uint32_t seqId : drafting) {
+      if (slots_[seqId].has_value() && slots_[seqId]->driver) {
+        slots_[seqId]->driver->finishSpeculativeDraft();
+      }
+    }
+  }
+  for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
+    if (generating(seqId)) {
+      batcher_.setDraft(seqId, slots_[seqId]->driver->speculativeDraft());
+    }
+  }
+}
+
+void ContinuousBatchScheduler::verifySpeculativeDraftsLocked() {
+  if (shared_.speculative == nullptr) {
+    return;
+  }
+  batcher_.verifyDrafted([this](
+                             uint32_t seqId,
+                             int firstLogitIdx,
+                             llama_pos basePos) {
+    auto& slot = slots_[seqId];
+    const Request* req = batcher_.requestAt(seqId);
+    if (!slot.has_value() || !slot->driver || req == nullptr) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "ContinuousBatchScheduler: missing slot state for drafted seqId " +
+              std::to_string(seqId));
+    }
+    // Verification runs before deferred teardown, so a cancel recorded during
+    // the decode has not been applied yet; nothing more is streamed for it,
+    // as on the plain path, which samples only after teardown.
+    auto outputCallback = [this, &slot, seqId](const std::string& text) {
+      if (teardownPendingForLocked(seqId)) {
+        return;
+      }
+      if (slot->group) {
+        slot->group->outputs[slot->outputIndex] += text;
+      }
+      if (slot->streams.onToken) {
+        slot->streams.onToken(seqId, text);
+      }
+    };
+    const llama_pos fed = req->currentPos - basePos;
+    const DraftStepResult result = slot->driver->onDraftLogitsReady(
+        firstLogitIdx,
+        basePos,
+        static_cast<unsigned>(req->generatedTokens.size()),
+        outputCallback);
+    stats_.recordSpeculativeStep(
+        static_cast<int64_t>(result.tokens.size()) - fed,
+        std::chrono::nanoseconds{0});
+    MultiRequestBatcher::DraftOutcome outcome{
+        .replay = result.replay,
+        .newPos = result.newPos,
+        .tokens = result.tokens,
+        .finished = result.finished,
+    };
+    if (result.replay) {
+      outcome.draft = slot->driver->speculativeDraft();
+    }
+    if (result.contextOverflow) {
+      outcome.stopReason = StopReason::ContextOverflow;
+    } else if (result.stopReason == GenerationStopReason::PredictionLimit) {
+      outcome.stopReason = StopReason::PredictionLimit;
+    }
+    return outcome;
+  });
 }
 
 bool ContinuousBatchScheduler::hasWork() const {
@@ -1245,6 +1383,15 @@ void RuntimeStatsSnapshot::recordDecodeStep(
   decodeTimeMs_ += stepMs * (1.0 - prefillFraction);
   prefillTokenCount_ += prefillTokens;
   decodeTokenCount_ += decodeTokens;
+}
+
+void RuntimeStatsSnapshot::recordSpeculativeStep(
+    int64_t tokenDelta, std::chrono::nanoseconds draftDuration) {
+  decodeTimeMs_ +=
+      std::chrono::duration<double, std::milli>(draftDuration).count();
+  const auto delta = static_cast<int64_t>(decodeTokenCount_) + tokenDelta;
+  decodeTokenCount_ =
+      static_cast<decltype(decodeTokenCount_)>(std::max<int64_t>(0, delta));
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
@@ -1432,6 +1579,33 @@ bool ContinuousBatchScheduler::slotOwnedByLocked(
 bool ContinuousBatchScheduler::hasPendingCancels() const {
   std::scoped_lock pendingLock(pendingCancelsMtx_);
   return !pendingSlotCancels_.empty() || !pendingGroupCancels_.empty();
+}
+
+bool ContinuousBatchScheduler::teardownPendingForLocked(uint32_t seqId) const {
+  if (cancelRequested_.load() || clearRequested_) {
+    return true;
+  }
+  if (seqId >= slots_.size() || !slots_[seqId].has_value()) {
+    return true;
+  }
+  const SlotState& slot = *slots_[seqId];
+  std::scoped_lock pendingLock(pendingCancelsMtx_);
+  for (const PendingSlotCancel& pending : pendingSlotCancels_) {
+    if (pending.seqId == seqId && pending.admissionId == slot.admissionId) {
+      return true;
+    }
+  }
+  // Same condition `applyGroupQueuedCancelLocked` fails the group on.
+  const auto& group = slot.group;
+  if (group && group->tag != 0 && !group->done &&
+      group->admittedCount < group->totalCount) {
+    for (const uint64_t tag : pendingGroupCancels_) {
+      if (tag == group->tag) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 void ContinuousBatchScheduler::cancelSlotLocked(
@@ -1836,6 +2010,8 @@ void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
       if (size > 0 && entry.state.size() == size &&
           llama_state_seq_get_data_ext(
               shared_.lctx, entry.state.data(), size, seq, 0) == size) {
+        entry.draft =
+            speculative::captureDraftSequenceState(shared_.lctx, seq, 0);
         entry.ledgerWords = parked.ledgerWords;
         entry.checkpoints = std::move(parked.checkpoints);
         entry.dirty = parked.dirty;
@@ -2190,6 +2366,8 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
     // caller asked one question, and "two of my renders dropped their tools"
     // is the honest answer to it.
     agg.toolDefinitionsDropped += stats.toolDefinitionsDropped;
+    agg.draftTokens += stats.draftTokens;
+    agg.draftAcceptedTokens += stats.draftAcceptedTokens;
     // Kept only while every request reports the same reason: a one-item group
     // (the concurrent single-prompt path) keeps it, a mixed group drops it.
     if (&stats == &all.front()) {
@@ -2237,6 +2415,9 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     stopReason = slot.driver->getGenerationStopReason();
   }
   stats_.accumulateSlot(nPast, toolsDropped, req);
+  if (slot.driver) {
+    stats_.speculative.add(slot.driver->speculativeStats());
+  }
   // Every terminal path that folds a slot into the aggregate also records the
   // request's observed end-to-end figures for its submitter, next to its
   // output.
@@ -2249,6 +2430,12 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     // scheduler-wide accumulator above — that copy stays, for the whole-model
     // `runtimeStats()` read.
     observed.toolDefinitionsDropped = toolsDropped;
+    if (slot.driver) {
+      const auto speculativeStats = slot.driver->speculativeStats();
+      observed.draftTokens = static_cast<int64_t>(speculativeStats.draftTokens);
+      observed.draftAcceptedTokens =
+          static_cast<int64_t>(speculativeStats.draftAccepted);
+    }
     slot.group->requestStats[slot.outputIndex] = std::move(observed);
   }
 }
