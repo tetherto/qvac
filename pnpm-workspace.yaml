@@ -67,3 +67,6 @@ minimumReleaseAgeExclude:
   - '@qvac/ocr-ggml@0.27.1'
   - '@qvac/translation-nmtcpp@0.19.0'
   - '@qvac/vla-ggml@0.30.0'
+  - bare-sidecar@0.5.8
+  - bare-stow@0.1.6
+  - react-native-bare-kit@0.16.0
