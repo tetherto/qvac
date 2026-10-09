@@ -1,5 +1,5 @@
 import RPC from 'bare-rpc'
-import host from 'bare-stow/host'
+import type host from 'bare-stow/host'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,35 +8,44 @@ import { initializeConfig } from '@/client/init-hooks'
 import { resolveConfig } from '@/client/config-loader/resolve-config.node'
 import { getClientLogger } from '@/logging'
 import {
-  RPCInitTimeoutError,
   WorkerCrashedError,
+  WorkerFileNotFoundError,
   WorkerShutdownError,
   WorkerStartupError
 } from '@/utils/errors-client'
-import type { QvacConfig, RuntimeContext } from '@qvac/inference/surface'
-import { RPC_INIT_TIMEOUT_ENV_VAR, resolveRPCInitTimeoutMs } from './init-timeout'
+import type { RuntimeContext } from '@qvac/inference/surface'
+import { getPearRuntime, type PearRuntime } from './pear-runtime'
+import { start as startUnbundled } from './unbundled-harness'
 
 type WorkerIPC = InstanceType<typeof host.IPC>
 
-/** A folder written by `bundleSdk` for `bare-sidecar`, or a worker entry run unbundled. */
-type WorkerSource = { harness: string } | { entry: string }
+interface Harness {
+  start(...args: unknown[]): Promise<{ ipc: WorkerIPC }>
+}
+
+/**
+ * The bare-stow harness in a folder written by `bundleSdk` for `bare-sidecar`
+ * or `pear-runtime`, or a worker entry run unbundled.
+ */
+type WorkerSource = { harness: string } | { harness: string; pear: PearRuntime } | { entry: string }
 
 const logger = getClientLogger()
 
-const STOWED_HARNESS = 'index.mjs'
+const SIDECAR_HARNESS = 'index.mjs'
+const PEAR_HARNESS = 'index.cjs'
 const STOWED_BUNDLE = 'index.bundle'
+const WORKER_READY_TIMEOUT_MS = 60_000
 
 let rpcInstance: RPC | null = null
 let rpcPromise: Promise<RPC> | null = null
-let workerIpc: WorkerIPC | null = null
+let worker: WorkerIPC | null = null
 let closePromise: Promise<void> | null = null
 // Bumped by close(); a start that finishes under an older generation stops its
 // own worker, so a caller waiting on that start never receives a closed client.
 let generation = 0
-// Aborted when the worker dies (crash) or close() runs (planned). Unblocks
-// in-flight `req.reply()` callers: bare-rpc does not reject outgoing requests
-// when its stream closes.
+// Aborted when the worker dies (crash) or close() runs (planned).
 let workerLifeController: AbortController | null = null
+const workerErrors = new WeakMap<WorkerIPC, unknown>()
 
 function findProjectRootSync(): string | undefined {
   let dir = process.cwd()
@@ -50,42 +59,59 @@ function findProjectRootSync(): string | undefined {
   return undefined
 }
 
-function stowedHarness(dir: string): string | undefined {
-  const harness = path.join(dir, STOWED_HARNESS)
+function stowedHarness(dir: string, harnessFile = SIDECAR_HARNESS): string | undefined {
+  const harness = path.join(dir, harnessFile)
   return fs.existsSync(harness) && fs.existsSync(path.join(dir, STOWED_BUNDLE))
     ? harness
     : undefined
 }
 
-function packagedWorkerDir(): string | undefined {
+function packagedWorkerDirs(): string[] {
   const { resourcesPath } = process as { resourcesPath?: string }
-  if (typeof resourcesPath !== 'string') return undefined
+  if (typeof resourcesPath !== 'string') return []
 
   return [
     path.join(resourcesPath, 'app.asar.unpacked', 'qvac', 'worker'),
     path.join(resourcesPath, 'app', 'qvac', 'worker'),
     path.join(resourcesPath, 'qvac', 'worker')
-  ].find((dir) => stowedHarness(dir) !== undefined)
+  ]
 }
 
 /**
- * Asset references keep these files visible to bundlers of the host app:
+ * An asset reference keeps the file visible to bundlers of the host app:
  * `import.meta.asset(<literal>)` on Bare, `new URL(<literal>, import.meta.url)`
  * elsewhere. This module compiles to `dist/src/client/rpc/`.
  */
-function sdkWorkerFile(which: 'entry' | 'shim'): string {
+function sdkWorkerEntry(): string {
   type ImportMetaAsset = { asset?: (spec: string) => string }
   const asset = (import.meta as ImportMetaAsset).asset
-  if (which === 'entry') {
-    return fileURLToPath(
-      asset ? asset('../../worker/index.js') : new URL('../../worker/index.js', import.meta.url)
-    )
-  }
   return fileURLToPath(
-    asset
-      ? asset('../../worker/unbundled-shim.js')
-      : new URL('../../worker/unbundled-shim.js', import.meta.url)
+    asset ? asset('../../worker/index.js') : new URL('../../worker/index.js', import.meta.url)
   )
+}
+
+/**
+ * With a Pear runtime registered, the `pear-runtime` bundle from
+ * QVAC_WORKER_PATH, the packaged app, or `qvac/worker/` in the project root.
+ */
+function resolvePearWorkerSource(pear: PearRuntime): WorkerSource {
+  const envPath = process.env['QVAC_WORKER_PATH']
+  const projectRoot = findProjectRootSync()
+  const projectWorkerDir = path.join(projectRoot ?? process.cwd(), 'qvac', 'worker')
+  const dirs = [
+    ...(envPath ? [path.resolve(envPath)] : []),
+    ...packagedWorkerDirs(),
+    projectWorkerDir
+  ]
+
+  for (const dir of dirs) {
+    const harness = stowedHarness(dir, PEAR_HARNESS)
+    if (harness) {
+      logger.info(`🔧 Using Pear worker: ${harness}`)
+      return { harness, pear }
+    }
+  }
+  throw new WorkerFileNotFoundError(path.join(projectWorkerDir, PEAR_HARNESS))
 }
 
 /**
@@ -97,6 +123,9 @@ function sdkWorkerFile(which: 'entry' | 'shim'): string {
  * 5. The SDK's default worker, run unbundled
  */
 function resolveWorkerSource(): WorkerSource {
+  const pear = getPearRuntime()
+  if (pear) return resolvePearWorkerSource(pear)
+
   const envPath = process.env['QVAC_WORKER_PATH']
   if (envPath) {
     const resolved = path.resolve(envPath)
@@ -112,10 +141,12 @@ function resolveWorkerSource(): WorkerSource {
     logger.warn(`⚠️ QVAC_WORKER_PATH was set but no worker was found at ${resolved}. Falling back.`)
   }
 
-  const packaged = packagedWorkerDir()
-  if (packaged) {
-    logger.info(`🔧 Using packaged worker: ${packaged}`)
-    return { harness: path.join(packaged, STOWED_HARNESS) }
+  for (const dir of packagedWorkerDirs()) {
+    const harness = stowedHarness(dir)
+    if (harness) {
+      logger.info(`🔧 Using packaged worker: ${harness}`)
+      return { harness }
+    }
   }
 
   const projectRoot = findProjectRootSync()
@@ -132,108 +163,35 @@ function resolveWorkerSource(): WorkerSource {
     }
   }
 
-  const entry = sdkWorkerFile('entry')
+  const entry = sdkWorkerEntry()
   logger.debug(`🔧 Using default SDK worker: ${entry}`)
   return { entry }
 }
 
-const WORKER_SOURCE = resolveWorkerSource()
-
-interface StartingWorker {
-  ready: Promise<WorkerIPC>
-  /** Stops the worker if it is still starting. */
-  abort(): void
+async function importHarness(file: string): Promise<Harness> {
+  const loaded = (await import(pathToFileURL(file).href)) as Partial<Harness> & {
+    default?: Harness
+  }
+  return typeof loaded.start === 'function' ? (loaded as Harness) : loaded.default!
 }
 
-function startWorker(source: WorkerSource): StartingWorker {
-  if ('harness' in source) {
-    let aborted = false
-    const ready = (async () => {
-      const harness = (await import(pathToFileURL(source.harness).href)) as {
-        start(): Promise<{ ipc: WorkerIPC }>
-      }
-      const { ipc } = await harness.start()
-      if (aborted) ipc.destroy()
-      return ipc
-    })()
-    return {
-      ready,
-      abort() {
-        aborted = true
-      }
-    }
-  }
-
-  let ipc: WorkerIPC | null = null
-  let aborted = false
-  const ready = (async () => {
-    // Loaded here: bare-sidecar resolves the Bare binary for this platform on load.
-    const { default: Sidecar } = await import('bare-sidecar')
-    if (aborted) throw new WorkerShutdownError()
-
-    const worker = new host.IPC(
-      new Sidecar(sdkWorkerFile('shim'), [source.entry], { stdio: 'inherit' })
-    ) as WorkerIPC
-    ipc = worker
-    await Promise.race([
-      worker.ready,
-      new Promise<never>((_, reject) => {
-        worker.once('close', () => reject(new Error('Worker exited before signalling ready')))
-      })
-    ])
-    return worker
-  })()
-  return {
-    ready,
-    abort() {
-      aborted = true
-      ipc?.destroy()
-    }
-  }
+async function launchWorker(source: WorkerSource): Promise<WorkerIPC> {
+  const options = { timeout: WORKER_READY_TIMEOUT_MS }
+  if ('entry' in source) return (await startUnbundled(source.entry, options)).ipc
+  const harness = await importHarness(source.harness)
+  const { ipc } = 'pear' in source ? await harness.start(source.pear) : await harness.start(options)
+  return ipc
 }
 
-/** Distinguishes "config file failed to load" from "no config file present". */
-const CONFIG_UNRESOLVED = Symbol('config-unresolved')
-
-/**
- * The startup timeout has to be known before the worker starts, but the config
- * file is normally read after it (init-hooks). Read it early and hand the same
- * object to init-hooks so the file is not parsed twice. A config that fails to
- * load surfaces from init-hooks, which resolves it again.
- */
-async function preresolveConfig(): Promise<QvacConfig | undefined | typeof CONFIG_UNRESOLVED> {
+async function startWorker(source: WorkerSource): Promise<WorkerIPC> {
+  let ipc: WorkerIPC
   try {
-    return await resolveConfig()
+    ipc = await launchWorker(source)
   } catch (error) {
-    logger.debug('Config preload for the RPC init timeout failed; using the default', { error })
-    return CONFIG_UNRESOLVED
+    throw new WorkerStartupError('Worker failed before signalling ready', error)
   }
-}
-
-function startWithTimeout(timeoutMs: number): Promise<WorkerIPC> {
-  return new Promise((resolve, reject) => {
-    const starting = startWorker(WORKER_SOURCE)
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      starting.abort()
-      reject(new RPCInitTimeoutError(timeoutMs))
-    }, timeoutMs)
-
-    starting.ready.then(
-      (ipc) => {
-        if (timedOut) return
-        clearTimeout(timer)
-        resolve(ipc)
-      },
-      (error: unknown) => {
-        clearTimeout(timer)
-        if (!timedOut) {
-          reject(new WorkerStartupError('Worker failed before signalling ready', error))
-        }
-      }
-    )
-  })
+  ipc.on('error', (error: unknown) => workerErrors.set(ipc, error))
+  return ipc
 }
 
 function watchWorker(ipc: WorkerIPC, controller: AbortController) {
@@ -245,14 +203,14 @@ function watchWorker(ipc: WorkerIPC, controller: AbortController) {
     if (controller.signal.aborted) return
     logger.info(`🪦 Bare worker ${exited ? 'exited' : 'closed'} unexpectedly`)
     if (workerLifeController === controller) resetModuleState()
-    controller.abort(new WorkerCrashedError(null, null))
+    controller.abort(new WorkerCrashedError(workerErrors.get(ipc)))
   })
 }
 
 function resetModuleState() {
   rpcInstance = null
   rpcPromise = null
-  workerIpc = null
+  worker = null
   workerLifeController = null
 }
 
@@ -262,31 +220,18 @@ async function ensureRPC(): Promise<RPC> {
   if (closePromise) await closePromise
 
   const startGeneration = generation
-  rpcPromise = (async () => {
-    const preresolved = await preresolveConfig()
-    const initTimeoutMs = resolveRPCInitTimeoutMs({
-      envValue: process.env[RPC_INIT_TIMEOUT_ENV_VAR],
-      configValue:
-        preresolved === CONFIG_UNRESOLVED
-          ? undefined
-          : (preresolved?.rpcInitTimeoutMs ?? undefined),
-      onInvalidEnvValue: (value) =>
-        logger.warn(
-          `Ignoring invalid ${RPC_INIT_TIMEOUT_ENV_VAR}=${value}; expected a positive integer of milliseconds`
-        )
-    })
-
-    const ipc = await startWithTimeout(initTimeoutMs)
+  const attempt = (async () => {
+    const started = await startWorker(resolveWorkerSource())
     if (startGeneration !== generation) {
-      await ipc.terminate()
+      await started.terminate()
       throw new WorkerShutdownError()
     }
     const controller = new AbortController()
-    workerIpc = ipc
+    worker = started
     workerLifeController = controller
-    watchWorker(ipc, controller)
+    watchWorker(started, controller)
 
-    const rpc = new RPC(ipc, () => {})
+    const rpc = new RPC(started, () => {})
 
     const runtimeContext: RuntimeContext = {
       runtime: 'node',
@@ -294,24 +239,27 @@ async function ensureRPC(): Promise<RPC> {
     }
     // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
     const homeDir = process.env['SNAP_USER_COMMON'] ?? os.homedir()
-    const resolveConfigForInit =
-      preresolved === CONFIG_UNRESOLVED ? resolveConfig : async () => preresolved
 
     await Promise.race([
-      initializeConfig(rpc, resolveConfigForInit, runtimeContext, homeDir),
+      initializeConfig(rpc, resolveConfig, runtimeContext, homeDir),
       rejectOnAbort(controller.signal)
     ])
 
     rpcInstance = rpc
     return rpc
   })()
+  rpcPromise = attempt
 
   try {
-    return await rpcPromise
+    return await attempt
   } catch (error) {
-    const ipc = workerIpc
-    resetModuleState()
-    ipc?.destroy()
+    if (startGeneration === generation) {
+      const failed = worker
+      const failedController = workerLifeController
+      resetModuleState()
+      failedController?.abort(error)
+      failed?.destroy()
+    }
     throw error
   }
 }
@@ -319,7 +267,7 @@ async function ensureRPC(): Promise<RPC> {
 function rejectOnAbort(signal: AbortSignal): Promise<never> {
   return new Promise((_, reject) => {
     const fail = () =>
-      reject(signal.reason instanceof Error ? signal.reason : new WorkerCrashedError(null, null))
+      reject(signal.reason instanceof Error ? signal.reason : new WorkerCrashedError())
     if (signal.aborted) {
       fail()
       return
@@ -339,10 +287,10 @@ export function notifyChannelClosed(): void {
   const controller = workerLifeController
   if (!controller || controller.signal.aborted) return
 
-  const ipc = workerIpc
+  const closed = worker
   resetModuleState()
-  controller.abort(new WorkerCrashedError(null, null))
-  ipc?.destroy()
+  controller.abort(new WorkerCrashedError(closed ? workerErrors.get(closed) : undefined))
+  closed?.destroy()
 }
 
 export async function getRPC() {
@@ -360,12 +308,12 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const lifeSignal = workerLifeController?.signal
   if (lifeSignal && !lifeSignal.aborted) {
     const onAbort = () => {
-      const err =
-        lifeSignal.reason instanceof Error ? lifeSignal.reason : new WorkerCrashedError(null, null)
+      const err = lifeSignal.reason instanceof Error ? lifeSignal.reason : new WorkerCrashedError()
       requestStream.destroy(err)
       responseStream.destroy(err)
     }
     lifeSignal.addEventListener('abort', onAbort, { once: true })
+    responseStream.once('close', () => lifeSignal.removeEventListener('abort', onAbort))
   }
 
   return { requestStream, responseStream }
@@ -379,9 +327,11 @@ export async function close() {
 
   generation++
   closePromise = (async () => {
-    const ipc = workerIpc
-    if (!ipc) {
-      await rpcPromise?.catch(() => {})
+    const closing = worker
+    if (!closing) {
+      const pending = rpcPromise
+      rpcPromise = null
+      await pending?.catch(() => {})
       return
     }
 
@@ -391,7 +341,7 @@ export async function close() {
     // in-flight caller rejects with WorkerShutdownError.
     workerLifeController?.abort(new WorkerShutdownError())
     resetModuleState()
-    await ipc.terminate()
+    await closing.terminate()
   })()
 
   try {

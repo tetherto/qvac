@@ -22,7 +22,6 @@ export const SDK_CLIENT_ERROR_CODES = {
   RPC_REQUEST_NOT_SENT: 50201,
   RPC_RESPONSE_STREAM_NOT_CREATED: 50202,
   RPC_CONNECTION_FAILED: 50203,
-  RPC_INIT_TIMEOUT: 50204,
   WORKER_CRASHED: 50205,
   WORKER_SHUTDOWN: 50206,
   WORKER_STARTUP_FAILED: 50207,
@@ -35,9 +34,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_FILE_INVALID: 50603,
   CONFIG_FILE_PARSE_FAILED: 50604,
   CONFIG_VALIDATION_FAILED: 50605,
-  PEAR_WORKER_ENTRY_REQUIRED: 50606,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
-  WORKER_PLUGINS_NOT_REGISTERED: 50608,
   BUNDLE_VERIFICATION_FAILED: 50609,
   BUNDLE_FAILED: 50611,
   INVALID_PLUGIN_SPECIFIER: 50612,
@@ -115,11 +112,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: 'RPC_CONNECTION_FAILED',
     message: (details: string) => `RPC connection failed: ${details}`
   },
-  [SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT]: {
-    name: 'RPC_INIT_TIMEOUT',
-    message: (timeoutMs: number) =>
-      `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`
-  },
   [SDK_CLIENT_ERROR_CODES.WORKER_CRASHED]: {
     name: 'WORKER_CRASHED',
     message: (code: string, signal: string) =>
@@ -168,16 +160,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: 'MULTIPLE_SDK_INSTALLATIONS',
     message: (packages: string) =>
       `Multiple QVAC SDK installations found: ${packages}. Remove all but one to avoid conflicts.`
-  },
-  [SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED]: {
-    name: 'PEAR_WORKER_ENTRY_REQUIRED',
-    message: (workerEntry: string) =>
-      `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`
-  },
-  [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
-    name: 'WORKER_PLUGINS_NOT_REGISTERED',
-    message: () =>
-      'No plugins registered in the worker. For in-process Bare use `@qvac/inference` and register plugins with `plugins([...])` (or `registerPlugin(...)`). See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare'
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: 'BUNDLE_VERIFICATION_FAILED',

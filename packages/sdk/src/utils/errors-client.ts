@@ -99,12 +99,6 @@ export class RPCConnectionFailedError extends QvacErrorBase {
   }
 }
 
-export class RPCInitTimeoutError extends QvacErrorBase {
-  constructor(timeoutMs: number, cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT, [timeoutMs], cause))
-  }
-}
-
 export class WorkerCrashedError extends QvacErrorBase {
   public readonly exitCode: number | null
   public readonly exitSignal: NodeJS.Signals | null
@@ -154,20 +148,6 @@ export class MultipleSDKInstallationsError extends QvacErrorBase {
 export class WorkerFileNotFoundError extends QvacErrorBase {
   constructor(workerPath: string, cause?: unknown) {
     super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_FILE_NOT_FOUND, [workerPath], cause))
-  }
-}
-
-export class PearWorkerEntryRequiredError extends QvacErrorBase {
-  constructor(workerEntry: string, cause?: unknown) {
-    super(
-      createErrorOptions(SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED, [workerEntry], cause)
-    )
-  }
-}
-
-export class WorkerPluginsNotRegisteredError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED, [], cause))
   }
 }
 

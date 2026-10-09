@@ -27,5 +27,5 @@ void test('RPC init reports a platform with no Bare runtime as a startup failure
   }
 
   t.is(thrown?.name, 'WORKER_STARTUP_FAILED')
-  t.ok(Date.now() - startedAt < 5_000, 'fails without waiting for the startup timeout')
+  t.ok(Date.now() - startedAt < 5_000, 'fails as soon as the worker cannot start')
 })
