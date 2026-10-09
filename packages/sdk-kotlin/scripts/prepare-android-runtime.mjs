@@ -4,8 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import link from 'bare-link'
 import { platformPackageForHost } from './platform-package.mjs'
 
@@ -54,6 +53,11 @@ if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recu
 // Bundle the checkout's packages/sdk. The worker build owns compiling it.
 const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
 const modulesRoot = bundleSdkPath ?? projectRoot
+const { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } = await import(
+  bundleSdkPath === undefined
+    ? '@qvac/sdk/commands'
+    : pathToFileURL(path.join(bundleSdkPath, 'dist', 'src', 'commands', 'index.js')).href
+)
 const classificationWeightsSource = classificationWeightsPath(modulesRoot)
 
 // Split addons ship their native code in per-platform packages, installed at
@@ -69,8 +73,10 @@ const bundle = await bundleSdk({
   projectRoot: modulesRoot,
   configPath,
   ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
+  target: 'react-native',
   hosts: ['android-arm64'],
-  defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
+  defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile'],
+  link: false,
   quiet: true
 })
 
@@ -86,14 +92,14 @@ if (hasErrors(verification)) {
 }
 
 const bundleModule = await fs.readFile(bundle.bundlePath, 'utf8')
-const bundleExportPrefix = 'module.exports = '
+const bundleExportPrefix = 'export default '
 if (!bundleModule.startsWith(bundleExportPrefix)) {
-  throw new Error('bare-pack produced an unsupported mobile bundle module')
+  throw new Error('bare-stow produced an unsupported react-native bundle module')
 }
 
 const workerBundle = JSON.parse(bundleModule.slice(bundleExportPrefix.length))
 if (typeof workerBundle !== 'string') {
-  throw new Error('bare-pack mobile bundle did not export a string')
+  throw new Error('bare-stow react-native bundle did not export a string')
 }
 await fs.writeFile(path.join(assetsDirectory, 'worker.bundle'), workerBundle)
 const runtimeAssets = [
@@ -110,12 +116,11 @@ if (includesClassification) {
 }
 await Promise.all(runtimeAssets)
 
-const manifest = JSON.parse(await fs.readFile(bundle.manifestPath, 'utf8'))
 const sdkPackagePath = bundleSdkPath
   ? path.join(bundleSdkPath, 'package.json')
   : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
 const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
-const addons = Array.isArray(manifest.addons) ? manifest.addons : []
+const addons = bundle.addons
 
 // bare-link 4 links the addons the worker entry's module graph loads on the
 // host, resolving each meta's per-platform split package (installed above by
@@ -123,7 +128,7 @@ const addons = Array.isArray(manifest.addons) ? manifest.addons : []
 // rather than adding one per installed addon, so the split @qvac/fabric layout
 // links a single libqvac__fabric-android-arm64.
 const linkedResources = new Set()
-for await (const resource of link(bundle.entryPaths.worker, {
+for await (const resource of link(bundle.entryPath, {
   hosts: ['android-arm64'],
   out: addonsDirectory
 })) {
@@ -239,7 +244,7 @@ function platformPackageForInstalledMeta(metaName, host) {
  * Install the per-platform packages every split addon under `modulesRoot`
  * names for `host` in its `#host-addon` map, at the meta's installed version.
  * Consumers declare the mobile ones as optional peers, which npm does not
- * install. Installed into `modulesRoot`, which bare-pack's lookup from any
+ * install. Installed into `modulesRoot`, which the bundler's lookup from any
  * package under it reaches, and not recorded in package.json.
  */
 async function ensureHostPrebuilds(host, modulesRoot) {
@@ -257,7 +262,7 @@ async function ensureHostPrebuilds(host, modulesRoot) {
 
 /**
  * The @qvac packages reachable from `modulesRoot`'s dependencies, found the way
- * bare-pack resolves them: up the (unresolved) symlinked path, so a pnpm
+ * the bundler resolves them: up the (unresolved) symlinked path, so a pnpm
  * layout's transitive addons (fabric under its consumers) are included.
  */
 async function installedQvacPackages(modulesRoot) {
