@@ -18,6 +18,10 @@ interface AddonDocs {
 const ADDON_DOCS: Record<string, AddonDocs> = {
   llm: { url: `${BASE}/addons/llm-llamacpp/`, configAnchor: '#4-create-the-config-obj' },
   embeddings: { url: `${BASE}/addons/embed-llamacpp/`, configAnchor: '#4-create-config' },
+  'llamacpp-decision': {
+    url: `${BASE}/addons/embed-llamacpp/`,
+    configAnchor: '#laya-configuration'
+  },
   whisper: {
     url: `${BASE}/addons/transcription-whispercpp/`,
     configAnchor: '#2-configure-transcription-parameters'
