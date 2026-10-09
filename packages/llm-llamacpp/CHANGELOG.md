@@ -17,6 +17,12 @@
   loaded next to the model, placed like it (`device`, `gpu-layers`) and
   counted by `assessFit`; drafting otherwise works as for MTP.
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.2` -> `^0.20.3`, which fixes the
+  Vulkan `TOP_K` device loss an MTP draft context's top-k sampler hit when
+  its logits were NaN (NVIDIA, reloading an MTP model with more sequences).
+
 ## [0.58.0] - 2026-10-09
 
 ### Breaking
