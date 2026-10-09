@@ -18,6 +18,7 @@ import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundl
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
+import { linkAddons } from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import { TARGETS, type BundleTarget } from '@/commands/bundle/targets'
@@ -68,6 +69,11 @@ export interface BundleSdkOptions {
   checkEngines?: boolean | undefined
   /** Allow network lookups during the engines check. Defaults to true. */
   network?: boolean | undefined
+  /**
+   * For the `react-native` target, link the native addons for the phone hosts
+   * into react-native-bare-kit. Defaults to true.
+   */
+  link?: boolean | undefined
 }
 
 export interface BundleSdkResult {
@@ -83,6 +89,8 @@ export interface BundleSdkResult {
   manifestPath: string
   /** Platform packages `installMissingPrebuilds` installed; empty when it is off. */
   installedPrebuilds: HostPrebuildPackage[]
+  /** Paths the link step wrote. */
+  linked: string[]
 }
 
 function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
@@ -418,6 +426,13 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     })
   }
 
+  let linked: string[] = []
+  if (target === 'react-native' && options.link !== false) {
+    logger.info('\n🔗 Linking native addons into react-native-bare-kit...')
+    linked = await linkAddons({ projectRoot, entryPath, hosts, logger })
+    logger.info(`   Wrote ${linked.length} files`)
+  }
+
   const harnessPath = path.join(outputDir, TARGETS[target].harness)
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)
@@ -436,7 +451,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     plugins: pluginSpecifiers,
     addons: manifestResult.addons,
     manifestPath: manifestResult.manifestPath,
-    installedPrebuilds
+    installedPrebuilds,
+    linked
   }
 }
 
