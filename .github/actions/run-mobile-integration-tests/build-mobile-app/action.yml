@@ -231,11 +231,18 @@ runs:
     # react-native-bare-kit's native projects already include. Must run after
     # the last install of react-native-bare-kit (which clears them) and before
     # `expo prebuild`, Gradle and `pod install`.
+    #
+    # The speech addons all ship their ggml backends as libqvac-speech-ggml-*,
+    # so an app with two of them (tts-ggml's tests load a published asr-ggml)
+    # gets one copy of each, picked by whichever of bare-link's concurrent
+    # copies lands last. Until the speech addons share one runtime, the second
+    # pass relinks just the addon under test so its own backends win.
     - name: Link native addons
       shell: bash
       working-directory: ./test-framework
       env:
         PLATFORM: ${{ inputs.platform }}
+        ADDON_NAME: ${{ inputs.addon-npm-name }}
       run: |
         if [ "$PLATFORM" = "Android" ]; then
           preset=android out=node_modules/react-native-bare-kit/android/src/main/addons
@@ -243,6 +250,12 @@ runs:
           preset=ios out=node_modules/react-native-bare-kit/ios/addons
         fi
         npx --no-install bare-link --preset "$preset" --out "$out" backend/backend.cjs
+        if [ -f "node_modules/$ADDON_NAME/package.json" ]; then
+          entry=link-addon-under-test.cjs
+          printf "require('%s')\n" "$ADDON_NAME" > "$entry"
+          npx --no-install bare-link --preset "$preset" --out "$out" "$entry"
+          rm "$entry"
+        fi
         echo "Linked addons in $out:"
         find "$out" -mindepth 1 -maxdepth 2 | sort
 
