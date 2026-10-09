@@ -14,8 +14,10 @@ import { InvalidResponseError } from '@/errors/index'
  * @param params.id - The unique identifier to stream logs for
  * @param options - Optional call options
  * @param options.signal - Ends the stream when aborted, without an error, and
- *   releases the subscription at once. Breaking out of the loop only does so
- *   when the next log arrives, which for an id that gets no more logs is never.
+ *   releases the subscription at once. Use it to stop the stream from outside
+ *   its loop: calling `return()` there waits for the next log, which for an id
+ *   that gets no more logs never comes. Breaking out of the loop releases it at
+ *   once as well.
  * @returns AsyncGenerator yielding logging stream responses
  * @throws {QvacErrorBase} When the response type is invalid or when the stream fails
  *
