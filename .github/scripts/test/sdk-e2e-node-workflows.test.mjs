@@ -219,3 +219,20 @@ test('each workflow passes the leg its own guard', () => {
   assert.match(testJob(read(NODE), 'test-node'), /allowed-families: desktop,electron,python\n/)
   assert.match(testJob(read(SNAP), 'test-snap'), /family: snap\n(?: {10}.*\n)*? {10}allowed-platforms: linux\n/)
 })
+
+// A called workflow has no runs of its own, so the baseline lookup must name
+// the workflow whose runs upload them. Those runs on main rarely end green,
+// and a dispatch may not carry every family/platform.
+test('the baseline lookup reads the runs that upload baselines', () => {
+  const results = read('.github/actions/sdk-e2e-node-results/action.yml')
+  const download = /- name: Download baseline[^\n]*\n((?: {6}.*\n)+)/.exec(results)
+  assert.ok(download, 'baseline download step not found')
+  assert.match(download[1], / {8}workflow: test-sdk\.yml\n/)
+  assert.match(download[1], / {8}workflow_conclusion: completed\n/)
+  assert.match(download[1], / {8}search_artifacts: true\n/)
+  assert.match(read(CALLER), /\n {2}workflow_dispatch:\n/)
+
+  const upload = /- name: Upload baseline[^\n]*\n {6}if: ([^\n]+)\n/.exec(results)
+  assert.ok(upload, 'baseline upload step not found')
+  assert.match(upload[1], /github\.event_name == 'workflow_dispatch'/)
+})

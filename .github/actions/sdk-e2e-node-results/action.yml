@@ -1,8 +1,8 @@
 name: SDK E2E node results
 description: >-
   Tear down and publish one runner-hosted SDK e2e leg: stop a consumer that
-  outlived the run, upload its log and results, and compare them against a
-  base branch baseline when one is found. Every step runs whatever happened before it, so the
+  outlived the run, upload its log and results, and compare them against the
+  base branch's newest test-sdk.yml baseline. Every step runs whatever happened before it, so the
   caller invokes this under always(). Shared by test-node-sdk.yml and
   test-snap-sdk.yml; the artifact names are the results-<family>-<platform>
   contract that sdk-e2e-report-finalize and sdk-e2e-base-state read.
@@ -65,12 +65,19 @@ runs:
         path: ${{ inputs.working-directory }}/reports/
         retention-days: 30
 
+    # Baselines are uploaded by test-sdk.yml runs on the base branch: a called
+    # workflow such as test-node-sdk.yml never has runs of its own. Any
+    # finished run counts, since a full e2e run on main rarely ends green, and
+    # the newest run that carries this family/platform wins, since a dispatch
+    # may have run other families only.
     - name: Download baseline for this platform (best-effort)
       if: always() && github.event.pull_request.base.ref != ''
       uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
       continue-on-error: true
       with:
-        workflow: test-node-sdk.yml
+        workflow: test-sdk.yml
+        workflow_conclusion: completed
+        search_artifacts: true
         branch: ${{ github.event.pull_request.base.ref }}
         name: baseline-${{ inputs.family }}-${{ inputs.platform }}
         path: ${{ inputs.working-directory }}/baseline
@@ -148,8 +155,10 @@ runs:
         retention-days: 7
         if-no-files-found: ignore
 
+    # pull_request_target runs carry the base branch as github.ref but test the
+    # PR's code, so only a dispatch on main/develop records a baseline.
     - name: Upload baseline (main/develop only)
-      if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+      if: always() && github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
       with:
         name: baseline-${{ inputs.family }}-${{ inputs.platform }}
