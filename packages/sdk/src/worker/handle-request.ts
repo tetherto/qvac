@@ -117,9 +117,6 @@ async function streamToWire(
       }
     }
 
-    // The client is gone.
-    if (signal.aborted) return
-
     if (!sentFinalChunk) {
       throttle?.flush()
       profiler.endHandler()
