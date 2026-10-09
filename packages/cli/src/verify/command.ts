@@ -44,7 +44,7 @@ export function registerVerifyCommand(program: Command): void {
     .description('Verify native addon prebuilds and ABI for a bundle or node_modules tree')
     .requiredOption(
       '--addons-source <path>',
-      'Path to a worker.bundle.js or a node_modules directory'
+      'Path to a worker bundle written by bundleSdk, or a node_modules directory'
     )
     .option('--host <target>', 'Target host (repeatable, at least one required)', collect, [])
     .option(

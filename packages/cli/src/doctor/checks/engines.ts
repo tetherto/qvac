@@ -70,11 +70,15 @@ export async function checkBareEngines(
   }
 
   // A project with react-native-bare-kit ships to phones, where the desktop
-  // bare-runtime never runs; any other project runs on this host's Bare.
-  const hosts = commands.isReactNativeBareKitInstalled(projectRoot)
-    ? MOBILE_HOSTS
-    : [`${process.platform}-${process.arch}`]
-  const bundlePath = path.join(projectRoot, 'qvac', 'worker.bundle.js')
+  // Bare never runs; any other project runs on this host's Bare.
+  const isPhoneProject = commands.isReactNativeBareKitInstalled(projectRoot)
+  const hosts = isPhoneProject ? MOBILE_HOSTS : [`${process.platform}-${process.arch}`]
+  const bundlePath = path.join(
+    projectRoot,
+    'qvac',
+    'worker',
+    isPhoneProject ? 'index.bundle.mjs' : 'index.bundle'
+  )
   const addonsSource = fs.existsSync(bundlePath) ? bundlePath : nodeModules
 
   const result = await commands.verifyBundle({
