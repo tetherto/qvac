@@ -86,6 +86,8 @@ interface ChatHistory {
   name?: string
   description?: string
   parameters?: unknown
+  tool_calls?: { id?: string; name: string; arguments: Record<string, unknown> }[]
+  tool_call_id?: string
 }
 
 // Internal generation-params shape forwarded to the addon. Extends the
@@ -103,15 +105,7 @@ type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'saveCacheToDisk' | 'p
   generationParams?: CompletionGenerationParams
 }
 
-function transformMessage(
-  message:
-    | {
-        role: string
-        content: string
-        attachments?: { path: string }[] | undefined
-      }
-    | Tool
-): ChatHistory[] {
+function transformMessage(message: HistoryMsg | Tool): ChatHistory[] {
   const transformed: ChatHistory[] = []
 
   // Check if it's a tool definition (has type: "function")
@@ -125,11 +119,7 @@ function transformMessage(
     return transformed
   }
 
-  const msg = message as {
-    role: string
-    content: string
-    attachments?: { path: string }[] | undefined
-  }
+  const msg = message as HistoryMsg
 
   if (msg.attachments && msg.attachments.length > 0) {
     for (const attachment of msg.attachments) {
@@ -147,7 +137,16 @@ function transformMessage(
 
   transformed.push({
     role: msg.role,
-    content: msg.content
+    content: msg.content,
+    ...(msg.toolCalls && {
+      tool_calls: msg.toolCalls.map((call) => ({
+        ...(call.id !== undefined && { id: call.id }),
+        name: call.name,
+        arguments: call.arguments
+      }))
+    }),
+    ...(msg.toolCallId !== undefined && { tool_call_id: msg.toolCallId }),
+    ...(msg.toolName !== undefined && { name: msg.toolName })
   })
 
   return transformed
@@ -157,16 +156,7 @@ function runModel(model: AnyModel, prompt: ChatHistory[], opts?: CompletionRunOp
   return model.run(prompt, opts)
 }
 
-export function transformMessages(
-  messages: Array<
-    | {
-        role: string
-        content: string
-        attachments?: { path: string }[] | undefined
-      }
-    | Tool
-  >
-): ChatHistory[] {
+export function transformMessages(messages: Array<HistoryMsg | Tool>): ChatHistory[] {
   const transformed: ChatHistory[] = []
   for (const message of messages) {
     transformed.push(...transformMessage(message))
@@ -174,10 +164,19 @@ export function transformMessages(
   return transformed
 }
 
-type HistoryMsg = {
-  role: string
-  content: string
-  attachments?: { path: string }[] | undefined
+type HistoryMsg = CacheMessage
+
+// The fields that identify a turn, so two tool turns with equal `content`
+// never share a cache key.
+function toCacheMessage(msg: HistoryMsg): CacheMessage {
+  return {
+    role: msg.role,
+    content: msg.content,
+    attachments: msg.attachments ?? undefined,
+    ...(msg.toolCalls && { toolCalls: msg.toolCalls }),
+    ...(msg.toolCallId !== undefined && { toolCallId: msg.toolCallId }),
+    ...(msg.toolName !== undefined && { toolName: msg.toolName })
+  }
 }
 
 /**
@@ -529,11 +528,7 @@ export async function* completion(
       signal
     })
   } else {
-    const cacheMessages: CacheMessage[] = history.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-      attachments: msg.attachments ?? undefined
-    }))
+    const cacheMessages: CacheMessage[] = history.map(toCacheMessage)
     turn = await session.beginTurn({
       kind: 'auto',
       configHash,
@@ -643,14 +638,7 @@ export async function* completion(
     return result
   }
 
-  const savedHistory = buildAutoCacheSaveHistory(
-    history.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-      attachments: msg.attachments ?? undefined
-    })),
-    result.responseText
-  )
+  const savedHistory = buildAutoCacheSaveHistory(history.map(toCacheMessage), result.responseText)
   const postResponseCacheInfo = await getCurrentCacheInfo(modelId, configHash, savedHistory)
 
   await session.commitTurn(turn, {

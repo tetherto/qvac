@@ -1884,11 +1884,11 @@
                   "properties": {
                     "role": {
                       "type": "string",
-                      "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+                      "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
                     },
                     "content": {
-                      "type": "string",
-                      "description": "Message content."
+                      "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                      "type": ["string", "null"]
                     },
                     "attachments": {
                       "description": "Optional file attachments for multimodal models.",
@@ -1904,9 +1904,46 @@
                         "required": ["path"],
                         "title": "BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem"
                       }
+                    },
+                    "toolCalls": {
+                      "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Call id, echoed by the `tool` message that answers it.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Name of the tool that was called."
+                          },
+                          "arguments": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {},
+                            "description": "Arguments the tool was called with.",
+                            "title": "BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments"
+                          }
+                        },
+                        "required": ["name", "arguments"],
+                        "title": "BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem"
+                      }
+                    },
+                    "toolCallId": {
+                      "description": "On a `tool` turn: the id of the call this result answers.",
+                      "type": "string"
+                    },
+                    "toolName": {
+                      "description": "On a `tool` turn: the name of the tool that produced the result.",
+                      "type": "string"
                     }
                   },
-                  "required": ["role", "content"],
+                  "required": ["role"],
                   "title": "BatchCompletionStreamRequestPromptsItemHistoryItem"
                 },
                 "description": "Array of conversation messages sent to the model."
@@ -3221,11 +3258,11 @@
             "properties": {
               "role": {
                 "type": "string",
-                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "type": "string",
-                "description": "Message content."
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "type": ["string", "null"]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -3241,9 +3278,46 @@
                   "required": ["path"],
                   "title": "CompletionOrchestrateRequestHistoryItemAttachmentsItem"
                 }
+              },
+              "toolCalls": {
+                "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Call id, echoed by the `tool` message that answers it.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of the tool that was called."
+                    },
+                    "arguments": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {},
+                      "description": "Arguments the tool was called with.",
+                      "title": "CompletionOrchestrateRequestHistoryItemToolCallsItemArguments"
+                    }
+                  },
+                  "required": ["name", "arguments"],
+                  "title": "CompletionOrchestrateRequestHistoryItemToolCallsItem"
+                }
+              },
+              "toolCallId": {
+                "description": "On a `tool` turn: the id of the call this result answers.",
+                "type": "string"
+              },
+              "toolName": {
+                "description": "On a `tool` turn: the name of the tool that produced the result.",
+                "type": "string"
               }
             },
-            "required": ["role", "content"],
+            "required": ["role"],
             "title": "CompletionOrchestrateRequestHistoryItem"
           },
           "description": "Array of conversation messages sent to the model."
@@ -3868,11 +3942,11 @@
             "properties": {
               "role": {
                 "type": "string",
-                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "type": "string",
-                "description": "Message content."
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "type": ["string", "null"]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -3888,9 +3962,46 @@
                   "required": ["path"],
                   "title": "CompletionStreamRequestHistoryItemAttachmentsItem"
                 }
+              },
+              "toolCalls": {
+                "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Call id, echoed by the `tool` message that answers it.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of the tool that was called."
+                    },
+                    "arguments": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {},
+                      "description": "Arguments the tool was called with.",
+                      "title": "CompletionStreamRequestHistoryItemToolCallsItemArguments"
+                    }
+                  },
+                  "required": ["name", "arguments"],
+                  "title": "CompletionStreamRequestHistoryItemToolCallsItem"
+                }
+              },
+              "toolCallId": {
+                "description": "On a `tool` turn: the id of the call this result answers.",
+                "type": "string"
+              },
+              "toolName": {
+                "description": "On a `tool` turn: the name of the tool that produced the result.",
+                "type": "string"
               }
             },
-            "required": ["role", "content"],
+            "required": ["role"],
             "title": "CompletionStreamRequestHistoryItem"
           },
           "description": "Array of conversation messages sent to the model."
