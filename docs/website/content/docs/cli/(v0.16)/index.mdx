@@ -109,10 +109,15 @@ Generate a tree-shaken Bare worker bundle with selected plugins.
 | --- | --- |
 | `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
 | `--sdk-path <path>` | Path to SDK package (default: auto-detect in node_modules) |
-| `--host <target>` | Target host (repeatable) |
+| `--target <target>` | Where the worker runs: `bare-sidecar` (Node.js, Electron; default), `react-native` (Expo) or `pear-runtime` (Pear) |
+| `--host <host>` | Host to bundle for (repeatable). Defaults to this machine, or every phone host for `react-native` |
 | `--defer <module>` | Defer a module (repeatable) |
+| `--no-install` | Do not install missing addon platform packages for phone hosts |
 | `-q, --quiet` | Minimal output |
 | `-v, --verbose` | Detailed output |
+| `--offline` | Skip GitHub and npm registry lookups in the `engines.bare` check |
+
+The bundle is written to `qvac/worker/`, with the worker entry at `qvac/worker.entry.mjs`.
 
 ### `qvac serve`
 

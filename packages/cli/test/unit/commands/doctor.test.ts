@@ -311,7 +311,7 @@ describe('deploy-target checks', () => {
     assert.ok(r.value && r.value.includes('darwin-arm64'))
   })
 
-  it('desktop targets still pass on non-desktop CLI hosts (bare-pack cross-bundles)', () => {
+  it('desktop targets still pass on non-desktop CLI hosts', () => {
     const r = checkDesktopTargets(makeCtx({ platform: 'freebsd' as NodeJS.Platform, arch: 'x64' }))
     assert.equal(r.status, 'pass')
     assert.ok(r.value && !r.value.includes('(native)'))
