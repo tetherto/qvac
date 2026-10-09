@@ -269,6 +269,8 @@ void LlamaModel::init(bool acquireLock) {
     speculativeConfig =
         qvac_lib_inference_addon_llama::speculative::parseSpeculativeConfig(
             configFilemap);
+    qvac_lib_inference_addon_llama::speculative::requireDraftModelFile(
+        speculativeConfig);
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());

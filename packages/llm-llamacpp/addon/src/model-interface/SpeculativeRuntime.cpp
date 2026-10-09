@@ -105,13 +105,17 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
       throw std::invalid_argument(
           draftModel->first + " requires spec-type \"draft-dflash\"");
     }
-    if (draftModel->second.empty() ||
-        !std::filesystem::path(draftModel->second).is_absolute()) {
+    const std::string& path = draftModel->second;
+    const auto isSeparator = [](char c) { return c == '/' || c == '\\'; };
+    // A leading double separator is a network share or a Windows device
+    // path, which `is_absolute` accepts there.
+    if (path.empty() || !std::filesystem::path(path).is_absolute() ||
+        (path.size() >= 2 && isSeparator(path[0]) && isSeparator(path[1]))) {
       throw std::invalid_argument(
-          draftModel->first + " must be an absolute path, got: \"" +
-          draftModel->second + "\"");
+          draftModel->first + " must be an absolute local path, got: \"" +
+          path + "\"");
     }
-    result.draftModelPath = draftModel->second;
+    result.draftModelPath = path;
   }
   if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH &&
       result.draftModelPath.empty()) {
@@ -148,6 +152,18 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
         std::to_string(nMax) + ")");
   }
   return result;
+}
+
+void requireDraftModelFile(const SpeculativeConfig& config) {
+  if (config.draftModelPath.empty()) {
+    return;
+  }
+  std::error_code error;
+  if (!std::filesystem::is_regular_file(config.draftModelPath, error)) {
+    throw std::invalid_argument(
+        "spec-draft-model is not a regular file: \"" + config.draftModelPath +
+        "\"");
+  }
 }
 
 void applySpeculativeConfig(

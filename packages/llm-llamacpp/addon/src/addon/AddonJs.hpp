@@ -632,6 +632,16 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   } catch (const std::exception&) {
     return errorResult("unsupported-config");
   }
+  // The DFlash draft model is a second file the fit reads; probed like the
+  // target model above.
+  if (const std::string& draftPath = loadParams.speculative.draft.mparams.path;
+      !draftPath.empty()) {
+    if (std::FILE* file = std::fopen(draftPath.c_str(), "rb")) {
+      std::fclose(file);
+    } else {
+      return errorResult("model-unreadable");
+    }
+  }
   loadParams.embedding = false;
 
   // Each is a second resident file the projection does not count, so a load

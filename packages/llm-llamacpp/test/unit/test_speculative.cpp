@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -77,6 +78,35 @@ TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {
       std::invalid_argument);
   EXPECT_THROW(
       parse({{"spec-draft-model", "/m/d.gguf"}}), std::invalid_argument);
+  // Network shares and device paths are not local files.
+  EXPECT_THROW(
+      parse(
+          {{"spec-type", "draft-dflash"},
+           {"spec-draft-model", "//host/share/d.gguf"}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parse(
+          {{"spec-type", "draft-dflash"},
+           {"spec-draft-model", "\\\\host\\share\\d.gguf"}}),
+      std::invalid_argument);
+}
+
+TEST(SpeculativeConfigTest, DraftModelMustBeARegularFile) {
+  EXPECT_NO_THROW(requireDraftModelFile(SpeculativeConfig{}));
+  EXPECT_THROW(
+      requireDraftModelFile(
+          SpeculativeConfig{
+              .type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,
+              .draftModelPath = "/nonexistent/qvac-dflash.gguf"}),
+      std::invalid_argument);
+  // A directory is not a model file.
+  EXPECT_THROW(
+      requireDraftModelFile(
+          SpeculativeConfig{
+              .type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,
+              .draftModelPath =
+                  std::filesystem::temp_directory_path().string()}),
+      std::invalid_argument);
 }
 
 TEST(SpeculativeConfigTest, NoneIsAcceptedAndDisables) {

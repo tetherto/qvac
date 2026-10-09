@@ -55,10 +55,14 @@ struct SpeculativeConfig {
 /// next-token heads, and `draft-dflash`, which drafts with the DFlash model
 /// given as `spec-draft-model`. Throws std::invalid_argument for an unknown
 /// type, a malformed or out-of-range value, both spellings of one key, draft
-/// options without a type, `draft-dflash` without an absolute
+/// options without a type, `draft-dflash` without an absolute local
 /// `spec-draft-model` path, or a `spec-draft-model` with another type.
 SpeculativeConfig
 parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
+
+/// Throws std::invalid_argument when `spec-draft-model` is set and is not a
+/// regular file. Separate from parsing, which only checks the path's form.
+void requireDraftModelFile(const SpeculativeConfig& config);
 
 /// Copies `config` into `params.speculative` and sizes the target context's
 /// output buffers for a verification batch, exactly as llama-server does
