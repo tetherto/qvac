@@ -160,6 +160,18 @@ export class EmbedFailedError extends QvacErrorBase {
   }
 }
 
+export class DecideFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DECIDE_FAILED,
+        details ? [details] : undefined,
+        cause
+      )
+    )
+  }
+}
+
 export class EmbedNoEmbeddingsError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(createErrorOptions(SDK_SERVER_ERROR_CODES.EMBED_NO_EMBEDDINGS, undefined, cause))

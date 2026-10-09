@@ -20,6 +20,7 @@ export type RequestKind =
   | 'completion'
   | 'batchCompletion'
   | 'embeddings'
+  | 'decision'
   | 'transcribe'
   | 'translate'
   | 'diffusion'

@@ -28,6 +28,7 @@ export const SDK_SERVER_ERROR_CODES = {
   RPC_SERVER_OPERATION_FAILED: 52423,
   MODEL_UNLOAD_FAILED: 52400,
   EMBED_FAILED: 52401,
+  DECIDE_FAILED: 52424,
   EMBED_NO_EMBEDDINGS: 52402,
   TRANSCRIPTION_FAILED: 52403,
   AUDIO_FILE_NOT_FOUND: 52404,
@@ -222,6 +223,10 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.EMBED_FAILED]: {
     name: 'EMBED_FAILED',
     message: (details?: string) => `Failed to generate embeddings${details ? `: ${details}` : ''}`
+  },
+  [SDK_SERVER_ERROR_CODES.DECIDE_FAILED]: {
+    name: 'DECIDE_FAILED',
+    message: (details?: string) => `Failed to score the decision${details ? `: ${details}` : ''}`
   },
   [SDK_SERVER_ERROR_CODES.EMBED_NO_EMBEDDINGS]: {
     name: 'EMBED_NO_EMBEDDINGS',

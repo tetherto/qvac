@@ -10,6 +10,7 @@ import { audioGenConfigSchema } from '@/schemas/audio-gen'
 import { vlaConfigSchema } from '@/schemas/vla'
 import { classificationConfigSchema } from '@/schemas/classification'
 import { ModelType, normalizeModelType, type CanonicalModelType } from '@/schemas/model-types'
+import { decideConfigBaseSchema } from '@/schemas/decide'
 
 // Canonical model type -> the `modelConfig` schema whose fields a user
 // configures. This is the describable, user-facing config surface: base/runtime
@@ -28,6 +29,7 @@ export const MODEL_CONFIG_SCHEMA_BY_TYPE = {
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigBaseSchema,
+  [ModelType.llamacppDecision]: decideConfigBaseSchema,
   [ModelType.nmtcppTranslation]: nmtConfigBaseSchema,
   [ModelType.ttsGgml]: ttsLoadConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema,

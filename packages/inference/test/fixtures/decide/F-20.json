@@ -1,0 +1,35 @@
+{
+  "id": "F-20",
+  "category": "invarianza",
+  "request": {
+    "state": "The capital of France is Paris.",
+    "questions": {
+      "truth": {
+        "type": "noul",
+        "instructions": "Is the statement true?"
+      }
+    }
+  },
+  "meta": {
+    "llamacpp_build": "0.5.0-dev (build 11405, commit 1b43d3116)",
+    "model_sha256": "c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2",
+    "server_flags": "-m models/Laya-Q8_0.gguf -c 512 -b 512 -ub 512 -t 2 -ngl 0 --host 127.0.0.1 --port 8088",
+    "server_bin": "/home/ubuntu/tether-qvac-decision-models/llama.cpp-oracle/llama-b11405/llama-server",
+    "server_url": "http://127.0.0.1:8088/v1/systemone",
+    "date": "2026-10-05T07:51:40Z",
+    "latency_ms": 93.545
+  },
+  "response": {
+    "model": "/home/ubuntu/tether-qvac-decision-models/models/Laya-Q8_0.gguf",
+    "answers": {
+      "truth": {
+        "type": "noul",
+        "noul": 0.09036234420700964
+      }
+    },
+    "usage": {
+      "input_tokens": 38,
+      "output_tokens": 0
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "id": "F-07",
+  "category": "choice",
+  "request": {
+    "state": "I was charged twice for the same invoice.",
+    "questions": {
+      "route": {
+        "type": "choice",
+        "instructions": "Which team should handle this?",
+        "criteria": {
+          "billing": "This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. Billing owns duplicate charges.",
+          "shipping": "This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. Shipping owns parcels.",
+          "technical": "This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. This option applies when the message is only about this topic and not about the others. It includes billing disputes, duplicate charges, refunds, and invoices. Technical owns outages."
+        }
+      }
+    }
+  },
+  "meta": {
+    "llamacpp_build": "0.5.0-dev (build 11405, commit 1b43d3116)",
+    "model_sha256": "c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2",
+    "server_flags": "-m models/Laya-Q8_0.gguf -c 512 -b 512 -ub 512 -t 2 -ngl 0 --host 127.0.0.1 --port 8088",
+    "server_bin": "/home/ubuntu/tether-qvac-decision-models/llama.cpp-oracle/llama-b11405/llama-server",
+    "server_url": "http://127.0.0.1:8088/v1/systemone",
+    "date": "2026-10-05T07:51:36Z",
+    "latency_ms": 320.359
+  },
+  "response": {
+    "model": "/home/ubuntu/tether-qvac-decision-models/models/Laya-Q8_0.gguf",
+    "answers": {
+      "route": {
+        "type": "choice",
+        "choice": "billing",
+        "probabilities": {
+          "billing": 0.8523233413148873,
+          "shipping": 0.1001400062684514,
+          "technical": 0.047536652416661225
+        },
+        "confidence": 0.7784850119723308
+      }
+    },
+    "usage": {
+      "input_tokens": 169,
+      "output_tokens": 0
+    }
+  }
+}

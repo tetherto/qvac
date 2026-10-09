@@ -44,6 +44,7 @@ import {
   bciTranscribeStreamResponseSchema
 } from '@/schemas/bci'
 import { embedRequestSchema, embedResponseSchema } from '@/schemas/embed'
+import { decideRequestSchema, decideResponseSchema } from '@/schemas/decide'
 import { cancelRequestSchema, cancelResponseSchema } from '@/schemas/cancel'
 import { translateRequestSchema, translateResponseSchema } from '@/schemas/translate'
 import { loggingStreamRequestSchema, loggingStreamResponseSchema } from '@/schemas/logging-stream'
@@ -140,6 +141,7 @@ export const requestSchema = z.union([
   bciTranscribeStreamRequestSchema,
   loggingStreamRequestSchema,
   embedRequestSchema,
+  decideRequestSchema,
   translateRequestSchema,
   ttsRequestSchema,
   textToSpeechStreamRequestSchema,
@@ -190,6 +192,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   bciTranscribeStreamResponseSchema,
   loggingStreamResponseSchema,
   embedResponseSchema,
+  decideResponseSchema,
   translateResponseSchema,
   ttsResponseSchema,
   textToSpeechStreamResponseSchema,

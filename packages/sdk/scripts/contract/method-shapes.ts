@@ -21,6 +21,7 @@ export const methodShapes = {
   classify: 'stream',
   completionOrchestrate: 'duplex',
   completionStream: 'stream',
+  decide: 'reply',
   deleteCache: 'reply',
   diffusionStream: 'stream',
   downloadAsset: 'reply',

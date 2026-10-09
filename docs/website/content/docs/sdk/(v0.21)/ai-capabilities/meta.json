@@ -3,6 +3,7 @@
   "pages": [
     "text-generation",
     "text-embeddings",
+    "decision-models",
     "rag",
     "fine-tuning",
     "multimodal",

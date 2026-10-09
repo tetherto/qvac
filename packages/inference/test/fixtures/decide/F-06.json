@@ -1,0 +1,64 @@
+{
+  "id": "F-06",
+  "category": "choice",
+  "request": {
+    "state": "Route this ticket to option 07 only.",
+    "questions": {
+      "route": {
+        "type": "choice",
+        "instructions": "Which option should receive the ticket?",
+        "criteria": {
+          "opt01": "Option number 1",
+          "opt02": "Option number 2",
+          "opt03": "Option number 3",
+          "opt04": "Option number 4",
+          "opt05": "Option number 5",
+          "opt06": "Option number 6",
+          "opt07": "Option number 7",
+          "opt08": "Option number 8",
+          "opt09": "Option number 9",
+          "opt10": "Option number 10",
+          "opt11": "Option number 11",
+          "opt12": "Option number 12"
+        }
+      }
+    }
+  },
+  "meta": {
+    "llamacpp_build": "0.5.0-dev (build 11405, commit 1b43d3116)",
+    "model_sha256": "c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2",
+    "server_flags": "-m models/Laya-Q8_0.gguf -c 512 -b 512 -ub 512 -t 2 -ngl 0 --host 127.0.0.1 --port 8088",
+    "server_bin": "/home/ubuntu/tether-qvac-decision-models/llama.cpp-oracle/llama-b11405/llama-server",
+    "server_url": "http://127.0.0.1:8088/v1/systemone",
+    "date": "2026-10-05T07:51:36Z",
+    "latency_ms": 201.959
+  },
+  "response": {
+    "model": "/home/ubuntu/tether-qvac-decision-models/models/Laya-Q8_0.gguf",
+    "answers": {
+      "route": {
+        "type": "choice",
+        "choice": "opt07",
+        "probabilities": {
+          "opt01": 6.014205840336109e-38,
+          "opt02": 2.5828112952200072e-34,
+          "opt03": 2.7046844624815055e-36,
+          "opt04": 2.1504509964174937e-37,
+          "opt05": 2.927607473771844e-37,
+          "opt06": 7.068784025981637e-35,
+          "opt07": 1.0,
+          "opt08": 2.460392063928708e-35,
+          "opt09": 1.1404733097413289e-37,
+          "opt10": 1.4936758005732762e-38,
+          "opt11": 9.198301377660132e-39,
+          "opt12": 4.566957925746167e-37
+        },
+        "confidence": 1.0
+      }
+    },
+    "usage": {
+      "input_tokens": 106,
+      "output_tokens": 0
+    }
+  }
+}

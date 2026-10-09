@@ -1,0 +1,155 @@
+{
+  "id": "F-11",
+  "category": "multi",
+  "request": {
+    "state": "Fact number 3 is stated. The other numbered facts are not in this note.",
+    "questions": {
+      "q00": {
+        "type": "noul",
+        "instructions": "Is fact number 0 stated?"
+      },
+      "q01": {
+        "type": "noul",
+        "instructions": "Is fact number 1 stated?"
+      },
+      "q02": {
+        "type": "noul",
+        "instructions": "Is fact number 2 stated?"
+      },
+      "q03": {
+        "type": "noul",
+        "instructions": "Is fact number 3 stated?"
+      },
+      "q04": {
+        "type": "noul",
+        "instructions": "Is fact number 4 stated?"
+      },
+      "q05": {
+        "type": "noul",
+        "instructions": "Is fact number 5 stated?"
+      },
+      "q06": {
+        "type": "noul",
+        "instructions": "Is fact number 6 stated?"
+      },
+      "q07": {
+        "type": "noul",
+        "instructions": "Is fact number 7 stated?"
+      },
+      "q08": {
+        "type": "noul",
+        "instructions": "Is fact number 8 stated?"
+      },
+      "q09": {
+        "type": "noul",
+        "instructions": "Is fact number 9 stated?"
+      },
+      "q10": {
+        "type": "noul",
+        "instructions": "Is fact number 10 stated?"
+      },
+      "q11": {
+        "type": "noul",
+        "instructions": "Is fact number 11 stated?"
+      },
+      "q12": {
+        "type": "noul",
+        "instructions": "Is fact number 12 stated?"
+      },
+      "q13": {
+        "type": "noul",
+        "instructions": "Is fact number 13 stated?"
+      },
+      "q14": {
+        "type": "noul",
+        "instructions": "Is fact number 14 stated?"
+      },
+      "q15": {
+        "type": "noul",
+        "instructions": "Is fact number 15 stated?"
+      }
+    }
+  },
+  "meta": {
+    "llamacpp_build": "0.5.0-dev (build 11405, commit 1b43d3116)",
+    "model_sha256": "c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2",
+    "server_flags": "-m models/Laya-Q8_0.gguf -c 512 -b 512 -ub 512 -t 2 -ngl 0 --host 127.0.0.1 --port 8088",
+    "server_bin": "/home/ubuntu/tether-qvac-decision-models/llama.cpp-oracle/llama-b11405/llama-server",
+    "server_url": "http://127.0.0.1:8088/v1/systemone",
+    "date": "2026-10-05T07:51:38Z",
+    "latency_ms": 1231.226
+  },
+  "response": {
+    "model": "/home/ubuntu/tether-qvac-decision-models/models/Laya-Q8_0.gguf",
+    "answers": {
+      "q00": {
+        "type": "noul",
+        "noul": 0.060289643613724436
+      },
+      "q01": {
+        "type": "noul",
+        "noul": 0.0450471257544393
+      },
+      "q02": {
+        "type": "noul",
+        "noul": 0.06482112742474458
+      },
+      "q03": {
+        "type": "noul",
+        "noul": 0.40133346654102164
+      },
+      "q04": {
+        "type": "noul",
+        "noul": 0.01430772592254041
+      },
+      "q05": {
+        "type": "noul",
+        "noul": 0.0020707572475521744
+      },
+      "q06": {
+        "type": "noul",
+        "noul": 0.005636651936176329
+      },
+      "q07": {
+        "type": "noul",
+        "noul": 0.0002180178327244846
+      },
+      "q08": {
+        "type": "noul",
+        "noul": 0.0001779948438369916
+      },
+      "q09": {
+        "type": "noul",
+        "noul": 0.00010166143175978723
+      },
+      "q10": {
+        "type": "noul",
+        "noul": 8.652819722354787e-5
+      },
+      "q11": {
+        "type": "noul",
+        "noul": 0.00010756218951875488
+      },
+      "q12": {
+        "type": "noul",
+        "noul": 9.725228911739983e-5
+      },
+      "q13": {
+        "type": "noul",
+        "noul": 0.00021475699331968836
+      },
+      "q14": {
+        "type": "noul",
+        "noul": 0.0002721916876874534
+      },
+      "q15": {
+        "type": "noul",
+        "noul": 0.00016305830554354538
+      }
+    },
+    "usage": {
+      "input_tokens": 768,
+      "output_tokens": 0
+    }
+  }
+}

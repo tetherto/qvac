@@ -1,0 +1,72 @@
+{
+  "id": "F-09",
+  "category": "score",
+  "request": {
+    "state": "The repair was finished the same day and the technician explained each step.",
+    "questions": {
+      "quality": {
+        "type": "score",
+        "instructions": "How well was the job done?",
+        "criteria": [
+          "level 0",
+          "level 1",
+          "level 2",
+          "level 3",
+          "level 4",
+          "level 5",
+          "level 6",
+          "level 7",
+          "level 8",
+          "level 9"
+        ]
+      }
+    }
+  },
+  "meta": {
+    "llamacpp_build": "0.5.0-dev (build 11405, commit 1b43d3116)",
+    "model_sha256": "c06528c5746d3bb8baa72a27938be95abbfd0b226f8471e8a9e365ed0bb066d2",
+    "server_flags": "-m models/Laya-Q8_0.gguf -c 512 -b 512 -ub 512 -t 2 -ngl 0 --host 127.0.0.1 --port 8088",
+    "server_bin": "/home/ubuntu/tether-qvac-decision-models/llama.cpp-oracle/llama-b11405/llama-server",
+    "server_url": "http://127.0.0.1:8088/v1/systemone",
+    "date": "2026-10-05T07:51:36Z",
+    "latency_ms": 168.158
+  },
+  "response": {
+    "model": "/home/ubuntu/tether-qvac-decision-models/models/Laya-Q8_0.gguf",
+    "answers": {
+      "quality": {
+        "type": "score",
+        "score": 2.7858891756085185,
+        "legend": {
+          "0": "level 0",
+          "1": "level 1",
+          "2": "level 2",
+          "3": "level 3",
+          "4": "level 4",
+          "5": "level 5",
+          "6": "level 6",
+          "7": "level 7",
+          "8": "level 8",
+          "9": "level 9"
+        },
+        "probabilities": {
+          "0": 0.11630606850113683,
+          "1": 0.3151848965562666,
+          "2": 0.2270163358121547,
+          "3": 0.08537667029288616,
+          "4": 0.01761627527781266,
+          "5": 0.022651905722955553,
+          "6": 0.08076776793280625,
+          "7": 0.041933384105198555,
+          "8": 0.03964359169901726,
+          "9": 0.05350310409976557
+        },
+        "confidence": 0.1925994749556832
+      }
+    },
+    "usage": {
+      "input_tokens": 88,
+      "output_tokens": 0
+    }
+  }
+}

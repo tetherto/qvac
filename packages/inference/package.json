@@ -94,6 +94,10 @@
       "types": "./dist/plugins/builtin/llamacpp-embedding/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-embedding/plugin.js"
     },
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/plugins/builtin/llamacpp-decision/plugin.d.ts",
+      "import": "./dist/plugins/builtin/llamacpp-decision/plugin.js"
+    },
     "./whispercpp-transcription/plugin": {
       "types": "./dist/plugins/builtin/whispercpp-transcription/plugin.d.ts",
       "import": "./dist/plugins/builtin/whispercpp-transcription/plugin.js"
