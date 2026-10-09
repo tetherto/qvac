@@ -64,7 +64,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
         target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
-        installMissingPrebuilds: true
+        installMissingPrebuilds: true,
+        link: false,
+        verify: false
       })
     )
 
@@ -80,7 +82,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
       ),
       'the bundle resolves #host-addon to the installed platform package'
     )
-    assert.deepEqual(result.addons, [SPLIT_ADDON_ANDROID_PACKAGE])
+    assert.deepEqual(result.addons, [SPLIT_ADDON_ANDROID_PACKAGE, 'bare-signals'])
     assert.deepEqual(result.installedPrebuilds, [
       {
         name: SPLIT_ADDON_ANDROID_PACKAGE,
@@ -106,7 +108,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
         target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
-        installMissingPrebuilds: true
+        installMissingPrebuilds: true,
+        link: false,
+        verify: false
       })
     )
 
@@ -160,7 +164,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
         hosts: ['android-arm64'],
         defer: [SPLIT_ADDON],
         quiet: true,
-        installMissingPrebuilds: true
+        installMissingPrebuilds: true,
+        link: false,
+        verify: false
       })
     )
 
@@ -188,7 +194,6 @@ describe('bundleSdk installMissingPrebuilds', () => {
         error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION
     )
 
-    assert.equal(fs.existsSync(path.join(projectRoot, 'qvac', 'addons.manifest.json')), false)
     assert.equal(fs.existsSync(path.join(projectRoot, 'qvac', 'worker')), false)
   })
 
@@ -202,7 +207,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
       target: 'react-native' as const,
       hosts: ['android-arm64'],
       quiet: true,
-      installMissingPrebuilds: true
+      installMissingPrebuilds: true,
+      link: false,
+      verify: false
     }
 
     await withPath(pm.binDir, () => bundleSdk(options))
@@ -245,7 +252,9 @@ describe('published ASR fallback mappings', () => {
         target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
-        installMissingPrebuilds: true
+        installMissingPrebuilds: true,
+        link: false,
+        verify: false
       })
     )
     assert.ok(

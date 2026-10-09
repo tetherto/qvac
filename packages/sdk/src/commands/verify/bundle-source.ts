@@ -1,8 +1,8 @@
 import path from 'node:path'
 import type Bundle from 'bare-bundle'
 import { DEFAULT_HOSTS } from '@/commands/bundle/constants'
-import { buildNestedPathIndex } from '@/commands/bundle/manifest'
-import { readBundle } from '@/commands/bundle/read-bundle'
+import { buildNestedPathIndex } from '@/commands/bundle/addons'
+import { bundleRoot, readBundle } from '@/commands/bundle/read-bundle'
 import {
   createLimiter,
   deduplicateAddons,
@@ -18,7 +18,7 @@ const LINKED_PREFIX = 'linked:'
 /**
  * Condition naming the addon a `require.addon()` specifier loads. An offloading
  * target such as bare-stow's `bare-sidecar` points it at the binary beside the
- * bundle (`/../node_modules/...`), or at `deferred:` when the package keeps no
+ * bundle (`/../index.bundle.d/...`), or at `deferred:` when the package keeps no
  * binary of its own, as split addons do.
  */
 const ADDON_KEY = 'addon'
@@ -76,13 +76,14 @@ export async function collectAddonsFromBundle(
     diagnostics.emptyResolutions = true
   }
 
-  const pathsByPackage = buildNestedPathIndex(resolutions, projectRoot)
+  const root = bundleRoot(main, projectRoot)
+  const pathsByPackage = buildNestedPathIndex(resolutions, root)
   const analysed = analyseLinkedHosts({
     resolutions,
     main,
     imports,
     hosts: hosts ?? [],
-    projectRoot,
+    projectRoot: root,
     pathsByPackage
   })
 

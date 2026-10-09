@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { bundleSdk } from '@/commands/bundle'
 import {
@@ -15,8 +15,8 @@ import {
 import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
-import { generateAddonsManifest } from '@/commands/bundle/manifest'
-import { readBundle } from '@/commands/bundle/read-bundle'
+import { listBundledAddons } from '@/commands/bundle/addons'
+import { bundleRoot, readBundle } from '@/commands/bundle/read-bundle'
 import { getClientLogger } from '@/logging'
 import { BarePackNodeUnsupportedError, BundleFailedError } from '@/utils/errors-client'
 import { linkDependency } from './fixtures/link-dependency'
@@ -29,12 +29,7 @@ function writeFile(filePath: string, contents: string) {
   fs.writeFileSync(filePath, contents)
 }
 
-function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
-  const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-')))
-  const sdkPath = path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
-  const configPath = path.join(projectRoot, 'qvac.config.json')
-  t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
-
+function writeFakeSdk(sdkPath: string) {
   writeFile(
     path.join(sdkPath, 'package.json'),
     JSON.stringify({
@@ -52,6 +47,15 @@ function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
     'export function startWorker(ipc, ready) { ready(); return async () => {} }\n'
   )
   writeFile(path.join(sdkPath, 'dist', 'llm-plugin.js'), 'export const llmPlugin = {}\n')
+}
+
+function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
+  const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-')))
+  const sdkPath = path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+  const configPath = path.join(projectRoot, 'qvac.config.json')
+  t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+
+  writeFakeSdk(sdkPath)
   writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
 
   linkDependency(projectRoot, 'bare-stow', SDK_DIR)
@@ -114,6 +118,33 @@ describe('generateWorkerEntry', () => {
     const entry = generateWorkerEntry([], '@qvac/sdk', 'custom"provider')
     assert.ok(entry.includes('from "custom\\"provider"'))
   })
+
+  it('imports through the given resolver', () => {
+    const entry = generateWorkerEntry(
+      ['@qvac/sdk/llamacpp-completion/plugin', 'my-pkg/plugin'],
+      '@qvac/sdk',
+      undefined,
+      (specifier) => specifier.replace('@qvac/sdk/', 'file:///sdk/')
+    )
+    assert.match(entry, /import \{ startWorker \} from "file:\/\/\/sdk\/worker"/)
+    assert.match(entry, /import \{ llmPlugin \} from "file:\/\/\/sdk\/llamacpp-completion\/plugin"/)
+    assert.match(entry, /import customPlugin1 from "my-pkg\/plugin"/)
+  })
+})
+
+describe('bundleRoot', () => {
+  it('is the project root for a bundle based there', () => {
+    assert.equal(bundleRoot('/qvac/__main__.mjs', '/work/app'), '/work/app')
+  })
+
+  it('climbs to the base above the project that the bundle names', () => {
+    assert.equal(bundleRoot('/packages/app/qvac/__main__.mjs', '/work/packages/app'), '/work')
+  })
+
+  it('falls back to the project root for a bundle with another main', () => {
+    assert.equal(bundleRoot('/entry.mjs', '/work/app'), '/work/app')
+    assert.equal(bundleRoot(null, '/work/app'), '/work/app')
+  })
 })
 
 describe('inference native dependency boundary', () => {
@@ -157,9 +188,8 @@ describe('inference native dependency boundary', () => {
     })
     const bundle = await readBundle(bundlePath)
     assert.doesNotMatch(JSON.stringify(bundle.resolutions), /ggml-rpc-server|rpc\/ggml-provider/)
-    const { addons } = await generateAddonsManifest({
+    const addons = await listBundledAddons({
       bundlePath,
-      outputDir: projectRoot,
       projectRoot,
       logger: getClientLogger({ enableConsole: false })
     })
@@ -178,11 +208,6 @@ async function assertDecoderExcludedFromBundle(
     'bare-ffmpeg module must not be in the bundle graph'
   )
   assert.ok(JSON.stringify(resolutions).includes('deferred:bare-ffmpeg'))
-  assert.ok(
-    !JSON.stringify(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8'))).includes(
-      'bare-ffmpeg'
-    )
-  )
 }
 
 describe('isBarePackNodeSupported', () => {
@@ -234,6 +259,27 @@ describe('bundleSdk', () => {
     assert.match(fs.readFileSync(result.entryPath, 'utf8'), /from "@qvac\/sdk\/worker"/)
     assert.match(fs.readFileSync(result.harnessPath, 'utf8'), /bare-sidecar/)
     assert.equal((await readBundle(result.bundlePath)).main, '/qvac/__main__.mjs')
+  })
+
+  it('bundles an SDK from outside the project, with its own bare-stow', async (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-outside-')))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    const sdkPath = path.join(root, 'sdk')
+    const projectRoot = path.join(root, 'app')
+    const configPath = path.join(projectRoot, 'qvac.config.json')
+    writeFakeSdk(sdkPath)
+    linkDependency(sdkPath, 'bare-stow', SDK_DIR)
+    writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
+
+    const result = await bundleSdk({ projectRoot, configPath, sdkPath, quiet: true })
+
+    const entry = fs.readFileSync(result.entryPath, 'utf8')
+    assert.ok(
+      entry.includes(JSON.stringify(pathToFileURL(path.join(sdkPath, 'dist', 'worker.js')).href))
+    )
+    const { main, resolutions } = await readBundle(result.bundlePath)
+    assert.ok(main?.endsWith('/app/qvac/__main__.mjs'))
+    assert.ok(Object.keys(resolutions).some((key) => key.endsWith('/sdk/dist/worker.js')))
   })
 
   it('replaces the output of an earlier run', async (t) => {
