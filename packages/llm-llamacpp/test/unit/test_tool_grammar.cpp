@@ -498,6 +498,85 @@ TEST_F(ToolGrammarModelTest, ToolChoiceUnknownFunctionIsRejected) {
   EXPECT_FALSE(model->processPrompt(makePrompt(PLAIN_PROMPT)).empty());
 }
 
+// `tool_calls` on an assistant turn and `tool_call_id` / `name` on a tool
+// turn reach the chat messages, with object arguments serialised to JSON.
+TEST_F(ToolGrammarModelTest, PromptParserReadsPastToolCalls) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"role":"user","content":"Weather in Paris and Rome?"},)"
+      R"({"role":"assistant","content":"","tool_calls":[)"
+      R"({"id":"call_1","name":"get_weather","arguments":{"city":"Paris"}},)"
+      R"({"id":"call_2","name":"get_weather","arguments":"{\"city\":\"Rome\"}"},)"
+      R"({"name":"get_time"}]},)"
+      R"({"role":"tool","content":"18C","tool_call_id":"call_1","name":"get_weather"}])");
+
+  ASSERT_EQ(parsed.chatMsgs.size(), 3u);
+  const common_chat_msg& call = parsed.chatMsgs[1];
+  ASSERT_EQ(call.tool_calls.size(), 3u);
+  EXPECT_EQ(call.tool_calls[0].id, "call_1");
+  EXPECT_EQ(call.tool_calls[0].name, "get_weather");
+  EXPECT_EQ(call.tool_calls[0].arguments, R"({"city":"Paris"})");
+  EXPECT_EQ(call.tool_calls[1].arguments, R"({"city":"Rome"})");
+  EXPECT_EQ(call.tool_calls[2].id, "");
+  EXPECT_EQ(call.tool_calls[2].arguments, "{}");
+  const common_chat_msg& result = parsed.chatMsgs[2];
+  EXPECT_EQ(result.tool_call_id, "call_1");
+  EXPECT_EQ(result.tool_name, "get_weather");
+}
+
+// OpenAI-shaped history leaves `content` null or absent on an assistant turn
+// that only carries `tool_calls`; both read as empty content.
+TEST_F(ToolGrammarModelTest, PromptParserAcceptsEmptyContentOnToolCallTurns) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  for (const char* input :
+       {R"([{"role":"assistant","content":null,"tool_calls":[{"name":"f"}]}])",
+        R"([{"role":"assistant","tool_calls":[{"name":"f"}]}])"}) {
+    const ParsedPromptPayload parsed =
+        LlamaModelTestPeer::formatPrompt(*model, input);
+    ASSERT_EQ(parsed.chatMsgs.size(), 1u) << input;
+    EXPECT_EQ(parsed.chatMsgs[0].content, "") << input;
+    EXPECT_EQ(parsed.chatMsgs[0].tool_calls.size(), 1u) << input;
+  }
+}
+
+// Every malformed shape surfaces as a StatusError, never as a raw picojson
+// type-mismatch exception.
+TEST_F(ToolGrammarModelTest, PromptParserRejectsMalformedToolTurns) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  for (
+      const char* input : {
+          R"([{"role":"user","content":"hi","tool_calls":[]}])",
+          R"([{"role":"assistant","content":"","tool_calls":{}}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"arguments":{}}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":""}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":3}]}])",
+          R"([{"role":"tool","content":"x","tool_call_id":7}])",
+          R"([{"role":"user","content":"hi","tool_call_id":"call_1"}])",
+          R"([{"role":"assistant","content":null}])",
+          R"([{"role":"user","content":5}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":""}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"{"}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"not json"}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"[1]"}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"{\"a\":1} x"}]}])",
+      }) {
+    EXPECT_THROW(
+        LlamaModelTestPeer::formatPrompt(*model, input),
+        qvac_errors::StatusError)
+        << input;
+  }
+}
+
 // Unset keeps fabric's single-call grammar; only `true` renders one that
 // accepts several calls.
 TEST_F(ToolGrammarModelTest, ParallelToolCallsIsOptIn) {

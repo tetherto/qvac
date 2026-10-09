@@ -14,6 +14,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [4. Create Model Instance](#4-create-model-instance)
   - [5. Load Model](#5-load-model)
   - [6. Run Inference](#6-run-inference)
+    - [Tool calling](#tool-calling)
+    - [Batch inference](#batch-inference)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
 - [Assessing fit](#assessing-fit)
@@ -294,6 +296,26 @@ try {
 ```
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
+#### Tool calling
+
+Load with `config.tools: 'true'` and declare tools as `{ type: 'function', ... }` entries in the message array. The model answers a tool request with a tool-call block in its own format (`<tool_call>` for Qwen). To continue the conversation, put the call on an assistant turn as `tool_calls` and the result on a `tool` turn; the chat template renders both natively, so neither needs to be written into `content`.
+
+```javascript
+const response = await model.run([
+  {
+    type: 'function',
+    name: 'get_weather',
+    description: 'Get the weather for a city',
+    parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  },
+  { role: 'user', content: 'Weather in Paris?' },
+  { role: 'assistant', content: '', tool_calls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }] },
+  { role: 'tool', content: '18C', tool_call_id: 'call_1', name: 'get_weather' }
+])
+```
+
+`arguments` is an object or the text of a JSON object, and `content` may be empty on the assistant turn. A malformed tool turn is rejected with `InvalidInputFormat`. [`examples/toolCalling.js`](./examples/toolCalling.js) shows a full round trip.
 
 #### Batch inference
 
