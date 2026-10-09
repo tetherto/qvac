@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "model-interface/vla_model.hpp"
 
@@ -30,8 +31,11 @@ std::string sniffGgufArchitecture(const std::string& ggufPath);
 // `embodiment` selects a multi-embodiment GR00T GGUF's embodiment by tag or
 // numeric cat_id, optionally overriding its camera count (unset = the GGUF's
 // default); ignored by the other architectures.
+// `backendOverride` lists GPU backend families in priority order, e.g.
+// {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const VlaEmbodimentRequest& embodiment = {});
+    const VlaEmbodimentRequest& embodiment = {},
+    const std::vector<std::string>& backendOverride = {});
 
 } // namespace qvac_lib_infer_vla_ggml

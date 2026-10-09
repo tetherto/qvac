@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-09
+
 ### Added
 
 - `assessFit` supports `engine: 'moss-transcribe'` with an explicit audio duration and the existing prompt, hotword and token options. It projects weights, encoder/decoder graphs, KV cache and host memory without loading model weights.
