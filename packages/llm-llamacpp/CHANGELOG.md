@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.58.0] - 2026-10-09
 
 ### Breaking
 
@@ -72,9 +72,19 @@
   the addon creates in it when the model loads (on Windows, in the directory
   itself), e.g. in an Android app's cache directory. The load fails with
   `InvalidArgument` when it is missing, empty, or unusable.
+- CUDA backend on Linux and Windows (NVIDIA), loaded as a module alongside
+  Vulkan. On a GPU load it is preferred over Vulkan; without the module, a
+  driver or an NVIDIA device, selection falls through to Vulkan, then CPU.
+- `backend` load-config field: comma-separated GPU backend priority list
+  (`cuda`, `vulkan`, `metal`, `opencl`, or `auto`), e.g. `'cuda,vulkan'`. An
+  unrecognised name is rejected; a recognised one with no device is skipped.
 
 ### Changed
 
+- TurboQuant and PolarQuant KV-cache types are rejected on CUDA, which has no
+  kernels for them. Use a Vulkan GPU or CPU.
+- Split mode passes the selected backend's GPUs as `--device`, so one card
+  registered under both CUDA and Vulkan is not split across two backends.
 - With `parallel >= 2`, a keyed request's committed state now stays in its
   scheduler slot, and the next request with the same `cacheKey` continues
   from it without a file round-trip, as on the
