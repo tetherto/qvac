@@ -7,8 +7,7 @@ const vm = require("node:vm");
 const packageDir = join(__dirname, "../..");
 const addonSource = readFileSync(join(packageDir, "index.js"), "utf8");
 
-// Runs the generated index.js against a stubbed native binding. Tests that do
-// not exercise RDMA get a TCP-only backend by default.
+// Runs the generated index.js against a stubbed native binding.
 function loadAddon(binding, resolveBackendsDir = () => packageDir) {
   const module = { exports: {} };
   const warnings = [];
@@ -25,9 +24,7 @@ function loadAddon(binding, resolveBackendsDir = () => packageDir) {
         if (name === "@qvac/fabric/backends") {
           return { resolveBackendsDir };
         }
-        if (name === "./binding") {
-          return { rpcBackendSupportsRdma: () => false, ...binding };
-        }
+        if (name === "./binding") return binding;
         throw new Error(`Unexpected mobile require: ${name}`);
       },
     },

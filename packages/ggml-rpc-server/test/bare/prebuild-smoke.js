@@ -9,10 +9,10 @@ Bare.exitCode = 1;
 async function main() {
   const server = await startRpcServer({ device: "CPU" });
   try {
-    // @qvac/fabric enables rpc-rdma for every Linux package and nowhere else,
-    // so a Linux build that reports false has lost RDMA from the packaged
-    // RPC backend.
-    const expectRdma = Bare.platform === "linux";
+    // @qvac/fabric enables rpc-rdma for Linux only, and the backend tries RDMA
+    // only when it can load libibverbs. smoke-packaged.cjs checks the host for
+    // the library and passes the result.
+    const expectRdma = Bare.argv.includes("--expect-rdma=true");
     if (server.rdmaCapable !== expectRdma) {
       throw new Error(
         `Expected rdmaCapable ${expectRdma} on ${Bare.platform}-${Bare.arch}, got ${server.rdmaCapable}`,

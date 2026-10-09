@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0] - Unreleased
+
+### Changed
+
+- Without a `port`, the native server binds a free port itself and reports it,
+  instead of this package picking a free port and releasing it before the
+  server bound it. Another process could take the port in between, which showed
+  up as a rare `RpcServerStartError`. `allocateFreePort()` is still exported.
+- `rdmaCapable` and `expectRdma` now use the capability that `@qvac/fabric`
+  reports, replacing a search of the RPC module for a log line. They mean the
+  server will try RDMA, which on Linux also needs `libibverbs.so.1` installed
+  and `GGML_RPC_NO_RDMA` unset.
+- Linux hosts no longer need `libibverbs1` to start the server. Fabric loads
+  the library at runtime, and without it the server runs over TCP only.
+- Requires an `@qvac/fabric` whose RPC backend exports
+  `ggml_backend_rpc_server_get_port` and `ggml_backend_rpc_rdma_supported`;
+  older releases fail to start with `RpcServerStartError`.
+
 ## [0.2.0] - 2026-10-06
 
 ### Changed

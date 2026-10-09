@@ -4,14 +4,24 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { loadAddon, packageDir } = require("./load-addon.cjs");
 
-function recordingBinding(overrides = {}) {
+// The fake native server reports the requested port, or boundPort for port 0,
+// as the real server does after binding.
+function recordingBinding(
+  overrides = {},
+  { rdmaCapable = false, boundPort = 41234 } = {},
+) {
   const calls = [];
   return {
     calls,
     binding: {
       startServer: (options) => {
         calls.push(options);
-        return Promise.resolve({});
+        const requested = Number(options.endpoint.split(":").pop());
+        return Promise.resolve({
+          handle: {},
+          port: requested === 0 ? boundPort : requested,
+          rdmaCapable,
+        });
       },
       stopServer: () => Promise.resolve(),
       ...overrides,
@@ -19,59 +29,51 @@ function recordingBinding(overrides = {}) {
   };
 }
 
-test("rdmaCapable reports the installed backend's RDMA build", async () => {
-  for (const capable of [false, true]) {
-    let queriedDir;
-    const { binding } = recordingBinding({
-      rpcBackendSupportsRdma: ({ backendsDir }) => {
-        queriedDir = backendsDir;
-        return capable;
-      },
-    });
+test("without a port the native server binds port 0 and reports its port", async () => {
+  const { binding, calls } = recordingBinding({}, { boundPort: 41234 });
+  const server = await loadAddon(binding).startRpcServer();
+  assert.equal(calls[0].endpoint, "127.0.0.1:0");
+  assert.equal(server.port, 41234);
+  assert.equal(server.url, "127.0.0.1:41234");
+  await server.stop();
+});
+
+test("rdmaCapable reports the native server's RDMA support", async () => {
+  for (const rdmaCapable of [false, true]) {
+    const { binding, calls } = recordingBinding({}, { rdmaCapable });
     const server = await loadAddon(binding).startRpcServer({ port: 50052 });
-    assert.equal(server.rdmaCapable, capable);
-    assert.equal(queriedDir, packageDir);
+    assert.equal(server.rdmaCapable, rdmaCapable);
+    assert.equal(calls[0].backendsDir, packageDir);
     await server.stop();
   }
 });
 
-test("the RDMA check reads the backend once per process", async () => {
-  let checks = 0;
-  const { binding } = recordingBinding({
-    rpcBackendSupportsRdma: () => {
-      checks++;
+test("expectRdma is passed to the native server", async () => {
+  for (const expectRdma of [undefined, false, true]) {
+    const { binding, calls } = recordingBinding({}, { rdmaCapable: true });
+    const server = await loadAddon(binding).startRpcServer({
+      port: 50052,
+      expectRdma,
+    });
+    assert.equal(calls[0].expectRdma, expectRdma === true, String(expectRdma));
+    await server.stop();
+  }
+});
+
+test("a native RDMA rejection becomes RpcServerRdmaUnavailableError", async () => {
+  const native = nativeError("RpcServerRdmaUnavailableError");
+  const addon = loadAddon(
+    recordingBinding({ startServer: () => Promise.reject(native) }).binding,
+  );
+  await assert.rejects(
+    addon.startRpcServer({ port: 50052, expectRdma: true }),
+    (error) => {
+      assert.ok(error instanceof addon.RpcServerRdmaUnavailableError);
+      assert.equal(error.name, "RpcServerRdmaUnavailableError");
+      assert.equal(error.cause, native);
       return true;
     },
-  });
-  const addon = loadAddon(binding);
-  for (const port of [50052, 50053]) {
-    const server = await addon.startRpcServer({ port });
-    assert.equal(server.rdmaCapable, true);
-    await server.stop();
-  }
-  assert.equal(checks, 1);
-});
-
-test("expectRdma rejects a TCP-only backend before starting", async () => {
-  const { binding, calls } = recordingBinding();
-  await assert.rejects(
-    loadAddon(binding).startRpcServer({ port: 50052, expectRdma: true }),
-    { name: "RpcServerRdmaUnavailableError" },
   );
-  assert.equal(calls.length, 0);
-});
-
-test("expectRdma starts when the backend supports RDMA", async () => {
-  const { binding, calls } = recordingBinding({
-    rpcBackendSupportsRdma: () => true,
-  });
-  const server = await loadAddon(binding).startRpcServer({
-    port: 50052,
-    expectRdma: true,
-  });
-  assert.equal(server.rdmaCapable, true);
-  assert.equal(calls.length, 1);
-  await server.stop();
 });
 
 test("the server binds loopback by default and normalizes localhost", async () => {
@@ -232,17 +234,6 @@ test("synchronous native failures become typed errors", async () => {
   await assert.rejects(addon.startRpcServer({ port: 50052 }), {
     name: "RpcServerBackendError",
     code: "RpcServerBackendError",
-  });
-
-  const rdmaFailure = loadAddon(
-    recordingBinding({
-      rpcBackendSupportsRdma: () => {
-        throw nativeError("RpcServerBackendError");
-      },
-    }).binding,
-  );
-  await assert.rejects(rdmaFailure.startRpcServer({ port: 50052 }), {
-    name: "RpcServerBackendError",
   });
 });
 

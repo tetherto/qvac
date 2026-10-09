@@ -24,6 +24,11 @@ try {
 }
 ```
 
+Without a `port`, the server binds a free port itself and reports it in
+`server.port`, so no other process can take the port before the server binds
+it. `allocateFreePort()` only finds a port that is free now; prefer leaving
+`port` unset.
+
 The listener accepts IPv4 addresses; `localhost` is normalized to `127.0.0.1`.
 The default host is `127.0.0.1`, but loopback is not private to the host
 application: other local processes (including apps with local TCP access on
@@ -48,9 +53,10 @@ Native server output is written to the host application's platform log.
 
 Errors are classes that can be matched by `name` or `instanceof`. Invalid
 options throw `RpcServerInvalidHostError`, `RpcServerNonLoopbackHostError`,
-`RangeError` (port) or `TypeError` (threads); a failed port lookup throws
-`RpcServerPortAllocationError`; and `expectRdma: true` on a backend without RDMA
-throws `RpcServerRdmaUnavailableError`. Failures reported by the native server
+`RangeError` (port) or `TypeError` (threads); `allocateFreePort()` throws
+`RpcServerPortAllocationError` when it cannot find a port; and
+`expectRdma: true` when the server would not try RDMA throws
+`RpcServerRdmaUnavailableError`. Failures reported by the native server
 extend `RpcServerNativeError`, which carries the native error as `cause` and a
 `code` equal to its `name`:
 
@@ -58,31 +64,28 @@ extend `RpcServerNativeError`, which carries the native error as `cause` and a
 |---|---|
 | `RpcServerDeviceError` | No requested device exists, or no device is available |
 | `RpcServerCacheError` | The cache directory cannot be resolved or created |
-| `RpcServerStartError` | The server cannot be created or bound, or the RPC backend is missing |
+| `RpcServerStartError` | The server cannot be created or bound, the RPC backend is missing, or the installed `@qvac/fabric` is too old |
 | `RpcServerBackendError` | The Fabric backends directory is invalid or cannot be inspected |
 | `RpcServerStopError` | The server does not stop cleanly |
 
 Anything else from the native addon, such as an out-of-memory failure, is
 rethrown unchanged.
 
-## Linux requirements
+## RDMA on Linux
 
-The Linux RPC backend in `@qvac/fabric` links `libibverbs.so.1`, so Linux
-hosts must provide it (`libibverbs1` on Debian/Ubuntu) even when connections
-use TCP. Without it, `startRpcServer()` rejects with an error whose `code` is
-`RpcServerStartError`.
-RDMA also requires the provider package for the host's hardware.
+The Linux RPC backend in `@qvac/fabric` is built with RDMA and loads
+`libibverbs.so.1` (`libibverbs1` on Debian/Ubuntu) at runtime. When the library
+is installed, the server tries RDMA with each client that also supports it and
+falls back to TCP otherwise. Without the library, the server runs over TCP
+only. RDMA also requires the provider package for the host's hardware.
 
-## RDMA-capable builds
-
-On Linux (not Android), `rdmaCapable` reports whether the installed
-`@qvac/fabric` RPC backend was built with RDMA. Such a backend negotiates RDMA
-with each client that also supports it and falls back to TCP otherwise, so
-`rdmaCapable: true` does not guarantee that a given connection uses RDMA. Other
-platforms always report `false`.
+`rdmaCapable` reports whether the server will try RDMA: the library loaded and
+`GGML_RPC_NO_RDMA` is not set. `rdmaCapable: true` does not guarantee that a
+given connection uses RDMA, since the client and the link must support it too.
+Android, iOS, macOS and Windows always report `false`.
 
 To fail closed when RDMA is required, pass `expectRdma: true`. Startup rejects
-with `RpcServerRdmaUnavailableError` when the installed backend lacks RDMA:
+with `RpcServerRdmaUnavailableError` when the server would not try RDMA:
 
 ```js
 const server = await startRpcServer({
@@ -95,8 +98,8 @@ const server = await startRpcServer({
 console.log(server.rdmaCapable)
 ```
 
-Without `expectRdma`, the server starts either way and reports the backend's
-capability in `rdmaCapable`.
+Without `expectRdma`, the server starts either way and reports in
+`rdmaCapable` whether it will try RDMA.
 
 ## Testing
 

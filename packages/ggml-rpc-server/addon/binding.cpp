@@ -121,11 +121,11 @@ struct StartTask {
       js_env_t* taskEnv, js_deferred_t* taskDeferred,
       uv_async_t* taskAsyncHandle, std::string taskEndpoint,
       std::string taskDevices, std::string taskBackendsDir, int taskThreads,
-      bool taskCache)
+      bool taskCache, bool taskExpectRdma)
       : env(taskEnv), deferred(taskDeferred), asyncHandle(taskAsyncHandle),
         endpoint(std::move(taskEndpoint)), devices(std::move(taskDevices)),
         backendsDir(std::move(taskBackendsDir)), threads(taskThreads),
-        cache(taskCache) {}
+        cache(taskCache), expectRdma(taskExpectRdma) {}
 
   js_env_t* env;
   js_deferred_t* deferred;
@@ -135,7 +135,11 @@ struct StartTask {
   std::string backendsDir;
   int threads;
   bool cache;
+  bool expectRdma;
   ServerHandleRef holder;
+  // Set on the worker with holder; read on the JS thread after it completes.
+  int port = -1;
+  bool rdmaCapable = false;
   std::exception_ptr error;
   js_deferred_teardown_t* teardown = nullptr;
   bool envAlive = true;
@@ -378,15 +382,6 @@ bool readBoolean(
   return true;
 }
 
-bool rpcBackendHasRdmaMarker(const std::string& backendsDir) {
-  // Same location ggml_backend_load_all_from_path() loads the module from.
-  std::filesystem::path moduleDir = backendsDir;
-#ifdef BACKENDS_SUBDIR
-  moduleDir /= BACKENDS_SUBDIR;
-#endif
-  return rpc_server::rpcBackendHasRdmaMarker(moduleDir);
-}
-
 ServerHandleRef* unwrapServer(js_env_t* env, js_value_t* value) {
   void* data = nullptr;
   if (js_get_value_external(env, value, &data) != 0 || data == nullptr) {
@@ -401,7 +396,7 @@ ServerHandleRef* unwrapServer(js_env_t* env, js_value_t* value) {
   return handle;
 }
 
-ServerHandleRef createServerOnWorker(const StartTask& task) {
+ServerHandleRef createServerOnWorker(StartTask& task) {
   // GGML's backend registry is process-global. Preserve the old serialized
   // startup behavior when multiple callers start servers concurrently.
   std::scoped_lock lock(startMutex());
@@ -411,6 +406,14 @@ ServerHandleRef createServerOnWorker(const StartTask& task) {
 #endif
   ggml_backend_load_all_from_path(backendPath.string().c_str());
   const RpcServerApi rpcApi = rpc_server::resolveRpcServerApi();
+
+  const bool rdmaCapable = rpcApi.rdmaSupported();
+  if (task.expectRdma && !rdmaCapable) {
+    throw StartError(
+        "RpcServerRdmaUnavailableError",
+        "RDMA is not available: the @qvac/fabric RPC backend lacks it, "
+        "libibverbs.so.1 could not be loaded, or GGML_RPC_NO_RDMA is set");
+  }
 
   std::vector<ggml_backend_dev_t> devices =
       rpc_server::selectDevices(task.devices);
@@ -451,6 +454,15 @@ ServerHandleRef createServerOnWorker(const StartTask& task) {
         "RpcServerStartError",
         "failed to initialize or bind the in-process RPC server");
   }
+  // Port 0 in the endpoint lets the server bind a free port itself.
+  const int port = rpcApi.getPort(server);
+  if (port <= 0) {
+    rpcApi.free(server);
+    throw StartError(
+        "RpcServerStartError", "the in-process RPC server reported no port");
+  }
+  task.port = port;
+  task.rdmaCapable = rdmaCapable;
 
   try {
     return std::make_shared<ServerHandle>(server, rpcApi);
@@ -522,7 +534,22 @@ void resolveStartTask(StartTask* task) {
   }
   // The JS external now owns this shared reference until finalizeServer runs.
   [[maybe_unused]] auto* jsOwnedHolder = externalHolder.release();
-  if (js_resolve_deferred(task->env, task->deferred, external) == 0) {
+  // A failure here leaves task->holder set, so the caller stops the server.
+  js_value_t* result = nullptr;
+  js_value_t* port = nullptr;
+  js_value_t* rdmaCapable = nullptr;
+  if (js_create_object(task->env, &result) != 0 ||
+      js_set_named_property(task->env, result, "handle", external) != 0 ||
+      js_create_int32(task->env, task->port, &port) != 0 ||
+      js_set_named_property(task->env, result, "port", port) != 0 ||
+      js_get_boolean(task->env, task->rdmaCapable, &rdmaCapable) != 0 ||
+      js_set_named_property(task->env, result, "rdmaCapable", rdmaCapable) !=
+          0) {
+    rejectStartTask(
+        task, "InternalError", "failed to create RPC server start result");
+    return;
+  }
+  if (js_resolve_deferred(task->env, task->deferred, result) == 0) {
     attachKeepAlive(task->env, *task->holder);
     task->holder.reset();
   }
@@ -587,7 +614,7 @@ void completeStartTask(uv_async_t* asyncHandle) {
 
 js_value_t* startServerAsync(
     js_env_t* env, std::string endpoint, std::string devices,
-    std::string backendsDir, int threads, bool cache) {
+    std::string backendsDir, int threads, bool cache, bool expectRdma) {
   js_deferred_t* deferred = nullptr;
   js_value_t* promise = nullptr;
   if (js_create_promise(env, &deferred, &promise) != 0) {
@@ -609,7 +636,8 @@ js_value_t* startServerAsync(
       std::move(devices),
       std::move(backendsDir),
       threads,
-      cache);
+      cache,
+      expectRdma);
   auto* task = taskOwner.get();
   asyncHandle->data = task;
   if (uv_async_init(loop, asyncHandle, completeStartTask) != 0) {
@@ -665,11 +693,13 @@ js_value_t* startServer(js_env_t* env, js_callback_info_t* info) try {
       defaultThreads,
       static_cast<unsigned int>(std::numeric_limits<int>::max())));
   bool cache = false;
+  bool expectRdma = false;
   if (!readString(env, options, "endpoint", true, &endpoint) ||
       !readString(env, options, "device", false, &devicesValue) ||
       !readString(env, options, "backendsDir", true, &backendsDir) ||
       !readPositiveInt(env, options, "threads", &threads) ||
-      !readBoolean(env, options, "cache", &cache)) {
+      !readBoolean(env, options, "cache", &cache) ||
+      !readBoolean(env, options, "expectRdma", &expectRdma)) {
     return nullptr;
   }
 
@@ -687,7 +717,8 @@ js_value_t* startServer(js_env_t* env, js_callback_info_t* info) try {
       std::move(devicesValue),
       std::move(backendsDir),
       threads,
-      cache);
+      cache,
+      expectRdma);
 } catch (const std::bad_alloc&) {
   js_throw_error(env, "OutOfMemory", "failed to allocate RPC server state");
   return nullptr;
@@ -724,35 +755,6 @@ js_value_t* stopServer(js_env_t* env, js_callback_info_t* info) try {
   return nullptr;
 }
 
-js_value_t*
-rpcBackendSupportsRdma(js_env_t* env, js_callback_info_t* info) try {
-  size_t argc = 1;
-  std::array<js_value_t*, 1> argv{nullptr};
-  if (js_get_callback_info(env, info, &argc, argv.data(), nullptr, nullptr) !=
-      0) {
-    return nullptr;
-  }
-  if (argc != 1) {
-    js_throw_type_error(env, "InvalidArgument", "backend options are required");
-    return nullptr;
-  }
-  std::string backendsDir;
-  if (!readString(env, argv.front(), "backendsDir", true, &backendsDir)) {
-    return nullptr;
-  }
-  js_value_t* result = nullptr;
-  if (js_get_boolean(env, rpcBackendHasRdmaMarker(backendsDir), &result) != 0) {
-    return nullptr;
-  }
-  return result;
-} catch (const std::exception& error) {
-  js_throw_error(env, "RpcServerBackendError", error.what());
-  return nullptr;
-} catch (...) {
-  js_throw_error(env, "RpcServerBackendError", "unknown native error");
-  return nullptr;
-}
-
 js_value_t* rpcServerExports(js_env_t* env, js_value_t* target) {
   // Windows delay-loads qvac__fabric@0.bare and resolves it through Bare's
   // addon registry, which only answers while Bare is loading or initializing
@@ -775,7 +777,6 @@ js_value_t* rpcServerExports(js_env_t* env, js_value_t* target) {
 
   V("startServer", startServer)
   V("stopServer", stopServer)
-  V("rpcBackendSupportsRdma", rpcBackendSupportsRdma)
 
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)

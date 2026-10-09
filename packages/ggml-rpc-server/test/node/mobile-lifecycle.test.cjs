@@ -5,13 +5,16 @@ const { join } = require("node:path");
 const { test } = require("node:test");
 const { loadAddon, packageDir } = require("./load-addon.cjs");
 
+// What the native startServer resolves with for a server on port 50052.
+const started = () => ({ handle: {}, port: 50052, rdmaCapable: false });
+
 test("packed mobile bundles use the addon's staged prebuilds", async () => {
   let receivedOptions;
   const addon = loadAddon(
     {
       startServer: (options) => {
         receivedOptions = options;
-        return Promise.resolve({});
+        return Promise.resolve(started());
       },
       stopServer: () => Promise.resolve(),
     },
@@ -30,7 +33,7 @@ test("mobile server handle stays pinned until asynchronous stop completes", asyn
   });
   let stopCalls = 0;
   const addon = loadAddon({
-    startServer: () => Promise.resolve({}),
+    startServer: () => Promise.resolve(started()),
     stopServer: () => {
       stopCalls++;
       return stopPending;
@@ -53,7 +56,7 @@ test("mobile server handle stays pinned until asynchronous stop completes", asyn
 test("mobile server handle stays pinned if stop fails and can be retried", async () => {
   let stopCalls = 0;
   const addon = loadAddon({
-    startServer: () => Promise.resolve({}),
+    startServer: () => Promise.resolve(started()),
     stopServer: () => {
       stopCalls++;
       return stopCalls === 1
@@ -84,7 +87,7 @@ test("mobile startup awaits the native result without blocking JS work", async (
   await Promise.resolve();
   assert.equal(addon.activeHandleCount(), 0);
 
-  finishStart({});
+  finishStart(started());
   const server = await starting;
   assert.equal(addon.activeHandleCount(), 1);
   await server.stop();

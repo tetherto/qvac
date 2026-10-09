@@ -2,7 +2,6 @@
 #include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -17,7 +16,6 @@
 
 namespace {
 
-using namespace std::string_literals;
 using rpc_server::RpcServerApi;
 using rpc_server::ServerRunner;
 
@@ -79,6 +77,8 @@ RpcServerApi fakeApi() {
       .run = fakeRun,
       .stop = fakeStop,
       .free = fakeFree,
+      .getPort = nullptr,
+      .rdmaSupported = nullptr,
   };
 }
 
@@ -203,66 +203,8 @@ TEST_F(ResolveRpcServerApi, FindsTheLifecycleEntryPoints) {
   EXPECT_NE(api.run, nullptr);
   EXPECT_NE(api.stop, nullptr);
   EXPECT_NE(api.free, nullptr);
-}
-
-class TempDir {
-public:
-  TempDir() {
-    const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
-    path_ = std::filesystem::temp_directory_path() /
-            (std::string("qvac-rpc-") + info->test_suite_name() + "-" +
-             info->name());
-    std::filesystem::remove_all(path_);
-    std::filesystem::create_directories(path_);
-  }
-  ~TempDir() {
-    std::error_code error;
-    std::filesystem::remove_all(path_, error);
-  }
-
-  TempDir(const TempDir&) = delete;
-  TempDir& operator=(const TempDir&) = delete;
-  TempDir(TempDir&&) = delete;
-  TempDir& operator=(TempDir&&) = delete;
-
-  [[nodiscard]] const std::filesystem::path& path() const { return path_; }
-
-  void writeModule(const std::string& contents) const {
-    std::ofstream module(path_ / "libqvac-ggml-rpc.so", std::ios::binary);
-    module << contents;
-  }
-
-private:
-  std::filesystem::path path_;
-};
-
-TEST(RpcBackendHasRdmaMarker, MissingModuleIsNotRdma) {
-  const TempDir dir;
-  EXPECT_FALSE(rpc_server::rpcBackendHasRdmaMarker(dir.path()));
-}
-
-TEST(RpcBackendHasRdmaMarker, EmptyModuleIsNotRdma) {
-  const TempDir dir;
-  dir.writeModule("");
-  EXPECT_FALSE(rpc_server::rpcBackendHasRdmaMarker(dir.path()));
-}
-
-TEST(RpcBackendHasRdmaMarker, TcpOnlyModuleIsNotRdma) {
-  const TempDir dir;
-  dir.writeModule(
-      "\x7f"
-      "ELF\0tcp transport only"s);
-  EXPECT_FALSE(rpc_server::rpcBackendHasRdmaMarker(dir.path()));
-}
-
-TEST(RpcBackendHasRdmaMarker, MarkerIsReportedOnlyOnDesktopLinux) {
-  const TempDir dir;
-  dir.writeModule("\0\0RDMA auto-negotiate enabled\0"s);
-#if defined(__linux__) && !defined(__ANDROID__)
-  EXPECT_TRUE(rpc_server::rpcBackendHasRdmaMarker(dir.path()));
-#else
-  EXPECT_FALSE(rpc_server::rpcBackendHasRdmaMarker(dir.path()));
-#endif
+  EXPECT_NE(api.getPort, nullptr);
+  EXPECT_NE(api.rdmaSupported, nullptr);
 }
 
 #ifdef _WIN32
