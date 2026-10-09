@@ -339,14 +339,14 @@ jobs:
 
       # After npm install, which would otherwise restore the released fabric.
       - name: Download fabric-prebuilds for overlay
-        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers), matrix.package) }}
+        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers || '[]'), matrix.package) }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: ${{ inputs.fabric-overlay-artifact }}
           path: ${{ runner.temp }}/fabric-prebuilds
 
       - name: Overlay PR @qvac/fabric prebuilds
-        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers), matrix.package) }}
+        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers || '[]'), matrix.package) }}
         uses: ./.github/actions/overlay-local-fabric
         with:
           workdir: ${{ matrix.workdir }}
@@ -713,7 +713,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
 
   cpp-tests-audiogen:
     needs: matrix
@@ -740,7 +740,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'model-fit') && inputs.fabric-overlay-artifact || '' }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'model-fit') && inputs.fabric-overlay-artifact || '' }}
 
   cpp-tests-translation:
     needs: matrix
@@ -755,7 +755,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'translation-nmtcpp') && inputs.fabric-overlay-artifact || '' }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'translation-nmtcpp') && inputs.fabric-overlay-artifact || '' }}
 
   coverage-report:
     permissions:
