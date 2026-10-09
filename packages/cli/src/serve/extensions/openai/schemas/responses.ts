@@ -10,6 +10,7 @@ import {
   extractGenerationParams,
   extractToolChoice,
   withToolChoice,
+  withParallelToolCalls,
   type GenerationParams,
   type ResponseFormat
 } from '@/serve/extensions/openai/schemas/common'
@@ -428,9 +429,13 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
   return {
     history,
     tools,
-    generationParams: withToolChoice(
-      extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
-      extractToolChoice(body as Record<string, unknown>, tools)
+    generationParams: withParallelToolCalls(
+      withToolChoice(
+        extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
+        extractToolChoice(body as Record<string, unknown>, tools)
+      ),
+      parallelToolCalls,
+      tools
     ),
     responseFormat: responseFmt,
     storeEnabled,

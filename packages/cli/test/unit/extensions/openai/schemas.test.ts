@@ -42,7 +42,9 @@ import {
   historyPrefixFromStoredResponse,
   UnsupportedToolTypeError,
   InvalidResponsesConversationError,
-  InvalidResponsesBackgroundError
+  InvalidResponsesBackgroundError,
+  responsesBody,
+  toSdkResponsesArgs
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   parseLegacyPrompt,
@@ -1400,7 +1402,7 @@ describe('chat tool_choice wiring', () => {
   })
 
   it('leaves generationParams undefined when nothing was set', () => {
-    const args = toSdkChatArgs(chatCompletionsBody.parse(body({})), 'hermes')
+    const args = toSdkChatArgs(chatCompletionsBody.parse(body({ tools: undefined })), 'hermes')
     assert.equal(args.generationParams, undefined)
   })
 
@@ -1411,5 +1413,57 @@ describe('chat tool_choice wiring', () => {
       tool_choice: 'required'
     })
     assert.throws(() => toSdkChatArgs(parsed, 'hermes'), InvalidToolChoiceError)
+  })
+})
+
+describe('parallel_tool_calls wiring', () => {
+  const tools = [
+    {
+      type: 'function',
+      function: { name: 'get_weather', parameters: { type: 'object', properties: {} } }
+    }
+  ]
+  const messages = [{ role: 'user', content: 'Weather in Lugano and Rome?' }]
+
+  function chatParams(extra: Record<string, unknown>) {
+    return toSdkChatArgs(chatCompletionsBody.parse({ model: 'm', messages, ...extra }), 'hermes')
+      .generationParams
+  }
+
+  function responsesParams(extra: Record<string, unknown>) {
+    return toSdkResponsesArgs(responsesBody.parse({ model: 'm', input: 'hi', ...extra }))
+      .generationParams
+  }
+
+  it('defaults to true on a chat request with tools', () => {
+    assert.deepEqual(chatParams({ tools }), { parallel_tool_calls: true })
+  })
+
+  it('forwards an explicit false on a chat request', () => {
+    assert.deepEqual(chatParams({ tools, parallel_tool_calls: false }), {
+      parallel_tool_calls: false
+    })
+  })
+
+  it('is not sent without tools', () => {
+    assert.equal(chatParams({ parallel_tool_calls: true }), undefined)
+  })
+
+  it('rides along with tool_choice', () => {
+    assert.deepEqual(chatParams({ tools, tool_choice: 'required' }), {
+      tool_choice: 'required',
+      parallel_tool_calls: true
+    })
+  })
+
+  it('defaults to true on a responses request with tools and forwards false', () => {
+    const responsesTools = [
+      { type: 'function', name: 'get_weather', parameters: { type: 'object' } }
+    ]
+    assert.deepEqual(responsesParams({ tools: responsesTools }), { parallel_tool_calls: true })
+    assert.deepEqual(responsesParams({ tools: responsesTools, parallel_tool_calls: false }), {
+      parallel_tool_calls: false
+    })
+    assert.equal(responsesParams({}), undefined)
   })
 })

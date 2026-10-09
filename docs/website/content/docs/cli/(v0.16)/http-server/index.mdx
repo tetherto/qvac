@@ -546,6 +546,9 @@ form to target one tool.
 cannot be targeted through `tool_choice` and the request returns
 `400 invalid_tool_choice`. Rename the tool to target it.
 
+`parallel_tool_calls` (default `true`) lets one response carry several tool
+calls, each in its own `tool_calls` entry; set it to `false` to get at most one.
+
 A tool call the model emits that fails to parse or validate is dropped, so the
 response comes back with `finish_reason: "stop"` and no `tool_calls`. The server
 log records what happened (`toolerrors=1 (PARSE_ERROR)`) — the OpenAI response
