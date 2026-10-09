@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { bundleSdk } from '@/commands/bundle'
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
-import { generateAddonsManifest } from '@/commands/bundle/manifest'
+import { listBundledAddons } from '@/commands/bundle/addons'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import { getClientLogger } from '@/logging'
 import { BundleFailedError, UnexpectedDeferredImportsError } from '@/utils/errors-client'
@@ -151,9 +151,8 @@ describe('inference native dependency boundary', () => {
     })
     const bundle = await readBundle(bundlePath)
     assert.doesNotMatch(JSON.stringify(bundle.resolutions), /ggml-rpc-server|rpc\/ggml-provider/)
-    const { addons } = await generateAddonsManifest({
+    const addons = await listBundledAddons({
       bundlePath,
-      outputDir: projectRoot,
       projectRoot,
       logger: getClientLogger({ enableConsole: false })
     })
@@ -172,11 +171,6 @@ async function assertDecoderExcludedFromBundle(
     'bare-ffmpeg module must not be in the bundle graph'
   )
   assert.ok(JSON.stringify(resolutions).includes('deferred:bare-ffmpeg'))
-  assert.ok(
-    !JSON.stringify(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8'))).includes(
-      'bare-ffmpeg'
-    )
-  )
 }
 
 describe('bundleSdk', () => {

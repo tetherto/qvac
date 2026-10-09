@@ -565,7 +565,7 @@ function detectTargetHosts(forgeConfig, argv = process.argv.slice(2)) {
  * @param {{ bundleSdk: Function, verifyBundle: Function, hasErrors: Function, formatVerifyBundleResult: Function }} commands
  * @param {string} projectDir
  * @param {{ configPath?: string|null, hosts?: string[]|null }} options
- * @returns {Promise<{ addons: string[], bundlePath: string, manifestPath: string }>}
+ * @returns {Promise<{ addons: string[], bundlePath: string }>}
  */
 async function runBundleAndVerify(commands, projectDir, options) {
   const { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } = commands

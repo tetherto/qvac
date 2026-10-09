@@ -80,7 +80,7 @@ export function registerBundleCommand(program: Command): void {
             // still produce the bundle.
             console.warn(`\n⚠️  ${error.message}\n`)
             if (error instanceof HostPrebuildsInstallRefusedError) {
-              // bundleSdk wrote the bundle and its manifest before refusing.
+              // bundleSdk wrote the bundle before refusing.
               console.warn(
                 '   Bundled without installing them. Pass --no-install to skip this step.\n'
               )

@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import Bundle from 'bare-bundle'
-import { buildNestedPathIndex } from '@/commands/bundle/manifest'
+import { buildNestedPathIndex } from '@/commands/bundle/addons'
 import { readBundle } from '@/commands/bundle/read-bundle'
 
 describe('readBundle', () => {

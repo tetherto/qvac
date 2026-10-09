@@ -106,10 +106,6 @@ describe('bundleSdk installMissingPrebuilds', () => {
         error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION
     )
 
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, 'qvac', 'addons.manifest.json'), 'utf8')
-    ) as { addons: string[] }
-    assert.deepEqual(manifest.addons, [SPLIT_ADDON])
     assert.ok(
       (await bundledModules(projectRoot)).some((key) =>
         key.endsWith('fake-ggml/addon-unavailable.js')

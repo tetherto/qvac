@@ -122,7 +122,6 @@ export async function runResourceCollectorPackagingCheck(
     const report = await dependencies.acceptResourceCollectorPackaging({
       projectRoot: temporaryProjectRoot,
       bundlePath: bundle.bundlePath,
-      manifestPath: bundle.manifestPath,
       hosts
     })
     const output = options.json

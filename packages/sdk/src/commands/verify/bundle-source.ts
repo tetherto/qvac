@@ -1,7 +1,7 @@
 import path from 'node:path'
 import type Bundle from 'bare-bundle'
 import { DEFAULT_HOSTS } from '@/commands/bundle/constants'
-import { buildNestedPathIndex } from '@/commands/bundle/manifest'
+import { buildNestedPathIndex } from '@/commands/bundle/addons'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
   createLimiter,

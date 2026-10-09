@@ -27,11 +27,15 @@ const REPORT: ResourceCollectorAcceptanceReport = {
 }
 
 const BUNDLE: BundleSdkResult = {
-  bundlePath: '/tmp/project/qvac/worker.bundle.js',
+  target: 'bare-sidecar',
+  hosts: ['linux-x64'],
+  entryPath: '/tmp/project/qvac/worker.entry.mjs',
+  harnessPath: '/tmp/project/qvac/worker/index.mjs',
+  bundlePath: '/tmp/project/qvac/worker/index.bundle',
   plugins: [],
   addons: ['bare-cpu-info', 'bare-gpu-info'],
-  entryPaths: { worker: '/tmp/project/qvac/worker.entry.mjs' },
-  manifestPath: '/tmp/project/qvac/addons.manifest.json'
+  installedPrebuilds: [],
+  linked: []
 }
 
 describe('parseResourceCollectorCheckArgs', () => {
@@ -142,7 +146,6 @@ describe('runResourceCollectorPackagingCheck', () => {
       {
         projectRoot: '/tmp/project',
         bundlePath: BUNDLE.bundlePath,
-        manifestPath: BUNDLE.manifestPath,
         hosts: ['linux-x64']
       }
     ])

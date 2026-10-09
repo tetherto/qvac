@@ -3,20 +3,14 @@ import path from 'node:path'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import type { Logger } from '@/logging/types'
 
-interface GenerateAddonsManifestOptions {
+interface ListBundledAddonsOptions {
   bundlePath: string
-  outputDir: string
   projectRoot: string
   logger: Logger
   includeAudioDecoder?: boolean
 }
 
 export const AUDIO_DECODER_ADDON = 'bare-ffmpeg'
-
-interface GenerateAddonsManifestResult {
-  manifestPath: string
-  addons: string[]
-}
 
 const NODE_MODULES_RE = /\/node_modules\/(@[^/]+\/[^/]+|[^/]+)(?=\/)/g
 
@@ -44,12 +38,9 @@ export function buildNestedPathIndex(
   return index
 }
 
-export async function generateAddonsManifest(
-  options: GenerateAddonsManifestOptions
-): Promise<GenerateAddonsManifestResult> {
-  const { bundlePath, outputDir, projectRoot, logger, includeAudioDecoder = true } = options
-
-  logger.info('\n📦 Generating addons manifest...')
+/** The native addon packages the bundle's module graph loads, sorted by name. */
+export async function listBundledAddons(options: ListBundledAddonsOptions): Promise<string[]> {
+  const { bundlePath, projectRoot, logger, includeAudioDecoder = true } = options
 
   const bundle = await readBundle(bundlePath)
   const pathsByPackage = buildNestedPathIndex(bundle.resolutions, projectRoot)
@@ -72,22 +63,5 @@ export async function generateAddonsManifest(
     }
   }
 
-  addons.sort()
-
-  const bundleId = bundle.id ?? 'unknown'
-
-  const manifest = {
-    version: 1,
-    bundleId,
-    addons
-  }
-
-  const manifestPath = path.join(outputDir, 'addons.manifest.json')
-  await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
-
-  logger.info(`   Found ${pathsByPackage.size} packages in bundle graph`)
-  logger.info(`   Identified ${addons.length} native addons: ${addons.join(', ') || '(none)'}`)
-  logger.info(`   Wrote ${manifestPath}`)
-
-  return { manifestPath, addons }
+  return addons.sort()
 }

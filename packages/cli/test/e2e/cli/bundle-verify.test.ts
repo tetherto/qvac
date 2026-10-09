@@ -50,10 +50,6 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
     })
     assert.equal(bundle.code, 0, `bundle sdk failed:\n${bundle.output}`)
     assert.ok(await exists(join(dir, DESKTOP_BUNDLE)), `expected ${DESKTOP_BUNDLE}`)
-    assert.ok(
-      await exists(join(dir, 'qvac', 'addons.manifest.json')),
-      'expected qvac/addons.manifest.json'
-    )
 
     const verify = await runCli(
       ['verify', 'bundle', '--addons-source', join(dir, DESKTOP_BUNDLE), '--host', HOST],
@@ -83,10 +79,6 @@ describe('cli: bundle sdk addon platform packages', () => {
     assert.match(bundle.output, /Bundled without installing them/)
     assert.doesNotMatch(bundle.output, /Bundling again/, 'a refused install bundles once')
     assert.ok(await exists(join(dir, PHONE_BUNDLE)), `expected ${PHONE_BUNDLE}`)
-    assert.ok(
-      await exists(join(dir, 'qvac', 'addons.manifest.json')),
-      'expected qvac/addons.manifest.json'
-    )
     assert.ok(!(await exists(join(dir, 'package.json'))), 'package.json must not be created')
   })
 
