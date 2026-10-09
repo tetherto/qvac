@@ -220,9 +220,10 @@ See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-te
 - `test-e2e-smoke` — runs the `smoke` suite **plus the tests this PR touched**, on desktop and
   mobile consumers. The smoke suite is only a fraction of the catalog, so without this a green
   smoke run says nothing about tests the PR added or changed. "Touched" means changed files under
-  `packages/sdk/e2e/{tests,fixtures,assets}`, plus an inference engine directory, an SDK
-  `client/api` file, and a handler module registered in `registry.ts`. Source with no declared link
-  to a test maps to nothing and leaves a plain smoke run.
+  `packages/sdk/e2e/{tests,fixtures,assets}`, plus an inference engine directory, an addon
+  dependency line in the inference or SDK manifest, an inference schema, an SDK `client/api`
+  file, and a handler module registered in `registry.ts`. Source with no declared link to a test
+  maps to nothing and leaves a plain smoke run.
   A PR comment reports what was added, and anything
   the impact mapper could not attribute. See
   [Smoke runs cover the tests a PR touched](../../../docs/ci/LABELS.md#smoke-runs-cover-the-tests-a-pr-touched).
