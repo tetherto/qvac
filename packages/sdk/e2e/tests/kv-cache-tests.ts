@@ -39,94 +39,54 @@ const kvCompletionSteps = (): Step[] => [
 ]
 
 /**
- * One two-turn conversation over a named cache, with reasoning compaction set one way or the other,
- * leaving the second turn's cached-token count bound.
- */
-const thinkingSession = (cacheKey: string, removeThinking: boolean, as: string): Step[] => [
-  { call: { method: 'deleteCache', params: { kvCacheKey: cacheKey } } },
-  {
-    call: {
-      method: 'completion',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        history: [{ role: 'user', content: '$params.messages[0]' }],
-        stream: false,
-        kvCache: cacheKey,
-        generationParams: {
-          reasoning_budget: '$params.generationParams.reasoning_budget',
-          predict: '$params.generationParams.predict',
-          temp: '$params.generationParams.temp',
-          seed: '$params.generationParams.seed',
-          remove_thinking_from_context: removeThinking
-        }
-      },
-      as: `${as}First`
-    }
-  },
-  { project: { from: `$${as}First`, path: 'text', as: `${as}FirstText` } },
-  {
-    call: {
-      method: 'completion',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        history: [
-          { role: 'user', content: '$params.messages[0]' },
-          { role: 'assistant', content: `$${as}FirstText` },
-          { role: 'user', content: '$params.messages[1]' }
-        ],
-        stream: false,
-        kvCache: cacheKey,
-        generationParams: {
-          reasoning_budget: '$params.generationParams.reasoning_budget',
-          predict: '$params.generationParams.predict',
-          temp: '$params.generationParams.temp',
-          seed: '$params.generationParams.seed',
-          remove_thinking_from_context: removeThinking
-        }
-      },
-      as: `${as}Second`
-    }
-  },
-  { project: { from: `$${as}Second`, path: 'stats.cacheTokens', as: `${as}CacheTokens` } }
-]
-
-/**
  * One tool-calling turn over the named cache, leaving its text, its tool call and its cached-token
- * count bound.
+ * count bound. The tool set, the generation params and the expected call come from the test's
+ * params unless the turn names its own.
  */
-const toolTurn = (history: unknown, as: string): Step[] => [
-  {
-    call: {
-      method: 'completion',
-      collect: 'text',
-      params: {
-        modelId: '$model',
-        history,
-        stream: '$params.stream',
-        kvCache: '$params.cacheKey',
-        tools: '$params.tools',
-        generationParams: '$params.generationParams'
-      },
-      as: `${as}Turn`
-    }
-  },
-  { project: { from: `$${as}Turn`, path: 'text', as: `${as}Text` } },
-  { project: { from: `$${as}Turn`, path: 'toolCalls', as: `${as}Calls` } },
-  {
-    assert: {
-      on: `$${as}Calls`,
-      named: 'toolCallShape',
-      with: {
-        declared: ['$params.declaredTool'],
-        name: '$params.declaredTool',
-        argKeys: '$params.requiredArgs'
+const toolTurn = (
+  history: unknown,
+  as: string,
+  turn: {
+    tools?: string
+    generationParams?: string
+    declared?: string[]
+    expectedTool?: string
+    requiredArgs?: string
+  } = {}
+): Step[] => {
+  const expectedTool = turn.expectedTool ?? '$params.declaredTool'
+  return [
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history,
+          stream: '$params.stream',
+          kvCache: '$params.cacheKey',
+          tools: turn.tools ?? '$params.tools',
+          generationParams: turn.generationParams ?? '$params.generationParams'
+        },
+        as: `${as}Turn`
       }
-    }
-  },
-  { project: { from: `$${as}Turn`, path: 'stats.cacheTokens', as: `${as}CacheTokens` } }
-]
+    },
+    { project: { from: `$${as}Turn`, path: 'text', as: `${as}Text` } },
+    { project: { from: `$${as}Turn`, path: 'toolCalls', as: `${as}Calls` } },
+    {
+      assert: {
+        on: `$${as}Calls`,
+        named: 'toolCallShape',
+        with: {
+          declared: turn.declared ?? [expectedTool],
+          name: expectedTool,
+          argKeys: turn.requiredArgs ?? '$params.requiredArgs'
+        }
+      }
+    },
+    { project: { from: `$${as}Turn`, path: 'stats.cacheTokens', as: `${as}CacheTokens` } }
+  ]
+}
 
 /**
  * The two cancellation tests below stay on their executor for the same reason `finetune-pause-
@@ -498,37 +458,6 @@ export const kvCacheStatsVerification: TestDefinition = {
   metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 90000 }
 }
 
-// Reasoning-model dependency ("tools" is the cross-platform Qwen3 build),
-// since the default `llm` resource is Llama and emits no reasoning block.
-/** Two identical two-turn conversations, one with reasoning compaction on. */
-export const kvCacheRemoveThinkingCompaction: TestDefinition = {
-  testId: 'kv-cache-remove-thinking-compaction',
-  params: {
-    cacheKeyOn: 'remove-thinking-on-session',
-    cacheKeyOff: 'remove-thinking-off-session',
-    messages: [
-      'Think step by step, then answer: what is 17 multiplied by 23?',
-      'Now add 100 to that result.'
-    ],
-    // Bounded, not disabled: the assertion needs a reasoning block, and a
-    // positive budget still force-emits the closing think tag.
-    generationParams: { reasoning_budget: 128, predict: 256, temp: 0, seed: 42 }
-  },
-  expectation: { validation: 'type', expectedType: 'string' },
-  suites: ['smoke'],
-  steps: [
-    { useModel: { deps: ['tools'], as: 'model' } },
-    ...thinkingSession('$params.cacheKeyOn', true, 'on'),
-    ...thinkingSession('$params.cacheKeyOff', false, 'off'),
-    { compare: { left: '$offCacheTokens', right: '$onCacheTokens', named: 'greaterThan' } }
-  ],
-  finally: [
-    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKeyOn' } } },
-    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKeyOff' } } }
-  ],
-  metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 180000 }
-}
-
 export const kvCacheNoSystemPrompt: TestDefinition = {
   testId: 'kv-cache-no-system-prompt',
   params: {
@@ -591,6 +520,125 @@ export const kvCacheToolsSequentialSave: TestDefinition = {
         named: 'greaterThan'
       }
     }
+  ],
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKey' } } }],
+  metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 90000 }
+}
+
+const CALCULATOR_TOOL = {
+  type: 'function',
+  name: 'calculator',
+  description: 'Performs basic math operations',
+  parameters: {
+    type: 'object',
+    properties: {
+      operation: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide'] },
+      a: { type: 'number' },
+      b: { type: 'number' }
+    },
+    required: ['operation', 'a', 'b']
+  }
+}
+
+const WEATHER_TOOL = {
+  type: 'function',
+  name: 'get_weather',
+  description: 'Returns the current weather for a city',
+  parameters: {
+    type: 'object',
+    properties: { city: { type: 'string', description: 'City name' } },
+    required: ['city']
+  }
+}
+
+/**
+ * A tool set that changes between turns on one named key. The turn after the change reuses the
+ * same cache file up to where the prompts differ, and the turn after that is warm again under the
+ * new set.
+ */
+export const kvCacheToolSetChange: TestDefinition = {
+  testId: 'kv-cache-tool-set-change',
+  params: {
+    cacheKey: 'tool-set-change-session',
+    tools: [CALCULATOR_TOOL],
+    changedTools: [CALCULATOR_TOOL, WEATHER_TOOL],
+    messages: ['What is 10 + 20?', 'What is the weather in Paris?', 'Now what is 5 + 5?'],
+    stream: true,
+    generationParams: { temp: 0, top_k: 1, seed: 42 },
+    declaredTool: 'calculator',
+    requiredArgs: ['operation', 'a', 'b'],
+    addedTool: 'get_weather',
+    addedToolArgs: ['city']
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKey' } } },
+    { useModel: { deps: ['tools'], as: 'model' } },
+    ...toolTurn([{ role: 'user', content: '$params.messages[0]' }], 'first'),
+    ...toolTurn(
+      [
+        { role: 'user', content: '$params.messages[0]' },
+        { role: 'assistant', content: '$firstText' },
+        { role: 'user', content: '$params.messages[1]' }
+      ],
+      'second',
+      {
+        tools: '$params.changedTools',
+        declared: ['$params.declaredTool', '$params.addedTool'],
+        expectedTool: '$params.addedTool',
+        requiredArgs: '$params.addedToolArgs'
+      }
+    ),
+    // The same file served the changed set: a fresh one would report no cached tokens.
+    { assert: { on: '$secondCacheTokens', named: 'atLeast', with: { value: 1 } } },
+    ...toolTurn(
+      [
+        { role: 'user', content: '$params.messages[0]' },
+        { role: 'assistant', content: '$firstText' },
+        { role: 'user', content: '$params.messages[1]' },
+        { role: 'assistant', content: '$secondText' },
+        { role: 'user', content: '$params.messages[2]' }
+      ],
+      'third',
+      { tools: '$params.changedTools', declared: ['$params.declaredTool', '$params.addedTool'] }
+    ),
+    { compare: { left: '$thirdCacheTokens', right: '$secondCacheTokens', named: 'greaterThan' } }
+  ],
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKey' } } }],
+  metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 120000 }
+}
+
+/**
+ * `tool_choice: 'required'` on a warm turn forces a call: the grammar is armed from the tool block
+ * every turn carries, so a prompt that would otherwise be answered in prose calls the tool.
+ */
+export const kvCacheWarmToolChoiceRequired: TestDefinition = {
+  testId: 'kv-cache-warm-tool-choice-required',
+  params: {
+    cacheKey: 'warm-tool-choice-required-session',
+    tools: [CALCULATOR_TOOL],
+    messages: ['What is 10 + 20?', 'Say hello.'],
+    stream: true,
+    generationParams: { temp: 0, top_k: 1, seed: 42 },
+    requiredGenerationParams: { temp: 0, top_k: 1, seed: 42, tool_choice: 'required' },
+    declaredTool: 'calculator',
+    requiredArgs: ['operation', 'a', 'b']
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKey' } } },
+    { useModel: { deps: ['tools'], as: 'model' } },
+    ...toolTurn([{ role: 'user', content: '$params.messages[0]' }], 'first'),
+    ...toolTurn(
+      [
+        { role: 'user', content: '$params.messages[0]' },
+        { role: 'assistant', content: '$firstText' },
+        { role: 'user', content: '$params.messages[1]' }
+      ],
+      'second',
+      { generationParams: '$params.requiredGenerationParams' }
+    ),
+    { assert: { on: '$secondCacheTokens', named: 'atLeast', with: { value: 1 } } }
   ],
   finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKey' } } }],
   metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 90000 }
@@ -667,10 +715,10 @@ export const kvCacheAutoConcurrency: TestDefinition = {
 }
 
 // A cancelled follow-up turn must not cost the session its committed cache.
-// The addon rewinds a cancelled run to the pre-request state and the engine
-// keeps the file, so the next turn stays warm. Proven by prompt tokens: the
-// warm turn sends only its own message, while the same history without a
-// cache sends all of it.
+// The addon keeps what a cancel after prefill decoded, the engine keeps the
+// file, and the next turn reconciles its full history against it, so it stays
+// warm. Proven by prompt tokens: the warm turn decodes only its own message,
+// while the same history without a cache decodes all of it.
 export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
   testId: 'kv-cache-cancel-keeps-committed-cache',
   params: {
@@ -713,9 +761,10 @@ export const kvCacheTests = [
   kvCacheWithTools,
   kvCacheDeleteAndReuse,
   kvCacheStatsVerification,
-  kvCacheRemoveThinkingCompaction,
   kvCacheNoSystemPrompt,
   kvCacheToolsSequentialSave,
+  kvCacheToolSetChange,
+  kvCacheWarmToolChoiceRequired,
   kvCacheCancelThenNewPrompt
 ]
 

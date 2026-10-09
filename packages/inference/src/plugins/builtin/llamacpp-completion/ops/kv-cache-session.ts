@@ -25,7 +25,6 @@ import {
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
 import { type AbortSignal } from 'bare-abort-controller'
-import { z } from 'zod'
 
 // Used by cross-model paths that have no `RequestContext` (e.g.
 // `deleteKvCacheState`). Per-session call sites receive a logger from
@@ -33,16 +32,14 @@ import { z } from 'zod'
 const moduleLogger = getEngineLogger()
 
 /**
- * Coordinates six KV-cache state layers:
+ * Coordinates four KV-cache state layers:
  *
- * 1. `cachedPrefixes` — saved message boundaries, and whether a tool
- *    block was rendered into them.
- * 2. `initializedCaches` — caches this process has established.
- * 3. On-disk `.bin` files written by the addon.
- * 4. `<bin>.meta.json` sidecars — layer 1 persisted, so a named cache's
- *    boundary outlives the process; see `readPrefixSidecar`.
- * 5. `activeCachePaths` — per-path refs that block in-flight eviction.
- * 6. `.auto-cache-<key>` markers — engine-generated cache ownership.
+ * 1. `initializedCaches` — caches this process has established.
+ * 2. On-disk `.bin` files written by the addon. Each one records the tokens
+ *    it holds, and the addon reuses the longest prefix the next prompt
+ *    shares with it, so nothing here tracks what a file covers.
+ * 3. `activeCachePaths` — per-path refs that block in-flight eviction.
+ * 4. `.auto-cache-<key>` markers — engine-generated cache ownership.
  *
  * Every turn must finish through `commitTurn`, `rollback`, or the
  * non-destructive `releaseTurn` so all inference state stays aligned,
@@ -52,115 +49,6 @@ const moduleLogger = getEngineLogger()
 
 // ----- module-scoped state. The session is the single mutation point
 // for the in-memory KV-cache bookkeeping. -----
-
-/** What the kv-cache file at a given path is known to hold. */
-const cachedPrefixSchema = z.object({
-  /** Number of chat messages the file on disk is known to cover. */
-  messages: z.number().int().nonnegative(),
-  /**
-   * Whether a static tool block was rendered into that prefix. Tracked
-   * rather than inferred from `messages`, because a committed turn is not
-   * proof that its tool block reached the model: the addon drops tools and
-   * still returns a usable prompt when the chat template rejects them.
-   */
-  toolBlock: z.boolean()
-})
-type CachedPrefix = z.infer<typeof cachedPrefixSchema>
-
-// The sidecar is written after the addon has already saved the `.bin`, so a
-// crash between the two leaves a boundary that describes an older file. The
-// `.bin` size is a function of the tokens it holds: it is unchanged when the
-// addon re-saves the same state (cancel rewind, key switch) and larger once
-// another turn landed in it, which is the case the fingerprint must catch.
-const persistedPrefixSchema = cachedPrefixSchema.extend({
-  binSize: z.number().int().nonnegative()
-})
-
-/**
- * What the kv-cache file on disk is known to cover, keyed by cache path.
- * Written by `commitTurn`, deleted by `rollback`, `delete`,
- * `dropStaleSavedCount` and the orphan clear in `beginTurn`. The same
- * INVARIANT that existed in `kv-cache-state.ts` still holds: an entry is
- * present only when the corresponding `.bin` file is considered trustworthy,
- * so any turn that leaves the file holding something the boundary does not
- * describe has to remove it.
- *
- * This map outranks the sidecar. Both are written by the same commit, so an
- * entry here is never the older copy, and `restorePersistedCache` reads the
- * file only to repopulate an empty map after a restart.
- */
-const cachedPrefixes = new Map<string, CachedPrefix>()
-
-const PREFIX_SIDECAR_SUFFIX = '.meta.json'
-
-function prefixSidecarPath(cachePath: string): string {
-  return `${cachePath}${PREFIX_SIDECAR_SUFFIX}`
-}
-
-async function writePrefixSidecar(
-  cachePath: string,
-  prefix: CachedPrefix,
-  logger: Logger
-): Promise<void> {
-  try {
-    const { size } = await fsPromises.stat(cachePath)
-    await fsPromises.writeFile(
-      prefixSidecarPath(cachePath),
-      JSON.stringify({ ...prefix, binSize: size })
-    )
-  } catch (error) {
-    // Only the file goes: a sidecar left from the previous commit describes a
-    // shorter `.bin` than the one now on disk. The in-memory boundary is the
-    // one this process keeps slicing against and stays.
-    await removePrefixSidecar(cachePath)
-    logger.warn(
-      `[kv-cache] Failed to persist saved-message boundary; this process stays warm but a restart will start the cache cold. path=${cachePath} error=${error instanceof Error ? error.message : String(error)}`
-    )
-  }
-}
-
-// Anything unreadable, malformed, or describing a `.bin` of a different size
-// is discarded: the cache is then used from a cold boundary, which is the
-// pre-sidecar behaviour. Only ever consulted for a path `cachedPrefixes` has
-// no entry for, so it can never contradict a live boundary. Never throws: the
-// caller holds the cache-path write lock and a `.bin` can vanish under it
-// (`deleteKvCacheState` takes no locks).
-async function readPrefixSidecar(cachePath: string): Promise<CachedPrefix | null> {
-  let parsed: z.infer<typeof persistedPrefixSchema>
-  let binSize: number
-  try {
-    const raw = await fsPromises.readFile(prefixSidecarPath(cachePath), 'utf8')
-    const result = persistedPrefixSchema.safeParse(JSON.parse(raw))
-    if (!result.success) return null
-    parsed = result.data
-    binSize = (await fsPromises.stat(cachePath)).size
-  } catch {
-    return null
-  }
-  if (binSize !== parsed.binSize) {
-    // The `.bin` changed after this boundary was recorded, so the file is
-    // stale whatever wrote it. Only the file: the caller guarantees the map
-    // holds nothing for this path.
-    await removePrefixSidecar(cachePath)
-    return null
-  }
-  return { messages: parsed.messages, toolBlock: parsed.toolBlock }
-}
-
-/** Drops the persisted boundary, leaving whatever is in memory alone. */
-async function removePrefixSidecar(cachePath: string): Promise<void> {
-  try {
-    await fsPromises.unlink(prefixSidecarPath(cachePath))
-  } catch {
-    // No sidecar for this path.
-  }
-}
-
-/** Drops the boundary everywhere: the cache it describes is gone or untrusted. */
-async function forgetPrefix(cachePath: string): Promise<void> {
-  cachedPrefixes.delete(cachePath)
-  await removePrefixSidecar(cachePath)
-}
 
 /**
  * In-memory registry of caches established this session, recorded once a save
@@ -201,7 +89,7 @@ class CacheLockAbortError extends Error {
 // "session"), which name the SAME file on case-insensitive filesystems (default
 // macOS/Windows), serialise on one lock and can't interleave writes. Over-locks
 // case-only variants on case-sensitive filesystems, which is safe. NOTE: the
-// other per-path bookkeeping (activeCachePaths, cachedPrefixes, retention)
+// other per-path bookkeeping (activeCachePaths, initializedCaches, retention)
 // stays case-sensitive, so case-only key variants are otherwise unsupported —
 // see the KV-cache system doc.
 function lockKeyFor(cachePath: string): string {
@@ -410,24 +298,17 @@ export interface TurnHandle {
   /** Resolved on-disk cache file path the addon will read from / write to. */
   readonly cachePath: string
   /**
-   * Snapshot of the on-disk saved-message count at `beginTurn` time
-   * (0 on a cold turn). Consumed by `decideCachedHistorySlice` to pick the
-   * message tail for the next addon call.
+   * True when no cache existed at this path when the turn began: nothing
+   * committed is there to keep, so an unwind drops whatever this turn wrote.
    */
-  readonly savedCount: number
-  /**
-   * Whether the cached prefix already holds a rendered static tool block, so
-   * this turn can leave it out of its payload. False on a cold turn and
-   * whenever the previous turn couldn't confirm the block reached the model.
-   */
-  readonly toolBlockCached: boolean
+  readonly createdCache: boolean
 }
 
 export interface BeginCustomTurnInput {
   kind: 'custom'
   /** User-provided session key (`completion({ kvCache: "session-a" })`). */
   customKey: string
-  /** Hash of system prompt + complete tool definitions. */
+  /** Hash of the system prompt; see `generateConfigHash`. */
   configHash: string
   /**
    * Request abort signal. When it aborts while this turn is queued behind a
@@ -439,7 +320,7 @@ export interface BeginCustomTurnInput {
 
 export interface BeginAutoTurnInput {
   kind: 'auto'
-  /** Hash of system prompt + complete tool definitions. */
+  /** Hash of the system prompt; see `generateConfigHash`. */
   configHash: string
   /** Conversation history used to compute the pre-response cache key. */
   history: CacheMessage[]
@@ -449,32 +330,17 @@ export interface BeginAutoTurnInput {
 
 export type BeginTurnInput = BeginCustomTurnInput | BeginAutoTurnInput
 
-/**
- * Whether the committed prefix holds a rendered static tool block. The
- * handler owns this because only it knows whether the payload carried the
- * block and whether the message list was one the template renders tools for.
- */
-interface ToolBlockCommit {
-  toolBlockCached: boolean
-}
-
-export interface StaticCommitResult extends ToolBlockCommit {
+export interface StaticCommitResult {
   kind: 'static'
-  /** `history.length + 1` — recorded at the turn's current `cachePath`. */
-  messageCount: number
 }
 
-export interface AutoRenameCommitResult extends ToolBlockCommit {
+export interface AutoRenameCommitResult {
   kind: 'autoRename'
   /**
    * Destination path the addon's pre-response cache file should be
-   * renamed to (computed from `cacheMessages + responseText`). The
-   * stale entry at the source path is dropped from `cachedPrefixes`
-   * and the new count is recorded at this target path.
+   * renamed to (computed from `cacheMessages + responseText`).
    */
   targetCachePath: string
-  /** Number of messages the renamed cache represents (`savedHistory.length`). */
-  messageCount: number
 }
 
 export type CommitResult = StaticCommitResult | AutoRenameCommitResult
@@ -484,47 +350,37 @@ export interface KvCacheSession {
    * Open a new turn against the cache. Resolves the cache file path,
    * ensures its parent directory exists, and returns a `TurnHandle` the
    * handler attaches to `ctx.scope.defer(...)` for the rollback hook. The
-   * addon's own `saveCacheToDisk` is what writes the file, so a cold turn
-   * opens without one. Auto-cache path resolution is serialized with
+   * addon's `saveCache` writes the file after the run, so a cold turn opens
+   * without one. Auto-cache path resolution is serialized with
    * retention deletion before the handle is returned.
    */
   beginTurn(input: BeginTurnInput): Promise<TurnHandle>
 
   /**
-   * Commit a successful turn — records the new saved-message count,
-   * preserves the cache file, and (for auto-cache turns) renames the
-   * addon's pre-response file to the post-response path. Flips the
-   * turn's internal `committed` flag so the deferred `rollback` becomes
-   * a no-op on the happy path.
+   * Commit a turn — verifies the addon saved the cache file, records it as
+   * established, and (for auto-cache turns) renames the addon's pre-response
+   * file to the post-response path. Flips the turn's internal `committed`
+   * flag so the deferred `rollback` becomes a no-op.
    */
   commitTurn(turn: TurnHandle, result: CommitResult): Promise<void>
 
   /**
    * Roll back an in-flight turn — atomically deletes the on-disk cache
-   * file, clears the in-memory `initializedCaches` entry, forgets the
-   * `cachedPrefixes` entry, releases the active-path ref, and
-   * removes orphaned marker metadata. Idempotent: a turn that has
-   * already been committed or rolled back is a no-op on subsequent
-   * calls. Handlers register this via `ctx.scope.defer(...)` so it
-   * runs regardless of how the handler exits (success branch removes
-   * itself via `commitTurn`).
+   * file, drops the addon's copy of the conversation through
+   * `options.discardCache`, clears the in-memory `initializedCaches` entry,
+   * releases the active-path ref, and removes orphaned marker metadata.
+   * Idempotent: a turn that has already been committed or rolled back is a
+   * no-op on subsequent calls. Handlers register this via
+   * `ctx.scope.defer(...)` so it runs regardless of how the handler exits
+   * (success branch removes itself via `commitTurn`).
    */
   rollback(turn: TurnHandle): Promise<void>
   /**
    * Non-destructive counterpart of `rollback`: releases locks and refs but
-   * keeps the committed disk cache and its recorded prefix valid for a retry.
-   * A cache this same turn created rolls back instead.
+   * keeps the committed disk cache for a retry. A cache this same turn
+   * created rolls back instead.
    */
   releaseTurn(turn: TurnHandle): Promise<void>
-
-  /**
-   * Forget the saved-message count for the turn's path, in memory and in the
-   * sidecar, without unlinking the cache file or clearing the init flag. Used
-   * when `decideCachedHistorySlice` detects a stale boundary
-   * (`clearStaleCount: true`) — the next turn re-sends the full history
-   * but the cache itself is still usable.
-   */
-  dropStaleSavedCount(turn: TurnHandle): Promise<void>
 }
 
 interface InternalTurnState {
@@ -552,13 +408,17 @@ interface InternalTurnState {
  * Construct a session bound to one `(modelId, turn-owning request)`
  * scope. `options.logger` is the per-instance logger the session emits
  * through (typically `withRequestContext(getEngineLogger(), ctx)`);
- * falls back to the module-scoped logger when omitted.
+ * falls back to the module-scoped logger when omitted. `options.discardCache`
+ * drops the addon's copy of a conversation whose cache the session rolls
+ * back; without it the addon writes that conversation to the deleted path at
+ * its next key switch or unload.
  */
 export function createKvCacheSession(
   modelId: string,
-  options?: { logger?: Logger }
+  options?: { logger?: Logger; discardCache?: (cachePath: string) => Promise<void> }
 ): KvCacheSession {
   const logger = options?.logger ?? moduleLogger
+  const discardCache = options?.discardCache
   // Per-session map: each `TurnHandle` carries an opaque entry here. A
   // WeakMap so handles drop their state once the handler scope releases
   // the reference; the module-scoped maps above survive.
@@ -570,11 +430,11 @@ export function createKvCacheSession(
     releaseWriteLock: () => void = () => {},
     signal?: AbortSignal
   ): TurnHandle {
-    const cached = cachedPrefixes.get(cachePath)
     const handle: TurnHandle = {
       cachePath,
-      savedCount: cached?.messages ?? 0,
-      toolBlockCached: cached?.toolBlock ?? false
+      get createdCache(): boolean {
+        return turnState.get(handle)?.createdByThisTurn ?? false
+      }
     }
     turnState.set(handle, {
       cachePath,
@@ -615,12 +475,9 @@ export function createKvCacheSession(
     // In-memory registry check first — the addon defers disk writes, so a
     // just-saved cache may not yet exist on disk. If the in-memory flag isn't
     // set, fall back to a filesystem probe so caches surviving across process
-    // restarts still hit the reuse path. Resolved before the handle is made so
-    // it snapshots the restored boundary.
+    // restarts still hit the reuse path.
     let exists = initializedCaches.has(cachePath)
-    if (!exists) exists = await restorePersistedCache(cachePath)
-    // A boundary without its `.bin` describes a cache that no longer exists.
-    if (!exists) await forgetPrefix(cachePath)
+    if (!exists) exists = await adoptPersistedCache(cachePath)
     const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal)
 
     try {
@@ -741,17 +598,13 @@ export function createKvCacheSession(
     if (state.committed || state.rolledBack) return
 
     if (result.kind === 'static') {
-      // Custom-key path: the addon wrote the new cache state inline
-      // at the same path. Verify the file persisted (the addon
-      // currently swallows save errors — see TODO in
-      // `verifySaveAndRecord`) and record the new boundary.
-      const prefix = { messages: result.messageCount, toolBlock: result.toolBlockCached }
-      const ok = await verifySaveAndRecord(state.cachePath, prefix)
+      // Custom-key path: the addon's save wrote the new cache state at the
+      // same path. Verify the file persisted.
+      const ok = await verifySaveAndRecord(state.cachePath)
       if (!ok) {
         await runRollback(state)
         return
       }
-      await writePrefixSidecar(state.cachePath, prefix, logger)
       state.committed = true
       releaseCachePath(state.cachePath)
       state.releaseWriteLock()
@@ -762,13 +615,14 @@ export function createKvCacheSession(
     const sourceCacheKey = state.autoCacheKey
     const targetCacheKey = path.basename(path.dirname(path.dirname(result.targetCachePath)))
     // Hold the target's lock across the rename AND commit verification, so a peer
-    // resolving to the same file can't observe it before its saved count is
-    // published. Abortable: a cancel while waiting for the lock rejects here.
+    // resolving to the same file can't observe it before it is recorded. Abortable: a cancel while waiting for the lock rejects here.
     const releaseTargetLock = await acquireCachePathWriteLock(result.targetCachePath, state.signal)
     try {
-      // A cancel that landed while we waited for the target lock must not commit.
+      // A cancel that landed while we waited for the target lock must not
+      // commit. The file holds what the addon kept, so it stays unless this
+      // turn created it.
       if (state.signal?.aborted) {
-        await runRollback(state)
+        await runRelease(state)
         return
       }
 
@@ -797,7 +651,6 @@ export function createKvCacheSession(
         releaseCachePath(sourceCachePath)
         state.cachePath = result.targetCachePath
         state.autoCacheKey = targetCacheKey
-        await forgetPrefix(sourceCachePath)
         await pruneEmptyCacheDirectories(sourceCachePath, snapshotActivePaths())
         if (sourceCacheKey !== undefined) {
           await removeAutoCacheMarkerIfMissing(sourceCacheKey)
@@ -815,10 +668,7 @@ export function createKvCacheSession(
         await runRollback(state)
         return
       }
-      const ok = await verifySaveAndRecord(result.targetCachePath, {
-        messages: result.messageCount,
-        toolBlock: result.toolBlockCached
-      })
+      const ok = await verifySaveAndRecord(result.targetCachePath)
       if (!ok) {
         // Rename succeeded but the file isn't where we expected. Roll back via
         // the target path instead of the (now-empty) source.
@@ -849,6 +699,10 @@ export function createKvCacheSession(
     const state = turnState.get(turn)
     if (!state) return
     if (state.committed || state.rolledBack) return
+    await runRelease(state)
+  }
+
+  async function runRelease(state: InternalTurnState): Promise<void> {
     // Nothing committed exists to keep, so a failed first turn is destructive.
     if (state.createdByThisTurn) {
       await runRollback(state)
@@ -876,7 +730,15 @@ export function createKvCacheSession(
         )
       }
     }
-    await forgetPrefix(state.cachePath)
+    if (discardCache) {
+      try {
+        await discardCache(state.cachePath)
+      } catch (discardError) {
+        logger.warn(
+          `[kv-cache] Failed to discard the addon's copy of a rolled-back cache; a later unload may write it back. path=${state.cachePath} error=${discardError instanceof Error ? discardError.message : String(discardError)}`
+        )
+      }
+    }
     // Release before pruning so an empty parent can go; a sibling still holding
     // the path keeps it in the active snapshot and protects the directory.
     releaseCachePath(state.cachePath)
@@ -890,18 +752,11 @@ export function createKvCacheSession(
     if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
-  async function dropStaleSavedCount(turn: TurnHandle): Promise<void> {
-    const state = turnState.get(turn)
-    if (!state) return
-    await forgetPrefix(state.cachePath)
-  }
-
   return {
     beginTurn,
     commitTurn,
     rollback,
-    releaseTurn,
-    dropStaleSavedCount
+    releaseTurn
   }
 }
 
@@ -924,10 +779,8 @@ export function createKvCacheSession(
  * Layers cleared, in order:
  *   1. On-disk: `deleteCache(...)` removes the matching directory
  *      tree (or wipes and recreates the root for `all: true`).
- *   2. `cachedPrefixes`: prefix-cleanup by the removed directory
- *      so any per-cache count under the deleted tree is forgotten.
- *   3. `initializedCaches`: prefix-cleanup by the same removed
- *      directory, since it is keyed by the resolved cache path.
+ *   2. `initializedCaches`: prefix-cleanup by the removed directory,
+ *      since it is keyed by the resolved cache path.
  *
  * Concurrency with in-flight turns: this delete does not take the
  * per-cache-path write locks, so it races any turn holding a `TurnHandle`
@@ -936,9 +789,8 @@ export function createKvCacheSession(
  * `Map.delete` / `Set.delete` no-op on absent keys), but the layers are
  * cleared without a lock, so an interleaving that lands the delete's
  * in-memory cleanup after a concurrent turn has already renamed/committed
- * its file splits state: the file stays on disk while its saved-count and
- * init flag are cleared, so the next turn loads the file and reports
- * `savedCount=0`. Callers must not delete a key that is in active use.
+ * its file splits state: the file stays on disk while its init flag is
+ * cleared. Callers must not delete a key that is in active use.
  * The `auto` target is the exception: it skips keys an in-flight turn holds
  * and clears each one under the cache-state lock.
  */
@@ -949,7 +801,6 @@ export async function deleteKvCacheState(
 
   if ('all' in target) {
     const removed = await deleteCacheUtil({ all: true })
-    cachedPrefixes.clear()
     initializedCaches.clear()
     // `removed` is the kv-cache root dir; surfaces it for ops
     // visibility but isn't part of the contract.
@@ -969,78 +820,48 @@ export async function deleteKvCacheState(
     await removeAutoCacheMarker(path.relative(getKVCacheDir(), removedPath))
   }
 
-  // Prefix-cleanup the in-memory counts. The on-disk directory tree
-  // is `{kvCacheRoot}/{kvCacheKey}[/{modelId}]/`, so every entry in
-  // `cachedPrefixes` whose key is the removed directory itself
-  // or sits beneath it must go.
-  clearCachedMessageCountsByPrefix(removedPath, path.sep)
-
-  // initializedCaches is keyed by the resolved cachePath too, so clear it by
-  // the same removed-directory prefix as cachedPrefixes above.
+  // The on-disk directory tree is `{kvCacheRoot}/{kvCacheKey}[/{modelId}]/`,
+  // so every entry whose path is the removed directory itself or sits beneath
+  // it must go.
   clearInitializedCachesByPrefix(removedPath, path.sep)
 }
 
 // ----- private helpers -----
 
 /**
- * Verify the addon actually persisted the cache file before recording
- * its message count. The addon currently swallows write errors
- * silently, so a missing file means the next turn must resend the full
- * history rather than slicing against a stale `savedCount`.
- *
- * TODO: once the addon surfaces save failures (e.g. throws
- * `UnableToSaveSessionFile` when `llama_state_save_file` returns
- * false), drop the `access()` probe and wrap the `model.run()` call in
- * a real try/catch that forwards the error.
+ * Verify the cache file exists before recording it as established. The file
+ * is the evidence because `saveCache` rejects both when a write fails and when
+ * the addon kept nothing to write.
  */
-async function verifySaveAndRecord(cachePath: string, prefix: CachedPrefix): Promise<boolean> {
+async function verifySaveAndRecord(cachePath: string): Promise<boolean> {
   try {
     await fsPromises.access(cachePath)
-    cachedPrefixes.set(cachePath, prefix)
     initializedCaches.add(cachePath)
     return true
   } catch (err) {
-    cachedPrefixes.delete(cachePath)
     logCacheSaveError(cachePath, err)
     return false
   }
 }
 
 /**
- * Adopt a `.bin` left by an earlier process run: record it as established and
- * pick up the boundary committed alongside it. Returns whether the file exists.
- *
- * An auto-rename commits its target into `cachedPrefixes` without an init
- * flag, so this can run for a path the map already knows. The map wins there
- * and the sidecar is left unread, which keeps the two from ever having to be
- * reconciled.
+ * Adopt a `.bin` left by an earlier process run. Returns whether the file
+ * exists. Earlier releases kept a `<bin>.meta.json` boundary sidecar beside
+ * it; nothing reads one now, so it goes on first contact.
  */
-async function restorePersistedCache(cachePath: string): Promise<boolean> {
+async function adoptPersistedCache(cachePath: string): Promise<boolean> {
+  try {
+    await fsPromises.unlink(`${cachePath}.meta.json`)
+  } catch {
+    // No sidecar for this path.
+  }
   try {
     await fsPromises.access(cachePath)
   } catch {
     return false
   }
   initializedCaches.add(cachePath)
-  if (cachedPrefixes.has(cachePath)) return true
-  const prefix = await readPrefixSidecar(cachePath)
-  if (prefix !== null) cachedPrefixes.set(cachePath, prefix)
   return true
-}
-
-function clearCachedMessageCountsByPrefix(prefix: string, sep: string): void {
-  if (!prefix) {
-    cachedPrefixes.clear()
-    return
-  }
-  for (const key of cachedPrefixes.keys()) {
-    if (key === prefix) {
-      cachedPrefixes.delete(key)
-      continue
-    }
-    if (!key.startsWith(prefix + sep)) continue
-    cachedPrefixes.delete(key)
-  }
 }
 
 function clearInitializedCachesByPrefix(prefix: string, sep: string): void {
@@ -1065,21 +886,6 @@ function clearInitializedCachesByPrefix(prefix: string, sep: string): void {
  * @internal
  */
 export const __kvCacheSessionTestHooks = {
-  getSavedCount(cachePath: string): number | undefined {
-    return cachedPrefixes.get(cachePath)?.messages
-  },
-  setSavedCountForTest(cachePath: string, count: number): void {
-    cachedPrefixes.set(cachePath, { messages: count, toolBlock: false })
-  },
-  getToolBlockCachedForTest(cachePath: string): boolean {
-    return cachedPrefixes.get(cachePath)?.toolBlock ?? false
-  },
-  getPrefixSidecarPathForTest(cachePath: string): string {
-    return prefixSidecarPath(cachePath)
-  },
-  readPrefixSidecarForTest(cachePath: string): Promise<CachedPrefix | null> {
-    return readPrefixSidecar(cachePath)
-  },
   hasInitializedPath(cachePath: string): boolean {
     return initializedCaches.has(cachePath)
   },
@@ -1093,7 +899,6 @@ export const __kvCacheSessionTestHooks = {
     lastAutoCacheSweepMs = value
   },
   resetForTest(): void {
-    cachedPrefixes.clear()
     initializedCaches.clear()
     activeCachePaths.clear()
     lastAutoCacheSweepMs = 0

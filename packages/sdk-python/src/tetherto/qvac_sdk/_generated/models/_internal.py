@@ -1650,12 +1650,6 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
             le=2147483647,
         ),
     ] = None
-    remove_thinking_from_context: Annotated[
-        bool | None,
-        Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
-        ),
-    ] = None
     tool_choice: Annotated[
         str | None,
         Field(
@@ -3025,12 +3019,6 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
-    remove_thinking_from_context: Annotated[
-        bool | None,
-        Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
-        ),
-    ] = None
     tool_choice: Annotated[
         str | None,
         Field(
@@ -3620,12 +3608,6 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
             description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
             ge=-1,
             le=2147483647,
-        ),
-    ] = None
-    remove_thinking_from_context: Annotated[
-        bool | None,
-        Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
     tool_choice: Annotated[

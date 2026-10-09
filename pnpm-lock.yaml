@@ -1082,8 +1082,8 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.57.0
-        version: 0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.58.0
+        version: link:../llm-llamacpp
       '@qvac/ocr-ggml':
         specifier: ^0.27.1
         version: link:../ocr-ggml
@@ -1494,8 +1494,8 @@ importers:
         specifier: ^0.45.0
         version: link:../embed-llamacpp
       '@qvac/llm-llamacpp':
-        specifier: ^0.57.0
-        version: 0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.58.0
+        version: link:../llm-llamacpp
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -1775,8 +1775,8 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.57.0
-        version: 0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.58.0
+        version: link:../llm-llamacpp
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -4423,44 +4423,8 @@ packages:
     resolution: {integrity: sha512-Io9zzgc7BMconmQKbkhTKO0U07GTF6DX6iISgdvzxDv58Zjxr0Dsd4UvX+zvI4u2OKVQ41gIMZ1Rthhb2wLiNQ==}
     engines: {bare: '>=1.24.0'}
 
-  '@qvac/fabric-darwin-arm64@0.20.0':
-    resolution: {integrity: sha512-lMCWHft3RuhCapzgVc3lnCnX7WBMtN+rUwWLfhRsLJ7pEpC0p57Uo1gtu1x7hG1vTQVMYIGEtxjSUZ0sgGaqLw==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@qvac/fabric-darwin-x64@0.20.0':
-    resolution: {integrity: sha512-RN5UGPBJ79Og7O4J4i/UJTjk3VfCjBdlFWmQQjCVDo6Gh4xbTcva+LmfJKBCy7ok/E0LlBH/tdQKL0s+VNCSCQ==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [darwin]
-
   '@qvac/fabric-ios@0.20.0':
     resolution: {integrity: sha512-TmKljlbS1HFvzpLDww+X4c5czbDSZUeLZu6QTxgomxmKaHLLy9gA97Lof2xhCPa986WkXcYEkdJGRsVOy7Zmbg==}
-    engines: {bare: '>=1.24.0'}
-
-  '@qvac/fabric-linux-arm64@0.20.0':
-    resolution: {integrity: sha512-uUrehzi8/vcLl1Fvg4AnhiZrtyQxenxfMO8qUjDO/ejDOzy6Zmi/xXI9ftiFQt0yse4t03yeiKqfNoy9izccYg==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/fabric-linux-x64@0.20.0':
-    resolution: {integrity: sha512-Az6suqO2vN9MS0rzQA/aoozwHgh8EkgwPn5ZhDfv6A9J4w/6AVFqFRJVBh0KyYRWaGaUbU0n2j211ODGnw5xIA==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/fabric-win32-x64@0.20.0':
-    resolution: {integrity: sha512-W9XEcI0WQZvAUr6oTuwGmsjNCnXlwoei5TxtnKNsL12J+iPHL1kqg0kVJ088Z168KYDBIfnNrYVlBOQw6xcs9w==}
-    engines: {bare: '>=1.24.0'}
-    cpu: [x64]
-    os: [win32]
-
-  '@qvac/fabric@0.20.0':
-    resolution: {integrity: sha512-cONy3ST5BJMxj4rH95sph4XxWSLL36N6m7p+6lHxSsqB8og7Sgi3BK9qkQPNqCnpMPOiW83GQNvMe0tjT+DlRA==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/infer-base@0.1.1':
@@ -4476,10 +4440,6 @@ packages:
 
   '@qvac/langdetect-text@0.1.2':
     resolution: {integrity: sha512-V6ntqPNBmz+49eIaY8jYdpgyx8MzSk9/bNp9ibSn+Xwx1D/8Mca8RNfn7/gHWsuACMvkvvJmNzZGGLu1eOW3og==}
-
-  '@qvac/llm-llamacpp@0.57.0':
-    resolution: {integrity: sha512-KKfZbZfa0u17Zbvq7fMD3Kcnz7VXd37Nne2EQSrjP3JJIOti/KRc4rRVKEwzWSnqochM2oZqE20cXAaXf3t+hg==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/logging@0.1.1':
     resolution: {integrity: sha512-un8/b8JZBXRW/ljezFj3VGPxALhMvONeD62F/NHaU3TGs4SmdXWDcG65Aot+Bi4rIjaKQS5iY1P4WYGKU6Chew==}
@@ -13770,30 +13730,7 @@ snapshots:
 
   '@qvac/fabric-android-arm64@0.20.0': {}
 
-  '@qvac/fabric-darwin-arm64@0.20.0':
-    optional: true
-
-  '@qvac/fabric-darwin-x64@0.20.0':
-    optional: true
-
   '@qvac/fabric-ios@0.20.0': {}
-
-  '@qvac/fabric-linux-arm64@0.20.0':
-    optional: true
-
-  '@qvac/fabric-linux-x64@0.20.0':
-    optional: true
-
-  '@qvac/fabric-win32-x64@0.20.0':
-    optional: true
-
-  '@qvac/fabric@0.20.0':
-    optionalDependencies:
-      '@qvac/fabric-darwin-arm64': 0.20.0
-      '@qvac/fabric-darwin-x64': 0.20.0
-      '@qvac/fabric-linux-arm64': 0.20.0
-      '@qvac/fabric-linux-x64': 0.20.0
-      '@qvac/fabric-win32-x64': 0.20.0
 
   '@qvac/infer-base@0.1.1(@qvac/dl-hyperdrive@0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
     dependencies:
@@ -13826,18 +13763,6 @@ snapshots:
   '@qvac/langdetect-text@0.1.2':
     dependencies:
       tinyld: 1.3.4
-
-  '@qvac/llm-llamacpp@0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.20.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@qvac/logging@0.1.1':
     dependencies:
