@@ -6,6 +6,10 @@ name: PR Release Guard (SDK Pod)
 # (release-merge-guard on push) and after npm publish (create-github-release) —
 # brought forward so a broken release fails on the PR.
 #
+# A release train PR (base release-train-<train>-x.y.z) gets the checks
+# release-train.yml runs on push, plus a check that npm does not have the moved
+# versions yet.
+#
 # Uses pull_request (not pull_request_target): the job needs no secrets or write
 # token, only reads PR git content, so it must not run with elevated privilege.
 #
@@ -42,6 +46,10 @@ jobs:
         run: |
           set -euo pipefail
           base_ref="${{ github.base_ref }}"
+          if [[ "$base_ref" == release-train-* ]]; then
+            echo "is_train=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           pods=" sdk inference cli rag logging error ai-sdk-provider test-suite "
           if [[ ! "$base_ref" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             echo "::notice::Base '$base_ref' is not release-<slug>-x.y.z — skipping SDK-pod release guard"
@@ -70,10 +78,37 @@ jobs:
       # so any branch running this job also has them; backporting this workflow
       # without them would fail loudly here.
       - name: Checkout
-        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true' || steps.pkg.outputs.is_train == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        if: steps.pkg.outputs.is_train == 'true'
+        with:
+          node-version: "24.14.1"
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
+        if: steps.pkg.outputs.is_train == 'true'
+
+      - name: Install workspace dependencies
+        if: steps.pkg.outputs.is_train == 'true'
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # From the merge base, so commits already on the train branch are not read
+      # as this PR's. A follow-up PR onto a half-shipped train moves nothing and
+      # passes.
+      - name: Check the release train
+        if: steps.pkg.outputs.is_train == 'true'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          node .github/scripts/release-train.mjs resolve "$BASE_REF" "$MERGE_BASE" "$HEAD_SHA" --check-npm
 
       - name: Validate release branch, version bump and changelog
         if: steps.pkg.outputs.is_sdk_pod_package == 'true'

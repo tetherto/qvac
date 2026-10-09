@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - release-*
+      # release-train-* branches publish from release-train.yml.
+      - "!release-train-*"
       - feature-*
       - tmp-*
     paths:
@@ -26,7 +28,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -42,11 +44,12 @@ jobs:
           package-slug: openclaw-plugin
           package-json-path: plugins/openclaw/package.json
           changelog-path: plugins/openclaw/CHANGELOG.md
+          strict-slug: true
 
   verify-release-notes:
     name: Verify release notes
     if: >-
-      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -211,7 +214,7 @@ jobs:
       - verify-release-notes
       - build
     if: |-
-      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') && (needs.verify-release-notes.result == 'success' || needs.verify-release-notes.result == 'skipped'))
+      (always() && needs.publish-logic.outputs.publish_release == 'true' && needs.release-merge-guard.result == 'success' && (needs.verify-release-notes.result == 'success' || needs.verify-release-notes.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:

@@ -2,6 +2,9 @@
 
 Only after `/qv-agent-stack-sync --plan` and confirmed versions.
 
+**Stop if the plan lists two or more packages of a release train**; use
+`qv-release-train` instead of the loop below.
+
 For each `needs_release` package (dependency order):
 
 ### 1. Release line
@@ -61,7 +64,9 @@ Run `qv-sdk-backmerge` immediately (do not wait for merge):
 
 ### 5. Fail-stop
 
-- Non-auto-resolvable conflicts → stop.
+- Non-auto-resolvable conflicts → stop. `qv-sdk-backmerge` Step 6 owns the
+  resolvable set, including `pnpm-lock.yaml`; do not resolve a cherry-pick
+  conflict here instead of there.
 - Plan blockers → skip, list under Blocked.
 - Never merge or trigger publish.
 

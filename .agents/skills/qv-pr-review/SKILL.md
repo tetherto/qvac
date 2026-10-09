@@ -184,6 +184,7 @@ Read `baseRefName`, `headRefName`, `isCrossRepository`, `headRepositoryOwner` fr
 |---|---|---|
 | anything | `main` | yes |
 | anything | `release-<pkg>-<x.y.z>` | yes (must bump version + changelog) |
+| anything | `release-train-<train>-<x.y.z>` | yes (see the release-train checks below) |
 | anything | `feature-<pkg>-*` / `tmp-<pkg>-*` | yes |
 
 **Blocker patterns:**
@@ -200,6 +201,17 @@ Read `baseRefName`, `headRefName`, `isCrossRepository`, `headRepositoryOwner` fr
 - `packages/<pkg>/package.json` version must increase vs base
 - `packages/<pkg>/CHANGELOG.md` must be updated
 - Verify patch fixes already landed on main (cherry-picked commits)
+
+**Release-train extra checks (base is `release-train-<train>-<x.y.z>`):**
+
+One PR moves every package of the train. `pr-release-guard.yml` and
+`pr-checks-sdk-pod.yml` check versions, ranges, changelog sections and each
+package's checks (see `docs/ci/RELEASE-TRAIN.md`). Review what they cannot:
+
+- `pnpm-lock.yaml` changes only the `specifier:` lines of the ranges between
+  train packages. Anything more means a range stopped matching the workspace
+  and pnpm fetched an old version from npm.
+- The changelog sections describe the changes since the last release.
 
 ### 4. Read applicable repository instructions for the touched paths
 

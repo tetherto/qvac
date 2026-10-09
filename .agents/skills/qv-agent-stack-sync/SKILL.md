@@ -28,6 +28,12 @@ Goal: know which packages need a release, prepare draft release + backmerge PRs 
 
 Invoke: `/qv-agent-stack-sync` or `/qv-agent-stack-sync --plan`.
 
+## Release train
+
+When `--plan` lists two or more packages of a release train, release them with
+`qv-release-train` instead of `--prepare-cascade` and `--promote`: one branch,
+one release PR, one publish run, and no wait for each layer to reach npm.
+
 ## References
 
 - `.github/teams/sdk.json` — current SDK pod scope
