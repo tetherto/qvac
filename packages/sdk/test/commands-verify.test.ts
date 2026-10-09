@@ -9,6 +9,7 @@ import {
   readAddonPackageJson
 } from '@/commands/verify/addon-source'
 import { collectAddonsFromBundle, InvalidBundleSourceError } from '@/commands/verify/bundle-source'
+import { writeBundleFile } from './fixtures/bundle-file'
 import {
   collectAddonsFromNodeModules,
   InvalidNodeModulesSourceError
@@ -132,6 +133,45 @@ function singleHostResolutions(options: { linked: boolean }): Record<string, unk
   }
 }
 
+/**
+ * `bare-posix` as bare-stow's `bare-sidecar` target emits it for one host: each
+ * addon resolves to its binary offloaded beside the bundle.
+ */
+function offloadedResolutions(options: { linked: boolean; host: string }): Record<string, unknown> {
+  const offloaded = (name: string) => ({
+    addon: `/../node_modules/${name}/prebuilds/${options.host}/${name}.bare`
+  })
+  const reached = options.linked
+    ? {
+        '/node_modules/bare-posix/index.js': {
+          '#package': BARE_POSIX_PKG,
+          './binding': '/node_modules/bare-posix/binding.js'
+        },
+        '/node_modules/bare-posix/binding.js': {
+          '#package': BARE_POSIX_PKG,
+          '.': offloaded('bare-posix')
+        }
+      }
+    : { '/node_modules/bare-posix/unsupported.js': { '#package': BARE_POSIX_PKG } }
+
+  return {
+    [BUNDLE_MAIN]: {
+      'bare-process': '/node_modules/bare-process/index.js',
+      'bare-os': '/node_modules/bare-os/index.js'
+    },
+    '/node_modules/bare-process/index.js': {
+      '#package': '/node_modules/bare-process/package.json',
+      'bare-posix': options.linked
+        ? '/node_modules/bare-posix/index.js'
+        : '/node_modules/bare-posix/unsupported.js'
+    },
+    ...reached,
+    [BARE_POSIX_PKG]: {},
+    '/node_modules/bare-os/index.js': { '#package': BARE_OS_PKG, '.': offloaded('bare-os') },
+    [BARE_OS_PKG]: {}
+  }
+}
+
 /** The addon packages the graph fixtures refer to. */
 function writeGraphPackages(projectRoot: string, options: { hosts?: string[] } = {}): void {
   writePackageJson(projectRoot, 'node_modules/bare-posix', {
@@ -147,30 +187,12 @@ function writeGraphPackages(projectRoot: string, options: { hosts?: string[] } =
   for (const host of options.hosts ?? []) writePrebuild(bareOs, host)
 }
 
-function escapeForJsString(s: string): string {
-  return s
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t')
-}
-
 function writeBareBundle(
   bundlePath: string,
   resolutions: Record<string, unknown>,
-  options: { id?: string; body?: string; main?: string; imports?: Record<string, unknown> } = {}
+  options: { id?: string; main?: string; imports?: Record<string, unknown> } = {}
 ): void {
-  const bundleId = options.id ?? 'test-bundle-id'
-  const header = JSON.stringify({
-    id: bundleId,
-    ...(options.main === undefined ? {} : { main: options.main }),
-    ...(options.imports === undefined ? {} : { imports: options.imports }),
-    resolutions
-  })
-  const packed = `${bundleId}\n${header}\n${options.body ?? ''}`
-  fs.mkdirSync(path.dirname(bundlePath), { recursive: true })
-  fs.writeFileSync(bundlePath, `module.exports = "${escapeForJsString(packed)}"`)
+  writeBundleFile(bundlePath, { ...options, resolutions })
 }
 
 describe('readAddonPackageJson', () => {
@@ -1785,6 +1807,79 @@ describe('verifyBundle orchestrator', () => {
       assert.equal(missing.length, 1)
       assert.equal(missing[0]?.code === 'missing-prebuild' && missing[0]?.addon, 'bare-posix@1.0.1')
       assert.equal(hasErrors(result), true)
+    })
+  })
+
+  it('passes on an offloaded bundle that resolved the addon away', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['win32-x64'] })
+      const bundlePath = path.join(dir, 'qvac', 'worker', 'index.bundle')
+      writeBareBundle(bundlePath, offloadedResolutions({ linked: false, host: 'win32-x64' }), {
+        main: BUNDLE_MAIN
+      })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['win32-x64']
+      })
+      assert.equal(hasErrors(result), false)
+      assert.deepEqual(result.addons.map((addon) => [addon.name, addon.linkedHosts]).sort(), [
+        ['bare-os', ['win32-x64']],
+        ['bare-posix', []]
+      ])
+    })
+  })
+
+  it('reports the missing prebuild of an addon an offloaded bundle loads', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['linux-x64'] })
+      const bundlePath = path.join(dir, 'qvac', 'worker', 'index.bundle')
+      writeBareBundle(bundlePath, offloadedResolutions({ linked: true, host: 'linux-x64' }), {
+        main: BUNDLE_MAIN
+      })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['linux-x64']
+      })
+      const missing = result.issues.filter((i) => i.code === 'missing-prebuild')
+      assert.deepEqual(
+        missing.map((i) => (i.code === 'missing-prebuild' ? `${i.addon}/${i.host}` : '')),
+        ['bare-posix@1.0.1/linux-x64']
+      )
+    })
+  })
+
+  it('checks a split addon whose own addon an offloaded bundle defers', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['linux-x64'] })
+      writePackageJson(dir, 'node_modules/split-addon', {
+        name: 'split-addon',
+        version: '1.0.0',
+        addon: true
+      })
+      const resolutions = offloadedResolutions({ linked: false, host: 'linux-x64' })
+      resolutions[BUNDLE_MAIN] = {
+        ...(resolutions[BUNDLE_MAIN] as Record<string, unknown>),
+        'split-addon': '/node_modules/split-addon/binding.js'
+      }
+      resolutions['/node_modules/split-addon/binding.js'] = {
+        '#package': '/node_modules/split-addon/package.json',
+        '.': { addon: 'deferred:.' }
+      }
+      resolutions['/node_modules/split-addon/package.json'] = {}
+      const bundlePath = path.join(dir, 'qvac', 'worker', 'index.bundle')
+      writeBareBundle(bundlePath, resolutions, { main: BUNDLE_MAIN })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['linux-x64']
+      })
+      const missing = result.issues.filter((i) => i.code === 'missing-prebuild')
+      assert.deepEqual(
+        missing.map((i) => (i.code === 'missing-prebuild' ? `${i.addon}/${i.host}` : '')),
+        ['split-addon@1.0.0/linux-x64']
+      )
     })
   })
 

@@ -21,7 +21,7 @@ function splitAddonProject(
   t: { after: (fn: () => void) => void },
   options: SplitAddonProjectOptions = {}
 ) {
-  const project = createSplitAddonProject('external-sdk', options)
+  const project = createSplitAddonProject(path.join('node_modules', '@qvac', 'sdk'), options)
   t.after(project.cleanup)
   return project
 }
@@ -35,7 +35,14 @@ describe('bundleSdk installMissingPrebuilds', () => {
 
     await assert.rejects(
       withPath(pm.binDir, () =>
-        bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true })
+        bundleSdk({
+          projectRoot,
+          sdkPath,
+          configPath,
+          target: 'react-native',
+          hosts: ['android-arm64'],
+          quiet: true
+        })
       ),
       (error: unknown) =>
         error instanceof HostPrebuildsMissingError &&
@@ -54,6 +61,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
         projectRoot,
         sdkPath,
         configPath,
+        target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
         installMissingPrebuilds: true
@@ -67,7 +75,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
       }
     ])
     assert.ok(
-      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml-android-arm64/index.js')),
+      (await bundledModules(projectRoot)).some((key) =>
+        key.endsWith('fake-ggml-android-arm64/index.js')
+      ),
       'the bundle resolves #host-addon to the installed platform package'
     )
     assert.deepEqual(result.addons, [SPLIT_ADDON_ANDROID_PACKAGE])
@@ -93,6 +103,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
         projectRoot,
         sdkPath,
         configPath,
+        target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
         installMissingPrebuilds: true
@@ -120,7 +131,14 @@ describe('bundleSdk installMissingPrebuilds', () => {
       const { projectRoot, sdkPath, configPath } = splitAddonProject(t, { withUnused: true })
 
       await assert.rejects(
-        bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true }),
+        bundleSdk({
+          projectRoot,
+          sdkPath,
+          configPath,
+          target: 'react-native',
+          hosts: ['android-arm64'],
+          quiet: true
+        }),
         (error: unknown) =>
           error instanceof HostPrebuildsMissingError &&
           JSON.stringify(error.dependencies) ===
@@ -138,6 +156,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
         projectRoot,
         sdkPath,
         configPath,
+        target: 'react-native',
         hosts: ['android-arm64'],
         defer: [SPLIT_ADDON],
         quiet: true,
@@ -159,6 +178,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
         projectRoot,
         sdkPath,
         configPath,
+        target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
         installMissingPrebuilds: true
@@ -169,7 +189,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
     )
 
     assert.equal(fs.existsSync(path.join(projectRoot, 'qvac', 'addons.manifest.json')), false)
-    assert.equal(fs.existsSync(path.join(projectRoot, 'qvac', 'worker.bundle.js')), false)
+    assert.equal(fs.existsSync(path.join(projectRoot, 'qvac', 'worker')), false)
   })
 
   it('does not reinstall once the platform package is present', posixOnly, async (t) => {
@@ -179,6 +199,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
       projectRoot,
       sdkPath,
       configPath,
+      target: 'react-native' as const,
       hosts: ['android-arm64'],
       quiet: true,
       installMissingPrebuilds: true
@@ -198,7 +219,14 @@ describe('published ASR fallback mappings', () => {
     async (t) => {
       const { projectRoot, sdkPath, configPath } = splitAddonProject(t, { legacyFallback: true })
       await assert.rejects(
-        bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true }),
+        bundleSdk({
+          projectRoot,
+          sdkPath,
+          configPath,
+          target: 'react-native',
+          hosts: ['android-arm64'],
+          quiet: true
+        }),
         (error: unknown) =>
           error instanceof HostPrebuildsMissingError &&
           error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION
@@ -214,13 +242,16 @@ describe('published ASR fallback mappings', () => {
         projectRoot,
         sdkPath,
         configPath,
+        target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
         installMissingPrebuilds: true
       })
     )
     assert.ok(
-      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml-android-arm64/index.js'))
+      (await bundledModules(projectRoot)).some((key) =>
+        key.endsWith('fake-ggml-android-arm64/index.js')
+      )
     )
     assert.equal(result.installedPrebuilds[0]?.name, SPLIT_ADDON_ANDROID_PACKAGE)
   })

@@ -1,56 +1,47 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import {
-  buildNestedPathIndex,
-  extractPackedString,
-  extractBarePackHeader
-} from '@/commands/bundle/manifest'
+import Bundle from 'bare-bundle'
+import { buildNestedPathIndex } from '@/commands/bundle/manifest'
+import { readBundle } from '@/commands/bundle/read-bundle'
 
-describe('extractPackedString', () => {
-  it('extracts double-quoted string', () => {
-    assert.equal(extractPackedString('module.exports = "hello world"'), 'hello world')
-  })
+describe('readBundle', () => {
+  function sampleBundle() {
+    const bundle = new Bundle()
+    bundle.write('/index.js', 'module.exports = 1', { main: true })
+    bundle.id = 'sample'
+    bundle.resolutions = { '/index.js': { '#package': '/package.json' } }
+    return bundle
+  }
 
-  it('extracts single-quoted string', () => {
-    assert.equal(extractPackedString("module.exports = 'hello world'"), 'hello world')
-  })
+  async function read(contents: string | Buffer) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-read-bundle-'))
+    try {
+      const file = path.join(dir, 'worker.bundle')
+      fs.writeFileSync(file, contents)
+      return await readBundle(file)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }
 
-  it('handles escape sequences', () => {
-    assert.equal(extractPackedString('module.exports = "line1\\nline2\\ttab"'), 'line1\nline2\ttab')
-  })
+  for (const [format, wrap] of [
+    ['a raw bundle', (data: string) => data],
+    ['a CommonJS-wrapped bundle', (data: string) => `module.exports = ${JSON.stringify(data)}\n`],
+    ['an ES module-wrapped bundle', (data: string) => `export default ${JSON.stringify(data)}\n`]
+  ] as const) {
+    it(`reads ${format}`, async () => {
+      const bundle = await read(wrap(sampleBundle().toBuffer().toString()))
+      assert.equal(bundle.id, 'sample')
+      assert.equal(bundle.main, '/index.js')
+      assert.deepEqual(bundle.resolutions, { '/index.js': { '#package': '/package.json' } })
+    })
+  }
 
-  it('throws on missing module.exports', () => {
-    assert.throws(() => extractPackedString('const x = 1'), /module\.exports/)
-  })
-
-  it('throws on non-string export', () => {
-    assert.throws(() => extractPackedString('module.exports = 42'), /not a string/)
-  })
-})
-
-describe('extractBarePackHeader', () => {
-  it('extracts JSON header from packed string', () => {
-    const header = extractBarePackHeader('some-id\n{"id":"abc","resolutions":{"key":"val"}}\nrest')
-    assert.equal(header.id, 'abc')
-    assert.deepEqual(header.resolutions, { key: 'val' })
-  })
-
-  it('handles nested JSON in header', () => {
-    const header = extractBarePackHeader(
-      'id\n{"id":"x","resolutions":{"/node_modules/foo/index.js":{"a":1}}}\ndata'
-    )
-    assert.equal(header.id, 'x')
-    assert.ok(header.resolutions)
-    assert.ok('/node_modules/foo/index.js' in (header.resolutions as Record<string, unknown>))
-  })
-
-  it('throws on missing first newline', () => {
-    assert.throws(() => extractBarePackHeader('no newline here'), /missing first newline/)
-  })
-
-  it('throws on missing JSON', () => {
-    assert.throws(() => extractBarePackHeader('id\nno json here'), /could not find header JSON/)
+  it('rejects a file that is not a bundle', async () => {
+    await assert.rejects(() => read('const x = 1'))
   })
 })
 
