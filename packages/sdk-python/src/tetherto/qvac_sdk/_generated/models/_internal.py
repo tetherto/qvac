@@ -17468,7 +17468,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -17643,14 +17643,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc | None,
         Field(
             alias="clipVisionModelSrc",
-            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no CLIP-vision projection).",
         ),
     ] = None
     audio_vae_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None,
         Field(
             alias="audioVaeModelSrc",
-            description="Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent LTX-2 video; unsupported by Wan.",
+            description="Audio VAE decoder model — optional for MiniMax-H3 and LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent video; unsupported by Wan.",
         ),
     ] = None
     embeddings_connectors_model_src: Annotated[
@@ -19959,7 +19959,7 @@ class OcrStreamResponseBlocksItem(GeneratedBaseModel):
         extra="forbid",
     )
     text: str
-    bbox: tuple[float, float, float, float] | None = None
+    bbox: list[Any] | None = None
     confidence: float | None = None
 
 
