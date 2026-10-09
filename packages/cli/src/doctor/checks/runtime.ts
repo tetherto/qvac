@@ -1,7 +1,11 @@
+import { createRequire } from 'node:module'
+import semver from 'semver'
 import type { Check } from '@/doctor/check'
 
-const MIN_NODE_MAJOR = 18
-const RECOMMENDED_NODE_MAJOR = 20
+const require = createRequire(import.meta.url)
+// The CLI's own engines.node; bundling (bare-pack) is what needs this range.
+const { engines } = require('../../../package.json') as { engines: { node: string } }
+const NODE_ENGINES = engines.node
 
 // Where the `qvac` CLI itself can run. This is NOT the set of SDK deploy
 // targets — the SDK additionally targets Android and iOS via Expo/BareKit,
@@ -14,44 +18,27 @@ const SUPPORTED_CLI_HOSTS: ReadonlyArray<string> = [
   'win32-x64'
 ]
 
-function parseNodeMajor(version: string): number | null {
-  const match = /^v?(\d+)\./.exec(version)
-  if (!match || match[1] === undefined) return null
-  const n = Number.parseInt(match[1], 10)
-  return Number.isFinite(n) ? n : null
-}
-
 export const checkNodeVersion: Check = (ctx) => {
   const version = ctx.nodeVersion
-  const major = parseNodeMajor(version)
-  if (major === null) {
+  if (semver.valid(version) === null) {
     return {
       id: 'node-version',
       label: 'Node.js version',
       status: 'warn',
       severity: 'required',
       value: version,
-      hint: `Could not parse Node.js version; expected v${MIN_NODE_MAJOR} or newer.`
+      hint: `Could not parse Node.js version; expected ${NODE_ENGINES}.`
     }
   }
-  if (major < MIN_NODE_MAJOR) {
+  const display = version.startsWith('v') ? version : `v${version}`
+  if (!semver.satisfies(version, NODE_ENGINES, { includePrerelease: true })) {
     return {
       id: 'node-version',
       label: 'Node.js version',
       status: 'fail',
       severity: 'required',
-      value: `v${version}`,
-      hint: `Upgrade Node.js to v${MIN_NODE_MAJOR} or newer (current: v${version}).`
-    }
-  }
-  if (major < RECOMMENDED_NODE_MAJOR) {
-    return {
-      id: 'node-version',
-      label: 'Node.js version',
-      status: 'warn',
-      severity: 'required',
-      value: `v${version}`,
-      hint: `Node.js v${MIN_NODE_MAJOR} is supported but end-of-life; upgrade to v${RECOMMENDED_NODE_MAJOR}+ when possible.`
+      value: display,
+      hint: `Upgrade Node.js to ${NODE_ENGINES} (current: ${display}); bundling needs Node 22.21+ on the 22 line or 24.9+.`
     }
   }
   return {
@@ -59,7 +46,7 @@ export const checkNodeVersion: Check = (ctx) => {
     label: 'Node.js version',
     status: 'pass',
     severity: 'required',
-    value: `v${version}`
+    value: display
   }
 }
 

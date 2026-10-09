@@ -210,6 +210,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("BARE_IMPORTS_MAP_NOT_FOUND", reportedCode, message, payload)
     class ClientBarePackError(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_PACK_ERROR", reportedCode, message, payload)
+    class ClientBarePackNodeUnsupported(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("BARE_PACK_NODE_UNSUPPORTED", reportedCode, message, payload)
     class ClientBarePackNotInstalled(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_PACK_NOT_INSTALLED", reportedCode, message, payload)
     class ClientBareRuntimeBinaryNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -389,6 +391,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "VECTOR_INDEX_PROVIDER_UNAVAILABLE" && (code == null || code == 52850) -> QvacKnownException.ServerVectorIndexProviderUnavailable(message, payload, code)
     name == "BARE_IMPORTS_MAP_NOT_FOUND" && (code == null || code == 50613) -> QvacKnownException.ClientBareImportsMapNotFound(message, payload, code)
     name == "BARE_PACK_ERROR" && (code == null || code == 50611) -> QvacKnownException.ClientBarePackError(message, payload, code)
+    name == "BARE_PACK_NODE_UNSUPPORTED" && (code == null || code == 50617) -> QvacKnownException.ClientBarePackNodeUnsupported(message, payload, code)
     name == "BARE_PACK_NOT_INSTALLED" && (code == null || code == 50610) -> QvacKnownException.ClientBarePackNotInstalled(message, payload, code)
     name == "BARE_RUNTIME_BINARY_NOT_FOUND" && (code == null || code == 50614) -> QvacKnownException.ClientBareRuntimeBinaryNotFound(message, payload, code)
     name == "BUNDLE_VERIFICATION_FAILED" && (code == null || code == 50609) -> QvacKnownException.ClientBundleVerificationFailed(message, payload, code)
