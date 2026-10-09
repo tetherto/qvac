@@ -6,11 +6,9 @@ const https = require('bare-https')
  * Minimal HTTP/HTTPS streamer used by the sharded-model integration test
  * to download a small public sharded GGUF before constructing the addon.
  *
- * Standalone — does not extend any base loader class. The package no
- * longer depends on `@qvac/dl-base` after the loader-removal refactor;
- * this helper exists solely so the sharded model-loading test can fetch
- * shard files without pulling a heavyweight loader implementation back
- * into devDependencies.
+ * Standalone — does not extend any base loader class. This helper exists
+ * solely so the sharded model-loading test can fetch shard files without
+ * pulling a heavyweight loader implementation into devDependencies.
  *
  * Only the surface used by `model-loading.test.js` is implemented:
  *   - `new HttpDL({ baseUrl })`
