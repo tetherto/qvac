@@ -18,7 +18,15 @@ import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
 import { listBundledAddons } from '@/commands/bundle/addons'
 import { bundleRoot, readBundle } from '@/commands/bundle/read-bundle'
 import { getClientLogger } from '@/logging'
-import { BarePackNodeUnsupportedError, BundleFailedError } from '@/utils/errors-client'
+import {
+  AddonLinkFailedError,
+  BarePackNodeUnsupportedError,
+  BundleFailedError,
+  BundleTargetNotInstalledError,
+  BundleVerificationFailedError,
+  HostPrebuildsMissingError
+} from '@/utils/errors-client'
+import { loadTargetPackage } from '@/commands/bundle/targets'
 import { linkDependency } from './fixtures/link-dependency'
 
 const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -59,6 +67,7 @@ function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
   writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
 
   linkDependency(projectRoot, 'bare-stow', SDK_DIR)
+  linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
 
   return { projectRoot, sdkPath, configPath, workerDir: path.join(projectRoot, 'qvac', 'worker') }
 }
@@ -132,6 +141,35 @@ describe('generateWorkerEntry', () => {
   })
 })
 
+describe('loadTargetPackage', () => {
+  it('names a target package neither the project nor the SDK has', async (t) => {
+    const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-target-')))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+
+    await assert.rejects(
+      loadTargetPackage('pear-runtime', 'qvac-missing-stow-target', projectRoot),
+      (error: unknown) =>
+        error instanceof BundleTargetNotInstalledError &&
+        error.message.includes('qvac-missing-stow-target')
+    )
+  })
+
+  it('loads the target package the project installed', async (t) => {
+    const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-target-')))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+    const targetDir = path.join(projectRoot, 'node_modules', 'qvac-project-stow-target')
+    writeFile(
+      path.join(targetDir, 'package.json'),
+      JSON.stringify({ name: 'qvac-project-stow-target', main: 'index.js' })
+    )
+    writeFile(path.join(targetDir, 'index.js'), "exports.name = 'project-target'\n")
+
+    const target = await loadTargetPackage('pear-runtime', 'qvac-project-stow-target', projectRoot)
+
+    assert.equal((target as { name?: string }).name, 'project-target')
+  })
+})
+
 describe('bundleRoot', () => {
   it('is the project root for a bundle based there', () => {
     assert.equal(bundleRoot('/qvac/__main__.mjs', '/work/app'), '/work/app')
@@ -181,7 +219,7 @@ describe('inference native dependency boundary', () => {
         'await heartbeat();'
       ].join('\n')
     )
-    const bundlePath = path.join(projectRoot, 'worker.bundle.js')
+    const bundlePath = path.join(projectRoot, 'index.bundle')
     const packBin = path.join(path.dirname(require.resolve('bare-pack/package')), 'bin.js')
     execFileSync(packBin, ['--host', HOST, '--linked', '--out', bundlePath, entryPath], {
       stdio: 'pipe'
@@ -202,6 +240,7 @@ async function assertDecoderExcludedFromBundle(
   result: Awaited<ReturnType<typeof bundleSdk>>
 ): Promise<void> {
   assert.ok(!result.addons.includes('bare-ffmpeg'))
+  assert.ok(!result.addonModules.some((file) => file.includes(`${path.sep}bare-ffmpeg${path.sep}`)))
   const { resolutions } = await readBundle(result.bundlePath)
   assert.ok(
     !Object.keys(resolutions).some((key) => key.includes('/node_modules/bare-ffmpeg/')),
@@ -249,7 +288,7 @@ describe('bundleSdk', () => {
   it('writes the entry, the harness and the bundle for this host', async (t) => {
     const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
 
-    const result = await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
 
     assert.equal(result.target, 'bare-sidecar')
     assert.deepEqual(result.hosts, [HOST])
@@ -269,6 +308,8 @@ describe('bundleSdk', () => {
     const configPath = path.join(projectRoot, 'qvac.config.json')
     writeFakeSdk(sdkPath)
     linkDependency(sdkPath, 'bare-stow', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow', SDK_DIR)
+    linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
     writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
 
     const result = await bundleSdk({ projectRoot, configPath, sdkPath, quiet: true })
@@ -282,11 +323,48 @@ describe('bundleSdk', () => {
     assert.ok(Object.keys(resolutions).some((key) => key.endsWith('/sdk/dist/worker.js')))
   })
 
+  it("copies an outside SDK's addon resources beside the offloaded binary", async (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-outside-')))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    const sdkPath = path.join(root, 'sdk')
+    const projectRoot = path.join(root, 'app')
+    const configPath = path.join(projectRoot, 'qvac.config.json')
+    writeFakeSdk(sdkPath)
+    linkDependency(sdkPath, 'bare-stow', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow', SDK_DIR)
+    linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
+    const addonDir = path.join(sdkPath, 'node_modules', 'resource-addon')
+    addAddon(addonDir, 'resource-addon')
+    writeFile(path.join(addonDir, 'index.js'), 'module.exports = require.addon()')
+    writeFile(path.join(addonDir, 'prebuilds', HOST, 'resource-addon.bare'), 'binary')
+    writeFile(path.join(addonDir, 'prebuilds', HOST, 'resource-addon', 'backend.so'), 'backend')
+    addPlugin(
+      sdkPath,
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'resource-addon'\nexport const llmPlugin = { addon }\n"
+    )
+    writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
+
+    const result = await bundleSdk({ projectRoot, configPath, sdkPath, quiet: true })
+
+    const offloaded = fs
+      .readdirSync(path.dirname(result.bundlePath), { recursive: true, encoding: 'utf8' })
+      .find((file) => file.endsWith(`${path.sep}resource-addon.bare`))
+    assert.ok(offloaded, 'the addon binary is offloaded beside the bundle')
+    const backend = path.join(
+      path.dirname(result.bundlePath),
+      offloaded.slice(0, -'.bare'.length),
+      'backend.so'
+    )
+    assert.equal(fs.readFileSync(backend, 'utf8'), 'backend')
+  })
+
   it('replaces the output of an earlier run', async (t) => {
     const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
     writeFile(path.join(workerDir, 'stale.bare'), '')
 
-    await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    await bundleSdk({ projectRoot, configPath, quiet: true })
 
     assert.ok(!fs.existsSync(path.join(workerDir, 'stale.bare')))
   })
@@ -308,7 +386,7 @@ describe('bundleSdk', () => {
       })
     )
 
-    const result = await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
     await assertDecoderExcludedFromBundle(result)
 
     writeFile(
@@ -329,14 +407,13 @@ describe('bundleSdk', () => {
     const explicitlyDeferred = await bundleSdk({
       projectRoot,
       configPath,
-      defer: ['bare-ffmpeg'],
-      checkEngines: false
+      defer: ['bare-ffmpeg']
     })
     await assertDecoderExcludedFromBundle(explicitlyDeferred)
     assert.ok(warnings.some((message) => message.includes('cannot decode compressed audio files')))
   })
 
-  it('omits bare-ffmpeg from the addon manifest when audio decoding is disabled', async (t) => {
+  it('leaves bare-ffmpeg out of the bundle when audio decoding is disabled', async (t) => {
     const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
     addAddon(path.join(sdkPath, 'node_modules', 'bare-ffmpeg'), 'bare-ffmpeg')
     addPlugin(
@@ -350,7 +427,7 @@ describe('bundleSdk', () => {
       JSON.stringify({ plugins: ['@qvac/sdk/audiogen-ggml/plugin'], includeAudioDecoder: false })
     )
 
-    const result = await bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
 
     await assertDecoderExcludedFromBundle(result)
   })
@@ -360,9 +437,148 @@ describe('bundleSdk', () => {
     writeFile(configPath, JSON.stringify({ plugins: ['missing-package/plugin'] }))
 
     await assert.rejects(
-      bundleSdk({ projectRoot, configPath, quiet: true, checkEngines: false }),
+      bundleSdk({ projectRoot, configPath, quiet: true }),
       (error: unknown) =>
         error instanceof BundleFailedError && error.message.includes('missing-package/plugin')
+    )
+  })
+
+  it('imports an SDK installed under a symlinked project path by name', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const linkedRoot = `${projectRoot}-link`
+    fs.symlinkSync(projectRoot, linkedRoot, 'dir')
+    t.after(() => fs.rmSync(linkedRoot, { force: true }))
+
+    const result = await bundleSdk({ projectRoot: linkedRoot, configPath, quiet: true })
+
+    assert.match(fs.readFileSync(result.entryPath, 'utf8'), /from "@qvac\/sdk\/worker"/)
+  })
+
+  it('bundles a custom plugin that imports the SDK by name under a linked SDK', async (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-linked-')))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    const sdkPath = path.join(root, 'sdk')
+    const projectRoot = path.join(root, 'app')
+    const configPath = path.join(projectRoot, 'qvac.config.json')
+    writeFakeSdk(sdkPath)
+    addPlugin(sdkPath, 'plugin-utils', 'plugin-utils.js', "export * from 'fake-inference'\n")
+    const manifestPath = path.join(sdkPath, 'package.json')
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    manifest.exports['./plugin-utils'] = './dist/plugin-utils.js'
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest))
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'fake-inference', 'package.json'),
+      JSON.stringify({ name: 'fake-inference', main: 'index.js' })
+    )
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'fake-inference', 'index.js'),
+      'exports.definePlugin = (plugin) => plugin\n'
+    )
+    linkDependency(sdkPath, 'bare-stow', SDK_DIR)
+    fs.mkdirSync(path.join(projectRoot, 'node_modules', '@qvac'), { recursive: true })
+    fs.symlinkSync(sdkPath, path.join(projectRoot, 'node_modules', '@qvac', 'sdk'), 'dir')
+    linkDependency(projectRoot, 'bare-stow', SDK_DIR)
+    linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'my-plugin', 'package.json'),
+      JSON.stringify({ name: 'my-plugin', exports: { './plugin': './plugin.js' } })
+    )
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'my-plugin', 'plugin.js'),
+      "const { definePlugin } = require('@qvac/sdk/plugin-utils')\nmodule.exports = definePlugin({})\n"
+    )
+    writeFile(configPath, JSON.stringify({ plugins: ['my-plugin/plugin'] }))
+
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    const { resolutions } = await readBundle(result.bundlePath)
+    assert.ok(Object.keys(resolutions).some((key) => key.endsWith('/fake-inference/index.js')))
+  })
+
+  it('names the missing platform package of a desktop host', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    const addonDir = path.join(sdkPath, 'node_modules', 'split-addon')
+    writeFile(
+      path.join(addonDir, 'package.json'),
+      JSON.stringify({
+        name: 'split-addon',
+        version: '1.0.0',
+        main: 'index.js',
+        imports: {
+          '#host-addon': {
+            [process.platform]: { [process.arch]: `split-addon-${HOST}` },
+            default: './addon-unavailable.js'
+          }
+        }
+      })
+    )
+    writeFile(path.join(addonDir, 'index.js'), "module.exports = require('#host-addon')\n")
+    writeFile(path.join(addonDir, 'addon-unavailable.js'), 'module.exports = null\n')
+    addPlugin(
+      sdkPath,
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'split-addon'\nexport const llmPlugin = { addon }\n"
+    )
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, quiet: true }),
+      (error: unknown) =>
+        error instanceof HostPrebuildsMissingError &&
+        error.dependencies[`split-addon-${HOST}`] === '1.0.0'
+    )
+  })
+
+  it('fails verification for an addon with no prebuild for a bundled host', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    addAddon(path.join(sdkPath, 'node_modules', 'phone-addon'), 'phone-addon')
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'phone-addon', 'index.js'),
+      'module.exports = require.addon()'
+    )
+    addPlugin(
+      sdkPath,
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'phone-addon'\nexport const llmPlugin = { addon }\n"
+    )
+
+    await assert.rejects(
+      bundleSdk({
+        projectRoot,
+        configPath,
+        target: 'react-native',
+        hosts: ['android-arm64'],
+        link: false,
+        quiet: true
+      }),
+      (error: unknown) =>
+        error instanceof BundleVerificationFailedError &&
+        error.cause instanceof Error &&
+        error.cause.message.includes('phone-addon@1.0.0 for android-arm64')
+    )
+  })
+
+  it('fails to link without react-native-bare-kit', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, target: 'react-native', quiet: true }),
+      (error: unknown) =>
+        error instanceof AddonLinkFailedError &&
+        error.message.includes('react-native-bare-kit is not installed')
+    )
+  })
+
+  it('fails when the harness cannot resolve a package it imports', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    fs.rmSync(path.join(projectRoot, 'node_modules', 'bare-sidecar'))
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, quiet: true }),
+      (error: unknown) =>
+        error instanceof BundleFailedError &&
+        error.message.includes('the harness imports bare-sidecar')
     )
   })
 
@@ -377,7 +593,7 @@ describe('bundleSdk', () => {
         configPath,
         target: 'react-native',
         quiet: true,
-        checkEngines: false
+        verify: false
       }),
       (error: unknown) => error instanceof BundleFailedError
     )

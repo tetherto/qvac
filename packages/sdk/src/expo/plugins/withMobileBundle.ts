@@ -89,8 +89,7 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
     defer: deferredModules,
     quiet: true,
     installMissingPrebuilds: options.installMissingPrebuilds === true,
-    // runVerifier checks engines.bare right after, with progress output.
-    checkEngines: false,
+    verify: false,
     link: false
   })
   if (result.installedPrebuilds.length > 0) {
@@ -98,13 +97,13 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
     console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
   }
 
-  await runVerifier(projectRoot, result.bundlePath, configPath, platformHosts)
+  await runVerifier(projectRoot, result.bundlePath, platformHosts)
 
   copyWorker(path.dirname(result.harnessPath), path.join(sdkPackage.dir, 'dist', 'worker-mobile'))
 
   const linked = await linkAddons({
     projectRoot,
-    entryPath: result.entryPath,
+    addonModules: result.addonModules,
     hosts: platformHosts,
     logger
   })
@@ -134,17 +133,11 @@ function findConfigFile(projectRoot: string): string | null {
   return null
 }
 
-async function runVerifier(
-  projectRoot: string,
-  bundlePath: string,
-  configPath: string | null,
-  hosts: string[]
-) {
+async function runVerifier(projectRoot: string, bundlePath: string, hosts: string[]) {
   const result = await verifyBundle({
     projectRoot,
     addonsSource: bundlePath,
     hosts,
-    ...(configPath ? { configPath } : {}),
     onProgress: (message) => console.log(`🕚 QVAC: ${message}`)
   })
 
