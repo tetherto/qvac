@@ -131,7 +131,7 @@ test('kv-cache-session: a cold turn establishes the cache from its own save, and
       'nothing is recorded before the addon has saved'
     )
 
-    // Stands in for the addon's own `saveCacheToDisk` at the end of the turn.
+    // Stands in for the addon's `saveCache` at the end of the turn.
     writeFakeCache(firstTurn.cachePath)
     await session.commitTurn(firstTurn, { kind: 'static' })
     t.ok(

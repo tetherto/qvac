@@ -345,8 +345,8 @@ export interface KvCacheSession {
    * Open a new turn against the cache. Resolves the cache file path,
    * ensures its parent directory exists, and returns a `TurnHandle` the
    * handler attaches to `ctx.scope.defer(...)` for the rollback hook. The
-   * addon's own `saveCacheToDisk` is what writes the file, so a cold turn
-   * opens without one. Auto-cache path resolution is serialized with
+   * addon's `saveCache` writes the file after the run, so a cold turn opens
+   * without one. Auto-cache path resolution is serialized with
    * retention deletion before the handle is returned.
    */
   beginTurn(input: BeginTurnInput): Promise<TurnHandle>
@@ -583,10 +583,8 @@ export function createKvCacheSession(
     if (state.committed || state.rolledBack) return
 
     if (result.kind === 'static') {
-      // Custom-key path: the addon wrote the new cache state inline
-      // at the same path. Verify the file persisted (the addon
-      // currently swallows save errors — see TODO in
-      // `verifySaveAndRecord`).
+      // Custom-key path: the addon's save wrote the new cache state at the
+      // same path. Verify the file persisted.
       const ok = await verifySaveAndRecord(state.cachePath)
       if (!ok) {
         await runRollback(state)
@@ -801,13 +799,9 @@ export async function deleteKvCacheState(
 // ----- private helpers -----
 
 /**
- * Verify the addon actually persisted the cache file before recording it
- * as established. The addon currently swallows write errors silently.
- *
- * TODO: once the addon surfaces save failures (e.g. throws
- * `UnableToSaveSessionFile` when `llama_state_save_file` returns
- * false), drop the `access()` probe and wrap the `model.run()` call in
- * a real try/catch that forwards the error.
+ * Verify the cache file exists before recording it as established. The file
+ * is the evidence because `saveCache` rejects both when a write fails and when
+ * the addon kept nothing to write.
  */
 async function verifySaveAndRecord(cachePath: string): Promise<boolean> {
   try {

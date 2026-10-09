@@ -16,6 +16,9 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
 - Name a cache file by key and system prompt only. A changed tool set or an
   edited history must reach the same file so the addon can trim it at the
   divergence point.
+- Write every turn's cache with `saveCache` once the run finishes. The addon
+  otherwise keeps it in memory, and the session, the auto-cache rename and a
+  restart all read the file.
 - Validate a newly written cache before marking it initialized. The addon
   rewinds a cancelled or failed request itself, so keep the file rather than
   deleting it; only an auto cache with no key to move to is dropped.

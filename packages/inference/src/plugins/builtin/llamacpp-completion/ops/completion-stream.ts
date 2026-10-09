@@ -83,7 +83,7 @@ export type CompletionGenerationParams = GenerationParams & {
   json_schema?: string
 }
 
-type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'saveCacheToDisk' | 'prefill'> & {
+type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'> & {
   generationParams?: CompletionGenerationParams
 }
 
@@ -173,7 +173,28 @@ export function seedConfiguredSystemPrompt<T extends { role: string; content: st
   return [{ role: 'system', content: configured } as T, ...history]
 }
 
-type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'saveCacheToDisk'>
+type CacheRunOptions = Pick<RunOptions, 'cacheKey'>
+
+type CacheSavingModel = AnyModel & { saveCache?(cacheKey: string): Promise<void> }
+
+/**
+ * Write the conversation the addon holds for `cachePath` to that file. The
+ * session commits on the file, and a saved conversation is one the addon drops
+ * once `deleteCache` removes the file. A rejection is expected when the addon
+ * kept nothing (a cold turn rolled back); the commit then finds no file.
+ */
+async function saveCacheFile(model: AnyModel, cachePath: string, log: Logger): Promise<void> {
+  const saveCache = (model as CacheSavingModel).saveCache
+  if (!saveCache) return
+  try {
+    await saveCache.call(model, cachePath)
+    logCacheSave(cachePath)
+  } catch (error) {
+    log.debug(
+      `[kv-cache] saveCache did not write ${cachePath}: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
 
 async function* processModelResponse(
   model: AnyModel,
@@ -190,9 +211,6 @@ async function* processModelResponse(
     ...(generationParams && { generationParams }),
     ...(cacheOptions?.cacheKey !== undefined && {
       cacheKey: cacheOptions.cacheKey
-    }),
-    ...(cacheOptions?.saveCacheToDisk !== undefined && {
-      saveCacheToDisk: cacheOptions.saveCacheToDisk
     })
   }
   const hasRunOptions = Object.keys(runOptions).length > 0
@@ -217,10 +235,6 @@ async function* processModelResponse(
     yield { token: tokenStr }
   }
   const modelExecutionMs = nowMs() - modelStart
-
-  if (cacheOptions?.saveCacheToDisk && cacheOptions.cacheKey) {
-    logCacheSave(cacheOptions.cacheKey)
-  }
 
   if (tools && tools.length > 0) {
     const { toolCalls } = parseToolCalls(accumulatedText, tools, dialect)
@@ -402,14 +416,15 @@ export async function* completion(
     prompt,
     callableTools,
     mergedGenerationParams,
-    { cacheKey: turn.cachePath, saveCacheToDisk: true },
+    { cacheKey: turn.cachePath },
     dialect,
     setActiveResponse
   )
+  await saveCacheFile(model, turn.cachePath, requestLogger)
 
   if (typeof kvCache === 'string') {
-    // Custom-key path: the addon saved whatever it kept, cancelled and
-    // stopped turns included, at the same path.
+    // Custom-key path: the file holds whatever the addon kept, cancelled and
+    // stopped turns included.
     await session.commitTurn(turn, { kind: 'static' })
     return result
   }
