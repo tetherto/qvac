@@ -90,10 +90,7 @@ async function streamToWire(
   profiler.startHandler()
   let sentFinalChunk = false
 
-  // A client that aborts its stream closes this one. Abort the engine stream
-  // with it: a handler that declares `endsOnAbort`, such as the log stream,
-  // would otherwise hold its subscription until it next had something to send.
-  // The engine runs every other stream to its end.
+  // Lets an `endsOnAbort` handler (log stream) release its source when the client aborts.
   const signal = signalOnWireClose(wire)
 
   // A progress stream (a reply op that streams because of `withProgress`) can
@@ -120,7 +117,7 @@ async function streamToWire(
       }
     }
 
-    // The client destroyed its end, so nothing is left to send it.
+    // The client is gone.
     if (signal.aborted) return
 
     if (!sentFinalChunk) {

@@ -19,8 +19,7 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void
  * stream that the worker fans every log into.
  *
  * @param handler - called once per log line.
- * @returns a function that stops the subscription at once, without waiting for
- *   another log.
+ * @returns a function that stops the subscription.
  *
  * @example
  * ```typescript

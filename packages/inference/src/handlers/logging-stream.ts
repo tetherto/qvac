@@ -38,10 +38,7 @@ export async function* handleLoggingStream(
     wake()
   }
 
-  // Release the subscription and drop what it queued as soon as the caller
-  // aborts, even while it is not reading. A parked stream wakes and ends; a
-  // stream whose id gets no more logs (an unloaded model) would otherwise wait
-  // forever, and its subscription with it.
+  // Release at once, even if nobody is reading; a quiet id would wait forever.
   const onAbort = () => {
     unregisterLoggingStream(id, streamHandler)
     logQueue.length = 0
@@ -57,8 +54,7 @@ export async function* handleLoggingStream(
         yield logQueue.shift()!
       }
 
-      // An abort while a log was being read emptied the queue and found no
-      // pending wait to wake, so end here instead of waiting.
+      // Aborted during a read: nothing to wake, so end here.
       if (signal?.aborted) return
 
       await new Promise<void>((resolve) => {

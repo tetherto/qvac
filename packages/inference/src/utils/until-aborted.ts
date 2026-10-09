@@ -3,13 +3,9 @@ import type { AbortSignalLike } from '@/schemas/common'
 const ABORTED = Symbol('aborted')
 
 /**
- * Iterates `source` until `signal` aborts, then ends without an error.
- *
- * Each pending `next()` is raced against the signal instead of awaited,
- * because an async generator queues `return()` behind its pending `next()`: a
- * source that never yields again would otherwise never end. Once aborted, the
- * source is returned in the background and a late rejection from it is
- * dropped, since the caller has stopped listening.
+ * Iterates `source` until `signal` aborts, then ends without an error. Races
+ * each `next()` against the signal, since `return()` waits behind a pending
+ * `next()`. A rejection after the abort is dropped.
  */
 export async function* untilAborted<T>(
   source: AsyncGenerator<T>,

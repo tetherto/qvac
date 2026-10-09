@@ -47,7 +47,7 @@ export function startLoggingStreamForModel(modelId: string, modelLogger: Logger)
       } catch (error) {
         logger.error(`Logging stream error for model ${modelId}:`, error)
       } finally {
-        // A reload under the same id may have registered a new stream by now.
+        // A reload may have replaced this entry.
         if (activeStreams.get(modelId) === entry) activeStreams.delete(modelId)
       }
     })()
@@ -62,8 +62,7 @@ export function stopLoggingStreamForModel(modelId: string) {
   const stream = activeStreams.get(modelId)
   if (stream) {
     activeStreams.delete(modelId)
-    // Abort rather than `return()`: an unloaded model logs nothing more, and
-    // `return()` waits for the next log before the stream ends.
+    // `return()` would wait for a log an unloaded model never sends.
     stream.controller.abort()
     logger.debug(`Stopped logging stream for model ${modelId}`)
   }

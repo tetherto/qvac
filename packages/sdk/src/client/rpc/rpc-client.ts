@@ -204,14 +204,9 @@ async function* iterateWithLifeSignal<T>(source: AsyncGenerator<T>): AsyncGenera
   }
 }
 
-// Destroying the response stream is what stops the worker: bare-rpc sends it a
-// DESTROY frame, and the worker aborts the engine stream behind it, so a
-// handler waiting on a source (a log subscription) releases it. This runs from
-// the signal's own listener, so it happens even while the caller is not
-// reading. It is registered before `untilAborted` listens, so by the time the
-// destroyed stream rejects its pending read, `untilAborted` has already ended
-// the iteration and drops that rejection instead of `iterateWithLifeSignal`
-// taking it for a dead worker.
+// Destroying the response stream makes the worker abort the engine stream.
+// Registered before `untilAborted`, so the destroyed stream's late rejection is
+// dropped there instead of reaching `iterateWithLifeSignal` as a worker crash.
 function destroyOnAbort(responseStream: { destroy(): void }, signal?: AbortSignalLike): () => void {
   if (!signal) return () => {}
   const onAbort = () => responseStream.destroy()
@@ -399,12 +394,7 @@ async function sendProfiled<T extends Request>(
   }
 }
 
-/**
- * Sends a request and yields its responses. Aborting `options.signal` ends the
- * stream without an error and closes it on the worker; a signal that is already
- * aborted sends nothing. Pass one only for a request whose handler declares
- * `endsOnAbort`: the worker keeps running any other stream to its end.
- */
+/** `options.signal` ends the stream; only `endsOnAbort` handlers stop on the worker. */
 export async function* stream<T extends Request>(
   request: T,
   options: AbortableRPCOptions = {},
@@ -458,7 +448,7 @@ async function* streamBase<T extends Request>(
       buffer = lines.pop() || '' // Keep incomplete line in buffer
 
       for (const line of lines) {
-        // The caller may abort while it reads a response from this chunk.
+        // Aborted mid-chunk.
         if (options.signal?.aborted) return
         if (line.trim()) {
           const response = responseSchema.parse(JSON.parse(line))
@@ -531,7 +521,7 @@ async function* streamProfiled<T extends Request>(
       buffer = lines.pop() || ''
 
       for (const line of lines) {
-        // The caller may abort while it reads a response from this chunk.
+        // Aborted mid-chunk.
         if (options.signal?.aborted) return
         if (line.trim()) {
           const rawParsed = JSON.parse(line) as Record<string, unknown>

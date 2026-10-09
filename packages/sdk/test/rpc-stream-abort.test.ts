@@ -5,7 +5,7 @@ import type { Response } from '@qvac/inference/surface'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// The worker path is read when the RPC client module loads, so set it first.
+// Read when the RPC client module loads.
 process.env['QVAC_WORKER_PATH'] = path.resolve(__dirname, 'fixtures/stream-close-worker.mjs')
 
 async function load() {
@@ -28,8 +28,7 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 
 type LogResponse = Response & { message: string }
 
-// The fixture reports on a probe stream when a stream opens and when the client
-// closes one, which is what the worker would see. One worker serves the file.
+// The fixture reports stream open/close on this probe stream.
 const probeController = new AbortController()
 let probe: AsyncGenerator<Response> | undefined
 let probeRead: Promise<IteratorResult<Response>> | undefined
@@ -138,7 +137,7 @@ test('the unsubscribe from subscribeServerLogs closes the stream without another
 test('close the worker', { hook: true }, async function () {
   const { close } = await load()
   probeController.abort()
-  // Let the probe's pending read end on its abort before close() fails it.
+  // Let the pending probe read end before close() rejects it.
   await probeRead
   await close()
   delete process.env['QVAC_WORKER_PATH']

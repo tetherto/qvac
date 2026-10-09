@@ -12,12 +12,9 @@ import { InvalidResponseError } from '@/errors/index'
  *
  * @param params - The arguments for the logging stream
  * @param params.id - The unique identifier to stream logs for
- * @param options - Optional call options
- * @param options.signal - Ends the stream when aborted, without an error, and
- *   releases the subscription at once. Use it to stop the stream from outside
- *   its loop: calling `return()` there waits for the next log, which for an id
- *   that gets no more logs never comes. Breaking out of the loop releases it at
- *   once as well.
+ * @param options - Call options
+ * @param options.signal - Abort to end the stream and release the subscription
+ *   at once, from outside the loop.
  * @returns AsyncGenerator yielding logging stream responses
  * @throws {QvacErrorBase} When the response type is invalid or when the stream fails
  *
@@ -33,8 +30,7 @@ import { InvalidResponseError } from '@/errors/index'
  *   console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);
  * }
  *
- * // Stop reading from outside the loop (on Bare, AbortController comes from
- * // `bare-abort-controller`)
+ * // Stop from outside the loop (on Bare, AbortController is from bare-abort-controller)
  * const controller = new AbortController();
  * const modelLogs = loggingStream({ id: 'my-model-id' }, { signal: controller.signal });
  * // later

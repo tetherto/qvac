@@ -284,12 +284,7 @@ export async function send<T extends Request>(
   )
 }
 
-/**
- * Runs a request and yields its responses. For a handler that declares
- * `endsOnAbort`, aborting `options.signal` ends the stream without an error, and
- * a signal that is already aborted runs nothing. Every other stream ignores the
- * signal and runs to its end.
- */
+/** `options.signal` ends the stream only for a handler with `endsOnAbort`. */
 export async function* stream<T extends Request>(
   request: T,
   options?: AbortableRPCOptions

@@ -11,11 +11,7 @@ export function isTerminalChunk<T>(value: T): value is T & { done: true } {
   return typeof value === 'object' && value !== null && 'done' in value && value.done === true
 }
 
-/**
- * A signal that aborts once the client closes its end of a response stream. A
- * client that aborts its stream destroys its end, and bare-rpc closes this one
- * with it. The stream also closes after it ends, which aborts the signal then.
- */
+/** Aborts when the client destroys its end of `wire` (and after a normal end). */
 export function signalOnWireClose(wire: {
   on(event: 'close' | 'error', listener: () => void): unknown
 }): AbortSignal {

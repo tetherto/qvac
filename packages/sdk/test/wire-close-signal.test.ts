@@ -8,8 +8,7 @@ import { signalOnWireClose } from '@/server/rpc/rpc-utils'
 
 type Wire = ReturnType<RPC.IncomingRequest['createResponseStream']>
 
-// A real bare-rpc pair over a socket, the transport between the SDK client and
-// the worker. The server hands each response stream it opens to `onWire`.
+// Real bare-rpc pair over a socket; the server hands each response stream to `onWire`.
 async function rpcPair(onWire: (wire: Wire) => void) {
   const socketPath = path.join(os.tmpdir(), `qvac-wire-close-${process.pid}-${Date.now()}.sock`)
   const sockets: net.Socket[] = []

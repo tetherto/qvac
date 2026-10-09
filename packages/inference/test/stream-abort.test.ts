@@ -25,7 +25,7 @@ import {
 import { untilAborted } from '@/utils/until-aborted'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 
-// Keep the storage-root lock out of the real home, as in dispatch.test.ts.
+// Keep the storage lock out of the real home.
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-test-${os.pid()}`)
 
 function setUp() {
@@ -42,7 +42,7 @@ async function tearDown() {
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 5))
 
-// Readiness is async, so a subscription registers a few ticks after the first read.
+// Readiness is async: a subscription registers a few ticks after the first read.
 async function waitFor(condition: () => boolean, ms = 2000): Promise<boolean> {
   const deadline = Date.now() + ms
   while (!condition()) {
@@ -54,7 +54,7 @@ async function waitFor(condition: () => boolean, ms = 2000): Promise<boolean> {
 
 const subscribed = (id: string) => hasLoggingStreams(id) === true
 
-// A read that never settles: the shape of a log stream whose id gets no more logs.
+// Never settles, like a log stream for a quiet id.
 async function* parked(): AsyncGenerator<number> {
   yield 1
   await new Promise<void>(() => {})
@@ -172,7 +172,6 @@ test('a model log stream restarted under the same id survives the old one ending
 
     stopLoggingStreamForModel('model-b')
     startLoggingStreamForModel('model-b', getAppLogger())
-    // Let the first stream finish and run its cleanup.
     await tick()
     await tick()
 
@@ -251,7 +250,6 @@ test('a plugin stream ignores the signal and runs to its end', async function (t
 
     t.is(tokenOf(await responses.next()), 'a', 'the first token arrives')
 
-    // Ending a plugin stream early would free its slot while the native job runs.
     controller.abort(new Error('stop'))
     release()
 

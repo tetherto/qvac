@@ -300,8 +300,7 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     const state = streamId ? LOGGING_STREAMS.get(streamId) : undefined
     if (!state) return { closed: false }
     LOGGING_STREAMS.delete(streamId as string)
-    // Aborting releases the worker's subscription now; waiting on the pump confirms the stream ended
-    // here too, rather than on the next entry.
+    // Wait for the pump so the stream is closed when this step returns.
     state.controller.abort()
     await state.pump
     return { closed: true }
