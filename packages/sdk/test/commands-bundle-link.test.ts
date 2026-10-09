@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createCommandLogger } from '@/commands/command-logger'
-import { linkAddons, warnOverwritten } from '@/expo/plugins/link-addons'
+import { linkAddons, warnOverwritten } from '@/commands/bundle/link'
 import type { Logger } from '@/logging/types'
 
 const logger = createCommandLogger({ quiet: true })
