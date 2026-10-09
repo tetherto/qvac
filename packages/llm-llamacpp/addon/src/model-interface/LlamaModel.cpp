@@ -1718,12 +1718,27 @@ void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
       if (args == call.end()) {
         toolCall.arguments = "{}";
       } else if (args->second.is<std::string>()) {
-        toolCall.arguments = args->second.get<std::string>();
+        // Must be a JSON object: a template that parses it would otherwise fall
+        // back to a render without tools. The iterator overload catches
+        // trailing text.
+        const std::string& text = args->second.get<std::string>();
+        picojson::value parsedArgs;
+        std::string parseErr;
+        const auto stop =
+            picojson::parse(parsedArgs, text.begin(), text.end(), &parseErr);
+        if (!parseErr.empty() || !parsedArgs.is<picojson::object>() ||
+            text.find_first_not_of(
+                " \t\n\r", static_cast<size_t>(stop - text.begin())) !=
+                std::string::npos) {
+          throwInvalidToolTurn(
+              "tool_calls arguments must be an object or a JSON object string");
+        }
+        toolCall.arguments = text;
       } else if (args->second.is<picojson::object>()) {
         toolCall.arguments = args->second.serialize();
       } else {
         throwInvalidToolTurn(
-            "tool_calls arguments must be an object or a JSON string");
+            "tool_calls arguments must be an object or a JSON object string");
       }
       msg.tool_calls.push_back(std::move(toolCall));
     }

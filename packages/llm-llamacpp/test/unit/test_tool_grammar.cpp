@@ -564,6 +564,11 @@ TEST_F(ToolGrammarModelTest, PromptParserRejectsMalformedToolTurns) {
           R"([{"role":"user","content":"hi","tool_call_id":"call_1"}])",
           R"([{"role":"assistant","content":null}])",
           R"([{"role":"user","content":5}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":""}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"{"}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"not json"}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"[1]"}]}])",
+          R"([{"role":"assistant","content":"","tool_calls":[{"name":"f","arguments":"{\"a\":1} x"}]}])",
       }) {
     EXPECT_THROW(
         LlamaModelTestPeer::formatPrompt(*model, input),
