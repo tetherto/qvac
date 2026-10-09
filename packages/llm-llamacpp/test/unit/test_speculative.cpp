@@ -23,6 +23,11 @@ SpeculativeConfig parse(ConfigMap config) {
   return parseSpeculativeConfig(config);
 }
 
+// Absolute on every platform: "/models/x" has no drive on Windows.
+std::string absoluteModelPath(const char* name) {
+  return (std::filesystem::temp_directory_path() / name).string();
+}
+
 } // namespace
 
 TEST(SpeculativeConfigTest, AbsentKeysLeaveSpeculationOff) {
@@ -51,14 +56,15 @@ TEST(SpeculativeConfigTest, ParsesDraftMtpAndConsumesKeys) {
 }
 
 TEST(SpeculativeConfigTest, ParsesDraftDflashWithItsDraftModel) {
+  const std::string draftPath = absoluteModelPath("dflash.gguf");
   ConfigMap config{
       {"spec_type", "draft-dflash"},
-      {"spec-draft-model", "/models/dflash.gguf"},
+      {"spec-draft-model", draftPath},
       {"spec-draft-n-max", "15"}};
   const SpeculativeConfig parsed = parseSpeculativeConfig(config);
   EXPECT_TRUE(parsed.enabled());
   EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH);
-  EXPECT_EQ(parsed.draftModelPath, "/models/dflash.gguf");
+  EXPECT_EQ(parsed.draftModelPath, draftPath);
   EXPECT_EQ(parsed.draftNMax, 15);
   EXPECT_TRUE(config.empty());
 }
