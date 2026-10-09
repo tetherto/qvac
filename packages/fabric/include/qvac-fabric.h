@@ -38,7 +38,7 @@ QVAC_FABRIC_API size_t qvac_fabric_load_backends(void);
 //      to loading each backend by file name).
 // The runtime dir is the directory of the loaded runtime module itself. The
 // string is UTF-8 and stays valid for the life of the process.
-QVAC_FABRIC_API const char* qvac_fabric_backends_dir(void);
+QVAC_FABRIC_API const char *qvac_fabric_backends_dir(void);
 
 #ifdef __cplusplus
 }
