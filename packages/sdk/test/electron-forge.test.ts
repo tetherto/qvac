@@ -7,8 +7,6 @@ const PLUGIN_PATH = path.join(__dirname, '../src/electron-forge/index.cjs')
 
 const {
   createIgnore,
-  diffAddons,
-  diffPlatformPackages,
   readPlatformPackageAddon,
   detectTargetHosts,
   resolveHosts,
@@ -18,58 +16,6 @@ const {
 } = require(PLUGIN_PATH)
 
 setLogLevel('off')
-
-// ============================================
-// diffAddons
-// ============================================
-
-test('diffAddons: required is subset → exclusions are the diff', (t) => {
-  const installed = ['@qvac/llm-llamacpp', '@qvac/ocr-ggml', '@qvac/embed-llamacpp']
-  const required = ['@qvac/llm-llamacpp']
-  const result = diffAddons(installed, required).sort()
-  t.alike(result, ['@qvac/embed-llamacpp', '@qvac/ocr-ggml'])
-})
-
-test('diffAddons: empty required → all installed are exclusions', (t) => {
-  const installed = ['@qvac/llm-llamacpp', '@qvac/ocr-ggml']
-  t.alike(diffAddons(installed, []).sort(), ['@qvac/llm-llamacpp', '@qvac/ocr-ggml'])
-})
-
-test('diffAddons: required matches all installed → no exclusions', (t) => {
-  const installed = ['@qvac/llm-llamacpp']
-  t.alike(diffAddons(installed, ['@qvac/llm-llamacpp']), [])
-})
-
-test('diffAddons: empty installed → no exclusions', (t) => {
-  t.alike(diffAddons([], ['@qvac/llm-llamacpp']), [])
-})
-
-// ============================================
-// per-platform prebuild packages
-// ============================================
-
-test('diffPlatformPackages: a platform package follows its addon', (t) => {
-  const platformPackages = [
-    { name: '@qvac/tts-ggml-darwin-arm64', addon: '@qvac/tts-ggml' },
-    { name: '@qvac/asr-ggml-darwin-arm64', addon: '@qvac/asr-ggml' }
-  ]
-  t.alike(
-    diffPlatformPackages(platformPackages, ['@qvac/tts-ggml']),
-    ['@qvac/asr-ggml-darwin-arm64'],
-    'excluded addon → its platform package is excluded'
-  )
-  t.alike(
-    diffPlatformPackages(platformPackages, ['@qvac/tts-ggml', '@qvac/asr-ggml']),
-    [],
-    'required addons keep their platform packages'
-  )
-  t.alike(
-    diffPlatformPackages(platformPackages, []).sort(),
-    ['@qvac/asr-ggml-darwin-arm64', '@qvac/tts-ggml-darwin-arm64'],
-    'nothing required → every platform package excluded'
-  )
-  t.alike(diffPlatformPackages([], ['@qvac/tts-ggml']), [], 'no platform packages → nothing')
-})
 
 test('readPlatformPackageAddon: reads the inner addon/package.json', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-forge-platform-'))
@@ -128,6 +74,21 @@ test('createIgnore: composes with user function (user OR addon OR mobile prebuil
   )
   t.absent(ignore('/x/node_modules/@qvac/llm-llamacpp/package.json'), 'non-excluded addon kept')
   t.absent(ignore('/x/index.js'), 'regular file kept')
+})
+
+test('createIgnore: keeps the bundled worker addons under qvac/worker', (t) => {
+  const ignore = createIgnore(['@qvac/fabric'], undefined)
+  const ignored = (filePath: string) => ignore.some((re: RegExp) => re.test(filePath))
+
+  t.ok(ignored('/node_modules/@qvac/fabric/package.json'), 'top-level addon package excluded')
+  t.ok(
+    ignored('/node_modules/@qvac/sdk/node_modules/@qvac/fabric/index.js'),
+    'nested addon package excluded'
+  )
+  t.absent(
+    ignored('/qvac/worker/node_modules/@qvac/fabric/prebuilds/darwin-arm64/qvac__fabric.bare'),
+    'worker addon binary kept'
+  )
 })
 
 test('createIgnore: composes with user array', (t) => {
@@ -222,23 +183,35 @@ test('resolveHosts: null/undefined/empty falls back to host', (t) => {
   t.alike(resolveHosts([]), expected)
 })
 
+const FAKE_BUNDLE_RESULT = {
+  target: 'bare-sidecar',
+  hosts: [],
+  entryPath: '/fake/qvac/worker.entry.mjs',
+  harnessPath: '/fake/qvac/worker/index.mjs',
+  bundlePath: '/fake/qvac/worker/index.bundle',
+  plugins: [],
+  addons: [],
+  installedPrebuilds: [],
+  linked: []
+}
+
 function makeFakeCommands() {
-  const calls: { bundleHosts: string[] | null; verifyHosts: string[] | null } = {
+  const calls: {
+    bundleTarget: string | null
+    bundleHosts: string[] | null
+    verifyHosts: string[] | null
+  } = {
+    bundleTarget: null,
     bundleHosts: null,
     verifyHosts: null
   }
   return {
     calls,
     commands: {
-      bundleSdk: async (opts: { hosts?: string[] }) => {
+      bundleSdk: async (opts: { target?: string; hosts?: string[] }) => {
+        calls.bundleTarget = opts.target ?? null
         calls.bundleHosts = opts.hosts ?? null
-        return {
-          bundlePath: '/fake/qvac/worker.bundle.js',
-          plugins: [],
-          addons: [],
-          entryPaths: { worker: '/fake/qvac/worker.entry.mjs' },
-          manifestPath: '/fake/qvac/addons.manifest.json'
-        }
+        return FAKE_BUNDLE_RESULT
       },
       verifyBundle: async (opts: { hosts?: string[] }) => {
         calls.verifyHosts = opts.hosts ?? null
@@ -256,6 +229,7 @@ test('runBundleAndVerify: same resolved hosts threaded into bundleSdk and verify
     configPath: null,
     hosts: ['darwin-x64']
   })
+  t.is(calls.bundleTarget, 'bare-sidecar', 'bundleSdk bundles for bare-sidecar')
   t.alike(calls.bundleHosts, ['darwin-x64'], 'bundleSdk got the resolved hosts')
   t.alike(calls.verifyHosts, ['darwin-x64'], 'verifyBundle got the resolved hosts')
   t.alike(calls.bundleHosts, calls.verifyHosts, 'both commands receive the same hosts array')
@@ -274,13 +248,7 @@ test('runBundleAndVerify: defaults to host arch when hosts is null', async (t) =
 
 test('runBundleAndVerify: narrowed and absent linkedHosts both survive reporting', async (t) => {
   const commands = {
-    bundleSdk: async () => ({
-      bundlePath: '/fake/qvac/worker.bundle.js',
-      plugins: [],
-      addons: [],
-      entryPaths: { worker: '/fake/qvac/worker.entry.mjs' },
-      manifestPath: '/fake/qvac/addons.manifest.json'
-    }),
+    bundleSdk: async () => FAKE_BUNDLE_RESULT,
     verifyBundle: async () => ({
       issues: [],
       addons: [
@@ -302,7 +270,7 @@ test('runBundleAndVerify: narrowed and absent linkedHosts both survive reporting
 test('runBundleAndVerify: bundleSdk failure is wrapped in QvacForgePluginError', async (t) => {
   const commands = {
     bundleSdk: async () => {
-      throw new Error('bare-pack exploded')
+      throw new Error('bare-stow exploded')
     },
     verifyBundle: async () => ({ issues: [], addons: [] }),
     hasErrors: () => false,
@@ -314,7 +282,7 @@ test('runBundleAndVerify: bundleSdk failure is wrapped in QvacForgePluginError',
         configPath: null,
         hosts: ['darwin-arm64']
       }),
-    /bundleSdk failed: bare-pack exploded/
+    /bundleSdk failed: bare-stow exploded/
   )
 })
 
