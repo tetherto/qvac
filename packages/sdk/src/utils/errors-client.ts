@@ -202,21 +202,17 @@ export class BundleVerificationFailedError extends QvacErrorBase {
   }
 }
 
-export class BarePackNotInstalledError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED, undefined, cause))
+export class BundleFailedError extends QvacErrorBase {
+  constructor(entryPath: string, cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.BUNDLE_FAILED, [entryPath, reason], cause))
   }
 }
 
-export class BarePackError extends QvacErrorBase {
-  constructor(exitCode: number, entryPath: string, outputPath: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR,
-        [exitCode, entryPath, outputPath],
-        cause
-      )
-    )
+export class UnexpectedDeferredImportsError extends QvacErrorBase {
+  constructor(imports: string[], cause?: unknown) {
+    const list = imports.map((entry) => `  - ${entry}`).join('\n')
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.UNEXPECTED_DEFERRED_IMPORTS, [list], cause))
   }
 }
 

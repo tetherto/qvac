@@ -1,7 +1,11 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { extractBarePackHeader, extractPackedString } from '@/commands/bundle/manifest'
+import { fileURLToPath } from 'node:url'
+import { readBundle } from '@/commands/bundle/read-bundle'
+import { linkDependency } from './link-dependency'
+
+const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 export const SPLIT_ADDON = '@qvac/fake-ggml'
 export const SPLIT_ADDON_VERSION = '1.2.3'
@@ -71,23 +75,15 @@ export function createSplitAddonProject(sdkDir: string, options: SplitAddonProje
       name: '@qvac/sdk',
       type: 'module',
       exports: {
-        './worker-lifecycle': './dist/worker-lifecycle.js',
-        './plugins': './dist/plugins.js',
-        './logging': './dist/logging.js',
+        './worker': './dist/worker.js',
         './llamacpp-completion/plugin': './dist/llm-plugin.js'
       }
     })
   )
   writeFile(path.join(sdkRoot, 'bare-imports.json'), '{}\n')
   writeFile(
-    path.join(sdkRoot, 'dist', 'worker-lifecycle.js'),
-    'export function initializeWorker() { return { hasRPCConfig: false } }\n' +
-      'export function ensureRPCSetup() {}\n'
-  )
-  writeFile(path.join(sdkRoot, 'dist', 'plugins.js'), 'export function registerPlugin() {}\n')
-  writeFile(
-    path.join(sdkRoot, 'dist', 'logging.js'),
-    'export function getServerLogger() { return { info() {} } }\n'
+    path.join(sdkRoot, 'dist', 'worker.js'),
+    'export function startWorker(ipc, ready) { ready(); return async () => {} }\n'
   )
   writeFile(
     path.join(sdkRoot, 'dist', 'llm-plugin.js'),
@@ -119,6 +115,9 @@ export function createSplitAddonProject(sdkDir: string, options: SplitAddonProje
     link(addonRoot, path.join(store, 'node_modules', ...SPLIT_ADDON.split('/')))
     writeFile(path.join(projectRoot, 'node_modules', '.modules.yaml'), 'layoutVersion: 5\n')
   }
+
+  linkDependency(projectRoot, 'bare-stow', SDK_DIR)
+  linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
 
   const configPath = path.join(projectRoot, 'qvac.config.json')
   writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
@@ -174,9 +173,8 @@ function writeSplitAddon(root: string, name: string, version: string, dependency
   writeFile(path.join(root, 'addon-unavailable.js'), 'module.exports = null\n')
 }
 
-/** The module keys in the header of the project's `qvac/worker.bundle.js`. */
-export function bundledModules(projectRoot: string) {
-  const bundleText = fs.readFileSync(path.join(projectRoot, 'qvac', 'worker.bundle.js'), 'utf8')
-  const header = extractBarePackHeader(extractPackedString(bundleText))
-  return Object.keys(header.resolutions ?? {})
+/** The module keys of the project's phone bundle. */
+export async function bundledModules(projectRoot: string) {
+  const bundle = await readBundle(path.join(projectRoot, 'qvac', 'worker', 'index.bundle.mjs'))
+  return Object.keys(bundle.resolutions)
 }

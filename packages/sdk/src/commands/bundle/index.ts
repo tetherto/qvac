@@ -1,6 +1,8 @@
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
+import stow from 'bare-stow'
 import { DEFAULT_HOSTS, DEFAULT_SDK_NAME } from '@/commands/bundle/constants'
 import {
   CONFIG_CANDIDATES,
@@ -9,18 +11,21 @@ import {
 import { createCommandLogger } from '@/commands/command-logger'
 import {
   BareImportsMapNotFoundError,
-  HostPrebuildsInstallRefusedError
+  BundleFailedError,
+  HostPrebuildsInstallRefusedError,
+  UnexpectedDeferredImportsError
 } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
-import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
-import { runBarePack } from '@/commands/bundle/bare-pack'
+import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
-import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
+import { readBundle } from '@/commands/bundle/read-bundle'
+import { TARGETS, type BundleTarget } from '@/commands/bundle/targets'
 import {
   installMissingHostPrebuilds,
   type HostPrebuildPackage
 } from '@/commands/host-prebuilds/index'
 import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
+import { isMobileHost } from '@/commands/verify/prebuilds'
 import { verifyBundle } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
@@ -32,6 +37,12 @@ export interface BundleSdkOptions {
   projectRoot?: string | undefined
   configPath?: string | undefined
   sdkPath?: string | undefined
+  /** Where the worker runs. Defaults to `bare-sidecar`. */
+  target?: BundleTarget | undefined
+  /**
+   * Hosts to bundle for. Defaults to this machine for `bare-sidecar` and
+   * `pear-runtime`, and to every phone host for `react-native`.
+   */
   hosts?: string[] | undefined
   defer?: string[] | undefined
   quiet?: boolean | undefined
@@ -56,10 +67,15 @@ export interface BundleSdkOptions {
 }
 
 export interface BundleSdkResult {
+  target: BundleTarget
+  hosts: string[]
+  /** The generated worker entry the bundle starts from. */
+  entryPath: string
+  /** The bare-stow harness that starts the bundled worker. */
+  harnessPath: string
   bundlePath: string
   plugins: string[]
   addons: string[]
-  entryPaths: { worker: string }
   manifestPath: string
   /** Platform packages `installMissingPrebuilds` installed; empty when it is off. */
   installedPrebuilds: HostPrebuildPackage[]
@@ -175,14 +191,95 @@ async function checkBundleEngines(options: CheckBundleEnginesOptions) {
   logger.warn(lines.join('\n').trimEnd())
 }
 
+function defaultHosts(target: BundleTarget): string[] {
+  if (target === 'react-native') return DEFAULT_HOSTS.filter(isMobileHost)
+  return [`${process.platform}-${process.arch}`]
+}
+
+const DEFERRED_PREFIX = 'deferred:'
+const HOST_ADDON_IMPORT = '#host-addon'
+
+/**
+ * Deferred imports the bundle may hold: the ones the caller asked for, and the
+ * own-package `require.addon()` of a split addon, which falls back to its
+ * `#host-addon` platform package at run time.
+ */
+function findUnexpectedDeferredImports(
+  resolutions: Record<string, unknown>,
+  deferModules: string[]
+): string[] {
+  const unexpected: string[] = []
+  for (const [module, map] of Object.entries(resolutions)) {
+    if (typeof map !== 'object' || map === null) continue
+    const imports = map as Record<string, unknown>
+    for (const [specifier, target] of Object.entries(imports)) {
+      if (typeof target !== 'string' || !target.startsWith(DEFERRED_PREFIX)) continue
+      if (deferModules.includes(specifier)) continue
+      if (specifier === '.' && HOST_ADDON_IMPORT in imports) continue
+      unexpected.push(`${specifier} (imported from ${module})`)
+    }
+  }
+  return unexpected
+}
+
+interface StowWorkerOptions {
+  entryPath: string
+  target: BundleTarget
+  outputDir: string
+  projectRoot: string
+  hosts: string[]
+  imports: Record<string, unknown>
+  deferModules: string[]
+}
+
+async function stowWorker(options: StowWorkerOptions): Promise<string> {
+  const { entryPath, target, outputDir, projectRoot, hosts, imports, deferModules } = options
+  const spec = TARGETS[target]
+  const harnessPath = path.join(outputDir, spec.harness)
+
+  await fsp.rm(outputDir, { recursive: true, force: true })
+
+  // bare-module-traverse types its options from bare-addon-resolve, which lacks
+  // the `imports` and `defer` that bare-module-resolve takes.
+  const stowOptions: stow.StowOptions & { imports: Record<string, unknown>; defer: string[] } = {
+    base: pathToFileURL(projectRoot + path.sep).href,
+    imports,
+    defer: deferModules,
+    hosts,
+    deferUnresolved: spec.offload
+  }
+
+  const written: string[] = []
+  try {
+    for await (const artifact of stow(
+      pathToFileURL(entryPath).href,
+      await spec.load(),
+      pathToFileURL(harnessPath).href,
+      stowOptions
+    )) {
+      written.push(artifact.url.pathname)
+    }
+  } catch (error) {
+    throw new BundleFailedError(entryPath, error)
+  }
+
+  const bundlePath = written.find(
+    (file) => path.dirname(file) === outputDir && file !== harnessPath && !file.endsWith('.d.ts')
+  )
+  if (bundlePath === undefined) {
+    throw new BundleFailedError(entryPath, new Error(`bare-stow wrote no bundle to ${outputDir}`))
+  }
+  return bundlePath
+}
+
 export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleSdkResult> {
   const startTime = Date.now()
 
-  const projectRoot = options.projectRoot ?? process.cwd()
-  const outputDir = path.join(projectRoot, 'qvac')
-  const entryPath = path.join(outputDir, 'worker.entry.mjs')
-  const bundleEntryPath = path.join(outputDir, 'worker.bundle.entry.mjs')
-  const bundlePath = path.join(outputDir, 'worker.bundle.js')
+  const projectRoot = path.resolve(options.projectRoot ?? process.cwd())
+  const qvacDir = path.join(projectRoot, 'qvac')
+  const outputDir = path.join(qvacDir, 'worker')
+  const entryPath = path.join(qvacDir, 'worker.entry.mjs')
+  const target = options.target ?? 'bare-sidecar'
 
   const logger = createCommandLogger(options)
 
@@ -208,6 +305,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   logger.debug(`   Path: ${sdkPath}`)
 
   const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
+  const imports = JSON.parse(await fsp.readFile(importsMapPath, 'utf8')) as Record<string, unknown>
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
@@ -216,7 +314,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.info(`   ${label}: ${spec}`)
   }
 
-  const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
+  const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : defaultHosts(target)
 
   const explicitDefer = options.defer ?? []
   const includeAudioDecoder =
@@ -234,70 +332,58 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
   }
 
-  await fsp.mkdir(outputDir, { recursive: true })
+  await fsp.mkdir(qvacDir, { recursive: true })
 
   logger.info('\n📝 Generating worker entry...')
-  const resolveSdkImport = createSdkImportResolver(sdkPath, sdkName)
-  const { runtimeEntry, bundleEntry } = generateWorkerEntries(
-    pluginSpecifiers,
-    sdkName,
-    resolveSdkImport,
-    config.rpcServerProvider
+  await fsp.writeFile(
+    entryPath,
+    generateWorkerEntry(pluginSpecifiers, sdkName, config.rpcServerProvider),
+    'utf8'
   )
-  await fsp.writeFile(entryPath, runtimeEntry, 'utf8')
   logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
-  logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
 
-  logger.info('\n🔨 Bundling with bare-pack...')
+  logger.info(`\n🔨 Bundling for ${target}...`)
   logger.debug(`   Hosts: ${hosts.join(', ')}`)
   if (deferModules.length > 0) {
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
+  const stowOptions = { entryPath, target, outputDir, projectRoot, hosts, imports, deferModules }
+  let bundlePath = await stowWorker(stowOptions)
+
   let installedPrebuilds: HostPrebuildPackage[] = []
   let installRefused: HostPrebuildsInstallRefusedError | undefined
-  try {
-    await fsp.writeFile(bundleEntryPath, bundleEntry, 'utf8')
-    const barePackOptions = {
-      entryPath: bundleEntryPath,
-      outputPath: bundlePath,
-      hosts,
-      importsMapPath,
-      deferModules,
-      quiet: options.quiet === true,
-      logger
-    }
-    await runBarePack(barePackOptions)
-
-    if (options.installMissingPrebuilds === true) {
-      try {
-        const { installed } = await installMissingHostPrebuilds({
-          projectRoot,
-          hosts,
-          addons: (await collectAddonsFromBundle({ bundlePath, projectRoot, hosts })).filter(
-            (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
-          ),
-          quiet: options.quiet === true,
-          logger
-        })
-        installedPrebuilds = installed
-        // Where a platform package was missing, bare-pack resolved the addon's
-        // `#host-addon` import to its fallback module; bundle again to pick up
-        // the installed package.
-        if (installed.length > 0) {
-          logger.info('\n🔨 Bundling again with the installed platform packages...')
-          await runBarePack(barePackOptions)
-        }
-      } catch (error: unknown) {
-        if (!(error instanceof HostPrebuildsInstallRefusedError)) throw error
-        // A refusal happens before anything is installed, so the bundle
-        // already written is final and only its manifest is left to write.
-        installRefused = error
+  if (options.installMissingPrebuilds === true) {
+    try {
+      const { installed } = await installMissingHostPrebuilds({
+        projectRoot,
+        hosts,
+        addons: (await collectAddonsFromBundle({ bundlePath, projectRoot, hosts })).filter(
+          (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
+        ),
+        quiet: options.quiet === true,
+        logger
+      })
+      installedPrebuilds = installed
+      // Where a platform package was missing, the bundle resolved the addon's
+      // `#host-addon` import to its fallback module; bundle again to pick up
+      // the installed package.
+      if (installed.length > 0) {
+        logger.info('\n🔨 Bundling again with the installed platform packages...')
+        bundlePath = await stowWorker(stowOptions)
       }
+    } catch (error: unknown) {
+      if (!(error instanceof HostPrebuildsInstallRefusedError)) throw error
+      installRefused = error
     }
-  } finally {
-    await fsp.rm(bundleEntryPath, { force: true })
   }
+
+  const bundle = await readBundle(bundlePath)
+  const unexpectedDeferred = findUnexpectedDeferredImports(
+    bundle.resolutions as Record<string, unknown>,
+    deferModules
+  )
+  if (unexpectedDeferred.length > 0) throw new UnexpectedDeferredImportsError(unexpectedDeferred)
 
   const stats = await fsp.stat(bundlePath)
   const sizeKB = (stats.size / 1024).toFixed(1)
@@ -306,7 +392,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const manifestResult = await generateAddonsManifest({
     bundlePath,
-    outputDir,
+    outputDir: qvacDir,
     projectRoot,
     logger,
     includeAudioDecoder
@@ -325,22 +411,23 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   if (installRefused !== undefined) throw installRefused
 
+  const harnessPath = path.join(outputDir, TARGETS[target].harness)
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)
   logger.info('Generated files:')
-  logger.info('  - qvac/worker.entry.mjs    (standalone worker with RPC + lifecycle)')
-  logger.info('  - qvac/worker.bundle.js    (mobile bundle for Expo/React Native BareKit)')
-  logger.info('  - qvac/addons.manifest.json\n')
-  logger.info('Mobile: Expo plugin auto-configures worker.bundle.js')
-  logger.info('Standalone: Import qvac/worker.entry.mjs for full worker with RPC\n')
+  logger.info(`  - ${path.relative(projectRoot, entryPath)}    (worker entry)`)
+  logger.info(`  - ${path.relative(projectRoot, harnessPath)}    (starts the bundled worker)`)
+  logger.info(`  - ${path.relative(projectRoot, bundlePath)}`)
+  logger.info(`  - ${path.relative(projectRoot, manifestResult.manifestPath)}\n`)
 
   return {
+    target,
+    hosts,
+    entryPath,
+    harnessPath,
     bundlePath,
     plugins: pluginSpecifiers,
     addons: manifestResult.addons,
-    entryPaths: {
-      worker: entryPath
-    },
     manifestPath: manifestResult.manifestPath,
     installedPrebuilds
   }

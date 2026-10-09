@@ -14,7 +14,7 @@ import {
 } from './fixtures/split-addon-project'
 
 function splitAddonProject(t: { after: (fn: () => void) => void }) {
-  const project = createSplitAddonProject('external-sdk')
+  const project = createSplitAddonProject(path.join('node_modules', '@qvac', 'sdk'))
   t.after(project.cleanup)
   return project
 }
@@ -27,13 +27,22 @@ describe('bundleSdk installMissingPrebuilds', () => {
     const pm = installFakePackageManager(projectRoot, 'pnpm')
 
     const result = await withPath(pm.binDir, () =>
-      bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true })
+      bundleSdk({
+        projectRoot,
+        sdkPath,
+        configPath,
+        target: 'react-native',
+        hosts: ['android-arm64'],
+        quiet: true
+      })
     )
 
     assert.deepEqual(pm.calls(), [])
     assert.deepEqual(result.installedPrebuilds, [])
     assert.ok(
-      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml/addon-unavailable.js')),
+      (await bundledModules(projectRoot)).some((key) =>
+        key.endsWith('fake-ggml/addon-unavailable.js')
+      ),
       'without the platform package, #host-addon resolves to the fallback'
     )
   })
@@ -47,6 +56,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
         projectRoot,
         sdkPath,
         configPath,
+        target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
         installMissingPrebuilds: true
@@ -60,7 +70,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
       }
     ])
     assert.ok(
-      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml-android-arm64/index.js')),
+      (await bundledModules(projectRoot)).some((key) =>
+        key.endsWith('fake-ggml-android-arm64/index.js')
+      ),
       'the second bundle resolves #host-addon to the installed platform package'
     )
     assert.deepEqual(result.addons, [SPLIT_ADDON])
@@ -84,6 +96,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
         projectRoot,
         sdkPath,
         configPath,
+        target: 'react-native',
         hosts: ['android-arm64'],
         quiet: true,
         installMissingPrebuilds: true
@@ -98,7 +111,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
     ) as { addons: string[] }
     assert.deepEqual(manifest.addons, [SPLIT_ADDON])
     assert.ok(
-      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml/addon-unavailable.js'))
+      (await bundledModules(projectRoot)).some((key) =>
+        key.endsWith('fake-ggml/addon-unavailable.js')
+      )
     )
   })
 
@@ -109,6 +124,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
       projectRoot,
       sdkPath,
       configPath,
+      target: 'react-native',
       hosts: ['android-arm64'],
       quiet: true,
       installMissingPrebuilds: true

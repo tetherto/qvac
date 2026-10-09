@@ -9,6 +9,7 @@ import {
   readAddonPackageJson
 } from '@/commands/verify/addon-source'
 import { collectAddonsFromBundle, InvalidBundleSourceError } from '@/commands/verify/bundle-source'
+import { writeBundleFile } from './fixtures/bundle-file'
 import {
   collectAddonsFromNodeModules,
   InvalidNodeModulesSourceError
@@ -147,30 +148,12 @@ function writeGraphPackages(projectRoot: string, options: { hosts?: string[] } =
   for (const host of options.hosts ?? []) writePrebuild(bareOs, host)
 }
 
-function escapeForJsString(s: string): string {
-  return s
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t')
-}
-
 function writeBareBundle(
   bundlePath: string,
   resolutions: Record<string, unknown>,
-  options: { id?: string; body?: string; main?: string; imports?: Record<string, unknown> } = {}
+  options: { id?: string; main?: string; imports?: Record<string, unknown> } = {}
 ): void {
-  const bundleId = options.id ?? 'test-bundle-id'
-  const header = JSON.stringify({
-    id: bundleId,
-    ...(options.main === undefined ? {} : { main: options.main }),
-    ...(options.imports === undefined ? {} : { imports: options.imports }),
-    resolutions
-  })
-  const packed = `${bundleId}\n${header}\n${options.body ?? ''}`
-  fs.mkdirSync(path.dirname(bundlePath), { recursive: true })
-  fs.writeFileSync(bundlePath, `module.exports = "${escapeForJsString(packed)}"`)
+  writeBundleFile(bundlePath, { ...options, resolutions })
 }
 
 describe('readAddonPackageJson', () => {

@@ -17,6 +17,7 @@ import {
   type PackageMetadata
 } from '@/commands/verify/engines-advice'
 import { formatVerifyBundleResult, hasErrors, verifyBundle } from '@/commands/verify/index'
+import { writeBundleFile } from './fixtures/bundle-file'
 
 async function withTempDir(fn: (dir: string) => Promise<void> | void): Promise<void> {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-engines-')))
@@ -106,8 +107,7 @@ function writeMobileProject(
 }
 
 function writeBareBundle(bundlePath: string, main: string, resolutions: Record<string, unknown>) {
-  const packed = `test-bundle-id\n${JSON.stringify({ id: 'test-bundle-id', main, resolutions })}\n`
-  writeFile(bundlePath, `module.exports = ${JSON.stringify(packed)}`)
+  writeBundleFile(bundlePath, { main, resolutions })
 }
 
 /**
