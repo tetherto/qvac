@@ -707,19 +707,14 @@ describe('deep SDK runtime probe', () => {
     )
   })
 
-  it('prioritizes a concrete SIGILL cause over an RPC timeout wrapper', () => {
+  it('prioritizes a concrete SIGILL cause over the startup failure that wraps it', () => {
+    const stderr =
+      'WORKER_STARTUP_FAILED: Worker failed before signalling ready\nCaused by: Error: Worker was killed by SIGILL'
     assert.match(
-      classifySdkRuntimeFailure(
-        failedProbe({ stderr: 'RPCInitTimeoutError: RPC initialization timed out\nsignal SIGILL' })
-      ).hint,
+      classifySdkRuntimeFailure(failedProbe({ stderr })).hint,
       /unsupported by this CPU/i
     )
-    assert.equal(
-      classifySdkRuntimeFailure(
-        failedProbe({ stderr: 'RPCInitTimeoutError: RPC initialization timed out\nsignal SIGILL' })
-      ).id,
-      'cpu-instruction'
-    )
+    assert.equal(classifySdkRuntimeFailure(failedProbe({ stderr })).id, 'cpu-instruction')
   })
 
   it('classifies a child-process spawn error', async () => {

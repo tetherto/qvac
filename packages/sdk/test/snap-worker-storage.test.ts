@@ -20,7 +20,7 @@ void test('worker storage remains in Snap common across revision homes', async f
   const commonDir = join(root, 'common')
   const firstRevisionHome = join(root, 'revision-1')
   const secondRevisionHome = join(root, 'revision-2')
-  const commonLock = join(commonDir, '.qvac', '.worker.lock')
+  const commonLock = join(commonDir, '.qvac', '.cache.lock')
   const originalSnapCommon = process.env['SNAP_USER_COMMON']
   const originalHome = process.env['HOME']
   const originalWorkerPath = process.env['QVAC_WORKER_PATH']
