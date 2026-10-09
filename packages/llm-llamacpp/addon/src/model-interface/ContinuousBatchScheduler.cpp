@@ -1224,6 +1224,9 @@ void ContinuousBatchScheduler::prepareSpeculativeDraftsLocked(
   if (!drafting.empty()) {
     const auto draftStart = std::chrono::steady_clock::now();
     {
+      // Drafting writes into the drivers' draft buffers, so no slot may be
+      // torn down until it is done; see `TeardownDeferGuard`.
+      TeardownDeferGuard deferTeardown(*this);
       StepUnlockGuard unlockGuard(*this, lock);
       speculative::SpeculativeSequence::draftPrepared(*shared_.speculative);
     }
