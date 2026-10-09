@@ -169,6 +169,9 @@ runs:
       working-directory: ./test-framework
       run: |
         echo "Setting up mobile test framework..."
+        # react-native-bare-kit 0.16 no longer links the worklet's native
+        # addons; "Link native addons" below does it with bare-link.
+        npm pkg set dependencies.react-native-bare-kit=^0.16.0 devDependencies.bare-link=^4.0.1
         npm install
 
     # A leftover tree from an earlier job on the same self-hosted runner must
@@ -223,6 +226,25 @@ runs:
           exit 1
         fi
         echo "Test app built successfully"
+
+    # Links the addons backend.cjs's module graph loads into the directories
+    # react-native-bare-kit's native projects already include. Must run after
+    # the last install of react-native-bare-kit (which clears them) and before
+    # `expo prebuild`, Gradle and `pod install`.
+    - name: Link native addons
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        if [ "$PLATFORM" = "Android" ]; then
+          preset=android out=node_modules/react-native-bare-kit/android/src/main/addons
+        else
+          preset=ios out=node_modules/react-native-bare-kit/ios/addons
+        fi
+        npx --no-install bare-link --preset "$preset" --out "$out" backend/backend.cjs
+        echo "Linked addons in $out:"
+        find "$out" -mindepth 1 -maxdepth 2 | sort
 
     # Patches the freshly generated e2e/tests/app.test.js to bump the
     # per-test Mocha ceiling. Two ways to opt in:
