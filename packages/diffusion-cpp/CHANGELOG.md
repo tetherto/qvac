@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.28.1] - 2026-10-09
+
+### Fixed
+
+- Rebuild the Android addon and Vulkan/OpenCL backends with NDK r29
+  (`29.0.14206865`) to match the application's C++ runtime. The 0.28.0 npm
+  binaries were built with NDK r30 before the shared NDK selection fixes merged.
+
+### Pull Requests
+
+- [#4915](https://github.com/tetherto/qvac/pull/4915) - Pin the shared Android
+  build host to NDK r29.
+- [#4916](https://github.com/tetherto/qvac/pull/4916) - Update Android build
+  callers to use the pinned build host.
+- [#4933](https://github.com/tetherto/qvac/pull/4933) - Align Bare's NDK selector
+  with the pinned NDK used by vcpkg.
+
 ## [0.28.0] - 2026-10-07
 
 ### Added
