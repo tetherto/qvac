@@ -33,6 +33,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 # overlays, e.g. vcpkg/triplets/x64-linux.cmake appends -fPIC -stdlib=libc++),
 # repo-wide overlays second.
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
@@ -408,6 +409,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
 
   add_executable(asr_ggml_tests
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_main.cpp
     # whisper suite
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
@@ -442,7 +444,7 @@ if(BUILD_TESTING)
   )
 
   target_link_libraries(asr_ggml_tests PRIVATE
-    GTest::gmock_main
+    GTest::gmock
     whisper::whisper
     qvac::parakeet
     ggml::ggml
@@ -453,6 +455,7 @@ if(BUILD_TESTING)
   # target — see the note above the module-target define.
   target_compile_definitions(asr_ggml_tests PRIVATE
     BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
+    QVAC_ASR_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
     QVAC_ASR_GGML_TESTING)
 
   set_target_properties(asr_ggml_tests PROPERTIES
