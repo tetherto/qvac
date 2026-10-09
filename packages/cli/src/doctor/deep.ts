@@ -40,7 +40,7 @@ export type SdkRuntimeFailureId =
   | 'visual-cpp-runtime'
   | 'vulkan'
   | 'shared-library'
-  | 'bare-runtime'
+  | 'bare-sidecar-runtime'
   | 'worker-handshake-timeout'
   | 'spawn-error'
   | 'protocol-error'
@@ -277,12 +277,9 @@ const FAILURE_RULES: readonly FailureRule[] = [
     hint: 'A native shared-library dependency may not have loaded. Re-run with --verbose to identify the missing or incompatible library.'
   },
   {
-    id: 'bare-runtime',
-    matches: (_result, diagnostics) =>
-      /BARE_RUNTIME_BINARY_NOT_FOUND|BareRuntimeBinaryNotFoundError|Bare runtime binary.*not found/i.test(
-        diagnostics
-      ),
-    hint: 'The Bare runtime binary appears to be missing. Reinstall @qvac/sdk with lifecycle scripts enabled for this host.'
+    id: 'bare-sidecar-runtime',
+    matches: (_result, diagnostics) => /Cannot find asset '#bare'/.test(diagnostics),
+    hint: 'bare-sidecar has no Bare program for this host. Reinstall @qvac/sdk so bare-sidecar is installed in full.'
   },
   {
     id: 'worker-handshake-timeout',

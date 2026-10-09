@@ -224,7 +224,7 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** The bundled worker's own addon binaries live under `qvac/worker/node_modules/`. */
+/** The bundled worker's own addon binaries live under `qvac/worker/index.bundle.d/`. */
 const WORKER_DIR_PREFIX = '(?![\\\\/]qvac[\\\\/]worker[\\\\/])'
 
 function createAddonIgnorePatterns(exclusions) {
@@ -341,6 +341,10 @@ function getDirSize(dirPath) {
   return size
 }
 
+function bareHostPlatform(platform) {
+  return platform === 'mas' ? 'darwin' : platform
+}
+
 /** Prunes prebuilds for a given path, keeping only target platform-arch. */
 function prunePrebuildsForPath(buildPath, platform, arch) {
   const nodeModulesPath = path.join(buildPath, 'node_modules')
@@ -350,7 +354,7 @@ function prunePrebuildsForPath(buildPath, platform, arch) {
     return { deleted: 0, bytes: 0 }
   }
 
-  const keepPrefix = `${platform}-${arch}`
+  const keepPrefix = `${bareHostPlatform(platform)}-${arch}`
   logger.debug(`Keeping prefix: ${keepPrefix}`)
 
   const prebuildsDirs = findPrebuildsDirs(nodeModulesPath)
@@ -512,7 +516,7 @@ function detectTargetHosts(forgeConfig, argv = process.argv.slice(2)) {
 
   if (!platform && !archSpec) return null
 
-  const p = platform || process.platform
+  const p = bareHostPlatform(platform || process.platform)
   const archs = (archSpec || process.arch)
     .split(',')
     .map((s) => s.trim())
@@ -541,7 +545,7 @@ async function runBundleAndVerify(commands, projectDir, options) {
   logger.info(`Running bundleSdk (hosts: ${hosts.join(', ')})...`)
   let bundleResult
   try {
-    const bundleOpts = { projectRoot: projectDir, target: 'bare-sidecar', hosts }
+    const bundleOpts = { projectRoot: projectDir, target: 'bare-sidecar', hosts, verify: false }
     if (options.configPath) bundleOpts.configPath = options.configPath
     bundleResult = await bundleSdk(bundleOpts)
   } catch (err) {
@@ -554,13 +558,11 @@ async function runBundleAndVerify(commands, projectDir, options) {
   logger.info(`Running verifyBundle (hosts: ${hosts.join(', ')})...`)
   let verifyResult
   try {
-    const verifyOpts = {
+    verifyResult = await verifyBundle({
       projectRoot: projectDir,
       addonsSource: bundleResult.bundlePath,
       hosts
-    }
-    if (options.configPath) verifyOpts.configPath = options.configPath
-    verifyResult = await verifyBundle(verifyOpts)
+    })
   } catch (err) {
     throw new QvacForgePluginError(`verifyBundle threw: ${err?.message || err}`)
   }
@@ -602,7 +604,7 @@ class QvacForgePlugin extends PluginBase {
    * @param {object} [config]
    * @param {string} [config.projectDir]   Project root (default: process.cwd()).
    * @param {string} [config.configPath]   Path to a qvac config file (`.ts`, `.mjs`, `.js`, or `.json`). Forwarded to bundleSdk + verifyBundle. Default: auto-discover in `projectDir`.
-   * @param {string[]} [config.hosts]      Hosts to verify against (default: `${process.platform}-${process.arch}`).
+   * @param {string[]} [config.hosts]      Hosts to bundle and verify for (default: `${process.platform}-${process.arch}`).
    * @param {"off"|"error"|"warn"|"info"|"debug"} [config.logLevel]
    */
   constructor(config = {}) {
