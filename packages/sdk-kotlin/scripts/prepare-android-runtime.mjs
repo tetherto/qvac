@@ -55,9 +55,14 @@ await fs.mkdir(assetsDirectory, { recursive: true })
 await fs.mkdir(addonsDirectory, { recursive: true })
 if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recursive: true })
 
+// The AIO profile lists exports from this checkout. Bundle that tree, not the
+// published pin in node_modules, which lags until the next SDK release.
+const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
+
 const bundle = await bundleSdk({
   projectRoot,
   configPath,
+  ...(bundleSdkPath !== undefined && { sdkPath: bundleSdkPath }),
   hosts: ['android-arm64'],
   defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
   quiet: true
@@ -105,9 +110,10 @@ if (includesClassification) {
 await Promise.all(runtimeAssets)
 
 const manifest = JSON.parse(await fs.readFile(bundle.manifestPath, 'utf8'))
-const sdkPackage = JSON.parse(
-  await fs.readFile(path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json'), 'utf8')
-)
+const sdkPackagePath = bundleSdkPath
+  ? path.join(bundleSdkPath, 'package.json')
+  : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
+const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
 const packageFilter =
   addons.length === 0
@@ -164,7 +170,8 @@ for (const resource of [...linkedResources].sort()) {
 // diffable: the addon hashes alone don't reveal an npm range that drifted.
 const resolvedDependencies = {}
 for (const name of ['@qvac/sdk', '@qvac/inference', ...addons].sort()) {
-  const version = await readInstalledVersion(name)
+  const version =
+    name === '@qvac/sdk' && sdkPackage.version ? sdkPackage.version : await readInstalledVersion(name)
   if (version !== null) resolvedDependencies[name] = version
   const platformPackage = platformPackageForInstalledMeta(name, 'android-arm64')
   if (platformPackage !== null) {
@@ -199,6 +206,51 @@ await fs.writeFile(
 )
 
 console.log(`Prepared QVAC Android runtime with ${addons.length} addon(s)`)
+
+function exportTarget(entry) {
+  if (typeof entry === 'string') return entry
+  if (entry && typeof entry === 'object') return entry.import ?? entry.default ?? entry.require
+  return undefined
+}
+
+function workspaceSdkExportsBuilt(sdkDir) {
+  let pkg
+  try {
+    pkg = JSON.parse(fsSync.readFileSync(path.join(sdkDir, 'package.json'), 'utf8'))
+  } catch {
+    return false
+  }
+  if (!fsSync.existsSync(path.join(sdkDir, 'dist', 'src', 'worker', 'index.js'))) return false
+  if (!fsSync.existsSync(path.join(sdkDir, 'bare-imports.json'))) return false
+  for (const [key, value] of Object.entries(pkg.exports ?? {})) {
+    if (!key.endsWith('/plugin')) continue
+    const target = exportTarget(value)
+    if (typeof target !== 'string' || !fsSync.existsSync(path.join(sdkDir, target))) return false
+  }
+  return true
+}
+
+function ensureWorkspaceSdk(sdkDir) {
+  if (!fsSync.existsSync(path.join(sdkDir, 'package.json'))) return undefined
+  if (!fsSync.existsSync(path.join(sdkDir, 'node_modules'))) {
+    execFileSync(
+      'npm',
+      ['install', '--ignore-scripts', '--legacy-peer-deps', '--no-package-lock'],
+      { cwd: sdkDir, stdio: 'inherit' }
+    )
+  }
+  if (!workspaceSdkExportsBuilt(sdkDir)) {
+    execFileSync('npx', ['--no-install', 'tsc', '--project', 'tsconfig.json'], {
+      cwd: sdkDir,
+      stdio: 'inherit'
+    })
+    execFileSync('npx', ['--no-install', 'tsc-alias', '-p', 'tsconfig.alias.json'], {
+      cwd: sdkDir,
+      stdio: 'inherit'
+    })
+  }
+  return sdkDir
+}
 
 async function pathExists(target) {
   try {

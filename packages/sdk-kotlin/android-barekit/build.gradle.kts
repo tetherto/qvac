@@ -136,6 +136,7 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
         inputs.files(
             runtimeRoot.file("package.json"),
             runtimeRoot.file("scripts/prepare-android-runtime.mjs"),
+            runtimeRoot.file("../sdk/package.json"),
             runtimeRoot.file("../sdk/LICENSE"),
             runtimeRoot.file("../sdk/NOTICE"),
         )
