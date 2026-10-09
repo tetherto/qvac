@@ -107,11 +107,11 @@ TEST_F(KvLeakOnAdmitFailureTest, KvRowsCleanedAfterAdmitFailurePostCache) {
   auto seedPrompt = makeKvLeakPrompt("Remember: the sky is blue.");
   seedPrompt.prefill = true;
   seedPrompt.cacheKey = cachePath.string();
-  seedPrompt.saveCacheToDisk = true;
 
   auto seedOutputs = model->processPromptBatch(
       std::vector<LlamaModel::Prompt>{std::move(seedPrompt)});
   ASSERT_EQ(seedOutputs.size(), 1u);
+  model->saveCache(cachePath.string());
   ASSERT_TRUE(fs::exists(cachePath)) << "cache file not created";
   ASSERT_GT(fs::file_size(cachePath), 0u);
 

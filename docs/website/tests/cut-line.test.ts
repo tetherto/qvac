@@ -77,33 +77,47 @@ describe('the manifest edit', () => {
   });
 });
 
-describe('the redirect pair', () => {
+describe('the line rules', () => {
   const redirects = [
     '# a comment',
     '/sdk/v0.19/        /sdk/v0.19/index.html        200',
     '/sdk/v0.19         /sdk/v0.19/                  301',
+    '/sdk/v0.19/*       /sdk/v0.19/:splat/index.html 200',
     '/cli/v0.13/        /cli/v0.13/index.html        200',
     '/cli/v0.13         /cli/v0.13/                  301',
+    '/cli/v0.13/*       /cli/v0.13/:splat/index.html 200',
     '',
   ].join('\n');
 
-  it('goes at the head of its own collection, in the block format', () => {
+  it('go at the head of their own collection, in the block format', () => {
     expect(cutRedirects(redirects, 'sdk', 'v0.20')).toContain(
       [
         '/sdk/v0.20/        /sdk/v0.20/index.html        200',
         '/sdk/v0.20         /sdk/v0.20/                  301',
+        '/sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200',
         '/sdk/v0.19/        /sdk/v0.19/index.html        200',
       ].join('\n'),
     );
   });
 
-  it('does not disturb another collection', () => {
+  it('do not disturb another collection', () => {
     expect(cutRedirects(redirects, 'sdk', 'v0.20')).toContain(
-      '/cli/v0.13/        /cli/v0.13/index.html        200',
+      [
+        '/cli/v0.13/        /cli/v0.13/index.html        200',
+        '/cli/v0.13         /cli/v0.13/                  301',
+        '/cli/v0.13/*       /cli/v0.13/:splat/index.html 200',
+      ].join('\n'),
     );
   });
 
-  it('refuses to add a pair that is already there', () => {
+  it("sit below every other collection's rules on a collection's first cut", () => {
+    const cut = cutRedirects(redirects, 'ecosystem', 'v1.0').split('\n');
+    expect(cut.indexOf('/ecosystem/v1.0/   /ecosystem/v1.0/index.html   200')).toBe(
+      cut.indexOf('/cli/v0.13/*       /cli/v0.13/:splat/index.html 200') + 1,
+    );
+  });
+
+  it('refuse to add a line that is already there', () => {
     expect(() => cutRedirects(redirects, 'sdk', 'v0.19')).toThrow(
       /already carries/,
     );
@@ -186,13 +200,14 @@ describe('a cut against a copy of the tree', () => {
     expect(manifest).toContain(`{ version: '${CURRENT}', folder: '${CURRENT}' }`);
   });
 
-  it("adds the preserved line's index pair", async () => {
+  it("adds the preserved line's rules", async () => {
     const redirects = await fs.readFile(
       path.join(root, 'public', '_redirects'),
       'utf-8',
     );
     expect(redirects).toContain(`/sdk/${CURRENT}/index.html`);
     expect(redirects).toContain(`/sdk/${CURRENT}         /sdk/${CURRENT}/`);
+    expect(redirects).toContain(`/sdk/${CURRENT}/*       /sdk/${CURRENT}/:splat/index.html`);
   });
 
   it('moves the currency marker from the preserved line to the opened one', async () => {

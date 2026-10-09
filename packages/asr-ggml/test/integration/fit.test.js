@@ -1,5 +1,6 @@
 'use strict'
 
+const path = require('bare-path')
 const test = require('brittle')
 
 const ASRGgml = require('../../index.js')
@@ -8,6 +9,23 @@ const { ensureWhisperModel, ensureVADModel, getTestPaths, getBackendsDir } = req
 const TEST_TIMEOUT_MS = 900000
 const { modelPath, vadModelPath } = getTestPaths()
 const backendsDir = getBackendsDir()
+
+const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures')
+const MODEL_DESCRIPTION_PATH = path.join(FIXTURES_DIR, 'ggml-tiny.fit.gguf')
+const VAD_DESCRIPTION_PATH = path.join(FIXTURES_DIR, 'ggml-silero-v5.1.2.fit.gguf')
+const PROJECTED_FIELDS = [
+  'status',
+  'modelType',
+  'deviceName',
+  'deviceTotalBytes',
+  'deviceBytes',
+  'weightsBytes',
+  'kvBytes',
+  'computeBytes',
+  'vadBytes',
+  'hostOverflowBytes',
+  'hostBytes'
+]
 
 function sumRows(fit) {
   return fit.deviceBytes + fit.hostBytes
@@ -84,6 +102,32 @@ test('a VAD model is added to the projection', { timeout: TEST_TIMEOUT_MS }, asy
   t.is(bare.vadBytes, 0, 'no VAD model was named')
   t.ok(withVad.vadBytes > 0, 'the VAD model was measured')
 })
+
+test(
+  'the registry descriptions project like the model and VAD model they describe',
+  { timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    await ensureWhisperModel(modelPath)
+    const vad = await ensureVADModel(vadModelPath)
+    if (!vad || vad.success === false) {
+      t.pass('no VAD model on this runner')
+      return
+    }
+
+    const files = ASRGgml.assessFit({ engine: 'whisper', modelPath, vadModelPath, backendsDir })
+    const descriptions = ASRGgml.assessFit({
+      engine: 'whisper',
+      modelPath: MODEL_DESCRIPTION_PATH,
+      vadModelPath: VAD_DESCRIPTION_PATH,
+      backendsDir
+    })
+
+    t.not(files.status, 'error', 'the model itself was projected')
+    for (const field of PROJECTED_FIELDS) {
+      t.is(descriptions[field], files[field], `${field} matches`)
+    }
+  }
+)
 
 test('a model that cannot be read is an outcome, not a throw', (t) => {
   const fit = ASRGgml.assessFit({ engine: 'whisper', modelPath: '/nonexistent/model.bin' })
