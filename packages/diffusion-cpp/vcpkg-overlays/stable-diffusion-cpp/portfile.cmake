@@ -22,8 +22,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 8c8ffb881288f22ad83f5492881a41dea24ca3ac
-    SHA512 357b89cb4f1d1ae6b99d10dc9d9023cd798feba7a2f1de8cf79ed53adcfcc5f2c491950c9d7d1536d4de302aa1a333a3a76eba7fdb2785638e25bedd4c6ae902
+    REF 700acd4370079aef35b08f93510f54ab04a3b15f
+    SHA512 b21990effad6eaaa780d8e75d5702ceb3688c7a5b672cc436069c3e8fdd32e05a99f17490cf8a44ddfc5f6a824db289c4412a318e8baa55328040d06ba7f395a
 )
 
 # Even under SD_USE_SYSTEM_GGML the sources reach into one ggml *internal*
@@ -35,8 +35,8 @@ vcpkg_from_github(
 vcpkg_from_github(
     OUT_SOURCE_PATH GGML_SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 9a7d2b36e96a198c1c67c013cafcde4e4c2c60eb
-    SHA512 814f00ef4f0e80a2a536a005800e483a2ba9bbcdc72ac6f98a3561b4d3fa0dee7e401b8fd2a68f60d14ecb3a993b0451d1516e4e9157331bdf55e11712309bb5
+    REF 700acd4370079aef35b08f93510f54ab04a3b15f
+    SHA512 b21990effad6eaaa780d8e75d5702ceb3688c7a5b672cc436069c3e8fdd32e05a99f17490cf8a44ddfc5f6a824db289c4412a318e8baa55328040d06ba7f395a
 )
 file(REMOVE_RECURSE "${SOURCE_PATH}/ggml")
 file(MAKE_DIRECTORY "${SOURCE_PATH}/ggml")
