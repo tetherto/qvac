@@ -285,9 +285,11 @@ fun main() = runBlocking {
 
 `installWorkerIfMissing = true` installs and caches the pinned `@qvac/sdk`
 version on first use; cached packages are re-checked. The transport launches
-`bare` and creates a loopback-only TCP endpoint. The channel is unauthenticated,
-so any local process can connect; do not use JVM hosting across a hostile
-local-user boundary.
+`bare` and creates a loopback-only TCP endpoint. The worker authenticates with a
+per-session token passed in its environment, and the transport rejects any
+other local connection before a frame is exchanged. An explicit worker path
+takes its IPC mode from the enclosing `@qvac/sdk` `package.json`; without one
+the worker must present the token.
 
 Worker stdout/stderr are continuously drained into `transport.recentWorkerLogs`
 (a bounded 16K-character tail); `isWorkerAlive` reports the child process state.
