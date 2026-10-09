@@ -73,7 +73,8 @@ test('a pinned context survives into the projection', { timeout: 600_000 }, asyn
 test('a full offload counts the output layer', { timeout: 600_000 }, async (t) => {
   const fit = assess(await modelPath())
 
-  if (fit.status !== 'fits' || fit.devices.length <= 1) {
+  // A device row is listed even when its free memory holds no layer.
+  if (fit.status !== 'fits' || fit.gpuLayers === 0) {
     t.pass('this runner placed nothing on a device')
     return
   }
@@ -171,8 +172,10 @@ test('a cpu load is refused', { timeout: 600_000 }, async (t) => {
   t.is(fit.reason, 'unsupported-config')
 })
 
-// A margin is free memory the projection may not place into, so one that
-// reaches most of what the device has leaves no room to offload.
+// A margin is free memory the projection may not place into, so one as large
+// as the device leaves no room to offload. Each projection reads free memory
+// again, and another job on a shared GPU moves it between calls, so the
+// margin is sized from the device's total, which free never exceeds.
 test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) => {
   const file = await modelPath()
   const base = assess(file)
@@ -182,16 +185,16 @@ test('the stricter of the two margins binds', { timeout: 600_000 }, async (t) =>
     return
   }
 
-  const free = base.devices
-    .filter((device) => device.name !== 'host')
-    .reduce((total, device) => total + device.freeBytes, 0)
-  const nearlyAll = free - 256 * 1024 * 1024
-  const nearlyAllMib = `${Math.floor(nearlyAll / (1024 * 1024))}`
+  // A margin applies to every device, so the largest one sets it.
+  const all = Math.max(
+    ...base.devices.filter((device) => device.name !== 'host').map((device) => device.totalBytes)
+  )
+  const allMib = `${Math.ceil(all / (1024 * 1024))}`
 
-  t.is(assess(file, {}, { marginBytes: nearlyAll }).gpuLayers, 0, 'the caller margin binds')
-  t.is(assess(file, { 'fit-target': nearlyAllMib }).gpuLayers, 0, 'the load target binds')
+  t.is(assess(file, {}, { marginBytes: all }).gpuLayers, 0, 'the caller margin binds')
+  t.is(assess(file, { 'fit-target': allMib }).gpuLayers, 0, 'the load target binds')
   t.is(
-    assess(file, { 'fit-target': nearlyAllMib }, { marginBytes: 0 }).gpuLayers,
+    assess(file, { 'fit-target': allMib }, { marginBytes: 0 }).gpuLayers,
     0,
     'a slack caller margin does not loosen the load target'
   )
