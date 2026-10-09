@@ -28,17 +28,40 @@
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
-const { spawn, spawnSync } = require('bare-subprocess')
 const { createWav } = require('./wav-helper')
+
+const MISSING_SUBPROCESS_WARNING =
+  '[pcm-chunk-player] bare-subprocess is not installed, so audio will not play. ' +
+  'Install it for live playback: `npm install bare-subprocess`.'
+
+const subprocess = loadSubprocess()
 
 let _seq = 0
 let _hasFfplay
 let _hasPlay
 let _hasAplay
+let _subprocessWarned = false
+
+function loadSubprocess () {
+  try {
+    return require('bare-subprocess')
+  } catch {
+    return null
+  }
+}
+
+function hasSubprocess () {
+  if (subprocess !== null) return true
+  if (!_subprocessWarned) {
+    console.warn(MISSING_SUBPROCESS_WARNING)
+    _subprocessWarned = true
+  }
+  return false
+}
 
 function syncOk (cmd, args) {
   try {
-    const r = spawnSync(cmd, args, { stdio: ['ignore', 'ignore', 'ignore'] })
+    const r = subprocess.spawnSync(cmd, args, { stdio: ['ignore', 'ignore', 'ignore'] })
     return !r.error && r.status === 0
   } catch {
     return false
@@ -64,6 +87,7 @@ function detectAplay () {
 }
 
 function canPlayPcmChunks () {
+  if (!hasSubprocess()) return false
   if (detectFfplay()) return true
   if (detectPlay()) return true
   if (detectAplay()) return true
@@ -87,7 +111,7 @@ function unlinkQuiet (p) {
 function spawnAsync (cmd, args, opts) {
   return new Promise((resolve, reject) => {
     try {
-      const child = spawn(cmd, args, opts)
+      const child = subprocess.spawn(cmd, args, opts)
       child.on('exit', (code) => resolve(code))
       child.on('error', reject)
     } catch (err) {
@@ -106,6 +130,7 @@ function spawnAsync (cmd, args, opts) {
  * `sampleRate` defaults to 24000 (Chatterbox native rate).
  */
 function createStreamingPlayer ({ sampleRate = 24000, channels = 1 } = {}) {
+  if (!hasSubprocess()) return null
   // sox `play` is preferred on darwin: on some macOS builds ffplay's
   // SDL output is silent for raw-piped audio; sox uses CoreAudio
   // directly and works reliably.  (qvac-tts.cpp's README documents
@@ -164,7 +189,7 @@ function tryAplay (sampleRate, channels) {
 }
 
 function spawnStreamingPlayer (cmd, args) {
-  const child = spawn(cmd, args, { stdio: ['pipe', 'ignore', 'pipe'] })
+  const child = subprocess.spawn(cmd, args, { stdio: ['pipe', 'ignore', 'pipe'] })
   let exited = false
   let exitResolve
   const exitPromise = new Promise((resolve) => { exitResolve = resolve })
@@ -255,7 +280,7 @@ function createAfplayFallback (sampleRate) {
 
 function playInt16ChunkSync (samples, sampleRate) {
   const arr = samples instanceof Int16Array ? samples : Int16Array.from(samples)
-  if (arr.length === 0) return
+  if (arr.length === 0 || !hasSubprocess()) return
 
   const id = `${Date.now()}-${++_seq}`
   const tmpDir = os.tmpdir()
@@ -264,14 +289,14 @@ function playInt16ChunkSync (samples, sampleRate) {
   if (plat === 'darwin') {
     const tmpWav = path.join(tmpDir, `qvac-tts-stream-${id}.wav`)
     createWav(Array.from(arr), sampleRate, tmpWav)
-    spawnSync('afplay', [tmpWav], { stdio: 'ignore' })
+    subprocess.spawnSync('afplay', [tmpWav], { stdio: 'ignore' })
     unlinkQuiet(tmpWav)
     return
   }
   if (detectFfplay()) {
     const tmpWav = path.join(tmpDir, `qvac-tts-stream-${id}.wav`)
     createWav(Array.from(arr), sampleRate, tmpWav)
-    spawnSync(
+    subprocess.spawnSync(
       'ffplay',
       ['-nodisp', '-autoexit', '-loglevel', 'error', '-i', tmpWav],
       { stdio: 'ignore' }
@@ -282,7 +307,7 @@ function playInt16ChunkSync (samples, sampleRate) {
   if (detectAplay()) {
     const rawPath = path.join(tmpDir, `qvac-tts-stream-${id}.raw`)
     fs.writeFileSync(rawPath, toInt16Buffer(arr))
-    spawnSync(
+    subprocess.spawnSync(
       'aplay',
       ['-q', '-t', 'raw', '-f', 'S16_LE', '-r', String(sampleRate), '-c', '1', rawPath],
       { stdio: 'ignore' }
@@ -293,7 +318,7 @@ function playInt16ChunkSync (samples, sampleRate) {
 
 async function playInt16Chunk (samples, sampleRate) {
   const arr = samples instanceof Int16Array ? samples : Int16Array.from(samples)
-  if (arr.length === 0) return
+  if (arr.length === 0 || !hasSubprocess()) return
 
   const id = `${Date.now()}-${++_seq}`
   const tmpDir = os.tmpdir()

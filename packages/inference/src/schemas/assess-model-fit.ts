@@ -244,7 +244,7 @@ export const nativeProbePlanSchema = z.object({
  * the engine separates them, and are absent together where it reports only a
  * total. They are summed across devices, as `deviceBytes` is, so a load spread
  * over more than one device is described by its totals and `deviceName` names
- * the first.
+ * the first non-CPU row.
  *
  * `deviceFreeBytes` is the backend's own gauge. A device sharing the host pool,
  * as Apple silicon and Adreno/Mali do, reports what it could address rather
@@ -268,6 +268,21 @@ export const nativeProbeProjectionSchema = z.object({
     .describe('Compute buffers and graph arenas, within `deviceBytes`.'),
   deviceFreeBytes: z.number().optional().describe('Device memory free when the probe ran.'),
   deviceTotalBytes: z.number().optional().describe('Device memory installed.'),
+  devices: z
+    .array(
+      z.object({
+        name: z.string().describe('Device name as the engine registered it.'),
+        totalBytes: z.number().describe('Device memory installed.'),
+        freeBytes: z.number().describe('Device memory free when the probe ran.'),
+        weightsBytes: z.number().describe('Model weights placed on this device.'),
+        contextBytes: z.number().describe('Context and KV cache placed on this device.'),
+        computeBytes: z.number().describe('Compute buffers placed on this device.')
+      })
+    )
+    .optional()
+    .describe(
+      'One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row.'
+    ),
   report: z
     .string()
     .optional()

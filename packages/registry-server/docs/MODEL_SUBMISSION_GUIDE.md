@@ -73,13 +73,15 @@ How sync works:
 
 ### Weightless Descriptions
 
-Ingest stores a weightless description of GGUF and safetensors artifacts holding
-their tensor list, and points the record at it through `fitBlobBinding`. Clients
-fetch it to project memory use before downloading a model. Nothing is required of
-a submission for this to happen.
+Ingest stores a weightless description of GGUF and safetensors artifacts, and of
+the `.bin` and `.spm` artifacts of the whisper.cpp, BCI and nmt.cpp engines,
+holding their settings and tensor list, and points the record at it through
+`fitBlobBinding`. Clients fetch it to project memory use before downloading a
+model. Nothing is required of a submission for this to happen beyond the right
+`engine`, which picks the reader for a `.bin`.
 
-Formats that interleave tensor data with their descriptions get none, so a
-whisper `.bin` submission will have no `fitBlobBinding`. That is expected and
+Other formats get none, and so does a file that does not parse as its engine's
+format, so such a submission will have no `fitBlobBinding`. That is expected and
 does not affect anything else about the record.
 
 Replacing a corrupt artifact regenerates the description along with the weights:
