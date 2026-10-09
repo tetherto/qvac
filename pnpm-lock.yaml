@@ -1073,8 +1073,8 @@ importers:
         specifier: ^0.26.0
         version: 0.26.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
-        specifier: ^0.45.0
-        version: 0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.46.0
+        version: link:../embed-llamacpp
       '@qvac/ggml-rpc-server':
         specifier: ^0.2.0
         version: link:../ggml-rpc-server
@@ -1491,8 +1491,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/embed-llamacpp':
-        specifier: ^0.45.0
-        version: 0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.46.0
+        version: link:../embed-llamacpp
       '@qvac/llm-llamacpp':
         specifier: ^0.57.0
         version: 0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1760,8 +1760,8 @@ importers:
         specifier: ^0.26.0
         version: 0.26.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
-        specifier: ^0.45.0
-        version: 0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.46.0
+        version: link:../embed-llamacpp
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
@@ -4415,10 +4415,6 @@ packages:
   '@qvac/dl-hyperdrive@0.1.1':
     resolution: {integrity: sha512-jTrtxgjSr43uHHs5UoIMQZ4ztaH92d4xVwWSB/GC/FgD424S6BK0C0NUo3TJ5p07kjdYXvnYzu1HazxQ0IJa5Q==}
     deprecated: 'Deprecated: no longer maintained; removed from the QVAC monorepo.'
-
-  '@qvac/embed-llamacpp@0.45.0':
-    resolution: {integrity: sha512-qlSKct7g9NTXyXRQIHfMGdsF9ZoZqHj7MmfdVlaaQi9McFjKM0TM69aiAyI9kriTIJJKNPTavP8lD2jHAoEHOQ==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
@@ -13773,18 +13769,6 @@ snapshots:
       - bare-url
       - react-native-b4a
       - sodium-javascript
-
-  '@qvac/embed-llamacpp@0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.20.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@qvac/error@0.1.1': {}
 
