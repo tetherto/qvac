@@ -117,6 +117,30 @@ test('AudioGen rejects alternate code in cache-writing events before checkout', 
   assert.ok(source.indexOf('Validate checkout inputs') < source.indexOf('name: Checkout repository'))
 })
 
+test('translation carve-out restores both vcpkg layers and saves them before its tests run', () => {
+  const source = readFileSync(join(ROOT, '.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml'), 'utf8').replaceAll('\r\n', '\n')
+  const blocks = source.split('\n      - ')
+  const checkout = blocks.find((text) => text.startsWith('uses: actions/checkout@'))
+  assert.ok(checkout.includes('repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name || github.repository }}\n'))
+  assert.ok(checkout.includes('ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}\n'))
+  const names = blocks.map((text) => text.match(/^name: (.+)\n/)?.[1])
+  const order = ['Configure vcpkg', 'Point vcpkg at its binary cache', 'Fingerprint the toolchain', 'Get vcpkg cache (restore)',
+    'Build C++ tests with coverage', 'Sync the host and workspace vcpkg caches', 'Save vcpkg cache (trusted contexts)', 'Run C++ tests']
+  const positions = order.map((name) => names.indexOf(name))
+  order.forEach((name, index) => assert.ok(positions[index] > 0, `Missing step: ${name}`))
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b))
+  const restore = blocks[positions[order.indexOf('Get vcpkg cache (restore)')]]
+  assert.match(restore, /format\('\{0\}\/vcpkg\.json', env\.WORKDIR\)/)
+  assert.match(restore, /'vcpkg-overlays\/triplets\/\*\*'/)
+  assert.match(restore, /env\.TOOLCHAIN_FINGERPRINT/)
+  assert.match(blocks[positions[order.indexOf('Save vcpkg cache (trusted contexts)')]], /steps\.vcpkg-cache\.outputs\.cache-primary-key/)
+  const push = source.split('\n  push:\n')[1].split('\n  schedule:\n')[0]
+  for (const path of ['packages/translation-nmtcpp/vcpkg.json', 'packages/translation-nmtcpp/vcpkg-configuration.json',
+    'packages/translation-nmtcpp/vcpkg/**', 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**', '.github/actions/vcpkg-*/**']) {
+    assert.ok(push.includes(`- '${path}'\n`), `push paths miss cache key input ${path}`)
+  }
+})
+
 test('compiler caches are isolated per package and use compiler contents', () => {
   const settings = configureCppBuild(environment())
   assert.equal(settings.CCACHE_DIR, join(tmpdir(), 'cpp-ccache', 'asr-ggml'))

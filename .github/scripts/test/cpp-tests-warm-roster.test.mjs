@@ -40,6 +40,10 @@ function carveOutWorkflows() {
   return [...NX_WORKFLOW.matchAll(/uses: \.\/\.github\/workflows\/([\w.-]+\.yml)/g)].map((match) => match[1])
 }
 
+function dispatchesWorkflow(warmer, workflow) {
+  return readWorkflow(warmer).includes(`gh workflow run "${workflow}"`)
+}
+
 function dispatchedNxPackages(source) {
   if (!source.includes(NX_DISPATCH)) return []
   return [...source.matchAll(/packages=\[([^\]]*)\]/g)]
@@ -136,6 +140,15 @@ test('warm schedules run every 2 days, staggered from every other warmer', () =>
   const all = [NX_WORKFLOW, ...[...carveOutWorkflows(), ...legacyWarmers()].map(readWorkflow)].flatMap(crons)
   all.forEach((cron) => assert.match(cron, EVERY_TWO_DAYS))
   assert.equal(new Set(all).size, all.length)
+})
+
+test('every carve-out cpp-tests-nx calls is warmed on a schedule, by itself or by a legacy warmer', () => {
+  const carveOuts = carveOutWorkflows()
+  assert.ok(carveOuts.length > 0)
+  carveOuts.forEach((workflow) => assert.ok(
+    crons(readWorkflow(workflow)).length > 0 || legacyWarmers().some((warmer) => dispatchesWorkflow(warmer, workflow)),
+    `${workflow} has no warm path, so its PR legs go cold once the cache server prunes its entry`,
+  ))
 })
 
 test('the matrix job hands the warm selection to nx-project-matrix and skips an empty one', () => {

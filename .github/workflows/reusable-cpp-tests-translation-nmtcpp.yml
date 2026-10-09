@@ -1,7 +1,23 @@
 name: C++ Tests with Coverage (NMTCPP)
 
 on:
-  workflow_call:    
+  # push and schedule warm this carve-out's vcpkg caches, which cpp-tests-nx.yml's
+  # warm roster does not cover. The push paths are the cache key's inputs.
+  push:
+    branches: [main]
+    paths:
+      - 'packages/translation-nmtcpp/vcpkg.json'
+      - 'packages/translation-nmtcpp/vcpkg-configuration.json'
+      - 'packages/translation-nmtcpp/vcpkg/**'
+      - '.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml'
+      - '.github/actions/vcpkg-*/**'
+      - 'vcpkg-overlays/triplets/**'
+      - 'vcpkg-overlays/toolchains/**'
+  # Every 2 days, like cpp-tests-nx.yml, to stay inside the cache server's prune
+  # window.
+  schedule:
+    - cron: "47 7 */2 * *"
+  workflow_call:
     inputs:
       ref:
         description: "Git ref to checkout"
@@ -48,8 +64,8 @@ jobs:
         working-directory: .
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
-          ref: ${{ inputs.ref || github.event.pull_request.head.sha }}
+          repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
@@ -84,11 +100,42 @@ jobs:
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
+      # The same two layers as cpp-tests-nx.yml: the host directory shared by
+      # every runner instance on the box, and this package's keyed actions/cache
+      # entry. Trusted runs on the default branch write both; PR legs only read.
+      - name: Point vcpkg at its binary cache
+        uses: ./.github/actions/vcpkg-binary-cache-dir
+        with:
+          workdir: ${{ env.WORKDIR }}
+          trusted: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) }}
+
       - name: Cleanup vcpkg
         shell: bash
         run: |
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Fingerprint the toolchain
+        uses: ./.github/actions/vcpkg-toolchain-fingerprint
+
+      # Restore only. The save sits below the build, so a run that restored from
+      # the host layer and compiled nothing cannot save an empty entry.
+      - name: Get vcpkg cache (restore)
+        id: vcpkg-cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: >-
+            cpp-tests-translation-nmtcpp-v1-coverage-linux-x64-${{
+              hashFiles(
+                format('{0}/vcpkg.json', env.WORKDIR),
+                format('{0}/vcpkg-configuration.json', env.WORKDIR),
+                format('{0}/vcpkg/triplets/**', env.WORKDIR),
+                format('{0}/vcpkg/ports/**', env.WORKDIR),
+                'vcpkg-overlays/triplets/**',
+                'vcpkg-overlays/toolchains/**'
+              )
+            }}-${{ env.TOOLCHAIN_FINGERPRINT }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -116,6 +163,52 @@ jobs:
 
       - name: Build C++ tests with coverage
         run: npm run coverage:cpp:build
+
+      # Workspace -> host only, before the tests so a failing or hung test run
+      # still warms the caches. See cpp-tests-nx.yml for why the host -> workspace
+      # direction is absent.
+      - name: Sync the host and workspace vcpkg caches
+        if: >-
+          env.VCPKG_CACHE_PERSISTENT == 'true' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository)
+        shell: bash
+        working-directory: .
+        run: |
+          set +e
+          host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
+          ws_dir="${VCPKG_CACHE_DIR}"
+          echo "sync: host=${host_dir} workspace=${ws_dir}"
+          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || { echo "sync: no host dir"; exit 0; }
+          [ "${host_dir}" = "${ws_dir}" ] && exit 0
+          mkdir -p "${ws_dir}"
+          umask 000
+
+          sync_dir() {
+            find "$1" -type f 2>/dev/null | while read -r f; do
+              out="$2/${f#$1/}"
+              [ -f "$out" ] && continue
+              mkdir -p "$(dirname "$out")" 2>/dev/null
+              tmp="$out.tmp.$$"
+              cp "$f" "$tmp" 2>/dev/null && mv -f "$tmp" "$out" 2>/dev/null
+              rm -f "$tmp" 2>/dev/null
+            done
+          }
+          sync_dir "${ws_dir}" "${host_dir}"
+
+          echo "sync: host=$(find "${host_dir}" -type f 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -type f 2>/dev/null | wc -l)"
+          exit 0
+
+      # Only trusted events may write the shared cache (see .github/AGENTS.md),
+      # and only when there are archives to write: hashFiles is empty for an
+      # empty directory.
+      - name: Save vcpkg cache (trusted contexts)
+        if: >-
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) &&
+          hashFiles(format('{0}/vcpkg/cache/**', env.WORKDIR)) != ''
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Run C++ tests
         id: cpp-tests
