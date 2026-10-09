@@ -102,6 +102,21 @@ async function writeCacheFile(cachePath: string): Promise<void> {
   fs.writeFileSync(cachePath, 'kv-cache-bytes')
 }
 
+// The addon keeps a run's conversation in memory under its key, and
+// `saveCache` writes it, rejecting a key it holds nothing for.
+function heldConversations() {
+  const held = new Set<string>()
+  return {
+    hold(cacheKey: string | undefined): void {
+      if (cacheKey !== undefined) held.add(cacheKey)
+    },
+    saveCache(cacheKey: string): Promise<void> {
+      if (!held.has(cacheKey)) return Promise.reject(new Error(`nothing cached under ${cacheKey}`))
+      return writeCacheFile(cacheKey)
+    }
+  }
+}
+
 async function holdsCommittedBytes(cachePath: string | undefined): Promise<boolean> {
   const fs = await import('bare-fs')
   return (
@@ -122,14 +137,15 @@ function registerRecordingModel(
   cachePaths?: string[],
   stats: Record<string, unknown> = {}
 ): void {
+  const conversations = heldConversations()
   registerModel(modelId, {
     model: {
+      saveCache: conversations.saveCache,
       run(
         prompt: unknown,
         opts?: {
           prefill?: boolean
           cacheKey?: string
-          saveCacheToDisk?: boolean
           generationParams?: { tool_choice?: string }
         }
       ) {
@@ -139,16 +155,12 @@ function registerRecordingModel(
           toolChoice: opts?.generationParams?.tool_choice
         })
         if (cachePaths && opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
-        const written =
-          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
-            ? writeCacheFile(opts.cacheKey)
-            : Promise.resolve()
+        conversations.hold(opts?.cacheKey)
         return {
           iterate: async function* () {
-            await written
             yield 'The area is 25 square units.'
           },
-          await: () => written,
+          await: () => Promise.resolve(),
           stats
         }
       }
@@ -241,6 +253,44 @@ test('completion: kv-cache sends the same prompt as the uncached path', async (t
   )
   t.alike(turnCalls[1]!.messages, turnCalls[0]!.messages, 'the named key sends the same prompt')
   t.alike(turnCalls[2]!.messages, turnCalls[0]!.messages, 'the auto key sends the same prompt')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache saves each turn to its cache path, and a refused save fails nothing', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-save-${Date.now()}`
+  const cachePaths: string[] = []
+  const saved: string[] = []
+  registerModel(modelId, {
+    model: {
+      saveCache(cacheKey: string) {
+        saved.push(cacheKey)
+        return Promise.reject(new Error(`nothing cached under ${cacheKey}`))
+      },
+      run(_prompt: unknown, opts?: { cacheKey?: string }) {
+        if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
+        return {
+          iterate: async function* () {
+            yield 'The area is 25 square units.'
+          },
+          await: () => Promise.resolve(),
+          stats: {}
+        }
+      }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: { tools: true },
+    modelType: ModelType.llamacppCompletion
+  })
+
+  await completer(modelId, 'tools-save-key')([user('Area of a triangle, base 10 height 5?')])
+
+  t.alike(saved, cachePaths, 'the turn asked the addon to save under the key it ran with')
+  t.absent(await holdsCommittedBytes(cachePaths[0]), 'a refused save leaves no cache behind')
 
   unregisterModel(modelId)
   clearRegistry()
@@ -493,12 +543,11 @@ function registerSecondTurnThrowingModel(
   throwOnRun = 2
 ): void {
   let runCount = 0
+  const conversations = heldConversations()
   registerModel(modelId, {
     model: {
-      run(
-        prompt: unknown,
-        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
-      ) {
+      saveCache: conversations.saveCache,
+      run(prompt: unknown, opts?: { prefill?: boolean; cacheKey?: string }) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
           prefill: opts?.prefill === true
@@ -508,16 +557,12 @@ function registerSecondTurnThrowingModel(
           runCount += 1
           if (runCount === throwOnRun) throw thrown
         }
-        const written =
-          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
-            ? writeCacheFile(opts.cacheKey)
-            : Promise.resolve()
+        conversations.hold(opts?.cacheKey)
         return {
           iterate: async function* () {
-            await written
             yield 'The area is 25 square units.'
           },
-          await: () => written,
+          await: () => Promise.resolve(),
           stats: {}
         }
       }
@@ -780,36 +825,31 @@ function registerScriptedModel(
 ): void {
   const registry = getRequestRegistry()
   let runCount = 0
+  const conversations = heldConversations()
   registerModel(modelId, {
     model: {
-      run(
-        prompt: unknown,
-        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
-      ) {
+      saveCache: conversations.saveCache,
+      run(prompt: unknown, opts?: { prefill?: boolean; cacheKey?: string }) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
           prefill: opts?.prefill === true
         })
         if (opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         const run = opts?.prefill ? 0 : ++runCount
-        const written =
-          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
-            ? writeCacheFile(opts.cacheKey)
-            : Promise.resolve()
+        conversations.hold(opts?.cacheKey)
         const tokens = script.tokensOnRun?.(run) ?? ['The area is 25 square units.']
         const stats = script.statsOnRun?.(run) ?? {
           stopReason: run === script.cancelOnRun ? 'none' : 'eos'
         }
         return {
           iterate: async function* () {
-            await written
             for (const token of tokens) yield token
             if (run === script.cancelOnRun) {
               registry.cancel({ requestId: `${modelId}-${run}` })
               await new Promise<void>((resolve) => setTimeout(resolve, 0))
             }
           },
-          await: () => written,
+          await: () => Promise.resolve(),
           cancel: () => Promise.resolve(),
           get stats() {
             if (run === script.statsThrowOnRun) throw new Error('stats exploded after the save')
