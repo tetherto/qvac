@@ -135,7 +135,10 @@
       "import": "./src/electron-forge/index.cjs",
       "default": "./src/electron-forge/index.cjs"
     },
-    "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
+    "./worker.mobile": {
+      "types": "./dist/worker-mobile/index.d.ts",
+      "default": "./dist/worker-mobile/index.mjs"
+    },
     "./worker": {
       "types": "./dist/src/worker/start.d.ts",
       "import": "./dist/src/worker/start.js"
@@ -181,7 +184,6 @@
     "bare-imports.json",
     "dist/**/*",
     "src/electron-forge/**/*",
-    "src/expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",

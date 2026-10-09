@@ -1,20 +1,18 @@
 import test from 'brittle'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   resolveAddonPlatformPackage,
-  resolvePlatformAddonRoots,
   resolvePlatformPackageName
-} from '@/expo/plugins/patches/qvac-platform-addons'
+} from '@/commands/verify/platform-addons'
 import {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
   buildMobileBundle,
-  mobileHostsForPlatform,
-  patchBareKitLinkers,
-  runIOSAddonLinker
+  disableBareKitLinkers,
+  mobileHostsForPlatform
 } from '@/expo/plugins/withMobileBundle'
 import { BundleVerificationFailedError } from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
@@ -42,37 +40,6 @@ test('MOBILE_HOSTS: the shared bundle covers every mobile host', (t) => {
   )
 })
 
-test('resolvePlatformAddonRoots: finds the inner addon of the installed platform package', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-platform-addon-'))
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-  writeSplitAddon(fixtureDir, '@qvac/tts-ggml', '0.9.2')
-  writeSplitAddon(fixtureDir, '@qvac/asr-ggml', '0.5.2')
-  writeFatAddon(fixtureDir, '@qvac/llm-llamacpp', '0.53.0')
-
-  const android = resolvePlatformAddonRoots(
-    fixtureDir,
-    ['@qvac/tts-ggml', '@qvac/asr-ggml', '@qvac/llm-llamacpp'],
-    'android'
-  )
-
-  t.is(android.length, 2, 'only split addons need linking from their platform packages')
-  t.is(android[0].pkg.name, '@qvac/tts-ggml', 'the inner addon carries the meta package name')
-  t.is(android[0].pkg.version, '0.9.2')
-  t.ok(
-    android[0].dir.endsWith(join('@qvac', 'tts-ggml-android-arm64', 'addon')),
-    'resolves the tts android slice'
-  )
-  t.is(android[1].pkg.name, '@qvac/asr-ggml')
-  t.ok(
-    android[1].dir.endsWith(join('@qvac', 'asr-ggml-android-arm64', 'addon')),
-    'resolves the asr android slice'
-  )
-
-  const ios = resolvePlatformAddonRoots(fixtureDir, ['@qvac/tts-ggml', '@qvac/asr-ggml'], 'ios')
-  t.ok(ios[0].dir.endsWith(join('@qvac', 'tts-ggml-ios', 'addon')), 'resolves the tts ios slice')
-  t.ok(ios[1].dir.endsWith(join('@qvac', 'asr-ggml-ios', 'addon')), 'resolves the asr ios slice')
-})
-
 test('resolvePlatformPackageName: reads slice names from #host-addon for hosts and build targets', (t) => {
   const hostAddon = hostAddonMap('@qvac/tts-ggml')
   t.is(resolvePlatformPackageName(hostAddon, 'android'), '@qvac/tts-ggml-android-arm64')
@@ -98,113 +65,33 @@ test('resolvePlatformPackageName: reads slice names from #host-addon for hosts a
   t.is(resolvePlatformPackageName(undefined, 'android-arm64'), null)
 })
 
-test('resolvePlatformAddonRoots: skips an addon whose platform package is absent', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-platform-addon-'))
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-  writeManifest(join(fixtureDir, 'node_modules', '@qvac', 'audiogen-ggml'), {
-    name: '@qvac/audiogen-ggml',
-    version: '0.4.1',
-    addon: true,
-    imports: { '#host-addon': hostAddonMap('@qvac/audiogen-ggml') }
-  })
-
-  t.alike(resolvePlatformAddonRoots(fixtureDir, ['@qvac/audiogen-ggml'], 'android'), [])
-})
-
 test('MOBILE_UNSUPPORTED_MODULES: the desktop-only spawn path stays out of mobile bundles', (t) => {
   t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn'])
 })
 
-test('patchBareKitLinkers: returns paths for patched platforms', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-linker-patch-'))
-  const projectRoot = join(fixtureDir, 'project')
+test('disableBareKitLinkers: empties the react-native-bare-kit linkers', (t) => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'qvac-linker-'))
   const bareKitPath = join(projectRoot, 'node_modules', 'react-native-bare-kit')
-  const sdkPath = join(fixtureDir, 'sdk')
-  const patchesDir = join(sdkPath, 'src', 'expo', 'plugins', 'patches')
-  const androidTarget = join(bareKitPath, 'android', 'link.mjs')
-  const iosTarget = join(bareKitPath, 'ios', 'link.mjs')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
+  const androidLinker = join(bareKitPath, 'android', 'link.mjs')
+  const iosLinker = join(bareKitPath, 'ios', 'link.mjs')
+  t.teardown(() => rmSync(projectRoot, { recursive: true, force: true }))
 
+  writeManifest(bareKitPath, { name: 'react-native-bare-kit', version: '0.15.6' })
   mkdirSync(join(bareKitPath, 'android'), { recursive: true })
   mkdirSync(join(bareKitPath, 'ios'), { recursive: true })
-  mkdirSync(patchesDir, { recursive: true })
-  mkdirSync(join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches'), { recursive: true })
-  writeFileSync(join(patchesDir, 'android-link.mjs'), 'android patch')
-  writeFileSync(join(patchesDir, 'ios-link.mjs'), 'ios patch')
-  writeFileSync(
-    join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches', 'qvac-platform-addons.js'),
-    'resolver'
-  )
+  writeFileSync(androidLinker, 'stock android linker')
+  writeFileSync(iosLinker, 'stock ios linker')
 
-  const linkerPaths = patchBareKitLinkers(projectRoot, sdkPath)
-
-  t.alike(linkerPaths, { android: androidTarget, ios: iosTarget })
-  t.ok(existsSync(androidTarget), 'copies the Android linker patch')
-  t.ok(existsSync(iosTarget), 'copies the iOS linker patch')
-  t.ok(
-    existsSync(join(bareKitPath, 'android', 'qvac-platform-addons.mjs')),
-    'copies the compiled resolver the Android patch imports'
-  )
-  t.ok(
-    existsSync(join(bareKitPath, 'ios', 'qvac-platform-addons.mjs')),
-    'copies the compiled resolver the iOS patch imports'
-  )
+  t.alike(disableBareKitLinkers(projectRoot), { android: androidLinker, ios: iosLinker })
+  t.is(readFileSync(androidLinker, 'utf8'), '')
+  t.is(readFileSync(iosLinker, 'utf8'), '')
 })
 
-test('patchBareKitLinkers: leaves the stock linker when the resolver is missing', (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-linker-patch-'))
-  const projectRoot = join(fixtureDir, 'project')
-  const bareKitPath = join(projectRoot, 'node_modules', 'react-native-bare-kit')
-  const sdkPath = join(fixtureDir, 'sdk')
-  const patchesDir = join(sdkPath, 'src', 'expo', 'plugins', 'patches')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
+test('disableBareKitLinkers: does nothing without react-native-bare-kit', (t) => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'qvac-linker-'))
+  t.teardown(() => rmSync(projectRoot, { recursive: true, force: true }))
 
-  mkdirSync(join(bareKitPath, 'android'), { recursive: true })
-  mkdirSync(join(bareKitPath, 'ios'), { recursive: true })
-  mkdirSync(patchesDir, { recursive: true })
-  writeFileSync(join(patchesDir, 'android-link.mjs'), 'android patch')
-  writeFileSync(join(patchesDir, 'ios-link.mjs'), 'ios patch')
-
-  t.alike(patchBareKitLinkers(projectRoot, sdkPath), { android: null, ios: null })
-  t.absent(
-    existsSync(join(bareKitPath, 'android', 'link.mjs')),
-    'a patch without its resolver must not be installed'
-  )
-})
-
-test('runIOSAddonLinker: waits for the linker to finish', async (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-ios-linker-'))
-  const linkerPath = join(fixtureDir, 'link.mjs')
-  const markerPath = join(fixtureDir, 'linked')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-
-  writeFileSync(
-    linkerPath,
-    `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(markerPath)}, '')\n`
-  )
-
-  await runIOSAddonLinker(linkerPath)
-
-  t.ok(existsSync(markerPath), 'linker completed before the helper resolved')
-})
-
-test('runIOSAddonLinker: rejects when the linker fails', async (t) => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-ios-linker-'))
-  const linkerPath = join(fixtureDir, 'link.mjs')
-  t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
-
-  writeFileSync(linkerPath, `console.error('fixture failure')\nprocess.exit(7)\n`)
-
-  let error: Error | undefined
-  try {
-    await runIOSAddonLinker(linkerPath)
-  } catch (cause) {
-    error = cause as Error
-  }
-
-  t.ok(error, 'expected the helper to reject')
-  t.ok(error?.message.includes('code 7'), 'reports the child exit code')
-  t.ok(error?.message.includes('fixture failure'), 'reports linker diagnostics')
+  t.alike(disableBareKitLinkers(projectRoot), { android: null, ios: null })
 })
 
 function androidPrebuildMod(projectRoot: string) {
@@ -265,75 +152,49 @@ test(
       'installs only the Android package for an Android prebuild, with the app package manager'
     )
     t.ok(
-      existsSync(join(project.sdkPath, 'dist', 'worker.mobile.bundle.js')),
+      existsSync(join(project.sdkPath, 'dist', 'worker-mobile', 'index.bundle.mjs')),
       'the verified bundle is copied into the SDK'
+    )
+    t.ok(
+      existsSync(join(project.sdkPath, 'dist', 'worker-mobile', 'index.mjs')),
+      'the harness is copied beside it'
     )
   }
 )
 
 test(
-  'buildMobileBundle: installMissingPrebuilds finds the SDK addon in a pnpm store',
+  "buildMobileBundle: installMissingPrebuilds covers an addon's split-addon dependency",
   posixOnly,
   async (t) => {
     const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), {
-      layout: 'pnpm'
+      withRuntime: true
     })
     t.teardown(project.cleanup)
     t.absent(
-      existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-ggml')),
-      'the addon is not in the top-level node_modules'
+      existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-runtime')),
+      'the dependency is not in the top-level node_modules'
     )
     const pm = installFakePackageManager(project.projectRoot, 'pnpm')
 
     await withPath(pm.binDir, () =>
-      buildMobileBundle(androidPrebuildMod(project.projectRoot), { installMissingPrebuilds: true })
+      buildMobileBundle(androidPrebuildMod(project.projectRoot), {
+        installMissingPrebuilds: true
+      })
     )
 
     t.alike(pm.calls(), [
       {
         cwd: project.projectRoot,
-        args: ['add', '--save-exact', `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`]
+        args: [
+          'add',
+          '--save-exact',
+          `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+          `${RUNTIME_ADDON_ANDROID_PACKAGE}@${RUNTIME_ADDON_VERSION}`
+        ]
       }
     ])
   }
 )
-
-for (const layout of ['pnpm', 'hoisted'] as const) {
-  test(
-    `buildMobileBundle: installMissingPrebuilds covers an addon's split-addon dependency (${layout})`,
-    posixOnly,
-    async (t) => {
-      const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), {
-        layout,
-        withRuntime: true
-      })
-      t.teardown(project.cleanup)
-      t.absent(
-        existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-runtime')),
-        'the dependency is not in the top-level node_modules'
-      )
-      const pm = installFakePackageManager(project.projectRoot, 'pnpm')
-
-      await withPath(pm.binDir, () =>
-        buildMobileBundle(androidPrebuildMod(project.projectRoot), {
-          installMissingPrebuilds: true
-        })
-      )
-
-      t.alike(pm.calls(), [
-        {
-          cwd: project.projectRoot,
-          args: [
-            'add',
-            '--save-exact',
-            `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
-            `${RUNTIME_ADDON_ANDROID_PACKAGE}@${RUNTIME_ADDON_VERSION}`
-          ]
-        }
-      ])
-    }
-  )
-}
 
 function hostAddonMap(metaName: string) {
   return {
@@ -354,28 +215,4 @@ function hostAddonMap(metaName: string) {
 function writeManifest(dir: string, manifest: unknown) {
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
-}
-
-function writeSplitAddon(fixtureDir: string, metaName: string, version: string) {
-  const modules = join(fixtureDir, 'node_modules')
-  writeManifest(join(modules, ...metaName.split('/')), {
-    name: metaName,
-    version,
-    addon: true,
-    imports: { '#host-addon': hostAddonMap(metaName) }
-  })
-  for (const [slice, host] of [
-    [`${metaName}-android-arm64`, 'android-arm64'],
-    [`${metaName}-ios`, 'ios-arm64']
-  ]) {
-    const addonDir = join(modules, ...slice.split('/'), 'addon')
-    writeManifest(addonDir, { name: metaName, version, addon: true })
-    mkdirSync(join(addonDir, 'prebuilds', host), { recursive: true })
-  }
-}
-
-function writeFatAddon(fixtureDir: string, name: string, version: string) {
-  const dir = join(fixtureDir, 'node_modules', ...name.split('/'))
-  writeManifest(dir, { name, version, addon: true })
-  mkdirSync(join(dir, 'prebuilds', 'android-arm64'), { recursive: true })
 }

@@ -1,10 +1,7 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { formatAddonId, type NativeAddon } from '@/commands/verify/addon-source'
-import {
-  HOST_ADDON_IMPORT,
-  resolveAddonPlatformPackage
-} from '@/expo/plugins/patches/qvac-platform-addons'
+import { HOST_ADDON_IMPORT, resolveAddonPlatformPackage } from '@/commands/verify/platform-addons'
 
 export interface MissingPrebuildIssue {
   code: 'missing-prebuild'
