@@ -70,14 +70,6 @@ target_include_directories(
 # Set C++20 standard for std::views support (required by inference-addon-cpp)
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
-# Set macOS deployment target for C++20 std::format support
-if(APPLE AND NOT IOS)
-  set_target_properties(addon-test PROPERTIES
-    XCODE_ATTRIBUTE_MACOSX_DEPLOYMENT_TARGET "14.0"
-    OSX_DEPLOYMENT_TARGET "14.0"
-  )
-endif()
-
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 target_compile_definitions(addon-test PRIVATE
@@ -130,3 +122,7 @@ add_test(NAME SdModelTests COMMAND addon-test)
 set_tests_properties(SdModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 900)  # 15 minutes
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set_tests_properties(SdModelTests PROPERTIES
+    ENVIRONMENT "LSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/test/unit/lsan-libdbus.supp")
+endif()

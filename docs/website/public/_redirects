@@ -254,15 +254,32 @@
 # DOCUMENTATION LINES
 # ----------------------------------------------------------------------
 # A line that is not the current one answers under its own version
-# segment, `/sdk/v0.18/…`. Only the line's index needs rules: it is the
-# only URL of the line whose last segment carries the dot, so it alone
-# misses Pretty URLs' slash normalization and its directory resolution.
-# Every page below it ends in an undotted segment and resolves unaided.
+# segment, `/sdk/v0.18/…`, so every URL of the line carries a dot. Pretty
+# URLs skips any path with a dot in it, wherever the dot sits, so no bare
+# line URL gains its trailing slash on its own. Each line carries three
+# rules to make up for it.
+#
+# The index pair serves the line's root, the one URL whose dot is in the
+# last segment. That costs it the directory resolution even with the
+# slash, so the `200` names the file; the `301` hands the bare form its
+# slash.
+#
+# The splat serves every page below the root addressed without the slash,
+# rewriting straight to its index.html. Only a splat reaches those
+# requests. Measured on production and on staging with Pretty URLs on, a
+# bare path with a dot in a segment other than the last is matched by
+# neither a literal nor a placeholder — both answered 404 under probe —
+# while a splat served all 77 pages of the lines that carried one. It
+# rewrites rather than redirects, so a page that was never built falls
+# through to the catch-all instead of looping, and the bare address serves
+# a page whose canonical names the slash form. With the slash, a page
+# resolves from its directory before any rule runs.
 #
 # ORDER MATTERS (first-match-wins), for the reason the archives above
 # document: Sevalla's matcher is lenient about a trailing slash in the
 # source, so the slash-less `301` would match the with-slash request too
-# and redirect it to itself. The `200` rewrite goes first.
+# and redirect it to itself. The `200` rewrite goes first, and the splat
+# after the pair, so the root is always answered by its own rules.
 #
 # The `301` is not just for inbound links. Next reads a dotted segment as a
 # file too, and strips the trailing slash off this URL whatever the page
@@ -274,19 +291,27 @@
 #
 # The segment is written out rather than matched by a placeholder. A
 # `/sdk/:version` pattern would claim every first-level SDK path to cover
-# one, and a literal line makes a cut visible in the diff.
+# one, it would not reach the bare form anyway, and a literal line makes a
+# cut visible in the diff. `scripts/cut-line.ts` writes all three rules of
+# the line a cut preserves.
 /sdk/v0.20/        /sdk/v0.20/index.html        200
 /sdk/v0.20         /sdk/v0.20/                  301
+/sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200
 /sdk/v0.19/        /sdk/v0.19/index.html        200
 /sdk/v0.19         /sdk/v0.19/                  301
+/sdk/v0.19/*       /sdk/v0.19/:splat/index.html 200
 /sdk/v0.18/        /sdk/v0.18/index.html        200
 /sdk/v0.18         /sdk/v0.18/                  301
+/sdk/v0.18/*       /sdk/v0.18/:splat/index.html 200
 /cli/v0.14/        /cli/v0.14/index.html        200
 /cli/v0.14         /cli/v0.14/                  301
+/cli/v0.14/*       /cli/v0.14/:splat/index.html 200
 /cli/v0.13/        /cli/v0.13/index.html        200
 /cli/v0.13         /cli/v0.13/                  301
+/cli/v0.13/*       /cli/v0.13/:splat/index.html 200
 /cli/v0.12/        /cli/v0.12/index.html        200
 /cli/v0.12         /cli/v0.12/                  301
+/cli/v0.12/*       /cli/v0.12/:splat/index.html 200
 
 # ======================================================================
 # SOFTWARE INVENTORY VERSIONS

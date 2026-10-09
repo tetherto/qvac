@@ -6,9 +6,19 @@
 #include <optional>
 #include <regex>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <variant>
 #include <vector>
+
+// Only the linux overload of shouldWarnAboutJitCache() reads the environment,
+// so these stay inside the guard rather than looking unused elsewhere.
+#if defined(__linux__)
+#include <cstdlib>
+#include <filesystem>
+
+#include <unistd.h>
+#endif
 
 #include <common/log.h>
 #include <ggml-backend.h>
@@ -116,6 +126,20 @@ struct DeviceDescription {
   }
 };
 
+// ggml-cuda appends "-v<N>" to the PCI bus id of each virtual device it
+// emulates under GGML_CUDA_DEVICES, while Vulkan reports the bare id of the
+// same card. Strip it to compare physical cards across backends.
+std::string physicalDeviceId(const std::string& deviceId) {
+  const size_t pos = deviceId.rfind("-v");
+  if (pos == std::string::npos || pos + 2 == deviceId.size() ||
+      !std::all_of(deviceId.begin() + pos + 2, deviceId.end(), [](char c) {
+        return std::isdigit(static_cast<unsigned char>(c)) != 0;
+      })) {
+    return deviceId;
+  }
+  return deviceId.substr(0, pos);
+}
+
 std::string lowerCopy(const char* value) {
   if (value == nullptr) {
     return {};
@@ -207,6 +231,8 @@ void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
+    std::vector<std::string>& cudaBackends,
+    std::vector<std::string>& otherOpenClBackends,
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu, const bool isOpenCl,
     const bool isRpc, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
@@ -243,12 +269,18 @@ void emplaceIfValidDevice(
       maxAdrenoVersion = version;
     }
   }
+  const bool isCuda = devDescr.gpuBackend.find("cuda") != std::string::npos;
   if (isOpenCl && isAdreno) {
     logEmplaceGpuBackend(devDescr.gpuBackend);
     openClBackends.emplace_back(devDescr.gpuBackend);
-  } else if (!isOpenCl) {
+  } else if (isOpenCl) {
     logEmplaceGpuBackend(devDescr.gpuBackend);
-    if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
+    otherOpenClBackends.emplace_back(devDescr.gpuBackend);
+  } else {
+    logEmplaceGpuBackend(devDescr.gpuBackend);
+    if (isCuda) {
+      cudaBackends.emplace_back(devDescr.gpuBackend);
+    } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
       gpuBackends.emplace_back(devDescr.gpuBackend);
     } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
       igpuBackends.emplace_back(devDescr.gpuBackend);
@@ -277,8 +309,11 @@ void tryEmplaceDevice(
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
+    std::vector<std::string>& cudaBackends,
+    std::vector<std::string>& otherOpenClBackends,
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu,
-    std::vector<std::string>& rejectedDevices) {
+    std::vector<std::string>& rejectedDevices,
+    const bool allowNonAdrenoOpenCl) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
@@ -288,7 +323,8 @@ void tryEmplaceDevice(
                          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
   // Recorded before the main-gpu type filter so the CPU-fallback warning names
   // a refused device even when `integrated`/`dedicated` skips its type.
-  if (isGpuType && !isEligibleGpuDevice(bckI, dev)) {
+  if (isGpuType && !isEligibleGpuDevice(bckI, dev) &&
+      !(allowNonAdrenoOpenCl && isOpenCl)) {
     rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
     return;
   }
@@ -301,6 +337,8 @@ void tryEmplaceDevice(
         gpuBackends,
         igpuBackends,
         openClBackends,
+        cudaBackends,
+        otherOpenClBackends,
         maxAdrenoVersion,
         sawMaliGpu,
         isOpenCl,
@@ -358,6 +396,115 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
   }
 }
 
+namespace {
+
+// Backend families qvac-fabric can register a GPU device for. Used to tell a
+// mistyped `backend` value (hard error) apart from a correctly-spelled backend
+// that simply has no device on this machine (falls through). Deliberately does
+// NOT include "cpu": the CPU path is `device`, and accepting two spellings for
+// it would make `device: 'gpu', backend: 'cpu'` ambiguous.
+constexpr std::array<std::string_view, 4> KNOWN_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl"};
+
+// Trimmed from each family. \r matters: a value from a CRLF config file would
+// otherwise throw "unknown backend 'cuda\r'", which renders identically to the
+// accepted spelling.
+constexpr std::string_view K_BACKEND_TRIM = " \t\r\n\v\f";
+
+/// Whether a ggml device backend name belongs to the requested family.
+/// Substring rather than equality because ggml suffixes the device index
+/// ("CUDA0", "Vulkan1") and OpenCL reports as "GPUOpenCL". Metal is special:
+/// some builds report "mtl..." instead of "Metal", which LoadFitNormalization
+/// already special-cases the same way.
+bool backendNameMatchesFamily(
+    const std::string& lowercasedBackendName, std::string_view family) {
+  if (lowercasedBackendName.find(family) != std::string::npos) {
+    return true;
+  }
+  return family == "metal" && lowercasedBackendName.rfind("mtl", 0) == 0;
+}
+
+} // namespace
+
+std::vector<std::string>
+backend_selection::parseBackendOverride(const std::string& backendStr) {
+  std::vector<std::string> families;
+  std::string current;
+  // Set for any non-blank token, 'auto' included, so 'auto' on its own is not
+  // then rejected by the names-no-backend check below.
+  bool namedAnyBackend = false;
+  auto flush = [&]() {
+    const auto begin = current.find_first_not_of(K_BACKEND_TRIM);
+    if (begin == std::string::npos) {
+      return;
+    }
+    const auto end = current.find_last_not_of(K_BACKEND_TRIM);
+    std::string family = current.substr(begin, end - begin + 1);
+    // Cast to unsigned char: std::tolower takes an int and is undefined for a
+    // negative value, which a signed char is for any byte >= 0x80. `backend`
+    // is caller-supplied, so it can carry non-ASCII.
+    std::ranges::transform(family, family.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    namedAnyBackend = true;
+    // 'auto' is vla-ggml's documented default for this same key, so accept and
+    // drop it here rather than rejecting a selector that works on that addon.
+    // 'auto' alone yields no families, which callers already read as no
+    // override.
+    if (family == "auto") {
+      return;
+    }
+    if (std::ranges::find(KNOWN_GPU_BACKEND_FAMILIES, family) ==
+        KNOWN_GPU_BACKEND_FAMILIES.end()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "backend: unknown backend '%s'. Expected a comma-separated list "
+              "of cuda/vulkan/metal/opencl or 'auto', for "
+              "example "
+              "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+              family.c_str()));
+    }
+    if (std::ranges::find(families, family) == families.end()) {
+      families.emplace_back(std::move(family));
+    }
+  };
+  for (const char c : backendStr) {
+    if (c == ',') {
+      flush();
+      current.clear();
+    } else {
+      current.push_back(c);
+    }
+  }
+  flush();
+  // An absent or blank value means the key was not configured. Anything else
+  // that parses to zero families, "," or ",,", is a config mistake and gets the
+  // same hard error as a misspelled name.
+  if (families.empty() && !namedAnyBackend &&
+      backendStr.find_first_not_of(K_BACKEND_TRIM) != std::string::npos) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "backend: '%s' names no backend. Expected a comma-separated list "
+            "of cuda/vulkan/metal/opencl or 'auto', for example "
+            "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+            backendStr.c_str()));
+  }
+  return families;
+}
+
+std::vector<std::string> backend_selection::tryBackendOverrideFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap) {
+  auto it = configFilemap.find("backend");
+  if (it == configFilemap.end()) {
+    return {};
+  }
+  std::vector<std::string> families = parseBackendOverride(it->second);
+  configFilemap.erase(it);
+  return families;
+}
+
 std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
     std::unordered_map<std::string, std::string>& configFilemap) {
   auto hIt = configFilemap.find("main-gpu");
@@ -380,12 +527,16 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
-    bool* outIsMaliGpu) {
+    bool* outIsMaliGpu, const std::vector<std::string>& backendOverride) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
+  std::vector<std::string> cudaBackends;
+  std::vector<std::string> otherOpenClBackends;
   std::vector<std::string> rejectedDevices;
+  const bool allowNonAdrenoOpenCl =
+      std::ranges::find(backendOverride, "opencl") != backendOverride.end();
   std::optional<int> maxAdrenoVersion;
   bool sawMaliGpu = false;
 
@@ -406,15 +557,26 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               gpuBackends,
               igpuBackends,
               openClBackends,
+              cudaBackends,
+              otherOpenClBackends,
               maxAdrenoVersion,
               sawMaliGpu,
-              rejectedDevices);
+              rejectedDevices,
+              allowNonAdrenoOpenCl);
           loopAllDevices = false;
         } else {
-          std::string errorMsg = string_format(
-              "main-gpu device index %d is out of range (0-%zu)",
-              deviceIndex,
-              deviceCount - 1);
+          std::string errorMsg;
+          if (deviceCount == 0) {
+            errorMsg = string_format(
+                "main-gpu device index %d is out of range: no devices are "
+                "available",
+                deviceIndex);
+          } else {
+            errorMsg = string_format(
+                "main-gpu device index %d is out of range (0-%zu)",
+                deviceIndex,
+                deviceCount - 1);
+          }
           bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, errorMsg.c_str(), nullptr);
         }
       } else if (std::holds_alternative<MainGpuType>(mainGpuValue)) {
@@ -430,16 +592,21 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           gpuBackends,
           igpuBackends,
           openClBackends,
+          cudaBackends,
+          otherOpenClBackends,
           maxAdrenoVersion,
           sawMaliGpu,
-          rejectedDevices);
+          rejectedDevices,
+          allowNonAdrenoOpenCl);
     }
   }
 
   auto clearAllGpuBackends = [&]() {
     openClBackends.clear();
+    cudaBackends.clear();
     gpuBackends.clear();
     igpuBackends.clear();
+    otherOpenClBackends.clear();
   };
 
   const bool noMainGpuOverride = !mainGpu.has_value();
@@ -492,9 +659,48 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     *outIsMaliGpu = sawMaliGpu;
   }
 
+  // QVAC-23763: an explicit `backend` override wins over the cascade below,
+  // but only over candidates that survived the guards above: a request for a
+  // backend that was just cleared (BitNet TQ on Adreno <800, finetuning on
+  // Adreno <800) must not resurrect it.
+  //
+  // Skipped entirely for a CPU load. No devices are enumerated in that case, so
+  // the block could only ever reach its "matched no available device" warning,
+  // which would be noise on a deliberate device:'cpu' request.
+  if (!backendOverride.empty() && preferredBackendType == BackendType::GPU) {
+    for (const std::string& family : backendOverride) {
+      for (const std::vector<std::string>* candidates :
+           {&openClBackends,
+            &cudaBackends,
+            &gpuBackends,
+            &igpuBackends,
+            &otherOpenClBackends}) {
+        for (const std::string& name : *candidates) {
+          if (::backendNameMatchesFamily(name, family)) {
+            std::string text = string_format(
+                "Chosen %s Backend (backend override)", family.c_str());
+            bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
+            return {BackendType::GPU, name};
+          }
+        }
+      }
+    }
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "backend override matched no available device; falling back to the "
+        "default backend order",
+        nullptr);
+  }
+
   if (!openClBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
     return {BackendType::GPU, openClBackends.front()};
+  }
+
+  // Before the generic GPU bucket, which is where Vulkan lands.
+  if (!cudaBackends.empty()) {
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU CUDA", nullptr);
+    return {BackendType::GPU, cudaBackends.front()};
   }
 
   if (!gpuBackends.empty()) {
@@ -524,11 +730,66 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   return {BackendType::CPU, "none"};
 };
 
+bool backend_selection::shouldWarnAboutJitCache(const JitCacheEnv& env) {
+  if (env.cacheDisabled) {
+    return true;
+  }
+  return !env.haveCacheDir || !env.cacheDirWritable;
+}
+
+#if defined(__linux__)
+bool backend_selection::shouldWarnAboutJitCache() {
+  JitCacheEnv env;
+
+  // The driver treats any value other than "0" as disabling the cache.
+  if (const char* disable = std::getenv("CUDA_CACHE_DISABLE");
+      disable != nullptr && *disable != '\0' &&
+      std::string_view(disable) != "0") {
+    env.cacheDisabled = true;
+  }
+
+  // CUDA_CACHE_PATH wins, otherwise the driver's default.
+  std::filesystem::path dir;
+  if (const char* explicitPath = std::getenv("CUDA_CACHE_PATH");
+      explicitPath != nullptr && *explicitPath != '\0') {
+    dir = explicitPath;
+  } else if (
+      const char* home = std::getenv("HOME");
+      home != nullptr && *home != '\0') {
+    dir = std::filesystem::path(home) / ".nv" / "ComputeCache";
+  }
+  env.haveCacheDir = !dir.empty();
+
+  // Walk up to the nearest ancestor that exists and ask whether it is writable.
+  // Checking the leaf alone reports "missing" for the common first-run case,
+  // where the driver would simply create it. Nothing is created here: probing
+  // must not have side effects on a host that turns out to be read-only anyway.
+  if (env.haveCacheDir) {
+    std::error_code ec;
+    std::filesystem::path probe = dir;
+    while (!probe.empty() && !std::filesystem::exists(probe, ec)) {
+      const std::filesystem::path parent = probe.parent_path();
+      if (parent == probe) {
+        break;
+      }
+      probe = parent;
+    }
+    env.cacheDirWritable = !probe.empty() &&
+                           std::filesystem::exists(probe, ec) &&
+                           ::access(probe.c_str(), W_OK) == 0;
+  }
+
+  return shouldWarnAboutJitCache(env);
+}
+#else
+bool backend_selection::shouldWarnAboutJitCache() { return false; }
+#endif
+
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
-    bool* outIsMaliGpu) {
+    bool* outIsMaliGpu, const std::vector<std::string>& backendOverride) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -539,14 +800,34 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_type,
       ggml_backend_dev_get_props,
       llamaLogcallback};
-  return backend_selection::chooseBackend(
-      preferredBackendType,
-      bckI,
-      metadata,
-      mainGpu,
-      outAdrenoVersion,
-      isFinetuning,
-      outIsMaliGpu);
+  std::pair<BackendType, std::string> selected =
+      backend_selection::chooseBackend(
+          preferredBackendType,
+          bckI,
+          metadata,
+          mainGpu,
+          outAdrenoVersion,
+          isFinetuning,
+          outIsMaliGpu,
+          backendOverride);
+
+  // Only on the real path, and only once a CUDA device actually won: the inner
+  // overload is what the unit tests drive, and it must not touch the
+  // filesystem. The device name is checked rather than the bucket, because a
+  // unified-memory card such as the GB10 registers CUDA as an iGPU and is
+  // selected through the iGPU branch.
+  if (selected.first == BackendType::GPU &&
+      selected.second.find("cuda") != std::string::npos &&
+      shouldWarnAboutJitCache()) {
+    llamaLogcallback(
+        GGML_LOG_LEVEL_WARN,
+        "CUDA PTX JIT cache is unwritable or disabled; if this GPU has no "
+        "precompiled kernels in this build, every process start pays the full "
+        "JIT cost (measured at up to 27s) instead of only the first. Set "
+        "CUDA_CACHE_PATH to a writable path that survives restarts.",
+        nullptr);
+  }
+  return selected;
 }
 
 size_t
@@ -561,6 +842,11 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
   std::vector<SplitDevice> discrete;
   std::vector<SplitDevice> integrated;
   std::unordered_set<std::string> seenDiscrete;
+  // Physical card id -> registry that kept it. Virtual CUDA devices share a
+  // card within one registry and stay distinct; another registry's device on
+  // that card is a twin.
+  std::unordered_map<std::string, std::string> physicalOwner;
+  bool discreteWithoutId = false;
 
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
@@ -606,7 +892,8 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
         .isRpc = hasBackendFamily(deviceName, registryName, "rpc"),
         .adrenoVersion = parseAdrenoVersion(description),
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
-        .isMetal = hasMetalFamily(deviceName, registryName)};
+        .isMetal = hasMetalFamily(deviceName, registryName),
+        .deviceId = deviceId};
     if (selected.isRpc) {
       rpc.emplace_back(std::move(selected));
       continue;
@@ -625,8 +912,45 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
     // A null device_id cannot be deduped against; keep the device rather than
     // dropping it, since omitting a real GPU is worse than a duplicate. This
     // mirrors fabric, whose find_if only matches when both ids are non-null.
-    if (deviceId.empty() || seenDiscrete.insert(deviceId).second) {
+    bool isTwin = false;
+    if (!deviceId.empty()) {
+      const auto [owner, inserted] =
+          physicalOwner.try_emplace(physicalDeviceId(deviceId), registryName);
+      isTwin = !seenDiscrete.insert(deviceId).second ||
+               (!inserted && owner->second != registryName);
+    }
+    if (isTwin) {
+      result.dedupedTwins.emplace_back(std::move(selected));
+    } else {
+      discreteWithoutId = discreteWithoutId || deviceId.empty();
       discrete.emplace_back(std::move(selected));
+    }
+  }
+  // One card can register under CUDA and under Vulkan. The dedupe above needs
+  // an id on both sides, so when the kept devices span registries and any has
+  // no id, a twin cannot be ruled out. Keep the first registry's devices, CUDA
+  // since it registers first; a second id-less card is the accepted cost.
+  if (discreteWithoutId && !discrete.empty()) {
+    const auto registryOf = [&](const SplitDevice& device) {
+      const ggml_backend_reg_t reg =
+          bckI.ggml_backend_dev_backend_reg(device.handle);
+      return lowerCopy(
+          reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
+    };
+    const std::string firstRegistry = registryOf(discrete.front());
+    const bool spansRegistries =
+        std::ranges::any_of(discrete, [&](const SplitDevice& device) {
+          return registryOf(device) != firstRegistry;
+        });
+    if (spansRegistries) {
+      std::erase_if(discrete, [&](const SplitDevice& device) {
+        if (registryOf(device) == firstRegistry) {
+          return false;
+        }
+        result.droppedAmbiguousDevices.push_back(device.name);
+        result.dedupedTwins.push_back(device);
+        return true;
+      });
     }
   }
   result.devices = std::move(rpc);
@@ -709,4 +1033,144 @@ backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
     names.push_back(device.name);
   }
   return names;
+}
+
+std::vector<std::string> backend_selection::splitModeDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName) {
+  // Kept in ggml's enumeration order, so the list matches what qvac-fabric
+  // would have discovered on its own.
+  struct SplitCandidate {
+    std::string registry;
+    std::string name;
+    std::string deviceId;
+    bool isIgpu;
+  };
+  std::vector<SplitCandidate> devices;
+  std::vector<std::string> registries;
+  std::string selectedRegistry;
+  bool selectedIsIgpu = false;
+
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+    if (reg == nullptr) {
+      continue;
+    }
+    std::string registry = bckI.ggml_backend_reg_name(reg);
+    // RPC is skipped for the same reason emplaceIfValidDevice skips it: those
+    // devices are never candidates for selection in the first place.
+    if (registry == "RPC") {
+      continue;
+    }
+    std::string deviceName = bckI.ggml_backend_dev_name(dev);
+    std::ranges::transform(deviceName, deviceName.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+    const bool isIgpu = devType == GGML_BACKEND_DEVICE_TYPE_IGPU;
+    if (deviceName == selectedDeviceName) {
+      selectedRegistry = registry;
+      selectedIsIgpu = isIgpu;
+    }
+    if (std::ranges::find(registries, registry) == registries.end()) {
+      registries.push_back(registry);
+    }
+    // Both CUDA and Vulkan publish the PCI bus id here, lowercased and in the
+    // same "domain:bus:device.function" form, which is what makes them
+    // comparable across registries. An absent id is left empty; see below.
+    std::string deviceId;
+    if (bckI.ggml_backend_dev_get_props != nullptr) {
+      ggml_backend_dev_props props{};
+      bckI.ggml_backend_dev_get_props(dev, &props);
+      if (props.device_id != nullptr) {
+        deviceId = props.device_id;
+      }
+    }
+    devices.push_back(
+        {std::move(registry),
+         std::move(deviceName),
+         std::move(deviceId),
+         isIgpu});
+  }
+
+  if (registries.size() < 2 || selectedRegistry.empty()) {
+    return {};
+  }
+
+  // QVAC-23763: mirror qvac-fabric's own iGPU rules, because they only apply on
+  // the path this list bypasses. llama_prepare_model_devices() drops iGPUs once
+  // any discrete GPU was found and keeps at most one otherwise, but with
+  // an explicit device list it takes every named device verbatim, so emitting
+  // an iGPU beside a discrete card would put layers on hardware it would never
+  // have used. A deliberately selected iGPU, `main-gpu: 'integrated'`, is the
+  // exception: scope to that one device.
+  if (selectedIsIgpu) {
+    return {selectedDeviceName};
+  }
+
+  // Dedupe by device_id, not by registry, so a second physical card on a
+  // mixed-vendor host stays in the split. Ties go to the selected registry so a
+  // `backend` override still binds. If any selected-registry device has no bus
+  // id its twin cannot be matched, so fall back to registry scoping for the
+  // whole list rather than name one card twice.
+  bool selectedRegistryHasAllIds = true;
+  std::vector<std::string> selectedIds;
+  for (const auto& candidate : devices) {
+    if (candidate.isIgpu || candidate.registry != selectedRegistry) {
+      continue;
+    }
+    if (candidate.deviceId.empty()) {
+      selectedRegistryHasAllIds = false;
+    } else {
+      selectedIds.push_back(candidate.deviceId);
+    }
+  }
+
+  std::vector<std::string> names;
+  std::vector<std::string> seenIds;
+  for (const auto& candidate : devices) {
+    if (candidate.isIgpu) {
+      continue;
+    }
+    // Either there is no usable key set at all, or this particular device has
+    // no id to match on. Both reduce to registry scoping, which can never name
+    // one card twice.
+    if (!selectedRegistryHasAllIds || candidate.deviceId.empty()) {
+      if (candidate.registry == selectedRegistry) {
+        names.push_back(candidate.name);
+      }
+      continue;
+    }
+    if (std::ranges::find(seenIds, candidate.deviceId) != seenIds.end()) {
+      continue;
+    }
+    if (candidate.registry != selectedRegistry &&
+        std::ranges::find(selectedIds, candidate.deviceId) !=
+            selectedIds.end()) {
+      continue;
+    }
+    seenIds.push_back(candidate.deviceId);
+    names.push_back(candidate.name);
+  }
+  return names;
+}
+
+std::vector<std::string>
+backend_selection::splitModeDeviceNames(const std::string& selectedDeviceName) {
+  BackendInterface bckI{
+      ggml_backend_dev_count,
+      ggml_backend_dev_backend_reg,
+      ggml_backend_dev_get,
+      ggml_backend_reg_name,
+      ggml_backend_dev_description,
+      ggml_backend_dev_name,
+      ggml_backend_dev_type,
+      ggml_backend_dev_get_props,
+      nullptr};
+  return backend_selection::splitModeDeviceNames(bckI, selectedDeviceName);
 }

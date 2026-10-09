@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.20.3] - 2026-10-09
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11018.0.0#2` -> `11018.1.0#1`, with the same
+  port build options as `11018.0.0#2`, including its CUDA architecture lists:
+  - Fixed a Vulkan `TOP_K` hang (device lost) on rows that are all or mostly
+    `+inf` or NaN, which an MTP draft context's top-k sampler hits when its
+    logits are NaN, and wrong results for `k = 1` on negative values.
+  - Fixed an OpenCL abort (`CL_INVALID_KERNEL`) in argsort when a backend user
+    such as the RPC server runs it before `supports_op`.
+  - `stb_image.h` is installed with the exported stb target, so consumers that
+    check image headers before mtmd decodes them use the same parser as
+    `mtmd-helper`.
+  - Faster Metal decode and speculative verify for Ternary Bonsai 2 (`PQ2_0`)
+    weights, and faster Metal flash attention for few-row and GQA decode.
+  - Added a CPU flash-attention backward, `ggml_flash_attn_ext_back()`.
+
+### Removed
+
+- The unused `ggml_flash_attn_back()` is removed, and `GGML_OP_FLASH_ATTN_BACK`
+  is renamed `GGML_OP_FLASH_ATTN_EXT_BACK` at the same enum position. Native
+  code naming either must adapt; no in-tree consumer does.
+
+## [0.20.2] - 2026-10-08
+
+Supersedes 0.20.1, whose publish stopped at `@qvac/fabric-linux-arm64` (npm
+`413 Payload Too Large`). `@qvac/fabric` 0.20.1 was never published, so no
+release uses the platform packages that 0.20.1 did publish.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11018.0.0#1` -> `11018.0.0#2`, which narrows
+  the CUDA architectures so every platform package fits npm's size limit. Same
+  fabric source (`v11018.0.0`); no API change for this package.
+  - linux-x64 and win32-x64: the CUDA 13 module covers sm_75 (PTX),
+    sm_80/86/89, sm_90 (PTX) and sm_120a. It drops the DGX Spark arch, which
+    is arm64 only, and the sm_80 PTX, which no x64 GPU selects. Every x64 GPU
+    0.20.1 covered is still covered.
+  - linux-arm64: the CUDA 13 module is built for DGX Spark (GB10, sm_121a)
+    only. Other arm64 NVIDIA GPUs, such as Grace Hopper and Grace Blackwell
+    servers, skip it and use Vulkan or CPU.
+  - linux-arm64 also ships the CUDA 12 Jetson Orin module
+    (`libqvac-ggml-cuda-jetson.so`, sm_87), now with compressed kernels (141 to
+    52 MB). The release build enables `QVAC_CUDA_JETSON`, so the published
+    package carries it, unlike the 0.20.1 note below says.
+
+## [0.20.1] - 2026-10-08
+
+### Added
+
+- CUDA backend in the linux-x64 (`libqvac-ggml-cuda.so`) and win32-x64 builds,
+  via `qvac-fabric[cuda-backend]` (`11018.0.0` -> `11018.0.0#1`). On Linux it
+  loads alongside Vulkan, and a host without an NVIDIA driver skips it and
+  falls back to Vulkan or CPU. No API change for this package.
+- An opt-in `cuda-jetson` feature (`QVAC_CUDA_JETSON`) that builds the CUDA 12
+  Jetson module for linux-arm64. Off by default, so the published linux-arm64
+  package does not carry it.
+
 ## [0.20.0] - 2026-10-06
 
 ### Changed
@@ -12,6 +71,20 @@
   - The `--mmap`, `--no-mmap` and `--direct-io` argument-parser flags are gone;
     the load mode replaces them.
   - RPC servers keep backend tensor extras.
+
+## [0.19.1] - 2026-10-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `10549.5.3`. No API change for
+  this package:
+  - Fixed an OpenCL abort (`CL_INVALID_KERNEL`) in argsort when a backend user
+    such as the RPC server runs it before `supports_op`, which broke MoE expert
+    selection behind an RPC server.
+  - The RPC server keeps backend tensor extras, so OpenCL works behind an RPC
+    server.
+  - Fixed the `ggml-cpu` build with clang-cl.
+  - Added Laya decision model support.
 
 ## [0.19.0] - 2026-09-30
 

@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-09
+
 ### Added
+
+- Metadata-only `assessFit()` for MOSS-TTS and MOSS-TTSD, including reference
+  encoding, batch or native streaming workloads, and host/device memory estimates.
+  MOSS fit requests require both backbone and codec decoder paths.
+
+- Metadata-only `assessFit()` for MOSS-SoundEffect, with required model path,
+  prompt and duration, shared generation controls, and host/device memory estimates.
 
 - MOSS-SoundEffect engine (`engine: 'moss-sfx'`, OpenMOSS MOSS-SoundEffect-v2):
   48 kHz sound effects of up to 30 seconds from a text description, from one
@@ -22,9 +31,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `systemPrompt`, a reply voice (`replyVoice`), `maxReplySeconds`,
   `maxNewTokens`, `textReply` and sampling controls; there is no streaming.
   Desktop, with a GPU.
+- Bounded FuzzTest coverage for the JS-adapter config string parsers
+  (`parseIntString`, `parseFloatString`). Linux C++ CI runs the suite after
+  unit tests. The parsers compile without tts-cpp, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-07#2` and the `ggml-speech` floor to
+  `2026-10-07#1`, keeping the speech packages on one engine stack. The new
+  revisions add MOSS transcription memory fit and ggml memory queries that this
+  package does not use, so published behavior is unchanged.
+- Raise the `speech-cpp` floor to `2026-10-07`. CosyVoice3 with GPU offload on
+  Android (OpenCL on Adreno) no longer aborts in the language model's first
+  step, which the `2026-10-06` `ggml-speech` floor would otherwise cause. Other
+  engines are unchanged.
+- Raise the `speech-cpp` floor to `2026-10-06#2`. Parler-TTS reuses its
+  decode-step memory plan instead of rebuilding it before every step; output
+  is unchanged.
+- Raise the `speech-cpp` and `ggml-speech` floors to `2026-10-06`. Supertonic
+  synthesis is unchanged on every backend this package builds.
 - Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
   the ggml changes of the QVAC LLM stack, so both build from the same backend
   code. Same models, same backends, no API change.
@@ -41,13 +67,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged on Metal. With several Vulkan adapters, Audio8 now runs on a
   discrete GPU rather than on the first adapter listed, which on a desktop
   with an integrated GPU was the iGPU.
+- `bare-subprocess` and `brittle` are now development dependencies, so
+  installing the package installs neither. The streaming examples play audio
+  live only when `bare-subprocess` is installed (`npm install bare-subprocess`);
+  without it they print that hint and log the chunks without playing them. The
+  published integration tests need `brittle` from the app that runs them, as
+  the mobile test app already provides.
 
 ### Fixed
 
+- MOSS-Speech calls that omit `maxNewTokens` use the remaining model context
+  after the prompt instead of an implicit 1000-token reply budget.
 - Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
   reports more free device memory than total once the process has allocated
   past the GPU's recommended working set, which made a model that does not fit
   report `fits`. Synthesis is unchanged.
+- Audio8 with `useGPU: true` no longer aborts on Snapdragon 8 Elite (Adreno
+  830) phones: its KV-cache write no longer needs a strided copy, which the
+  OpenCL backend could not run there.
 
 ## [0.10.1] - 2026-09-29
 

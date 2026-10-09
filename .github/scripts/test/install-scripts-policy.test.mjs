@@ -112,11 +112,11 @@ const PENDING = [
   // non-draft PR gets; the cpp-tests and integration legs need the
   // run-cpp-addon-tests and run-desktop-addon-tests labels.
   ...[
-    ['.github/workflows/cpp-lint.yaml', 1],
+    ['.github/workflows/cpp-lint.yaml', 2],
     ['.github/workflows/cpp-test-coverage-asr-ggml.yml', 1],
     ['.github/workflows/cpp-test-coverage-bci-whispercpp.yml', 1],
     ['.github/workflows/cpp-test-coverage-tts-ggml.yml', 1],
-    ['.github/workflows/cpp-tests-llm.yml', 1],
+    ['.github/workflows/cpp-tests-llm.yml', 2],
     ['.github/workflows/cpp-tests-model-fit.yml', 1],
     ['.github/workflows/cpp-tests-nx.yml', 2],
     ['.github/workflows/cpp-tests-vla.yml', 1],
@@ -126,7 +126,7 @@ const PENDING = [
     ['.github/workflows/integration-test-llm-llamacpp.yml', 1],
     ['.github/workflows/integration-test-vla.yml', 1],
     ['.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml', 1],
-    ['.github/workflows/reusable-prebuilds.yml', 1],
+    ['.github/workflows/reusable-prebuilds.yml', 2],
     ['.github/actions/cpp-lint/action.yaml', 1],
   ].map(([file, count]) => ({
     file,
@@ -141,7 +141,6 @@ const PENDING = [
     ['.github/workflows/on-merge-model-cache-audiogen.yml', 1],
     ['.github/workflows/pr-models-validation-registry-server.yml', 7],
     ['.github/workflows/publish-registry-server.yml', 1],
-    ['.github/workflows/test-sdk.yml', 1],
     ['.github/workflows/trigger-reusable-lib.yml', 1],
     ['.github/actions/run-lint-and-integration-tests/action.yaml', 1],
     ['.github/actions/run-lint-and-unit-tests/action.yaml', 1],

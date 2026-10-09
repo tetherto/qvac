@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.56.0",
+  "version": "0.58.0",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -78,7 +78,7 @@
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-process": "^4.2.2",
-    "bare-subprocess": "^5.2.3",
+    "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
@@ -96,7 +96,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.20.0",
+    "@qvac/fabric": "^0.20.2",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",

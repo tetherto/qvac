@@ -1,4 +1,5 @@
 import type { ModelConstant } from '@qvac/sdk'
+import type { ModelFitPolicy } from '@qvac/sdk/schemas'
 
 export interface LoadConfig {
   /** When false, requests never trigger a load; an unloaded model returns
@@ -41,5 +42,6 @@ export interface ResolvedModelEntry {
   endpointCategory: string
   isDefault: boolean
   preload: boolean
+  modelFitPolicy?: ModelFitPolicy
   config: Record<string, unknown>
 }

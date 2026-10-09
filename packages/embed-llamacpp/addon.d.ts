@@ -9,6 +9,8 @@ export interface GGMLConfig {
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
+    /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
+    backend?: string;
     /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
     "split-mode"?: "none" | "layer";
     "tensor-split"?: string;
@@ -81,6 +83,12 @@ export type MappedAddonEvent = {
  * event names (caller logs and skips dispatch).
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+export declare function pickPrimaryGgufPath(files: string[]): string;
 export declare function resolveBackendsDir(): string;
 /** An interface between the Bare C++ addon and the JS runtime. */
 export declare class BertInterface implements Addon {

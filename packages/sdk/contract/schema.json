@@ -497,9 +497,9 @@
           "title": "AssessModelFitResponseExecution"
         },
         "evidence": {
-          "description": "The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
+          "description": "The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or a floor, never a missing model.",
           "type": "string",
-          "enum": ["calibration", "computed-only", "native-fit"],
+          "enum": ["computed-only", "native-fit"],
           "title": "AssessModelFitResponseEvidence"
         },
         "budget": {
@@ -537,21 +537,6 @@
           "additionalProperties": false,
           "title": "AssessModelFitResponseBudget"
         },
-        "estimate": {
-          "description": "Combined two-sided bound. Absent when the combined verdict is `unknown` for want of evidence, and under computed-only evidence, which has no upper bound.",
-          "type": "object",
-          "properties": {
-            "lowerBoundBytes": {
-              "type": "number"
-            },
-            "upperBoundBytes": {
-              "type": "number"
-            }
-          },
-          "required": ["lowerBoundBytes", "upperBoundBytes"],
-          "additionalProperties": false,
-          "title": "AssessModelFitResponseEstimate"
-        },
         "floorBytes": {
           "description": "Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.",
           "type": "number"
@@ -573,23 +558,8 @@
               "evidence": {
                 "description": "What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
                 "type": "string",
-                "enum": ["calibration", "computed-only", "native-fit"],
+                "enum": ["computed-only", "native-fit"],
                 "title": "AssessModelFitResponseModelsItemEvidence"
-              },
-              "estimate": {
-                "description": "Two-sided bound from calibrated coefficients. Absent under computed-only evidence, or when this model assessed as `unknown` for want of any evidence.",
-                "type": "object",
-                "properties": {
-                  "lowerBoundBytes": {
-                    "type": "number"
-                  },
-                  "upperBoundBytes": {
-                    "type": "number"
-                  }
-                },
-                "required": ["lowerBoundBytes", "upperBoundBytes"],
-                "additionalProperties": false,
-                "title": "AssessModelFitResponseModelsItemEstimate"
               },
               "floorBytes": {
                 "description": "Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.",
@@ -6165,7 +6135,7 @@
               "title": "LoadedModelInfoToolDialect"
             },
             "fitProbe": {
-              "description": "Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+              "description": "Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`.",
               "type": "object",
               "properties": {
                 "verdict": {
@@ -6257,6 +6227,49 @@
                     "deviceTotalBytes": {
                       "description": "Device memory installed.",
                       "type": "number"
+                    },
+                    "devices": {
+                      "description": "One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Device name as the engine registered it."
+                          },
+                          "totalBytes": {
+                            "type": "number",
+                            "description": "Device memory installed."
+                          },
+                          "freeBytes": {
+                            "type": "number",
+                            "description": "Device memory free when the probe ran."
+                          },
+                          "weightsBytes": {
+                            "type": "number",
+                            "description": "Model weights placed on this device."
+                          },
+                          "contextBytes": {
+                            "type": "number",
+                            "description": "Context and KV cache placed on this device."
+                          },
+                          "computeBytes": {
+                            "type": "number",
+                            "description": "Compute buffers placed on this device."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "totalBytes",
+                          "freeBytes",
+                          "weightsBytes",
+                          "contextBytes",
+                          "computeBytes"
+                        ],
+                        "additionalProperties": false,
+                        "title": "NativeProbeFitProjectionDevicesItem"
+                      }
                     },
                     "report": {
                       "description": "The engine's own per-module memory table, suitable for a log line.",
@@ -10266,6 +10279,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestLlamacppCompletionModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -10719,6 +10738,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestWhispercppTranscriptionModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -11118,6 +11143,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestBciWhispercppTranscriptionModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -11391,6 +11422,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestParakeetTranscriptionModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -11572,6 +11609,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -11700,6 +11743,12 @@
                 "requireSecureTransport": {
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestNmtcppTranslationModelFitPolicy"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -12567,6 +12616,12 @@
                 "requireSecureTransport": {
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestTtsGgmlModelFitPolicy"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -15411,6 +15466,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestGgmlOcrModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -15627,6 +15688,12 @@
                 "requireSecureTransport": {
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestSdcppGenerationModelFitPolicy"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -17193,6 +17260,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestAudiogenGgmlModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -17898,6 +17971,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestGgmlVlaModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -18003,6 +18082,12 @@
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
                 },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestGgmlClassificationModelFitPolicy"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -18068,6 +18153,12 @@
                 "requireSecureTransport": {
                   "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
                   "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelCustomPluginRequestModelFitPolicy"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",

@@ -2,9 +2,9 @@ import type { ModelFitWorkload } from '@/schemas/assess-model-fit'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
 import {
   LLAMA_WEIGHTS_ASSUMPTION,
-  kvCacheBytesForWidth,
-  kvElementBytes
-} from '@/resources/model-fit/estimators/llm'
+  kvCacheFloorBytes,
+  narrowestKvElementBytes
+} from '@/resources/model-fit/kv-cache'
 
 export const FLOOR_VERSION = 'floor-v1'
 
@@ -30,19 +30,19 @@ export interface FloorResult {
 }
 
 /**
- * The smallest resident footprint the catalog facts prove, with no coefficient
- * measured anywhere: artifact bytes, plus the KV cache for a llama.cpp model at
- * the cheapest element width the engine can default to.
+ * The smallest resident footprint the catalog facts prove: artifact bytes, plus
+ * the KV cache for a llama.cpp model at the cheapest element width the engine
+ * can default to.
  *
- * Every term a calibrated estimate adds on top — weight slack, engine overhead,
- * compute buffers, a completion's working peak — is non-negative, so a floor
- * with all of them at zero is unconditionally valid on any platform and any
- * backend. It can therefore refuse a model (`likely-too-large` when even the
- * floor is over budget) but never confirm one: how far above the floor the real
- * load lands is exactly what calibration exists to measure.
+ * Every term the real load adds on top — weight slack, engine overhead, compute
+ * buffers, a completion's working peak — is non-negative, so a floor with all of
+ * them at zero is unconditionally valid on any platform and any backend. It can
+ * therefore refuse a model (`likely-too-large` when even the floor is over
+ * budget) but never confirm one, since how far above the floor the real load
+ * lands is unmeasured here.
  *
  * This is the zero-fetch gate. It reads nothing but the catalog and stays the
- * fallback wherever no calibration or engine projection is available.
+ * fallback wherever no engine measurement is available.
  */
 export function computeFloor(input: FloorInput): FloorResult {
   const { profile, workload, extraArtifactBytes } = input
@@ -91,8 +91,8 @@ export function computeFloor(input: FloorInput): FloorResult {
   // The narrowest default the engine can pick on any backend, so the floor
   // holds whether the model lands on a GPU (q8_0 with flash attention) or on
   // the CPU (f16). Architectures that disable flash attention stay f16 anyway.
-  const element = kvElementBytes(facts, true).bytes.lower
-  const kv = kvCacheBytesForWidth(facts, contextTokens, element).lower
+  const element = narrowestKvElementBytes(facts)
+  const kv = kvCacheFloorBytes(facts, contextTokens, element)
   assumptions.push(
     element < 2
       ? 'the KV cache is floored at the q8_0 element width, the narrowest default the engine picks on any backend; a CPU load allocates an f16 cache above it'

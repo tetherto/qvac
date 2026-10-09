@@ -66,6 +66,49 @@ Per target, common fields (see any `packages/*/project.json`):
 
 Per-run overrides are possible via the action's `overrides` input, but only for fields a package already declares (validated, so a PR can't inject new CI behaviour).
 
+For `asr-ggml`, `tts-ggml`, `audiogen-ggml`, and `bci-whispercpp`, PR-time cpp-lint additionally requires a changed C/C++ source or header (`.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, or `.hxx`) inside that package. The filter uses API-reported paths, including deleted files and previous paths for renames. Vcpkg version-only bumps skip cpp-lint, and the merge guard accepts that skipped job. Manual dispatch retains the affected packages' cpp-lint lanes.
+
+Speech C++ tests for `asr-ggml`, `tts-ggml`, and `bci-whispercpp` use the Ubuntu 22.04 x64 CPU runner in both their `test:cpp.options.ci.platforms` rows and standalone coverage workflows. The consolidated PR lane reads those target rows; changing only a standalone workflow does not change PR runner selection. `audiogen-ggml` builds its native addon on the Ubuntu 22.04 CPU runner, with trusted vcpkg and per-package compiler caches and two build workers. Addon-level C++ tests remain a stub. Default-branch pushes or dispatches warm the AudioGen caches. `runner-names.test.mjs`, included in the security policy suite, guards both routing paths.
+
+AudioGen non-PR runs pin checkout to the triggering repository and commit, and
+reject inputs requesting other code. Caller-selected PR-head checkouts are
+limited to PR events, whose cache scope cannot write default-branch entries.
+
+The consolidated coverage lane restores vcpkg binaries from the host cache and
+the package's keyed cache, including its build mode, triplets, and toolchain
+fingerprint. Only trusted default-branch builds write shared caches. Pushes to
+`main` affecting these speech packages or their cache configuration build all
+three packages to warm their caches; the first such run can be cold. A manual
+`CPP Tests (nx)` dispatch on `main` with explicit packages also warms them:
+
+```bash
+gh workflow run cpp-tests-nx.yml --ref main \
+  -f packages='["asr-ggml","tts-ggml","bci-whispercpp"]'
+```
+
+All three coverage targets enable ccache. Each job uses its own package cache
+directory under `RUNNER_TEMP`, restores entries for the same toolchain and
+dependencies, and trusted builds save a fresh run-specific key. This avoids
+restoring a fixed, immutable snapshot forever or mixing another package's
+compiler cache into the archive. `cppBuildJobs` defaults to two and caps both
+CMake and vcpkg parallelism; change the target's `options.ci.cppBuildJobs` to
+tune it for runner capacity. CPU runners remain the default to avoid GPU queue
+contention. ASR and BCI test errors fail the job and the merge guard; coverage
+generation and artifact collection still run after a failed test if the build
+succeeded.
+
+For a runner comparison, dispatch the same `main` commit with explicit packages
+and an `overrides` JSON object. It accepts only fields already declared in the
+trusted package configuration. For example, benchmark TTS on Ubuntu 24.04 GPU
+without changing its default CPU routing:
+
+```bash
+gh workflow run cpp-tests-nx.yml --ref main -f packages='["tts-ggml"]' \
+  -f overrides='{"tts-ggml":{"os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64-gpu","cppBuildJobs":2}}'
+```
+
+Package config is read from the trusted base ref. After merging a runner change into `main`, start a new run for an existing PR to resolve the updated matrix; already queued jobs retain the labels selected by their original run.
+
 ## Fork safety
 
 `on-pr-nx.yml` runs on `pull_request_target` — the base-repo workflow with secrets, against fork code. The rule: **base = control surface, head = code-under-test.**

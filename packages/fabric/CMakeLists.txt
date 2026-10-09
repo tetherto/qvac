@@ -7,10 +7,16 @@ if(VK_PROFILING)
   list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
 
+option(QVAC_CUDA_JETSON "Build the CUDA 12 Jetson backend module" OFF)
+if(QVAC_CUDA_JETSON)
+  list(APPEND VCPKG_MANIFEST_FEATURES "cuda-jetson")
+endif()
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
@@ -289,7 +295,13 @@ elseif(WIN32)
   # for the same symbol prefixes the ELF/Mach-O builds export, and feed it via
   # /DEF. The export entries double as references that pull the matching members
   # out of the archives, so the listed symbols are always present in the image.
-  find_program(FABRIC_NM NAMES llvm-nm nm)
+  # npm's Windows bin for llvm-nm is three files. The bare name is a
+  # #!/bin/sh script, which find_program selects when generate runs under
+  # Git bash. CreateProcess cannot run that script. The .cmd shim can.
+  find_program(FABRIC_NM NAMES llvm-nm.cmd llvm-nm.exe nm.cmd nm.exe)
+  if(NOT FABRIC_NM)
+    find_program(FABRIC_NM NAMES llvm-nm nm)
+  endif()
   if(NOT FABRIC_NM)
     set(FABRIC_NM "${CMAKE_NM}")
   endif()

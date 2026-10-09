@@ -2,7 +2,7 @@ import GGMLBert from './index.js'
 import addon from './addon.js'
 
 const { BertInterface, mapAddonEvent } = addon
-const { assessFit, pickPrimaryGgufPath } = GGMLBert
+const { assessFit, pickPrimaryGgufPath, LayaDecisions, LayaInterface, mapLayaEvent } = GGMLBert
 
 const { IdMapIndex, IdMapIndexFilter } = GGMLBert
 
@@ -13,6 +13,9 @@ export {
   GGMLBert,
   IdMapIndex,
   IdMapIndexFilter,
+  LayaDecisions,
+  LayaInterface,
   mapAddonEvent,
+  mapLayaEvent,
   pickPrimaryGgufPath
 }

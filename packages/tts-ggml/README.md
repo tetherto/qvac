@@ -1111,6 +1111,12 @@ await response.onUpdate((data) => {
 }).await()
 ```
 
+When `maxNewTokens` is omitted, MOSS-Speech uses the remaining model context
+after the prompt instead of an implicit 1000-token budget. The JavaScript API
+currently accepts explicit budgets from 1 to 4096; the native engine also
+checks that the requested budget fits the remaining context. `maxReplySeconds`
+is optional and defaults to no time cut.
+
 The user turn is either `audio` (with `sampleRate`) or the run `input` text,
 not both; each entry of `messages` carries exactly one of `text` or `audio`
 (with its `sampleRate`).  Every call is one exchange: pass the earlier turns in
@@ -1352,6 +1358,8 @@ fit.report
 | `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
 | `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
 | `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+| `moss` | `mossBackbonePath`, `mossCodecDecoderPath`, optional `mossCodecEncoderPath` | Required `promptRows`, `referenceSamples`, `streaming`; load controls `durationTokens`, `streamChunkTokens`, `threads` |
+| `moss-sfx` | Required `mossSoundEffectPath` | Required `prompt`, `seconds`; optional `negativePrompt`, `steps`, `guidance`, `shift`, `threads` |
 
 Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
 
@@ -1359,9 +1367,59 @@ Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the 
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
 
-A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS is the one voice in that state. A broken request, or a host with no native binding, throws.
+A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, throws.
+
+MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
+native prompt length, including special tokens, encoded speaker references and
+TTSD continuation rows. `referenceSamples` is the total mono reference sample
+count (0 without a reference); a positive count requires the encoder path.
+`streaming` explicitly selects native chunk streaming or batch synthesis.
+The fitter does not open reference recordings. Use the TTSD backbone to assess
+dialogue, supplying its complete prompt and total reference workload.
+
+```js
+const fit = TTSGgml.assessFit({
+  engineType: 'moss',
+  mossBackbonePath: './moss-tts-delay-f16.gguf',
+  mossCodecDecoderPath: './moss-codec-decoder-f16.gguf',
+  promptRows: 128,
+  referenceSamples: 0,
+  streaming: false,
+  useGPU: true
+})
+```
+
+The result includes LM weights and KV state, codec weights and compute, streaming
+caches when applicable, and host staging/audio memory. It sums component peaks
+as a conservative upper bound, including the reference encoder when requested;
+this may reject a workload whose actual peak is smaller. The fit follows the
+load's generation settings and does not change synthesis behavior.
 
 The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
+
+### MOSS-SoundEffect fit
+
+```js
+const fit = TTSGgml.assessFit({
+  engineType: 'moss-sfx',
+  mossSoundEffectPath: './moss-sfx-v2-q8_0.gguf',
+  prompt: 'Rain falling on a tin roof.',
+  seconds: 8,
+  useGPU: false
+})
+console.log(fit.report)
+```
+
+The fitter uses generation's tokenizer, request validation and graph builders,
+without loading weights or generating audio. It supports full and metadata-only
+GGUF files. `negativePrompt`, `steps`, `guidance` and `shift` keep their generation
+semantics; `marginBytes` keeps the shared 256 MiB default. DiT processes the model's
+full latent duration even for a short output. Requested seconds size decoder
+windows and audio buffers. The shared compute arena is counted at its peak:
+`lmComputeBytes` covers text/DiT, `codecComputeBytes` any additional VAE demand.
+Host memory includes conditioning, temporary arrays and CPU fallback buffers.
+
+Run `bare examples/moss-sfx-fit.js ./moss-sfx-v2-q8_0.gguf "Rain on a roof." 8`.
 
 ## Examples
 
@@ -1392,13 +1450,20 @@ Runnable demos under `examples/`:
 | `moss-speech.js` | MOSS-Speech speech-to-speech: answers a spoken question WAV with a 24 kHz spoken reply (optionally in the voice of a second WAV). Set `QVAC_TTS_MOSS_SPEECH_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SPEECH_TEXT=1` for a text-only answer. `bare examples/moss-speech.js test/reference-audio/jfk.wav` |
 | `moss-dialogue-tts.js` | MOSS-TTSD multi-speaker dialogue from one 24 kHz reference per speaker; the text opens with each reference's transcript. Set `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-dialogue-tts.js "[S1] What alice.wav says. [S2] What bob.wav says. [S1] Hi. [S2] Hello." alice.wav bob.wav` |
 
-The two streaming examples feed PCM into a single long-running
+The streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
-per-chunk spawn gaps — install one of them (`brew install sox` or
-`brew install ffmpeg` on macOS) to enable playback.  Absent a player
-the demos still run and write the concatenated wav.
+per-chunk spawn gaps. Playback needs one of those players (`brew install sox`
+or `brew install ffmpeg` on macOS) and `bare-subprocess`, a development
+dependency: run `npm install bare-subprocess` when you run the examples from
+an installed package. Without them the demos still run and write the
+concatenated wav.
 
 ## Testing
+
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. The deterministic C++ tier remains a
+required gate. See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
 
 ```bash
 npm run test:unit               # mocked binding; fast
@@ -1448,6 +1513,27 @@ its codec), and the C++ suite answers a short spoken turn when
 To stress-test long inputs, set `INPUT_SENTENCES=medium` (or `long`)
 and re-run the integration suite — `addon.test.js` reads the env var to
 pick its sentence corpus from `test/data/sentences-{medium,long}.js`.
+
+### Fuzzing
+
+The JS-adapter config string parsers have a [Google FuzzTest][fuzztest]
+target, `tts-config-parse-fuzz`. Fuzzing is Linux-only: it needs clang with
+libFuzzer and AddressSanitizer, plus the [build-from-source](#build-from-source)
+prerequisites. The target does not link tts-cpp, so it runs with full ASan and
+LeakSanitizer.
+
+```bash
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- TtsConfigParseFuzz.ParseFloatNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
 
 ## Build from source
 

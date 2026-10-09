@@ -43,7 +43,7 @@ interface NormalizedRunOptions {
   prefill: boolean;
   generationParams: GenerationParams | undefined;
   cacheKey: string | undefined;
-  saveCacheToDisk: boolean;
+  ephemeral: boolean;
   rejectWhenBusy: boolean | undefined;
 }
 
@@ -69,7 +69,7 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
       prefill: false,
       generationParams: undefined,
       cacheKey: undefined,
-      saveCacheToDisk: false,
+      ephemeral: false,
       rejectWhenBusy: undefined,
     };
   }
@@ -97,8 +97,16 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     throw new TypeError("cacheKey must be a string when provided");
   }
 
-  if (options.saveCacheToDisk !== undefined && typeof options.saveCacheToDisk !== "boolean") {
-    throw new TypeError("saveCacheToDisk must be a boolean when provided");
+  if ((options as { saveCacheToDisk?: unknown }).saveCacheToDisk !== undefined) {
+    throw new TypeError(
+      "saveCacheToDisk was removed: a cached conversation stays in memory and is written to " +
+        "its cacheKey file when it is set aside, evicted or the model unloads; call " +
+        "saveCache(cacheKey) to write it now, or set ephemeral: true to never write it",
+    );
+  }
+
+  if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
+    throw new TypeError("ephemeral must be a boolean when provided");
   }
 
   if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
@@ -109,7 +117,7 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     prefill: options.prefill === true,
     generationParams: normalizeGenerationParams(options.generationParams),
     cacheKey: options.cacheKey,
-    saveCacheToDisk: options.saveCacheToDisk === true,
+    ephemeral: options.ephemeral === true,
     // Left undefined when unset so admission falls back to the instance default.
     rejectWhenBusy: options.rejectWhenBusy,
   };
@@ -123,7 +131,7 @@ function promptToAddonMessages(
     throw new TypeError("Prompt input must be Message[]");
   }
 
-  const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions);
+  const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
 
   const textMessages: Message[] = [];
   const mediaItems: Uint8Array[] = [];
@@ -150,7 +158,7 @@ function promptToAddonMessages(
     prefill,
     generationParams,
     cacheKey,
-    saveCacheToDisk,
+    ephemeral,
   });
 
   return promptMessages;
@@ -174,7 +182,6 @@ const GENERATION_PARAM_KEYS: ReadonlySet<string> = new Set([
   "tool_choice",
   "parallel_tool_calls",
   "reasoning_budget",
-  "remove_thinking_from_context",
 ]);
 
 // Normalizes the per-request `generationParams.json_schema` field. The
@@ -219,15 +226,6 @@ function normalizeGenerationParams(
     if (value !== undefined) params[key] = value;
   }
   const sanitized = params as GenerationParams;
-
-  if (
-    sanitized.remove_thinking_from_context !== undefined &&
-    typeof sanitized.remove_thinking_from_context !== "boolean"
-  ) {
-    throw new TypeError(
-      "generationParams.remove_thinking_from_context must be a boolean when provided",
-    );
-  }
 
   if (
     sanitized.tool_choice !== undefined &&
@@ -413,6 +411,21 @@ interface LlmLlamacpp {
   cancel(): Promise<void>;
   pause(): Promise<void>;
   unload(): Promise<void>;
+  /**
+   * Write the conversation kept in memory for `cacheKey` to that file now.
+   * Waits for a request running on that key, not one still queued, so read a
+   * response to the end first. Writes only when the file lacks turns, and
+   * rejects when nothing is cached under the key or the write fails (the
+   * conversation then stays in memory, still unsaved).
+   */
+  saveCache(cacheKey: string): Promise<void>;
+  /**
+   * Drop the conversation kept in memory for `cacheKey` without writing it,
+   * so no later eviction or unload writes it. Waits for a request running on
+   * that key. The file, if one was written, is left alone: delete it too to
+   * remove the conversation from disk.
+   */
+  discardCache(cacheKey: string): Promise<void>;
   getState(): { configLoaded: boolean };
 }
 
@@ -995,6 +1008,48 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     return (this.addon ? this.addon.activeJobs() : 0) > 0;
   }
 
+  /**
+   * Write the conversation kept in memory for `cacheKey` to that file now:
+   * the active single-prompt conversation, a batch conversation kept in its
+   * slot, or one in the RAM tier. Resolves once the file is written. When a
+   * request on that key is running it waits for it to finish, so the file
+   * always holds a committed state. A request still queued is not waited
+   * for: `run()` resolves when the request is accepted, so read its response
+   * to the end before saving when the file must hold that turn. Resolves without writing when the file
+   * already holds the conversation. Rejects when nothing is cached under the
+   * key and no file exists, or when the write fails (the conversation then
+   * stays in memory, still unsaved, so the call can be retried). Writes
+   * ephemeral conversations too.
+   */
+  async saveCache(cacheKey: string): Promise<void> {
+    if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+      throw new TypeError("saveCache(cacheKey) requires a non-empty string");
+    }
+    if (!this.addon) {
+      throw new Error("Model is not loaded");
+    }
+    await this.addon.saveCache(cacheKey);
+  }
+
+  /**
+   * Drop the conversation kept in memory for `cacheKey` — the active
+   * single-prompt conversation, a batch conversation kept in its slot, its
+   * RAM-tier entry and its checkpoints — without writing it, so no later
+   * eviction or unload writes it. When a request on that key is running it
+   * waits for it to finish. The file, if one was written, is left alone:
+   * delete it as well to remove the conversation from disk. Resolves when
+   * nothing is kept for the key.
+   */
+  async discardCache(cacheKey: string): Promise<void> {
+    if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+      throw new TypeError("discardCache(cacheKey) requires a non-empty string");
+    }
+    if (!this.addon) {
+      throw new Error("Model is not loaded");
+    }
+    await this.addon.discardCache(cacheKey);
+  }
+
   getState(): { configLoaded: boolean } {
     return this.state;
   }
@@ -1053,6 +1108,13 @@ namespace LlmLlamacpp {
 
   export interface LlamaConfig {
     device?: string;
+    /**
+     * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
+     * Accepted names: cuda, vulkan, metal, opencl, plus
+     * `auto` for no preference. An unrecognised name is rejected; a recognised
+     * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+     */
+    backend?: string;
     gpu_layers?: NumericLike;
     ctx_size?: NumericLike;
     system_prompt?: string;
@@ -1201,6 +1263,63 @@ namespace LlmLlamacpp {
      * `InvalidArgument` naming both knobs.
      */
     parallel?: NumericLike;
+    /**
+     * Per-sequence cap on the process-local full-state checkpoints kept for
+     * cached requests on hybrid / recurrent models (Qwen3.5, Jamba,
+     * Granite-Hybrid, DeepSeek V4, ...). Such models cannot trim a KV tail,
+     * so a diverging history is served by restoring the longest checkpoint
+     * that is still a prefix of the new prompt. A committed cached request
+     * adds one, at the end of its history, holding only the state a tail
+     * trim cannot rebuild. The default is 1: the last one, which an ordinary
+     * next turn and a regenerate restore. `2` also keeps the one before it,
+     * which an edit of the last user message restores. Changing the user
+     * message k-th from the end (1 = the last) without reprocessing the whole
+     * conversation needs at least k + 1; with the default 1, editing the last
+     * user message reprocesses everything. `0` keeps and takes none (every
+     * divergent turn is a cold prefill), the maximum is 1024.
+     * Ignored on pure-attention models, which never take checkpoints.
+     * Also accepted as `cache-checkpoints`; supplying both is an error.
+     */
+    cache_checkpoints?: NumericLike;
+    /**
+     * Byte budget for the checkpoints kept per sequence, enforced before
+     * `cache_checkpoints`: the oldest checkpoints are dropped until the total
+     * payload fits. `0` (default) is unlimited. When set, the model load fails
+     * with `InvalidArgument` if the budget cannot hold `cache_checkpoints`
+     * checkpoints of the largest size the context allows, so a misconfigured
+     * budget is reported up front rather than discovered mid-conversation.
+     * Also accepted as `cache-checkpoints-max-bytes`.
+     */
+    cache_checkpoints_max_bytes?: NumericLike;
+    /**
+     * Where checkpoints and the per-request rollback snapshot live:
+     * `'memory'` (default) keeps them in host RAM so a cached chat never
+     * touches the disk, `'disk'` writes them to files in
+     * `cache_checkpoint_dir`, which it requires. Each snapshot holds only the
+     * state a tail trim cannot rebuild, a size fixed by the model (about 20 MB
+     * on Qwen3.5-0.8B). Also accepted as `cache-checkpoint-storage`.
+     */
+    cache_checkpoint_storage?: "disk" | "memory";
+    /**
+     * Required with `cache_checkpoint_storage: 'disk'`, and refused without
+     * it: where checkpoint files go, inside a private directory the addon
+     * creates in it (mode 0700; on Windows, the directory itself). There is
+     * no default, because the OS temp directory is not usable on every
+     * platform (Android); on mobile, pass the app's cache directory. The load
+     * fails with `InvalidArgument` when it is missing, empty, or unusable.
+     * Also accepted as `cache-checkpoint-dir`.
+     */
+    cache_checkpoint_dir?: string;
+    /**
+     * Host-RAM budget, in MiB, for conversations that are not running: a
+     * `cacheKey` switch (single prompt) or a slot eviction (batch) moves the
+     * conversation there instead of writing its file, and the next request on
+     * that key restores it from there. A write-back cache: unsaved turns reach
+     * the file on `saveCache()`, when the budget pushes the entry out, or at
+     * unload; ephemeral entries are dropped instead. `0` (default) is off; the
+     * maximum is 1048576 (1 TiB). Also accepted as `cache-ram-mib`.
+     */
+    cache_ram_mib?: NumericLike;
     [key: string]: string | number | boolean | string[] | undefined;
   }
 
@@ -1221,6 +1340,14 @@ namespace LlmLlamacpp {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- the literals document the known roles; any string is accepted.
     role: "system" | "assistant" | "user" | "tool" | "session" | string;
     content: string;
+    /**
+     * An assistant turn's reasoning, separate from its answer in `content`, as
+     * in OpenAI-compatible APIs. Optional: an answer sent back with its
+     * reasoning inline (`<think>…</think>` first, as the model streamed it) is
+     * split into the two, using the reasoning markers the chat template
+     * reports, so the template can drop or place it. Ignored on other roles.
+     */
+    reasoning_content?: string;
     type?: undefined;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary caller-supplied fields ride along to the chat template.
     [key: string]: any;
@@ -1305,121 +1432,38 @@ namespace LlmLlamacpp {
      * value is restored afterwards.
      */
     reasoning_budget?: number;
-    /**
-     * When the model emits a reasoning block during generation (e.g.
-     * `<think>...</think>` for the Qwen3 family, `<|channel>thought ...
-     * <channel|>` for Gemma 4), drop those tokens from the KV cache at
-     * end-of-generation so subsequent turns do not accumulate reasoning
-     * history.
-     *
-     * Defaults to `false` for all models except the Qwen3 reasoning family
-     * (Qwen3, Qwen3.5, and Qwen3.6, including MoE variants), which defaults
-     * to `true`. Set this per-request `generationParams` value to override the
-     * model default. Set to `false` to preserve reasoning tokens in the KV / SSM
-     * cache across turns (e.g. chain-of-thought agents that want the next turn
-     * to attend to prior reasoning, interpretability tooling, or cache-reuse
-     * patterns that depend on the reasoning-inclusive state). Supported on both
-     * text and multimodal contexts. No-op for models without a recognised
-     * reasoning channel.
-     *
-     * Every model kind is handled the same way: the sequence is rewound to a
-     * boundary anchored BEFORE the reasoning span, and the tokens that sit
-     * outside the span, the pre-reasoning preamble and the answer tail, are
-     * replayed through the decoder. Only the anchor's form differs. Recurrent
-     * / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba, Granite-Hybrid, ...)
-     * anchor a full-state snapshot, because the recurrent half cannot be
-     * rewound by dropping cells; pure-attention models anchor a bare position
-     * and rewind with a tail trim.
-     *
-     * No structural reasoning marker is seeded or replayed, so the compacted
-     * cache is preamble plus answer with no `<think>` / `</think>` scaffold
-     * left behind, and close-marker length decides nothing: a marker that
-     * tokenises to several pieces is supported like any other. Chat templates
-     * that force-open the reasoning channel during prefill and templates that
-     * let the model generate the opener are both supported; on the
-     * generated-opener path the sampled pieces that open the block are clipped
-     * out of the replay rather than rebuilt.
-     *
-     * Prefill-only (cache-warm) requests anchor nothing: they never enter
-     * generation and cannot emit reasoning tokens.
-     *
-     * Uniform hard-fail contract: any inability to remove the reasoning
-     * span from cache, whether the boundary anchor, the rewind, or the
-     * replay step, is surfaced to the caller as a `StatusError`. There is no
-     * soft-failure counter: if the feature is
-     * enabled and cache cleanup cannot complete, the final request result is
-     * failed rather than reported as a successful answer with the reasoning span
-     * still resident in cache.
-     *
-     * Streaming caveat: token callbacks (`outputCallback` / batch `onToken`) are
-     * invoked during generation, while reasoning-block compaction runs at
-     * end-of-generation. If compaction fails, streaming callers may already have
-     * received partial or complete text. Treat streamed text as tentative until
-     * the request completes successfully; non-streaming callers receive no
-     * successful returned answer on this failure path.
-     *
-     * Before throwing, the affected sequence is cleaned up so that the
-     * next request on the same context starts from a coherent state:
-     *   * Boundary-anchor failure: nothing has been rewound yet, so the
-     *     driver rolls back to its pre-prompt checkpoint (or clears the
-     *     sequence entirely on restore underflow) and resets positional
-     *     accounting, then rethrows.
-     *   * Rewind or replay failure: compaction rewinds before it replays,
-     *     so live KV has already been written to by this point and a tail
-     *     trim can no longer reach a coherent state. The compactor
-     *     best-effort wipes the sequence and the driver zeroes its
-     *     positional accounting to match, so subsequent turns cannot decode
-     *     into contaminated positions.
-     *
-     * On the continuous-batch path, the scheduler's error-recovery leg
-     * deliberately does NOT persist the failed slot's cache: when the
-     * request was configured with `cacheKey` + `saveCacheToDisk`, the
-     * last known-good on-disk cache is preserved rather than being
-     * overwritten with the post-failure state. The same skip-save rule
-     * applies to graceful cancels of hybrid / recurrent requests when
-     * rollback to the pre-request cursor cannot be completed (recurrent
-     * full-state restore refused, or no pre-request snapshot was captured
-     * yet the driver has advanced past the pre-request cursor). Cancels
-     * that can be rolled back cleanly still persist as usual.
-     */
-    remove_thinking_from_context?: boolean;
   }
 
   export interface RunOptions {
     /**
      * Run prefill only (cache warming): the prompt is evaluated but no tokens
-     * are generated. On a model loaded with `parallel >= 2` a prefill is
-     * admitted only when it is *persistable* (`saveCacheToDisk: true` plus a
-     * `cacheKey`) — a live-only prefill warms context state that no concurrent
-     * job could reach and is rejected with `InvalidArgument`; run live-only
-     * prefills on a `parallel: 1` model. The same rule applies per batch item.
+     * are generated. On a model loaded with `parallel >= 2` a prefill needs a
+     * `cacheKey` (the warmed conversation stays in its slot for the next
+     * request on that key) — a keyless prefill warms context state that no
+     * concurrent job could reach and is rejected with `InvalidArgument`; run
+     * keyless prefills on a `parallel: 1` model. The same rule applies per
+     * batch item.
      */
     prefill?: boolean;
     generationParams?: GenerationParams;
+    /**
+     * Enables addon-owned prompt caching at this path. Every cached request
+     * must resend the complete authoritative message history and tool list;
+     * delta-only continuations are not supported. The addon renders once and
+     * decodes only the suffix after the longest matching token/media prefix.
+     */
     cacheKey?: string;
     /**
-     * When `true` and `cacheKey` is set, the driver persists the sequence's
-     * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
-     * later run keyed by the same string can resume without re-prefilling.
-     *
-     * The continuous-batch scheduler intentionally SKIPS the save on
-     * teardown legs where persistence could corrupt the last known-good
-     * on-disk cache:
-     *   - Any batch error-recovery path (e.g. decode failure, per-slot
-     *     failure with `SaveCachePolicy::Skip`, or a
-     *     `remove_thinking_from_context` hard-fail).
-     *   - Graceful cancel of a hybrid / recurrent request whose driver
-     *     cannot roll live memory back to the pre-request cursor —
-     *     either the recurrent full-state restore was refused, or no
-     *     pre-request snapshot exists yet the driver advanced past the
-     *     pre-request cursor. Cancels that roll back cleanly still save.
-     *
-     * On both skip paths the sequence's in-memory KV is still cleared, so
-     * subsequent requests decode from a coherent baseline; only the
-     * on-disk cache is untouched. Pure-attention drivers always roll back
-     * via `removeLastNTokens` and therefore save on cancel as usual.
+     * Keep this conversation in memory only. By default a cached
+     * conversation is written to its `cacheKey` file whenever it would
+     * otherwise be lost with turns the file lacks: when it is set aside for
+     * another key, evicted from its batch slot or from the RAM tier, or the
+     * model is reloaded or unloaded. With `ephemeral: true` each of those
+     * drops it instead, so its next request starts cold. It still loads an
+     * existing file, and an explicit `saveCache(cacheKey)` still writes it.
+     * The flag belongs to the conversation's latest request.
      */
-    saveCacheToDisk?: boolean;
+    ephemeral?: boolean;
     /**
      * Admission policy when the worker pool is full. `true` rejects before
      * submitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the
@@ -1480,15 +1524,6 @@ namespace LlmLlamacpp {
     CacheTokens: number;
     generatedTokens: number;
     promptTokens: number;
-    /**
-     * Number of `<think>` (or model-equivalent) reasoning blocks dropped
-     * from the KV cache at end-of-generation by the
-     * `remove_thinking_from_context` feature. Per-inference for single
-     * requests; summed across completed slots for batch requests. 0 when
-     * the model has no recognised reasoning channel, when the feature
-     * was disabled per-request, or when no reasoning blocks were emitted.
-     */
-    thinkingBlockDiscards: number;
     /**
      * Number of prompt renders in this request that provably left the tool
      * definitions out — the template either rejected them, or supplying them
