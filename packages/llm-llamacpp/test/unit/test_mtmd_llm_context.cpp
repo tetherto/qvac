@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -24,13 +25,34 @@ using test_common::getStatValue;
 namespace fs = std::filesystem;
 
 namespace {
-constexpr uint32_t kQwen35MultimodalPrefillCells = 2899;
-constexpr llama_pos kQwen35MultimodalPrefillPosMax = 90;
+constexpr uint32_t K_QWEN35_MULTIMODAL_PREFILL_CELLS = 2899;
+constexpr llama_pos K_QWEN35_MULTIMODAL_PREFILL_POS_MAX = 90;
 
 std::vector<uint8_t> readBinaryFile(const fs::path& path) {
   std::ifstream stream(path, std::ios::binary);
   return {
       std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+}
+
+std::vector<uint8_t> imageAboveOneMegapixel() {
+  std::vector<uint8_t> png{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+                           0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0,    0,
+                           0,    0,    0,    0,    0,    0,    0x08, 0x02, 0x00,
+                           0x00, 0x00, 0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0};
+  png[16] = 0x00;
+  png[17] = 0x00;
+  png[18] = 0x03;
+  png[19] = 0xe9;
+  png[20] = 0x00;
+  png[21] = 0x00;
+  png[22] = 0x03;
+  png[23] = 0xe8;
+  png[37] = 'I';
+  png[38] = 'D';
+  png[39] = 'A';
+  png[40] = 'T';
+  return png;
 }
 
 fs::path multimodalTestImagePath() {
@@ -257,6 +279,132 @@ TEST_F(MtmdLlmContextTest, LoadMediaFile) {
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
+TEST_F(MtmdLlmContextTest, ImageLimitRejectsBeforeCacheAndFileDecode) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto config = config_files;
+  config["image-max-megapixels"] = "1";
+  auto modelPath = test_model_path;
+  auto projectionPath = test_projection_path;
+  LlamaModel model(
+      std::move(modelPath), std::move(projectionPath), std::move(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  auto* const memory = llama_get_memory(model.getContext());
+  ASSERT_NE(memory, nullptr);
+
+  const auto png = imageAboveOneMegapixel();
+  const auto tempName =
+      "qvac25639-" +
+      std::to_string(
+          std::chrono::steady_clock::now().time_since_epoch().count());
+  const auto activeCachePath =
+      fs::temp_directory_path() / (tempName + "-active.cache");
+  const auto rejectedCachePath =
+      fs::temp_directory_path() / (tempName + "-rejected.cache");
+  LlamaModel::Prompt warmSession;
+  warmSession.input = R"([{"role":"user","content":"Say hello."}])";
+  warmSession.cacheKey = activeCachePath.string();
+  warmSession.prefill = true;
+  ASSERT_NO_THROW(model.processPrompt(warmSession));
+  ASSERT_NO_THROW(model.saveCache(activeCachePath.string()));
+  ASSERT_TRUE(fs::exists(activeCachePath));
+  const auto cellsBefore = llama_memory_seq_token_count(memory, -1);
+  ASSERT_GT(cellsBefore, 0u);
+
+  LlamaModel::Prompt oversized;
+  oversized.input =
+      R"([{"role":"user","type":"media","content":""},{"role":"user","content":"Describe the image."}])";
+  oversized.media.push_back(png);
+  oversized.cacheKey = rejectedCachePath.string();
+  try {
+    model.processPrompt(oversized);
+    FAIL() << "Expected the configured image limit to reject the prompt";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(std::string(error.what()).find("1 MP limit"), std::string::npos);
+  }
+  EXPECT_EQ(llama_memory_seq_token_count(memory, -1), cellsBefore);
+  EXPECT_FALSE(fs::exists(rejectedCachePath));
+
+  const auto imagePath = fs::temp_directory_path() / (tempName + ".png");
+  {
+    std::ofstream output(imagePath, std::ios::binary);
+    ASSERT_TRUE(output.is_open());
+    output.write(
+        reinterpret_cast<const char*>(png.data()),
+        static_cast<std::streamsize>(png.size()));
+  }
+  LlamaModel::Prompt filePrompt;
+  filePrompt.input =
+      std::string(R"([{"role":"user","type":"media","content":")") +
+      imagePath.generic_string() +
+      R"("},{"role":"user","content":"Describe the image."}])";
+  filePrompt.cacheKey = rejectedCachePath.string();
+  const auto cellsBeforeFile = llama_memory_seq_token_count(memory, -1);
+  try {
+    model.processPrompt(filePrompt);
+    FAIL() << "Expected the configured image limit to reject the file";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(std::string(error.what()).find("1 MP limit"), std::string::npos);
+  }
+  EXPECT_EQ(llama_memory_seq_token_count(memory, -1), cellsBeforeFile);
+  EXPECT_EQ(cellsBeforeFile, cellsBefore);
+  EXPECT_FALSE(fs::exists(rejectedCachePath));
+
+  LlamaModel::Prompt followUp;
+  followUp.input = R"([{"role":"user","content":"Say hello again."}])";
+  followUp.cacheKey = activeCachePath.string();
+  EXPECT_NO_THROW(model.processPrompt(followUp));
+  fs::remove(imagePath);
+  fs::remove(activeCachePath);
+  fs::remove(rejectedCachePath);
+}
+
+TEST_F(MtmdLlmContextTest, ImageLimitRejectsBatchPrompt) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto config = config_files;
+  config["image-max-megapixels"] = "1";
+  config["parallel"] = "2";
+  auto modelPath = test_model_path;
+  auto projectionPath = test_projection_path;
+  LlamaModel model(
+      std::move(modelPath), std::move(projectionPath), std::move(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  auto* scheduler = LlamaModelTestPeer::scheduler(model);
+  ASSERT_NE(scheduler, nullptr) << "parallel=2 must build the scheduler";
+
+  // The per-slot loadMedia check throws the same error, so only the slot
+  // count shows the batch preflight rejected before admission.
+  size_t slotsBuilt = 0;
+  qvac_lib_inference_addon_llama::batching::DriverFactory original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original, &slotsBuilt](
+          const common_params& params, uint32_t seqId, llama_pos ceiling) {
+        ++slotsBuilt;
+        return original(params, seqId, ceiling);
+      });
+
+  LlamaModel::Prompt oversized;
+  oversized.input =
+      R"([{"role":"user","type":"media","content":""},{"role":"user","content":"Describe the image."}])";
+  oversized.media.push_back(imageAboveOneMegapixel());
+  try {
+    model.processPromptBatch(std::vector<LlamaModel::Prompt>{oversized});
+    FAIL() << "Expected the configured image limit to reject the batch";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(std::string(error.what()).find("1 MP limit"), std::string::npos);
+  }
+  EXPECT_EQ(slotsBuilt, 0u);
+}
+
 TEST_F(MtmdLlmContextTest, ResetState) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";
@@ -405,9 +553,9 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalReportsMemoryTokenCountAndPosMax) {
       "sequenceCells=" + std::to_string(sequenceCells) + ", totalCells=" +
       std::to_string(totalCells) + ", posMax=" + std::to_string(posMax));
 
-  EXPECT_EQ(sequenceCells, kQwen35MultimodalPrefillCells);
-  EXPECT_EQ(totalCells, kQwen35MultimodalPrefillCells);
-  EXPECT_EQ(posMax, kQwen35MultimodalPrefillPosMax);
+  EXPECT_EQ(sequenceCells, K_QWEN35_MULTIMODAL_PREFILL_CELLS);
+  EXPECT_EQ(totalCells, K_QWEN35_MULTIMODAL_PREFILL_CELLS);
+  EXPECT_EQ(posMax, K_QWEN35_MULTIMODAL_PREFILL_POS_MAX);
 
   const auto stats = model->runtimeStats();
   EXPECT_EQ(
@@ -459,9 +607,9 @@ TEST_F(
       "sequenceCells=" + std::to_string(sequenceCells) + ", totalCells=" +
       std::to_string(totalCells) + ", posMax=" + std::to_string(posMax));
 
-  EXPECT_GT(sequenceCells, kQwen35MultimodalPrefillCells);
+  EXPECT_GT(sequenceCells, K_QWEN35_MULTIMODAL_PREFILL_CELLS);
   EXPECT_EQ(totalCells, sequenceCells);
-  EXPECT_GT(posMax, kQwen35MultimodalPrefillPosMax);
+  EXPECT_GT(posMax, K_QWEN35_MULTIMODAL_PREFILL_POS_MAX);
 
   const auto stats = model->runtimeStats();
   EXPECT_EQ(

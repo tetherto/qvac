@@ -1164,7 +1164,7 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.20.2
+        specifier: ^0.20.3
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -1180,11 +1180,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.20.0
-        version: 0.20.0
+        specifier: ^0.20.3
+        version: 0.20.3
       '@qvac/fabric-ios':
-        specifier: ^0.20.0
-        version: 0.20.0
+        specifier: ^0.20.3
+        version: 0.20.3
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -4354,6 +4354,10 @@ packages:
     resolution: {integrity: sha512-Io9zzgc7BMconmQKbkhTKO0U07GTF6DX6iISgdvzxDv58Zjxr0Dsd4UvX+zvI4u2OKVQ41gIMZ1Rthhb2wLiNQ==}
     engines: {bare: '>=1.24.0'}
 
+  '@qvac/fabric-android-arm64@0.20.3':
+    resolution: {integrity: sha512-sbH8tIRp6bEAq7Y9HKfTp98LHmkX+VSzaEr3g7R1fH+OKP2DW56DA+00XUIeddZS2HJYtvNJGNHN+6Pg62B+Qg==}
+    engines: {bare: '>=1.24.0'}
+
   '@qvac/fabric-darwin-arm64@0.18.1':
     resolution: {integrity: sha512-gwj22xrLKJDlZZrCjqt4fkjBKrhrhnSCIq9Tgsxgs5H0MzvStU6Sg1MzhQm3aD8ZUx1KCGh5Astsj/tn9cVQ7A==}
     engines: {bare: '>=1.24.0'}
@@ -4368,6 +4372,10 @@ packages:
 
   '@qvac/fabric-ios@0.20.0':
     resolution: {integrity: sha512-TmKljlbS1HFvzpLDww+X4c5czbDSZUeLZu6QTxgomxmKaHLLy9gA97Lof2xhCPa986WkXcYEkdJGRsVOy7Zmbg==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric-ios@0.20.3':
+    resolution: {integrity: sha512-ZKlXUkGr7oVPPC9essAXRA7oZMcCyUqVGeTZfi5W+PgF1Euxu4FhVv3KiSJrBqcWociY1TjES8NouPYVW0Bb4A==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric-linux-arm64@0.18.1':
@@ -13632,6 +13640,8 @@ snapshots:
 
   '@qvac/fabric-android-arm64@0.20.0': {}
 
+  '@qvac/fabric-android-arm64@0.20.3': {}
+
   '@qvac/fabric-darwin-arm64@0.18.1':
     optional: true
 
@@ -13639,6 +13649,8 @@ snapshots:
     optional: true
 
   '@qvac/fabric-ios@0.20.0': {}
+
+  '@qvac/fabric-ios@0.20.3': {}
 
   '@qvac/fabric-linux-arm64@0.18.1':
     optional: true

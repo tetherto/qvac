@@ -1221,6 +1221,10 @@ namespace LlmLlamacpp {
     devices?: string;
     "cache-type-k"?: string;
     "cache-type-v"?: string;
+    /** Maximum reported image pixel count in megapixels before decoding. Default: 50. */
+    "image-max-megapixels"?: string;
+    /** Alias for image-max-megapixels. Set only one spelling. */
+    image_max_megapixels?: string;
     /**
      * Run the multimodal projector (mmproj / vision encoder) on the GPU. Accepts
      * 'true'/'on'/'1' or 'false'/'off'/'0'. When unset, the backend is auto-selected

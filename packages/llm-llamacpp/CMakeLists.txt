@@ -36,6 +36,7 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -89,6 +90,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp

@@ -29,6 +29,7 @@
 #include <picojson/picojson.h>
 
 #include "BatchEntryGuard.hpp"
+#include "ImagePixelLimit.hpp"
 #include "MediaLoadOrder.hpp"
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
@@ -46,6 +47,20 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
+
+static void preflightImagePixels(
+    const ParsedPromptPayload& parsed,
+    const std::vector<std::vector<uint8_t>>& media, uint64_t maxPixels) {
+  validateByteBufferCount(parsed.mediaPlan, media.size());
+  for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
+    if (step.source == MediaSource::ByteBuffer) {
+      const auto& bytes = media[step.byteIndex];
+      image_pixel_limit::checkBuffer(bytes.data(), bytes.size(), maxPixels);
+    } else {
+      image_pixel_limit::checkFile(step.path, maxPixels);
+    }
+  }
+}
 
 void LlamaModel::resolveShardPaths(
     GGUFShards& shards, const std::string& modelPath) {
@@ -67,6 +82,9 @@ LlamaModel::LlamaModel(
           std::move(modelPath),
           std::move(projectionPath),
           std::move(configFilemap)} {
+  // This is an addon admission limit, not a common_params load setting.
+  maxImagePixels_ =
+      image_pixel_limit::takeMaxPixels(constructionArgs_.configFilemap);
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
@@ -399,8 +417,9 @@ namespace {
 // future multimodal context is picked up without inheriting MtmdLlmContext.
 batching::DriverFactory buildDriverFactory(
     LlmModelContext shared, mtmd_context* sharedVision,
-    qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy) {
-  return [shared, sharedVision, checkpointPolicy](
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy,
+    uint64_t maxImagePixels) {
+  return [shared, sharedVision, checkpointPolicy, maxImagePixels](
              const common_params& params,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
@@ -408,7 +427,7 @@ batching::DriverFactory buildDriverFactory(
     std::unique_ptr<SequenceDriver> driver;
     if (sharedVision != nullptr) {
       driver = std::make_unique<MtmdLlmContext>(
-          params, shared, sharedVision, sid, perSeqCtxCeiling);
+          params, shared, sharedVision, sid, perSeqCtxCeiling, maxImagePixels);
     } else {
       driver = std::make_unique<TextLlmContext>(
           params, shared, sid, perSeqCtxCeiling);
@@ -449,7 +468,8 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
         buildDriverFactory(
             shared,
             state.llmContext_->visionContext(),
-            state.cacheCheckpointPolicy_));
+            state.cacheCheckpointPolicy_,
+            maxImagePixels_));
     scheduler->setRamTier(state.ramTier_);
     return scheduler;
   } catch (const std::invalid_argument& e) {
@@ -1081,6 +1101,14 @@ void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
 LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
+  auto parseAndPreflight = [this, &prompt](const std::string& input) {
+    auto parsed = formatPrompt(input);
+    if (!state_->isTextLlm_) {
+      // handleCache mutates the active session after parsing.
+      preflightImagePixels(parsed, prompt.media, maxImagePixels_);
+    }
+    return parsed;
+  };
   // Load all prompt media (hoisted byte buffers and inline paths) in
   // prompt-marker order so each bitmap binds to its own MTMD marker.
   auto validateAndLoadPlannedMedia =
@@ -1117,9 +1145,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
         parsedPrompt,
         prompt.input,
-        [this](const std::string& inputPrompt) {
-          return this->formatPrompt(inputPrompt);
-        },
+        parseAndPreflight,
         prompt.cacheKey,
         prompt.ephemeral);
     validateAndLoadPlannedMedia(parsedPrompt);
@@ -1129,7 +1155,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
-    ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
+    ParsedPromptPayload parsedPrompt = parseAndPreflight(prompt.input);
     validateAndLoadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
@@ -1523,6 +1549,9 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: media requires a multimodal model");
     }
+    if (!state_->isTextLlm_) {
+      preflightImagePixels(parsed, prompt.media, maxImagePixels_);
+    }
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
     sr.tools = std::move(parsed.tools);
@@ -1804,7 +1833,8 @@ std::unique_ptr<LlmContext> LlamaModel::createContext(
     common_init_result_ptr llamaInit) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
+    return std::make_unique<MtmdLlmContext>(
+        params, std::move(llamaInit), maxImagePixels_);
   }
   return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
 }
