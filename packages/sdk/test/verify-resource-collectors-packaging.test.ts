@@ -11,6 +11,7 @@ import {
   type ResourceCollectorAcceptanceOptions
 } from '@/commands/verify/resource-collectors'
 import { listBarePrebuildFiles } from '@/commands/verify/prebuilds'
+import { writeBundleFile } from './fixtures/bundle-file'
 
 const COLLECTORS = ['bare-cpu-info', 'bare-gpu-info']
 
@@ -39,20 +40,8 @@ function writeJson(filePath: string, value: object) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`)
 }
 
-function escapeForJsString(value: string) {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t')
-}
-
 function writeBareBundle(bundlePath: string, resolutions: Record<string, boolean>) {
-  const bundleId = 'resource-collector-fixture'
-  const header = JSON.stringify({ id: bundleId, resolutions })
-  const packed = `${bundleId}\n${header}\n`
-  fs.writeFileSync(bundlePath, `module.exports = "${escapeForJsString(packed)}"\n`)
+  writeBundleFile(bundlePath, { id: 'resource-collector-fixture', resolutions })
 }
 
 function createFixture(projectRoot: string, fixtureOptions: FixtureOptions = {}): Fixture {
