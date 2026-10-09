@@ -145,6 +145,7 @@ class BareRpcTransport:
         self._proc: asyncio.subprocess.Process | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._read_task: asyncio.Task | None = None
+        self._handshakes: set[asyncio.Task] = set()
         self.rpc: bare_rpc.RPC | None = None
 
     async def connect(self, *, timeout: float = 30) -> BareRpcTransport:
@@ -156,7 +157,17 @@ class BareRpcTransport:
             reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         ) -> None:
             nonlocal rejected
-            if not await self._authenticate(reader, token):
+            handshake = asyncio.current_task()
+            assert handshake is not None
+            self._handshakes.add(handshake)
+            try:
+                authenticated = await self._authenticate(reader, token)
+            except asyncio.CancelledError:
+                writer.close()
+                raise
+            finally:
+                self._handshakes.discard(handshake)
+            if not authenticated:
                 rejected += 1
                 writer.close()
                 return
@@ -214,16 +225,32 @@ class BareRpcTransport:
                 self._writer.write(frame)
 
             self.rpc = bare_rpc.RPC(send=send)
+            # A worker that cannot authenticate (or crashes on startup) exits
+            # long before `timeout`; fail as soon as it does.
+            exited = asyncio.ensure_future(self._proc.wait())
+            waiters: set[asyncio.Future[Any]] = {connected, exited}
             try:
-                await asyncio.wait_for(connected, timeout=timeout)
-            except asyncio.TimeoutError:
-                if rejected:
-                    raise asyncio.TimeoutError(
-                        f"worker did not authenticate within {timeout}s "
-                        f"({rejected} connection(s) rejected); a worker older "
-                        "than this client does not send the IPC token"
-                    ) from None
-                raise
+                done, _ = await asyncio.wait(
+                    waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+                )
+            finally:
+                if not exited.done():
+                    exited.cancel()
+            if connected not in done:
+                detail = (
+                    f" ({rejected} connection(s) rejected); a worker older than "
+                    "this client does not send the IPC token"
+                    if rejected
+                    else ""
+                )
+                if exited in done:
+                    raise RuntimeError(
+                        f"worker exited with code {exited.result()} before "
+                        f"authenticating{detail}"
+                    )
+                raise asyncio.TimeoutError(
+                    f"worker did not authenticate within {timeout}s{detail}"
+                )
             # Apply SDK config before any method call, mirroring the JS client's
             # `__init_config` on connect (server/rpc/handle-request.ts routes it).
             if self._config:
@@ -253,6 +280,8 @@ class BareRpcTransport:
         return hmac.compare_digest(presented, token + b"\n")
 
     async def close(self) -> None:
+        for handshake in list(self._handshakes):
+            handshake.cancel()
         if self._read_task:
             self._read_task.cancel()
         if self.rpc:

@@ -21,21 +21,30 @@ pytestmark = [pytest.mark.asyncio]
 
 
 class _FakeProc:
-    returncode = None
+    def __init__(self) -> None:
+        self.returncode: int | None = None
+        self._exited = asyncio.Event()
+
+    def exit(self, code: int = 0) -> None:
+        self.returncode = code
+        self._exited.set()
 
     def terminate(self) -> None:
-        self.returncode = 0
+        self.exit()
 
     kill = terminate
 
     async def wait(self) -> int:
-        return 0
+        await self._exited.wait()
+        assert self.returncode is not None
+        return self.returncode
 
 
 class _Spawn:
     def __init__(self) -> None:
         self.argv: tuple = ()
         self.env: dict = {}
+        self.proc: _FakeProc | None = None
         self.ready = asyncio.Event()
 
     @property
@@ -56,8 +65,9 @@ def spawn(monkeypatch) -> _Spawn:
     async def fake_exec(*argv, env=None, **_kwargs):
         captured.argv = argv
         captured.env = env or {}
+        captured.proc = _FakeProc()
         captured.ready.set()
-        return _FakeProc()
+        return captured.proc
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
     return captured
@@ -163,5 +173,36 @@ async def test_wrong_token_is_rejected_and_connect_times_out(spawn) -> None:
         assert await asyncio.wait_for(reader.read(), timeout=5) == b""
         with pytest.raises(asyncio.TimeoutError, match="1 connection"):
             _ = await task
+    finally:
+        writer.close()
+
+
+async def test_worker_exit_after_rejection_fails_connect_at_once(spawn) -> None:
+    transport = BareRpcTransport(["bare", "worker.js"])
+    task = await _start(transport, spawn, timeout=30)
+    reader, writer = await asyncio.open_connection("127.0.0.1", spawn.port)
+    writer.write(b"0" * 64 + b"\n")
+    try:
+        assert await asyncio.wait_for(reader.read(), timeout=5) == b""
+        assert spawn.proc is not None
+        spawn.proc.exit(1)
+        with pytest.raises(RuntimeError, match="exited with code 1 .*1 connection"):
+            await asyncio.wait_for(task, timeout=5)
+    finally:
+        writer.close()
+
+
+async def test_close_drops_a_silent_connection_without_waiting(
+    spawn, monkeypatch
+) -> None:
+    monkeypatch.setattr(bare_rpc_transport, "_HANDSHAKE_TIMEOUT", 60)
+    transport = BareRpcTransport(["bare", "worker.js"])
+    task = await _start(transport, spawn)
+    reader, writer = await asyncio.open_connection("127.0.0.1", spawn.port)
+    try:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await asyncio.wait_for(transport.close(), timeout=2)
+        assert await asyncio.wait_for(reader.read(), timeout=5) == b""
     finally:
         writer.close()
