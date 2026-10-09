@@ -432,6 +432,23 @@ TEST(SpeculativeBatcherTest, TerminalTokenIsNotCountedUnlessPredictionLimit) {
         slot.req().generatedTokens, (std::vector<llama_token>{50, 51, 52}));
     EXPECT_EQ(slot.req().stopReason, StopReason::PredictionLimit);
   }
+  {
+    // A full window stops before the next token: 51 was streamed, nothing
+    // after it was, so 51 is counted.
+    GeneratingSlot slot;
+    slot.batcher.setDraft(slot.seqId, {51, 52});
+    (void)slot.batcher.fillBatch(slot.batch);
+    slot.batcher.advance();
+    slot.batcher.verifyDrafted([](uint32_t, int, llama_pos) {
+      return MultiRequestBatcher::DraftOutcome{
+          .newPos = 4,
+          .tokens = {51},
+          .finished = true,
+          .stopReason = StopReason::ContextOverflow};
+    });
+    EXPECT_EQ(slot.req().generatedTokens, (std::vector<llama_token>{50, 51}));
+    EXPECT_EQ(slot.req().stopReason, StopReason::ContextOverflow);
+  }
 }
 
 TEST(SpeculativeBatcherTest, DraftWithoutRoomIsDropped) {

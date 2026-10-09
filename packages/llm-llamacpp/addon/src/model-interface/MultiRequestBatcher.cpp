@@ -579,14 +579,16 @@ void MultiRequestBatcher::verifyDrafted(const VerifyFn& verifyFn) {
     }
     // Same accounting as sampleAndAppendIdle, token by token: every streamed
     // token is counted except one that ended the sequence for any reason
-    // other than the prediction limit.
+    // other than the prediction limit. A context overflow stops before the
+    // next token, so every token it returns is ordinary content.
     const auto now = std::chrono::steady_clock::now();
     if (!out.tokens.empty() && !req.firstTokenAt.has_value()) {
       req.firstTokenAt = now;
     }
     for (size_t i = 0; i < out.tokens.size(); ++i) {
       const bool terminal = out.finished && i + 1 == out.tokens.size() &&
-                            out.stopReason != StopReason::PredictionLimit;
+                            out.stopReason != StopReason::PredictionLimit &&
+                            out.stopReason != StopReason::ContextOverflow;
       if (terminal) {
         break;
       }
