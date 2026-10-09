@@ -562,6 +562,27 @@ TypeScript declarations ship with the package (`index.d.ts`).
 
 ### Methods
 
+Call `TranslationNmtcpp.assessFit({ files, config, marginBytes? })` before
+constructing a model to estimate whether its weights can load with the memory
+free right now. `files` and `config` match the constructor; `files.model` must
+be an absolute path. The synchronous result contains `status` (`fits`,
+`does-not-fit`, or `error`), `reason`, `backend`, `modelBytes`, `requiredBytes`,
+`freeBytes`, and a readable `report`. No model instance or weights are loaded.
+The estimate budgets four times the model file size plus 512 MiB for copies,
+tokenizers, and inference buffers; actual use varies by model. An indeterminate placement reports `error`
+with `reason: 'insufficient-evidence'`. IndicTrans `main-gpu` selection currently
+reports `unsupported-config`. Fit is a point-in-time estimate, so
+another load can consume memory before `load()` runs.
+
+```js
+const fit = TranslationNmtcpp.assessFit({
+  files: { model: '/absolute/path/to/model.bin' },
+  config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
+  marginBytes: 256 * 1024 * 1024
+})
+if (fit.status !== 'fits') console.log(fit.report)
+```
+
 - `load(): Promise<void>` — loads the model (both stages for pivot setups);
   reloads if already loaded. Rejects after `destroy()`.
 - `run(input: string): Promise<TranslationResponse>` — translates one text.

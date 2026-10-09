@@ -46,6 +46,28 @@ function resolveBackendsDir(): string {
   return path.join(__dirname, "prebuilds");
 }
 
+function isAbsoluteModelPath(modelPath: string): boolean {
+  return (
+    modelPath.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(modelPath) ||
+    modelPath.startsWith("\\\\")
+  );
+}
+
+function normalizeGpuAliases(config: Record<string, unknown>): void {
+  for (const [canonical, alias] of [
+    ["use_gpu", "useGPU"],
+    ["gpu_backend", "gpuBackend"],
+    ["gpu_device", "gpuDevice"],
+    ["op_offload_min_batch", "opOffloadMinBatch"],
+  ]) {
+    if (config[canonical] === undefined && config[alias] !== undefined) {
+      config[canonical] = config[alias];
+    }
+    delete config[alias];
+  }
+}
+
 interface QvacResponseHandlers {
   cancelHandler: () => Promise<void>;
   signal?: AbortSignal;
@@ -168,6 +190,8 @@ interface TranslationNmtcpp {
  */
 interface TranslationNmtcppConstructor {
   new (args: TranslationNmtcppArgs): TranslationNmtcpp;
+  /** Assess a model before loading it, using current device memory. */
+  assessFit(request: TranslationNmtcpp.FitRequest): TranslationNmtcpp.FitResult;
   /**
    * Available model types for translation
    */
@@ -185,6 +209,57 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     IndicTrans: "IndicTrans",
     Bergamot: "Bergamot",
   };
+
+  static assessFit(
+    request: TranslationNmtcpp.FitRequest,
+  ): TranslationNmtcpp.FitResult {
+    if (
+      !request ||
+      !request.files ||
+      typeof request.files.model !== "string" ||
+      !isAbsoluteModelPath(request.files.model)
+    ) {
+      throw new TypeError("files.model must be an absolute path");
+    }
+    if (request.files.pivotModel && !isAbsoluteModelPath(request.files.pivotModel)) {
+      throw new TypeError("files.pivotModel must be an absolute path");
+    }
+    const modelType = request.config?.modelType;
+    if (modelType !== "IndicTrans" && modelType !== "Bergamot") {
+      throw new TypeError("config.modelType must be IndicTrans or Bergamot");
+    }
+    if (
+      modelType === "IndicTrans" &&
+      (request.config["main-gpu"] !== undefined ||
+        request.config.main_gpu !== undefined)
+    ) {
+      return {
+        status: "error",
+        reason: "unsupported-config",
+        backend: "",
+        modelBytes: 0,
+        requiredBytes: 0,
+        freeBytes: 0,
+        report: "Fit with main-gpu selection is unavailable",
+      };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
+    const binding = require("./binding") as {
+      assessFit?: (input: TranslationNmtcpp.FitRequest) => TranslationNmtcpp.FitResult;
+    };
+    if (typeof binding.assessFit !== "function") {
+      throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
+    }
+    const config = { ...request.config };
+    normalizeGpuAliases(config);
+    return binding.assessFit({
+      ...request,
+      config: {
+        ...config,
+        backendsDir: request.config.backendsDir ?? resolveBackendsDir(),
+      },
+    });
+  }
 
   private readonly opts: { stats?: boolean };
   readonly logger: QvacLogger;
@@ -441,31 +516,7 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     // expects snake_case (mirrors nmt_context_params field names), so we
     // translate camelCase → snake_case here. snake_case takes precedence
     // when both are present (explicit user choice wins over alias).
-    if (otherConfig.use_gpu === undefined && otherConfig.useGPU !== undefined) {
-      otherConfig.use_gpu = otherConfig.useGPU;
-    }
-    if (
-      otherConfig.gpu_backend === undefined &&
-      otherConfig.gpuBackend !== undefined
-    ) {
-      otherConfig.gpu_backend = otherConfig.gpuBackend;
-    }
-    if (
-      otherConfig.gpu_device === undefined &&
-      otherConfig.gpuDevice !== undefined
-    ) {
-      otherConfig.gpu_device = otherConfig.gpuDevice;
-    }
-    if (
-      otherConfig.op_offload_min_batch === undefined &&
-      otherConfig.opOffloadMinBatch !== undefined
-    ) {
-      otherConfig.op_offload_min_batch = otherConfig.opOffloadMinBatch;
-    }
-    delete otherConfig.useGPU;
-    delete otherConfig.gpuBackend;
-    delete otherConfig.gpuDevice;
-    delete otherConfig.opOffloadMinBatch;
+    normalizeGpuAliases(otherConfig);
 
     if (otherConfig.backendsDir === undefined) {
       otherConfig.backendsDir = resolveBackendsDir();
@@ -692,6 +743,24 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
  */
 // eslint-disable-next-line @typescript-eslint/no-namespace -- class/namespace merging is the only way to type a constructor-first CommonJS export.
 namespace TranslationNmtcpp {
+  export interface FitRequest {
+    files: TranslationNmtcppFiles;
+    config: TranslationNmtcppConfig;
+    /** Additional free memory to reserve, in bytes. */
+    marginBytes?: number;
+  }
+
+  export interface FitResult {
+    status: "fits" | "does-not-fit" | "error";
+    reason: string;
+    /** CPU or selected GGML device name. */
+    backend: string;
+    modelBytes: number;
+    requiredBytes: number;
+    freeBytes: number;
+    report: string;
+  }
+
   export interface TranslationNmtcppFiles {
     model: string;
     srcVocab?: string;

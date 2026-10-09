@@ -1,10 +1,11 @@
-#include "QwenTemplate.hpp"
+#pragma once
 
-namespace qvac_lib_inference_addon_llama {
-namespace utils {
+namespace qvac_lib_inference_addon_llama::test {
 
-const char* getFixedQwen3Template() {
-  return R"({%- if tools %}
+// The chat template embedded in Qwen3-0.6B-Q8_0.gguf
+// (`tokenizer.chat_template`), for tests that render a Qwen3-style prompt
+// without loading a model.
+inline constexpr const char* QWEN3_CHAT_TEMPLATE = R"jinja({%- if tools %}
     {{- '<|im_start|>system\n' }}
     {%- if messages[0].role == 'system' %}
         {{- messages[0].content + '\n\n' }}
@@ -21,9 +22,9 @@ const char* getFixedQwen3Template() {
     {%- endif %}
 {%- endif %}
 {%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}
-{%- for message in messages[::-1] %}
-    {%- set index = (messages|length - 1) - loop.index0 %}
-    {%- if ns.multi_step_tool and message.role == "user" and not(message.content.startswith('<tool_response>') and message.content.endswith('</tool_response>')) %}
+{%- for index in range(ns.last_query_index, -1, -1) %}
+    {%- set message = messages[index] %}
+    {%- if ns.multi_step_tool and message.role == "user" and not('<tool_response>' in message.content and '</tool_response>' in message.content) %}
         {%- set ns.multi_step_tool = false %}
         {%- set ns.last_query_index = index %}
     {%- endif %}
@@ -38,14 +39,16 @@ const char* getFixedQwen3Template() {
             {%- set reasoning_content = message.reasoning_content %}
         {%- else %}
             {%- if '</think>' in message.content %}
-                {%- set parts = message.content.split('</think>') %}
-                {%- set content = parts[-1] | trim %}
-                {%- set think_parts = parts[0].split('<think>') %}
-                {%- set reasoning_content = think_parts[-1] | trim %}
+                {%- set content = message.content.split('</think>')[-1].lstrip('\n') %}
+                {%- set reasoning_content = message.content.split('</think>')[0].rstrip('\n').split('<think>')[-1].lstrip('\n') %}
             {%- endif %}
         {%- endif %}
-        {%- if reasoning_content %}
-            {{- '<|im_start|>' + message.role + '\n<think>\n' + (reasoning_content | trim) + '\n</think>\n\n' + (content | trim) }}
+        {%- if loop.index0 > ns.last_query_index %}
+            {%- if loop.last or (not loop.last and reasoning_content) %}
+                {{- '<|im_start|>' + message.role + '\n<think>\n' + reasoning_content.strip('\n') + '\n</think>\n\n' + content.lstrip('\n') }}
+            {%- else %}
+                {{- '<|im_start|>' + message.role + '\n' + content }}
+            {%- endif %}
         {%- else %}
             {{- '<|im_start|>' + message.role + '\n' + content }}
         {%- endif %}
@@ -86,8 +89,6 @@ const char* getFixedQwen3Template() {
     {%- if enable_thinking is defined and enable_thinking is false %}
         {{- '<think>\n\n</think>\n\n' }}
     {%- endif %}
-{%- endif %})";
-}
+{%- endif %})jinja";
 
-} // namespace utils
-} // namespace qvac_lib_inference_addon_llama
+} // namespace qvac_lib_inference_addon_llama::test

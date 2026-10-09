@@ -52,7 +52,7 @@ public:
 
 private:
   // `QLOG_IF` to match the package's other logging header
-  // (model-interface/ReasoningRecoveryHelpers.hpp), so a guard failure honours
+  // (model-interface/RequestRecoveryHelpers.hpp), so a guard failure honours
   // the configured verbosity and lands in the same sink as its callers.
   //
   // `reason` is a `what()` from whatever threw, and the callables guarded here
