@@ -121,17 +121,33 @@ data class QvacToolParameter(
 
 typealias QvacToolHandler = suspend (JsonObject) -> JsonElement
 
+/**
+ * A tool the model may call. Describe flat parameters with [parameters] and
+ * [required], or pass a full JSON Schema object as [parametersSchema] for nested
+ * `properties`, `items`, `anyOf` or `$defs`; it is sent as written.
+ */
 data class QvacTool(
     val name: String,
     val description: String,
     val parameters: Map<String, QvacToolParameter> = emptyMap(),
     val required: Set<String> = emptySet(),
     val handler: QvacToolHandler? = null,
+    val parametersSchema: JsonObject? = null,
 ) {
+    init {
+        require(parametersSchema == null || (parameters.isEmpty() && required.isEmpty())) {
+            "QvacTool \"$name\": set either parametersSchema or parameters/required, not both"
+        }
+    }
+
     internal fun toJson(): JsonObject = buildJsonObject {
         put("type", "function")
         put("name", name)
         put("description", description)
+        if (parametersSchema != null) {
+            put("parameters", parametersSchema)
+            return@buildJsonObject
+        }
         putJsonObject("parameters") {
             put("type", "object")
             putJsonObject("properties") {

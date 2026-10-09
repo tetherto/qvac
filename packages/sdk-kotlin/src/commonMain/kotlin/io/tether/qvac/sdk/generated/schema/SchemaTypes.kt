@@ -806,73 +806,8 @@ data class BatchCompletionStreamRequestPromptsItemToolsItem(
     @SerialName("description") val `description`: String,
     @SerialName("deferLoading") val `deferLoading`: Boolean? = null,
     @SerialName("group") val `group`: String? = null,
-    @SerialName("parameters") val `parameters`: BatchCompletionStreamRequestPromptsItemToolsItemParameters,
+    @SerialName("parameters") val `parameters`: JsonObject,
 )
-
-@Serializable
-data class BatchCompletionStreamRequestPromptsItemToolsItemParameters(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "object",
-    @SerialName("properties") val `properties`: Map<String, BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue>,
-    @SerialName("required") val `required`: List<String>? = null,
-)
-
-@Serializable
-data class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
-    @SerialName("type") val `type`: BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType? = null,
-    @SerialName("description") val `description`: String? = null,
-    @SerialName("enum") val `enum`: List<JsonElement?>? = null,
-)
-
-@Serializable(with = BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeSerializer::class)
-sealed class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType {
-    data class Value53EF4A00(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00) : BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType()
-    data class Variant2(val value: List<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem>) : BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType()
-}
-internal object BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeSerializer : KSerializer<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Value53EF4A00(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00>(), element))
-            1 -> BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Variant2(input.json.decodeFromJsonElement(serializer<List<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem>>(), element))
-            else -> throw SerializationException("No matching BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType) {
-        when (value) {
-            is BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Value53EF4A00 -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00>(), value.value)
-            is BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType.Variant2 -> encoder.encodeSerializableValue(serializer<List<BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem>>(), value.value)
-        }
-    }
-}
-
-@Serializable
-enum class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType53EF4A00 {
-    @SerialName("string") `STRING`,
-    @SerialName("number") `NUMBER`,
-    @SerialName("integer") `INTEGER`,
-    @SerialName("boolean") `BOOLEAN`,
-    @SerialName("object") `OBJECT`,
-    @SerialName("array") `ARRAY`,
-    @SerialName("null") `NULL`,
-}
-
-@Serializable
-enum class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueTypeItem {
-    @SerialName("string") `STRING`,
-    @SerialName("number") `NUMBER`,
-    @SerialName("integer") `INTEGER`,
-    @SerialName("boolean") `BOOLEAN`,
-    @SerialName("object") `OBJECT`,
-    @SerialName("array") `ARRAY`,
-    @SerialName("null") `NULL`,
-}
 
 @Serializable
 enum class BatchCompletionStreamRequestToolDialect {
@@ -1108,73 +1043,8 @@ data class CompletionOrchestrateRequestToolsItem(
     @SerialName("description") val `description`: String,
     @SerialName("deferLoading") val `deferLoading`: Boolean? = null,
     @SerialName("group") val `group`: String? = null,
-    @SerialName("parameters") val `parameters`: CompletionOrchestrateRequestToolsItemParameters,
+    @SerialName("parameters") val `parameters`: JsonObject,
 )
-
-@Serializable
-data class CompletionOrchestrateRequestToolsItemParameters(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "object",
-    @SerialName("properties") val `properties`: Map<String, CompletionOrchestrateRequestToolsItemParametersPropertiesValue>,
-    @SerialName("required") val `required`: List<String>? = null,
-)
-
-@Serializable
-data class CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
-    @SerialName("type") val `type`: CompletionOrchestrateRequestToolsItemParametersPropertiesValueType? = null,
-    @SerialName("description") val `description`: String? = null,
-    @SerialName("enum") val `enum`: List<JsonElement?>? = null,
-)
-
-@Serializable(with = CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeSerializer::class)
-sealed class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType {
-    data class Value70681380(val value: io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380) : CompletionOrchestrateRequestToolsItemParametersPropertiesValueType()
-    data class Variant2(val value: List<CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem>) : CompletionOrchestrateRequestToolsItemParametersPropertiesValueType()
-}
-internal object CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeSerializer : KSerializer<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionOrchestrateRequestToolsItemParametersPropertiesValueType")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): CompletionOrchestrateRequestToolsItemParametersPropertiesValueType {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Value70681380(input.json.decodeFromJsonElement(serializer<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380>(), element))
-            1 -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Variant2(input.json.decodeFromJsonElement(serializer<List<CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem>>(), element))
-            else -> throw SerializationException("No matching CompletionOrchestrateRequestToolsItemParametersPropertiesValueType variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: CompletionOrchestrateRequestToolsItemParametersPropertiesValueType) {
-        when (value) {
-            is CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Value70681380 -> encoder.encodeSerializableValue(serializer<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380>(), value.value)
-            is CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.Variant2 -> encoder.encodeSerializableValue(serializer<List<CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem>>(), value.value)
-        }
-    }
-}
-
-@Serializable
-enum class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType70681380 {
-    @SerialName("string") `STRING`,
-    @SerialName("number") `NUMBER`,
-    @SerialName("integer") `INTEGER`,
-    @SerialName("boolean") `BOOLEAN`,
-    @SerialName("object") `OBJECT`,
-    @SerialName("array") `ARRAY`,
-    @SerialName("null") `NULL`,
-}
-
-@Serializable
-enum class CompletionOrchestrateRequestToolsItemParametersPropertiesValueTypeItem {
-    @SerialName("string") `STRING`,
-    @SerialName("number") `NUMBER`,
-    @SerialName("integer") `INTEGER`,
-    @SerialName("boolean") `BOOLEAN`,
-    @SerialName("object") `OBJECT`,
-    @SerialName("array") `ARRAY`,
-    @SerialName("null") `NULL`,
-}
 
 @Serializable
 data class CompletionOrchestrateRequestGenerationParams(
@@ -1299,73 +1169,8 @@ data class CompletionStreamRequestToolsItem(
     @SerialName("description") val `description`: String,
     @SerialName("deferLoading") val `deferLoading`: Boolean? = null,
     @SerialName("group") val `group`: String? = null,
-    @SerialName("parameters") val `parameters`: CompletionStreamRequestToolsItemParameters,
+    @SerialName("parameters") val `parameters`: JsonObject,
 )
-
-@Serializable
-data class CompletionStreamRequestToolsItemParameters(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "object",
-    @SerialName("properties") val `properties`: Map<String, CompletionStreamRequestToolsItemParametersPropertiesValue>,
-    @SerialName("required") val `required`: List<String>? = null,
-)
-
-@Serializable
-data class CompletionStreamRequestToolsItemParametersPropertiesValue(
-    @SerialName("type") val `type`: CompletionStreamRequestToolsItemParametersPropertiesValueType? = null,
-    @SerialName("description") val `description`: String? = null,
-    @SerialName("enum") val `enum`: List<JsonElement?>? = null,
-)
-
-@Serializable(with = CompletionStreamRequestToolsItemParametersPropertiesValueTypeSerializer::class)
-sealed class CompletionStreamRequestToolsItemParametersPropertiesValueType {
-    data class Value9C410ED0(val value: io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0) : CompletionStreamRequestToolsItemParametersPropertiesValueType()
-    data class Variant2(val value: List<CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem>) : CompletionStreamRequestToolsItemParametersPropertiesValueType()
-}
-internal object CompletionStreamRequestToolsItemParametersPropertiesValueTypeSerializer : KSerializer<CompletionStreamRequestToolsItemParametersPropertiesValueType> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionStreamRequestToolsItemParametersPropertiesValueType")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"string\",\"number\",\"integer\",\"boolean\",\"object\",\"array\",\"null\"]}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): CompletionStreamRequestToolsItemParametersPropertiesValueType {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> CompletionStreamRequestToolsItemParametersPropertiesValueType.Value9C410ED0(input.json.decodeFromJsonElement(serializer<CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0>(), element))
-            1 -> CompletionStreamRequestToolsItemParametersPropertiesValueType.Variant2(input.json.decodeFromJsonElement(serializer<List<CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem>>(), element))
-            else -> throw SerializationException("No matching CompletionStreamRequestToolsItemParametersPropertiesValueType variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: CompletionStreamRequestToolsItemParametersPropertiesValueType) {
-        when (value) {
-            is CompletionStreamRequestToolsItemParametersPropertiesValueType.Value9C410ED0 -> encoder.encodeSerializableValue(serializer<CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0>(), value.value)
-            is CompletionStreamRequestToolsItemParametersPropertiesValueType.Variant2 -> encoder.encodeSerializableValue(serializer<List<CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem>>(), value.value)
-        }
-    }
-}
-
-@Serializable
-enum class CompletionStreamRequestToolsItemParametersPropertiesValueType9C410ED0 {
-    @SerialName("string") `STRING`,
-    @SerialName("number") `NUMBER`,
-    @SerialName("integer") `INTEGER`,
-    @SerialName("boolean") `BOOLEAN`,
-    @SerialName("object") `OBJECT`,
-    @SerialName("array") `ARRAY`,
-    @SerialName("null") `NULL`,
-}
-
-@Serializable
-enum class CompletionStreamRequestToolsItemParametersPropertiesValueTypeItem {
-    @SerialName("string") `STRING`,
-    @SerialName("number") `NUMBER`,
-    @SerialName("integer") `INTEGER`,
-    @SerialName("boolean") `BOOLEAN`,
-    @SerialName("object") `OBJECT`,
-    @SerialName("array") `ARRAY`,
-    @SerialName("null") `NULL`,
-}
 
 @Serializable
 data class CompletionStreamRequestGenerationParams(
