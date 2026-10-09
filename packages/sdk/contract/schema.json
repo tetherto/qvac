@@ -10485,6 +10485,12 @@
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
+                    "image-max-megapixels": {
+                      "description": "Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
                     "threads": {
                       "description": "CPU threads to use during generation. Unset uses one thread per physical core; a value of 0 or below uses every logical CPU, which is a different and usually larger count.",
                       "type": "integer",

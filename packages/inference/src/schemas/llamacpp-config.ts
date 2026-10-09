@@ -209,6 +209,14 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
     ),
+  'image-max-megapixels': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      'Largest image a vision model accepts, in millions of pixels (width × height). Checked against the image header before decoding; larger images are rejected. Vision models only. Default 50.'
+    ),
   threads: z
     .number()
     .int()
