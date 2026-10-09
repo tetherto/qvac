@@ -39,24 +39,6 @@ Or run directly via npx:
 npx @qvac/cli <command>
 ```
 
-### Troubleshooting: `No binaries found for target '<platform>-<arch>'`
-
-QVAC spawns its worker through `bare-runtime`, which loads a platform-specific
-binary package (e.g. `bare-runtime-win32-x64`). With **pnpm** this package — or
-one of its nested dependencies — is sometimes not installed, even on a supported
-platform, so the runtime throws `No binaries found for target '<platform>-<arch>'`
-(see [#1492](https://github.com/tetherto/qvac/issues/1492)).
-
-Resolve it in one of these ways:
-
-```bash
-# Install the platform package directly (substitute your platform-arch)
-pnpm add bare-runtime-win32-x64
-
-# …or install with npm or bun, which place the nested binary correctly
-npm install
-```
-
 ## Command Reference
 
 ### `doctor`
@@ -93,14 +75,15 @@ qvac doctor [options]
 - **Optional tools** — `ffmpeg` (microphone/transcription), Bare runtime,
   Bun.
 - **Project** — whether `@qvac/sdk` is resolvable from the current
-  working directory (works for hoisted monorepo installs too), and whether
-  every package's `engines.bare` accepts the Bare version each target runs:
-  the one built into `react-native-bare-kit` for Android/iOS, `bare-runtime`
-  for the desktop host. Reads `qvac/worker.bundle.js` when present (exactly
-  what ships), otherwise `node_modules`. On a mismatch it fails and prints the
+  working directory (works for hoisted monorepo installs too), and, for a
+  project with `react-native-bare-kit`, whether every package's
+  `engines.bare` accepts the Bare version built into it. Other projects run
+  the Bare that `bare-sidecar` installs with the SDK, and skip this check.
+  Reads the bundle in `qvac/worker/` when present (exactly what ships),
+  otherwise `node_modules`. On a mismatch it fails and prints the
   `react-native-bare-kit` release to upgrade to and, per package, an override
   that pins a release that runs on the current Bare. See
-  [Bare runtime detection](#verify-bundle) for where versions come from.
+  [Bare runtime detection](#verify-bundle) for where the version comes from.
 - **SDK runtime (`--deep`)** — starts the installed SDK in an isolated Node.js
   process, performs a worker heartbeat, and closes it. The probe is bounded to
   45 seconds and classifies common Bare, native library, CPU instruction,
@@ -169,32 +152,33 @@ qvac bundle sdk [options]
 
 1. Reads `qvac.config.*` from your project root (if present)
 2. Resolves enabled plugins from the `plugins` array (defaults to all built-in plugins if omitted)
-3. Generates worker entry files with **static imports only**
-4. Bundles with `bare-pack --linked`
-5. For mobile hosts (`android-arm64`, `ios-*`), adds any addon platform packages the bundle needs (for example `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version, and bundles again. If it cannot install them, it prints the dependencies to add and continues without them. Skip this step with `--no-install`.
-6. Generates `addons.manifest.json` from the bundle graph
-7. Checks every bundled package's `engines.bare` against the Bare runtime of each host and prints a warning with fixes on a mismatch (see [`verify bundle`](#verify-bundle))
+3. Writes the worker entry `qvac/worker.entry.mjs` with **static imports only**
+4. Bundles it with [bare-stow](https://github.com/holepunchto/bare-stow) for the `--target`, replacing `qvac/worker/`
+5. For phone hosts (`android-arm64`, `ios-*`), adds any addon platform packages the bundle needs (for example `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version, and bundles again. If it cannot install them, it prints the dependencies to add and continues without them. Skip this step with `--no-install`.
+6. For the `react-native` target, checks every bundled package's `engines.bare` against the Bare runtime in `react-native-bare-kit` and prints a warning with fixes on a mismatch (see [`verify bundle`](#verify-bundle))
+7. For the `react-native` target, links the native addons into `react-native-bare-kit` (iOS hosts on macOS only)
 
 **Options:**
 
-| Flag                  | Description                                                      |
-| --------------------- | ---------------------------------------------------------------- |
-| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`)          |
-| `--host <target>`     | Target host (repeatable, default: all platforms)                 |
-| `--defer <module>`    | Defer a module (repeatable, for mobile targets)                  |
-| `--no-install`        | Do not install missing addon platform packages for mobile hosts  |
-| `--quiet, -q`         | Minimal output                                                   |
-| `--verbose, -v`       | Detailed output                                                  |
-| `--offline`           | Skip GitHub and npm registry lookups in the `engines.bare` check |
+| Flag                  | Description                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`)                                                            |
+| `--target <target>`   | Where the worker runs: `bare-sidecar` (Node.js, Electron; default), `react-native` (Expo) or `pear-runtime` (Pear) |
+| `--host <host>`       | Host to bundle for (repeatable). Defaults to this machine, or every phone host for `react-native`                  |
+| `--defer <module>`    | Defer a module (repeatable)                                                                                        |
+| `--no-install`        | Do not install missing addon platform packages for phone hosts                                                     |
+| `--quiet, -q`         | Minimal output                                                                                                     |
+| `--verbose, -v`       | Detailed output                                                                                                    |
+| `--offline`           | Skip GitHub and npm registry lookups in the `engines.bare` check                                                   |
 
 **Examples:**
 
 ```bash
-# Bundle with default settings (all platforms)
+# Bundle for this machine
 qvac bundle sdk
 
-# Bundle for specific platforms only
-qvac bundle sdk --host darwin-arm64 --host linux-x64
+# Bundle for Expo and link the addons into react-native-bare-kit
+qvac bundle sdk --target react-native
 
 # Use a custom config file
 qvac bundle sdk --config ./my-config.json
@@ -205,11 +189,12 @@ qvac bundle sdk --verbose
 
 **Output:**
 
-| File                        | Description                                     |
-| --------------------------- | ----------------------------------------------- |
-| `qvac/worker.entry.mjs`     | Standalone/Electron worker with RPC + lifecycle |
-| `qvac/worker.bundle.js`     | Final bundle for mobile runtimes (Expo/BareKit) |
-| `qvac/addons.manifest.json` | Native addon allowlist for tree-shaking         |
+| File                        | Description                                                           |
+| --------------------------- | --------------------------------------------------------------------- |
+| `qvac/worker.entry.mjs`     | Worker entry that registers the selected plugins                      |
+| `qvac/worker/index.mjs`     | Starts the bundled worker (`index.cjs` for `pear-runtime`)            |
+| `qvac/worker/index.bundle`  | The worker bundle (`index.bundle.mjs` for `react-native`)             |
+| `qvac/worker/node_modules/` | Native addons the bundle loads, for `bare-sidecar` and `pear-runtime` |
 
 > **Note:** Your project must have `@qvac/sdk` installed.
 
@@ -267,36 +252,36 @@ CI guardrails should treat `1` and `2` differently: `1` means "real native chang
 ### `verify bundle`
 
 Verify that every native Bare addon reachable from a generated worker bundle or
-an installed `node_modules` tree has prebuilds for the requested host(s) and a
-declared `engines.bare` range compatible with the installed Bare runtime.
+an installed `node_modules` tree has prebuilds for the requested host(s). For
+Android and iOS hosts, it also checks every declared `engines.bare` range
+against the Bare runtime inside the app's `react-native-bare-kit`. Desktop hosts
+run the Bare that `bare-sidecar` installs with the SDK, so they get no ABI check.
 
 ```bash
 qvac verify bundle --addons-source <path> --host <target> [--host <target>...] [options]
 ```
 
-`--addons-source` may be either a `qvac/worker.bundle.js` produced by
-`qvac bundle sdk` or a `node_modules` directory. The source kind is detected
-automatically: files are parsed as bare-pack bundles, directories are walked
-as `node_modules` trees.
+`--addons-source` may be either the bundle `qvac bundle sdk` writes to
+`qvac/worker/` (`index.bundle`, or `index.bundle.mjs` for `react-native`) or a
+`node_modules` directory. The source kind is detected automatically: files are
+parsed as bare-pack bundles, directories are walked as `node_modules` trees.
 
 **Options:**
 
-| Flag                              | Description                                                                                                                                                                                                                                                             |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--addons-source <path>`          | Required. Path to a `worker.bundle.js` or a `node_modules` directory.                                                                                                                                                                                                   |
-| `--host <target>`                 | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`.                                                                                                   |
-| `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks, for every host. It replaces the version read from `react-native-bare-kit` for mobile hosts, so use it for desktop builds only (e.g. Electron packaging where runtime inference is ambiguous). |
-| `--offline`                       | Optional. Make no network requests: no GitHub lookup for a `react-native-bare-kit` release newer than the built-in table, and no npm registry lookup for override suggestions.                                                                                          |
-| `--config, -c <path>`             | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present.                                                                                                              |
-| `--project-root <path>`           | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd).                                                                                                                                                         |
-| `--json`                          | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                                                                                                                   |
-| `--quiet, -q`                     | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                                                                                                                   |
+| Flag                     | Description                                                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--addons-source <path>` | Required. Path to a worker bundle in `qvac/worker/` or a `node_modules` directory.                                                                                             |
+| `--host <target>`        | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`.          |
+| `--offline`              | Optional. Make no network requests: no GitHub lookup for a `react-native-bare-kit` release newer than the built-in table, and no npm registry lookup for override suggestions. |
+| `--project-root <path>`  | Optional. Project root used to resolve bundle resolutions and find `react-native-bare-kit` (default: cwd).                                                                     |
+| `--json`                 | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                          |
+| `--quiet, -q`            | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                          |
 
 **Examples:**
 
 ```bash
-# Mobile bundle, runs after `qvac bundle sdk` writes qvac/worker.bundle.js
-qvac verify bundle --addons-source qvac/worker.bundle.js \
+# Mobile bundle, after `qvac bundle sdk --target react-native`
+qvac verify bundle --addons-source qvac/worker/index.bundle.mjs \
   --host android-arm64 \
   --host ios-arm64 \
   --host ios-arm64-simulator \
@@ -308,64 +293,42 @@ qvac verify bundle --addons-source ./node_modules \
 
 # Packaged Electron app (validates what actually ships)
 qvac verify bundle \
-  --addons-source dist/mac-arm64/MyApp.app/Contents/Resources/app.asar.unpacked/node_modules \
-  --host darwin-arm64
-
-# Force the runtime version of a desktop build (e.g. an Electron app that
-# ships its own Bare). Do not pin mobile hosts: the pin replaces the version
-# read from react-native-bare-kit.
-qvac verify bundle --addons-source ./node_modules \
-  --host darwin-arm64 --bare-runtime-version 1.33.4
-
-# Pin via qvac.config.json (committed with the project; same caveat)
-# {
-#   "plugins": ["llamacpp-completion"],
-#   "bareRuntimeVersion": "1.33.4"
-# }
-qvac verify bundle --addons-source ./node_modules \
+  --addons-source out/MyApp-darwin-arm64/MyApp.app/Contents/Resources/app/qvac/worker/index.bundle \
   --host darwin-arm64
 
 # Structured output for CI consumers
-qvac verify bundle --addons-source qvac/worker.bundle.js \
+qvac verify bundle --addons-source qvac/worker/index.bundle \
   --host darwin-arm64 --json | jq '.issues[] | select(.level == "error")'
 ```
 
 **Exit codes:**
 
-| Exit | Meaning                                                                                                                                                                                                                                                                                                                               |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`  | No error-level issues. All required prebuilds are present, and every ABI check that _ran_ passed. Warnings may indicate skipped checks or surfaced metadata problems: `unknown-runtime-version`, `malformed-engines-bare`, `invalid-package-json`, `empty-bundle-resolutions`, or `config-load-failed`.                               |
-| `1`  | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `invalid-runtime-version` (malformed `--bare-runtime-version` or config `bareRuntimeVersion`), or `invalid-source`. Prebuild checks always run regardless of runtime parse failures, so a typo in `--bare-runtime-version` cannot hide a real `missing-prebuild`. |
+| Exit | Meaning                                                                                                                                                                                                                                                                           |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | No error-level issues. All required prebuilds are present, and every ABI check that _ran_ passed. Warnings may indicate skipped checks or surfaced metadata problems: `unknown-runtime-version`, `malformed-engines-bare`, `invalid-package-json`, or `empty-bundle-resolutions`. |
+| `1`  | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `engines-mismatch`, or `invalid-source`.                                                                                                                                                                      |
 
 **Issue codes:**
 
-| Code                       | Level   | Meaning                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `missing-prebuild`         | error   | No `.bare` for the host: the addon's `<packageRoot>/prebuilds/<host>/` is missing or empty, and no per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) with `addon/prebuilds/<host>/*.bare` resolves from the addon's package root.                                                                           |
-| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the resolved runtime version.                                                                                                                                                                                                                                                |
-| `engines-mismatch`         | error   | A package that is not an addon declares an `engines.bare` range that does not include the resolved runtime version.                                                                                                                                                                                                                     |
-| `unknown-runtime-version`  | warning | At least one package declares `engines.bare`, but no Bare runtime version could be auto-detected. For mobile hosts install `react-native-bare-kit`; for a desktop build install `bare-runtime` or pass `--bare-runtime-version`.                                                                                                        |
-| `invalid-runtime-version`  | error   | The value passed via `--bare-runtime-version` or via the config `bareRuntimeVersion` field is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification. ABI resolution is skipped, but prebuild checks still run. |
-| `malformed-engines-bare`   | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer.                                                                                                                                        |
-| `invalid-package-json`     | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified.                                                                                                                              |
-| `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption.                                                                                                                                      |
-| `config-load-failed`       | warning | An auto-detected `qvac.config.*` exists but failed to load (syntax error, throwing import, etc.). The project-pinned `bareRuntimeVersion` is being ignored. Fix the config or pass `--config` explicitly to escalate to an error.                                                                                                       |
-| `invalid-source`           | error   | `--addons-source` does not point to a readable bundle or directory, `--host` was empty, or an explicit `--config` path could not be loaded.                                                                                                                                                                                             |
+| Code                       | Level   | Meaning                                                                                                                                                                                                                                                       |
+| -------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `missing-prebuild`         | error   | No `.bare` for the host: the addon's `<packageRoot>/prebuilds/<host>/` is missing or empty, and no per-platform package `<addon>-<host>` (iOS hosts grouped under `<addon>-ios`) with `addon/prebuilds/<host>/*.bare` resolves from the addon's package root. |
+| `abi-mismatch`             | error   | The addon's declared `engines.bare` range does not include the Bare version of `react-native-bare-kit`.                                                                                                                                                       |
+| `engines-mismatch`         | error   | A package that is not an addon declares an `engines.bare` range that does not include the Bare version of `react-native-bare-kit`.                                                                                                                            |
+| `unknown-runtime-version`  | warning | A package declares `engines.bare` and an Android or iOS host was requested, but the Bare version of `react-native-bare-kit` could not be determined, for example because it is not installed.                                                                 |
+| `malformed-engines-bare`   | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer.                                                              |
+| `invalid-package-json`     | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified.                                                    |
+| `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption.                                                            |
+| `invalid-source`           | error   | `--addons-source` does not point to a readable bundle or directory, or `--host` was empty.                                                                                                                                                                    |
 
 **Bare runtime detection:**
 
-Runtime resolution order:
+ABI checks run against the Bare version compiled into the bare-kit binaries
+that `react-native-bare-kit` ships. If it cannot be determined, ABI checks emit
+a single `unknown-runtime-version` warning and the exit code stays `0`.
+Prebuild checks always run.
 
-1. `--bare-runtime-version <semver>` (authoritative — user-provided). Applies to every host, including mobile hosts, where it replaces the `react-native-bare-kit` detection below.
-2. `bareRuntimeVersion` field in `qvac.config.{json,js,mjs,ts}` (auto-detected from `--project-root`, or supplied via `--config`). Committed and shared across the team. Applies to every host, including mobile hosts, where it replaces the `react-native-bare-kit` detection below.
-3. Android and iOS hosts, when `react-native-bare-kit` is installed: the Bare version compiled into the bare-kit binaries it ships (see below).
-4. Desktop hosts, and mobile hosts without `react-native-bare-kit`: `<projectRoot>/node_modules/bare-runtime/package.json`, then `<projectRoot>/node_modules/bare/package.json` — `version` field.
-
-If no runtime resolves, ABI checks emit a single `unknown-runtime-version`
-warning and the exit code stays `0`. Prebuild checks always run regardless of
-runtime detection.
-
-**Mobile / Expo:** `react-native-bare-kit` records no Bare version in its
+`react-native-bare-kit` records no Bare version in its
 `package.json`. The SDK finds it in this order, and says so before any step
 that uses the network:
 

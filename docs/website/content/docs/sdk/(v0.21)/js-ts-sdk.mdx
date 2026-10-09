@@ -38,8 +38,7 @@ npm i @qvac/sdk
 Install peer dependencies:
 
 ```bash
-npm i 'react-native-bare-kit@^0.11.5'
-npm i -D 'bare-pack@^1.5.1'
+npm i 'react-native-bare-kit@^0.16.0'
 npx expo install expo-file-system expo-build-properties expo-device
 ```
 
@@ -75,6 +74,8 @@ Prebuild your project to generate the native files:
 ```bash
 npx expo prebuild
 ```
+
+Prebuild also links QVAC's native addons into `react-native-bare-kit`. Reinstalling packages clears them, so run `npx expo prebuild` again after an install before building.
 </Step>
 
 <Step>
@@ -206,7 +207,6 @@ module.exports = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {
@@ -248,7 +248,6 @@ const config: QvacConfig = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {

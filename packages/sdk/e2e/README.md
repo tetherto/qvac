@@ -132,8 +132,8 @@ The full Electron pass intentionally skips `diffusion-`, `finetune-`, `no-linger
 `vla-` tests. These suites are resource-heavy or depend on process/lifecycle behavior that is not stable inside
 the packaged Electron worker model: diffusion and VLA require heavyweight model execution, finetune can monopolize
 the worker during long-running operations, and
-no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
-packaged worker lock.
+no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with the packaged
+Electron worker's cache lock.
 
 `classification-` runs in Electron through the shared Node executor and bundled `@qvac/classification-ggml`
 weights; no registry model pre-download is required.
@@ -142,7 +142,7 @@ weights; no registry model pre-download is required.
 
 The Snap target wraps the Linux Electron package in `snap/snapcraft.yaml` with strict confinement. Test code,
 the SDK worker, addons, fixtures, and assets are included under the read-only `$SNAP` mount. Generated config,
-models, Corestore state, and worker locks use writable `$SNAP_USER_COMMON`.
+models, Corestore state, and the cache lock use writable `$SNAP_USER_COMMON`.
 
 Electron is deliberately used as the packaging vehicle because the affected Workbench runtime is Electron and
 Electron Forge produces a self-contained application containing the SDK worker and native addons. The desktop
@@ -157,7 +157,7 @@ npx qvac-test run:local:snap --filter snap-
 ```
 
 `snap-storage-common-root` verifies that strict Snap rewrites `HOME` to revision-specific
-`SNAP_USER_DATA` while the SDK worker creates `.qvac/.worker.lock` under `SNAP_USER_COMMON`. Desktop,
+`SNAP_USER_DATA` while the SDK worker creates `.qvac/.cache.lock` under `SNAP_USER_COMMON`. Desktop,
 mobile, and non-Snap Electron consumers skip this platform-only test.
 
 CI additionally builds two distinct local Snap artifacts and runs `scripts/run-snap-refresh-test.mjs`.
@@ -196,8 +196,9 @@ consumers.
 Each platform bundles the worker with the plugin included through its normal build path:
 
 - **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
-  (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes
-  `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
+  (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes the worker
+  entry `qvac/worker.entry.mjs` and the bundled worker `qvac/worker/` at the project root, which the SDK
+  client starts.
 - **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
   `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
   `electron-forge package`. Snap reuses this packaged Linux application and plugin set.
@@ -206,8 +207,8 @@ Each platform bundles the worker with the plugin included through its normal bui
   before `expo prebuild`, so the SDK's `withMobileBundle` Expo plugin discovers it and bundles the same plugin
   set as desktop.
 
-**Local sequencing:** desktop and Electron share `qvac/worker.entry.mjs` (and `qvac.config.json`) at the project
-root. `forge.config.cjs` snapshots whatever's there before Electron overwrites it and restores it in
+**Local sequencing:** desktop and Electron share `qvac/` (the worker entry and bundle) and `qvac.config.json` at
+the project root. `forge.config.cjs` snapshots whatever's there before Electron overwrites it and restores it in
 `postPackage`, so `run:local:desktop` and `run:local:electron` can run in any order without clobbering each
 other's bundle.
 

@@ -200,17 +200,20 @@ In-process Bare uses [`@qvac/inference`](https://github.com/tetherto/qvac/tree/m
 ```ts
 import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
 
-await bundleSdk({
+const { bundlePath } = await bundleSdk({
   projectRoot: process.cwd(),
   configPath: "./qvac.config.json",
+  target: "react-native",
   quiet: true,
 });
 
 const result = await verifyBundle({
   projectRoot: process.cwd(),
-  addonsSource: "./qvac/worker.bundle.js",
+  addonsSource: bundlePath,
   hosts: ["android-arm64", "ios-arm64"],
 });
 ```
+
+* **Bundle output:** `bundleSdk` writes the worker entry to `qvac/worker.entry.mjs` and replaces `qvac/worker/` with the bundle and the small module that starts it. `target` picks where the worker runs: `bare-sidecar` (the default, for Node.js and Electron), `react-native` (Expo), or `pear-runtime` (Pear). The `react-native` target also links the native addons into `react-native-bare-kit`; pass `link: false` to skip that. A Node.js app that has not bundled runs `qvac/worker.entry.mjs`, or the SDK's own worker with every built-in plugin, without a bundle.
 
 * **Addon platform packages:** QVAC ships part of its Android and iOS binaries in separate packages, for the speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) and for `@qvac/fabric`, the runtime the other native addons share. They must be installed at an exact version. Pass `installMissingPrebuilds: true` to `bundleSdk` to add the missing ones to `package.json` with the project's package manager (npm 7+, pnpm, bun, or Yarn Berry) and bundle again. The package manager is read from the project's `packageManager` field, lockfile, or installed `node_modules`; a workspace member uses its workspace root's. If none of those identify it, nothing is installed and the error lists the dependencies to add. It is off by default, so a plain `bundleSdk` call never changes `package.json` or `node_modules`. `ensureHostPrebuilds({ projectRoot, hosts, addons })` runs the install step on its own.

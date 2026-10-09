@@ -24,12 +24,12 @@ For mobile apps that use only raw PCM streaming transcription, list the required
 
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
-On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
+On Node.js, the SDK starts its own Bare worker with the Bare that `bare-sidecar` installs.
 Its dependency range must satisfy `@qvac/inference`'s `engines.bare` requirement.
 When upgrading the SDK, reinstall dependencies with the existing lockfile so the
-package manager can replace an older, incompatible runtime. Remove any override
-or resolution that forces the worker below that requirement; installing a newer
-global `bare` executable does not change the SDK's worker dependency.
+package manager can replace an older, incompatible `bare-sidecar`. Remove any override
+or resolution that forces it below the SDK's range; installing a newer global `bare`
+executable does not change the SDK's worker.
 
 ## Quickstart
 

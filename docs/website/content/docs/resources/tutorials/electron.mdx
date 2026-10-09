@@ -577,8 +577,8 @@ On the first run, the model may download from peers (watch the terminal for prog
 
 Now that the app works in dev env, let's build a distributable using `@qvac/sdk/electron-forge`, which:
 
-- Bundles the QVAC worker for the target platform/arch.
-- Tree-shakes unused `@qvac/*` addons.
+- Bundles the QVAC worker into `qvac/worker/` for the target platform/arch, with the native addons it loads.
+- Leaves the `@qvac/*` addon packages out of the app, since the bundled worker carries their binaries.
 - Prunes native prebuilds to match the target platform.
 - Refuses configurations known to produce broken apps.
 
@@ -687,10 +687,10 @@ npm run package
 
 This will:
 1. Compile main, preload, and renderer to `dist/`.
-2. Run `bundleSdk` to produce `qvac/worker.bundle.js` for your target platform.
+2. Run `bundleSdk` to write the worker bundle and its native addons to `qvac/worker/` for your target platform.
 3. Run `verifyBundle` to assert all required addon prebuilds are available.
 4. Package the app to `out/<name>-<platform>-<arch>/`.
-5. Tree-shake unused `@qvac/*` addons and prune non-target prebuilds.
+5. Leave out the `@qvac/*` addon packages and prune non-target prebuilds.
 
 </Step>
 
@@ -705,16 +705,16 @@ npm run make
 
 ## Packaging caveats
 
-- **`asar: false` is forced.** The Bare worker can't load addons from inside an ASAR archive — paths inside `app.asar` aren't real files on disk. `QvacForgePlugin` overrides any `packagerConfig.asar` setting and warns if you've set it to anything else.
+- **`asar: false` is forced.** The worker's Bare program, its bundle and its native addons must be real files on disk, and paths inside `app.asar` aren't. `QvacForgePlugin` overrides any `packagerConfig.asar` setting and warns if you've set it to anything else.
 
-- **macOS universal builds are blocked.** Native addon prebuilds are arch-specific (`darwin-arm64.bare` vs `darwin-x64.bare`); a universal Electron app would need to ship both prebuild sets, which conflicts with `QvacForgePlugin` single-arch pruning. Build the two architectures separately:
+- **macOS universal builds are blocked.** Native addon prebuilds are arch-specific (`darwin-arm64.bare` vs `darwin-x64.bare`); a universal Electron app would need a worker bundle for both, which conflicts with `QvacForgePlugin` single-arch bundling. Build the two architectures separately:
 
   ```bash
   npx electron-forge package --platform=darwin --arch=arm64
   npx electron-forge package --platform=darwin --arch=x64
   ```
 
-- **Cross-platform packaging is supported.** `QvacForgePlugin` reads `--platform` and `--arch` from CLI args (and from `packagerConfig` in the config file) to drive both `bundleSdk` and `verifyBundle`. From a darwin-arm64 host you can package for darwin-x64 as long as each addon ships a `darwin-x64.bare` prebuild:
+- **Cross-platform packaging is supported.** `QvacForgePlugin` reads `--platform` and `--arch` from CLI args (and from `packagerConfig` in the config file) to drive both `bundleSdk` and `verifyBundle`. From a darwin-arm64 host you can package for darwin-x64 once the darwin-x64 platform packages of the split addons, such as `@qvac/fabric-darwin-x64`, are installed. npm and bun install only the running machine's by default:
 
   ```bash
   npx electron-forge package --platform=darwin --arch=x64
