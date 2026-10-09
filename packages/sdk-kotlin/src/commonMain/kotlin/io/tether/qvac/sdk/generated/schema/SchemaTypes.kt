@@ -79,11 +79,11 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"name\",\"type\"],\"properties\":{\"name\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"getModelInfo\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"sample\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"getSystemResources\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"heartbeat\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"anyOf\":[{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-completion\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"ctx_size\":{\"type\":\"number\"},\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"integer\"},\"seed\":{\"type\":\"number\"},\"gpu_layers\":{\"type\":\"number\"},\"lora\":{\"type\":\"string\"},\"device\":{\"type\":\"string\"},\"predict\":{\"anyOf\":[{\"type\":\"number\",\"const\":-1},{\"type\":\"number\",\"const\":-2},{\"type\":\"integer\"}]},\"system_prompt\":{\"type\":\"string\"},\"load_mode\":{\"type\":\"string\",\"enum\":[\"none\",\"mmap\",\"mlock\",\"mmap+mlock\",\"dio\"]},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"presence_penalty\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"stop_sequences\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"parallel\":{\"type\":\"integer\"},\"tools\":{\"type\":\"boolean\"},\"cache-type-k\":{\"type\":\"string\"},\"cache-type-v\":{\"type\":\"string\"},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"rpc-servers\":{\"type\":\"string\"},\"devices\":{\"type\":\"string\"},\"split-mode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\",\"tensor\"]},\"flash-attn\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"tensor-split\":{\"type\":\"string\"},\"batch-size\":{\"type\":\"integer\"},\"ubatch-size\":{\"type\":\"integer\"},\"cpu-moe\":{\"type\":\"boolean\"},\"n-cpu-moe\":{\"type\":\"integer\"},\"kv-offload\":{\"type\":\"boolean\"},\"image-max-tokens\":{\"type\":\"integer\"},\"image-min-tokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"threads-batch\":{\"type\":\"integer\"},\"cpu-mask\":{\"type\":\"string\"},\"cpu-mask-batch\":{\"type\":\"string\"},\"override-tensor\":{\"type\":\"string\"},\"n-cpu-ffn\":{\"type\":\"integer\"},\"moe-cache-mib\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"prefetch-weights\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"tensor-read-lazy\":{\"type\":\"string\",\"enum\":[\"on\",\"auto\",\"off\"]},\"fit\":{\"type\":\"boolean\"},\"fit-target\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]},\"fit-ctx\":{\"type\":\"integer\"},\"openclCacheDir\":{\"type\":\"string\"},\"reasoning_budget\":{\"type\":\"integer\"},\"projectionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"image_tile_mode\":{\"type\":\"string\",\"enum\":[\"disabled\",\"batched\",\"sequential\"]},\"image_no_upscale\":{\"type\":\"string\",\"enum\":[\"on\",\"off\"]},\"mmproj-use-gpu\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"bci-whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"whisperConfig\":{\"type\":\"object\"},\"bciConfig\":{\"type\":\"object\"},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"backendsDir\":{\"type\":\"string\"},\"embedderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"parakeet-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"captionEnabled\":{\"type\":\"boolean\"},\"timestampsEnabled\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"integer\"},\"streaming\":{\"type\":\"boolean\"},\"streamingChunkMs\":{\"type\":\"integer\"},\"streamingHistoryMs\":{\"type\":\"integer\"},\"streamingEmitPartials\":{\"type\":\"boolean\"},\"streamingEnergyVad\":{\"type\":\"boolean\"},\"streamingLeftContextMs\":{\"type\":\"integer\"},\"streamingRightLookaheadMs\":{\"type\":\"integer\"},\"language\":{\"type\":\"string\"},\"streamingSpkCacheEnable\":{\"type\":\"boolean\"},\"streamingSpkCacheLen\":{\"type\":\"integer\"},\"streamingFifoLen\":{\"type\":\"integer\"},\"streamingChunkLeftContextMs\":{\"type\":\"integer\"},\"streamingChunkRightContextMs\":{\"type\":\"integer\"},\"streamingSpkCacheUpdatePeriod\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"parakeetEncoderSrc\":{},\"parakeetDecoderSrc\":{},\"parakeetVocabSrc\":{},\"parakeetPreprocessorSrc\":{},\"parakeetCtcModelSrc\":{},\"parakeetTokenizerSrc\":{},\"parakeetSortformerSrc\":{},\"parakeetModelSrc\":{},\"modelType\":{}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-embedding\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"gpuLayers\":{\"type\":\"integer\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"batchSize\":{\"type\":\"integer\"},\"pooling\":{\"type\":\"string\",\"enum\":[\"none\",\"mean\",\"cls\",\"last\",\"rank\"]},\"attention\":{\"type\":\"string\",\"enum\":[\"causal\",\"non-causal\"]},\"embdNormalize\":{\"type\":\"integer\"},\"flashAttention\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"splitMode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\"]},\"tensorSplit\":{\"type\":\"string\"},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"openclCacheDir\":{\"type\":\"string\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"nmtcpp-translation\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"Bergamot\"},\"from\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"to\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"normalize\":{\"type\":\"number\"},\"pivotModel\":{\"type\":\"object\",\"required\":[\"modelSrc\"]}}},{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"IndicTrans\"},\"from\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]},\"to\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"tts-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"chatterbox\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"es\",\"fr\",\"de\",\"it\",\"ja\",\"pt\",\"nl\",\"pl\",\"tr\",\"sv\",\"da\",\"fi\",\"no\",\"el\",\"ms\",\"sw\",\"ar\",\"ko\",\"he\",\"ru\",\"zh\",\"hi\"]},\"voice\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"ttsSpeed\":{\"type\":\"number\"},\"nCtx\":{\"type\":\"integer\"},\"kvCacheType\":{\"type\":\"string\",\"enum\":[\"f32\",\"f16\",\"q8_0\"]},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"cfmSteps\":{\"type\":\"integer\"},\"cfgRate\":{\"type\":\"number\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"s3genModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mecabDictSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cangjieTsvSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"supertonic\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"ko\",\"ja\",\"ar\",\"bg\",\"cs\",\"da\",\"de\",\"el\",\"es\",\"et\",\"fi\",\"fr\",\"hi\",\"hr\",\"hu\",\"id\",\"it\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ro\",\"ru\",\"sk\",\"sl\",\"sv\",\"tr\",\"uk\",\"vi\"]},\"voice\":{\"type\":\"string\"},\"ttsSpeed\":{\"type\":\"number\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"ttsNumInferenceSteps\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"vulkanCacheDir\":{\"type\":\"string\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"parler\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"anyOf\":[{\"type\":\"number\",\"const\":0},{\"type\":\"integer\"}]},\"minNewTokens\":{\"type\":\"integer\"},\"normalizeNumbers\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"cosyvoice3\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"anger\",\"happy\",\"neutral\",\"sad\"]},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"instruct\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\"}]},\"promptText\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3S3tokModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3CampplusModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"audio8CodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"audio8\"},\"referenceText\":{\"type\":\"string\"},\"greedy\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"audio8CodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audio8CodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"mossCodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"moss\"},\"language\":{\"type\":\"string\"},\"durationTokens\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"mossCodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mossCodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dialogueReferenceSrcs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-ocr\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"langList\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"pipelineType\":{\"type\":\"string\",\"enum\":[\"easyocr\",\"doctr\"]},\"magRatio\":{\"type\":\"number\"},\"canvasSize\":{\"type\":\"number\"},\"defaultRotationAngles\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"contrastRetry\":{\"type\":\"boolean\"},\"lowConfidenceThreshold\":{\"type\":\"number\"},\"recognizerBatchSize\":{\"type\":\"number\"},\"nThreads\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"vulkan\",\"metal\",\"opencl\"]},\"gpuDevice\":{\"type\":\"number\"},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"detectorModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"sdcpp-generation\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"diffusion\",\"upscale\",\"video\",\"world\"]},\"threads\":{\"type\":\"number\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"prediction\":{\"type\":\"string\",\"enum\":[\"auto\",\"eps\",\"v\",\"edm_v\",\"flow\",\"flux2_flow\"]},\"type\":{\"type\":\"string\",\"enum\":[\"auto\",\"f32\",\"f16\",\"bf16\",\"q2_k\",\"q3_k\",\"q4_0\",\"q4_1\",\"q4_k\",\"q5_0\",\"q5_1\",\"q5_k\",\"q6_k\",\"q8_0\"]},\"rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"sampler_rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"vae_auto_cpu_fallback\":{\"type\":\"boolean\"},\"vae_auto_cpu_fallback_memory_ratio\":{\"type\":\"number\"},\"vae_tiling\":{\"type\":\"boolean\"},\"offload_to_cpu\":{\"type\":\"boolean\"},\"control_net_cpu\":{\"not\":{}},\"clip_on_cpu\":{\"not\":{}},\"vae_on_cpu\":{\"not\":{}},\"backend\":{\"type\":\"string\"},\"params_backend\":{\"type\":\"string\"},\"max_vram\":{\"type\":[\"number\",\"string\"]},\"stream_layers\":{\"type\":\"boolean\"},\"flash_attn\":{\"type\":\"boolean\"},\"diffusion_fa\":{\"type\":\"boolean\"},\"lora_apply_mode\":{\"type\":\"string\",\"enum\":[\"auto\",\"immediately\",\"at_runtime\"]},\"verbosity\":{\"type\":\"number\"},\"clipLModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipGModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"t5XxlModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"llmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"highNoiseDiffusionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"uncondModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipVisionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audioVaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"embeddingsConnectorsModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"taehvModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"sceneSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"world\":{\"type\":\"object\"},\"upscaler\":{\"type\":\"object\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"audiogen-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"textEncModelSrc\",\"lmModelSrc\",\"ditModelSrc\",\"vaeModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"acestep\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"nGpuLayers\":{\"type\":\"integer\"},\"textEncModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ditModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"engine\",\"lmModelSrc\",\"synthModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"minimax\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"cfgScale\":{\"type\":\"number\"},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"synthModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-vla\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"backend\":{\"type\":\"string\",\"enum\":[\"auto\",\"cpu\"]},\"verbosity\":{\"type\":\"integer\"},\"embodiment\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"integer\"},{\"type\":\"object\"}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-classification\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"modelPath\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"nativeLogger\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"modelConfig\":{\"type\":\"object\"}}}]},{\"type\":\"object\",\"required\":[\"type\",\"modelId\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelId\":{\"type\":\"string\"},\"modelSrc\":{\"not\":{}},\"withProgress\":{\"not\":{}},\"seed\":{\"not\":{}},\"modelType\":{\"type\":\"string\",\"enum\":[\"whisper\",\"whispercpp-transcription\"]},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}}]}").jsonObject,
+        Json.parseToJsonElement("{\"anyOf\":[{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-completion\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"ctx_size\":{\"type\":\"number\"},\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"integer\"},\"seed\":{\"type\":\"number\"},\"gpu_layers\":{\"type\":\"number\"},\"lora\":{\"type\":\"string\"},\"device\":{\"type\":\"string\"},\"predict\":{\"anyOf\":[{\"type\":\"number\",\"const\":-1},{\"type\":\"number\",\"const\":-2},{\"type\":\"integer\"}]},\"system_prompt\":{\"type\":\"string\"},\"load_mode\":{\"type\":\"string\",\"enum\":[\"none\",\"mmap\",\"mlock\",\"mmap+mlock\",\"dio\"]},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"presence_penalty\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"stop_sequences\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"parallel\":{\"type\":\"integer\"},\"tools\":{\"type\":\"boolean\"},\"cache-type-k\":{\"type\":\"string\"},\"cache-type-v\":{\"type\":\"string\"},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"rpc-servers\":{\"type\":\"string\"},\"devices\":{\"type\":\"string\"},\"split-mode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\",\"tensor\"]},\"flash-attn\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"tensor-split\":{\"type\":\"string\"},\"batch-size\":{\"type\":\"integer\"},\"ubatch-size\":{\"type\":\"integer\"},\"cpu-moe\":{\"type\":\"boolean\"},\"n-cpu-moe\":{\"type\":\"integer\"},\"kv-offload\":{\"type\":\"boolean\"},\"image-max-tokens\":{\"type\":\"integer\"},\"image-min-tokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"threads-batch\":{\"type\":\"integer\"},\"cpu-mask\":{\"type\":\"string\"},\"cpu-mask-batch\":{\"type\":\"string\"},\"override-tensor\":{\"type\":\"string\"},\"n-cpu-ffn\":{\"type\":\"integer\"},\"moe-cache-mib\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"prefetch-weights\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"tensor-read-lazy\":{\"type\":\"string\",\"enum\":[\"on\",\"auto\",\"off\"]},\"fit\":{\"type\":\"boolean\"},\"fit-target\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]},\"fit-ctx\":{\"type\":\"integer\"},\"openclCacheDir\":{\"type\":\"string\"},\"reasoning_budget\":{\"type\":\"integer\"},\"projectionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"image_tile_mode\":{\"type\":\"string\",\"enum\":[\"disabled\",\"batched\",\"sequential\"]},\"image_no_upscale\":{\"type\":\"string\",\"enum\":[\"on\",\"off\"]},\"mmproj-use-gpu\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"bci-whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"whisperConfig\":{\"type\":\"object\"},\"bciConfig\":{\"type\":\"object\"},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"backendsDir\":{\"type\":\"string\"},\"embedderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"parakeet-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"captionEnabled\":{\"type\":\"boolean\"},\"timestampsEnabled\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"integer\"},\"streaming\":{\"type\":\"boolean\"},\"streamingChunkMs\":{\"type\":\"integer\"},\"streamingHistoryMs\":{\"type\":\"integer\"},\"streamingEmitPartials\":{\"type\":\"boolean\"},\"streamingEnergyVad\":{\"type\":\"boolean\"},\"streamingLeftContextMs\":{\"type\":\"integer\"},\"streamingRightLookaheadMs\":{\"type\":\"integer\"},\"language\":{\"type\":\"string\"},\"streamingSpkCacheEnable\":{\"type\":\"boolean\"},\"streamingSpkCacheLen\":{\"type\":\"integer\"},\"streamingFifoLen\":{\"type\":\"integer\"},\"streamingChunkLeftContextMs\":{\"type\":\"integer\"},\"streamingChunkRightContextMs\":{\"type\":\"integer\"},\"streamingSpkCacheUpdatePeriod\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"parakeetEncoderSrc\":{},\"parakeetDecoderSrc\":{},\"parakeetVocabSrc\":{},\"parakeetPreprocessorSrc\":{},\"parakeetCtcModelSrc\":{},\"parakeetTokenizerSrc\":{},\"parakeetSortformerSrc\":{},\"parakeetModelSrc\":{},\"modelType\":{}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"moss-transcribe\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-embedding\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"gpuLayers\":{\"type\":\"integer\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"batchSize\":{\"type\":\"integer\"},\"pooling\":{\"type\":\"string\",\"enum\":[\"none\",\"mean\",\"cls\",\"last\",\"rank\"]},\"attention\":{\"type\":\"string\",\"enum\":[\"causal\",\"non-causal\"]},\"embdNormalize\":{\"type\":\"integer\"},\"flashAttention\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"splitMode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\"]},\"tensorSplit\":{\"type\":\"string\"},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"openclCacheDir\":{\"type\":\"string\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"nmtcpp-translation\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"Bergamot\"},\"from\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"to\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"normalize\":{\"type\":\"number\"},\"pivotModel\":{\"type\":\"object\",\"required\":[\"modelSrc\"]}}},{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"IndicTrans\"},\"from\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]},\"to\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"tts-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"chatterbox\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"es\",\"fr\",\"de\",\"it\",\"ja\",\"pt\",\"nl\",\"pl\",\"tr\",\"sv\",\"da\",\"fi\",\"no\",\"el\",\"ms\",\"sw\",\"ar\",\"ko\",\"he\",\"ru\",\"zh\",\"hi\"]},\"voice\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"ttsSpeed\":{\"type\":\"number\"},\"nCtx\":{\"type\":\"integer\"},\"kvCacheType\":{\"type\":\"string\",\"enum\":[\"f32\",\"f16\",\"q8_0\"]},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"cfmSteps\":{\"type\":\"integer\"},\"cfgRate\":{\"type\":\"number\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"s3genModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mecabDictSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cangjieTsvSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"supertonic\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"ko\",\"ja\",\"ar\",\"bg\",\"cs\",\"da\",\"de\",\"el\",\"es\",\"et\",\"fi\",\"fr\",\"hi\",\"hr\",\"hu\",\"id\",\"it\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ro\",\"ru\",\"sk\",\"sl\",\"sv\",\"tr\",\"uk\",\"vi\"]},\"voice\":{\"type\":\"string\"},\"ttsSpeed\":{\"type\":\"number\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"ttsNumInferenceSteps\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"vulkanCacheDir\":{\"type\":\"string\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"parler\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"anyOf\":[{\"type\":\"number\",\"const\":0},{\"type\":\"integer\"}]},\"minNewTokens\":{\"type\":\"integer\"},\"normalizeNumbers\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"cosyvoice3\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"anger\",\"happy\",\"neutral\",\"sad\"]},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"instruct\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\"}]},\"promptText\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3S3tokModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3CampplusModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"audio8CodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"audio8\"},\"referenceText\":{\"type\":\"string\"},\"greedy\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"audio8CodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audio8CodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"mossCodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"moss\"},\"language\":{\"type\":\"string\"},\"durationTokens\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"mossCodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mossCodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dialogueReferenceSrcs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-ocr\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"langList\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"pipelineType\":{\"type\":\"string\",\"enum\":[\"easyocr\",\"doctr\"]},\"magRatio\":{\"type\":\"number\"},\"canvasSize\":{\"type\":\"number\"},\"defaultRotationAngles\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"contrastRetry\":{\"type\":\"boolean\"},\"lowConfidenceThreshold\":{\"type\":\"number\"},\"recognizerBatchSize\":{\"type\":\"number\"},\"nThreads\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"vulkan\",\"metal\",\"opencl\"]},\"gpuDevice\":{\"type\":\"number\"},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"detectorModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"sdcpp-generation\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"diffusion\",\"upscale\",\"video\",\"world\"]},\"threads\":{\"type\":\"number\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"prediction\":{\"type\":\"string\",\"enum\":[\"auto\",\"eps\",\"v\",\"edm_v\",\"flow\",\"flux2_flow\"]},\"type\":{\"type\":\"string\",\"enum\":[\"auto\",\"f32\",\"f16\",\"bf16\",\"q2_k\",\"q3_k\",\"q4_0\",\"q4_1\",\"q4_k\",\"q5_0\",\"q5_1\",\"q5_k\",\"q6_k\",\"q8_0\"]},\"rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"sampler_rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"vae_auto_cpu_fallback\":{\"type\":\"boolean\"},\"vae_auto_cpu_fallback_memory_ratio\":{\"type\":\"number\"},\"vae_tiling\":{\"type\":\"boolean\"},\"offload_to_cpu\":{\"type\":\"boolean\"},\"control_net_cpu\":{\"not\":{}},\"clip_on_cpu\":{\"not\":{}},\"vae_on_cpu\":{\"not\":{}},\"backend\":{\"type\":\"string\"},\"params_backend\":{\"type\":\"string\"},\"max_vram\":{\"type\":[\"number\",\"string\"]},\"stream_layers\":{\"type\":\"boolean\"},\"flash_attn\":{\"type\":\"boolean\"},\"diffusion_fa\":{\"type\":\"boolean\"},\"lora_apply_mode\":{\"type\":\"string\",\"enum\":[\"auto\",\"immediately\",\"at_runtime\"]},\"verbosity\":{\"type\":\"number\"},\"clipLModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipGModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"t5XxlModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"llmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"highNoiseDiffusionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"uncondModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipVisionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audioVaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"embeddingsConnectorsModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"taehvModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"sceneSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"world\":{\"type\":\"object\"},\"upscaler\":{\"type\":\"object\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"audiogen-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"textEncModelSrc\",\"lmModelSrc\",\"ditModelSrc\",\"vaeModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"acestep\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"nGpuLayers\":{\"type\":\"integer\"},\"textEncModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ditModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"engine\",\"lmModelSrc\",\"synthModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"minimax\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"cfgScale\":{\"type\":\"number\"},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"synthModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-vla\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"backend\":{\"type\":\"string\",\"enum\":[\"auto\",\"cpu\"]},\"verbosity\":{\"type\":\"integer\"},\"embodiment\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"integer\"},{\"type\":\"object\"}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-classification\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"modelPath\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"nativeLogger\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"modelConfig\":{\"type\":\"object\"}}}]},{\"type\":\"object\",\"required\":[\"type\",\"modelId\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelId\":{\"type\":\"string\"},\"modelSrc\":{\"not\":{}},\"withProgress\":{\"not\":{}},\"seed\":{\"not\":{}},\"modelType\":{\"type\":\"string\",\"enum\":[\"whisper\",\"whispercpp-transcription\"]},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"id\",\"type\"],\"properties\":{\"id\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"loggingStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"registryPath\",\"registrySource\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistryGetModel\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistryList\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistrySearch\"},\"filter\":{\"type\":\"string\"},\"engine\":{\"type\":\"string\"},\"quantization\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"parakeet\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistrySearch\"},\"filter\":{\"type\":\"string\"},\"engine\":{\"type\":\"string\"},\"quantization\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"parakeet\",\"moss-transcribe\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"image\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"image\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"options\":{\"type\":\"object\",\"properties\":{\"paragraph\":{\"type\":\"boolean\"}}},\"type\":{\"type\":\"string\",\"const\":\"ocrStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelId\",\"handler\",\"params\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"pluginInvoke\"},\"modelId\":{\"type\":\"string\"},\"handler\":{\"type\":\"string\"},\"params\":{}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelId\",\"handler\",\"params\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"pluginInvokeStream\"},\"modelId\":{\"type\":\"string\"},\"handler\":{\"type\":\"string\"},\"params\":{}}}").jsonObject,
@@ -95,7 +95,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"suspend\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"text\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"},\"inputType\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"stream\":{\"type\":\"boolean\"},\"sentenceStream\":{\"type\":\"boolean\"},\"sentenceStreamLocale\":{\"type\":\"string\"},\"sentenceStreamMaxChunkScalars\":{\"type\":\"number\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"textToSpeech\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"requestId\":{\"type\":\"string\"},\"inputType\":{\"type\":\"string\"},\"accumulateSentences\":{\"type\":\"boolean\"},\"sentenceDelimiterPreset\":{\"type\":\"string\",\"enum\":[\"latin\",\"cjk\",\"multilingual\"]},\"maxBufferScalars\":{\"type\":\"number\"},\"flushAfterMs\":{\"type\":\"number\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"textToSpeechStream\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"audioChunk\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"audioChunk\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"transcribe\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"audioChunk\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"audioChunk\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"hotwords\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"maxNewTokens\":{\"type\":\"integer\"},\"type\":{\"type\":\"string\",\"const\":\"transcribe\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"transcribeStream\"},\"emitVadEvents\":{\"type\":\"boolean\"},\"endOfTurnSilenceMs\":{\"type\":\"integer\"},\"vadRunIntervalMs\":{\"type\":\"integer\"},\"parakeetStreamingConfig\":{\"type\":\"object\",\"properties\":{\"chunkMs\":{\"type\":\"integer\"},\"historyMs\":{\"type\":\"integer\"},\"leftContextMs\":{\"type\":\"integer\"},\"rightLookaheadMs\":{\"type\":\"integer\"},\"emitPartials\":{\"type\":\"boolean\"},\"emitEnergyVad\":{\"type\":\"boolean\"},\"spkCacheEnable\":{\"type\":\"boolean\"},\"spkCacheLen\":{\"type\":\"integer\"},\"fifoLen\":{\"type\":\"integer\"},\"chunkLeftContextMs\":{\"type\":\"integer\"},\"chunkRightContextMs\":{\"type\":\"integer\"},\"spkCacheUpdatePeriod\":{\"type\":\"integer\"}}},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"modelId\",\"text\",\"stream\",\"modelType\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"stream\":{\"type\":\"boolean\"},\"modelType\":{\"type\":\"string\",\"enum\":[\"nmt\",\"nmtcpp-translation\"]},\"type\":{\"type\":\"string\",\"const\":\"translate\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"text\",\"stream\",\"modelType\",\"to\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"stream\":{\"type\":\"boolean\"},\"modelType\":{\"type\":\"string\",\"enum\":[\"llm\",\"llamacpp-completion\"]},\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"},\"context\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"translate\"},\"requestId\":{\"type\":\"string\"}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"unloadModel\"},\"modelId\":{\"type\":\"string\"},\"clearStorage\":{\"type\":\"boolean\"}}}").jsonObject,
@@ -230,33 +230,33 @@ data class AssessModelFitRequestModelsItem(
 @Serializable(with = AssessModelFitRequestModelsItemModelSrcSerializer::class)
 sealed class AssessModelFitRequestModelsItemModelSrc {
     data class Variant1(val value: String) : AssessModelFitRequestModelsItemModelSrc()
-    data class Value2C43A19A(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrc2C43A19A) : AssessModelFitRequestModelsItemModelSrc()
+    data class Value7CF62DF7(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrc7CF62DF7) : AssessModelFitRequestModelsItemModelSrc()
 }
 internal object AssessModelFitRequestModelsItemModelSrcSerializer : KSerializer<AssessModelFitRequestModelsItemModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AssessModelFitRequestModelsItemModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): AssessModelFitRequestModelsItemModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> AssessModelFitRequestModelsItemModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> AssessModelFitRequestModelsItemModelSrc.Value2C43A19A(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrc2C43A19A>(), element))
+            1 -> AssessModelFitRequestModelsItemModelSrc.Value7CF62DF7(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrc7CF62DF7>(), element))
             else -> throw SerializationException("No matching AssessModelFitRequestModelsItemModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: AssessModelFitRequestModelsItemModelSrc) {
         when (value) {
             is AssessModelFitRequestModelsItemModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is AssessModelFitRequestModelsItemModelSrc.Value2C43A19A -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrc2C43A19A>(), value.value)
+            is AssessModelFitRequestModelsItemModelSrc.Value7CF62DF7 -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrc7CF62DF7>(), value.value)
         }
     }
 }
 
 @Serializable
-data class AssessModelFitRequestModelsItemModelSrc2C43A19A(
+data class AssessModelFitRequestModelsItemModelSrc7CF62DF7(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -267,33 +267,33 @@ data class AssessModelFitRequestModelsItemModelSrc2C43A19A(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: AssessModelFitRequestModelsItemModelSrc2C43A19AAddon? = null,
+    @SerialName("addon") val `addon`: AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon? = null,
 )
 
-@Serializable(with = AssessModelFitRequestModelsItemModelSrc2C43A19AAddonSerializer::class)
-sealed class AssessModelFitRequestModelsItemModelSrc2C43A19AAddon {
-    data class AssessModelFitRequestModelsItemModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrcAddon) : AssessModelFitRequestModelsItemModelSrc2C43A19AAddon()
-    data class Variant2(val value: String) : AssessModelFitRequestModelsItemModelSrc2C43A19AAddon()
+@Serializable(with = AssessModelFitRequestModelsItemModelSrc7CF62DF7AddonSerializer::class)
+sealed class AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon {
+    data class AssessModelFitRequestModelsItemModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrcAddon) : AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon()
+    data class Variant2(val value: String) : AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon()
 }
-internal object AssessModelFitRequestModelsItemModelSrc2C43A19AAddonSerializer : KSerializer<AssessModelFitRequestModelsItemModelSrc2C43A19AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AssessModelFitRequestModelsItemModelSrc2C43A19AAddon")
+internal object AssessModelFitRequestModelsItemModelSrc7CF62DF7AddonSerializer : KSerializer<AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): AssessModelFitRequestModelsItemModelSrc2C43A19AAddon {
+    override fun deserialize(decoder: Decoder): AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> AssessModelFitRequestModelsItemModelSrc2C43A19AAddon.AssessModelFitRequestModelsItemModelSrcAddon(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), element))
-            1 -> AssessModelFitRequestModelsItemModelSrc2C43A19AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching AssessModelFitRequestModelsItemModelSrc2C43A19AAddon variant")
+            0 -> AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon.AssessModelFitRequestModelsItemModelSrcAddon(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), element))
+            1 -> AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: AssessModelFitRequestModelsItemModelSrc2C43A19AAddon) {
+    override fun serialize(encoder: Encoder, value: AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon) {
         when (value) {
-            is AssessModelFitRequestModelsItemModelSrc2C43A19AAddon.AssessModelFitRequestModelsItemModelSrcAddon -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), value.value)
-            is AssessModelFitRequestModelsItemModelSrc2C43A19AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon.AssessModelFitRequestModelsItemModelSrcAddon -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), value.value)
+            is AssessModelFitRequestModelsItemModelSrc7CF62DF7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -308,6 +308,7 @@ enum class AssessModelFitRequestModelsItemModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -337,6 +338,7 @@ enum class AssessModelFitRequestModelsItemModelType {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -1943,7 +1945,7 @@ sealed class LoadModelRequest {
 internal object LoadModelRequestSerializer : KSerializer<LoadModelRequest> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelRequest")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-completion\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"ctx_size\":{\"type\":\"number\"},\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"integer\"},\"seed\":{\"type\":\"number\"},\"gpu_layers\":{\"type\":\"number\"},\"lora\":{\"type\":\"string\"},\"device\":{\"type\":\"string\"},\"predict\":{\"anyOf\":[{\"type\":\"number\",\"const\":-1},{\"type\":\"number\",\"const\":-2},{\"type\":\"integer\"}]},\"system_prompt\":{\"type\":\"string\"},\"load_mode\":{\"type\":\"string\",\"enum\":[\"none\",\"mmap\",\"mlock\",\"mmap+mlock\",\"dio\"]},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"presence_penalty\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"stop_sequences\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"parallel\":{\"type\":\"integer\"},\"tools\":{\"type\":\"boolean\"},\"cache-type-k\":{\"type\":\"string\"},\"cache-type-v\":{\"type\":\"string\"},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"rpc-servers\":{\"type\":\"string\"},\"devices\":{\"type\":\"string\"},\"split-mode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\",\"tensor\"]},\"flash-attn\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"tensor-split\":{\"type\":\"string\"},\"batch-size\":{\"type\":\"integer\"},\"ubatch-size\":{\"type\":\"integer\"},\"cpu-moe\":{\"type\":\"boolean\"},\"n-cpu-moe\":{\"type\":\"integer\"},\"kv-offload\":{\"type\":\"boolean\"},\"image-max-tokens\":{\"type\":\"integer\"},\"image-min-tokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"threads-batch\":{\"type\":\"integer\"},\"cpu-mask\":{\"type\":\"string\"},\"cpu-mask-batch\":{\"type\":\"string\"},\"override-tensor\":{\"type\":\"string\"},\"n-cpu-ffn\":{\"type\":\"integer\"},\"moe-cache-mib\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"prefetch-weights\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"tensor-read-lazy\":{\"type\":\"string\",\"enum\":[\"on\",\"auto\",\"off\"]},\"fit\":{\"type\":\"boolean\"},\"fit-target\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]},\"fit-ctx\":{\"type\":\"integer\"},\"openclCacheDir\":{\"type\":\"string\"},\"reasoning_budget\":{\"type\":\"integer\"},\"projectionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"image_tile_mode\":{\"type\":\"string\",\"enum\":[\"disabled\",\"batched\",\"sequential\"]},\"image_no_upscale\":{\"type\":\"string\",\"enum\":[\"on\",\"off\"]},\"mmproj-use-gpu\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"bci-whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"whisperConfig\":{\"type\":\"object\"},\"bciConfig\":{\"type\":\"object\"},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"backendsDir\":{\"type\":\"string\"},\"embedderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"parakeet-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"captionEnabled\":{\"type\":\"boolean\"},\"timestampsEnabled\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"integer\"},\"streaming\":{\"type\":\"boolean\"},\"streamingChunkMs\":{\"type\":\"integer\"},\"streamingHistoryMs\":{\"type\":\"integer\"},\"streamingEmitPartials\":{\"type\":\"boolean\"},\"streamingEnergyVad\":{\"type\":\"boolean\"},\"streamingLeftContextMs\":{\"type\":\"integer\"},\"streamingRightLookaheadMs\":{\"type\":\"integer\"},\"language\":{\"type\":\"string\"},\"streamingSpkCacheEnable\":{\"type\":\"boolean\"},\"streamingSpkCacheLen\":{\"type\":\"integer\"},\"streamingFifoLen\":{\"type\":\"integer\"},\"streamingChunkLeftContextMs\":{\"type\":\"integer\"},\"streamingChunkRightContextMs\":{\"type\":\"integer\"},\"streamingSpkCacheUpdatePeriod\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"parakeetEncoderSrc\":{},\"parakeetDecoderSrc\":{},\"parakeetVocabSrc\":{},\"parakeetPreprocessorSrc\":{},\"parakeetCtcModelSrc\":{},\"parakeetTokenizerSrc\":{},\"parakeetSortformerSrc\":{},\"parakeetModelSrc\":{},\"modelType\":{}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-embedding\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"gpuLayers\":{\"type\":\"integer\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"batchSize\":{\"type\":\"integer\"},\"pooling\":{\"type\":\"string\",\"enum\":[\"none\",\"mean\",\"cls\",\"last\",\"rank\"]},\"attention\":{\"type\":\"string\",\"enum\":[\"causal\",\"non-causal\"]},\"embdNormalize\":{\"type\":\"integer\"},\"flashAttention\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"splitMode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\"]},\"tensorSplit\":{\"type\":\"string\"},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"openclCacheDir\":{\"type\":\"string\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"nmtcpp-translation\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"Bergamot\"},\"from\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"to\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"normalize\":{\"type\":\"number\"},\"pivotModel\":{\"type\":\"object\",\"required\":[\"modelSrc\"]}}},{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"IndicTrans\"},\"from\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]},\"to\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"tts-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"chatterbox\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"es\",\"fr\",\"de\",\"it\",\"ja\",\"pt\",\"nl\",\"pl\",\"tr\",\"sv\",\"da\",\"fi\",\"no\",\"el\",\"ms\",\"sw\",\"ar\",\"ko\",\"he\",\"ru\",\"zh\",\"hi\"]},\"voice\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"ttsSpeed\":{\"type\":\"number\"},\"nCtx\":{\"type\":\"integer\"},\"kvCacheType\":{\"type\":\"string\",\"enum\":[\"f32\",\"f16\",\"q8_0\"]},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"cfmSteps\":{\"type\":\"integer\"},\"cfgRate\":{\"type\":\"number\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"s3genModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mecabDictSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cangjieTsvSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"supertonic\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"ko\",\"ja\",\"ar\",\"bg\",\"cs\",\"da\",\"de\",\"el\",\"es\",\"et\",\"fi\",\"fr\",\"hi\",\"hr\",\"hu\",\"id\",\"it\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ro\",\"ru\",\"sk\",\"sl\",\"sv\",\"tr\",\"uk\",\"vi\"]},\"voice\":{\"type\":\"string\"},\"ttsSpeed\":{\"type\":\"number\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"ttsNumInferenceSteps\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"vulkanCacheDir\":{\"type\":\"string\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"parler\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"anyOf\":[{\"type\":\"number\",\"const\":0},{\"type\":\"integer\"}]},\"minNewTokens\":{\"type\":\"integer\"},\"normalizeNumbers\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"cosyvoice3\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"anger\",\"happy\",\"neutral\",\"sad\"]},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"instruct\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\"}]},\"promptText\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3S3tokModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3CampplusModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"audio8CodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"audio8\"},\"referenceText\":{\"type\":\"string\"},\"greedy\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"audio8CodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audio8CodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"mossCodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"moss\"},\"language\":{\"type\":\"string\"},\"durationTokens\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"mossCodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mossCodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dialogueReferenceSrcs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-ocr\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"langList\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"pipelineType\":{\"type\":\"string\",\"enum\":[\"easyocr\",\"doctr\"]},\"magRatio\":{\"type\":\"number\"},\"canvasSize\":{\"type\":\"number\"},\"defaultRotationAngles\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"contrastRetry\":{\"type\":\"boolean\"},\"lowConfidenceThreshold\":{\"type\":\"number\"},\"recognizerBatchSize\":{\"type\":\"number\"},\"nThreads\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"vulkan\",\"metal\",\"opencl\"]},\"gpuDevice\":{\"type\":\"number\"},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"detectorModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"sdcpp-generation\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"diffusion\",\"upscale\",\"video\",\"world\"]},\"threads\":{\"type\":\"number\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"prediction\":{\"type\":\"string\",\"enum\":[\"auto\",\"eps\",\"v\",\"edm_v\",\"flow\",\"flux2_flow\"]},\"type\":{\"type\":\"string\",\"enum\":[\"auto\",\"f32\",\"f16\",\"bf16\",\"q2_k\",\"q3_k\",\"q4_0\",\"q4_1\",\"q4_k\",\"q5_0\",\"q5_1\",\"q5_k\",\"q6_k\",\"q8_0\"]},\"rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"sampler_rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"vae_auto_cpu_fallback\":{\"type\":\"boolean\"},\"vae_auto_cpu_fallback_memory_ratio\":{\"type\":\"number\"},\"vae_tiling\":{\"type\":\"boolean\"},\"offload_to_cpu\":{\"type\":\"boolean\"},\"control_net_cpu\":{\"not\":{}},\"clip_on_cpu\":{\"not\":{}},\"vae_on_cpu\":{\"not\":{}},\"backend\":{\"type\":\"string\"},\"params_backend\":{\"type\":\"string\"},\"max_vram\":{\"type\":[\"number\",\"string\"]},\"stream_layers\":{\"type\":\"boolean\"},\"flash_attn\":{\"type\":\"boolean\"},\"diffusion_fa\":{\"type\":\"boolean\"},\"lora_apply_mode\":{\"type\":\"string\",\"enum\":[\"auto\",\"immediately\",\"at_runtime\"]},\"verbosity\":{\"type\":\"number\"},\"clipLModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipGModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"t5XxlModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"llmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"highNoiseDiffusionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"uncondModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipVisionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audioVaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"embeddingsConnectorsModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"taehvModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"sceneSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"world\":{\"type\":\"object\"},\"upscaler\":{\"type\":\"object\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"audiogen-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"textEncModelSrc\",\"lmModelSrc\",\"ditModelSrc\",\"vaeModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"acestep\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"nGpuLayers\":{\"type\":\"integer\"},\"textEncModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ditModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"engine\",\"lmModelSrc\",\"synthModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"minimax\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"cfgScale\":{\"type\":\"number\"},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"synthModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-vla\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"backend\":{\"type\":\"string\",\"enum\":[\"auto\",\"cpu\"]},\"verbosity\":{\"type\":\"integer\"},\"embodiment\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"integer\"},{\"type\":\"object\"}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-classification\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"modelPath\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"nativeLogger\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"modelConfig\":{\"type\":\"object\"}}}]}").jsonObject,
+        Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-completion\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"ctx_size\":{\"type\":\"number\"},\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"integer\"},\"seed\":{\"type\":\"number\"},\"gpu_layers\":{\"type\":\"number\"},\"lora\":{\"type\":\"string\"},\"device\":{\"type\":\"string\"},\"predict\":{\"anyOf\":[{\"type\":\"number\",\"const\":-1},{\"type\":\"number\",\"const\":-2},{\"type\":\"integer\"}]},\"system_prompt\":{\"type\":\"string\"},\"load_mode\":{\"type\":\"string\",\"enum\":[\"none\",\"mmap\",\"mlock\",\"mmap+mlock\",\"dio\"]},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"presence_penalty\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"stop_sequences\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"parallel\":{\"type\":\"integer\"},\"tools\":{\"type\":\"boolean\"},\"cache-type-k\":{\"type\":\"string\"},\"cache-type-v\":{\"type\":\"string\"},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"rpc-servers\":{\"type\":\"string\"},\"devices\":{\"type\":\"string\"},\"split-mode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\",\"tensor\"]},\"flash-attn\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"tensor-split\":{\"type\":\"string\"},\"batch-size\":{\"type\":\"integer\"},\"ubatch-size\":{\"type\":\"integer\"},\"cpu-moe\":{\"type\":\"boolean\"},\"n-cpu-moe\":{\"type\":\"integer\"},\"kv-offload\":{\"type\":\"boolean\"},\"image-max-tokens\":{\"type\":\"integer\"},\"image-min-tokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"threads-batch\":{\"type\":\"integer\"},\"cpu-mask\":{\"type\":\"string\"},\"cpu-mask-batch\":{\"type\":\"string\"},\"override-tensor\":{\"type\":\"string\"},\"n-cpu-ffn\":{\"type\":\"integer\"},\"moe-cache-mib\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"prefetch-weights\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\",\"const\":\"auto\"}]},\"tensor-read-lazy\":{\"type\":\"string\",\"enum\":[\"on\",\"auto\",\"off\"]},\"fit\":{\"type\":\"boolean\"},\"fit-target\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]},\"fit-ctx\":{\"type\":\"integer\"},\"openclCacheDir\":{\"type\":\"string\"},\"reasoning_budget\":{\"type\":\"integer\"},\"projectionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"image_tile_mode\":{\"type\":\"string\",\"enum\":[\"disabled\",\"batched\",\"sequential\"]},\"image_no_upscale\":{\"type\":\"string\",\"enum\":[\"on\",\"off\"]},\"mmproj-use-gpu\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"bci-whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"whisperConfig\":{\"type\":\"object\"},\"bciConfig\":{\"type\":\"object\"},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"backendsDir\":{\"type\":\"string\"},\"embedderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"parakeet-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"captionEnabled\":{\"type\":\"boolean\"},\"timestampsEnabled\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"integer\"},\"streaming\":{\"type\":\"boolean\"},\"streamingChunkMs\":{\"type\":\"integer\"},\"streamingHistoryMs\":{\"type\":\"integer\"},\"streamingEmitPartials\":{\"type\":\"boolean\"},\"streamingEnergyVad\":{\"type\":\"boolean\"},\"streamingLeftContextMs\":{\"type\":\"integer\"},\"streamingRightLookaheadMs\":{\"type\":\"integer\"},\"language\":{\"type\":\"string\"},\"streamingSpkCacheEnable\":{\"type\":\"boolean\"},\"streamingSpkCacheLen\":{\"type\":\"integer\"},\"streamingFifoLen\":{\"type\":\"integer\"},\"streamingChunkLeftContextMs\":{\"type\":\"integer\"},\"streamingChunkRightContextMs\":{\"type\":\"integer\"},\"streamingSpkCacheUpdatePeriod\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"parakeetEncoderSrc\":{},\"parakeetDecoderSrc\":{},\"parakeetVocabSrc\":{},\"parakeetPreprocessorSrc\":{},\"parakeetCtcModelSrc\":{},\"parakeetTokenizerSrc\":{},\"parakeetSortformerSrc\":{},\"parakeetModelSrc\":{},\"modelType\":{}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"moss-transcribe\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-embedding\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"gpuLayers\":{\"type\":\"integer\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"batchSize\":{\"type\":\"integer\"},\"pooling\":{\"type\":\"string\",\"enum\":[\"none\",\"mean\",\"cls\",\"last\",\"rank\"]},\"attention\":{\"type\":\"string\",\"enum\":[\"causal\",\"non-causal\"]},\"embdNormalize\":{\"type\":\"integer\"},\"flashAttention\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"splitMode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\"]},\"tensorSplit\":{\"type\":\"string\"},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"openclCacheDir\":{\"type\":\"string\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"nmtcpp-translation\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"Bergamot\"},\"from\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"to\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"normalize\":{\"type\":\"number\"},\"pivotModel\":{\"type\":\"object\",\"required\":[\"modelSrc\"]}}},{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"IndicTrans\"},\"from\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]},\"to\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"tts-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"chatterbox\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"es\",\"fr\",\"de\",\"it\",\"ja\",\"pt\",\"nl\",\"pl\",\"tr\",\"sv\",\"da\",\"fi\",\"no\",\"el\",\"ms\",\"sw\",\"ar\",\"ko\",\"he\",\"ru\",\"zh\",\"hi\"]},\"voice\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"ttsSpeed\":{\"type\":\"number\"},\"nCtx\":{\"type\":\"integer\"},\"kvCacheType\":{\"type\":\"string\",\"enum\":[\"f32\",\"f16\",\"q8_0\"]},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"cfmSteps\":{\"type\":\"integer\"},\"cfgRate\":{\"type\":\"number\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"s3genModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mecabDictSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cangjieTsvSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"supertonic\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"ko\",\"ja\",\"ar\",\"bg\",\"cs\",\"da\",\"de\",\"el\",\"es\",\"et\",\"fi\",\"fr\",\"hi\",\"hr\",\"hu\",\"id\",\"it\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ro\",\"ru\",\"sk\",\"sl\",\"sv\",\"tr\",\"uk\",\"vi\"]},\"voice\":{\"type\":\"string\"},\"ttsSpeed\":{\"type\":\"number\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"ttsNumInferenceSteps\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"vulkanCacheDir\":{\"type\":\"string\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"parler\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"anyOf\":[{\"type\":\"number\",\"const\":0},{\"type\":\"integer\"}]},\"minNewTokens\":{\"type\":\"integer\"},\"normalizeNumbers\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"cosyvoice3\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"anger\",\"happy\",\"neutral\",\"sad\"]},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"instruct\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\"}]},\"promptText\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3S3tokModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3CampplusModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"audio8CodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"audio8\"},\"referenceText\":{\"type\":\"string\"},\"greedy\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"audio8CodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audio8CodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"mossCodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"moss\"},\"language\":{\"type\":\"string\"},\"durationTokens\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"mossCodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mossCodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dialogueReferenceSrcs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-ocr\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"langList\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"pipelineType\":{\"type\":\"string\",\"enum\":[\"easyocr\",\"doctr\"]},\"magRatio\":{\"type\":\"number\"},\"canvasSize\":{\"type\":\"number\"},\"defaultRotationAngles\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"contrastRetry\":{\"type\":\"boolean\"},\"lowConfidenceThreshold\":{\"type\":\"number\"},\"recognizerBatchSize\":{\"type\":\"number\"},\"nThreads\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"vulkan\",\"metal\",\"opencl\"]},\"gpuDevice\":{\"type\":\"number\"},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"detectorModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"sdcpp-generation\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"diffusion\",\"upscale\",\"video\",\"world\"]},\"threads\":{\"type\":\"number\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"main-gpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"prediction\":{\"type\":\"string\",\"enum\":[\"auto\",\"eps\",\"v\",\"edm_v\",\"flow\",\"flux2_flow\"]},\"type\":{\"type\":\"string\",\"enum\":[\"auto\",\"f32\",\"f16\",\"bf16\",\"q2_k\",\"q3_k\",\"q4_0\",\"q4_1\",\"q4_k\",\"q5_0\",\"q5_1\",\"q5_k\",\"q6_k\",\"q8_0\"]},\"rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"sampler_rng\":{\"type\":\"string\",\"enum\":[\"cpu\",\"cuda\",\"std_default\"]},\"vae_auto_cpu_fallback\":{\"type\":\"boolean\"},\"vae_auto_cpu_fallback_memory_ratio\":{\"type\":\"number\"},\"vae_tiling\":{\"type\":\"boolean\"},\"offload_to_cpu\":{\"type\":\"boolean\"},\"control_net_cpu\":{\"not\":{}},\"clip_on_cpu\":{\"not\":{}},\"vae_on_cpu\":{\"not\":{}},\"backend\":{\"type\":\"string\"},\"params_backend\":{\"type\":\"string\"},\"max_vram\":{\"type\":[\"number\",\"string\"]},\"stream_layers\":{\"type\":\"boolean\"},\"flash_attn\":{\"type\":\"boolean\"},\"diffusion_fa\":{\"type\":\"boolean\"},\"lora_apply_mode\":{\"type\":\"string\",\"enum\":[\"auto\",\"immediately\",\"at_runtime\"]},\"verbosity\":{\"type\":\"number\"},\"clipLModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipGModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"t5XxlModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"llmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"highNoiseDiffusionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"uncondModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"clipVisionModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audioVaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"embeddingsConnectorsModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"taehvModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"sceneSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"world\":{\"type\":\"object\"},\"upscaler\":{\"type\":\"object\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"audiogen-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"textEncModelSrc\",\"lmModelSrc\",\"ditModelSrc\",\"vaeModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"acestep\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"nGpuLayers\":{\"type\":\"integer\"},\"textEncModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ditModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"engine\",\"lmModelSrc\",\"synthModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"minimax\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"cfgScale\":{\"type\":\"number\"},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"synthModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}]}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-vla\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"backend\":{\"type\":\"string\",\"enum\":[\"auto\",\"cpu\"]},\"verbosity\":{\"type\":\"integer\"},\"embodiment\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"integer\"},{\"type\":\"object\"}]}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"ggml-classification\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"modelPath\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"nativeLogger\":{\"type\":\"boolean\"}}}}},{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"modelConfig\":{\"type\":\"object\"}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelId\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelId\":{\"type\":\"string\"},\"modelSrc\":{\"not\":{}},\"withProgress\":{\"not\":{}},\"seed\":{\"not\":{}},\"modelType\":{\"type\":\"string\",\"enum\":[\"whisper\",\"whispercpp-transcription\"]},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelRequest {
@@ -1969,6 +1971,7 @@ sealed class LoadModelSrcRequest {
     data class WhispercppTranscription(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscription) : LoadModelSrcRequest()
     data class BciWhispercppTranscription(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscription) : LoadModelSrcRequest()
     data class ParakeetTranscription(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestParakeetTranscription) : LoadModelSrcRequest()
+    data class MossTranscribe(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestMossTranscribe) : LoadModelSrcRequest()
     data class LlamacppEmbedding(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbedding) : LoadModelSrcRequest()
     data class NmtcppTranslation(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslation) : LoadModelSrcRequest()
     data class TtsGgml(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgml) : LoadModelSrcRequest()
@@ -1986,6 +1989,7 @@ internal object LoadModelSrcRequestSerializer : KSerializer<LoadModelSrcRequest>
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"strategy\":{\"type\":\"string\",\"enum\":[\"greedy\",\"beam_search\"]},\"n_threads\":{\"type\":\"integer\"},\"n_max_text_ctx\":{\"type\":\"integer\"},\"offset_ms\":{\"type\":\"integer\"},\"duration_ms\":{\"type\":\"integer\"},\"audio_ctx\":{\"type\":\"integer\"},\"translate\":{\"type\":\"boolean\"},\"no_context\":{\"type\":\"boolean\"},\"no_timestamps\":{\"type\":\"boolean\"},\"single_segment\":{\"type\":\"boolean\"},\"print_special\":{\"type\":\"boolean\"},\"print_progress\":{\"type\":\"boolean\"},\"print_realtime\":{\"type\":\"boolean\"},\"print_timestamps\":{\"type\":\"boolean\"},\"token_timestamps\":{\"type\":\"boolean\"},\"thold_pt\":{\"type\":\"number\"},\"thold_ptsum\":{\"type\":\"number\"},\"max_len\":{\"type\":\"integer\"},\"split_on_word\":{\"type\":\"boolean\"},\"max_tokens\":{\"type\":\"integer\"},\"debug_mode\":{\"type\":\"boolean\"},\"tdrz_enable\":{\"type\":\"boolean\"},\"suppress_regex\":{\"type\":\"string\"},\"initial_prompt\":{\"type\":\"string\"},\"language\":{\"type\":\"string\"},\"detect_language\":{\"type\":\"boolean\"},\"suppress_blank\":{\"type\":\"boolean\"},\"suppress_nst\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"length_penalty\":{\"type\":\"number\"},\"temperature_inc\":{\"type\":\"number\"},\"entropy_thold\":{\"type\":\"number\"},\"logprob_thold\":{\"type\":\"number\"},\"greedy_best_of\":{\"type\":\"integer\"},\"beam_search_beam_size\":{\"type\":\"integer\"},\"max_initial_ts\":{\"type\":\"number\"},\"no_speech_thold\":{\"type\":\"number\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"vad_params\":{\"type\":\"object\"},\"audio_format\":{\"type\":\"string\",\"enum\":[\"f32le\",\"s16le\"]},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"vadModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"bci-whispercpp-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"whisperConfig\":{\"type\":\"object\"},\"bciConfig\":{\"type\":\"object\"},\"contextParams\":{\"type\":\"object\"},\"miscConfig\":{\"type\":\"object\"},\"backendsDir\":{\"type\":\"string\"},\"embedderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"parakeet-transcription\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"captionEnabled\":{\"type\":\"boolean\"},\"timestampsEnabled\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"integer\"},\"streaming\":{\"type\":\"boolean\"},\"streamingChunkMs\":{\"type\":\"integer\"},\"streamingHistoryMs\":{\"type\":\"integer\"},\"streamingEmitPartials\":{\"type\":\"boolean\"},\"streamingEnergyVad\":{\"type\":\"boolean\"},\"streamingLeftContextMs\":{\"type\":\"integer\"},\"streamingRightLookaheadMs\":{\"type\":\"integer\"},\"language\":{\"type\":\"string\"},\"streamingSpkCacheEnable\":{\"type\":\"boolean\"},\"streamingSpkCacheLen\":{\"type\":\"integer\"},\"streamingFifoLen\":{\"type\":\"integer\"},\"streamingChunkLeftContextMs\":{\"type\":\"integer\"},\"streamingChunkRightContextMs\":{\"type\":\"integer\"},\"streamingSpkCacheUpdatePeriod\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"parakeetEncoderSrc\":{},\"parakeetDecoderSrc\":{},\"parakeetVocabSrc\":{},\"parakeetPreprocessorSrc\":{},\"parakeetCtcModelSrc\":{},\"parakeetTokenizerSrc\":{},\"parakeetSortformerSrc\":{},\"parakeetModelSrc\":{},\"modelType\":{}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"moss-transcribe\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"maxThreads\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"llamacpp-embedding\"},\"modelConfig\":{\"type\":\"object\",\"properties\":{\"gpuLayers\":{\"type\":\"integer\"},\"device\":{\"type\":\"string\",\"enum\":[\"gpu\",\"cpu\"]},\"batchSize\":{\"type\":\"integer\"},\"pooling\":{\"type\":\"string\",\"enum\":[\"none\",\"mean\",\"cls\",\"last\",\"rank\"]},\"attention\":{\"type\":\"string\",\"enum\":[\"causal\",\"non-causal\"]},\"embdNormalize\":{\"type\":\"integer\"},\"flashAttention\":{\"type\":\"string\",\"enum\":[\"on\",\"off\",\"auto\"]},\"mainGpu\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\",\"enum\":[\"integrated\",\"dedicated\"]}]},\"splitMode\":{\"type\":\"string\",\"enum\":[\"none\",\"layer\"]},\"tensorSplit\":{\"type\":\"string\"},\"verbosity\":{\"type\":\"number\",\"enum\":[0,1,2,3]},\"openclCacheDir\":{\"type\":\"string\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"nmtcpp-translation\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"Bergamot\"},\"from\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"to\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"normalize\":{\"type\":\"number\"},\"pivotModel\":{\"type\":\"object\",\"required\":[\"modelSrc\"]}}},{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"IndicTrans\"},\"from\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]},\"to\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]}}}]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelSrc\",\"modelType\",\"modelConfig\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"modelSrc\":{\"type\":\"string\"},\"modelName\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"fallbackSrc\":{\"type\":\"string\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"modelFitPolicy\":{\"type\":\"string\",\"enum\":[\"log\",\"refuse\",\"off\"]},\"requestId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\",\"const\":\"tts-ggml\"},\"modelConfig\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"chatterbox\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"es\",\"fr\",\"de\",\"it\",\"ja\",\"pt\",\"nl\",\"pl\",\"tr\",\"sv\",\"da\",\"fi\",\"no\",\"el\",\"ms\",\"sw\",\"ar\",\"ko\",\"he\",\"ru\",\"zh\",\"hi\"]},\"voice\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"ttsSpeed\":{\"type\":\"number\"},\"nCtx\":{\"type\":\"integer\"},\"kvCacheType\":{\"type\":\"string\",\"enum\":[\"f32\",\"f16\",\"q8_0\"]},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"cfmSteps\":{\"type\":\"integer\"},\"cfgRate\":{\"type\":\"number\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"s3genModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mecabDictSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cangjieTsvSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"supertonic\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"ko\",\"ja\",\"ar\",\"bg\",\"cs\",\"da\",\"de\",\"el\",\"es\",\"et\",\"fi\",\"fr\",\"hi\",\"hr\",\"hu\",\"id\",\"it\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ro\",\"ru\",\"sk\",\"sl\",\"sv\",\"tr\",\"uk\",\"vi\"]},\"voice\":{\"type\":\"string\"},\"ttsSpeed\":{\"type\":\"number\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"ttsNumInferenceSteps\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"vulkanCacheDir\":{\"type\":\"string\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"parler\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"anyOf\":[{\"type\":\"number\",\"const\":0},{\"type\":\"integer\"}]},\"minNewTokens\":{\"type\":\"integer\"},\"normalizeNumbers\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"cosyvoice3\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"anger\",\"happy\",\"neutral\",\"sad\"]},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"instruct\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\"}]},\"promptText\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3S3tokModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"cosyvoice3CampplusModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"audio8CodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"audio8\"},\"referenceText\":{\"type\":\"string\"},\"greedy\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"audio8CodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"audio8CodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}},{\"type\":\"object\",\"required\":[\"ttsEngine\",\"mossCodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"moss\"},\"language\":{\"type\":\"string\"},\"durationTokens\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"mossCodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"mossCodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dialogueReferenceSrcs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}]}}}").jsonObject,
@@ -2004,15 +2008,16 @@ internal object LoadModelSrcRequestSerializer : KSerializer<LoadModelSrcRequest>
             1 -> LoadModelSrcRequest.WhispercppTranscription(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscription>(), element))
             2 -> LoadModelSrcRequest.BciWhispercppTranscription(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscription>(), element))
             3 -> LoadModelSrcRequest.ParakeetTranscription(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestParakeetTranscription>(), element))
-            4 -> LoadModelSrcRequest.LlamacppEmbedding(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbedding>(), element))
-            5 -> LoadModelSrcRequest.NmtcppTranslation(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslation>(), element))
-            6 -> LoadModelSrcRequest.TtsGgml(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgml>(), element))
-            7 -> LoadModelSrcRequest.GgmlOcr(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcr>(), element))
-            8 -> LoadModelSrcRequest.SdcppGeneration(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGeneration>(), element))
-            9 -> LoadModelSrcRequest.AudiogenGgml(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgml>(), element))
-            10 -> LoadModelSrcRequest.GgmlVla(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlVla>(), element))
-            11 -> LoadModelSrcRequest.GgmlClassification(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlClassification>(), element))
-            12 -> LoadModelSrcRequest.LoadModelCustomPluginRequest(input.json.decodeFromJsonElement(serializer<LoadModelCustomPluginRequest>(), element))
+            4 -> LoadModelSrcRequest.MossTranscribe(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestMossTranscribe>(), element))
+            5 -> LoadModelSrcRequest.LlamacppEmbedding(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbedding>(), element))
+            6 -> LoadModelSrcRequest.NmtcppTranslation(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslation>(), element))
+            7 -> LoadModelSrcRequest.TtsGgml(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgml>(), element))
+            8 -> LoadModelSrcRequest.GgmlOcr(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcr>(), element))
+            9 -> LoadModelSrcRequest.SdcppGeneration(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGeneration>(), element))
+            10 -> LoadModelSrcRequest.AudiogenGgml(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgml>(), element))
+            11 -> LoadModelSrcRequest.GgmlVla(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlVla>(), element))
+            12 -> LoadModelSrcRequest.GgmlClassification(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlClassification>(), element))
+            13 -> LoadModelSrcRequest.LoadModelCustomPluginRequest(input.json.decodeFromJsonElement(serializer<LoadModelCustomPluginRequest>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequest variant")
         }
     }
@@ -2022,6 +2027,7 @@ internal object LoadModelSrcRequestSerializer : KSerializer<LoadModelSrcRequest>
             is LoadModelSrcRequest.WhispercppTranscription -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscription>(), value.value)
             is LoadModelSrcRequest.BciWhispercppTranscription -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscription>(), value.value)
             is LoadModelSrcRequest.ParakeetTranscription -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestParakeetTranscription>(), value.value)
+            is LoadModelSrcRequest.MossTranscribe -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestMossTranscribe>(), value.value)
             is LoadModelSrcRequest.LlamacppEmbedding -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbedding>(), value.value)
             is LoadModelSrcRequest.NmtcppTranslation -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslation>(), value.value)
             is LoadModelSrcRequest.TtsGgml -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgml>(), value.value)
@@ -2298,33 +2304,33 @@ internal object LoadModelSrcRequestLlamacppCompletionModelConfigFittargetSeriali
 @Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc()
-    data class E938C844(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc()
+    data class AED85425(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc()
 }
 internal object LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.E938C844(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844>(), element))
+            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.AED85425(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc) {
         when (value) {
             is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.E938C844 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.AED85425 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844(
+data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -2335,33 +2341,33 @@ data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE93
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844AddonSerializer::class)
-sealed class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon {
-    data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon()
+@Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425AddonSerializer::class)
+sealed class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon {
+    data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon()
 }
-internal object LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844AddonSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon")
+internal object LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425AddonSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon variant")
+            0 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon) {
         when (value) {
-            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcE938C844Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAED85425Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -2376,6 +2382,7 @@ enum class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAdd
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -2520,33 +2527,33 @@ data class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(
 @Serializable(with = LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcSerializer::class)
 sealed class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc()
-    data class Value9AE603F4(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc()
+    data class Value6231B536(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc()
 }
 internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcSerializer : KSerializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Value9AE603F4(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4>(), element))
+            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Value6231B536(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc) {
         when (value) {
             is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Value9AE603F4 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4>(), value.value)
+            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Value6231B536 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4(
+data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -2557,33 +2564,33 @@ data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE60
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4AddonSerializer::class)
-sealed class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon {
-    data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon()
+@Serializable(with = LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536AddonSerializer::class)
+sealed class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon {
+    data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon()
 }
-internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4AddonSerializer : KSerializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon")
+internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536AddonSerializer : KSerializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon variant")
+            0 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon) {
         when (value) {
-            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc9AE603F4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc6231B536Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -2598,6 +2605,7 @@ enum class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -2693,33 +2701,33 @@ data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(
 @Serializable(with = LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc()
-    data class D42A1A39(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc()
+    data class Value7BD5D821(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc()
 }
 internal object LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcSerializer : KSerializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.D42A1A39(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39>(), element))
+            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.Value7BD5D821(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc) {
         when (value) {
             is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.D42A1A39 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39>(), value.value)
+            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.Value7BD5D821 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39(
+data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -2730,33 +2738,33 @@ data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModel
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39AddonSerializer::class)
-sealed class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon {
-    data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon()
+@Serializable(with = LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821AddonSerializer::class)
+sealed class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon {
+    data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon()
 }
-internal object LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39AddonSerializer : KSerializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon")
+internal object LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821AddonSerializer : KSerializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon variant")
+            0 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon) {
         when (value) {
-            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcD42A1A39Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc7BD5D821Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -2771,6 +2779,7 @@ enum class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModel
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -2849,6 +2858,38 @@ data class LoadModelSrcRequestParakeetTranscriptionModelConfig(
     @SerialName("parakeetSortformerSrc") val `parakeetSortformerSrc`: JsonElement? = null,
     @SerialName("parakeetModelSrc") val `parakeetModelSrc`: JsonElement? = null,
     @SerialName("modelType") val `modelType`: JsonElement? = null,
+)
+
+@Serializable
+data class LoadModelSrcRequestMossTranscribe(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "loadModel",
+    @SerialName("modelSrc") val `modelSrc`: String,
+    @SerialName("modelName") val `modelName`: String? = null,
+    @SerialName("withProgress") val `withProgress`: Boolean? = null,
+    @SerialName("seed") val `seed`: Boolean? = null,
+    @SerialName("fallbackSrc") val `fallbackSrc`: String? = null,
+    @SerialName("requireHttpChecksum") val `requireHttpChecksum`: Boolean? = null,
+    @SerialName("requireSecureTransport") val `requireSecureTransport`: Boolean? = null,
+    @SerialName("modelFitPolicy") val `modelFitPolicy`: LoadModelSrcRequestMossTranscribeModelFitPolicy? = null,
+    @SerialName("requestId") val `requestId`: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("modelType") val `modelType`: String = "moss-transcribe",
+    @SerialName("modelConfig") val `modelConfig`: LoadModelSrcRequestMossTranscribeModelConfig? = null,
+)
+
+@Serializable
+enum class LoadModelSrcRequestMossTranscribeModelFitPolicy {
+    @SerialName("log") `LOG`,
+    @SerialName("refuse") `REFUSE`,
+    @SerialName("off") `OFF`,
+}
+
+@Serializable
+data class LoadModelSrcRequestMossTranscribeModelConfig(
+    @SerialName("maxThreads") val `maxThreads`: Long? = null,
+    @SerialName("useGPU") val `useGPU`: Boolean? = null,
+    @SerialName("backendsDir") val `backendsDir`: String? = null,
 )
 
 @Serializable
@@ -2993,7 +3034,7 @@ sealed class LoadModelSrcRequestNmtcppTranslationModelConfig {
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfig> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfig")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"Bergamot\"},\"from\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"to\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"normalize\":{\"type\":\"number\"},\"pivotModel\":{\"type\":\"object\",\"required\":[\"modelSrc\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"modelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"normalize\":{\"type\":\"number\"}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"Bergamot\"},\"from\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"to\":{\"type\":\"string\",\"enum\":[\"en\",\"ar\",\"bg\",\"ca\",\"cs\",\"de\",\"es\",\"et\",\"fi\",\"fr\",\"hu\",\"is\",\"it\",\"ja\",\"ko\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ru\",\"sk\",\"sl\",\"uk\",\"zh\",\"az\",\"be\",\"bn\",\"bs\",\"da\",\"el\",\"fa\",\"gu\",\"he\",\"hi\",\"hr\",\"id\",\"kn\",\"ml\",\"ms\",\"mt\",\"nb\",\"nn\",\"no\",\"re\",\"ro\",\"sq\",\"sr\",\"sv\",\"ta\",\"te\",\"th\",\"tr\",\"vi\"]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"normalize\":{\"type\":\"number\"},\"pivotModel\":{\"type\":\"object\",\"required\":[\"modelSrc\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"modelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"srcVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"dstVocabSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]},\"normalize\":{\"type\":\"number\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"engine\",\"from\",\"to\"],\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"full\"]},\"beamsize\":{\"type\":\"number\"},\"lengthpenalty\":{\"type\":\"number\"},\"maxlength\":{\"type\":\"number\"},\"repetitionpenalty\":{\"type\":\"number\"},\"norepeatngramsize\":{\"type\":\"number\"},\"temperature\":{\"type\":\"number\"},\"topk\":{\"type\":\"number\"},\"topp\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\",\"const\":\"IndicTrans\"},\"from\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]},\"to\":{\"type\":\"string\",\"enum\":[\"asm_Beng\",\"ben_Beng\",\"brx_Deva\",\"doi_Deva\",\"eng_Latn\",\"gom_Deva\",\"guj_Gujr\",\"hin_Deva\",\"kan_Knda\",\"kas_Arab\",\"kas_Deva\",\"mai_Deva\",\"mal_Mlym\",\"mar_Deva\",\"mni_Beng\",\"mni_Mtei\",\"npi_Deva\",\"ory_Orya\",\"pan_Guru\",\"san_Deva\",\"sat_Olck\",\"snd_Arab\",\"snd_Deva\",\"tam_Taml\",\"tel_Telu\",\"urd_Arab\"]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfig {
@@ -3158,33 +3199,33 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo {
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc()
-    data class Value6FABB257(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc()
+    data class Value42E9A99F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99F) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value6FABB257(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value42E9A99F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99F>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value6FABB257 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value42E9A99F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99F>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99F(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3195,33 +3236,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FA
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257AddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc6FABB257Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc42E9A99FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3236,6 +3277,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAdd
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -3258,33 +3300,33 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAdd
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc()
-    data class Value4BAB3140(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc()
+    data class Value6D177F71(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value4BAB3140(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value6D177F71(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value4BAB3140 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value6D177F71 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3295,33 +3337,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BA
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140AddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71AddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc4BAB3140Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc6D177F71Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3336,6 +3378,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAdd
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -3380,33 +3423,33 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc()
-    data class Value4195D04F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04F) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc()
+    data class Value110A2EE0(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value4195D04F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04F>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value110A2EE0(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value4195D04F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04F>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value110A2EE0 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04F(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3417,33 +3460,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0AddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc4195D04FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc110A2EE0Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3458,6 +3501,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -3480,33 +3524,33 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc()
-    data class Value76B5D6BD(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BD) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc()
+    data class Value1D9AC805(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value76B5D6BD(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BD>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value1D9AC805(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value76B5D6BD -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BD>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value1D9AC805 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BD(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3517,33 +3561,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcV
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805AddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc76B5D6BDAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc1D9AC805Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3558,6 +3602,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcV
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -3580,33 +3625,33 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcV
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc()
-    data class Value2B47DFD4(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc()
+    data class BBEB574C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574C) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Value2B47DFD4(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.BBEB574C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574C>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Value2B47DFD4 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.BBEB574C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574C>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574C(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3617,33 +3662,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstV
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4AddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2B47DFD4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcBBEB574CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3658,6 +3703,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstV
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -3796,12 +3842,12 @@ sealed class LoadModelSrcRequestTtsGgmlModelConfig {
 internal object LoadModelSrcRequestTtsGgmlModelConfigSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfig> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfig")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"chatterbox\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"es\",\"fr\",\"de\",\"it\",\"ja\",\"pt\",\"nl\",\"pl\",\"tr\",\"sv\",\"da\",\"fi\",\"no\",\"el\",\"ms\",\"sw\",\"ar\",\"ko\",\"he\",\"ru\",\"zh\",\"hi\"]},\"voice\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"ttsSpeed\":{\"type\":\"number\"},\"nCtx\":{\"type\":\"integer\"},\"kvCacheType\":{\"type\":\"string\",\"enum\":[\"f32\",\"f16\",\"q8_0\"]},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"cfmSteps\":{\"type\":\"integer\"},\"cfgRate\":{\"type\":\"number\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"s3genModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"mecabDictSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"cangjieTsvSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"supertonic\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"ko\",\"ja\",\"ar\",\"bg\",\"cs\",\"da\",\"de\",\"el\",\"es\",\"et\",\"fi\",\"fr\",\"hi\",\"hr\",\"hu\",\"id\",\"it\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ro\",\"ru\",\"sk\",\"sl\",\"sv\",\"tr\",\"uk\",\"vi\"]},\"voice\":{\"type\":\"string\"},\"ttsSpeed\":{\"type\":\"number\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"ttsNumInferenceSteps\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"vulkanCacheDir\":{\"type\":\"string\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"parler\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"anyOf\":[{\"type\":\"number\",\"const\":0},{\"type\":\"integer\"}]},\"minNewTokens\":{\"type\":\"integer\"},\"normalizeNumbers\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"cosyvoice3\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"anger\",\"happy\",\"neutral\",\"sad\"]},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"instruct\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"properties\":{\"dialect\":{\"type\":\"string\",\"enum\":[\"cantonese\",\"northeastern\",\"gansu\",\"guizhou\",\"henan\",\"hubei\",\"hunan\",\"jiangxi\",\"minnan\",\"ningxia\",\"shanxi\",\"shaanxi\",\"shandong\",\"shanghai\",\"sichuan\",\"tianjin\",\"yunnan\"]},\"volume\":{\"type\":\"string\",\"enum\":[\"loud\",\"soft\"]},\"style\":{\"type\":\"string\",\"enum\":[\"peppa\",\"robot\"]}}}]},\"promptText\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"cosyvoice3S3tokModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"cosyvoice3CampplusModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"audio8CodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"audio8\"},\"referenceText\":{\"type\":\"string\"},\"greedy\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"audio8CodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"audio8CodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"mossCodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"moss\"},\"language\":{\"type\":\"string\"},\"durationTokens\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"mossCodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"mossCodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"dialogueReferenceSrcs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"chatterbox\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"es\",\"fr\",\"de\",\"it\",\"ja\",\"pt\",\"nl\",\"pl\",\"tr\",\"sv\",\"da\",\"fi\",\"no\",\"el\",\"ms\",\"sw\",\"ar\",\"ko\",\"he\",\"ru\",\"zh\",\"hi\"]},\"voice\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"ttsSpeed\":{\"type\":\"number\"},\"nCtx\":{\"type\":\"integer\"},\"kvCacheType\":{\"type\":\"string\",\"enum\":[\"f32\",\"f16\",\"q8_0\"]},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"cfmSteps\":{\"type\":\"integer\"},\"cfgRate\":{\"type\":\"number\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"s3genModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"mecabDictSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"cangjieTsvSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"language\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"supertonic\"},\"language\":{\"type\":\"string\",\"enum\":[\"en\",\"ko\",\"ja\",\"ar\",\"bg\",\"cs\",\"da\",\"de\",\"el\",\"es\",\"et\",\"fi\",\"fr\",\"hi\",\"hr\",\"hu\",\"id\",\"it\",\"lt\",\"lv\",\"nl\",\"pl\",\"pt\",\"ro\",\"ru\",\"sk\",\"sl\",\"sv\",\"tr\",\"uk\",\"vi\"]},\"voice\":{\"type\":\"string\"},\"ttsSpeed\":{\"type\":\"number\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"ttsNumInferenceSteps\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"vulkanCacheDir\":{\"type\":\"string\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"ttsSupertonicMultilingual\":{},\"ttsTokenizerSrc\":{},\"ttsSpeechEncoderSrc\":{},\"ttsEmbedTokensSrc\":{},\"ttsConditionalDecoderSrc\":{},\"ttsLanguageModelSrc\":{},\"ttsTextEncoderSrc\":{},\"ttsDurationPredictorSrc\":{},\"ttsVectorEstimatorSrc\":{},\"ttsVocoderSrc\":{},\"ttsUnicodeIndexerSrc\":{},\"ttsTtsConfigSrc\":{},\"ttsVoiceStyleSrc\":{}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"parler\"},\"description\":{\"type\":\"string\"},\"voiceDescription\":{\"type\":\"string\"},\"voice\":{\"type\":\"string\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"command\",\"anger\",\"narration\",\"conversation\",\"disgust\",\"fear\",\"happy\",\"neutral\",\"proper noun\",\"news\",\"sad\",\"surprise\"]},\"pitch\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"expressivity\":{\"type\":\"string\"},\"noise\":{\"type\":\"string\"},\"reverb\":{\"type\":\"string\"},\"quality\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"anyOf\":[{\"type\":\"number\",\"const\":0},{\"type\":\"integer\"}]},\"minNewTokens\":{\"type\":\"integer\"},\"normalizeNumbers\":{\"type\":\"boolean\"},\"backendsDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"cosyvoice3\"},\"emotion\":{\"type\":\"string\",\"enum\":[\"anger\",\"happy\",\"neutral\",\"sad\"]},\"pace\":{\"type\":\"string\",\"enum\":[\"slow\",\"moderate\",\"fast\"]},\"instruct\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"properties\":{\"dialect\":{\"type\":\"string\",\"enum\":[\"cantonese\",\"northeastern\",\"gansu\",\"guizhou\",\"henan\",\"hubei\",\"hunan\",\"jiangxi\",\"minnan\",\"ningxia\",\"shanxi\",\"shaanxi\",\"shandong\",\"shanghai\",\"sichuan\",\"tianjin\",\"yunnan\"]},\"volume\":{\"type\":\"string\",\"enum\":[\"loud\",\"soft\"]},\"style\":{\"type\":\"string\",\"enum\":[\"peppa\",\"robot\"]}}}]},\"promptText\":{\"type\":\"string\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"streamFirstChunkTokens\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"openclCacheDir\":{\"type\":\"string\"},\"lavasrEnhancerModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lavasrDenoiserModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"cosyvoice3S3tokModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"cosyvoice3CampplusModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"audio8CodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"audio8\"},\"referenceText\":{\"type\":\"string\"},\"greedy\":{\"type\":\"boolean\"},\"temperature\":{\"type\":\"number\"},\"topK\":{\"type\":\"integer\"},\"topP\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"outputSampleRate\":{\"type\":\"integer\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"audio8CodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"audio8CodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"ttsEngine\",\"mossCodecDecoderModelSrc\"],\"properties\":{\"ttsEngine\":{\"type\":\"string\",\"const\":\"moss\"},\"language\":{\"type\":\"string\"},\"durationTokens\":{\"type\":\"integer\"},\"streamChunkTokens\":{\"type\":\"integer\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"nGpuLayers\":{\"type\":\"integer\"},\"seed\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"mossCodecDecoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"mossCodecEncoderModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"referenceAudioSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"dialogueReferenceSrcs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"]}]}}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfig {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -3906,33 +3952,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxKvCacheType {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc()
-    data class Value5D01CDF4(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc()
+    data class BB47D812(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Value5D01CDF4(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.BB47D812(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Value5D01CDF4 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.BB47D812 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3943,33 +3989,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc5D01CDF4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcBB47D812Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3984,6 +4030,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4006,33 +4053,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc()
-    data class E03355B5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc()
+    data class Value2E819D5A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5A) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.E03355B5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Value2E819D5A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5A>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.E03355B5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Value2E819D5A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4043,33 +4090,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE0335
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcE03355B5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2E819D5AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4084,6 +4131,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4106,33 +4154,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc()
-    data class CA622657(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc()
+    data class C0609505(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.CA622657(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.C0609505(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.CA622657 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.C0609505 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4143,33 +4191,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcCA622657Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcC0609505Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4184,6 +4232,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4206,33 +4255,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc()
-    data class Value3E92D637(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc()
+    data class Value5A08246C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246C) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value3E92D637(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value5A08246C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246C>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value3E92D637 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value5A08246C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246C>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246C(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4243,33 +4292,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc3E92D637Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5A08246CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4284,6 +4333,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4306,33 +4356,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc()
-    data class Value92517037(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc()
+    data class CBA673BA(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BA) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Value92517037(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.CBA673BA(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BA>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Value92517037 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.CBA673BA -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BA>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BA(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4343,33 +4393,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc92517037Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcCBA673BAAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4384,6 +4434,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4406,33 +4457,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc()
-    data class Value2A9344BB(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BB) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc()
+    data class Value79CCAC27(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Value2A9344BB(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BB>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Value79CCAC27(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Value2A9344BB -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BB>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Value79CCAC27 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BB(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4443,33 +4494,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc2A9344BBAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc79CCAC27Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4484,6 +4535,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4582,33 +4634,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigSupertonicPace {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc()
-    data class F0DDAE33(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc()
+    data class Value49F3013B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013B) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.F0DDAE33(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Value49F3013B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013B>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.F0DDAE33 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Value49F3013B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013B>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33(
+data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013B(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4619,33 +4671,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcF0DDAE33Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc49F3013BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4660,6 +4712,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4682,33 +4735,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc()
-    data class Value2CC63106(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc()
+    data class C9C5E965(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Value2CC63106(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.C9C5E965(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Value2CC63106 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.C9C5E965 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106(
+data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4719,33 +4772,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc2CC63106Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcC9C5E965Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4760,6 +4813,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4865,33 +4919,33 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigParlerMaxFramesSerializer :
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc()
-    data class Value9FB15596(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc()
+    data class Value3366FD40(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Value9FB15596(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Value3366FD40(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Value9FB15596 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Value3366FD40 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596(
+data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4902,33 +4956,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB1
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc9FB15596Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc3366FD40Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4943,6 +4997,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddo
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -4965,33 +5020,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddo
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc()
-    data class Value3AA20101(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc()
+    data class Value98728E45(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Value3AA20101(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Value98728E45(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Value3AA20101 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Value98728E45 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101(
+data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5002,33 +5057,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA2
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc3AA20101Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc98728E45Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5043,6 +5098,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddo
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5172,33 +5228,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc()
-    data class EE5A99C5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc()
+    data class Value2F4A64C3(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.EE5A99C5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.Value2F4A64C3(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.EE5A99C5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.Value2F4A64C3 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5209,33 +5265,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcEE5A99C5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc2F4A64C3Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5250,6 +5306,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5272,33 +5329,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc()
-    data class F2B2E059(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc()
+    data class AE550EB0(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.F2B2E059(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.AE550EB0(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.F2B2E059 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.AE550EB0 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5309,33 +5366,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcF2B2E059Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAE550EB0Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5350,6 +5407,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5372,33 +5430,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc()
-    data class BD7D9CDB(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDB) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc()
+    data class Value4772BF7C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7C) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.BD7D9CDB(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDB>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Value4772BF7C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7C>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.BD7D9CDB -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDB>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Value4772BF7C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7C>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDB(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7C(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5409,33 +5467,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcBD7D9CDBAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc4772BF7CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5450,6 +5508,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5472,33 +5531,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc()
-    data class Value05752BB5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc()
+    data class Value9EE66A63(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Value05752BB5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Value9EE66A63(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Value05752BB5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Value9EE66A63 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5509,33 +5568,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSr
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc05752BB5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc9EE66A63Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5550,6 +5609,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSr
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5572,33 +5632,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSr
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc()
-    data class Value9940EDC6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc()
+    data class Value215B882F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882F) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Value9940EDC6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Value215B882F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882F>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Value9940EDC6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Value215B882F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882F>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882F(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5609,33 +5669,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusMode
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc9940EDC6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc215B882FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5650,6 +5710,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusMode
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5693,33 +5754,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8(
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc()
-    data class Value298F605F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605F) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc()
+    data class Value326C29CE(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CE) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value298F605F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605F>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value326C29CE(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CE>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value298F605F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605F>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value326C29CE -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CE>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605F(
+data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CE(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5730,33 +5791,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc298F605FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc326C29CEAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5771,6 +5832,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5793,33 +5855,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc()
-    data class Value0299566F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566F) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc()
+    data class Value355CD891(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Value0299566F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566F>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Value355CD891(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Value0299566F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566F>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Value355CD891 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566F(
+data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5830,33 +5892,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc0299566FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc355CD891Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5871,6 +5933,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -5893,33 +5956,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc()
-    data class Value0236660D(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660D) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc()
+    data class Value7A96F457(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Value0236660D(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660D>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Value7A96F457(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Value0236660D -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660D>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Value7A96F457 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660D(
+data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5930,33 +5993,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660D(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc0236660DAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc7A96F457Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5971,6 +6034,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6011,33 +6075,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMoss(
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc()
-    data class Value6CADD490(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc()
+    data class BFE56B10(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Value6CADD490(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.BFE56B10(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Value6CADD490 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.BFE56B10 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6048,33 +6112,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CAD
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc6CADD490Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcBFE56B10Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6089,6 +6153,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddo
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6111,33 +6176,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddo
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc()
-    data class Value258DBA6D(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6D) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc()
+    data class FAF3B832(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Value258DBA6D(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6D>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.FAF3B832(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Value258DBA6D -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6D>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.FAF3B832 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6D(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6148,33 +6213,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258D
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc258DBA6DAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcFAF3B832Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6189,6 +6254,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddo
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6211,33 +6277,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddo
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc()
-    data class F55EAD43(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc()
+    data class E2AD633A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633A) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.F55EAD43(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.E2AD633A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633A>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.F55EAD43 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.E2AD633A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6248,33 +6314,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcF55EAD43Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcE2AD633AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6289,6 +6355,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6311,33 +6378,33 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem()
-    data class Value173A4DCF(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCF) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem()
+    data class Value751E23B1(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Value173A4DCF(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCF>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Value751E23B1(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Value173A4DCF -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCF>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Value751E23B1 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCF(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6348,33 +6415,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem173A4DCFAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem751E23B1Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6389,6 +6456,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAdd
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6501,33 +6569,33 @@ enum class LoadModelSrcRequestGgmlOcrModelConfigMainGpuAF333E48 {
 @Serializable(with = LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcSerializer::class)
 sealed class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc()
-    data class Value859B56E7(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc()
+    data class E792031E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031E) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc()
 }
 internal object LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcSerializer : KSerializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Value859B56E7(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7>(), element))
+            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.E792031E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031E>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc) {
         when (value) {
             is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Value859B56E7 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7>(), value.value)
+            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.E792031E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031E>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7(
+data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031E(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6538,33 +6606,33 @@ data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7AddonSerializer::class)
-sealed class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon {
-    data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon()
+@Serializable(with = LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddonSerializer::class)
+sealed class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon {
+    data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon()
 }
-internal object LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7AddonSerializer : KSerializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon")
+internal object LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddonSerializer : KSerializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon variant")
+            0 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon) {
         when (value) {
-            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc859B56E7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcE792031EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6579,6 +6647,7 @@ enum class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6761,33 +6830,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc()
-    data class Value7A03A4FD(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FD) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc()
+    data class F54854D5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Value7A03A4FD(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FD>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.F54854D5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Value7A03A4FD -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FD>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.F54854D5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FD(
+data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6798,33 +6867,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FD(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc7A03A4FDAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcF54854D5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6839,6 +6908,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6861,33 +6931,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc()
-    data class ECA34825(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc()
+    data class Value4168AB4B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4B) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.ECA34825(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Value4168AB4B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4B>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.ECA34825 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Value4168AB4B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4B>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825(
+data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4B(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6898,33 +6968,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcECA34825Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc4168AB4BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6939,6 +7009,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -6961,33 +7032,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc()
-    data class Value5F7BF1FD(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FD) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc()
+    data class Value067FC753(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Value5F7BF1FD(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FD>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Value067FC753(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Value5F7BF1FD -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FD>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Value067FC753 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FD(
+data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6998,33 +7069,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FD(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc5F7BF1FDAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc067FC753Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7039,6 +7110,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7061,33 +7133,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc()
-    data class D52AECA6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc()
+    data class Value80C95AED(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AED) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.D52AECA6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Value80C95AED(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AED>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.D52AECA6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Value80C95AED -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AED>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6(
+data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AED(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7098,33 +7170,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcD52AECA6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc80C95AEDAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7139,6 +7211,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7161,33 +7234,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc()
-    data class A91AE4C5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc()
+    data class A7CC6293(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.A91AE4C5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.A7CC6293(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.A91AE4C5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.A7CC6293 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5(
+data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7198,33 +7271,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA91AE4C5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcA7CC6293Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7239,6 +7312,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7261,33 +7335,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc()
-    data class Value5A5C4E7A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7A) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc()
+    data class Value90963564(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Value5A5C4E7A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7A>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Value90963564(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Value5A5C4E7A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7A>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Value90963564 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7A(
+data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7298,33 +7372,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelS
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc5A5C4E7AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc90963564Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7339,6 +7413,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelS
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7361,33 +7436,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelS
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc()
-    data class Value0E9ADAE5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc()
+    data class Value813C4013(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value0E9ADAE5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value813C4013(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value0E9ADAE5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value813C4013 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5(
+data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7398,33 +7473,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc0E9ADAE5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc813C4013Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7439,6 +7514,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7461,33 +7537,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc()
-    data class Value8159A4A8(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc()
+    data class D9A93136(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Value8159A4A8(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.D9A93136(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Value8159A4A8 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.D9A93136 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8(
+data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7498,33 +7574,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc8159A4A8Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcD9A93136Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7539,6 +7615,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon 
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7561,33 +7638,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon 
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc()
-    data class Value60D4F6D9(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc()
+    data class B3F62287(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Value60D4F6D9(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.B3F62287(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Value60D4F6D9 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.B3F62287 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9(
+data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7598,33 +7675,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc60D4F6D9Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcB3F62287Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7639,6 +7716,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7661,33 +7739,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc()
-    data class D765E529(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc()
+    data class CCD84486(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.D765E529(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.CCD84486(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.D765E529 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.CCD84486 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529(
+data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7698,33 +7776,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsMode
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcD765E529Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcCCD84486Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7739,6 +7817,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsMode
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7761,33 +7840,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsMode
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc()
-    data class Value0CF96EF6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc()
+    data class F9EA7B22(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Value0CF96EF6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.F9EA7B22(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Value0CF96EF6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.F9EA7B22 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6(
+data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7798,33 +7877,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc0CF96EF6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcF9EA7B22Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7839,6 +7918,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -7861,33 +7941,33 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc()
-    data class B0376A55(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc()
+    data class Value88B5E240(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.B0376A55(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Value88B5E240(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.B0376A55 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Value88B5E240 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55(
+data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7898,33 +7978,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcB0376A55Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc88B5E240Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7939,6 +8019,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -8059,7 +8140,7 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModel_srcSe
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModel_src")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModel_src {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -8095,34 +8176,34 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(
 
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon {
-    data class B3C185E1(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB3C185E1) : LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon()
+    data class B79E0835(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB79E0835) : LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon()
     data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.B3C185E1(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB3C185E1>(), element))
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.B79E0835(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB79E0835>(), element))
             1 -> LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.B3C185E1 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB3C185E1>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.B79E0835 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB79E0835>(), value.value)
             is LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
 
 @Serializable
-enum class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB3C185E1 {
+enum class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB79E0835 {
     @SerialName("llamacpp-completion") `LLAMACPPCOMPLETION`,
     @SerialName("whispercpp-transcription") `WHISPERCPPTRANSCRIPTION`,
     @SerialName("bci-whispercpp-transcription") `BCIWHISPERCPPTRANSCRIPTION`,
@@ -8131,6 +8212,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonB3C
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -8211,8 +8293,8 @@ sealed class LoadModelSrcRequestAudiogenGgmlModelConfig {
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfig> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfig")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"textEncModelSrc\",\"lmModelSrc\",\"ditModelSrc\",\"vaeModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"acestep\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"nGpuLayers\":{\"type\":\"integer\"},\"textEncModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"ditModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"engine\",\"lmModelSrc\",\"synthModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"minimax\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"cfgScale\":{\"type\":\"number\"},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"synthModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"textEncModelSrc\",\"lmModelSrc\",\"ditModelSrc\",\"vaeModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"acestep\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"shift\":{\"type\":\"number\"},\"nGpuLayers\":{\"type\":\"integer\"},\"textEncModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"ditModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"vaeModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"engine\",\"lmModelSrc\",\"synthModelSrc\"],\"properties\":{\"engine\":{\"type\":\"string\",\"const\":\"minimax\"},\"useGPU\":{\"type\":\"boolean\"},\"threads\":{\"type\":\"integer\"},\"backendsDir\":{\"type\":\"string\"},\"inferenceSteps\":{\"type\":\"integer\"},\"cfgScale\":{\"type\":\"number\"},\"lmModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]},\"synthModelSrc\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfig {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -8250,33 +8332,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc()
-    data class EB84848E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848E) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc()
+    data class D23CD9B8(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.EB84848E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848E>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.D23CD9B8(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.EB84848E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848E>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.D23CD9B8 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848E(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8287,33 +8369,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB848
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcEB84848EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcD23CD9B8Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8328,6 +8410,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -8350,33 +8433,33 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc()
-    data class Value3D3E9A36(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc()
+    data class Value12DF450F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450F) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value3D3E9A36(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value12DF450F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450F>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value3D3E9A36 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value12DF450F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450F>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450F(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8387,33 +8470,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc3D3E9A36Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc12DF450FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8428,6 +8511,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -8450,33 +8534,33 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc()
-    data class Value28E00752(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc()
+    data class DF55059C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059C) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Value28E00752(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.DF55059C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059C>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Value28E00752 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.DF55059C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059C>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059C(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8487,33 +8571,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc28E00752Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcDF55059CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8528,6 +8612,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -8550,33 +8635,33 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc()
-    data class Value04EAFF91(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc()
+    data class Value3FE39F1E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1E) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value04EAFF91(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value3FE39F1E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1E>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value04EAFF91 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value3FE39F1E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1E>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1E(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8587,33 +8672,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc04EAFF91Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc3FE39F1EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8628,6 +8713,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -8663,33 +8749,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc()
-    data class E79DC7E5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc()
+    data class Value8D93FF45(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.E79DC7E5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Value8D93FF45(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.E79DC7E5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Value8D93FF45 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8700,33 +8786,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcE79DC7E5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc8D93FF45Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8741,6 +8827,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -8763,33 +8850,33 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc()
-    data class Value6B786F2D(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2D) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc()
+    data class Value53A244C7(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Value6B786F2D(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2D>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Value53A244C7(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Value6B786F2D -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2D>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Value53A244C7 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2D(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8800,33 +8887,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc6B786F2DAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc53A244C7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8841,6 +8928,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -9095,33 +9183,33 @@ data class ReloadConfigRequestModelConfigMiscConfig(
 @Serializable(with = ReloadConfigRequestModelConfigVadModelSrcSerializer::class)
 sealed class ReloadConfigRequestModelConfigVadModelSrc {
     data class Variant1(val value: String) : ReloadConfigRequestModelConfigVadModelSrc()
-    data class Value2486D4ED(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrc2486D4ED) : ReloadConfigRequestModelConfigVadModelSrc()
+    data class Value833B7DF4(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrc833B7DF4) : ReloadConfigRequestModelConfigVadModelSrc()
 }
 internal object ReloadConfigRequestModelConfigVadModelSrcSerializer : KSerializer<ReloadConfigRequestModelConfigVadModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ReloadConfigRequestModelConfigVadModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): ReloadConfigRequestModelConfigVadModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> ReloadConfigRequestModelConfigVadModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> ReloadConfigRequestModelConfigVadModelSrc.Value2486D4ED(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrc2486D4ED>(), element))
+            1 -> ReloadConfigRequestModelConfigVadModelSrc.Value833B7DF4(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrc833B7DF4>(), element))
             else -> throw SerializationException("No matching ReloadConfigRequestModelConfigVadModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: ReloadConfigRequestModelConfigVadModelSrc) {
         when (value) {
             is ReloadConfigRequestModelConfigVadModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is ReloadConfigRequestModelConfigVadModelSrc.Value2486D4ED -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrc2486D4ED>(), value.value)
+            is ReloadConfigRequestModelConfigVadModelSrc.Value833B7DF4 -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrc833B7DF4>(), value.value)
         }
     }
 }
 
 @Serializable
-data class ReloadConfigRequestModelConfigVadModelSrc2486D4ED(
+data class ReloadConfigRequestModelConfigVadModelSrc833B7DF4(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9132,33 +9220,33 @@ data class ReloadConfigRequestModelConfigVadModelSrc2486D4ED(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon? = null,
+    @SerialName("addon") val `addon`: ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon? = null,
 )
 
-@Serializable(with = ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddonSerializer::class)
-sealed class ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon {
-    data class ReloadConfigRequestModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrcAddon) : ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon()
-    data class Variant2(val value: String) : ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon()
+@Serializable(with = ReloadConfigRequestModelConfigVadModelSrc833B7DF4AddonSerializer::class)
+sealed class ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon {
+    data class ReloadConfigRequestModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrcAddon) : ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon()
+    data class Variant2(val value: String) : ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon()
 }
-internal object ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddonSerializer : KSerializer<ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon")
+internal object ReloadConfigRequestModelConfigVadModelSrc833B7DF4AddonSerializer : KSerializer<ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon {
+    override fun deserialize(decoder: Decoder): ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon.ReloadConfigRequestModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), element))
-            1 -> ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon variant")
+            0 -> ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon.ReloadConfigRequestModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), element))
+            1 -> ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon) {
+    override fun serialize(encoder: Encoder, value: ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon) {
         when (value) {
-            is ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon.ReloadConfigRequestModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), value.value)
-            is ReloadConfigRequestModelConfigVadModelSrc2486D4EDAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon.ReloadConfigRequestModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), value.value)
+            is ReloadConfigRequestModelConfigVadModelSrc833B7DF4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9173,6 +9261,7 @@ enum class ReloadConfigRequestModelConfigVadModelSrcAddon {
     @SerialName("onnx-tts") `ONNXTTS`,
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
@@ -9234,6 +9323,7 @@ enum class ModelRegistrySearchRequestAddon {
     @SerialName("tts") `TTS`,
     @SerialName("ocr") `OCR`,
     @SerialName("parakeet") `PARAKEET`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("diffusion") `DIFFUSION`,
     @SerialName("audiogen") `AUDIOGEN`,
     @SerialName("vla") `VLA`,
@@ -9740,6 +9830,8 @@ data class TranscribeRequest(
     @SerialName("prompt") val `prompt`: String? = null,
     @SerialName("metadata") val `metadata`: Boolean? = null,
     @SerialName("audioChunk") val `audioChunk`: TranscribeRequestAudioChunk,
+    @SerialName("hotwords") val `hotwords`: List<String>? = null,
+    @SerialName("maxNewTokens") val `maxNewTokens`: Long? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "transcribe",
     @SerialName("requestId") val `requestId`: String? = null,
@@ -10348,8 +10440,8 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioGenStream\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"data\":{\"type\":\"string\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"bitsPerSample\":{\"type\":\"integer\"},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioUnderstand\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"],\"properties\":{\"caption\":{\"type\":\"string\"},\"bpm\":{\"type\":\"number\"},\"duration\":{\"type\":\"number\"},\"keyscale\":{\"type\":\"string\"},\"timesignature\":{\"type\":\"string\"},\"vocalLanguage\":{\"type\":\"string\"},\"audioCodes\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"events\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"batchCompletionStream\"},\"done\":{\"type\":\"boolean\"},\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"events\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"event\"]}},\"stats\":{\"type\":\"object\",\"properties\":{\"timeToFirstToken\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"promptTokensPerSecond\":{\"type\":\"number\"},\"cacheTokens\":{\"type\":\"number\"},\"promptTokens\":{\"type\":\"number\"},\"generatedTokens\":{\"type\":\"number\"},\"emittedTokens\":{\"type\":\"number\"},\"avgConcurrentSeq\":{\"type\":\"number\"},\"toolDefinitionsDropped\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]}}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"},\"windowStartTimestep\":{\"type\":\"integer\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"speakerId\":{\"type\":\"integer\"},\"speaker\":{\"type\":\"string\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"speakerId\":{\"type\":\"integer\"},\"speaker\":{\"type\":\"string\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"},\"windowStartTimestep\":{\"type\":\"integer\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"success\":{\"type\":\"boolean\"},\"cancelled\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"results\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"classify\"},\"results\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"label\",\"confidence\"]}},\"done\":{\"type\":\"boolean\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"turn\":{\"type\":\"integer\"},\"events\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"call\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stats\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stopReason\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\"]}]}},\"toolCallback\":{\"type\":\"object\",\"required\":[\"callId\",\"name\",\"arguments\"],\"properties\":{\"callId\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"arguments\":{\"type\":\"object\"}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"const\":\"maxToolTurns\"}}}").jsonObject,
@@ -10363,13 +10455,13 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"finetune\"},\"status\":{\"type\":\"string\",\"enum\":[\"IDLE\",\"RUNNING\",\"PAUSED\",\"CANCELLED\",\"COMPLETED\"]},\"stats\":{\"type\":\"object\",\"required\":[\"global_steps\",\"epochs_completed\"],\"properties\":{\"train_loss\":{\"type\":\"number\"},\"train_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_loss\":{\"type\":\"number\"},\"val_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"train_accuracy\":{\"type\":\"number\"},\"train_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_accuracy\":{\"type\":\"number\"},\"val_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"learning_rate\":{\"type\":\"number\"},\"global_steps\":{\"type\":\"integer\"},\"epochs_completed\":{\"type\":\"integer\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"is_train\",\"loss\",\"loss_uncertainty\",\"accuracy\",\"accuracy_uncertainty\",\"global_steps\",\"current_epoch\",\"current_batch\",\"total_batches\",\"elapsed_ms\",\"eta_ms\",\"type\",\"modelId\"],\"properties\":{\"is_train\":{\"type\":\"boolean\"},\"loss\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"global_steps\":{\"type\":\"integer\"},\"current_epoch\":{\"type\":\"integer\"},\"current_batch\":{\"type\":\"integer\"},\"total_batches\":{\"type\":\"integer\"},\"elapsed_ms\":{\"type\":\"number\"},\"eta_ms\":{\"type\":\"number\"},\"type\":{\"type\":\"string\",\"const\":\"finetune:progress\"},\"modelId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"info\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getLoadedModelInfo\"},\"info\":{\"type\":\"object\",\"required\":[\"modelId\",\"modelType\",\"handlers\",\"loadedAt\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"modelType\":{\"type\":\"string\"},\"handlers\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"displayName\":{\"type\":\"string\"},\"addonPackage\":{\"type\":\"string\"},\"loadedAt\":{},\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"fitProbe\":{\"type\":\"object\",\"required\":[\"verdict\",\"basis\",\"estimatorVersion\",\"reason\"]}}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelInfo\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getModelInfo\"},\"modelInfo\":{\"type\":\"object\",\"required\":[\"name\",\"modelId\",\"expectedSize\",\"sha256Checksum\",\"addon\",\"isCached\",\"isLoaded\",\"cacheFiles\"],\"properties\":{\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobBlockOffset\":{\"type\":\"number\"},\"blobBlockLength\":{\"type\":\"number\"},\"blobByteOffset\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"quantization\":{\"type\":\"string\"},\"params\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"parakeet\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]},\"isCached\":{\"type\":\"boolean\"},\"isLoaded\":{\"type\":\"boolean\"},\"cacheFiles\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"filename\",\"path\",\"expectedSize\",\"sha256Checksum\",\"isCached\"]}},\"actualSize\":{\"type\":\"number\"},\"cachedAt\":{},\"loadedInstances\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"registryId\",\"loadedAt\"]}}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"modelInfo\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"getModelInfo\"},\"modelInfo\":{\"type\":\"object\",\"required\":[\"name\",\"modelId\",\"expectedSize\",\"sha256Checksum\",\"addon\",\"isCached\",\"isLoaded\",\"cacheFiles\"],\"properties\":{\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobBlockOffset\":{\"type\":\"number\"},\"blobBlockLength\":{\"type\":\"number\"},\"blobByteOffset\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"quantization\":{\"type\":\"string\"},\"params\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"parakeet\",\"moss-transcribe\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]},\"isCached\":{\"type\":\"boolean\"},\"isLoaded\":{\"type\":\"boolean\"},\"cacheFiles\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"filename\",\"path\",\"expectedSize\",\"sha256Checksum\",\"isCached\"]}},\"actualSize\":{\"type\":\"number\"},\"cachedAt\":{},\"loadedInstances\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"registryId\",\"loadedAt\"]}}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"capabilities\",\"type\"],\"properties\":{\"capabilities\":{\"type\":\"object\",\"required\":[\"cpu\",\"memory\",\"gpus\"],\"properties\":{\"cpu\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]},\"memory\":{\"type\":\"object\",\"required\":[\"totalBytes\"]},\"gpus\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]}}},\"sample\":{\"type\":\"object\",\"required\":[\"sampledAt\",\"cpu\",\"memory\",\"gpus\"],\"properties\":{\"sampledAt\":{\"type\":\"number\"},\"cpu\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]},\"memory\":{\"type\":\"object\",\"required\":[\"usedBytes\",\"totalBytes\",\"processUsedBytes\",\"processAvailableBytes\"]},\"gpus\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]},{\"type\":\"object\",\"required\":[\"status\"]}]}}},\"type\":{\"type\":\"string\",\"const\":\"getSystemResources\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"number\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"heartbeat\"},\"number\":{\"type\":\"number\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loadModel\"},\"success\":{\"type\":\"boolean\"},\"modelId\":{\"type\":\"string\"},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"id\",\"level\",\"namespace\",\"message\",\"timestamp\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"loggingStream\"},\"id\":{\"type\":\"string\"},\"level\":{\"type\":\"string\",\"enum\":[\"error\",\"warn\",\"info\",\"debug\",\"off\"]},\"namespace\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"timestamp\":{\"type\":\"number\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"downloaded\",\"total\",\"percentage\",\"downloadKey\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelProgress\"},\"downloaded\":{\"type\":\"number\"},\"total\":{\"type\":\"number\"},\"percentage\":{\"type\":\"number\"},\"downloadKey\":{\"type\":\"string\"},\"shardInfo\":{\"type\":\"object\",\"required\":[\"currentShard\",\"totalShards\",\"shardName\",\"overallDownloaded\",\"overallTotal\",\"overallPercentage\"],\"properties\":{\"currentShard\":{\"type\":\"number\"},\"totalShards\":{\"type\":\"number\"},\"shardName\":{\"type\":\"string\"},\"overallDownloaded\":{\"type\":\"number\"},\"overallTotal\":{\"type\":\"number\"},\"overallPercentage\":{\"type\":\"number\"}}},\"fileSetInfo\":{\"type\":\"object\",\"required\":[\"setKey\",\"currentFile\",\"fileIndex\",\"totalFiles\",\"overallDownloaded\",\"overallTotal\",\"overallPercentage\"],\"properties\":{\"setKey\":{\"type\":\"string\"},\"currentFile\":{\"type\":\"string\"},\"fileIndex\":{\"type\":\"number\"},\"totalFiles\":{\"type\":\"number\"},\"overallDownloaded\":{\"type\":\"number\"},\"overallTotal\":{\"type\":\"number\"},\"overallPercentage\":{\"type\":\"number\"}}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistryGetModel\"},\"success\":{\"type\":\"boolean\"},\"model\":{\"type\":\"object\",\"required\":[\"name\",\"registryPath\",\"registrySource\",\"blobCoreKey\",\"blobBlockOffset\",\"blobBlockLength\",\"blobByteOffset\",\"modelId\",\"addon\",\"expectedSize\",\"sha256Checksum\",\"engine\",\"quantization\",\"params\"],\"properties\":{\"name\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobBlockOffset\":{\"type\":\"number\"},\"blobBlockLength\":{\"type\":\"number\"},\"blobByteOffset\":{\"type\":\"number\"},\"modelId\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"parakeet\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"engine\":{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"ggml-ocr\",\"parakeet-transcription\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"onnx-vad\"]},\"quantization\":{\"type\":\"string\"},\"params\":{\"type\":\"string\"}}},\"error\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistryGetModel\"},\"success\":{\"type\":\"boolean\"},\"model\":{\"type\":\"object\",\"required\":[\"name\",\"registryPath\",\"registrySource\",\"blobCoreKey\",\"blobBlockOffset\",\"blobBlockLength\",\"blobByteOffset\",\"modelId\",\"addon\",\"expectedSize\",\"sha256Checksum\",\"engine\",\"quantization\",\"params\"],\"properties\":{\"name\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobBlockOffset\":{\"type\":\"number\"},\"blobBlockLength\":{\"type\":\"number\"},\"blobByteOffset\":{\"type\":\"number\"},\"modelId\":{\"type\":\"string\"},\"addon\":{\"type\":\"string\",\"enum\":[\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"vad\",\"tts\",\"ocr\",\"parakeet\",\"moss-transcribe\",\"diffusion\",\"audiogen\",\"vla\",\"classification\",\"other\"]},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"engine\":{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"ggml-ocr\",\"parakeet-transcription\",\"moss-transcribe\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"onnx-vad\"]},\"quantization\":{\"type\":\"string\"},\"params\":{\"type\":\"string\"}}},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistryList\"},\"success\":{\"type\":\"boolean\"},\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"registryPath\",\"registrySource\",\"blobCoreKey\",\"blobBlockOffset\",\"blobBlockLength\",\"blobByteOffset\",\"modelId\",\"addon\",\"expectedSize\",\"sha256Checksum\",\"engine\",\"quantization\",\"params\"]}},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"modelRegistrySearch\"},\"success\":{\"type\":\"boolean\"},\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"registryPath\",\"registrySource\",\"blobCoreKey\",\"blobBlockOffset\",\"blobBlockLength\",\"blobByteOffset\",\"modelId\",\"addon\",\"expectedSize\",\"sha256Checksum\",\"engine\",\"quantization\",\"params\"]}},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"ocrStream\"},\"blocks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"text\"]}},\"done\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"stats\":{\"type\":\"object\",\"properties\":{\"detectionTime\":{\"type\":\"number\"},\"recognitionTime\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"}}}}}").jsonObject,
@@ -10384,8 +10476,8 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"suspend\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"buffer\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"textToSpeech\"},\"buffer\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"done\":{\"type\":\"boolean\"},\"sampleRate\":{\"type\":\"integer\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"generatedFrames\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"enhancerBackendDevice\":{\"type\":\"number\"},\"enhancerBackendId\":{\"type\":\"number\"},\"codecSidecarLoaded\":{\"type\":\"number\"},\"codecOnCoreml\":{\"type\":\"number\"}}},\"chunkIndex\":{\"type\":\"integer\"},\"sentenceChunk\":{\"type\":\"string\"},\"isLast\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"buffer\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"textToSpeechStream\"},\"buffer\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"done\":{\"type\":\"boolean\"},\"sampleRate\":{\"type\":\"integer\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"generatedFrames\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"enhancerBackendDevice\":{\"type\":\"number\"},\"enhancerBackendId\":{\"type\":\"number\"},\"codecSidecarLoaded\":{\"type\":\"number\"},\"codecOnCoreml\":{\"type\":\"number\"}}},\"chunkIndex\":{\"type\":\"integer\"},\"sentenceChunk\":{\"type\":\"string\"},\"isLast\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"vad\":{\"type\":\"object\",\"required\":[\"speaking\",\"probability\"],\"properties\":{\"speaking\":{\"type\":\"boolean\"},\"probability\":{\"type\":\"number\"},\"source\":{\"type\":\"string\",\"enum\":[\"silero\",\"energy\",\"sortformer\"]}}},\"endOfTurn\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"source\",\"silenceDurationMs\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"whisper\"},\"silenceDurationMs\":{\"type\":\"number\"}}},{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"parakeet\"}}}]},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}},\"type\":{\"type\":\"string\",\"const\":\"transcribe\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"vad\":{\"type\":\"object\",\"required\":[\"speaking\",\"probability\"],\"properties\":{\"speaking\":{\"type\":\"boolean\"},\"probability\":{\"type\":\"number\"},\"source\":{\"type\":\"string\",\"enum\":[\"silero\",\"energy\",\"sortformer\"]}}},\"endOfTurn\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"source\",\"silenceDurationMs\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"whisper\"},\"silenceDurationMs\":{\"type\":\"number\"}}},{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"parakeet\"}}}]},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}},\"type\":{\"type\":\"string\",\"const\":\"transcribeStream\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"speakerId\":{\"type\":\"integer\"},\"speaker\":{\"type\":\"string\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"vad\":{\"type\":\"object\",\"required\":[\"speaking\",\"probability\"],\"properties\":{\"speaking\":{\"type\":\"boolean\"},\"probability\":{\"type\":\"number\"},\"source\":{\"type\":\"string\",\"enum\":[\"silero\",\"energy\",\"sortformer\"]}}},\"endOfTurn\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"source\",\"silenceDurationMs\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"whisper\"},\"silenceDurationMs\":{\"type\":\"number\"}}},{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"parakeet\"}}}]},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}},\"type\":{\"type\":\"string\",\"const\":\"transcribe\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"speakerId\":{\"type\":\"integer\"},\"speaker\":{\"type\":\"string\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"vad\":{\"type\":\"object\",\"required\":[\"speaking\",\"probability\"],\"properties\":{\"speaking\":{\"type\":\"boolean\"},\"probability\":{\"type\":\"number\"},\"source\":{\"type\":\"string\",\"enum\":[\"silero\",\"energy\",\"sortformer\"]}}},\"endOfTurn\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"source\",\"silenceDurationMs\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"whisper\"},\"silenceDurationMs\":{\"type\":\"number\"}}},{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\",\"const\":\"parakeet\"}}}]},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}},\"type\":{\"type\":\"string\",\"const\":\"transcribeStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"token\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"translate\"},\"token\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"totalTime\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"timeToFirstToken\":{\"type\":\"number\"},\"decodeTime\":{\"type\":\"number\"},\"encodeTime\":{\"type\":\"number\"},\"cacheTokens\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"unloadModel\"},\"success\":{\"type\":\"boolean\"},\"error\":{\"type\":\"string\"},\"hasActiveModels\":{\"type\":\"boolean\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"upscaleStream\"},\"data\":{\"type\":\"string\"},\"outputIndex\":{\"type\":\"number\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"modelLoadMs\":{\"type\":\"number\"},\"upscaleMs\":{\"type\":\"number\"},\"totalUpscaleMs\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalUpscales\":{\"type\":\"number\"},\"totalImages\":{\"type\":\"number\"},\"totalPixels\":{\"type\":\"number\"},\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"},\"repeats\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]}}}}}").jsonObject,
@@ -11209,6 +11301,8 @@ data class BciTranscribeResponseSegment(
     @SerialName("endMs") val `endMs`: Double,
     @SerialName("append") val `append`: Boolean,
     @SerialName("id") val `id`: Double,
+    @SerialName("speakerId") val `speakerId`: Long? = null,
+    @SerialName("speaker") val `speaker`: String? = null,
     @SerialName("isEndOfTurn") val `isEndOfTurn`: Boolean? = null,
     @SerialName("startsWord") val `startsWord`: Boolean? = null,
 )
@@ -11326,6 +11420,8 @@ data class BciTranscribeStreamResponseSegment(
     @SerialName("endMs") val `endMs`: Double,
     @SerialName("append") val `append`: Boolean,
     @SerialName("id") val `id`: Double,
+    @SerialName("speakerId") val `speakerId`: Long? = null,
+    @SerialName("speaker") val `speaker`: String? = null,
     @SerialName("isEndOfTurn") val `isEndOfTurn`: Boolean? = null,
     @SerialName("startsWord") val `startsWord`: Boolean? = null,
     @SerialName("windowStartTimestep") val `windowStartTimestep`: Long? = null,
@@ -12086,6 +12182,7 @@ enum class GetModelInfoResponseModelInfoAddon {
     @SerialName("whisper") `WHISPER`,
     @SerialName("bci") `BCI`,
     @SerialName("parakeet") `PARAKEET`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("embeddings") `EMBEDDINGS`,
     @SerialName("nmt") `NMT`,
     @SerialName("vad") `VAD`,
@@ -15671,6 +15768,7 @@ enum class ModelRegistryGetModelResponseModelAddon {
     @SerialName("tts") `TTS`,
     @SerialName("ocr") `OCR`,
     @SerialName("parakeet") `PARAKEET`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("diffusion") `DIFFUSION`,
     @SerialName("audiogen") `AUDIOGEN`,
     @SerialName("vla") `VLA`,
@@ -15689,6 +15787,7 @@ enum class ModelRegistryGetModelResponseModelEngine {
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
     @SerialName("ggml-vla") `GGMLVLA`,
@@ -15734,6 +15833,7 @@ enum class ModelRegistryListResponseModelsItemAddon {
     @SerialName("tts") `TTS`,
     @SerialName("ocr") `OCR`,
     @SerialName("parakeet") `PARAKEET`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("diffusion") `DIFFUSION`,
     @SerialName("audiogen") `AUDIOGEN`,
     @SerialName("vla") `VLA`,
@@ -15752,6 +15852,7 @@ enum class ModelRegistryListResponseModelsItemEngine {
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
     @SerialName("ggml-vla") `GGMLVLA`,
@@ -15797,6 +15898,7 @@ enum class ModelRegistrySearchResponseModelsItemAddon {
     @SerialName("tts") `TTS`,
     @SerialName("ocr") `OCR`,
     @SerialName("parakeet") `PARAKEET`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("diffusion") `DIFFUSION`,
     @SerialName("audiogen") `AUDIOGEN`,
     @SerialName("vla") `VLA`,
@@ -15815,6 +15917,7 @@ enum class ModelRegistrySearchResponseModelsItemEngine {
     @SerialName("tts-ggml") `TTSGGML`,
     @SerialName("ggml-ocr") `GGMLOCR`,
     @SerialName("parakeet-transcription") `PARAKEETTRANSCRIPTION`,
+    @SerialName("moss-transcribe") `MOSSTRANSCRIBE`,
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
     @SerialName("ggml-vla") `GGMLVLA`,
@@ -16252,6 +16355,8 @@ data class TranscribeResponseSegment(
     @SerialName("endMs") val `endMs`: Double,
     @SerialName("append") val `append`: Boolean,
     @SerialName("id") val `id`: Double,
+    @SerialName("speakerId") val `speakerId`: Long? = null,
+    @SerialName("speaker") val `speaker`: String? = null,
     @SerialName("isEndOfTurn") val `isEndOfTurn`: Boolean? = null,
     @SerialName("startsWord") val `startsWord`: Boolean? = null,
 )
@@ -16427,6 +16532,8 @@ data class TranscribeStreamResponseSegment(
     @SerialName("endMs") val `endMs`: Double,
     @SerialName("append") val `append`: Boolean,
     @SerialName("id") val `id`: Double,
+    @SerialName("speakerId") val `speakerId`: Long? = null,
+    @SerialName("speaker") val `speaker`: String? = null,
     @SerialName("isEndOfTurn") val `isEndOfTurn`: Boolean? = null,
     @SerialName("startsWord") val `startsWord`: Boolean? = null,
 )
@@ -16899,6 +17006,7 @@ enum class ModelType {
     @SerialName("onnx-tts") `onnxTts`,
     @SerialName("tts-ggml") `ttsGgml`,
     @SerialName("parakeet-transcription") `parakeetTranscription`,
+    @SerialName("moss-transcribe") `mossTranscribe`,
     @SerialName("ggml-ocr") `ggmlOcr`,
     @SerialName("sdcpp-generation") `sdcppGeneration`,
     @SerialName("audiogen-ggml") `audiogenGgml`,

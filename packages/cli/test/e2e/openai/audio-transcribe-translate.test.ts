@@ -39,6 +39,11 @@ const AUDIO_CONFIG = {
         src: 'hyper://example.invalid/non-whisper-translation',
         preload: false
       },
+      'moss-transcription': {
+        type: 'moss-transcribe',
+        src: 'hyper://example.invalid/moss-transcription',
+        preload: false
+      },
       'parakeet-transcription': {
         type: 'parakeet-transcription',
         src: 'hyper://example.invalid/parakeet-transcription',
@@ -83,6 +88,7 @@ async function createReadyAudioServer(t: TestContext) {
   app.qvac.registry.setReady('whisper-transcription', 'sdk-whisper-transcription')
   app.qvac.registry.setReady('whisper-translation', 'sdk-whisper-translation')
   app.qvac.registry.setReady('non-whisper-translation', 'sdk-non-whisper-translation')
+  app.qvac.registry.setReady('moss-transcription', 'sdk-moss-transcription')
   app.qvac.registry.setReady('parakeet-transcription', 'sdk-parakeet-transcription')
   return { app, calls, boundRequestIds }
 }
@@ -381,6 +387,50 @@ describe('serve: timed transcription and translation formats', () => {
     })
 
     assertStatusAndError(res, 400, 'unsupported_response_format')
+    assert.equal(calls.length, 0)
+  })
+})
+
+describe('serve: MOSS transcription', () => {
+  it('forwards per-request multipart hotwords and requests timed metadata', async (t) => {
+    const { app, calls } = await createReadyAudioServer(t)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audio/transcriptions',
+      ...multipart([
+        { name: 'model', value: 'moss-transcription' },
+        { name: 'response_format', value: 'verbose_json' },
+        { name: 'hotwords', value: '["QVAC"]' },
+        { name: 'max_new_tokens', value: '0' },
+        EMPTY_FILE
+      ])
+    })
+    assert.equal(res.statusCode, 200)
+    assert.deepEqual(calls[0]?.hotwords, ['QVAC'])
+    assert.equal(calls[0]?.maxNewTokens, 0)
+    assert.equal(calls[0]?.metadata, true)
+    assert.equal(res.json().segments.length, 2)
+  })
+
+  it('rejects conflicting prompts and MOSS options on Whisper before inference', async (t) => {
+    const { app, calls } = await createReadyAudioServer(t)
+    for (const [model, prompt] of [
+      ['moss-transcription', 'instruction'],
+      ['whisper-transcription', undefined]
+    ]) {
+      const fields = [
+        { name: 'model', value: model! },
+        { name: 'hotwords', value: '[]' },
+        EMPTY_FILE
+      ]
+      if (prompt !== undefined) fields.push({ name: 'prompt', value: prompt })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/audio/transcriptions',
+        ...multipart(fields)
+      })
+      assert.equal(res.statusCode, 400)
+    }
     assert.equal(calls.length, 0)
   })
 })

@@ -153,6 +153,8 @@ function generateBaseName(input: BaseNameInput): string {
       return generateTtsName(input)
     case 'ocr':
       return generateOcrName(input)
+    case 'moss-transcribe':
+      return cleanPart(input.filename.replace(/\.gguf$/, ''))
     case 'parakeet':
       return generateParakeetName(input)
     case 'diffusion':

@@ -455,9 +455,11 @@ Transcribes audio in its source language using a transcription model.
   - `file` (required) — audio file
   - `model` (required) — a `serve.models` alias whose endpoint category is `transcription`
   - `prompt` (optional) — initial prompt where supported
+  - `hotwords` (optional, MOSS only) — JSON array of up to 64 nonempty terms, each at most 64 UTF-8 bytes; cannot be combined with `prompt`
+  - `max_new_tokens` (optional, MOSS only) — integer decoding limit; `0` uses the model default
   - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
-- `json` and `text` work with Whisper and Parakeet. The timed formats `srt`, `vtt`, and `verbose_json` require Whisper segment metadata. Requesting a timed format from Parakeet returns `400 unsupported_response_format`.
-- In partial `verbose_json`, `duration` is the end of the last transcribed segment, not the submitted audio length.
+- `json` and `text` work with Whisper, Parakeet, and MOSS. The timed formats `srt`, `vtt`, and `verbose_json` require Whisper or MOSS segment metadata. Requesting a timed format from Parakeet returns `400 unsupported_response_format`.
+- In partial `verbose_json`, `duration` is the end of the last transcribed segment, not the submitted audio length. MOSS segments also include `speaker` and `speaker_id` when available.
 - `language` is configured when the model loads; a per-request value is logged and ignored. `temperature` is also logged and ignored.
 
 ```bash
@@ -466,6 +468,11 @@ curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
   -F file=@./sample.wav \
   -F response_format=srt
 ```
+
+Configure MOSS with a catalog model such as `MOSS_TRANSCRIBE_DIARIZE_Q8_0`,
+or use `type: moss-transcribe` and a local GGUF `src`. Model `config` accepts
+`maxThreads`, `useGPU` for Metal, and `backendsDir`. MOSS processes whole
+recordings and does not support streaming or CoreML sidecars in this integration.
 
 See [Audio transcription and translation timed responses](#audio-transcription-and-translation-timed-responses) for the shared SRT, WebVTT, and partial `verbose_json` examples, and [Audio transcription and translation errors](#audio-transcription-and-translation-errors) for timed-format failures.
 

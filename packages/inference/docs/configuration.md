@@ -22,3 +22,10 @@ defaults are intentionally not duplicated here.
 required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without
 FFmpeg. Compressed audio file decoding and compressed audiogen output formats
 require `bare-ffmpeg` to be bundled.
+
+MOSS transcription uses the `moss-transcribe` model type and plugin. It supports
+batch transcription, with optional `maxThreads`, `useGPU` (Metal), and
+`backendsDir` model configuration. Per-request `hotwords` or `prompt` and
+`maxNewTokens` belong to `transcribe`, not model configuration. Metadata results
+include timestamps and optional `speakerId` / `speaker` labels. Streaming,
+CoreML sidecars, and native memory-fit assessment are not exposed by this plugin.

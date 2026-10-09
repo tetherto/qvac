@@ -4,6 +4,7 @@ export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   'whispercpp-transcription': { exportName: 'whisperPlugin' },
   'bci-whispercpp-transcription': { exportName: 'bciPlugin' },
   'parakeet-transcription': { exportName: 'parakeetPlugin' },
+  'moss-transcribe': { exportName: 'mossTranscribePlugin' },
   'nmtcpp-translation': { exportName: 'nmtPlugin' },
   'tts-ggml': { exportName: 'ttsPlugin' },
   'ggml-ocr': { exportName: 'ocrPlugin' },

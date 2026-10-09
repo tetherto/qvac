@@ -394,3 +394,24 @@ const legacyParakeetOnnxFieldsShape = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.r
 export const parakeetLoadConfigSchema = parakeetRuntimeConfigSchema
   .extend(legacyParakeetOnnxFieldsShape)
   .strict()
+
+/** MOSS-Transcribe-Diarize processes a whole recording with speaker labels. */
+export const mossTranscribeConfigSchema = z
+  .object({
+    maxThreads: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('CPU threads; 0 lets the engine choose.'),
+    useGPU: z
+      .boolean()
+      .optional()
+      .describe('Enable the linked GPU backend, including Metal. Default false.'),
+    backendsDir: z
+      .string()
+      .optional()
+      .describe('Directory containing dynamically loaded ggml backend libraries.')
+  })
+  .strict()
+export type MossTranscribeConfig = z.infer<typeof mossTranscribeConfigSchema>

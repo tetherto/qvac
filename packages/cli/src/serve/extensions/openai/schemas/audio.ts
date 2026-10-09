@@ -30,12 +30,35 @@ export const speechVoice = z.union([
 
 export type SpeechVoice = z.infer<typeof speechVoice>
 
+// Multipart clients encode hotwords as a JSON array.
+const hotwords = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  },
+  z
+    .array(
+      z
+        .string()
+        .min(1)
+        .refine((word) => Buffer.byteLength(word, 'utf8') <= 64)
+    )
+    .max(64)
+    .optional()
+)
+
 export const transcriptionsBody = z
   .object({
     model: z.string().min(1),
     file: z.instanceof(Buffer),
     response_format: z.string().optional(),
     prompt: z.string().optional(),
+    hotwords,
+    max_new_tokens: z.coerce.number().int().min(0).max(2147483647).optional(),
     language: z.string().optional(),
     temperature: z.coerce.number().optional()
   })

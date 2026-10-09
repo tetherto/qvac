@@ -7,6 +7,8 @@ interface PartialVerboseSegment {
   start: number
   end: number
   text: string
+  speaker?: string
+  speaker_id?: number
 }
 
 interface PartialVerboseTranscription {
@@ -53,7 +55,9 @@ export function formatTimedTranscription(
             id: segment.id,
             start: roundMilliseconds(segment.startMs) / 1000,
             end: roundMilliseconds(segment.endMs) / 1000,
-            text: segment.text
+            text: segment.text,
+            ...(segment.speaker !== undefined ? { speaker: segment.speaker } : {}),
+            ...(segment.speakerId !== undefined ? { speaker_id: segment.speakerId } : {})
           }))
         }
       }

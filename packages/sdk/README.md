@@ -433,3 +433,39 @@ This will:
 4. Generate `changelog/<version>/CHANGELOG.md`
 5. Generate `changelog/<version>/breaking.md` for BC changes (with code examples)
 6. Generate `changelog/<version>/api.md` for API changes (with code examples)
+
+## Speaker-aware transcription
+
+The local ASR 0.8 integration adds `MODEL_TYPES.mossTranscribe` and the
+`@qvac/sdk/moss-transcribe/plugin` entry point. MOSS processes a whole recording;
+use `transcribe`, since it has no duplex streaming or configuration reload.
+
+```ts
+import { loadModel, transcribe, MOSS_TRANSCRIBE_DIARIZE_Q8_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
+  modelConfig: { useGPU: true, maxThreads: 4 }
+})
+const segments = await transcribe({
+  modelId,
+  audioChunk: '/recordings/meeting.wav',
+  metadata: true,
+  hotwords: ['QVAC'],
+  maxNewTokens: 2048
+})
+```
+
+Segments retain `speaker` labels such as `S01`, zero-based `speakerId`, and
+`startMs`/`endMs`. Hotwords apply to each request: at most 64 nonempty terms of
+64 UTF-8 bytes each. A MOSS `prompt` replaces the default instruction and cannot
+be combined with hotwords. `maxNewTokens: 0` uses the model default. These two
+MOSS-specific options are rejected for Whisper and Parakeet models.
+
+The local addon already contains Whisper v1.9.4, so existing Whisper calls keep
+their API and use the updated backend. MOSS memory-fit assessment and CoreML
+support are deferred because the current addon does not expose those capabilities.
+
+The ASR dependencies temporarily use `file:../asr-ggml` for local validation.
+Replace the SDK dependency and both inference declarations with `^0.8.0` and
+regenerate the lockfile when that version is published.

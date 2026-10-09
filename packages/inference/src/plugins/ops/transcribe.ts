@@ -252,7 +252,21 @@ export async function* transcribe(
   const audioStream = await createAudioStream(params.audioChunk, audioFormat)
 
   const modelStart = nowMs()
-  const response = (await model.run(audioStream)) as unknown as TranscribeResponse
+  const hasMossOptions = params.hotwords !== undefined || params.maxNewTokens !== undefined
+  if (engineType !== ModelType.mossTranscribe && hasMossOptions) {
+    throw new TranscriptionFailedError(
+      'hotwords and maxNewTokens require a MOSS-Transcribe-Diarize model'
+    )
+  }
+  const runOptions =
+    engineType === ModelType.mossTranscribe
+      ? {
+          ...(params.prompt !== undefined && { prompt: params.prompt }),
+          ...(params.hotwords !== undefined && { hotwords: params.hotwords }),
+          ...(params.maxNewTokens !== undefined && { maxNewTokens: params.maxNewTokens })
+        }
+      : undefined
+  const response = (await model.run(audioStream, runOptions)) as unknown as TranscribeResponse
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break

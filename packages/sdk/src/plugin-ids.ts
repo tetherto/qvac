@@ -4,6 +4,7 @@ export const PLUGIN_LLM = '@qvac/sdk/llamacpp-completion/plugin' as const
 export const PLUGIN_EMBEDDING = '@qvac/sdk/llamacpp-embedding/plugin' as const
 export const PLUGIN_WHISPER = '@qvac/sdk/whispercpp-transcription/plugin' as const
 export const PLUGIN_BCI = '@qvac/sdk/bci-whispercpp-transcription/plugin' as const
+export const PLUGIN_MOSS_TRANSCRIBE = '@qvac/sdk/moss-transcribe/plugin' as const
 const PLUGIN_PARAKEET = '@qvac/sdk/parakeet-transcription/plugin' as const
 export const PLUGIN_NMT = '@qvac/sdk/nmtcpp-translation/plugin' as const
 export const PLUGIN_TTS = '@qvac/sdk/tts-ggml/plugin' as const
@@ -19,6 +20,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_PARAKEET,
+  PLUGIN_MOSS_TRANSCRIBE,
   PLUGIN_NMT,
   PLUGIN_TTS,
   PLUGIN_OCR,

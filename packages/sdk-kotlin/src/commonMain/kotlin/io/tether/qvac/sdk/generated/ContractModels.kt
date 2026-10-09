@@ -358,6 +358,8 @@ enum class ModelType {
     ttsGgml,
     @SerialName("parakeet-transcription")
     parakeetTranscription,
+    @SerialName("moss-transcribe")
+    mossTranscribe,
     @SerialName("ggml-ocr")
     ggmlOcr,
     @SerialName("sdcpp-generation")
@@ -1208,6 +1210,8 @@ data class TextToSpeechStreamResponse(
 @Serializable
 data class TranscribeRequest(
     val audioChunk: JsonElement,
+    val hotwords: List<String>? = null,
+    val maxNewTokens: Long? = null,
     val metadata: Boolean? = null,
     val modelId: String,
     val prompt: String? = null,
