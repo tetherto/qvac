@@ -1364,8 +1364,8 @@ importers:
         specifier: ^0.45.0
         version: 0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/llm-llamacpp':
-        specifier: ^0.57.0
-        version: 0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.58.0
+        version: link:../llm-llamacpp
       '@qvac/registry-client':
         specifier: ^0.6.0
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.5.4)
@@ -4320,10 +4320,6 @@ packages:
 
   '@qvac/langdetect-text@0.1.2':
     resolution: {integrity: sha512-V6ntqPNBmz+49eIaY8jYdpgyx8MzSk9/bNp9ibSn+Xwx1D/8Mca8RNfn7/gHWsuACMvkvvJmNzZGGLu1eOW3og==}
-
-  '@qvac/llm-llamacpp@0.57.0':
-    resolution: {integrity: sha512-KKfZbZfa0u17Zbvq7fMD3Kcnz7VXd37Nne2EQSrjP3JJIOti/KRc4rRVKEwzWSnqochM2oZqE20cXAaXf3t+hg==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/logging@0.1.1':
     resolution: {integrity: sha512-un8/b8JZBXRW/ljezFj3VGPxALhMvONeD62F/NHaU3TGs4SmdXWDcG65Aot+Bi4rIjaKQS5iY1P4WYGKU6Chew==}
@@ -13317,18 +13313,6 @@ snapshots:
   '@qvac/langdetect-text@0.1.2':
     dependencies:
       tinyld: 1.3.4
-
-  '@qvac/llm-llamacpp@0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.20.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@qvac/logging@0.1.1':
     dependencies:
