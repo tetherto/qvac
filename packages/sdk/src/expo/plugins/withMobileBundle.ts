@@ -4,9 +4,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from '@/commands'
 import { createCommandLogger } from '@/commands/command-logger'
+import { linkAddons } from '@/commands/bundle/link'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
 import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
-import { linkAddons } from '@/commands/bundle/link'
 import { getProjectRootFromMod } from '@/expo/plugins/get-project-root'
 import { BundleVerificationFailedError } from '@/utils/errors-client'
 
@@ -32,6 +32,9 @@ const MOBILE_HOSTS_BY_PLATFORM: Record<MobilePlatform, string[]> = {
 /** Every mobile host, in platform order. The bundle covers all of them. */
 const MOBILE_HOSTS = [...MOBILE_HOSTS_BY_PLATFORM.android, ...MOBILE_HOSTS_BY_PLATFORM.ios]
 
+/** The generated harness and its bundle, served as `@qvac/sdk/worker.mobile`. */
+const WORKER_MOBILE_FILES = ['index.mjs', 'index.d.ts', 'index.bundle.mjs']
+
 type MobileBundleOptions = {
   /**
    * Install the platform packages the app's split addons need for every
@@ -43,10 +46,8 @@ type MobileBundleOptions = {
 }
 
 /**
- * Expo plugin: bundles the worker for every mobile host, verifies it for the
- * platform being prebuilt, copies it to `<sdkPackageDir>/dist/worker.mobile.bundle.js`,
- * and links the native addons it loads into react-native-bare-kit. Uses
- * `qvac.config.*` if present.
+ * Expo plugin: bundle, verify, copy the worker into the SDK, then link the
+ * native addons for the platform being built. Uses `qvac.config.*` if present.
  */
 function withMobileBundle(config: ExpoConfig, options: MobileBundleOptions = {}): ExpoConfig {
   config = withDangerousMod(config, ['android', (mod) => buildMobileBundle(mod, options)])
@@ -60,8 +61,8 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
 ) {
   const projectRoot = getProjectRootFromMod(config)
   const sdkPackage = resolveSDKPackageDir(projectRoot)
-  const outputPath = path.join(sdkPackage.dir, 'dist', 'worker.mobile.bundle.js')
   const platformHosts = mobileHostsForPlatform(config.modRequest.platform)
+  const logger = createCommandLogger({})
 
   const configPath = findConfigFile(projectRoot)
   if (configPath) {
@@ -73,31 +74,39 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
   const deferredModules = [
     ...DEFERRED_MODULES,
     ...MOBILE_UNSUPPORTED_MODULES,
-    `${sdkPackage.name}/worker.mobile.bundle`
+    `${sdkPackage.name}/worker.mobile`
   ]
   // The bundle is one shared artifact both platforms import, so it is built
   // for every mobile host: a dual-platform `expo prebuild` runs this mod twice
   // and the second run would otherwise overwrite the first platform's bundle
   // with one that resolved the other platform's conditions.
-  const entryPath = await runBundler(
+  const result = await bundleSdk({
     projectRoot,
-    sdkPackage.dir,
-    configPath,
-    deferredModules,
-    MOBILE_HOSTS,
-    options.installMissingPrebuilds === true
-  )
-  const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
+    sdkPath: sdkPackage.dir,
+    ...(configPath ? { configPath } : {}),
+    target: 'react-native',
+    hosts: MOBILE_HOSTS,
+    defer: deferredModules,
+    quiet: true,
+    installMissingPrebuilds: options.installMissingPrebuilds === true,
+    // runVerifier checks engines.bare right after, with progress output.
+    checkEngines: false,
+    link: false
+  })
+  if (result.installedPrebuilds.length > 0) {
+    const names = result.installedPrebuilds.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
+    console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
+  }
 
-  await runVerifier(projectRoot, generatedBundle, configPath, platformHosts)
+  await runVerifier(projectRoot, result.bundlePath, configPath, platformHosts)
 
-  fs.copyFileSync(generatedBundle, outputPath)
+  copyWorker(path.dirname(result.harnessPath), path.join(sdkPackage.dir, 'dist', 'worker-mobile'))
 
   const linked = await linkAddons({
     projectRoot,
-    entryPath,
+    entryPath: result.entryPath,
     hosts: platformHosts,
-    logger: createCommandLogger({})
+    logger
   })
   console.log(`🔗 QVAC: Linked ${linked.length} native addon files for ${platformHosts.join(', ')}`)
 
@@ -127,51 +136,29 @@ function findConfigFile(projectRoot: string): string | null {
 
 async function runVerifier(
   projectRoot: string,
-  generatedBundle: string,
+  bundlePath: string,
   configPath: string | null,
   hosts: string[]
 ) {
   const result = await verifyBundle({
     projectRoot,
-    addonsSource: generatedBundle,
+    addonsSource: bundlePath,
     hosts,
     ...(configPath ? { configPath } : {}),
     onProgress: (message) => console.log(`🕚 QVAC: ${message}`)
   })
 
   if (hasErrors(result)) {
-    throw new BundleVerificationFailedError(
-      generatedBundle,
-      new Error(formatVerifyBundleResult(result))
-    )
+    throw new BundleVerificationFailedError(bundlePath, new Error(formatVerifyBundleResult(result)))
   }
 }
 
-async function runBundler(
-  projectRoot: string,
-  qvacSdkPath: string,
-  configPath: string | null,
-  deferredModules: string[],
-  hosts: string[],
-  installMissingPrebuilds: boolean
-): Promise<string> {
-  const result = await bundleSdk({
-    projectRoot,
-    sdkPath: qvacSdkPath,
-    ...(configPath ? { configPath } : {}),
-    hosts,
-    defer: deferredModules,
-    quiet: true,
-    installMissingPrebuilds,
-    // runVerifier checks engines.bare right after, with progress output.
-    checkEngines: false
-  })
-  if (result.installedPrebuilds.length > 0) {
-    const names = result.installedPrebuilds.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
-    console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
+function copyWorker(workerDir: string, outDir: string) {
+  fs.rmSync(outDir, { recursive: true, force: true })
+  fs.mkdirSync(outDir, { recursive: true })
+  for (const file of WORKER_MOBILE_FILES) {
+    fs.copyFileSync(path.join(workerDir, file), path.join(outDir, file))
   }
-
-  return result.entryPaths.worker
 }
 
 export {
