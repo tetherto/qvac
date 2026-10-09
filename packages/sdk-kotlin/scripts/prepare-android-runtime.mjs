@@ -230,24 +230,65 @@ function workspaceSdkExportsBuilt(sdkDir) {
   return true
 }
 
+const npmInstallArgs = ['install', '--ignore-scripts', '--legacy-peer-deps', '--no-package-lock']
+
+function run(command, args, cwd) {
+  execFileSync(command, args, { cwd, stdio: 'inherit' })
+}
+
+function readPackage(dir) {
+  return JSON.parse(fsSync.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+}
+
+function canLinkWorkspaceInference(sdkDir) {
+  const inferenceDir = path.join(sdkDir, '..', 'inference')
+  if (!fsSync.existsSync(path.join(inferenceDir, 'package.json'))) return false
+  let pkg
+  try {
+    pkg = readPackage(sdkDir)
+  } catch {
+    return false
+  }
+  return Boolean(
+    pkg.dependencies?.['@qvac/inference'] && pkg.scripts?.['sdk-source:workspace']
+  )
+}
+
+function ensureInferenceBuild(inferenceDir) {
+  if (!fsSync.existsSync(path.join(inferenceDir, 'node_modules'))) {
+    run('npm', npmInstallArgs, inferenceDir)
+  }
+  if (fsSync.existsSync(path.join(inferenceDir, 'dist', 'surface.d.ts'))) return
+  run('npx', ['--no-install', 'tsc', '-p', 'tsconfig.build.json'], inferenceDir)
+  run('npx', ['--no-install', 'tsc-alias', '-p', 'tsconfig.alias.json'], inferenceDir)
+}
+
+function linkWorkspaceInference(sdkDir) {
+  const inferenceDir = path.join(sdkDir, '..', 'inference')
+  const manifestPath = path.join(sdkDir, 'package.json')
+  const saved = fsSync.readFileSync(manifestPath, 'utf8')
+  ensureInferenceBuild(inferenceDir)
+  try {
+    const pkg = JSON.parse(saved)
+    pkg.dependencies['@qvac/inference'] = 'file:../inference'
+    fsSync.writeFileSync(manifestPath, `${JSON.stringify(pkg, null, 2)}\n`)
+    run('npm', npmInstallArgs, sdkDir)
+  } finally {
+    // node_modules keeps the file: link after the manifest is restored.
+    fsSync.writeFileSync(manifestPath, saved)
+  }
+}
+
 function ensureWorkspaceSdk(sdkDir) {
   if (!fsSync.existsSync(path.join(sdkDir, 'package.json'))) return undefined
-  if (!fsSync.existsSync(path.join(sdkDir, 'node_modules'))) {
-    execFileSync(
-      'npm',
-      ['install', '--ignore-scripts', '--legacy-peer-deps', '--no-package-lock'],
-      { cwd: sdkDir, stdio: 'inherit' }
-    )
-  }
   if (!workspaceSdkExportsBuilt(sdkDir)) {
-    execFileSync('npx', ['--no-install', 'tsc', '--project', 'tsconfig.json'], {
-      cwd: sdkDir,
-      stdio: 'inherit'
-    })
-    execFileSync('npx', ['--no-install', 'tsc-alias', '-p', 'tsconfig.alias.json'], {
-      cwd: sdkDir,
-      stdio: 'inherit'
-    })
+    if (canLinkWorkspaceInference(sdkDir)) {
+      linkWorkspaceInference(sdkDir)
+    } else if (!fsSync.existsSync(path.join(sdkDir, 'node_modules'))) {
+      run('npm', npmInstallArgs, sdkDir)
+    }
+    run('npx', ['--no-install', 'tsc', '--project', 'tsconfig.json'], sdkDir)
+    run('npx', ['--no-install', 'tsc-alias', '-p', 'tsconfig.alias.json'], sdkDir)
   }
   return sdkDir
 }
