@@ -293,6 +293,13 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     params.speculative.draft.ctx_tgt = ctxTgt;
     params.speculative.draft.ctx_dft = runtime->ctxDft_;
   }
+  // Dropping `runtime` frees the draft context, so `params`, which outlives
+  // this call, must not keep pointing at it.
+  const auto disable = [&params]() -> std::unique_ptr<SpeculativeRuntime> {
+    params.speculative.draft.ctx_tgt = nullptr;
+    params.speculative.draft.ctx_dft = nullptr;
+    return nullptr;
+  };
 
   // Probing clears the context memory, which is empty at load anyway.
   runtime->tgtSeqRmType_ = common_context_can_seq_rm(ctxTgt);
@@ -300,7 +307,7 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
     QLOG_IF(
         Priority::WARNING,
         "[Speculative] speculative decoding not supported by this context\n");
-    return nullptr;
+    return disable();
   }
   if (runtime->tgtSeqRmType_ == COMMON_CONTEXT_SEQ_RM_TYPE_FULL) {
     QLOG_IF(
@@ -320,7 +327,7 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
             e.what()));
   }
   if (!runtime->spec_) {
-    return nullptr;
+    return disable();
   }
   runtime->dftSeqRmType_ = common_context_can_seq_rm(runtime->ctxDft_);
   runtime->params_ = params.speculative;
