@@ -343,8 +343,8 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
 // A past call and its result render as the template's own tool-call and
 // tool-response blocks, not as text the caller pasted into `content`.
 TEST_F(ChatTemplateUtilsTest, GetPromptRendersPastToolCallsNatively) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  common_chat_templates_ptr tmpls = common_chat_templates_init(
+      nullptr, qvac_lib_inference_addon_llama::test::QWEN3_CHAT_TEMPLATE);
   ASSERT_NE(tmpls, nullptr);
 
   common_chat_templates_inputs inputs = makeQwenInputs();
