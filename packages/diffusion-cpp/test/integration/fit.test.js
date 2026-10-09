@@ -158,6 +158,37 @@ test('an unreadable model returns an error outcome', (t) => {
   t.is(fit.changed, false)
 })
 
+test('world fit validates its companion paths and session length', async (t) => {
+  const files = {
+    model: '/missing/abot.gguf',
+    taehv: '/missing/taehv.gguf',
+    scene: '/missing/scene.safetensors'
+  }
+  for (const key of ['taehv', 'scene']) {
+    await t.exception.all(
+      () => assessFit({ mode: 'world', files: { ...files, [key]: 'relative.file' } }),
+      TypeError
+    )
+  }
+  for (const walkSteps of [0, -1, 1.5, Infinity, 1000001]) {
+    const fit = assessFit({ mode: 'world', files, workload: { walkSteps } })
+    t.is(fit.status, 'error')
+    t.is(fit.reason, 'unsupported-config')
+  }
+  const fit = assessFit({ mode: 'world', files, config: { backend: 'cpu' } })
+  t.is(fit.reason, 'model-unreadable')
+  for (const config of [
+    { backend: 'gpux' },
+    { paramsBackend: 'decoder=cpu' },
+    { paramsBackend: 'diffusion=gpux' },
+    { maxVram: 'gpux=4' }
+  ]) {
+    const invalid = assessFit({ mode: 'world', files, config })
+    t.is(invalid.status, 'error')
+    t.is(invalid.reason, 'unsupported-config')
+  }
+})
+
 test('a file that is not a model is unreadable too', (t) => {
   const fit = assessFit({ files: { model: tempFile(t, 'model.gguf', Buffer.alloc(512, 7)) } })
 

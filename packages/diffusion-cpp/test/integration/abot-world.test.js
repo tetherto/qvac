@@ -50,6 +50,7 @@ const test = require('brittle')
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
 const { readImageDimensions } = require('@qvac/diffusion-cpp/addon.js')
+const { assessFit } = require('@qvac/diffusion-cpp')
 const { ensureModelPath, setupJsLogger, releaseJsLogger } = require('./utils.js')
 const {
   waitForLogEvidence,
@@ -222,6 +223,15 @@ test(
       )
       return
     }
+
+    const fit = assessFit({
+      mode: 'world',
+      files: { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath },
+      config: { seed: 42 }
+    })
+    t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'world fit returns a verdict')
+    t.ok(fit.report.includes('100 walk steps'), 'the default sizes 100 walk steps')
+    t.is(fit.changed, false, 'fit preserves the configured placement')
 
     const world = new WorldStableDiffusion({
       files: {
@@ -431,6 +441,17 @@ for (const lane of [
         reportedEvidence.clear()
         const started = Date.now()
         console.log('[ABot streaming] starting walk', JSON.stringify(config))
+        const fit = assessFit({
+          mode: 'world',
+          files,
+          config: { backend: 'gpu', ...config },
+          workload: { walkSteps: 4 }
+        })
+        t.ok(
+          fit.status === 'fits' || fit.status === 'does-not-fit',
+          'streaming world fit returns a verdict'
+        )
+        t.ok(fit.report.includes('4 walk steps'), 'the explicit length reaches the engine')
         const world = new WorldStableDiffusion({
           files,
           config: { backend: 'gpu', seed: 42, verbosity: 3, ...config },

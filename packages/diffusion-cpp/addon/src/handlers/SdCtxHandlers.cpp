@@ -17,6 +17,7 @@
 #include <TargetConditionals.h>
 #endif
 
+#include <ggml-backend.h>
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "utils/BackendSelection.hpp"
@@ -238,6 +239,73 @@ void validateWorldPlacement(
           "maxVram contains an invalid budget assignment: '" + part + "'");
     }
   }
+}
+
+bool worldFitPlacementSupported(
+    const std::string& backend, const std::string& paramsBackend,
+    const std::string& maxVram) {
+  const auto available = [](std::string_view name) {
+    name = trim(name);
+    if (name.empty() || equalsIgnoreCase(name, "auto") ||
+        equalsIgnoreCase(name, "default")) {
+      return true;
+    }
+    for (std::size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+      const auto device = ggml_backend_dev_get(i);
+      const auto type = ggml_backend_dev_type(device);
+      if (equalsIgnoreCase(name, "gpu") &&
+          (type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+           type == GGML_BACKEND_DEVICE_TYPE_IGPU)) {
+        return true;
+      }
+      const std::string_view registry =
+          ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+      const std::string_view deviceName = ggml_backend_dev_name(device);
+      if (equalsIgnoreCase(name, registry) ||
+          (equalsIgnoreCase(name, "metal") &&
+           equalsIgnoreCase(registry, "MTL")) ||
+          (deviceName.size() >= name.size() &&
+           equalsIgnoreCase(name, deviceName.substr(0, name.size())))) {
+        return true;
+      }
+    }
+    return false;
+  };
+  bool supported = true;
+  const auto checkAssignment =
+      [&](std::string_view key, std::string_view value, bool params) {
+        if (!isWholeSpecDefaultKey(key) && !paramsBackendModuleIndex(key)) {
+          supported = false;
+        }
+        if (params) {
+          supported = supported &&
+                      (equalsIgnoreCase(value, "disk") || available(value));
+          return;
+        }
+        const bool list = value.find('&') != std::string_view::npos;
+        do {
+          const auto separator = value.find('&');
+          const auto name = trim(value.substr(0, separator));
+          if (list && (name.empty() || equalsIgnoreCase(name, "auto") ||
+                       equalsIgnoreCase(name, "default"))) {
+            supported = false;
+          }
+          supported = supported && available(name);
+          if (separator == std::string_view::npos)
+            break;
+          value.remove_prefix(separator + 1);
+        } while (true);
+      };
+  forEachSpecAssignment(backend, [&](auto key, auto value) {
+    checkAssignment(key, value, false);
+  });
+  forEachSpecAssignment(paramsBackend, [&](auto key, auto value) {
+    checkAssignment(key, value, true);
+  });
+  forEachSpecAssignment(maxVram, [&](auto key, auto) {
+    supported = supported && (isWholeSpecDefaultKey(key) || available(key));
+  });
+  return supported;
 }
 
 std::string

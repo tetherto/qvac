@@ -221,6 +221,10 @@ bool maxVramSpecHasNonZeroBudget(const std::string& spec);
 
 void validateWorldPlacement(
     const std::string& paramsBackend, const std::string& maxVram);
+
+bool worldFitPlacementSupported(
+    const std::string& backend, const std::string& paramsBackend,
+    const std::string& maxVram);
 /** Prepends the offload_to_cpu default before explicit module assignments. */
 std::string
 effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);

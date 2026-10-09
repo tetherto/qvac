@@ -13,7 +13,7 @@
 # on Android and desktop Linux the GPU backends are dlopen'd modules
 # (hybrid GGML_BACKEND_DL, see the ggml port).
 #
-# Temporary engine overlay for ESRGAN memory-fit validation.
+# Temporary engine overlay for diffusion memory-fit validation.
 # Remove after the merged engine commit is available in the registry.
 #
 # WebP/WebM support auto-disables: upstream vendors them as git submodules
@@ -22,8 +22,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 700acd4370079aef35b08f93510f54ab04a3b15f
-    SHA512 b21990effad6eaaa780d8e75d5702ceb3688c7a5b672cc436069c3e8fdd32e05a99f17490cf8a44ddfc5f6a824db289c4412a318e8baa55328040d06ba7f395a
+    REF 4c3c8f6d1bc15cdde9e3e69b46561e2f361c195c
+    SHA512 b92f3cdf44bf1408da0d1002536653716b2caddbb80d3a9ca761c2936ef20d09913d3041f96a65900219a26d63ca5beb9d5d65b5780e6d0cbead2a4992aac951
 )
 
 # Even under SD_USE_SYSTEM_GGML the sources reach into one ggml *internal*
