@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2026-10-06
+
+### Changed
+
+- `bergamot-translator` dependency bumped `1.0.1` -> `1.0.2`. The new port
+  drops `/LTCG:incremental` from the static linker flags, which `llvm-lib`
+  rejects. Nothing in this build is compiled with `/GL`, so the flag had no
+  effect with `lib.exe` either. No API change.
+
 ## [0.19.0] - 2026-10-06
 
 ### Changed
