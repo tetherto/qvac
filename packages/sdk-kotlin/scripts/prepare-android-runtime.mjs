@@ -55,8 +55,7 @@ await fs.mkdir(assetsDirectory, { recursive: true })
 await fs.mkdir(addonsDirectory, { recursive: true })
 if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recursive: true })
 
-// The AIO profile lists exports from this checkout. Bundle that tree, not the
-// published pin in node_modules, which lags until the next SDK release.
+// Bundle the checkout's packages/sdk. The worker build owns compiling it.
 const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
 
 const bundle = await bundleSdk({
@@ -207,88 +206,13 @@ await fs.writeFile(
 
 console.log(`Prepared QVAC Android runtime with ${addons.length} addon(s)`)
 
-function exportTarget(entry) {
-  if (typeof entry === 'string') return entry
-  if (entry && typeof entry === 'object') return entry.import ?? entry.default ?? entry.require
-  return undefined
-}
-
-function workspaceSdkExportsBuilt(sdkDir) {
-  let pkg
-  try {
-    pkg = JSON.parse(fsSync.readFileSync(path.join(sdkDir, 'package.json'), 'utf8'))
-  } catch {
-    return false
-  }
-  if (!fsSync.existsSync(path.join(sdkDir, 'dist', 'src', 'worker', 'index.js'))) return false
-  if (!fsSync.existsSync(path.join(sdkDir, 'bare-imports.json'))) return false
-  for (const [key, value] of Object.entries(pkg.exports ?? {})) {
-    if (!key.endsWith('/plugin')) continue
-    const target = exportTarget(value)
-    if (typeof target !== 'string' || !fsSync.existsSync(path.join(sdkDir, target))) return false
-  }
-  return true
-}
-
-const npmInstallArgs = ['install', '--ignore-scripts', '--legacy-peer-deps', '--no-package-lock']
-
-function run(command, args, cwd) {
-  execFileSync(command, args, { cwd, stdio: 'inherit' })
-}
-
-function readPackage(dir) {
-  return JSON.parse(fsSync.readFileSync(path.join(dir, 'package.json'), 'utf8'))
-}
-
-function canLinkWorkspaceInference(sdkDir) {
-  const inferenceDir = path.join(sdkDir, '..', 'inference')
-  if (!fsSync.existsSync(path.join(inferenceDir, 'package.json'))) return false
-  let pkg
-  try {
-    pkg = readPackage(sdkDir)
-  } catch {
-    return false
-  }
-  return Boolean(
-    pkg.dependencies?.['@qvac/inference'] && pkg.scripts?.['sdk-source:workspace']
-  )
-}
-
-function ensureInferenceBuild(inferenceDir) {
-  if (!fsSync.existsSync(path.join(inferenceDir, 'node_modules'))) {
-    run('npm', npmInstallArgs, inferenceDir)
-  }
-  if (fsSync.existsSync(path.join(inferenceDir, 'dist', 'surface.d.ts'))) return
-  run('npx', ['--no-install', 'tsc', '-p', 'tsconfig.build.json'], inferenceDir)
-  run('npx', ['--no-install', 'tsc-alias', '-p', 'tsconfig.alias.json'], inferenceDir)
-}
-
-function linkWorkspaceInference(sdkDir) {
-  const inferenceDir = path.join(sdkDir, '..', 'inference')
-  const manifestPath = path.join(sdkDir, 'package.json')
-  const saved = fsSync.readFileSync(manifestPath, 'utf8')
-  ensureInferenceBuild(inferenceDir)
-  try {
-    const pkg = JSON.parse(saved)
-    pkg.dependencies['@qvac/inference'] = 'file:../inference'
-    fsSync.writeFileSync(manifestPath, `${JSON.stringify(pkg, null, 2)}\n`)
-    run('npm', npmInstallArgs, sdkDir)
-  } finally {
-    // node_modules keeps the file: link after the manifest is restored.
-    fsSync.writeFileSync(manifestPath, saved)
-  }
-}
-
 function ensureWorkspaceSdk(sdkDir) {
   if (!fsSync.existsSync(path.join(sdkDir, 'package.json'))) return undefined
-  if (!workspaceSdkExportsBuilt(sdkDir)) {
-    if (canLinkWorkspaceInference(sdkDir)) {
-      linkWorkspaceInference(sdkDir)
-    } else if (!fsSync.existsSync(path.join(sdkDir, 'node_modules'))) {
-      run('npm', npmInstallArgs, sdkDir)
-    }
-    run('npx', ['--no-install', 'tsc', '--project', 'tsconfig.json'], sdkDir)
-    run('npx', ['--no-install', 'tsc-alias', '-p', 'tsconfig.alias.json'], sdkDir)
+  const worker = path.join(sdkDir, 'dist', 'src', 'worker', 'index.js')
+  if (!fsSync.existsSync(worker)) {
+    execFileSync('python3', [path.join(sdkDir, '..', 'sdk-python', 'scripts', 'build_worker.py')], {
+      stdio: 'inherit'
+    })
   }
   return sdkDir
 }

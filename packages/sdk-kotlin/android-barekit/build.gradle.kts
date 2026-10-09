@@ -121,10 +121,29 @@ val npmCi by tasks.registering(Exec::class) {
     outputs.dir(runtimeRoot.dir("node_modules"))
 }
 
+val buildWorkspaceSdk by tasks.registering(Exec::class) {
+    description = "Build packages/sdk with the shared worker build"
+    workingDir(runtimeRoot)
+    commandLine("python3", "../sdk-python/scripts/build_worker.py", "--force")
+    inputs.dir(runtimeRoot.dir("../sdk/src"))
+    inputs.dir(runtimeRoot.dir("../inference/src"))
+    inputs.files(
+        runtimeRoot.file("../sdk/package.json"),
+        runtimeRoot.file("../sdk/tsconfig.json"),
+        runtimeRoot.file("../sdk/tsconfig.alias.json"),
+        runtimeRoot.file("../sdk/scripts/link-workspace-inference.ts"),
+        runtimeRoot.file("../inference/package.json"),
+        runtimeRoot.file("../inference/tsconfig.build.json"),
+        runtimeRoot.file("../inference/tsconfig.alias.json"),
+        runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
+    )
+    outputs.dir(runtimeRoot.dir("../sdk/dist/src/worker"))
+}
+
 val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
     tasks.register<Exec>("prepare${profile.name.replaceFirstChar(Char::uppercase)}QvacAndroidRuntime") {
         description = "Bundle the ${profile.name} QVAC worker and link Android addons"
-        dependsOn(npmCi)
+        dependsOn(npmCi, buildWorkspaceSdk)
         workingDir(runtimeRoot)
         commandLine("node", "scripts/prepare-android-runtime.mjs")
         environment("QVAC_KOTLIN_CONFIG", runtimeRoot.file(profile.configFile).asFile.absolutePath)
@@ -140,6 +159,7 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
             runtimeRoot.file("../sdk/LICENSE"),
             runtimeRoot.file("../sdk/NOTICE"),
         )
+        inputs.dir(runtimeRoot.dir("../sdk/dist/src/worker"))
         inputs.file(runtimeRoot.file(profile.configFile))
         outputs.dir(layout.buildDirectory.dir("generated/qvac/${profile.name}"))
     }
