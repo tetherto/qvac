@@ -10,6 +10,72 @@
 - `resolveBackendsDir()` is removed from `./addon.js`, which stays in
   `exports`.
 
+## [0.58.0] - 2026-10-09
+
+### Breaking
+
+- Requests with a `cacheKey` must send the complete message history and tool
+  list every time. The addon reuses the longest prefix that matches its cache
+  and processes the rest. Cache files written by earlier versions are cold
+  misses. SDK releases that still send only the new messages are incompatible
+  until the SDK migrates.
+- `runOptions.saveCacheToDisk` is removed and throws a `TypeError`. A cached
+  conversation stays in memory and is written to its `cacheKey` file when it
+  is set aside for another key, evicted, reloaded or unloaded, or on
+  `saveCache(cacheKey)`.
+- `generationParams.remove_thinking_from_context` is removed and rejected as
+  an unknown key. Earlier reasoning stays in the cache until the chat template
+  drops it. `RuntimeStats.thinkingBlockDiscards` is removed.
+
+### Added
+
+- `saveCache(cacheKey)` writes a cached conversation to its file;
+  `discardCache(cacheKey)` drops it without writing.
+- `runOptions.ephemeral`: the conversation is never written automatically;
+  `saveCache()` still writes it.
+- `cache_ram_mib`: host-RAM budget in MiB for idle conversations, so a key
+  switch or slot eviction moves them to RAM instead of disk. Default `0` (off).
+- `cache_checkpoints` (default `1`, max `1024`) and
+  `cache_checkpoints_max_bytes`: checkpoints per sequence on hybrid, recurrent
+  and DeepSeek V4 models, so a follow-up turn whose template drops the last
+  answer's reasoning does not reprocess the whole conversation.
+- `cache_checkpoint_storage` (`memory` by default, or `disk`) and
+  `cache_checkpoint_dir`, required with `disk`.
+- CUDA backend on NVIDIA GPUs (Linux x64 and arm64, Windows x64). It is
+  preferred over Vulkan, and without a CUDA module, driver or device the load
+  falls back to Vulkan, then CPU.
+- `backend` load-config field: comma-separated GPU backend priority list
+  (`cuda`, `vulkan`, `metal`, `opencl`, or `auto`), e.g. `'cuda,vulkan'`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.20.2`, the first release
+  that ships the CUDA module.
+- With `parallel >= 2`, a conversation stays in its scheduler slot between
+  requests, and requests on the same `cacheKey` run one at a time.
+- Cancelling after prefill keeps the prompt and the streamed tokens in the
+  cache; a cancel during prefill still rolls back.
+- Assistant messages may carry `reasoning_content`, and reasoning sent inline
+  in `content` is split out before rendering.
+- TurboQuant and PolarQuant KV-cache types are rejected on CUDA.
+- Split mode only spreads layers across GPUs of the selected backend.
+
+### Removed
+
+- The built-in Qwen3 chat template override: Qwen3 models use the template in
+  their GGUF.
+- The EOS-inside-reasoning recovery: that EOS now ends the response with
+  `stopReason: 'eos'`.
+
+### Fixed
+
+- A single-prompt cache load on a parallel model no longer truncates the
+  other sequences.
+- A `cacheKey` write that fails part-way (e.g. a full disk) no longer replaces
+  the last good file.
+- DeepSeek V4 vision models now roll back a failed or cancelled request
+  correctly.
+
 ## [0.57.0] - 2026-10-06
 
 ### Added
