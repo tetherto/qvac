@@ -79,6 +79,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
+               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -26,6 +26,7 @@ extern "C" {
 // qvac_fabric_backends_dir(), once per process; later calls only return the
 // count. Thread-safe. Returns the number of registered ggml backends. A no-op
 // on hosts whose backends are linked into the runtime (Apple).
+// NOLINTNEXTLINE(readability-identifier-naming)
 QVAC_FABRIC_API size_t qvac_fabric_load_backends(void);
 
 // Where qvac_fabric_load_backends() looks, in order:
@@ -38,6 +39,7 @@ QVAC_FABRIC_API size_t qvac_fabric_load_backends(void);
 //      to loading each backend by file name).
 // The runtime dir is the directory of the loaded runtime module itself. The
 // string is UTF-8 and stays valid for the life of the process.
+// NOLINTNEXTLINE(readability-identifier-naming)
 QVAC_FABRIC_API const char* qvac_fabric_backends_dir(void);
 
 #ifdef __cplusplus

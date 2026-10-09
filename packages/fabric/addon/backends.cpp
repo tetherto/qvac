@@ -1,5 +1,3 @@
-#include "qvac-fabric.h"
-
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
@@ -7,6 +5,8 @@
 #include <system_error>
 
 #include <ggml-backend.h>
+
+#include "qvac-fabric.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -40,7 +40,8 @@ fs::path runtimePath() {
   for (;;) {
     const DWORD length = GetModuleFileNameW(
         module, buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (length == 0) return {};
+    if (length == 0)
+      return {};
     if (length < buffer.size()) {
       buffer.resize(length);
       return fs::path(buffer);
@@ -64,29 +65,31 @@ std::string findBackendsDir() {
   }
 
   const fs::path self = runtimePath();
-  if (self.empty()) return {};
+  if (self.empty())
+    return {};
 
   const fs::path dir = self.parent_path();
   std::error_code ec;
   const fs::path nested = dir / QVAC_FABRIC_MODULE_NAME;
-  if (fs::is_directory(nested, ec)) return utf8(nested);
+  if (fs::is_directory(nested, ec))
+    return utf8(nested);
   return utf8(dir);
 }
 
-std::once_flag dirOnce;
-std::string dir;
+std::once_flag g_dirOnce;
+std::string g_dir;
 
-std::once_flag loadOnce;
+std::once_flag g_loadOnce;
 
-}  // namespace
+} // namespace
 
 extern "C" const char* qvac_fabric_backends_dir(void) {
-  std::call_once(dirOnce, [] { dir = findBackendsDir(); });
-  return dir.c_str();
+  std::call_once(g_dirOnce, [] { g_dir = findBackendsDir(); });
+  return g_dir.c_str();
 }
 
 extern "C" size_t qvac_fabric_load_backends(void) {
-  std::call_once(loadOnce, [] {
+  std::call_once(g_loadOnce, [] {
     const char* path = qvac_fabric_backends_dir();
     ggml_backend_load_all_from_path(*path != '\0' ? path : nullptr);
   });
