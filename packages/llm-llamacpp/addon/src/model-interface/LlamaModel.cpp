@@ -299,8 +299,13 @@ void LlamaModel::init(bool acquireLock) {
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
   const bool isStreaming = snap->asyncWeightsLoader_.isStreaming();
-  qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
-      speculativeConfig, params);
+  try {
+    qvac_lib_inference_addon_llama::speculative::applySpeculativeConfig(
+        speculativeConfig, params);
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, e.what());
+  }
 
   // Match llama-server for every on-disk GGUF. llama_model_load_from_file
   // discovers the remaining split files from shard 0, while

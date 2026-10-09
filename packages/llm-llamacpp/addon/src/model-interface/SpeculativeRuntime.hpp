@@ -64,7 +64,9 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 /// output buffers for a verification batch, exactly as llama-server does
 /// before it creates the target context (`server_output_limits`). A DFlash
 /// draft model is placed like the target model (its GPU layers and
-/// devices), since the addon has no separate options for it. Must run
+/// devices), since the addon has no separate options for it. `n_max` is
+/// lowered to fit one ubatch and the batch's per-sequence share; throws
+/// `std::invalid_argument` when not even one draft token fits. Must run
 /// before `common_init_from_params`: `load_mtp` and `n_rs_seq` are derived
 /// from `params.speculative` when the model and context are created.
 void applySpeculativeConfig(

@@ -173,6 +173,35 @@ void applySpeculativeConfig(
     params.speculative.draft.devices = params.devices;
   }
 
+  // Every generating sequence feeds its sample plus its whole draft in one
+  // step: the batch scheduler grants a sequence at most one ubatch and drops
+  // a draft that does not fit, and DFlash drafts every sequence in one batch
+  // of n_batch tokens, which fabric asserts on overflow.
+  const int32_t perSeqTokens = std::min(
+      std::min(params.n_ubatch, params.n_batch),
+      params.n_batch / std::max<int32_t>(1, params.n_parallel));
+  const int32_t nMaxLimit = perSeqTokens - 1;
+  if (nMaxLimit < 1) {
+    throw std::invalid_argument(
+        "speculative decoding needs room for a sampled and a drafted token per "
+        "sequence: raise batch-size / ubatch-size or lower parallel");
+  }
+  auto& draft = params.speculative.draft;
+  if (draft.n_max > nMaxLimit) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[Speculative] spec-draft-n-max %d lowered to %d to fit the batch "
+            "(batch-size %d, ubatch-size %d, parallel %d)\n",
+            draft.n_max,
+            nMaxLimit,
+            params.n_batch,
+            params.n_ubatch,
+            params.n_parallel));
+    draft.n_max = nMaxLimit;
+    draft.n_min = std::min(draft.n_min, draft.n_max);
+  }
+
   // server_output_limits: a verification step reads one output per drafted
   // token plus the sampled one, for every sequence.
   if (!params.embedding &&

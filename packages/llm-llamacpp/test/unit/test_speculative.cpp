@@ -159,6 +159,63 @@ TEST(SpeculativeConfigTest, ApplySizesOutputsLikeLlamaServer) {
   EXPECT_EQ(params.speculative.need_n_rs_seq(), 3u);
 }
 
+TEST(SpeculativeConfigTest, ApplyFitsTheDraftToOneUbatch) {
+  common_params params;
+  params.n_batch = 2048;
+  params.n_ubatch = 8;
+  params.n_parallel = 1;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP,
+          .draftNMax = 16,
+          .draftNMin = 12},
+      params);
+  // The sample and the draft share one ubatch.
+  EXPECT_EQ(params.speculative.draft.n_max, 7);
+  EXPECT_EQ(params.speculative.draft.n_min, 7);
+  EXPECT_EQ(params.n_outputs_max_per_seq, 8);
+}
+
+TEST(SpeculativeConfigTest, ApplyFitsEverySequenceDraftInOneBatch) {
+  common_params params;
+  params.n_batch = 64;
+  params.n_ubatch = 64;
+  params.n_parallel = 8;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH,
+          .draftNMax = 15,
+          .draftModelPath = "/models/dflash.gguf"},
+      params);
+  // DFlash drafts all eight sequences in one batch of n_batch tokens.
+  EXPECT_EQ(params.speculative.draft.n_max, 7);
+  EXPECT_LE(
+      params.n_parallel * (params.speculative.draft.n_max + 1), params.n_batch);
+}
+
+TEST(SpeculativeConfigTest, ApplyKeepsADraftThatFits) {
+  common_params params;
+  params.n_batch = 2048;
+  params.n_ubatch = 512;
+  params.n_parallel = 4;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP, .draftNMax = 7},
+      params);
+  EXPECT_EQ(params.speculative.draft.n_max, 7);
+}
+
+TEST(SpeculativeConfigTest, ApplyRejectsABatchWithNoRoomToDraft) {
+  common_params params;
+  params.n_batch = 4;
+  params.n_ubatch = 4;
+  params.n_parallel = 4;
+  EXPECT_THROW(
+      applySpeculativeConfig(
+          SpeculativeConfig{.type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP}, params),
+      std::invalid_argument);
+}
+
 TEST(SpeculativeConfigTest, ApplyLeavesParamsAloneWhenOff) {
   common_params params;
   const auto outputsMax = params.n_outputs_max;

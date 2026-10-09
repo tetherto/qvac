@@ -169,6 +169,12 @@ void SpeculativeSequence::setBatchStart(int32_t first) {
 }
 
 void SpeculativeSequence::discardDraft() {
+  // A dropped draft is never verified, so it does not count as drafted. A
+  // replayed draft was never counted (`afterDraft` does not run for it).
+  if (!isReplay_) {
+    stats_.draftTokens -=
+        std::min<uint64_t>(stats_.draftTokens, draft_.size());
+  }
   draft_.clear();
   iBatch_.clear();
   isReplay_ = false;
