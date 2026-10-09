@@ -14,6 +14,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
+  MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when
+  `moss-transcribe-diarize-encoder.mlmodelc` sits next to the GGUF; without
+  one nothing changes.
+
 ## [0.8.0] - 2026-10-09
 
 ### Added
