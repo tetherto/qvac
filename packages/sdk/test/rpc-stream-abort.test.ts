@@ -76,6 +76,22 @@ test('a stream() delivers responses until it is aborted', async function (t) {
   t.is(await nextReport(), 'closed:chatty', 'the worker sees the stream closed')
 })
 
+test('a stream() aborted mid-chunk yields nothing more from that chunk', async function (t) {
+  t.timeout(30_000)
+  const { stream } = await load()
+
+  const controller = new AbortController()
+  const responses = stream({ type: 'loggingStream', id: 'pair' }, { signal: controller.signal })
+  const first = await within(responses.next(), 5000, 'no entry from the worker')
+  t.is((first.value as LogResponse).message, 'first', 'the first entry of the chunk arrives')
+  t.is(await nextReport(), 'opened:pair', 'the worker holds the stream open')
+
+  controller.abort()
+
+  t.ok((await responses.next()).done, 'the second entry of the same chunk is not yielded')
+  t.is(await nextReport(), 'closed:pair', 'the worker sees the stream closed')
+})
+
 test('a stream() with an aborted signal sends nothing', async function (t) {
   t.timeout(30_000)
   const { stream } = await load()

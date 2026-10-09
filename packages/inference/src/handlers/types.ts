@@ -1,12 +1,10 @@
 import type { AbortSignalLike, Request, Response } from '@/schemas/index'
 
-/** What dispatch passes a stream handler after its request. */
+/** What dispatch passes a stream handler that declares `endsOnAbort`. */
 export interface StreamHandlerContext {
   /**
-   * Aborts when the caller stops reading. Dispatch ends the stream on it either
-   * way. A handler that begins a registry context passes it as `parentSignal`;
-   * one that waits on a source outside the registry (a log subscription) listens
-   * to it, so the wait ends and its cleanup runs.
+   * Aborts when the caller stops reading. The handler ends its stream on it and
+   * releases what it waits on, such as a log subscription.
    */
   signal?: AbortSignalLike
 }
@@ -26,4 +24,9 @@ export type HandlerEntry = {
   // record their own profiling inside plugin dispatch, so local dispatch does
   // not wrap them again.
   pluginOp?: boolean
+  // The handler ends its stream when the caller aborts, so dispatch passes it a
+  // `StreamHandlerContext`. Every other stream runs to its end: ending a plugin
+  // stream early would free its admission slot while the native job still runs,
+  // so an inference run is stopped with `cancel` instead.
+  endsOnAbort?: boolean
 }

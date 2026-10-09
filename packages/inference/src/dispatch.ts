@@ -5,7 +5,8 @@ import type {
   CanonicalModelType,
   ProfilingRequestMeta,
   QvacConfig,
-  RPCOptions
+  RPCOptions,
+  AbortableRPCOptions
 } from '@/schemas/index'
 import {
   normalizeModelType,
@@ -20,7 +21,6 @@ import Buffer from 'bare-buffer'
 import { PassThrough, type Readable } from 'bare-stream'
 import { registry } from '@/registry'
 import type { HandlerEntry, StreamHandler, StreamHandlerContext } from '@/handlers/types'
-import { untilAborted } from '@/utils/until-aborted'
 import { handlerSupportsProgress, selectHandler } from '@/selection'
 import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
@@ -203,15 +203,13 @@ function invokeHandler(request: Request, handler: HandlerEntry['handler']): Hand
   return directHandler(request)
 }
 
-// Only a `stream` entry takes the context: a reply handler's second parameter is
-// its progress callback.
 function invokeStreamHandler(
   request: Request,
   entry: HandlerEntry,
   handler: HandlerEntry['handler'],
   context: StreamHandlerContext
 ): HandlerResult {
-  if (entry.type !== 'stream') return invokeHandler(request, handler)
+  if (!entry.endsOnAbort) return invokeHandler(request, handler)
   return (handler as StreamHandler)(request, context)
 }
 
@@ -287,23 +285,23 @@ export async function send<T extends Request>(
 }
 
 /**
- * Runs a request and yields its responses. Aborting `options.signal` ends the
- * stream without an error, whether or not the handler is waiting on something;
- * a signal that is already aborted runs nothing.
+ * Runs a request and yields its responses. For a handler that declares
+ * `endsOnAbort`, aborting `options.signal` ends the stream without an error, and
+ * a signal that is already aborted runs nothing. Every other stream ignores the
+ * signal and runs to its end.
  */
 export async function* stream<T extends Request>(
   request: T,
-  options?: RPCOptions
+  options?: AbortableRPCOptions
 ): AsyncGenerator<Response> {
-  const signal = options?.signal
-  if (signal?.aborted) return
-
   await ensureReady()
   assertLifecycleAllowed(request)
 
   const processed = prepareRequest(request)
   const entry = getHandlerEntry(processed.type)
   const handler = selectHandler(entry)
+  const signal = entry.endsOnAbort ? options?.signal : undefined
+  if (signal?.aborted) return
   const context: StreamHandlerContext = signal ? { signal } : {}
 
   async function* run(): AsyncGenerator<Response> {
@@ -320,10 +318,11 @@ export async function* stream<T extends Request>(
   }
 
   // See `send`: plugin capabilities are timed elsewhere.
-  const responses = entry.pluginOp
-    ? run()
-    : profileStreamHandler({ op: processed.type, request: processed }, run)
-  yield* untilAborted(responses, signal)
+  if (entry.pluginOp) {
+    yield* run()
+  } else {
+    yield* profileStreamHandler({ op: processed.type, request: processed }, run)
+  }
 }
 
 export interface DuplexWritable {

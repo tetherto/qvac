@@ -4,7 +4,7 @@ import type {
   LoggingStreamRequest,
   LoggingParams
 } from '@/schemas/logging-stream'
-import type { RPCOptions } from '@/schemas/index'
+import type { AbortableRPCOptions } from '@/schemas/index'
 import { InvalidResponseError } from '@/errors/index'
 
 /**
@@ -41,7 +41,7 @@ import { InvalidResponseError } from '@/errors/index'
  */
 export async function* loggingStream(
   params: LoggingParams,
-  options?: RPCOptions
+  options?: AbortableRPCOptions
 ): AsyncGenerator<LoggingStreamResponse> {
   const request: LoggingStreamRequest = {
     type: 'loggingStream',

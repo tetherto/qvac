@@ -27,17 +27,18 @@ Cancellation capability is explicit:
 
 ## Caller-ended streams
 
-A caller ends a stream it no longer reads by aborting `RPCOptions.signal`. Over
-RPC, the SDK client destroys its response stream and the worker aborts the signal
-it passed to `stream()`. `stream()` then ends without an error, and a signal that
-is already aborted runs nothing.
+A stream that waits on a source outside the registry, such as a log subscription,
+can be ended by its caller. Its registry entry declares `endsOnAbort`, and
+dispatch passes it the caller's `signal` (`AbortableRPCOptions`) as
+`StreamHandlerContext.signal`. The handler listens to the signal, so its wait ends
+and its `finally` releases the source. `stream()` then ends without an error, and
+a signal that is already aborted runs nothing. Over RPC, the SDK client destroys
+its response stream and the worker aborts the signal it passed to `stream()`.
 
-Dispatch passes the signal to `stream` handlers as `StreamHandlerContext.signal`.
-A handler that begins a registry context passes it as `parentSignal`, so the
-registry stays the cancellation source of truth. A handler that waits on a source
-outside the registry, such as a log subscription, listens to the signal itself, so
-its wait ends and its `finally` releases the source. Dispatch ends the stream on
-abort either way. A handler that ignores the signal is returned at its next yield.
+Every other stream ignores the signal and runs to its end, even when the client
+has stopped reading. Ending an inference stream early would release its admission
+slot while the native job still runs. Stop an inference run with `cancel`, which
+goes through the registry.
 
 Keep event-stream termination and aggregate-promise outcomes compatible, including
 partial results. Update the plugin declaration, handler, schemas, public surface,

@@ -6,7 +6,6 @@ import {
   type ProfilingRequestMeta
 } from '@qvac/inference/surface'
 import { send, stream, duplex, dispatchTransport } from '@qvac/inference/engine'
-import { AbortController } from 'bare-abort-controller'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
 import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
@@ -17,7 +16,7 @@ import {
   isShutdownMessage
 } from './handler-utils'
 import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profiling'
-import { isTerminalChunk } from '@/server/rpc/rpc-utils'
+import { isTerminalChunk, signalOnWireClose } from '@/server/rpc/rpc-utils'
 import { createProgressThrottle } from '@/server/rpc/progress-throttle'
 
 type Transport = 'reply' | 'stream' | 'progress' | 'duplex' | undefined
@@ -91,14 +90,11 @@ async function streamToWire(
   profiler.startHandler()
   let sentFinalChunk = false
 
-  // A client that stops reading destroys its end (`RPCOptions.signal`), which
-  // closes this one. Abort the engine stream with it: a handler waiting on a
-  // source, such as a log subscription, would otherwise hold it until it next
-  // had something to send.
-  const controller = new AbortController()
-  const onWireClosed = () => controller.abort(new Error('The client closed the stream'))
-  wire.on('close', onWireClosed)
-  wire.on('error', onWireClosed)
+  // A client that aborts its stream closes this one. Abort the engine stream
+  // with it: a handler that declares `endsOnAbort`, such as the log stream,
+  // would otherwise hold its subscription until it next had something to send.
+  // The engine runs every other stream to its end.
+  const signal = signalOnWireClose(wire)
 
   // A progress stream (a reply op that streams because of `withProgress`) can
   // emit hundreds of updates, so batch them on a time window before writing to
@@ -111,7 +107,7 @@ async function streamToWire(
     : undefined
 
   try {
-    for await (const response of stream(request, { signal: controller.signal })) {
+    for await (const response of stream(request, { signal })) {
       if (isTerminalChunk(response)) {
         throttle?.flush()
         profiler.endHandler()
@@ -125,7 +121,7 @@ async function streamToWire(
     }
 
     // The client destroyed its end, so nothing is left to send it.
-    if (controller.signal.aborted) return
+    if (signal.aborted) return
 
     if (!sentFinalChunk) {
       throttle?.flush()

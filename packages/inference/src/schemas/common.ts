@@ -229,28 +229,11 @@ export const responseSchema = z.discriminatedUnion('type', [
  */
 export interface AbortSignalLike {
   readonly aborted: boolean
-  readonly reason?: unknown
   addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
   removeEventListener(type: 'abort', listener: () => void): void
 }
 
-function isAbortSignalLike(value: unknown): value is AbortSignalLike {
-  if (typeof value !== 'object' || value === null) return false
-  const signal = value as Partial<AbortSignalLike>
-  return (
-    typeof signal.aborted === 'boolean' &&
-    typeof signal.addEventListener === 'function' &&
-    typeof signal.removeEventListener === 'function'
-  )
-}
-
 export const rpcOptionsSchema = z.object({
-  signal: z
-    .custom<AbortSignalLike>(isAbortSignalLike, 'Expected an AbortSignal')
-    .optional()
-    .describe(
-      'Ends a streaming call when aborted: the stream finishes without an error and the worker releases what it held for it. Single-reply calls ignore it.'
-    ),
   timeout: z
     .number()
     .min(100)
@@ -275,3 +258,11 @@ export const rpcOptionsSchema = z.object({
 export type Request = z.input<typeof requestSchema>
 export type Response = z.infer<typeof responseSchema>
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>
+
+/**
+ * `RPCOptions` for a stream the caller can end early. Aborting `signal` ends the
+ * stream without an error, but only for a request whose handler declares
+ * `endsOnAbort` (the log stream); every other stream ignores it and runs to its
+ * end. An inference run is stopped with `cancel` instead.
+ */
+export type AbortableRPCOptions = RPCOptions & { signal?: AbortSignalLike }

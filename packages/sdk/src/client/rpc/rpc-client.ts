@@ -16,6 +16,7 @@ import {
   recordFailure,
   untilAborted,
   type AbortSignalLike,
+  type AbortableRPCOptions,
   type Request,
   type Response,
   type RPCOptions
@@ -400,12 +401,13 @@ async function sendProfiled<T extends Request>(
 
 /**
  * Sends a request and yields its responses. Aborting `options.signal` ends the
- * stream without an error and tells the worker to stop; a signal that is
- * already aborted sends nothing.
+ * stream without an error and closes it on the worker; a signal that is already
+ * aborted sends nothing. Pass one only for a request whose handler declares
+ * `endsOnAbort`: the worker keeps running any other stream to its end.
  */
 export async function* stream<T extends Request>(
   request: T,
-  options: RPCOptions = {},
+  options: AbortableRPCOptions = {},
   rpc?: RPC
 ): AsyncGenerator<Response> {
   if (options.signal?.aborted) return
@@ -422,7 +424,7 @@ export async function* stream<T extends Request>(
 async function* streamBase<T extends Request>(
   request: T,
   rpc: RPC,
-  options: RPCOptions = {},
+  options: AbortableRPCOptions = {},
   signalDisable: boolean = false
 ): AsyncGenerator<Response> {
   const parsedRequest = parseRequest(request)
@@ -456,6 +458,8 @@ async function* streamBase<T extends Request>(
       buffer = lines.pop() || '' // Keep incomplete line in buffer
 
       for (const line of lines) {
+        // The caller may abort while it reads a response from this chunk.
+        if (options.signal?.aborted) return
         if (line.trim()) {
           const response = responseSchema.parse(JSON.parse(line))
 
@@ -473,7 +477,7 @@ async function* streamBase<T extends Request>(
 async function* streamProfiled<T extends Request>(
   request: T,
   rpc: RPC,
-  options: RPCOptions = {}
+  options: AbortableRPCOptions = {}
 ): AsyncGenerator<Response> {
   const requestType = request.type
   const profileId = createProfileId()
@@ -527,6 +531,8 @@ async function* streamProfiled<T extends Request>(
       buffer = lines.pop() || ''
 
       for (const line of lines) {
+        // The caller may abort while it reads a response from this chunk.
+        if (options.signal?.aborted) return
         if (line.trim()) {
           const rawParsed = JSON.parse(line) as Record<string, unknown>
 

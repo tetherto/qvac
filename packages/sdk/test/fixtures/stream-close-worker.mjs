@@ -1,7 +1,8 @@
 // Bare worker that holds every loggingStream request open and reports on the
 // `probe` stream when one opens and when the client closes it. A stream for the
-// id `chatty` gets one log right away; every other id gets none, like a model
-// that logs nothing more. Used by rpc-stream-abort.test.ts.
+// id `chatty` gets one log right away, and one for `pair` gets two in a single
+// write; every other id gets none, like a model that logs nothing more. Used by
+// rpc-stream-abort.test.ts.
 
 import RPC from 'bare-rpc'
 import { connect } from 'bare-net'
@@ -50,6 +51,7 @@ new RPC(connect(socketPath), (req) => {
   wire.on('close', () => report(`closed:${request.id}`))
   report(`opened:${request.id}`)
   if (request.id === 'chatty') wire.write(frame('chatty', 'hello'), 'utf-8')
+  if (request.id === 'pair') wire.write(frame('pair', 'first') + frame('pair', 'second'), 'utf-8')
 })
 
 const signals = new Signal.Emitter()

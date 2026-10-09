@@ -1,10 +1,12 @@
 import test from 'brittle'
+import { z } from 'zod'
 import env from 'bare-env'
 import os from 'bare-os'
 import path from 'bare-path'
 import { AbortController } from 'bare-abort-controller'
 import { stream, close } from '@/dispatch'
 import { registerPlugin, clearPlugins } from '@/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
 import { ALL_LOG_ID, getAppLogger } from '@/logging'
@@ -174,6 +176,67 @@ test('stream with a signal still runs a reply handler', async function (t) {
     t.is(responses.length, 1, 'one response')
     t.is(responses[0]?.type, 'heartbeat', 'from the reply handler')
   } finally {
+    await tearDown()
+  }
+})
+
+test('a plugin stream ignores the signal and runs to its end', async function (t) {
+  clearPlugins()
+  clearAllLoggingStreams()
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  registerPlugin({
+    modelType: ModelType.llamacppCompletion,
+    displayName: 'Gated stream',
+    addonPackage: '@qvac/test-addon',
+    loadConfigSchema: z.object({}),
+    createModel() {
+      return { model: { load: async function () {} } }
+    },
+    handlers: {
+      gated: {
+        requestSchema: z.object({}) as z.ZodType,
+        responseSchema: z.object({ token: z.string() }) as z.ZodType,
+        streaming: true,
+        handler: async function* () {
+          yield { token: 'a' }
+          await gate
+          yield { token: 'b' }
+        }
+      }
+    }
+  })
+  registerModel('gated-model', {
+    model: {} as unknown as AnyModel,
+    path: '/tmp/model.bin',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+  try {
+    const controller = new AbortController()
+    const responses = stream(
+      {
+        type: 'pluginInvokeStream',
+        modelId: 'gated-model',
+        handler: 'gated',
+        params: {}
+      } as unknown as Request,
+      { signal: controller.signal }
+    )
+    const tokenOf = (result: IteratorResult<Response>) =>
+      (result.value as unknown as { result: { token: string } } | undefined)?.result.token
+
+    t.is(tokenOf(await responses.next()), 'a', 'the first token arrives')
+
+    // Ending a plugin stream early would free its slot while the native job runs.
+    controller.abort(new Error('stop'))
+    release()
+
+    t.is(tokenOf(await responses.next()), 'b', 'the stream keeps running after the abort')
+  } finally {
+    unregisterModel('gated-model')
     await tearDown()
   }
 })
