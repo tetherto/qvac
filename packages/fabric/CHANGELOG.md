@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.20.3] - 2026-10-09
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11018.0.0#2` -> `11018.1.0#1`, with the same
+  port build options as `11018.0.0#2`, including its CUDA architecture lists:
+  - Fixed a Vulkan `TOP_K` hang (device lost) on rows that are all or mostly
+    `+inf` or NaN, which an MTP draft context's top-k sampler hits when its
+    logits are NaN, and wrong results for `k = 1` on negative values.
+  - Fixed an OpenCL abort (`CL_INVALID_KERNEL`) in argsort when a backend user
+    such as the RPC server runs it before `supports_op`.
+  - `stb_image.h` is installed with the exported stb target, so consumers that
+    check image headers before mtmd decodes them use the same parser as
+    `mtmd-helper`.
+  - Faster Metal decode and speculative verify for Ternary Bonsai 2 (`PQ2_0`)
+    weights, and faster Metal flash attention for few-row and GQA decode.
+  - Added a CPU flash-attention backward, `ggml_flash_attn_ext_back()`.
+
+### Removed
+
+- The unused `ggml_flash_attn_back()` is removed, and `GGML_OP_FLASH_ATTN_BACK`
+  is renamed `GGML_OP_FLASH_ATTN_EXT_BACK` at the same enum position. Native
+  code naming either must adapt; no in-tree consumer does.
+
 ## [0.20.2] - 2026-10-08
 
 Supersedes 0.20.1, whose publish stopped at `@qvac/fabric-linux-arm64` (npm

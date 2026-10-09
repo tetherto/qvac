@@ -518,20 +518,55 @@ fit.hostBytes
 fit.report
 ```
 
-`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet reports `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
+`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet and MOSS report `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
 
 | Option | Description |
 | --- | --- |
 | `modelPath` | **Required.** Absolute path to the model, or to the registry's weightless copy where one exists. |
-| `audioSeconds` | Longest single transcribe the projection must cover. Defaults to 300. |
-| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet projects on the CPU and whisper on the GPU, matching what each load does. |
-| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet. |
+| `audioSeconds` | Longest single transcribe the projection must cover. Required for MOSS; defaults to 300 for whisper and parakeet. |
+| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
+| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
 | `backendsDir` | The prebuilds root. The backends are read from the per-target subdir under it, the same path a load reads. |
 | `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
 | `threads`, `longFormWindowFrames`, `longFormContextFrames` | Parakeet: as the load takes them. |
 | `nemotronChunkMs` | Nemotron: the streaming operating point the projection must also cover. 0 projects the largest allowed one. |
+
+MOSS-Transcribe-Diarize uses an explicit duration and the same per-call options as `run`:
+
+```js
+const fit = ASRGgml.assessFit({
+  engine: 'moss-transcribe',
+  modelPath: '/models/moss-transcribe-diarize-q8_0.gguf',
+  audioSeconds: 90,
+  hotwords: ['QVAC', 'Tether'],
+  maxNewTokens: 1024,
+  threads: 4,
+  gpuLayers: 1
+})
+console.log(fit.report)
+```
+
+`audioSeconds` is required and must be positive and finite. `threads` follows
+`maxThreads` at load time (0 or omitted keeps the existing engine default).
+`prompt`, `hotwords` and `maxNewTokens` follow the transcription rules, including
+prompt/hotword exclusion and 0 or omitted token allowance selecting the GGUF default.
+The projection reads GGUF metadata only and supports a metadata-only copy with the
+same tensor table and tokenizer. It measures the runtime encoder and decoder graphs,
+the aligned KV cache, and host buffers. A workload exceeding the model context returns
+`error` / `workload-too-large`.
+
+Encoder and decoder reuse one scheduler allocation: `decoderComputeBytes` is the
+additional compute above `encoderComputeBytes`, so their sum is the peak allocation.
+On CPU and unified-memory GPUs, host bytes also count against available device memory.
+This projection covers one batch transcription, matching MOSS's existing API.
+
+Run [`examples/moss-transcribe-fit.js`](examples/moss-transcribe-fit.js) with:
+
+```sh
+bare examples/moss-transcribe-fit.js /models/moss-transcribe-diarize-q8_0.gguf 90
+```
 
 A model the fitter cannot read is `status: "error"` with the engine's reason; only a broken request throws.
 
@@ -1141,6 +1176,7 @@ Parakeet:
 
 MOSS-Transcribe-Diarize:
 
+- [`examples/moss-transcribe-fit.js`](examples/moss-transcribe-fit.js) — metadata-only memory preflight for a model and audio duration
 - [`examples/moss-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/moss-transcribe.js) — speaker-labelled transcript of a WAV or raw 16 kHz file, with optional `--hotwords "a,b"` and `--gpu`
 
 The npm tarball includes the dependency-clean Whisper quickstart. The other

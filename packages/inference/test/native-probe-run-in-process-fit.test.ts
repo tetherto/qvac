@@ -15,7 +15,7 @@ const PROBE: FitProbeRequest = {
   engine: 'llm-llamacpp',
   request: {
     modelPath: '/models/model.gguf',
-    params: { 'ctx-size': '4096', 'gpu-layers': '99' },
+    config: { 'ctx-size': '4096', 'gpu-layers': '99' },
     minCtxSize: 4096,
     marginBytes: 1024 * 1024 * 1024
   }

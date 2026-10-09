@@ -6,7 +6,7 @@
 // flag consumed at fixed points of the eval loop. Two escapes exist around
 // job teardown:
 //   - the action runs while the job's registry entry is still live but the
-//     run already passed its last flag check (completion tail: compaction,
+//     run already passed its last flag check (completion tail: finalization,
 //     cache save), or
 //   - JobCancelRegistry::cancel() executes its action copy outside the
 //     registry lock, after the entry was removed and the next job started.
