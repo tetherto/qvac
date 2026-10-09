@@ -1,8 +1,11 @@
 name: Benchmark Performance — LLM Parameter Sweep
 
-# Manually-triggered LLM benchmark (no sweep inputs — everything is in the scripts).
-# Desktop: bare benchmarks/performance/llm-parameter-sweep.js on a Linux GPU runner.
-# Mobile:  runBenchmarkPerfTest on Android + iOS via Device Farm.
+# Manually-triggered LLM benchmark.
+# Desktop: the throughput grid (llm-parameter-sweep.js) and/or the additive
+#          load-mode sweep (load-mode-sweep.js), per platform in desktop_platforms.
+# Mobile:  runBenchmarkPerf* shards on Android + iOS via Device Farm.
+#
+# `sweep_params` selects what runs; empty means everything.
 #
 # To change what runs, edit:
 #   desktop: models.manifest.json (models) + llm-parameter-sweep.config.js (sweep dims)
@@ -17,7 +20,7 @@ on:
         required: false
         type: string
       run_desktop:
-        description: "Run desktop benchmark (Linux GPU)"
+        description: "Run the desktop benchmark on each platform in desktop_platforms"
         required: false
         default: true
         type: boolean
@@ -26,6 +29,30 @@ on:
         required: false
         default: true
         type: boolean
+      desktop_platforms:
+        description: 'JSON array of desktop platforms. Default ["linux-x64"]. QVAC-25043 needs ["linux-x64","win32-x64","darwin-x64","linux-arm64"]; darwin-arm64 is also available. linux-arm64 (ubuntu-22.04-arm) has no GPU; darwin-x64 (macos-15-large) exposes only Apple Paravirtual Metal. No device is forced — a GPU request that lands on the CPU is reported as a backend mismatch.'
+        required: false
+        default: '["linux-x64"]'
+        type: string
+      sweep_params:
+        description: >-
+          OPTIONAL. Which parameters to sweep. Empty (the default) runs
+          everything, exactly as before. Params separate with "," and their
+          values with "|". Name a param bare for its full range, or
+          "name=a|b" for specific values; anything not named is pinned, so a
+          focused run does not pay for axes it is not about. Naming an
+          additive sweep (load-mode, batch-sweep) selects that sweep instead
+          of the throughput grid. Known params: quantization, device,
+          ctx-size, threads, batch-size, ubatch-size, flash-attn,
+          cache-type-k, cache-type-v, reasoning-budget, load-mode,
+          batch-sweep. Examples - "load-mode,device=cpu|gpu" (the QVAC-25043
+          acceptance run: both devices on every platform, no 6h grid),
+          "load-mode=auto|mmap", "quantization=Q4_0|Q8_0". An axis a
+          shard runs internally, or a selection matching no case, fails in the
+          context job rather than running something other than what was asked.
+        required: false
+        default: ''
+        type: string
       summarize_only:
         description: "Summarize a PREVIOUS run only: re-render its report in ~1 min, skip the ~6h benchmarks. Requires 'Previous run ID to summarize' below."
         required: false
@@ -49,16 +76,62 @@ jobs:
   context:
     runs-on: ubuntu-latest
     outputs:
-      ref: ${{ steps.ctx.outputs.ref }}
+      ref: ${{ steps.ref.outputs.ref }}
+      desktop_matrix: ${{ steps.desktop.outputs.desktop_matrix }}
+      sweep_params: ${{ steps.selector.outputs.sweep_params }}
+      run_grid: ${{ steps.selector.outputs.run_grid }}
+      run_load_mode: ${{ steps.selector.outputs.run_load_mode }}
+      run_batch: ${{ steps.selector.outputs.run_batch }}
     steps:
-      - id: ctx
+      # Resolve the ref FIRST, so the matrix this job validates against is the
+      # same revision prebuild and the benchmarks will run. Checking out the
+      # workflow's own branch here would validate one revision and execute
+      # another whenever `ref` is set.
+      - id: ref
         shell: bash
         env:
           INPUT_REF: ${{ inputs.ref }}
           REF_NAME: ${{ github.ref_name }}
+        run: echo "ref=${INPUT_REF:-$REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      # The selector is parsed by the canonical implementation, not a copy: a
+      # second parser in another language is a second set of rules to drift.
+      - name: Checkout benchmark matrix
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+          sparse-checkout: |
+            .github/scripts/plan-desktop-platforms.py
+            .github/scripts/resolve-sweep-selection.js
+            packages/llm-llamacpp/test/integration/_benchmark-matrix.js
+          sparse-checkout-cone-mode: false
+
+      # The desktop matrix is built here rather than with `include:` in the
+      # job. A matrix `include` entry whose key does not match an existing
+      # matrix value is APPENDED as a new combination, so listing every
+      # platform's runner under `include` would run all of them on every
+      # dispatch regardless of desktop_platforms. Emitting the selected
+      # {platform, runner} pairs as one JSON array avoids that entirely.
+      - id: desktop
+        name: Plan desktop platforms
+        shell: bash
+        env:
+          DESKTOP_PLATFORMS: ${{ inputs.desktop_platforms }}
         run: |
-          ref="${INPUT_REF:-$REF_NAME}"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          python3 .github/scripts/plan-desktop-platforms.py >> "$GITHUB_OUTPUT"
+
+      # One selector implementation, end to end: the same parser the runners
+      # and the mobile planner use. A typo, an axis that cannot narrow a
+      # shard, or a selection matching no case fails here in ~30s rather than
+      # after the prebuild.
+      - id: selector
+        name: Resolve sweep selection
+        shell: bash
+        env:
+          SWEEP_PARAMS: ${{ inputs.sweep_params }}
+          RUN_MOBILE: ${{ inputs.run_mobile }}
+        run: |
+          node .github/scripts/resolve-sweep-selection.js >> "$GITHUB_OUTPUT"
 
   # Fast fail-first gate (~30s, no prebuild): the benchmark shards are generated
   # from test/integration/_benchmark-matrix.js and not committed, so the
@@ -73,6 +146,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+    outputs:
+      mobile_matrix: ${{ steps.plan.outputs.mobile_matrix }}
     steps:
       - name: Checkout matrix + generated artifacts
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -83,10 +158,24 @@ jobs:
             packages/llm-llamacpp/test/integration/_benchmark-matrix.js
             packages/llm-llamacpp/test/mobile/integration.auto.cjs
             .github/workflows/benchmark-perf-llm-llamacpp.yml
+            .github/scripts/plan-mobile-matrix.js
           sparse-checkout-cone-mode: false
       - name: Verify benchmark matrix is in sync
         working-directory: packages/llm-llamacpp
         run: node scripts/generate-benchmark-shards.js --check
+
+      # The mobile matrix is PLANNED here rather than written literally in the
+      # YAML below, so `sweep_params` actually reduces what Device Farm runs.
+      # This job already checks out the canonical matrix and gates on its
+      # drift check, so the plan cannot be emitted from a stale definition.
+      # A selection matching no canonical case throws, failing the run in
+      # ~30s instead of dispatching nothing.
+      - name: Plan mobile matrix
+        id: plan
+        env:
+          SWEEP_PARAMS: ${{ inputs.sweep_params }}
+        run: |
+          node .github/scripts/plan-mobile-matrix.js >> "$GITHUB_OUTPUT"
 
   # Records, into a run-meta.json artifact, the exact addon version this run
   # benchmarks (from the checked-out package.json) AND the mobile shard list it
@@ -108,14 +197,17 @@ jobs:
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
+            .github/scripts/stamp-run-meta.js
             packages/llm-llamacpp/package.json
             packages/llm-llamacpp/test/integration/_benchmark-matrix.js
           sparse-checkout-cone-mode: false
       - name: Write run-meta.json
+        env:
+          SWEEP_PARAMS: ${{ inputs.sweep_params }}
+          RUN_MOBILE: ${{ inputs.run_mobile }}
         shell: bash
         run: |
-          mkdir -p run-meta
-          node -e "const pkg=require('./packages/llm-llamacpp/package.json');const m=require('./packages/llm-llamacpp/test/integration/_benchmark-matrix.js');require('fs').writeFileSync('run-meta/run-meta.json',JSON.stringify({addonVersion:'@qvac/llm-llamacpp@'+pkg.version,expectedShards:m.matrix().map(m.mobileShardKey)})+'\n')"
+          node .github/scripts/stamp-run-meta.js
           cat run-meta/run-meta.json
       - name: Upload run-meta
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
@@ -156,8 +248,22 @@ jobs:
     # mobile-only verify-shards job (on a desktop-only run) does not propagate
     # through prebuild and skip this job.
     if: inputs.run_desktop && !inputs.summarize_only && !cancelled() && needs.prebuild.result == 'success'
-    name: Desktop Parameter Sweep
-    runs-on: qvac-ubuntu2204-x64-gpu
+    name: Desktop Parameter Sweep (${{ matrix.platform }})
+    # QVAC-25043 requires load-mode evidence on each desktop platform the
+    # project calibrates for, so the desktop leg is a matrix rather than a
+    # single Linux runner. linux-x64 alone is the default because the routine
+    # parameter-sweep cadence is a ~6h Linux run and widening it by default
+    # would multiply that; `desktop_platforms` opts the others in per dispatch.
+    strategy:
+      fail-fast: false
+      # Parallel. Each platform has its own runner pool — linux-x64 and
+      # win32-x64 are distinct self-hosted GPU pools, darwin-x64 and
+      # linux-arm64 are GitHub-hosted — so nothing here contends. Serialising
+      # them only makes each leg wait on the queue time of the ones before it,
+      # which defeats the point of a narrowed selector.
+      matrix:
+        include: ${{ fromJSON(needs.context.outputs.desktop_matrix) }}
+    runs-on: ${{ startsWith(matrix.runner, '[') && fromJSON(matrix.runner) || matrix.runner }}
     timeout-minutes: 360
 
     steps:
@@ -174,10 +280,14 @@ jobs:
         with:
           ref: ${{ needs.context.outputs.ref }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      # Node AND a global bare, via the action the prebuild workflows already
+      # use. The load-mode sweep spawns one bare process per sample, and bare
+      # is not on PATH by default on every runner; without it the sweep falls
+      # back to `npx --yes bare`, which re-resolves the package on every spawn.
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
-          node-version: lts/*
+          shell_type: ${{ startsWith(matrix.platform, 'win32') && 'powershell' || 'bash' }}
 
       - name: Install addon dependencies
         working-directory: packages/llm-llamacpp
@@ -189,21 +299,30 @@ jobs:
       - name: Download prebuilds (from artifacts)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/prebuilds-staging
+          # Workspace-relative, NOT ${{ runner.temp }}: on Windows that expands
+          # to a backslash path (D:\a\_temp), and the backslashes are escape
+          # characters to the Git Bash step below, which mangles the path. A
+          # relative path has no backslashes on any runner.
+          path: prebuilds-staging
           merge-multiple: true
 
       - name: Move prebuilds into the addon
         shell: bash
         run: |
           mkdir -p packages/llm-llamacpp/prebuilds
-          cp -r ${{ runner.temp }}/prebuilds-staging/* packages/llm-llamacpp/prebuilds/
+          cp -r prebuilds-staging/* packages/llm-llamacpp/prebuilds/
           ls -la packages/llm-llamacpp/prebuilds/
 
       - name: Detect GPU
         id: gpu
         shell: bash
         run: |
-          gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr -d '\r' || echo "GPU")
+          # Empty when nothing is detected, NOT the literal "GPU". nvidia-smi
+          # cannot see Metal and does not exist on every runner, so a fallback
+          # name asserted a GPU on hosts that have none — darwin-x64 and
+          # linux-arm64 both stamped "(GPU)" while their load rows recorded a
+          # CPU fallback. An absent name is stamped as no suffix at all.
+          gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr -d '\r' || true)
           echo "name=$gpu_name" >> "$GITHUB_OUTPUT"
 
       - name: Install benchmark dependencies
@@ -215,9 +334,48 @@ jobs:
         # Models are public (unsloth Qwen3.5 GGUFs) — no HF_TOKEN needed.
         run: node ./prepare-models.js --target addon
 
+      # Skippable so a load-mode dispatch does not have to pay for it. The
+      # parameter sweep is a ~6h GPU run; the load-mode sweep is minutes, and
+      # and on runners with no usable GPU the parameter sweep would additionally
+      # be asking a GPU-shaped run of a host that cannot serve it.
+      # Skipped when the selector names only load-mode, so a load-mode run
+      # does not pay for a ~6h grid it did not ask for.
       - name: Run parameter sweep
+        if: needs.context.outputs.run_grid == 'true' || needs.context.outputs.run_batch == 'true'
         working-directory: packages/llm-llamacpp/benchmarks/performance
-        run: npx --yes bare ./llm-parameter-sweep.js --addon-source local
+        shell: bash
+        env:
+          SWEEP_PARAMS: ${{ needs.context.outputs.sweep_params }}
+        run: |
+          npx --yes bare ./llm-parameter-sweep.js \
+            --addon-source local \
+            --sweep-params "$SWEEP_PARAMS"
+
+      # The load-mode sweep is a separate runner, not another case in the
+      # parameter sweep, because each of its samples needs its own process:
+      # unload() leaves mode-dependent resident memory behind and the page
+      # cache carries across modes, so cells measured in one shared process
+      # record load order rather than load mode (see load-mode-probe.js).
+      # It writes into the same results directory, so the summarize job picks
+      # it up with everything else.
+      - name: Run load-mode sweep
+        if: needs.context.outputs.run_load_mode == 'true'
+        working-directory: packages/llm-llamacpp/benchmarks/performance
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          # No device is forced here. The leg requests what the sweep selects,
+          # and a GPU request that silently lands on the CPU is recorded as a
+          # backend mismatch rather than published as GPU evidence — that, not
+          # a platform-name allowlist, is what keeps the report honest.
+          # `device=cpu` in sweep_params asks for CPU measurements deliberately.
+          SWEEP_PARAMS: ${{ needs.context.outputs.sweep_params }}
+        run: |
+          node ./load-mode-sweep.js \
+            --addon-source local \
+            --platform "$PLATFORM" \
+            --sweep-params "$SWEEP_PARAMS" \
+            --results-dir results/parameter-sweep
 
       # Stamp the desktop device name (incl. detected GPU) into the results so
       # the renderer shows it even on a later summarize-only re-render, when this
@@ -227,9 +385,15 @@ jobs:
         shell: bash
         env:
           GPU_NAME: ${{ steps.gpu.outputs.name }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           mkdir -p packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep
-          printf '{"desktopDevice":"Desktop (%s)"}\n' "$GPU_NAME" \
+          if [ -n "$GPU_NAME" ]; then
+            label="Desktop $PLATFORM ($GPU_NAME)"
+          else
+            label="Desktop $PLATFORM"
+          fi
+          printf '{"desktopDevice":"%s"}\n' "$label" \
             > packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/desktop-meta.json
           cat packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/desktop-meta.json
 
@@ -239,7 +403,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: llm-param-sweep-desktop-${{ github.run_number }}
+          # Per-platform artifact name: a matrix of desktop legs would
+          # otherwise collide on one name and only the first would survive.
+          name: llm-param-sweep-desktop-${{ matrix.platform }}-${{ github.run_number }}
           path: packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/
           retention-days: 90
           if-no-files-found: ignore
@@ -258,7 +424,11 @@ jobs:
   # Vulkan + CPU only, so they show Crashed on iOS (Metal) and Samsung GPU. The
   # batchsweep group holds batch === ubatch at a fixed Q4_0/f16 baseline against a
   # long prompt: batch is orthogonal to quant/KV, so it is swept once here rather
-  # than crossed with all 70 cross-product shards. These wrappers are deliberately
+  # than crossed with all 70 cross-product shards. The loadmode group (6) holds
+  # the six load_mode values at the same fixed baseline, orthogonal for the same
+  # reason; Android is where it earns its keep, since Adreno's OpenCL backend
+  # reports no mmap support and 'auto' resolves differently there than on Metal.
+  # These wrappers are deliberately
   # absent from the addon's test-groups.json, so this override is the only path
   # that runs them — normal mobile integration runs never trigger the benchmark.
   mobile-benchmark:
@@ -267,9 +437,14 @@ jobs:
       - prebuild
       - verify-shards
     if: inputs.run_mobile && !inputs.summarize_only
+    # A called workflow cannot hold more than its caller grants, and GitHub
+    # rejects the whole run at startup when it asks for more. The mobile test
+    # workflow's job requests actions: read (its prebuild_run_id route reads
+    # another run's artifact), so it must be granted here.
     permissions:
       actions: read
       contents: read
+      actions: read
       packages: read
       pull-requests: write
       id-token: write
@@ -277,23 +452,12 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include:
-          - cache: f16
-            groups: '[{"name":"BenchmarkPerf08bQ40F16","grep":"runBenchmarkPerf08bQ40F16Test"},{"name":"BenchmarkPerf08bQ41F16","grep":"runBenchmarkPerf08bQ41F16Test"},{"name":"BenchmarkPerf08bQ4KMF16","grep":"runBenchmarkPerf08bQ4KMF16Test"},{"name":"BenchmarkPerf08bQ6KF16","grep":"runBenchmarkPerf08bQ6KF16Test"},{"name":"BenchmarkPerf08bQ80F16","grep":"runBenchmarkPerf08bQ80F16Test"},{"name":"BenchmarkPerf2bQ40F16","grep":"runBenchmarkPerf2bQ40F16Test"},{"name":"BenchmarkPerf2bQ41F16","grep":"runBenchmarkPerf2bQ41F16Test"},{"name":"BenchmarkPerf2bQ4KMF16","grep":"runBenchmarkPerf2bQ4KMF16Test"},{"name":"BenchmarkPerf2bQ6KF16","grep":"runBenchmarkPerf2bQ6KF16Test"},{"name":"BenchmarkPerf2bQ80F16","grep":"runBenchmarkPerf2bQ80F16Test"}]'
-          - cache: q8_0
-            groups: '[{"name":"BenchmarkPerf08bQ40Q80","grep":"runBenchmarkPerf08bQ40Q80Test"},{"name":"BenchmarkPerf08bQ41Q80","grep":"runBenchmarkPerf08bQ41Q80Test"},{"name":"BenchmarkPerf08bQ4KMQ80","grep":"runBenchmarkPerf08bQ4KMQ80Test"},{"name":"BenchmarkPerf08bQ6KQ80","grep":"runBenchmarkPerf08bQ6KQ80Test"},{"name":"BenchmarkPerf08bQ80Q80","grep":"runBenchmarkPerf08bQ80Q80Test"},{"name":"BenchmarkPerf2bQ40Q80","grep":"runBenchmarkPerf2bQ40Q80Test"},{"name":"BenchmarkPerf2bQ41Q80","grep":"runBenchmarkPerf2bQ41Q80Test"},{"name":"BenchmarkPerf2bQ4KMQ80","grep":"runBenchmarkPerf2bQ4KMQ80Test"},{"name":"BenchmarkPerf2bQ6KQ80","grep":"runBenchmarkPerf2bQ6KQ80Test"},{"name":"BenchmarkPerf2bQ80Q80","grep":"runBenchmarkPerf2bQ80Q80Test"}]'
-          - cache: q4_0
-            groups: '[{"name":"BenchmarkPerf08bQ40Q40","grep":"runBenchmarkPerf08bQ40Q40Test"},{"name":"BenchmarkPerf08bQ41Q40","grep":"runBenchmarkPerf08bQ41Q40Test"},{"name":"BenchmarkPerf08bQ4KMQ40","grep":"runBenchmarkPerf08bQ4KMQ40Test"},{"name":"BenchmarkPerf08bQ6KQ40","grep":"runBenchmarkPerf08bQ6KQ40Test"},{"name":"BenchmarkPerf08bQ80Q40","grep":"runBenchmarkPerf08bQ80Q40Test"},{"name":"BenchmarkPerf2bQ40Q40","grep":"runBenchmarkPerf2bQ40Q40Test"},{"name":"BenchmarkPerf2bQ41Q40","grep":"runBenchmarkPerf2bQ41Q40Test"},{"name":"BenchmarkPerf2bQ4KMQ40","grep":"runBenchmarkPerf2bQ4KMQ40Test"},{"name":"BenchmarkPerf2bQ6KQ40","grep":"runBenchmarkPerf2bQ6KQ40Test"},{"name":"BenchmarkPerf2bQ80Q40","grep":"runBenchmarkPerf2bQ80Q40Test"}]'
-          - cache: tbq3_0-pq3_0
-            groups: '[{"name":"BenchmarkPerf08bQ40Tbq30Pq30","grep":"runBenchmarkPerf08bQ40Tbq30Pq30Test"},{"name":"BenchmarkPerf08bQ41Tbq30Pq30","grep":"runBenchmarkPerf08bQ41Tbq30Pq30Test"},{"name":"BenchmarkPerf08bQ4KMTbq30Pq30","grep":"runBenchmarkPerf08bQ4KMTbq30Pq30Test"},{"name":"BenchmarkPerf08bQ6KTbq30Pq30","grep":"runBenchmarkPerf08bQ6KTbq30Pq30Test"},{"name":"BenchmarkPerf08bQ80Tbq30Pq30","grep":"runBenchmarkPerf08bQ80Tbq30Pq30Test"},{"name":"BenchmarkPerf2bQ40Tbq30Pq30","grep":"runBenchmarkPerf2bQ40Tbq30Pq30Test"},{"name":"BenchmarkPerf2bQ41Tbq30Pq30","grep":"runBenchmarkPerf2bQ41Tbq30Pq30Test"},{"name":"BenchmarkPerf2bQ4KMTbq30Pq30","grep":"runBenchmarkPerf2bQ4KMTbq30Pq30Test"},{"name":"BenchmarkPerf2bQ6KTbq30Pq30","grep":"runBenchmarkPerf2bQ6KTbq30Pq30Test"},{"name":"BenchmarkPerf2bQ80Tbq30Pq30","grep":"runBenchmarkPerf2bQ80Tbq30Pq30Test"}]'
-          - cache: tbq4_0-pq4_0
-            groups: '[{"name":"BenchmarkPerf08bQ40Tbq40Pq40","grep":"runBenchmarkPerf08bQ40Tbq40Pq40Test"},{"name":"BenchmarkPerf08bQ41Tbq40Pq40","grep":"runBenchmarkPerf08bQ41Tbq40Pq40Test"},{"name":"BenchmarkPerf08bQ4KMTbq40Pq40","grep":"runBenchmarkPerf08bQ4KMTbq40Pq40Test"},{"name":"BenchmarkPerf08bQ6KTbq40Pq40","grep":"runBenchmarkPerf08bQ6KTbq40Pq40Test"},{"name":"BenchmarkPerf08bQ80Tbq40Pq40","grep":"runBenchmarkPerf08bQ80Tbq40Pq40Test"},{"name":"BenchmarkPerf2bQ40Tbq40Pq40","grep":"runBenchmarkPerf2bQ40Tbq40Pq40Test"},{"name":"BenchmarkPerf2bQ41Tbq40Pq40","grep":"runBenchmarkPerf2bQ41Tbq40Pq40Test"},{"name":"BenchmarkPerf2bQ4KMTbq40Pq40","grep":"runBenchmarkPerf2bQ4KMTbq40Pq40Test"},{"name":"BenchmarkPerf2bQ6KTbq40Pq40","grep":"runBenchmarkPerf2bQ6KTbq40Pq40Test"},{"name":"BenchmarkPerf2bQ80Tbq40Pq40","grep":"runBenchmarkPerf2bQ80Tbq40Pq40Test"}]'
-          - cache: pq3_0
-            groups: '[{"name":"BenchmarkPerf08bQ40Pq30","grep":"runBenchmarkPerf08bQ40Pq30Test"},{"name":"BenchmarkPerf08bQ41Pq30","grep":"runBenchmarkPerf08bQ41Pq30Test"},{"name":"BenchmarkPerf08bQ4KMPq30","grep":"runBenchmarkPerf08bQ4KMPq30Test"},{"name":"BenchmarkPerf08bQ6KPq30","grep":"runBenchmarkPerf08bQ6KPq30Test"},{"name":"BenchmarkPerf08bQ80Pq30","grep":"runBenchmarkPerf08bQ80Pq30Test"},{"name":"BenchmarkPerf2bQ40Pq30","grep":"runBenchmarkPerf2bQ40Pq30Test"},{"name":"BenchmarkPerf2bQ41Pq30","grep":"runBenchmarkPerf2bQ41Pq30Test"},{"name":"BenchmarkPerf2bQ4KMPq30","grep":"runBenchmarkPerf2bQ4KMPq30Test"},{"name":"BenchmarkPerf2bQ6KPq30","grep":"runBenchmarkPerf2bQ6KPq30Test"},{"name":"BenchmarkPerf2bQ80Pq30","grep":"runBenchmarkPerf2bQ80Pq30Test"}]'
-          - cache: pq4_0
-            groups: '[{"name":"BenchmarkPerf08bQ40Pq40","grep":"runBenchmarkPerf08bQ40Pq40Test"},{"name":"BenchmarkPerf08bQ41Pq40","grep":"runBenchmarkPerf08bQ41Pq40Test"},{"name":"BenchmarkPerf08bQ4KMPq40","grep":"runBenchmarkPerf08bQ4KMPq40Test"},{"name":"BenchmarkPerf08bQ6KPq40","grep":"runBenchmarkPerf08bQ6KPq40Test"},{"name":"BenchmarkPerf08bQ80Pq40","grep":"runBenchmarkPerf08bQ80Pq40Test"},{"name":"BenchmarkPerf2bQ40Pq40","grep":"runBenchmarkPerf2bQ40Pq40Test"},{"name":"BenchmarkPerf2bQ41Pq40","grep":"runBenchmarkPerf2bQ41Pq40Test"},{"name":"BenchmarkPerf2bQ4KMPq40","grep":"runBenchmarkPerf2bQ4KMPq40Test"},{"name":"BenchmarkPerf2bQ6KPq40","grep":"runBenchmarkPerf2bQ6KPq40Test"},{"name":"BenchmarkPerf2bQ80Pq40","grep":"runBenchmarkPerf2bQ80Pq40Test"}]'
-          - cache: batchsweep
-            groups: '[{"name":"BenchmarkPerf08bQ40F16Bs512","grep":"runBenchmarkPerf08bQ40F16Bs512Test"},{"name":"BenchmarkPerf08bQ40F16Bs1024","grep":"runBenchmarkPerf08bQ40F16Bs1024Test"},{"name":"BenchmarkPerf2bQ40F16Bs512","grep":"runBenchmarkPerf2bQ40F16Bs512Test"},{"name":"BenchmarkPerf2bQ40F16Bs1024","grep":"runBenchmarkPerf2bQ40F16Bs1024Test"}]'
+        # Planned from the canonical matrix in verify-shards, so
+        # `sweep_params` actually reduces what Device Farm runs. Writing the
+        # batches literally here is what made the selector cosmetic: the job
+        # executed all 86 shards while run-meta recorded only the selected
+        # ones, so coverage described a different run than the one that ran.
+        include: ${{ fromJSON(needs.verify-shards.outputs.mobile_matrix) }}
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     # Bounded: Device Farm needs the AWS/Apple/pool secrets; no repository input, and
     # the release environment + fork-approval keep this to trusted in-repo refs.
