@@ -146,9 +146,9 @@
       "types": "./dist/plugins/builtin/moss-transcribe/plugin.d.ts",
       "import": "./dist/plugins/builtin/moss-transcribe/plugin.js"
     },
-    "./llamacpp-decisions/plugin": {
-      "types": "./dist/plugins/builtin/llamacpp-decisions/plugin.d.ts",
-      "import": "./dist/plugins/builtin/llamacpp-decisions/plugin.js"
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/plugins/builtin/llamacpp-decision/plugin.d.ts",
+      "import": "./dist/plugins/builtin/llamacpp-decision/plugin.js"
     }
   },
   "files": [

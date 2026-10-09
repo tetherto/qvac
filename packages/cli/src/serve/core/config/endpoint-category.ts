@@ -10,7 +10,7 @@ const ENDPOINT_CATEGORY: Record<CanonicalModelType, string> & Record<string, str
   embeddings: 'embedding',
   embedding: 'embedding',
   'llamacpp-embedding': 'embedding',
-  'llamacpp-decisions': 'decision',
+  'llamacpp-decision': 'decision',
   whisper: 'transcription',
   'whispercpp-transcription': 'transcription',
   'bci-whispercpp-transcription': 'bci',

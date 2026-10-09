@@ -7,7 +7,7 @@ import {
 } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { ResourceManager } from '../resource-manager.js'
-import { decisionsTests } from '../../decisions-tests.js'
+import { decisionTests } from '../../decision-tests.js'
 
 const questions = {
   department: {
@@ -24,21 +24,21 @@ const questions = {
 }
 const state = 'My payment failed twice and I was charged both times. Please refund the duplicate.'
 
-export class DecisionsExecutor extends AbstractModelExecutor<typeof decisionsTests> {
-  pattern = /^decisions-/
+export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests> {
+  pattern = /^decision-/
   protected handlers = {
-    'decisions-ticket': this.ticket.bind(this),
-    'decisions-structured-batch': this.batch.bind(this),
-    'decisions-invalid-budget': this.invalidBudget.bind(this)
+    'decision-ticket': this.ticket.bind(this),
+    'decision-structured-batch': this.batch.bind(this),
+    'decision-invalid-budget': this.invalidBudget.bind(this)
   }
 
   async ticket(_params: object, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded('decisions')
+    const modelId = await this.resources.ensureLoaded('decision')
     return ValidationHelpers.validate(await decide({ modelId, state, questions }), expectation)
   }
 
   async batch(_params: object, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded('decisions')
+    const modelId = await this.resources.ensureLoaded('decision')
     return ValidationHelpers.validate(
       await decide({
         modelId,
@@ -53,7 +53,7 @@ export class DecisionsExecutor extends AbstractModelExecutor<typeof decisionsTes
   }
 
   async invalidBudget(_params: object, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded('decisions')
+    const modelId = await this.resources.ensureLoaded('decision')
     let rejected = false
     try {
       await decide({ modelId, state, questions, max_len: -1 })
@@ -70,13 +70,13 @@ export class DecisionsExecutor extends AbstractModelExecutor<typeof decisionsTes
 }
 
 /** Register the local fixture shared by the desktop and Electron decision tests. */
-export function configureDecisionsResource(resources: ResourceManager, modelPath?: string) {
+export function configureDecisionResource(resources: ResourceManager, modelPath?: string) {
   if (!modelPath) {
-    return new SkipExecutor(/^decisions-/, 'Set QVAC_LAYA_MODEL to a local Laya GGUF.')
+    return new SkipExecutor(/^decision-/, 'Set QVAC_LAYA_MODEL to a local Laya GGUF.')
   }
-  resources.define('decisions', {
+  resources.define('decision', {
     modelSrc: modelPath,
-    type: 'llamacpp-decisions'
+    type: 'llamacpp-decision'
   })
-  return new DecisionsExecutor(resources)
+  return new DecisionExecutor(resources)
 }

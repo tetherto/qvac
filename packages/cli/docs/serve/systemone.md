@@ -22,7 +22,7 @@ with `choice`, `score`, or `noul` questions.
 ### Loaded model
 
 Requires an alias whose endpoint category is `decision`. Register a Laya decision
-checkpoint in `serve.models` with SDK model type `llamacpp-decisions`. An
+checkpoint in `serve.models` with SDK model type `llamacpp-decision`. An
 embedding-only checkpoint cannot answer decision questions.
 
 ```bash
@@ -42,7 +42,7 @@ or configuration to run on CPU.
     "models": {
       "laya-multilingual-322m-q8-0": {
         "model": "LAYA_MULTILINGUAL_322M_Q8_0",
-        "type": "llamacpp-decisions",
+        "type": "llamacpp-decision",
         "preload": false
       }
     }
@@ -56,7 +56,7 @@ The first request loads the model. Set `preload: true` or pass
 Choose another Laya checkpoint in interactive configuration. To use a local GGUF,
 replace `model` with `src` in the entry above and set it to the file path.
 When adding a Laya checkpoint through "Search all models", set
-`type: 'llamacpp-decisions'` in the JSON editor or configuration.
+`type: 'llamacpp-decision'` in the JSON editor or configuration.
 
 ### Request
 
