@@ -20,7 +20,7 @@ import {
 
 const PROBE: FitProbeRequest = {
   engine: 'llm-llamacpp',
-  request: { modelPath: '/models/test.gguf', params: { 'ctx-size': '4096' }, minCtxSize: 4096 }
+  request: { modelPath: '/models/test.gguf', config: { 'ctx-size': '4096' }, minCtxSize: 4096 }
 }
 const RUNTIME = {
   platform: 'darwin',

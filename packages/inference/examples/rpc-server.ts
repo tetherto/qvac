@@ -1,5 +1,5 @@
 // Run: bare examples/rpc-server.ts
-// Requires: npm install @qvac/inference @qvac/ggml-rpc-server@0.1.0
+// Requires: npm install @qvac/inference @qvac/ggml-rpc-server@0.2.0
 import { registerRpcServerProvider, startRpcServer, stopRpcServer, close } from '@qvac/inference'
 import { ggmlRpcServerProvider } from '@qvac/inference/ggml-rpc-server/provider'
 
