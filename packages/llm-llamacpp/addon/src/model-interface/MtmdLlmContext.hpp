@@ -429,6 +429,11 @@ private:
       int& nRemain);
   /// See `TextLlmContext::processSpeculativeBatch`.
   void processSpeculativeBatch(const llama_batch& batch);
+  /// Encodes and decodes an audio chunk like `mtmd_helper_eval_chunk_single`,
+  /// handing each decoded batch to the speculative state.
+  int32_t evalAudioChunkSpeculative(
+      const mtmd_input_chunk* chunk, llama_pos nPast, llama_seq_id seqId,
+      llama_pos* newNPast);
   /// Advances both cursors over one decoded text token.
   void advanceDecodedTextToken(llama_token token);
 

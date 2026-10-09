@@ -359,11 +359,15 @@ bool SpeculativeRuntime::process(const llama_batch& batch) const {
   // (cache reconciliation, rollbacks, checkpoint restores), so instead the
   // draft sequence is brought in line here, right before it receives the
   // batch: a draft tail at or past the batch start is stale and trimmed, and
-  // a draft that stops short of it (the target was extended without the
-  // draft context) restarts from this batch.
-  if (batch.n_tokens > 0 && batch.token != nullptr && batch.embd == nullptr) {
+  // a draft that stops short of a token batch (the target was extended
+  // without the draft context) restarts from it. Media batches are only
+  // trimmed: drafts skip some of them (MTP, position-pinned images), so a
+  // gap before one is expected.
+  if (batch.n_tokens > 0 && batch.pos != nullptr && batch.seq_id != nullptr) {
+    const bool isTokenBatch = batch.token != nullptr && batch.embd == nullptr;
     llama_memory_t memDft = llama_get_memory(ctxDft_);
-    const bool gapsAllowed = allowsPositionGaps(llama_get_model(ctxDft_));
+    const bool gapsAllowed =
+        !isTokenBatch || allowsPositionGaps(llama_get_model(ctxDft_));
     std::unordered_map<llama_seq_id, llama_pos> firstPos;
     for (int32_t k = 0; k < batch.n_tokens; ++k) {
       firstPos.try_emplace(batch.seq_id[k][0], batch.pos[k]);

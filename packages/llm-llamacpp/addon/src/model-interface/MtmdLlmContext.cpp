@@ -42,7 +42,7 @@ bool isFileInitialized(const std::filesystem::path& path) {
 }
 
 // llama-server's `process_mtmd_chunk` post-decode callback: hands each image
-// embedding batch to the speculative state.
+// or audio embedding batch to the speculative state.
 int32_t speculativePostDecode(llama_batch batch, void* userData) {
   const auto* runtime =
       static_cast<const speculative::SpeculativeRuntime*>(userData);
@@ -853,6 +853,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
             modelCtx_.speculative != nullptr ? speculativePostDecode : nullptr,
             modelCtx_.speculative);
       }
+    } else if (
+        modelCtx_.speculative != nullptr &&
+        mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_AUDIO) {
+      res = evalAudioChunkSpeculative(chunk, nPastLocal, 0, &nPastLocal);
     } else {
       res = mtmd_helper_eval_chunk_single(
           visionContext(),
@@ -1893,6 +1897,10 @@ llama_pos MtmdLlmContext::evalMediaSegment(size_t mediaIndex, llama_pos pos) {
           modelCtx_.speculative != nullptr ? speculativePostDecode : nullptr,
           modelCtx_.speculative);
     }
+  } else if (
+      modelCtx_.speculative != nullptr &&
+      mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_AUDIO) {
+    res = evalAudioChunkSpeculative(chunk, pos, seqId_, &newPos);
   } else {
     res = mtmd_helper_eval_chunk_single(
         visionContext(),
@@ -1949,6 +1957,28 @@ void MtmdLlmContext::onPrefillComplete(
   if (thinkingForcedOpen_ && reasoningEnabled_) {
     reasoningState_.inside_reasoning = true;
   }
+}
+
+int32_t MtmdLlmContext::evalAudioChunkSpeculative(
+    const mtmd_input_chunk* chunk, llama_pos nPast, llama_seq_id seqId,
+    llama_pos* newNPast) {
+  // mtmd_helper_eval_chunk_single's audio branch, with llama-server's
+  // post-decode hook so the speculative state sees the audio positions.
+  int32_t res = mtmd_encode_chunk(visionContext(), chunk);
+  if (res != 0) {
+    return res;
+  }
+  return mtmd_helper_decode_image_chunk(
+      visionContext(),
+      modelCtx_.lctx,
+      chunk,
+      mtmd_get_output_embd(visionContext()),
+      nPast,
+      seqId,
+      params_.n_batch,
+      newNPast,
+      speculativePostDecode,
+      modelCtx_.speculative);
 }
 
 void MtmdLlmContext::processSpeculativeBatch(const llama_batch& batch) {
