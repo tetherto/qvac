@@ -6,7 +6,7 @@
  * zero noise), and prints the produced action chunk + per-stage timings.
  *
  * Usage:
- *   bun examples/vla-smolvla.ts [path-to-smolvla.gguf]
+ *   npx tsx examples/vla-smolvla.ts [path-to-smolvla.gguf]
  *
  * By default the example pulls the registry-baked SmolVLA-LIBERO GGUF
  * (~1.9 GB) on first run and caches it locally. Pass an absolute path on

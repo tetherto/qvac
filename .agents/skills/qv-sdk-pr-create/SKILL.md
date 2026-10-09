@@ -201,7 +201,7 @@ A change to `packages/inference/package.json` alone is not a trigger — the eng
    - Changes touch sdk's `version` line, its `@qvac/inference` range, OR sdk's `dependencies` / `optionalDependencies` / `peerDependencies` block
 2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-inference-version` (version + sdk-python)?" [Yes / No (skip)]
 3. If yes, read `.agents/skills/qv-sdk-inference-version/SKILL.md` and follow it inline.
-4. Verify: `bun run enforce-inference-versions` in `packages/sdk` and `packages/sdk-python` `generate.py --check` must both pass.
+4. Verify: `npm run enforce-inference-versions` in `packages/sdk` and `packages/sdk-python` `generate.py --check` must both pass.
 5. Stage and commit the version changes onto the same branch BEFORE proceeding to Output step.
 
 ### Opt-out

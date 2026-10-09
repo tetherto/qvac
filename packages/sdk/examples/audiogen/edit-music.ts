@@ -14,7 +14,7 @@ import {
 // regenerates one time range against a new prompt. Operations run in order.
 //
 // Usage:
-//   bun examples/audiogen/edit-music.ts <source.wav|mp3|...> "original pop song" "guitar pop-rock" [output.wav]
+//   npx tsx examples/audiogen/edit-music.ts <source.wav|mp3|...> "original pop song" "guitar pop-rock" [output.wav]
 //
 // The source must run at least REPAINT_END seconds: the Repaint below asks for
 // a fixed window, and a range past the end of the source is rejected with
@@ -36,7 +36,7 @@ const outputPath = process.argv[5] ?? 'audiogen-edit.wav'
 
 if (!sourcePath) {
   console.error(
-    'Usage: bun examples/audiogen/edit-music.ts <source-audio> "<from caption>" "<to caption>" [output.wav]'
+    'Usage: npx tsx examples/audiogen/edit-music.ts <source-audio> "<from caption>" "<to caption>" [output.wav]'
   )
   process.exit(1)
 }

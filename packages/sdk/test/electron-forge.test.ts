@@ -1,9 +1,11 @@
 import test from 'brittle'
 import fs from 'fs'
+import { createRequire } from 'module'
 import os from 'os'
 import path from 'path'
 
-const PLUGIN_PATH = path.join(__dirname, '../src/electron-forge/index.cjs')
+const require = createRequire(import.meta.url)
+const PLUGIN_PATH = path.join(import.meta.dirname, '../src/electron-forge/index.cjs')
 
 const {
   createIgnore,

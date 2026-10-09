@@ -36,7 +36,7 @@ const embeddingsConnectorsModelSrc =
 if (!initImagePath) {
   console.error('✖ init image path is required')
   console.error(
-    'Usage: bun run bare:example dist/examples/diffusion-img2vid-ltx.js ' +
+    'Usage: node dist/examples/diffusion-img2vid-ltx.js ' +
       '<initImagePath> [prompt] [outputDir] ' +
       '[diffusionModelSrc] [llmModelSrc] [vaeModelSrc] [audioVaeModelSrc] [embeddingsConnectorsModelSrc]'
   )

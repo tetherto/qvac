@@ -138,7 +138,7 @@ Rules for this section:
 - End-to-end tests in the test suite cover the plugin's behavior.
 - End-to-end example(s) exist under `packages/sdk/examples/` and reflect the current API shape.
 - If adding/changing the client API, ensure `packages/sdk/e2e` is aligned.
-- Typecheck and lint pass (`bun run build`).
+- Typecheck and lint pass (`npm run build`).
 
 ### Breaking Changes & Docs Hygiene
 

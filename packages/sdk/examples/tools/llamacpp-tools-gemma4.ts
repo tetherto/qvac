@@ -13,7 +13,7 @@
  * completion() if auto-detection does not pick it up for a given file name.
  *
  * Usage:
- *   bun run bare:example dist/examples/tools/llamacpp-tools-gemma4.js <model-url>
+ *   node dist/examples/tools/llamacpp-tools-gemma4.js <model-url>
  */
 import {
   completion,

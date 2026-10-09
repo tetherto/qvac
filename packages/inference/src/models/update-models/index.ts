@@ -14,7 +14,7 @@ import { formatSize } from './utils'
 
 // This tool runs from the compiled build (bare resolves the `@/` alias only
 // after tsc-alias), but regenerates the source catalog. Resolve both targets
-// against the package root (cwd for `npm run`/`bun run`) so the location the
+// against the package root (cwd for `npm run`) so the location the
 // build ran from does not matter.
 const OUTPUT_FILE = path.join(os.cwd(), 'src', 'models', 'registry', 'models.ts')
 const PROFILES_FILE = path.join(os.cwd(), 'src', 'models', 'registry', 'resource-profiles.ts')
@@ -28,7 +28,7 @@ async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<v
     setTimeout(() => {
       timedOut = true
       console.log('⏱️  Model check timed out')
-      console.log("   Run 'bun check-models' manually to retry")
+      console.log("   Run 'npm run check-models' manually to retry")
       resolve(null)
     }, timeoutMs)
   })
@@ -97,7 +97,7 @@ async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<v
     }
 
     console.log('')
-    console.log(`💡 Run 'bun update-models' to sync changes`)
+    console.log(`💡 Run 'npm run update-models' to sync changes`)
     console.log('')
     if (nonBlocking) {
       console.log('💡 Commit will proceed - update models when ready')

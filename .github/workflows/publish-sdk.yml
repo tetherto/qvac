@@ -140,10 +140,10 @@ jobs:
           fi
           echo "OK: @qvac/sdk and tetherto-qvac-sdk both at $SDK_VER (verified at ${REF})"
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          bun-version: latest
+          node-version: 22
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
@@ -169,15 +169,6 @@ jobs:
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           fi
 
-          # Configure bunfig.toml for reading packages (in same dir as package.json)
-          cat > bunfig.toml << EOF
-          [install]
-          registry = "https://registry.npmjs.org/"
-
-          [install.scopes]
-          "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
-          EOF
-
       # Dev builds compile against the in-repo @qvac/inference at this commit,
       # because the engine they publish is the one built beside them in this run
       # (publish-gpr pins the SDK mono build to that @tetherto/inference-mono).
@@ -188,11 +179,14 @@ jobs:
       # can sit ahead of it, since a release branch is cut from main.
       - name: Build against workspace @qvac/inference
         if: ${{ !startsWith(github.ref_name, 'release-sdk-') }}
-        run: bun run sdk-source:workspace
+        run: npm run sdk-source:workspace
         working-directory: ${{ env.WORKDIR }}
 
+      # --ignore-scripts: the step above writes GITHUB_TOKEN into .npmrc, so a
+      # dependency lifecycle script would run with that token in reach. See
+      # .github/scripts/test/install-scripts-policy.test.mjs.
       - name: Install dependencies
-        run: bun install
+        run: npm install --ignore-scripts
         working-directory: ${{ env.WORKDIR }}
 
       - name: Modify package name for branch-based builds
@@ -255,7 +249,7 @@ jobs:
           fi
 
       - name: Build (includes lint, typecheck, compile)
-        run: bun run build
+        run: npm run build
         working-directory: ${{ env.WORKDIR }}
 
       - name: Upload build artifacts
@@ -305,7 +299,7 @@ jobs:
     permissions:
       contents: read
       # The scoped-registry step below writes an @tetherto GPR authToken into
-      # .npmrc/bunfig. GITHUB_TOKEN is bounded by this block (PAT_TOKEN was not),
+      # .npmrc. GITHUB_TOKEN is bounded by this block (PAT_TOKEN was not),
       # so declare the scope the config implies.
       packages: read
     env:
@@ -319,10 +313,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          bun-version: latest
+          node-version: 22
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         shell: bash
@@ -338,21 +332,15 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
-          cat > bunfig.toml <<BUNFIG
-          [install]
-          registry = "https://registry.npmjs.org/"
-
-          [install.scopes]
-          "@tetherto" = { token = "${GIT_PAT}", url = "https://npm.pkg.github.com" }
-          BUNFIG
-
+      # --ignore-scripts skips the engine's own `prepare` as well, hence the
+      # explicit build step.
       - name: Install dependencies
         working-directory: ${{ env.WORKDIR_INFERENCE }}
-        run: bun install
+        run: npm install --ignore-scripts
 
       - name: Build
         working-directory: ${{ env.WORKDIR_INFERENCE }}
-        run: bun run build
+        run: npm run build
 
       - name: Upload inference dist artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0

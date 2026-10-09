@@ -36,7 +36,7 @@ import { PathTraversalError } from '@/errors'
 // scope (production code path — the session resolves real on-disk
 // cache files). `bare-path/lib/posix.js` references `Bare.platform` at
 // import time, and `bare-os` carries N-API bindings — neither resolves
-// in Bun. These tests live in `test/bare/` and run exclusively under
+// in Node. These tests live in `test/bare/` and run exclusively under
 // the Bare runtime via `npm run test:bare`.
 // -----------------------------------------------------------------------------
 

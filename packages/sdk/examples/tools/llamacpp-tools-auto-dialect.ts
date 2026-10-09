@@ -6,7 +6,7 @@
  * LFM without requiring a toolDialect override.
  *
  * Usage:
- *   bun run bare:example dist/examples/tools/llamacpp-tools-auto-dialect.js <model-src>
+ *   node dist/examples/tools/llamacpp-tools-auto-dialect.js <model-src>
  */
 import { completion, loadModel, unloadModel, type ToolCall } from '@qvac/sdk'
 import { tools, mockExecute } from './shared'

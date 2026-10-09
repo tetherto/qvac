@@ -6,9 +6,8 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const testDir = join(__dirname, '..', 'test')
 
-// The Bare suite (test/bare) and its build output (test/dist) run via
-// `test:bare`, so the Bun/Node unit runner skips them.
-const SKIP_DIRS = new Set(['bare', 'dist'])
+// test/dist is a build output, not a test source tree.
+const SKIP_DIRS = new Set(['dist'])
 
 function collectTestFiles(dir: string): string[] {
   const files: string[] = []
@@ -33,9 +32,14 @@ function usesNodeTestRunner(filePath: string): boolean {
   return source.includes("from 'node:test'") || source.includes('from "node:test"')
 }
 
+// Each file runs in its own Node process with tsx loaded, so TypeScript sources
+// and the tsconfig path aliases resolve without a build step. brittle files run
+// as plain scripts; node:test files go through Node's test runner.
 for (const file of testFiles) {
-  const args = usesNodeTestRunner(file) ? ['test', file] : ['run', file]
-  const result = spawnSync('bun', args, {
+  const args = usesNodeTestRunner(file)
+    ? ['--import', 'tsx', '--test', file]
+    : ['--import', 'tsx', file]
+  const result = spawnSync(process.execPath, args, {
     stdio: 'inherit'
   })
   if (result.status !== 0) {

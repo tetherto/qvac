@@ -220,10 +220,6 @@ jobs:
         with:
           node-version: 22
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
-
       # A failed-test rerun carries a different test list per platform, so the
       # effective filter is resolved inside the matrix leg rather than passed in.
       - name: Resolve test filter for this platform
@@ -347,7 +343,7 @@ jobs:
 
       - name: Install dependencies (root)
         working-directory: ${{ inputs.project-directory }}
-        run: bun install
+        run: npm install --ignore-scripts
 
       - name: Build project (root)
         working-directory: ${{ inputs.project-directory }}
@@ -359,7 +355,7 @@ jobs:
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           if (packageJson.scripts && packageJson.scripts.build) {
             console.log('Building root project...');
-            execSync('bun run build', { stdio: 'inherit' });
+            execSync('npm run build', { stdio: 'inherit' });
           } else {
             console.log('⚠️  No build script found in root package.json - skipping');
           }
@@ -384,7 +380,7 @@ jobs:
 
       - name: Build project (consumer)
         working-directory: ${{ inputs.working-directory }}
-        run: bun run build
+        run: npm run build
 
       # The Python client runs from source; the action carries the reason the
       # runner's own Python is used rather than actions/setup-python.

@@ -90,8 +90,8 @@ qvac doctor [options]
 - **Deploy targets (SDK)** — desktop target matrix, Android (`adb`), and
   iOS (`xcodebuild` on macOS). Missing mobile toolchains produce
   warnings, not failures.
-- **Optional tools** — `ffmpeg` (microphone/transcription), Bare runtime,
-  Bun.
+- **Optional tools** — `ffmpeg` (microphone/transcription) and the Bare
+  runtime.
 - **Project** — whether `@qvac/sdk` is resolvable from the current
   working directory (works for hoisted monorepo installs too), and whether
   every package's `engines.bare` accepts the Bare version each target runs:
@@ -380,9 +380,9 @@ that uses the network:
    `raw.githubusercontent.com` (two requests, 5 s timeout each). Skipped with
    `--offline`.
 
-The table is regenerated with `bun run bare-kit-runtimes:generate` in
+The table is regenerated with `npm run bare-kit-runtimes:generate` in
 `packages/sdk`, which only probes releases newer than its newest entries
-(`bun run bare-kit-runtimes:generate --full` rebuilds it).
+(`npm run bare-kit-runtimes:generate -- --full` rebuilds it).
 
 **Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
 names the oldest `react-native-bare-kit` release whose Bare satisfies every
@@ -525,7 +525,7 @@ separate worktree):
 
 ```bash
 # Build the SDK first (from its packages/sdk directory)
-cd /path/to/qvac/packages/sdk && bun run build
+cd /path/to/qvac/packages/sdk && npm run build
 
 # Point the CLI at the sibling SDK (../sdk) instead of the registry copy
 cd packages/cli
