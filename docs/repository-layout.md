@@ -37,7 +37,6 @@ Legend:
 | inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building inference addons | Core |
 | logging | Logger wrapper that normalizes the logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
-| diagnostics | Diagnostic report generation library for QVAC | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 | qvac-ci | CI utilities for the QVAC monorepo | Tool |
 | registry-server | Distributed model registry server for downloading AI models and contributing new ones | Tool |
