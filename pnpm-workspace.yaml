@@ -54,3 +54,5 @@ minimumReleaseAgeExclude:
   - '@qvac/fabric-ios@0.19.0'
   - '@qvac/fabric-android-arm64@0.20.0'
   - '@qvac/fabric-ios@0.20.0'
+  - '@qvac/fabric-android-arm64@0.20.3'
+  - '@qvac/fabric-ios@0.20.3'

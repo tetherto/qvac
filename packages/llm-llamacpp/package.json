@@ -73,8 +73,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.20.0",
-    "@qvac/fabric-ios": "^0.20.0",
+    "@qvac/fabric-android-arm64": "^0.20.3",
+    "@qvac/fabric-ios": "^0.20.3",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-process": "^4.2.2",
@@ -96,7 +96,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.20.0",
+    "@qvac/fabric": "^0.20.3",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
