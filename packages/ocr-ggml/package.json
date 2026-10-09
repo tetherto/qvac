@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.27.0",
+  "version": "0.27.1",
   "description": "GGML-backed OCR addon for qvac (EasyOCR and DocTR pipelines on GGUF weights)",
   "addon": true,
   "engines": {
@@ -9,9 +9,9 @@
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
-    "build:ts": "tsc -p tsconfig.build.json",
+    "build:ts": "tsc -p tsconfig.build.json && prettier --write fit.js",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
-    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js ocr-ggml.js addonLogging.js index.d.ts ocr-ggml.d.ts addonLogging.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js ocr-ggml.js addonLogging.js fit.js index.d.ts ocr-ggml.d.ts addonLogging.d.ts fit.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "mobile:generate-urls": "bash ./scripts/generate-ocr-ggml-presigned-urls.sh",
@@ -45,6 +45,8 @@
     "addonLogging.d.ts",
     "binding.js",
     "index.js",
+    "fit.js",
+    "fit.d.ts",
     "ocr-ggml.js",
     "ocr-ggml.d.ts",
     "prebuilds",
@@ -80,7 +82,7 @@
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
     "bare-stream": "^2.7.0",
-    "bare-subprocess": "^5.2.1",
+    "bare-subprocess": "^6.2.1",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",

@@ -88,6 +88,7 @@ jobs:
           node --test
           .github/scripts/test/ci-trust-policy.test.mjs
           .github/scripts/test/cpp-tests-baseline.test.mjs
+          .github/scripts/test/cpp-build-cache.test.mjs
           .github/scripts/test/cpp-lint-selection.test.mjs
           .github/scripts/test/fabric-overlay-policy.test.mjs
           .github/scripts/test/install-scripts-policy.test.mjs

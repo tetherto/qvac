@@ -12,6 +12,7 @@
       "runDoctrModelsTest",
       "runDoctrParamValidationTest",
       "runErrorHandlingTest",
+      "runFitTest",
       "runFullCoverageTest",
       "runFullOcrSuiteTest"
     ],
@@ -48,6 +49,7 @@
       "runDoctrModelsTest",
       "runDoctrParamValidationTest",
       "runErrorHandlingTest",
+      "runFitTest",
       "runFullCoverageTest",
       "runFullOcrSuiteTest"
     ],

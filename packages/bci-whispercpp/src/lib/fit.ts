@@ -4,9 +4,13 @@ import path from 'bare-path'
 const PREBUILDS_DIR = path.join(__dirname, '..', 'prebuilds')
 
 export interface BciFitRequest {
-  /** Absolute path to the BCI model. */
+  /** Absolute path to the BCI model, or to the registry's weightless description of it. */
   modelPath: string
-  /** Sized alongside the projection; see `embedderFileBytes`. */
+  /**
+   * The embedder, or its weightless description. Its host memory is part of
+   * the projection. Omitted, `bci-embedder.bin` next to `modelPath` is read,
+   * as a load reads it.
+   */
   embedderPath?: string
   /** Longest single transcribe the projection must cover. */
   audioSeconds?: number
@@ -28,7 +32,7 @@ export type BciFitStatus = 'fits' | 'does-not-fit' | 'error'
 
 export interface BciFitResult {
   status: BciFitStatus
-  /** Whisper's own wording, e.g. `model-unreadable`, `no-backend-device`. */
+  /** Whisper's own wording, e.g. `model-unreadable`, `no-backend-device`, or `embedder-unreadable`. */
   reason: string
   /** `tiny` | `base` | ... | `large v3`. */
   modelType: string
@@ -44,13 +48,14 @@ export interface BciFitResult {
   computeBytes: number
   /** Device-component bytes the runtime places in host RAM instead. */
   hostOverflowBytes: number
+  /** Host RAM the load needs beside the device projection, the embedder included. */
   hostBytes: number
   /**
-   * The embedder's size on disk, 0 when no path was given. The embedder has no
-   * fitter, so this is a size on disk. It is counted in neither `deviceBytes`
-   * nor `hostBytes`.
+   * Host RAM the embedder keeps: its day and month projections, its session
+   * map and the dense projection it caches per day, 0 when it could not be
+   * read. Counted in `hostBytes`.
    */
-  embedderFileBytes: number
+  embedderBytes: number
   report: string
 }
 
@@ -62,9 +67,10 @@ interface FitBinding {
  * Projects a BCI load against the memory free right now, reading model
  * metadata and never weight data.
  *
- * Covers the whisper half of the load. A model the fitter cannot read comes
- * back as `status: "error"`; a broken request, or a host with no native
- * binding, throws.
+ * Covers the whisper model and the embedder, from the files or from the
+ * registry's weightless descriptions of them. A model or embedder the fitter
+ * cannot read comes back as `status: "error"`; a broken request, or a host
+ * with no native binding, throws.
  *
  * The backend directory defaults to the one a real load uses. The native side
  * registers backends once per process, so a fit that let it fall back to the

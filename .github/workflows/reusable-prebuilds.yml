@@ -336,6 +336,13 @@ jobs:
           arch: ${{ matrix.arch }}
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
+      # The pinned host action predates the Bare NDK selector fix.
+      - name: Align Bare NDK selection
+        if: runner.environment == 'github-hosted' && matrix.platform == 'android'
+        shell: bash
+        run: |
+          echo "ANDROID_NDK_LATEST_HOME=${ANDROID_NDK_HOME:?Android NDK must be selected first}" >> "$GITHUB_ENV"
+
       - name: Setup LLVM (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
         uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
@@ -451,6 +458,18 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm install
+
+      # Local install, not `npm install -g`. The global pin is bare-make
+      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
+      # is prepended so generate and the vcpkg toolchain's
+      # find_program(bare-make) both use the current package.
+      - name: Install current bare-make locally
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          npm install --no-save --ignore-scripts bare-make
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          ./node_modules/.bin/bare-make --version
 
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Download fabric-prebuilds for overlay
