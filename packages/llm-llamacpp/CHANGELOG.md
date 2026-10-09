@@ -12,6 +12,13 @@
   `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
   `InvalidInputFormat`.
 
+### Fixed
+
+- A multimodal model that failed to load, for example out of GPU memory,
+  resolved `load()` instead of rejecting it, and the first request then
+  crashed the process. It now rejects with `UnableToLoadModel`, as a
+  text-only model does.
+
 ## [0.58.0] - 2026-10-09
 
 ### Breaking
