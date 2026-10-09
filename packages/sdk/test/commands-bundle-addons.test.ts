@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import Bundle from 'bare-bundle'
-import { buildNestedPathIndex } from '@/commands/bundle/manifest'
+import { buildNestedPathIndex } from '@/commands/bundle/addons'
 import { readBundle } from '@/commands/bundle/read-bundle'
 
 describe('readBundle', () => {
@@ -19,7 +19,7 @@ describe('readBundle', () => {
   async function read(contents: string | Buffer) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-read-bundle-'))
     try {
-      const file = path.join(dir, 'worker.bundle')
+      const file = path.join(dir, 'index.bundle')
       fs.writeFileSync(file, contents)
       return await readBundle(file)
     } finally {

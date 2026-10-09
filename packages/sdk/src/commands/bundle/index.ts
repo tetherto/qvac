@@ -17,7 +17,7 @@ import {
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
-import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
+import { AUDIO_DECODER_ADDON, listBundledAddons } from '@/commands/bundle/addons'
 import { linkAddons } from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
@@ -58,8 +58,8 @@ export interface BundleSdkOptions {
    * (see `ensureHostPrebuilds`), before bundling. Off by default: without it,
    * bundling never changes package.json or node_modules, and a mobile host
    * whose platform package is missing fails with `HostPrebuildsMissingError`,
-   * naming the exact pins. A refused install
-   * throws `HostPrebuildsInstallRefusedError` before anything is written.
+   * naming the exact pins. A refused install throws
+   * `HostPrebuildsInstallRefusedError` before anything is written.
    */
   installMissingPrebuilds?: boolean | undefined
   /**
@@ -87,7 +87,6 @@ export interface BundleSdkResult {
   bundlePath: string
   plugins: string[]
   addons: string[]
-  manifestPath: string
   /** Platform packages `installMissingPrebuilds` installed; empty when it is off. */
   installedPrebuilds: HostPrebuildPackage[]
   /** Paths the link step wrote. */
@@ -404,13 +403,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   logger.info(`\n✅ Bundle created: ${path.relative(projectRoot, bundlePath)}`)
   logger.info(`   Size: ${sizeKB} KB`)
 
-  const manifestResult = await generateAddonsManifest({
-    bundlePath,
-    outputDir: qvacDir,
-    projectRoot,
-    logger,
-    includeAudioDecoder
-  })
+  const addons = await listBundledAddons({ bundlePath, projectRoot, logger, includeAudioDecoder })
+  logger.info(`   Native addons (${addons.length}): ${addons.join(', ') || '(none)'}`)
 
   if (options.checkEngines !== false) {
     await checkBundleEngines({
@@ -436,8 +430,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   logger.info('Generated files:')
   logger.info(`  - ${path.relative(projectRoot, entryPath)}    (worker entry)`)
   logger.info(`  - ${path.relative(projectRoot, harnessPath)}    (starts the bundled worker)`)
-  logger.info(`  - ${path.relative(projectRoot, bundlePath)}`)
-  logger.info(`  - ${path.relative(projectRoot, manifestResult.manifestPath)}\n`)
+  logger.info(`  - ${path.relative(projectRoot, bundlePath)}\n`)
 
   return {
     target,
@@ -446,8 +439,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     harnessPath,
     bundlePath,
     plugins: pluginSpecifiers,
-    addons: manifestResult.addons,
-    manifestPath: manifestResult.manifestPath,
+    addons,
     installedPrebuilds,
     linked
   }

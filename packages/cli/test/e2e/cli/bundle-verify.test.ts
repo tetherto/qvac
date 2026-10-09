@@ -9,14 +9,14 @@ import { runCli } from '../helpers/cli.js'
 import { tempDir } from '../helpers/tmp.js'
 
 // bundle sdk resolves @qvac/sdk from the project's node_modules and emits a
-// worker bundle + addons manifest; verify bundle then validates that bundle for
-// the host. The exhaustive option matrix lives in the SDK.
+// worker bundle; verify bundle then validates that bundle for the host. The
+// exhaustive option matrix lives in the SDK.
 const INSTALLED_SDK = fileURLToPath(new URL('../../../node_modules/@qvac/sdk', import.meta.url))
 const HOST = `${process.platform}-${process.arch}`
 const DESKTOP_BUNDLE = join('qvac', 'worker', 'index.bundle')
 
-// The bundle's entry imports these from the project root, where an install hoists them.
-const HOISTED = ['bare-stow', 'bare-stow-target-react-native']
+// The harnesses import these by name from the project root, where an install puts them.
+const HOISTED = ['bare-sidecar', 'bare-stow', 'react-native-bare-kit']
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -84,10 +84,6 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
     })
     assert.equal(bundle.code, 0, `bundle sdk failed:\n${bundle.output}`)
     assert.ok(await exists(join(dir, DESKTOP_BUNDLE)), `expected ${DESKTOP_BUNDLE}`)
-    assert.ok(
-      await exists(join(dir, 'qvac', 'addons.manifest.json')),
-      'expected qvac/addons.manifest.json'
-    )
 
     const verify = await runCli(
       ['verify', 'bundle', '--addons-source', join(dir, DESKTOP_BUNDLE), '--host', HOST],
@@ -114,7 +110,7 @@ describe('cli: bundle sdk addon platform packages', () => {
     assert.notEqual(bundle.code, 0, 'a split addon cannot bundle without its platform package')
     assert.match(bundle.output, /Cannot install the addon platform packages automatically/)
     assert.match(bundle.output, /Bundling without installing them/)
-    assert.match(bundle.output, /HOST_PREBUILDS_MISSING|needs each mobile host's platform package/)
+    assert.match(bundle.output, /HOST_PREBUILDS_MISSING|needs each host's platform package/)
     assert.match(bundle.output, /"@qvac\/tts-ggml-android-arm64": "\d+\.\d+\.\d+"/)
     assert.ok(!(await exists(join(dir, 'package.json'))), 'package.json must not be created')
   })
