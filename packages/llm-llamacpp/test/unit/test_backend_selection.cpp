@@ -1509,6 +1509,53 @@ TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
   EXPECT_EQ(result.first, BackendType::CPU);
 }
 
+static bool loggedOverrideMiss(const MockBackendInterface& mockBackend) {
+  return std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("matched no available device") != std::string::npos;
+  });
+}
+
+// Some builds name the Metal device "MTL0", so the family match must still
+// bind 'metal' to it.
+TEST_F(BackendSelectionTest, OverrideBindsMetal) {
+  mockBackend.addDevice(createGPUDevice("Apple M2", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice("Apple M2", "MTL0"));
+  auto result = chooseWithOverride(mockBackend, {"metal"});
+  expectChosen(result, BackendType::GPU, "mtl0");
+  EXPECT_FALSE(loggedOverrideMiss(mockBackend));
+}
+
+// A main-gpu index narrows the candidates to that one device before the
+// override is applied, so an override naming another device's family misses
+// and the indexed device is used.
+TEST_F(BackendSelectionTest, OverrideWithinMainGpuIndex) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      MainGpu(1),
+      nullptr,
+      false,
+      nullptr,
+      {"cuda"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+  EXPECT_TRUE(loggedOverrideMiss(mockBackend));
+}
+
+// GB10 reports its CUDA device as integrated. The override must still bind it
+// over a discrete Vulkan device.
+TEST_F(BackendSelectionTest, OverrideBindsIntegratedCuda) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice("NVIDIA GB10", CUDA0_BACK));
+  auto result = chooseWithOverride(mockBackend, {"cuda"});
+  expectChosen(result, BackendType::GPU, "cuda0");
+  EXPECT_FALSE(loggedOverrideMiss(mockBackend));
+}
+
 // ---- parseBackendOverride ----
 
 TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {
@@ -1632,6 +1679,7 @@ TEST_F(BackendSelectionTest, OverrideIgnoredWhenPreferredCpu) {
   auto result = chooseWithOverride(mockBackend, {"cuda"}, BackendType::CPU);
   EXPECT_EQ(result.first, BackendType::CPU);
   EXPECT_EQ(result.second, "none");
+  EXPECT_FALSE(loggedOverrideMiss(mockBackend));
 }
 
 // ---- QVAC-23763: split-mode device scoping ----
