@@ -332,10 +332,12 @@ private:
 
   /**
    * The check antiprompt method. It checks the antiprompt.
+   * See TextLlmContext::checkAntiprompt for `unemittedTail` / `emitted`.
    *
    * @return - true if the antiprompt is found, false otherwise.
    */
-  bool checkAntiprompt();
+  bool checkAntiprompt(
+      size_t unemittedTail = 0, llama_token emitted = LLAMA_TOKEN_NULL);
 
   /**
    * The tokenize chat method. It tokenizes the chat.
@@ -418,7 +420,7 @@ private:
   SequenceStepResult emitSampledToken(
       llama_token tokenId, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
-      LlamaBatch* inlineDecodeBatch);
+      LlamaBatch* inlineDecodeBatch, size_t unemittedTail = 0);
   /// Single-prompt speculative generation loop; see
   /// `TextLlmContext::generateSpeculative`. `nRemain` follows the plain
   /// loop's prediction budget.

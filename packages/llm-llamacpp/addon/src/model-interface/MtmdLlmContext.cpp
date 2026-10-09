@@ -291,13 +291,22 @@ void MtmdLlmContext::initVisionContext() {
   }
 }
 
-bool MtmdLlmContext::checkAntiprompt() {
+bool MtmdLlmContext::checkAntiprompt(
+    size_t unemittedTail, llama_token emitted) {
   if (antipromptLower_.empty() && templateStops_.empty()) {
     return false;
   }
   constexpr int kNPrev = 32;
+  const int tail = static_cast<int>(unemittedTail);
   std::string lastOutput =
-      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
+      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev + tail);
+  if (tail > 0) {
+    // See TextLlmContext::checkAntiprompt.
+    const size_t unemittedBytes =
+        common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, tail).size();
+    lastOutput.resize(
+        lastOutput.size() - std::min(unemittedBytes, lastOutput.size()));
+  }
 
   // See TextLlmContext::checkAntiprompt: the same shared matcher, so the
   // duplicated stop handling in the two contexts cannot drift apart on the
@@ -308,7 +317,8 @@ bool MtmdLlmContext::checkAntiprompt() {
   }
 
   // check for reverse prompt using special tokens
-  llama_token lastToken = common_sampler_last(smpl_.get());
+  const llama_token lastToken =
+      unemittedTail > 0 ? emitted : common_sampler_last(smpl_.get());
   for (auto token : antipromptTokens_) {
     if (token == lastToken) {
       return true;
@@ -1976,7 +1986,8 @@ void MtmdLlmContext::generateSpeculative(
   };
   // Accepted tokens are checked for a full context like every sample
   // (`sampleFromLogits` checks before sampling).
-  const auto emit = [&](llama_token token) -> SequenceStepResult {
+  const auto emit = [&](llama_token token,
+                        size_t unemittedTail) -> SequenceStepResult {
     if (contextWindowFull(current_.pos, ctxCeiling()) ||
         contextWindowFull(current_.cacheTokens, ctxCeiling())) {
       return {
@@ -1985,7 +1996,8 @@ void MtmdLlmContext::generateSpeculative(
           .stopReason = GenerationStopReason::ContextOverflow};
     }
     --nRemain;
-    return emitSampledToken(token, ++generated, outputCallback, &batch);
+    return emitSampledToken(
+        token, ++generated, outputCallback, &batch, unemittedTail);
   };
   const auto finish = [this](const SequenceStepResult& step) {
     generationStopReason_ = step.contextOverflow
@@ -2058,7 +2070,7 @@ void MtmdLlmContext::generateSpeculative(
     const auto& ids = verified.ids;
     for (size_t i = 0; i < ids.size(); ++i) {
       const bool isLast = i + 1 == ids.size();
-      step = emit(ids[i]);
+      step = emit(ids[i], ids.size() - 1 - i);
       if (step.contextOverflow || step.finished) {
         // See TextLlmContext::generateSpeculative.
         if (!isLast &&
@@ -2131,7 +2143,8 @@ DraftStepResult MtmdLlmContext::onDraftLogitsReady(
           ids[i],
           generatedBefore + static_cast<unsigned>(i) + 1,
           outputCallback,
-          nullptr);
+          nullptr,
+          ids.size() - 1 - i);
       out.tokens.push_back(ids[i]);
     }
     if (step.finished) {
@@ -2215,7 +2228,7 @@ SequenceStepResult MtmdLlmContext::sampleFromLogits(
 SequenceStepResult MtmdLlmContext::emitSampledToken(
     llama_token tokenId, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
-    LlamaBatch* inlineDecodeBatch) {
+    LlamaBatch* inlineDecodeBatch, size_t unemittedTail) {
   std::string tokenStr =
       common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
   const std::string completeChars = utf8Buffer_.addToken(tokenStr);
@@ -2260,7 +2273,7 @@ SequenceStepResult MtmdLlmContext::emitSampledToken(
     stopReason = GenerationStopReason::Eos;
   } else if (reachedBudget) {
     stopReason = GenerationStopReason::PredictionLimit;
-  } else if (checkAntiprompt()) {
+  } else if (checkAntiprompt(unemittedTail, tokenId)) {
     stopReason = GenerationStopReason::Antiprompt;
   }
   const bool finished = stopReason != GenerationStopReason::None;

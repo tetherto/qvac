@@ -98,6 +98,36 @@ safeTest('MTP drafts and verifies on a single prompt', { timeout: 600_000 }, asy
   }
 })
 
+safeTest('MTP stops on a stop string exactly where plain decoding does', { timeout: 900_000 }, async (t) => {
+  async function run(config) {
+    const model = await loadModel(config)
+    try {
+      return await runOnce(model, PROMPT)
+    } finally {
+      await model.unload()
+    }
+  }
+
+  // A stop word that first appears in the second half of the plain output,
+  // so generation drafts for a while before an accepted run reaches it.
+  // Stop strings match case-insensitively.
+  const reference = await run(baseConfig({ 'spec-type': 'none' }))
+  const lower = reference.output.toLowerCase()
+  const half = Math.floor(lower.length / 2)
+  const stopWord = (lower.slice(half).match(/[a-z]{5,}/g) || []).find(
+    (word) => lower.indexOf(word) >= half
+  )
+  t.ok(stopWord, `found a stop word in the plain output: ${stopWord}`)
+
+  const plain = await run(baseConfig({ 'spec-type': 'none', reverse_prompt: stopWord }))
+  const speculative = await run(baseConfig({ reverse_prompt: stopWord }))
+  t.is(plain.stats.stopReason, 'antiprompt', 'plain decoding stopped on the stop word')
+  t.is(speculative.stats.stopReason, 'antiprompt', 'speculative decoding stopped on the stop word')
+  t.is(speculative.output, plain.output, 'speculative output matches plain output up to the stop')
+  t.is(speculative.stats.generatedTokens, plain.stats.generatedTokens, 'same token count')
+  assertDrafted(t, speculative.stats, 'stop string')
+})
+
 safeTest('MTP keeps cached conversations working across turns', { timeout: 900_000 }, async (t) => {
   const cacheKey = path.join(os.tmpdir(), `qvac-mtp-cache-${Date.now()}.bin`)
   cleanupIntegrationCacheFiles(cacheKey)

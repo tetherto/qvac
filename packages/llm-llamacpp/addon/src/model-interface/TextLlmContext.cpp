@@ -251,13 +251,23 @@ void TextLlmContext::initializeOwnedThreadpools() {
   }());
 }
 
-bool TextLlmContext::checkAntiprompt() {
+bool TextLlmContext::checkAntiprompt(
+    size_t unemittedTail, llama_token emitted) {
   if (antipromptLower_.empty() && templateStops_.empty()) {
     return false;
   }
   constexpr int kNPrev = 32;
+  const int tail = static_cast<int>(unemittedTail);
   std::string lastOutput =
-      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
+      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev + tail);
+  if (tail > 0) {
+    // The history is the concatenation of token pieces, so dropping the
+    // unemitted run's pieces leaves the text up to `emitted`.
+    const size_t unemittedBytes =
+        common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, tail).size();
+    lastOutput.resize(
+        lastOutput.size() - std::min(unemittedBytes, lastOutput.size()));
+  }
 
   // Caller antiprompts fold case; template stops are compared raw. See
   // `matchesAnyStopString` for why the two must not share one rule, and
@@ -269,7 +279,8 @@ bool TextLlmContext::checkAntiprompt() {
   }
 
   // check for reverse prompt using special tokens
-  llama_token lastToken = common_sampler_last(smpl_.get());
+  const llama_token lastToken =
+      unemittedTail > 0 ? emitted : common_sampler_last(smpl_.get());
   for (auto token : antipromptTokens_) {
     if (token == lastToken) {
       return true;
@@ -1048,7 +1059,11 @@ void TextLlmContext::generateSpeculative(
             .stopReason = GenerationStopReason::ContextOverflow};
       } else {
         step = emitSampledToken(
-            ids[i], generatedAfterAccept, outputCallback, &batch);
+            ids[i],
+            generatedAfterAccept,
+            outputCallback,
+            &batch,
+            ids.size() - 1 - i);
       }
       if (step.contextOverflow || step.finished) {
         // The plain loop never decodes the token it stops on. Drop it and
@@ -1121,7 +1136,8 @@ DraftStepResult TextLlmContext::onDraftLogitsReady(
           ids[i],
           generatedBefore + static_cast<unsigned>(i) + 1,
           outputCallback,
-          nullptr);
+          nullptr,
+          ids.size() - 1 - i);
       out.tokens.push_back(ids[i]);
     }
     if (step.finished) {
@@ -1202,7 +1218,7 @@ SequenceStepResult TextLlmContext::sampleFromLogits(
 SequenceStepResult TextLlmContext::emitSampledToken(
     llama_token tokenId, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
-    LlamaBatch* inlineDecodeBatch) {
+    LlamaBatch* inlineDecodeBatch, size_t unemittedTail) {
   std::string tokenStr =
       common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
   const std::string completeChars = utf8Buffer_.addToken(tokenStr);
@@ -1242,7 +1258,7 @@ SequenceStepResult TextLlmContext::emitSampledToken(
     stopReason = GenerationStopReason::Eos;
   } else if (reachedBudget) {
     stopReason = GenerationStopReason::PredictionLimit;
-  } else if (checkAntiprompt()) {
+  } else if (checkAntiprompt(unemittedTail, tokenId)) {
     stopReason = GenerationStopReason::Antiprompt;
   }
   const bool finished = stopReason != GenerationStopReason::None;

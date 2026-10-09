@@ -278,9 +278,15 @@ private:
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
+   * @param unemittedTail - accepted tokens at the end of the sampler history
+   * that are not streamed yet (speculative verification accepts a run at
+   * once); they are left out of the check.
+   * @param emitted - the token being streamed; required when
+   * `unemittedTail > 0`, since it is then not the history's last token.
    * @return - true if the antiprompt is found, false otherwise.
    */
-  bool checkAntiprompt();
+  bool checkAntiprompt(
+      size_t unemittedTail = 0, llama_token emitted = LLAMA_TOKEN_NULL);
 
   /**
    * The Tokenize chat method. It tokenizes the chat.
@@ -357,10 +363,12 @@ private:
   /// Streams a token the sampler already accepted and applies the stop
   /// conditions; the part of `sampleFromLogits` after sampling, shared with
   /// speculative verification, which samples several tokens at once.
+  /// `unemittedTail` counts the accepted tokens after `tokenId` (see
+  /// `checkAntiprompt`).
   SequenceStepResult emitSampledToken(
       llama_token tokenId, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
-      LlamaBatch* inlineDecodeBatch);
+      LlamaBatch* inlineDecodeBatch, size_t unemittedTail = 0);
   /// Single-prompt generation loop with speculative decoding: llama-server's
   /// draft / verify / accept cycle on top of the same per-token streaming and
   /// stop handling as the plain loop. Sets `generationStopReason_` like the
