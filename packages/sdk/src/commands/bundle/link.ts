@@ -18,10 +18,6 @@ export interface LinkAddonsOptions {
   logger: Logger
 }
 
-export function resolveBareKitDir(projectRoot: string): string | null {
-  return findInAncestorNodeModules(projectRoot, 'react-native-bare-kit')
-}
-
 /**
  * Links the native addons of the worker entry into react-native-bare-kit for
  * each phone platform in `hosts`, replacing what the platform had. Returns the
@@ -30,7 +26,7 @@ export function resolveBareKitDir(projectRoot: string): string | null {
 export async function linkAddons(options: LinkAddonsOptions): Promise<string[]> {
   const { projectRoot, entryPath, hosts, logger } = options
 
-  const bareKitDir = resolveBareKitDir(projectRoot)
+  const bareKitDir = findInAncestorNodeModules(projectRoot, 'react-native-bare-kit')
   if (bareKitDir === null) {
     logger.warn('react-native-bare-kit is not installed; the native addons were not linked.')
     return []

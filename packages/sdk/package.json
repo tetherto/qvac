@@ -296,7 +296,7 @@
     "mongodb": "^7.5.0",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
-    "react-native-bare-kit": "^0.15.5",
+    "react-native-bare-kit": "^0.16.0",
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
@@ -309,7 +309,7 @@
     "expo-device": ">=8.0.0",
     "expo-file-system": ">=19.0.0",
     "expo-modules-core": ">=3.0.0",
-    "react-native-bare-kit": "*",
+    "react-native-bare-kit": ">=0.16.0",
     "tsx": "*"
   },
   "peerDependenciesMeta": {

@@ -4,7 +4,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from '@/commands'
 import { createCommandLogger } from '@/commands/command-logger'
-import { linkAddons, resolveBareKitDir } from '@/commands/bundle/link'
+import { linkAddons } from '@/commands/bundle/link'
 import { installMissingHostPrebuilds } from '@/commands/host-prebuilds/index'
 import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
@@ -36,11 +36,6 @@ const MOBILE_HOSTS = [...MOBILE_HOSTS_BY_PLATFORM.android, ...MOBILE_HOSTS_BY_PL
 
 /** The generated harness and its bundle, served as `@qvac/sdk/worker.mobile`. */
 const WORKER_MOBILE_FILES = ['index.mjs', 'index.d.ts', 'index.bundle.mjs']
-
-type BareKitLinkerPaths = {
-  android: string | null
-  ios: string | null
-}
 
 type MobileBundleOptions = {
   /**
@@ -126,7 +121,6 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
 
   copyWorker(path.dirname(result.harnessPath), path.join(sdkPackage.dir, 'dist', 'worker-mobile'))
 
-  disableBareKitLinkers(projectRoot)
   const linked = await linkAddons({
     projectRoot,
     entryPath: result.entryPath,
@@ -180,32 +174,13 @@ function copyWorker(workerDir: string, outDir: string) {
   }
 }
 
-/**
- * Empties react-native-bare-kit's own linkers, which its Gradle build and
- * `pod install` run, so they keep the addons `linkAddons` wrote.
- */
-function disableBareKitLinkers(projectRoot: string): BareKitLinkerPaths {
-  const bareKitDir = resolveBareKitDir(projectRoot)
-  if (bareKitDir === null) return { android: null, ios: null }
-
-  const empty = (platform: MobilePlatform) => {
-    const linker = path.join(bareKitDir, platform, 'link.mjs')
-    if (!fs.existsSync(linker)) return null
-    fs.writeFileSync(linker, '')
-    return linker
-  }
-
-  return { android: empty('android'), ios: empty('ios') }
-}
-
 export {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
   buildMobileBundle,
-  disableBareKitLinkers,
   mobileHostsForPlatform
 }
-export type { BareKitLinkerPaths, MobileBundleOptions, MobilePlatform }
+export type { MobileBundleOptions, MobilePlatform }
 
 export default withMobileBundle

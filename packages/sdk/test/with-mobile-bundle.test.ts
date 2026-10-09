@@ -1,6 +1,5 @@
 import test from 'brittle'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   resolveAddonPlatformPackage,
@@ -11,7 +10,6 @@ import {
   MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
   buildMobileBundle,
-  disableBareKitLinkers,
   mobileHostsForPlatform
 } from '@/expo/plugins/withMobileBundle'
 import { BundleVerificationFailedError } from '@/utils/errors-client'
@@ -67,31 +65,6 @@ test('resolvePlatformPackageName: reads slice names from #host-addon for hosts a
 
 test('MOBILE_UNSUPPORTED_MODULES: the desktop-only spawn path stays out of mobile bundles', (t) => {
   t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn'])
-})
-
-test('disableBareKitLinkers: empties the react-native-bare-kit linkers', (t) => {
-  const projectRoot = mkdtempSync(join(tmpdir(), 'qvac-linker-'))
-  const bareKitPath = join(projectRoot, 'node_modules', 'react-native-bare-kit')
-  const androidLinker = join(bareKitPath, 'android', 'link.mjs')
-  const iosLinker = join(bareKitPath, 'ios', 'link.mjs')
-  t.teardown(() => rmSync(projectRoot, { recursive: true, force: true }))
-
-  writeManifest(bareKitPath, { name: 'react-native-bare-kit', version: '0.15.6' })
-  mkdirSync(join(bareKitPath, 'android'), { recursive: true })
-  mkdirSync(join(bareKitPath, 'ios'), { recursive: true })
-  writeFileSync(androidLinker, 'stock android linker')
-  writeFileSync(iosLinker, 'stock ios linker')
-
-  t.alike(disableBareKitLinkers(projectRoot), { android: androidLinker, ios: iosLinker })
-  t.is(readFileSync(androidLinker, 'utf8'), '')
-  t.is(readFileSync(iosLinker, 'utf8'), '')
-})
-
-test('disableBareKitLinkers: does nothing without react-native-bare-kit', (t) => {
-  const projectRoot = mkdtempSync(join(tmpdir(), 'qvac-linker-'))
-  t.teardown(() => rmSync(projectRoot, { recursive: true, force: true }))
-
-  t.alike(disableBareKitLinkers(projectRoot), { android: null, ios: null })
 })
 
 function androidPrebuildMod(projectRoot: string) {
@@ -210,9 +183,4 @@ function hostAddonMap(metaName: string) {
     ios: [`${metaName}-ios`, './addon-unavailable.js'],
     default: './addon-unavailable.js'
   }
-}
-
-function writeManifest(dir: string, manifest: unknown) {
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
 }
