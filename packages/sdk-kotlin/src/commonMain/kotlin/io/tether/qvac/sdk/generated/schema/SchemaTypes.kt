@@ -12035,7 +12035,18 @@ data class NativeProbeFitProjection(
     @SerialName("computeBytes") val `computeBytes`: Double? = null,
     @SerialName("deviceFreeBytes") val `deviceFreeBytes`: Double? = null,
     @SerialName("deviceTotalBytes") val `deviceTotalBytes`: Double? = null,
+    @SerialName("devices") val `devices`: List<NativeProbeFitProjectionDevicesItem>? = null,
     @SerialName("report") val `report`: String? = null,
+)
+
+@Serializable
+data class NativeProbeFitProjectionDevicesItem(
+    @SerialName("name") val `name`: String,
+    @SerialName("totalBytes") val `totalBytes`: Double,
+    @SerialName("freeBytes") val `freeBytes`: Double,
+    @SerialName("weightsBytes") val `weightsBytes`: Double,
+    @SerialName("contextBytes") val `contextBytes`: Double,
+    @SerialName("computeBytes") val `computeBytes`: Double,
 )
 
 @Serializable

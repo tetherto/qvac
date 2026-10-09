@@ -31,9 +31,20 @@ test('supportsFitBlob accepts only the formats with a separable description', as
   t.ok(supportsFitBlob('/models/model.gguf'))
   t.ok(supportsFitBlob('/models/MODEL.GGUF'))
   t.ok(supportsFitBlob('/models/model.safetensors'))
-  t.absent(supportsFitBlob('/models/ggml-small.en-q8_0.bin'))
+  t.absent(supportsFitBlob('/models/ggml-small.en-q8_0.bin'), 'a .bin needs the engine to be read')
   t.absent(supportsFitBlob('/models/upscaler.pth'))
   t.absent(supportsFitBlob('/models/tokenizer.spm'))
+})
+
+// lunte-disable-next-line require-await
+test('supportsFitBlob reads .bin and .spm through the engines that ship them', async (t) => {
+  t.ok(supportsFitBlob('/models/ggml-small.en-q8_0.bin', '@qvac/transcription-whispercpp'))
+  t.ok(supportsFitBlob('/models/ggml-bci-windowed.bin', '@qvac/bci-whispercpp'))
+  t.ok(supportsFitBlob('/models/bci-embedder.bin', '@qvac/bci-whispercpp'))
+  t.ok(supportsFitBlob('/models/model.enes.intgemm.alphas.bin', '@qvac/translation-nmtcpp'))
+  t.ok(supportsFitBlob('/models/vocab.enes.spm', '@qvac/translation-nmtcpp'))
+  t.absent(supportsFitBlob('/models/weight.bin', '@qvac/transcription-parakeet'))
+  t.absent(supportsFitBlob('/models/vocab.spm', '@qvac/transcription-whispercpp'))
 })
 
 test('a GGUF fit blob drops the tokenizer tables and keeps the tensors', async (t) => {

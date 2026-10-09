@@ -5182,6 +5182,37 @@ class NativeProbeFitPlan(GeneratedBaseModel):
     ]
 
 
+class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(description="Device name as the engine registered it.")]
+    total_bytes: Annotated[
+        float, Field(alias="totalBytes", description="Device memory installed.")
+    ]
+    free_bytes: Annotated[
+        float,
+        Field(alias="freeBytes", description="Device memory free when the probe ran."),
+    ]
+    weights_bytes: Annotated[
+        float,
+        Field(alias="weightsBytes", description="Model weights placed on this device."),
+    ]
+    context_bytes: Annotated[
+        float,
+        Field(
+            alias="contextBytes",
+            description="Context and KV cache placed on this device.",
+        ),
+    ]
+    compute_bytes: Annotated[
+        float,
+        Field(
+            alias="computeBytes", description="Compute buffers placed on this device."
+        ),
+    ]
+
+
 class NativeProbeFitProjection(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -5231,6 +5262,12 @@ class NativeProbeFitProjection(GeneratedBaseModel):
     device_total_bytes: Annotated[
         float | None,
         Field(alias="deviceTotalBytes", description="Device memory installed."),
+    ] = None
+    devices: Annotated[
+        list[NativeProbeFitProjectionDevicesItem] | None,
+        Field(
+            description="One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row."
+        ),
     ] = None
     report: Annotated[
         str | None,

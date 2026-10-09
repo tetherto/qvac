@@ -14,10 +14,12 @@ const RegistryConfig = require('../../lib/config')
 const { AUTOBASE_NAMESPACE, QVAC_MAIN_REGISTRY } = require('../../shared/constants')
 const { createTempStorage, waitFor } = require('../helpers/test-utils')
 const { buildGguf, buildSafetensors } = require('../helpers/gguf-fixture')
+const { buildWhisperBin } = require('../helpers/bin-fixtures')
 const { fitBlobContent } = require('../../lib/fit-blob')
 
 const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 const DISPATCH_PUT_MODEL = `@${QVAC_MAIN_REGISTRY}/put-model`
+const WHISPER_ENGINE = '@qvac/transcription-whispercpp'
 
 const noopLogger = {
   info() {},
@@ -657,11 +659,11 @@ async function addLocalArtifact(ctx, { filename, buffer, engine = '@test/engine'
   return model
 }
 
-async function fitBlobFor(t, filename, buffer) {
+async function fitBlobFor(t, filename, buffer, engine) {
   const dir = await createTempStorage(t)
   const filePath = path.join(dir, filename)
   await fs.writeFile(filePath, buffer)
-  return fitBlobContent(filePath)
+  return fitBlobContent(filePath, engine)
 }
 
 async function readBlob(service, binding) {
@@ -804,6 +806,96 @@ test('a format with no separable metadata region is added without a pointer', as
 
     t.absent(model.fitBlobBinding, 'no pointer for an unsupported format')
     t.ok(model.blobBinding, 'the artifact itself is still stored')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('addModel describes a whisper.cpp model through its engine', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const artifact = buildWhisperBin()
+    const model = await addLocalArtifact(ctx, {
+      filename: 'ggml-tiny.bin',
+      buffer: artifact,
+      engine: WHISPER_ENGINE
+    })
+
+    const expected = await fitBlobFor(t, 'ggml-tiny.bin', artifact, WHISPER_ENGINE)
+
+    t.ok(model.fitBlobBinding, 'record carries a fit blob pointer')
+    t.is(model.fitBlobBinding.byteLength, expected.length, 'pointer covers the description only')
+
+    const stored = await readBlob(ctx.service, model.fitBlobBinding)
+    t.alike(stored, expected, 'the stored blob is the weightless description')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('a whisper.cpp model its reader cannot parse is added without a pointer', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'ggml-tiny.bin',
+      buffer: Buffer.alloc(256, 3),
+      engine: WHISPER_ENGINE
+    })
+
+    t.absent(model.fitBlobBinding, 'no pointer for a file that is not a whisper.cpp model')
+    t.ok(model.blobBinding, 'the artifact itself is still stored')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs selects a .bin record only for an engine that can read it', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const artifact = buildWhisperBin()
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    const whisper = await addLocalArtifact(ctx, {
+      filename: 'ggml-base.bin',
+      buffer: artifact,
+      engine: WHISPER_ENGINE
+    })
+    await addLocalArtifact(ctx, { filename: 'weight.bin', buffer: artifact })
+
+    ctx.service._uploadFitBlob = originalUpload
+
+    const planned = await ctx.service.fillFitBlobs({ dryRun: true })
+    t.alike(planned.paths, [whisper.path], 'only the record a reader exists for is selected')
+
+    const report = await ctx.service.fillFitBlobs()
+    await flushAutobases(ctx.service.base)
+    t.is(report.filled, 1)
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: whisper.path,
+      source: whisper.source
+    })
+    const stored = await readBlob(ctx.service, retrieved.fitBlobBinding)
+    t.alike(stored, await fitBlobFor(t, 'ggml-base.bin', artifact, WHISPER_ENGINE))
   } finally {
     await cleanupService(ctx)
   }

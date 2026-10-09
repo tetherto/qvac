@@ -56,6 +56,16 @@ const FIT_PROJECTION = {
   weightsBytes: 4 * 1024 ** 3,
   contextBytes: 1024 ** 3,
   computeBytes: 0,
+  devices: [
+    {
+      name: 'Metal',
+      totalBytes: 24 * 1024 ** 3,
+      freeBytes: 20 * 1024 ** 3,
+      weightsBytes: 4 * 1024 ** 3,
+      contextBytes: 1024 ** 3,
+      computeBytes: 0
+    }
+  ],
   deviceName: 'Metal',
   deviceFreeBytes: 20 * 1024 ** 3,
   deviceTotalBytes: 24 * 1024 ** 3

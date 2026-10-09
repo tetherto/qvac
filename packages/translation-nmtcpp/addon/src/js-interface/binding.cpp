@@ -19,6 +19,7 @@ qvac_lib_infer_nmtcpp_exports( // NOLINT(readability-identifier-naming)
   }
 
   V("createInstance", qvac_lib_inference_addon_nmt::createInstance)
+  V("assessFit", qvac_lib_inference_addon_nmt::assessFit)
   V("runJob", qvac_lib_inference_addon_nmt::runJob)
   V("getActiveBackendName", qvac_lib_inference_addon_nmt::getActiveBackendName)
   V("getActiveBackendDescription",
