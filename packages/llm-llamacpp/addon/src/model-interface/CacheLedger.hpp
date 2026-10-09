@@ -310,8 +310,46 @@ inline uint64_t checksum(const std::vector<llama_token>& words, size_t begin) {
       words.data() + begin, (words.size() - begin) * sizeof(llama_token));
 }
 
-inline std::vector<llama_token>
-serialize(const Ledger& ledger, llama_pos nPast, llama_pos cacheTokens) {
+/// Identifies the model a cache file was written with: its description
+/// (architecture, size class, quantization), tensor size, parameter count,
+/// training context, shape, vocabulary and RoPE scale. Never 0, which marks a
+/// file written without one.
+inline uint32_t modelFingerprint(const llama_model* model) {
+  if (model == nullptr) {
+    return 1;
+  }
+  char desc[256] = {};
+  llama_model_desc(model, desc, sizeof(desc));
+  std::string identity(desc);
+  const auto append = [&identity](const auto& value) {
+    identity.append(reinterpret_cast<const char*>(&value), sizeof(value));
+  };
+  append(llama_model_size(model));
+  append(llama_model_n_params(model));
+  append(llama_model_n_ctx_train(model));
+  append(llama_model_n_embd(model));
+  append(llama_model_n_layer(model));
+  append(llama_vocab_n_tokens(llama_model_get_vocab(model)));
+  append(llama_model_rope_freq_scale_train(model));
+  const uint64_t hash = hashBytes(identity.data(), identity.size());
+  const auto folded = static_cast<uint32_t>(hash ^ (hash >> 32U));
+  return folded == 0 ? 1 : folded;
+}
+
+/// Header word 7 holds the writer's `modelFingerprint`. A file without one
+/// (0) is accepted; a file from another model is a cold miss.
+inline bool
+writtenByModel(const std::vector<llama_token>& words, uint32_t fingerprint) {
+  if (words.size() < LEDGER_HEADER_WORDS) {
+    return true;
+  }
+  const auto stored = static_cast<uint32_t>(words[7]);
+  return stored == 0 || stored == fingerprint;
+}
+
+inline std::vector<llama_token> serialize(
+    const Ledger& ledger, llama_pos nPast, llama_pos cacheTokens,
+    uint32_t fingerprint = 0) {
   std::vector<llama_token> out(
       LEDGER_HEADER_WORDS + ledger.entries.size() * LEDGER_ENTRY_WORDS);
   out[0] = LEDGER_MAGIC;
@@ -321,7 +359,7 @@ serialize(const Ledger& ledger, llama_pos nPast, llama_pos cacheTokens) {
   out[4] = static_cast<llama_token>(ledger.entries.size());
   out[5] = 0;
   out[6] = 0;
-  out[7] = 0;
+  out[7] = static_cast<llama_token>(fingerprint);
   size_t cursor = LEDGER_HEADER_WORDS;
   for (const Entry& entry : ledger.entries) {
     const uint64_t id = static_cast<uint64_t>(entry.identity);

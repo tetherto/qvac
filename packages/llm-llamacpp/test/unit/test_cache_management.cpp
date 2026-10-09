@@ -27,6 +27,7 @@
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
 #include "test_prompt_helpers.hpp"
+#include "utils/ModelMemoryPolicy.hpp"
 #include "utils/SequenceStateSnapshot.hpp"
 
 namespace fs = std::filesystem;
@@ -1362,8 +1363,8 @@ TEST_F(CacheManagementTest, SinglePromptCacheUsesSeqStateFormat) {
 namespace {
 
 std::unique_ptr<LlamaModel> loadSlidingWindowModel(
-    const test_common::TestModelPath& modelPath, const char* ctxSize = "4096") {
-  std::unordered_map<std::string, std::string> config;
+    const test_common::TestModelPath& modelPath, const char* ctxSize = "4096",
+    std::unordered_map<std::string, std::string> config = {}) {
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
   config["ctx_size"] = ctxSize;
@@ -1562,6 +1563,151 @@ TEST(CacheSlidingWindowTest, RollbackWithTheWindowIntactKeepsTheCache) {
 
   model.reset();
   fs::remove(cacheFile);
+}
+
+// A sliding-window model takes an end-of-history checkpoint, holding the
+// window at that point. A regenerate after an answer longer than the window
+// diverges behind it: the checkpoint brings the window back instead of a cold
+// reprocess of the whole conversation.
+TEST(CacheSlidingWindowTest, RegenerateBehindTheWindowRestoresTheCheckpoint) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+
+  auto model = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(model->isLoaded());
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+  llama_context* lctx = text->getCtx();
+  const int32_t nSwa = llama_model_n_swa(llama_get_model(lctx));
+  ASSERT_GT(nSwa, 0);
+
+  // The answer outgrows the window, so the end of the history is no longer
+  // in it when the turn commits.
+  LlamaModel::Prompt first;
+  first.input = slidingWindowBrief(-1);
+  first.cacheKey = cacheFile.string();
+  first.generationParams.grammar = R"(root ::= "lighthouse " root)";
+  const int32_t generated = nSwa + 100;
+  first.generationParams.n_predict = generated;
+  ASSERT_FALSE(model->processPrompt(first).empty());
+  const llama_pos afterFirst = text->getNPast();
+  // Without this a plain tail trim would serve the regenerate.
+  const llama_pos promptEnd = afterFirst - generated;
+  ASSERT_GT(
+      llama_memory_seq_pos_min(llama_get_memory(lctx), text->getSeqId()),
+      promptEnd - nSwa)
+      << "test setup: the window in front of the prompt end is still resident";
+
+  LlamaModel::Prompt regenerate;
+  regenerate.input = first.input;
+  regenerate.cacheKey = cacheFile.string();
+  const std::string fromCheckpoint = model->processPrompt(regenerate);
+  ASSERT_FALSE(fromCheckpoint.empty());
+  EXPECT_GT(text->lastCacheReuseForTesting(), static_cast<size_t>(1024))
+      << "the regenerate reprocessed the conversation instead of restoring "
+         "the end-of-history checkpoint (first turn ended at "
+      << afterFirst << ")";
+
+  const llama_pos nPast = text->getNPast();
+  const llama_pos posMin =
+      llama_memory_seq_pos_min(llama_get_memory(lctx), text->getSeqId());
+  EXPECT_GE(posMin, 0);
+  EXPECT_LE(posMin, std::max<llama_pos>(0, nPast - nSwa))
+      << "the restored window does not cover the cursor at " << nPast;
+  model.reset();
+
+  // Keyed, so its prefill stops at the end of the history exactly as the
+  // first turn's did.
+  const fs::path coldFile = "sliding_window_checkpoint_cold.bin";
+  fs::remove(coldFile);
+  auto cold = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = regenerate.input;
+  fresh.cacheKey = coldFile.string();
+  EXPECT_EQ(fromCheckpoint, cold->processPrompt(fresh))
+      << "a turn served from the restored checkpoint must match a cold run";
+  cold.reset();
+
+  fs::remove(cacheFile);
+  fs::remove(coldFile);
+}
+
+// The load-time budget check bounds a sliding-window checkpoint by the
+// window, not the context: the bound covers a real capture of a prompt longer
+// than the window, and a budget of exactly one bound loads at a context many
+// times the window.
+TEST(CacheSlidingWindowTest, CheckpointBudgetIsBoundedByTheWindow) {
+  namespace utils = qvac_lib_inference_addon_llama::utils;
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_budget_cache.bin";
+  fs::remove(cacheFile);
+
+  auto probe = loadSlidingWindowModel(modelPath, "32768");
+  ASSERT_TRUE(probe->isLoaded());
+  LlmContext* context = LlamaModelTestPeer::llmContext(*probe);
+  ASSERT_NE(context, nullptr);
+  llama_context* lctx = context->getCtx();
+  const llama_model* mdl = llama_get_model(lctx);
+  const uint32_t windowCells =
+      utils::slidingWindowCheckpointCells(llama_model_n_swa(mdl));
+  ASSERT_GT(windowCells, 0u);
+  ASSERT_LT(windowCells * 8, llama_n_ctx_seq(lctx))
+      << "test setup: the context must dwarf the window";
+  // Measured on the empty sequence, before the prompt below fills it.
+  const uint64_t bound = utils::estimateMaxSequenceStateBytes(
+      lctx,
+      llama_model_get_vocab(mdl),
+      windowCells,
+      utils::untrimmableSnapshotScope());
+  ASSERT_GT(bound, 0u);
+
+  LlamaModel::Prompt primer;
+  primer.input = slidingWindowBrief(-1);
+  primer.prefill = true;
+  primer.cacheKey = cacheFile.string();
+  EXPECT_TRUE(probe->processPrompt(primer).empty());
+  const llama_pos nPast = context->getNPast();
+  ASSERT_GT(nPast, static_cast<llama_pos>(windowCells))
+      << "test setup: the prompt must outgrow the window";
+  utils::SequenceStateSnapshot snap;
+  ASSERT_TRUE(
+      utils::snapshotSequenceState(
+          lctx,
+          context->getSeqId(),
+          nPast,
+          snap,
+          utils::SnapshotStorage::Memory,
+          utils::untrimmableSnapshotScope()));
+  EXPECT_LE(snap.bytes(), bound)
+      << "a real checkpoint must never exceed the load-time bound";
+  probe.reset();
+  fs::remove(cacheFile);
+
+  std::unordered_map<std::string, std::string> budget;
+  budget["cache_checkpoints"] = "1";
+  budget["cache_checkpoints_max_bytes"] = std::to_string(bound);
+  std::unique_ptr<LlamaModel> budgeted;
+  ASSERT_NO_THROW(
+      budgeted = loadSlidingWindowModel(modelPath, "32768", std::move(budget)))
+      << "a budget that holds one window checkpoint must load";
+  EXPECT_TRUE(budgeted->isLoaded());
 }
 
 namespace {
@@ -2166,6 +2312,70 @@ TEST(CacheRuntimeStatsTest, FullyCachedPromptReportsItsPromptWork) {
   fs::remove(cacheFile);
 }
 
+// A cache file records the model that wrote it. Another model with the same
+// cache shape (another quant, a fine-tune) loads it as a cold miss instead of
+// continuing from KV it did not compute. The file here is stamped with a
+// foreign fingerprint, which is what such a model sees.
+TEST(CacheModelFingerprintTest, AnotherModelsFileIsAColdMiss) {
+  const std::string path =
+      test_common::BaseTestModelPath::get("Qwen3-0.6B-Q8_0.gguf");
+  if (!fs::exists(path)) {
+    GTEST_SKIP() << "Qwen3-0.6B-Q8_0.gguf not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "8";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string modelPath = path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(modelPath), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+
+  const fs::path cacheFile = "model_fingerprint_cache.bin";
+  const fs::path otherKey = "model_fingerprint_other.bin";
+  fs::remove(cacheFile);
+  const std::string input =
+      R"([{"role":"user","content":"Name one colour of the rainbow."}])";
+  const auto run = [&](const fs::path& key) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = key.string();
+    prompt.prefill = true;
+    return model->processPrompt(prompt);
+  };
+  ASSERT_NO_THROW((void)run(cacheFile));
+  model->saveCache(cacheFile.string());
+  // Switching keys moves the conversation out, so the next request on
+  // `cacheFile` loads it from the file.
+  ASSERT_NO_THROW((void)run(otherKey));
+  ASSERT_NO_THROW((void)run(cacheFile));
+  EXPECT_GT(text->lastCacheReuseForTesting(), 0u)
+      << "test setup: the file was not reused by the model that wrote it";
+
+  ASSERT_NO_THROW((void)run(otherKey));
+  {
+    // GGSQ magic, version and token count, then the ledger: word 7 is at
+    // byte 12 + 7 * 4.
+    std::fstream file(
+        cacheFile, std::ios::in | std::ios::out | std::ios::binary);
+    file.seekp(12 + (7 * 4));
+    const int32_t foreign = 0x5eed;
+    file.write(reinterpret_cast<const char*>(&foreign), sizeof(foreign));
+  }
+  ASSERT_NO_THROW((void)run(cacheFile))
+      << "another model's file must be a cold miss, not an error";
+  EXPECT_EQ(text->lastCacheReuseForTesting(), 0u)
+      << "the file of another model was reused";
+
+  fs::remove(cacheFile);
+  fs::remove(otherKey);
+}
+
 // Batch mode gives every request a fresh slot driver, so the checkpoints
 // must outlive it in the scheduler to reach the next turn on the same
 // cacheKey. The prefill stops at the end of the history for the capture.
@@ -2384,6 +2594,50 @@ TEST(BatchedCacheResidencyTest, EvictionWritesUnsavedTurnsToTheCacheFile) {
   EXPECT_GT(followUp.reuse, 0u) << "the evicted conversation was not reloaded";
   EXPECT_EQ(harness.scheduler().ramTierHitsForTesting(), 0u);
 
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// The batch path loads an evicted conversation through the context's own
+// `loadCache`, which checks the fingerprint too: another model's file is a
+// cold miss there as well.
+TEST(BatchedCacheResidencyTest, AnotherModelsFileIsAColdMiss) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::vector<std::string> keys = {
+      "fingerprint_a.bin", "fingerprint_b.bin", "fingerprint_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+
+  const BatchedTurn a =
+      harness.run(userTurns({"Say one word: apple."}), keys[0]);
+  harness.run(userTurns({"Say one word: banana."}), keys[1]);
+  harness.run(userTurns({"Say one word: cherry."}), keys[2]);
+  ASSERT_TRUE(fs::exists(keys[0])) << "test setup: the eviction wrote no file";
+  {
+    // GGSQ magic, version and token count, then the ledger: word 7 is at
+    // byte 12 + 7 * 4.
+    std::fstream file(keys[0], std::ios::in | std::ios::out | std::ios::binary);
+    file.seekp(12 + (7 * 4));
+    const int32_t foreign = 0x5eed;
+    file.write(reinterpret_cast<const char*>(&foreign), sizeof(foreign));
+  }
+
+  BatchedTurn followUp;
+  ASSERT_NO_THROW(
+      followUp = harness.run(
+          userTurns({"Say one word: apple.", a.output, "Again."}), keys[0]))
+      << "another model's file must be a cold miss, not an error";
+  EXPECT_FALSE(followUp.output.empty());
+  EXPECT_EQ(followUp.reuse, 0u) << "the file of another model was reused";
+
+  model.reset();
   for (const auto& key : keys) {
     fs::remove(key);
   }

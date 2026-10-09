@@ -112,6 +112,10 @@ void TextLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
+  slidingWindowCheckpoints_ =
+      (model != nullptr) && !needsFullStateSnapshot_ &&
+      qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
+          llama_model_n_swa(model), params_.swa_full);
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -485,7 +489,7 @@ void TextLlmContext::tokenizeChat(
   }
 
   generationPromptTokens_ =
-      needsFullStateSnapshot_ && cacheReconciliationEnabled_ &&
+      takesHistoryCheckpoints() && cacheReconciliationEnabled_ &&
               inputs.add_generation_prompt &&
               !llama_model_has_encoder(modelCtx_.model)
           ? generationPromptTailLength(
@@ -1154,7 +1158,11 @@ void TextLlmContext::resetToolDefinitionsDropped() {
 }
 
 std::vector<llama_token> TextLlmContext::cacheStateTokens() const {
-  return cache::serialize(residentLedger_, nPast_, nPast_);
+  return cache::serialize(
+      residentLedger_,
+      nPast_,
+      nPast_,
+      cache::modelFingerprint(llama_get_model(modelCtx_.lctx)));
 }
 
 void TextLlmContext::restoreCacheStateTokens(
@@ -1291,19 +1299,35 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
     // rollback target moves to the divergence point instead of the
     // pre-request state. That is the state the next request wants anyway:
     // a retry of this prompt shares exactly this prefix with the cache, and
-    // restoring the old tail would only have it trimmed again. No snapshot
-    // is ever written for pure-attention memory.
+    // restoring the old tail would only have it trimmed again. No
+    // pre-request snapshot is written for this memory.
     llama_pos reusePos = residentLedger_.positions(reuseTarget);
+    bool restored = false;
     if (!canTrimSequenceTo(modelCtx_.lctx, reusePos)) {
-      // Sliding-window cells before the divergence are gone; only a full
-      // reprocess rebuilds that window.
+      // Sliding-window cells before the divergence are gone. A checkpoint
+      // within the shared prefix brings its window back (the restore trims
+      // the full-attention cells past it); without one, go cold.
+      const size_t sharedEntries = reuseTarget;
       reuseTarget = 0;
       reuse = 0;
       reusePos = 0;
       checkpoint = "cold";
+      for (CacheCheckpoint* candidate : cache::usableCheckpointsLongestFirst(
+               cacheCheckpoints_, pendingPromptLedger_, sharedEntries)) {
+        if (restoreSequenceState(modelCtx_.lctx, seqId_, candidate->state)) {
+          residentLedger_ = candidate->ledger;
+          reuse = residentLedger_.entries.size();
+          reusePos = residentLedger_.positions();
+          checkpoint = std::to_string(reuse);
+          restored = true;
+          break;
+        }
+      }
     }
-    clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
-    residentLedger_.truncate(reuseTarget);
+    if (!restored) {
+      clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
+      residentLedger_.truncate(reuseTarget);
+    }
     nPast_ = reusePos;
     preRequestLedger_ = residentLedger_;
     preRequestNPast_ = nPast_;
@@ -1364,7 +1388,7 @@ void TextLlmContext::commitCacheRequest() {
 }
 
 void TextLlmContext::captureHistoryCheckpoint(llama_pos pos) {
-  if (!needsFullStateSnapshot_ || !cacheRequestActive_ ||
+  if (!takesHistoryCheckpoints() || !cacheRequestActive_ ||
       historyCheckpointEntries_ == 0) {
     return;
   }
@@ -1603,7 +1627,10 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   });
 
   stateTokens.resize(tokenCount);
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size()) ||
+      !cache::writtenByModel(
+          stateTokens,
+          cache::modelFingerprint(llama_get_model(modelCtx_.lctx)))) {
     clearCacheReconciliationState();
     return false;
   }

@@ -290,7 +290,7 @@ Lifecycle methods in call order:
 | Method | When | What it does |
 |--------|------|--------------|
 | `loadCache` | At admission | Loads KV cache from disk if `cacheKey` is set |
-| `adoptCheckpoints` | At admission, after `loadCache` | Takes the process-local checkpoints the previous request on the same `cacheKey` left in the scheduler (full-state models only) |
+| `adoptCheckpoints` | At admission, after `loadCache` | Takes the process-local checkpoints the previous request on the same `cacheKey` left in the scheduler (full-state and sliding-window models only) |
 | `preparePrefill` | At admission | Renders and tokenizes the full history, reconciles it with the resident ledger, and returns the plan: the tokens to feed, media barriers, and the end-of-history checkpoint stop |
 | `captureHistoryCheckpoint` | At the checkpoint stop | Snapshots the state at the end of the history; kept as a checkpoint if the request commits |
 | `onPrefillComplete` | When prefill finishes | Records `nPast` and adopts the prompt ledger; a prefill-only request commits here |

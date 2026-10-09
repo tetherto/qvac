@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include "SequenceStateSnapshot.hpp"
 
@@ -13,6 +14,22 @@ namespace qvac_lib_inference_addon_llama::utils {
 [[nodiscard]] inline bool needsFullStateSnapshot(
     bool isRecurrent, bool isHybrid, bool isDeepSeekV4) noexcept {
   return isRecurrent || isHybrid || isDeepSeekV4;
+}
+
+// Sliding-window models (without `swa_full`) trim a KV tail only while the
+// window in front of the trim point is resident, so they also take
+// end-of-history checkpoints, holding the window cells. Rollback stays a trim.
+[[nodiscard]] inline bool
+takesSlidingWindowCheckpoints(int32_t nSwa, bool swaFull) noexcept {
+  return nSwa > 0 && !swaFull;
+}
+
+// Most cells a sliding-window checkpoint holds: a sequence snapshot skips the
+// cells its window has masked (`llama_kv_cache::state_write`), which leaves
+// the last `n_swa` positions, one cell each.
+[[nodiscard]] inline uint32_t
+slidingWindowCheckpointCells(int32_t nSwa) noexcept {
+  return nSwa > 0 ? static_cast<uint32_t>(nSwa) : 0U;
 }
 
 // Which part of the sequence those snapshots hold: only what a tail trim
@@ -33,6 +50,8 @@ namespace qvac_lib_inference_addon_llama::utils {
 //     unfinished block at the snapshot lives in the compressor state, which
 //     the snapshot holds. Fabric's own llama-server restores DeepSeek V4 the
 //     same way.
+//   * sliding window (fabric `llama_kv_cache_iswa`): the window cells; the
+//     full-attention cells are trimmed.
 [[nodiscard]] inline SnapshotScope untrimmableSnapshotScope() noexcept {
   return SnapshotScope::Partial;
 }

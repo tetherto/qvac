@@ -338,19 +338,29 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   if (mdl == nullptr || ctx == nullptr) {
     return;
   }
-  // Only models that cannot trim a KV tail keep checkpoints; a budget on a
-  // pure-attention model is inert and needs no validation.
+  // Only models that cannot trim a KV tail, and sliding-window models, keep
+  // checkpoints; a budget on any other model is inert and needs no
+  // validation.
   const std::optional<std::string> architecture =
       utils::getModelArchitecture(mdl);
   const bool isDeepSeekV4 = architecture.has_value() &&
                             utils::isDeepSeekV4Architecture(*architecture);
-  if (!utils::needsFullStateSnapshot(
-          llama_model_is_recurrent(mdl),
-          llama_model_is_hybrid(mdl),
-          isDeepSeekV4)) {
+  const auto& params = state.llmContext_->getParams();
+  const bool fullState = utils::needsFullStateSnapshot(
+      llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
+  const int32_t nSwa = llama_model_n_swa(mdl);
+  const bool slidingWindow =
+      !fullState && utils::takesSlidingWindowCheckpoints(nSwa, params.swa_full);
+  if (!fullState && !slidingWindow) {
     return;
   }
-  const uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
+  // A sliding-window checkpoint grows per token only until the window is
+  // full, so the extrapolation stops there.
+  uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
+  if (slidingWindow) {
+    perSeqTokens =
+        std::min(perSeqTokens, utils::slidingWindowCheckpointCells(nSwa));
+  }
   const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
       ctx,
       llama_model_get_vocab(mdl),
@@ -370,8 +380,8 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "[LlamaModel] cache_checkpoints_max_bytes=%llu cannot hold "
-            "cache_checkpoints=%zu checkpoints: one checkpoint of a "
-            "%u-token sequence takes up to %llu bytes, so %zu need %llu. "
+            "cache_checkpoints=%zu checkpoints: one checkpoint covering "
+            "%u tokens takes up to %llu bytes, so %zu need %llu. "
             "Lower cache_checkpoints to %llu or raise the budget.",
             static_cast<unsigned long long>(policy.maxBytes),
             policy.maxCount,

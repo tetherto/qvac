@@ -1,5 +1,6 @@
 #include "CacheManager.hpp"
 
+#include <cerrno>
 #include <filesystem>
 #include <system_error>
 
@@ -15,12 +16,81 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 namespace cache = qvac_lib_inference_addon_llama::cache;
+
+namespace {
+
+// Flushes `path` to the storage device, so a power loss after the rename
+// cannot leave the new name over data that never reached the disk.
+std::error_code syncFile(const std::string& path) {
+#ifdef _WIN32
+  HANDLE file = CreateFileW(
+      std::filesystem::path(path).wstring().c_str(),
+      GENERIC_WRITE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return {static_cast<int>(GetLastError()), std::system_category()};
+  }
+  const bool flushed = FlushFileBuffers(file) != 0;
+  const auto error = static_cast<int>(GetLastError());
+  CloseHandle(file);
+  return flushed ? std::error_code{}
+                 : std::error_code{error, std::system_category()};
+#else
+  const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    return {errno, std::generic_category()};
+  }
+  int rc = -1;
+#ifdef F_FULLFSYNC
+  // Apple's fsync stops at the drive's cache; F_FULLFSYNC flushes it too.
+  // Filesystems that refuse it fall back to fsync.
+  rc = ::fcntl(fd, F_FULLFSYNC);
+#endif
+  if (rc != 0) {
+    do {
+      rc = ::fsync(fd);
+    } while (rc != 0 && errno == EINTR);
+  }
+  const int error = errno;
+  ::close(fd);
+  // A filesystem that cannot sync at all leaves nothing more to do.
+  if (rc == 0 || error == EINVAL || error == ENOTSUP) {
+    return {};
+  }
+  return {error, std::generic_category()};
+#endif
+}
+
+#ifndef _WIN32
+// Makes the rename itself durable. Best effort: some filesystems refuse to
+// sync a directory, and the file data is already on disk.
+void syncParentDirectory(const std::string& path) {
+  std::filesystem::path parent = std::filesystem::path(path).parent_path();
+  if (parent.empty()) {
+    parent = ".";
+  }
+  const int fd = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (fd >= 0) {
+    (void)::fsync(fd);
+    ::close(fd);
+  }
+}
+#endif
+
+} // namespace
 
 CacheManager::CacheManager(
     LlmContext* llmContext, std::function<void(bool)> resetStateCallback)
@@ -226,8 +296,11 @@ bool CacheManager::acceptLoadedState(
 
   // Old addon files carried only positional metadata. They are valid state
   // files but not self-describing, so reject them as a cold miss after
-  // clearing the state tentatively restored by llama.cpp.
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+  // clearing the state tentatively restored by llama.cpp. A file written by
+  // another model with the same cache shape is a cold miss too.
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size()) ||
+      !cache::writtenByModel(
+          stateTokens, cache::modelFingerprint(llama_get_model(ctx)))) {
     llmContext_->clearCacheReconciliationState();
     return false;
   }
@@ -585,6 +658,18 @@ void CacheManager::atomicPromoteFile(
             __func__,
             to.c_str()));
   }
+  if (const std::error_code syncEc = syncFile(from)) {
+    std::error_code removeEc;
+    std::filesystem::remove(from, removeEc);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        string_format(
+            "%s: failed to flush tmp file for '%s': %s\n",
+            __func__,
+            to.c_str(),
+            syncEc.message().c_str()));
+  }
 
 #ifdef _WIN32
   // MoveFileExW atomically replaces the destination on NTFS — unlike
@@ -625,6 +710,7 @@ void CacheManager::atomicPromoteFile(
             to.c_str(),
             renameEc.message().c_str()));
   }
+  syncParentDirectory(to);
 #endif
 }
 
