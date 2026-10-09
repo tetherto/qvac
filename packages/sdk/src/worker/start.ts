@@ -31,15 +31,31 @@ export function startWorker(ipc: Duplex, ready: () => void, options: WorkerOptio
   logger.info(`Worker ready with ${options.plugins.length} plugins`)
   ready()
 
+  // The shim stops the worker on `terminate` only. A host that exits without it
+  // leaves the pipe half open: `end` arrives, `close` never does.
+  ipc.once('end', () => {
+    if (stopping) return
+    logger.info('Host ended the worker pipe; stopping')
+    const exit = () => {
+      if (!isBareKit) Bare.exit(0)
+    }
+    stopWorker().then(exit, exit)
+  })
+
   return stopWorker
 }
 
-async function stopWorker(): Promise<void> {
-  try {
-    await closeEngine()
-  } finally {
-    if (!isBareKit) scheduleForceExit()
-  }
+let stopping: Promise<void> | null = null
+
+function stopWorker(): Promise<void> {
+  stopping ??= (async () => {
+    try {
+      await closeEngine()
+    } finally {
+      if (!isBareKit) scheduleForceExit()
+    }
+  })()
+  return stopping
 }
 
 function scheduleForceExit(): void {
