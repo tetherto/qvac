@@ -7,7 +7,7 @@ import {
   extractInternalLinks,
   contentPathsOfLink,
 } from '../scripts/lib/link-validator'
-import { getDocumentedSoftware } from '../src/lib/versions'
+import { getCurrentLine, getDocumentedSoftware } from '../src/lib/versions'
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const WEBSITE_DIR = path.resolve(TESTS_DIR, '..')
@@ -73,19 +73,23 @@ describe('extractInternalLinks', () => {
 // ---------------------------------------------------------------------------
 
 describe('contentPathsOfLink', () => {
+  // Read from the manifest rather than written out: a cut moves the group, and
+  // a test naming it would have to be edited by every cut.
+  const sdkGroup = getCurrentLine(getDocumentedSoftware('/sdk')!)!.folder
+
   it("resolves a same-collection link in the reader's own line", () => {
     expect(contentPathsOfLink('/sdk/quickstart', 'sdk/v0.18/index.mdx')[0])
       .toBe('sdk/v0.18/quickstart')
   })
 
   it('resolves a link from the current line inside the group', () => {
-    expect(contentPathsOfLink('/sdk/quickstart', 'sdk/(v0.21)/index.mdx')[0])
-      .toBe('sdk/(v0.21)/quickstart')
+    expect(contentPathsOfLink('/sdk/quickstart', `sdk/${sdkGroup}/index.mdx`)[0])
+      .toBe(`sdk/${sdkGroup}/quickstart`)
   })
 
   it('resolves a link arriving from another collection in the current line', () => {
     expect(contentPathsOfLink('/sdk/quickstart', 'ecosystem/index.mdx')[0])
-      .toBe('sdk/(v0.21)/quickstart')
+      .toBe(`sdk/${sdkGroup}/quickstart`)
   })
 
   it('leaves a link that names its version alone', () => {
