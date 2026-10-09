@@ -456,6 +456,16 @@ const segments = await transcribe({
 })
 ```
 
+For a runnable example with download progress and resource cleanup, see
+[the MOSS file transcription example](examples/asr/moss-transcribe-filesystem.ts).
+From `packages/sdk`, run:
+
+```bash
+bun run examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
+# Use local weights and per-request hotwords:
+bun run examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
+```
+
 Segments retain `speaker` labels such as `S01`, zero-based `speakerId`, and
 `startMs`/`endMs`. Hotwords apply to each request: at most 64 nonempty terms of
 64 UTF-8 bytes each. A MOSS `prompt` replaces the default instruction and cannot
