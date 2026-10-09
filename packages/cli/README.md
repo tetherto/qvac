@@ -129,12 +129,12 @@ qvac doctor --quiet || exit 1
 ### `configure`
 
 Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
-straight to `qvac serve --openai`. It searches the models the SDK provides — by name or by
+straight to `qvac serve --openai` or `qvac serve --systemone`. It searches the models the SDK provides — by name or by
 capability (role, addon, quantization) — and on a wide terminal previews, for the
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
 type and description and is validated on entry, for model types the SDK exposes a schema for;
-currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the
+currently llama.cpp chat + embedding + decision), and (with `$EDITOR`) tweak the entry and review the
 result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C`
 aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
@@ -142,17 +142,18 @@ aborts without writing. Existing entries are preserved; re-running is idempotent
 qvac configure                 # interactive
 qvac configure --yes           # non-interactive: write a chat + transcription starter
 qvac configure --modality chat --modality image
+qvac configure --modality decision
 ```
 
-| Flag                  | Description                                                                                                 |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                            |
-| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                   |
-| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
-| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                         |
-| `-q, --quiet`         | Suppress output.                                                                                            |
+| Flag                  | Description                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                                         |
+| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                                |
+| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image` / `decision`. |
+| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                                      |
+| `-q, --quiet`         | Suppress output.                                                                                                         |
 
-Single-artifact modalities (chat, embedding, transcription, image) are runnable as written.
+Single-artifact modalities (chat, embedding, transcription, image, decision) are runnable as written.
 Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder —
 set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
 non-TTY use `--yes` / `--modality`.
@@ -397,10 +398,12 @@ accepting dependents when another dependent still requires the current version.
 
 ### `serve`
 
-Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with an optional **OpenAI-compatible** extension.
+Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with optional **OpenAI-compatible** and **System One** extensions.
 
 ```bash
 qvac serve --openai [options]
+qvac serve --systemone [options]
+qvac serve --openai --systemone [options]
 ```
 
 `--no-default` leaves the QVAC surface out. `qvac serve openai` is a deprecated alias for `qvac serve --openai --no-default`.
@@ -411,6 +414,7 @@ qvac serve --openai [options]
 | `-p, --port <number>`            | Port to listen on (default: `11434`).                                                                                               |
 | `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                             |
 | `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request. |
+| `--systemone`                    | Mount `POST /v1/systemone` for typed decisions. See [System One](docs/serve/systemone.md).                                          |
 | `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                             |
 | `--api-key-file <path>`          | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.                                             |
 | `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |

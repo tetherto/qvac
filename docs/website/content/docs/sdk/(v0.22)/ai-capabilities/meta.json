@@ -18,6 +18,7 @@
     "bci",
     "vla",
     "ocr",
-    "image-classification"
+    "image-classification",
+    "laya-decisions"
   ]
 }

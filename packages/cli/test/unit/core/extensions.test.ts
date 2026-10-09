@@ -106,4 +106,11 @@ describe('mounted surfaces', () => {
     assert.match(printed, /embeddings/)
     assert.ok(!printed.includes('/qvac/'))
   })
+
+  it('mounts the System One endpoint independently', async () => {
+    const printed = await build(['systemone'])
+    assert.match(printed, /\/v1\/systemone/)
+    assert.ok(!printed.includes('chat'))
+    assert.ok(!printed.includes('/qvac/'))
+  })
 })

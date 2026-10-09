@@ -6,9 +6,11 @@
 export {
   llmConfigBaseSchema as llamacppCompletionConfigSchema,
   embedConfigBaseSchema as llamacppEmbeddingConfigSchema,
+  decisionConfigBaseSchema as llamacppDecisionConfigSchema,
   modelSrcInputSchema as modelSourceSchema,
   type LlmConfigInput as LlamacppCompletionConfig,
   type EmbedConfigInput as LlamacppEmbeddingConfig,
+  type DecisionConfigInput as LlamacppDecisionConfig,
   type ModelSrcInput as ModelSource
 } from '@qvac/inference/surface'
 

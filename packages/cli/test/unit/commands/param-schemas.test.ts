@@ -10,6 +10,18 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('exposes the decision device and accepts the generated starter', () => {
+    const schema = configSchemaForAddon('llamacpp-decision')
+    assert.ok(schema)
+    assert.ok(schema.safeParse(buildEntry('decision').entry.config ?? {}).success)
+    const device = paramFields(schema).find((field) => field.name === 'device')
+    assert.ok(device)
+    assert.equal(device.required, false)
+    assert.equal(validateParam(device, 'cpu'), true)
+    assert.equal(validateParam(device, 'gpu'), true)
+    assert.notEqual(validateParam(device, 'cuda'), true)
+  })
+
   it('exposes and validates World memory controls in the nested editor', () => {
     const schema = configSchemaForAddon('diffusion')
     assert.ok(schema)

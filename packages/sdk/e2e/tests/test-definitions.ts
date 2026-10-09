@@ -1,3 +1,4 @@
+import { decisionTests } from './decision-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
@@ -517,6 +518,7 @@ const catalog: TestDefinition[] = [
 
   // Classification tests
   ...classificationTests,
+  ...decisionTests,
 
   // TTS tests
   ...ttsTests,

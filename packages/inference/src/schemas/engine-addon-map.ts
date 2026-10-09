@@ -26,6 +26,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.whispercppTranscription]: 'whisper',
   [ModelType.bciWhispercppTranscription]: 'bci',
   [ModelType.llamacppEmbedding]: 'embeddings',
+  [ModelType.llamacppDecision]: 'embeddings',
   [ModelType.nmtcppTranslation]: 'nmt',
   [ModelType.onnxTts]: 'tts',
   [ModelType.ttsGgml]: 'tts',

@@ -26,6 +26,7 @@ class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -130,6 +131,7 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -2789,6 +2791,7 @@ class CancelRequestBroadKind(Enum):
     completion = "completion"
     batch_completion = "batchCompletion"
     embeddings = "embeddings"
+    decision = "decision"
     transcribe = "transcribe"
     translate = "translate"
     diffusion = "diffusion"
@@ -4057,6 +4060,7 @@ class ModelType(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -4071,6 +4075,7 @@ class ModelType(Enum):
 class PluginId(Enum):
     llm = "@qvac/sdk/llamacpp-completion/plugin"
     embedding = "@qvac/sdk/llamacpp-embedding/plugin"
+    decision = "@qvac/sdk/llamacpp-decision/plugin"
     whisper = "@qvac/sdk/whispercpp-transcription/plugin"
     bci = "@qvac/sdk/bci-whispercpp-transcription/plugin"
     nmt = "@qvac/sdk/nmtcpp-translation/plugin"
@@ -4238,6 +4243,791 @@ class Verbosity(Enum):
     warn = 1
     info = 2
     debug = 3
+
+
+class DecideSingleRequestQuestionsValueChoiceInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueChoiceInstructions"),
+    ]
+
+
+class OptionOrderItem(RootModel[int]):
+    root: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class DecideSingleRequestQuestionsValueChoiceCriteriaValue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueChoiceCriteriaValue"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueChoiceCriteria(
+    RootModel[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideSingleRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideSingleRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ],
+        Field(title="DecideSingleRequestQuestionsValueChoiceCriteria"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueChoiceInstructions
+        | list[Any]
+    )
+    option_order: list[OptionOrderItem] | None = None
+    type: Literal["choice"] = "choice"
+    criteria: list[str | float | bool] | DecideSingleRequestQuestionsValueChoiceCriteria
+
+
+class DecideSingleRequestQuestionsValueScoreInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueScoreInstructions"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueScoreCriteriaItem(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueScoreCriteriaItem"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueScoreInstructions
+        | list[Any]
+    )
+    option_order: list[OptionOrderItem] | None = None
+    type: Literal["score"] = "score"
+    criteria: list[
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueScoreCriteriaItem
+        | list[Any]
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideSingleRequestQuestionsValueNoulInstructions")
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulCriteriaTrue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideSingleRequestQuestionsValueNoulCriteriaTrue")
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulCriteriaFalse(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideSingleRequestQuestionsValueNoulCriteriaFalse"),
+    ]
+
+
+class DecideSingleRequestQuestionsValueNoulCriteria(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    true: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueNoulCriteriaTrue
+        | list[Any]
+        | None
+    ) = None
+    false: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueNoulCriteriaFalse
+        | list[Any]
+        | None
+    ) = None
+
+
+class DecideSingleRequestQuestionsValueNoulLabels(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    false: str
+    true: str
+
+
+class DecideSingleRequestQuestionsValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideSingleRequestQuestionsValueNoulInstructions
+        | list[Any]
+    )
+    option_order: list[OptionOrderItem] | None = None
+    type: Literal["noul"] = "noul"
+    criteria: DecideSingleRequestQuestionsValueNoulCriteria | None = None
+    labels: Annotated[
+        DecideSingleRequestQuestionsValueNoulLabels | None,
+        Field(title="DecideSingleRequestQuestionsValueNoulLabels"),
+    ] = None
+
+
+class DecideSingleRequestQuestions(
+    RootModel[
+        dict[
+            str,
+            DecideSingleRequestQuestionsValueChoice
+            | DecideSingleRequestQuestionsValueScore
+            | DecideSingleRequestQuestionsValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideSingleRequestQuestionsValueChoice
+            | DecideSingleRequestQuestionsValueScore
+            | DecideSingleRequestQuestionsValueNoul,
+        ],
+        Field(
+            description="Question ID to Laya question.",
+            title="DecideSingleRequestQuestions",
+        ),
+    ]
+
+
+class DecideSingleRequestState(RootModel[dict[str, Any]]):
+    root: Annotated[dict[str, Any], Field(title="DecideSingleRequestState")]
+
+
+class DecideSingleRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    questions: Annotated[
+        DecideSingleRequestQuestions,
+        Field(
+            description="Question ID to Laya question.",
+            title="DecideSingleRequestQuestions",
+        ),
+    ]
+    max_len: Annotated[
+        int | None,
+        Field(
+            description="Token budget per sequence; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    head_max_len: Annotated[
+        int | None,
+        Field(
+            description="Token budget for each question and its options; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    state: str | float | bool | DecideSingleRequestState | list[Any]
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    type: Literal["decide"] = "decide"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class DecideBatchRequestQuestionsValueChoiceInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideBatchRequestQuestionsValueChoiceInstructions"),
+    ]
+
+
+class DecideBatchRequestQuestionsValueChoiceCriteriaValue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="DecideBatchRequestQuestionsValueChoiceCriteriaValue"),
+    ]
+
+
+class DecideBatchRequestQuestionsValueChoiceCriteria(
+    RootModel[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideBatchRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            str
+            | float
+            | bool
+            | DecideBatchRequestQuestionsValueChoiceCriteriaValue
+            | list[Any]
+            | None,
+        ],
+        Field(title="DecideBatchRequestQuestionsValueChoiceCriteria"),
+    ]
+
+
+class DecideBatchRequestQuestionsValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueChoiceInstructions
+        | list[Any]
+    )
+    option_order: list[OptionOrderItem] | None = None
+    type: Literal["choice"] = "choice"
+    criteria: list[str | float | bool] | DecideBatchRequestQuestionsValueChoiceCriteria
+
+
+class DecideBatchRequestQuestionsValueScoreInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueScoreInstructions")
+    ]
+
+
+class DecideBatchRequestQuestionsValueScoreCriteriaItem(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueScoreCriteriaItem")
+    ]
+
+
+class DecideBatchRequestQuestionsValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueScoreInstructions
+        | list[Any]
+    )
+    option_order: list[OptionOrderItem] | None = None
+    type: Literal["score"] = "score"
+    criteria: list[
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueScoreCriteriaItem
+        | list[Any]
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulInstructions(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueNoulInstructions")
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulCriteriaTrue(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueNoulCriteriaTrue")
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulCriteriaFalse(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="DecideBatchRequestQuestionsValueNoulCriteriaFalse")
+    ]
+
+
+class DecideBatchRequestQuestionsValueNoulCriteria(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    true: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueNoulCriteriaTrue
+        | list[Any]
+        | None
+    ) = None
+    false: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueNoulCriteriaFalse
+        | list[Any]
+        | None
+    ) = None
+
+
+class DecideBatchRequestQuestionsValueNoulLabels(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    false: str
+    true: str
+
+
+class DecideBatchRequestQuestionsValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    instructions: (
+        str
+        | float
+        | bool
+        | DecideBatchRequestQuestionsValueNoulInstructions
+        | list[Any]
+    )
+    option_order: list[OptionOrderItem] | None = None
+    type: Literal["noul"] = "noul"
+    criteria: DecideBatchRequestQuestionsValueNoulCriteria | None = None
+    labels: Annotated[
+        DecideBatchRequestQuestionsValueNoulLabels | None,
+        Field(title="DecideBatchRequestQuestionsValueNoulLabels"),
+    ] = None
+
+
+class DecideBatchRequestQuestions(
+    RootModel[
+        dict[
+            str,
+            DecideBatchRequestQuestionsValueChoice
+            | DecideBatchRequestQuestionsValueScore
+            | DecideBatchRequestQuestionsValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideBatchRequestQuestionsValueChoice
+            | DecideBatchRequestQuestionsValueScore
+            | DecideBatchRequestQuestionsValueNoul,
+        ],
+        Field(
+            description="Question ID to Laya question.",
+            title="DecideBatchRequestQuestions",
+        ),
+    ]
+
+
+class DecideBatchRequestStatesItem(RootModel[dict[str, Any]]):
+    root: Annotated[dict[str, Any], Field(title="DecideBatchRequestStatesItem")]
+
+
+class DecideBatchRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    questions: Annotated[
+        DecideBatchRequestQuestions,
+        Field(
+            description="Question ID to Laya question.",
+            title="DecideBatchRequestQuestions",
+        ),
+    ]
+    max_len: Annotated[
+        int | None,
+        Field(
+            description="Token budget per sequence; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    head_max_len: Annotated[
+        int | None,
+        Field(
+            description="Token budget for each question and its options; unset uses the checkpoint budget.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    states: list[str | float | bool | DecideBatchRequestStatesItem | list[Any]]
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    type: Literal["decide"] = "decide"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class DecideResponseResultAnswersValueChoiceAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: float
+
+
+class DecideResponseResultAnswersValueChoiceProbabilities(RootModel[dict[str, float]]):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: float
+    confidence: float
+    action: Annotated[
+        DecideResponseResultAnswersValueChoiceAction,
+        Field(title="DecideResponseResultAnswersValueChoiceAction"),
+    ]
+    type: Literal["choice"] = "choice"
+    choice: str | float | bool
+    probabilities: Annotated[
+        DecideResponseResultAnswersValueChoiceProbabilities,
+        Field(title="DecideResponseResultAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueScoreAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: float
+
+
+class DecideResponseResultAnswersValueScoreLegend(RootModel[dict[str, str]]):
+    root: Annotated[
+        dict[str, str], Field(title="DecideResponseResultAnswersValueScoreLegend")
+    ]
+
+
+class DecideResponseResultAnswersValueScoreProbabilities(RootModel[dict[str, float]]):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: float
+    confidence: float
+    action: Annotated[
+        DecideResponseResultAnswersValueScoreAction,
+        Field(title="DecideResponseResultAnswersValueScoreAction"),
+    ]
+    type: Literal["score"] = "score"
+    score: float
+    legend: Annotated[
+        DecideResponseResultAnswersValueScoreLegend,
+        Field(title="DecideResponseResultAnswersValueScoreLegend"),
+    ]
+    probabilities: Annotated[
+        DecideResponseResultAnswersValueScoreProbabilities,
+        Field(title="DecideResponseResultAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultAnswersValueNoulAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: float
+
+
+class DecideResponseResultAnswersValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: float
+    confidence: float
+    action: Annotated[
+        DecideResponseResultAnswersValueNoulAction,
+        Field(title="DecideResponseResultAnswersValueNoulAction"),
+    ]
+    type: Literal["noul"] = "noul"
+    noul: float
+
+
+class DecideResponseResultAnswers(
+    RootModel[
+        dict[
+            str,
+            DecideResponseResultAnswersValueChoice
+            | DecideResponseResultAnswersValueScore
+            | DecideResponseResultAnswersValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideResponseResultAnswersValueChoice
+            | DecideResponseResultAnswersValueScore
+            | DecideResponseResultAnswersValueNoul,
+        ],
+        Field(title="DecideResponseResultAnswers"),
+    ]
+
+
+class DecideResponseResultUsageOptionsValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total: float
+    distinct: float
+    tokens_per_option: float | None
+
+
+class DecideResponseResultUsageOptions(
+    RootModel[dict[str, DecideResponseResultUsageOptionsValue]]
+):
+    root: Annotated[
+        dict[str, DecideResponseResultUsageOptionsValue],
+        Field(title="DecideResponseResultUsageOptions"),
+    ]
+
+
+class DecideResponseResultUsage(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    input_tokens: float
+    output_tokens: float
+    state_tokens: float
+    state_tokens_dropped: float
+    truncated: bool
+    truncated_questions: list[str]
+    options: Annotated[
+        DecideResponseResultUsageOptions | None,
+        Field(title="DecideResponseResultUsageOptions"),
+    ] = None
+
+
+class DecideResponseResult(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model: str
+    answers: Annotated[
+        DecideResponseResultAnswers, Field(title="DecideResponseResultAnswers")
+    ]
+    usage: Annotated[
+        DecideResponseResultUsage, Field(title="DecideResponseResultUsage")
+    ]
+
+
+class DecideResponseResultItemAnswersValueChoiceAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: float
+
+
+class DecideResponseResultItemAnswersValueChoiceProbabilities(
+    RootModel[dict[str, float]]
+):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultItemAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueChoice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: float
+    confidence: float
+    action: Annotated[
+        DecideResponseResultItemAnswersValueChoiceAction,
+        Field(title="DecideResponseResultItemAnswersValueChoiceAction"),
+    ]
+    type: Literal["choice"] = "choice"
+    choice: str | float | bool
+    probabilities: Annotated[
+        DecideResponseResultItemAnswersValueChoiceProbabilities,
+        Field(title="DecideResponseResultItemAnswersValueChoiceProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueScoreAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: float
+
+
+class DecideResponseResultItemAnswersValueScoreLegend(RootModel[dict[str, str]]):
+    root: Annotated[
+        dict[str, str], Field(title="DecideResponseResultItemAnswersValueScoreLegend")
+    ]
+
+
+class DecideResponseResultItemAnswersValueScoreProbabilities(
+    RootModel[dict[str, float]]
+):
+    root: Annotated[
+        dict[str, float],
+        Field(title="DecideResponseResultItemAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueScore(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: float
+    confidence: float
+    action: Annotated[
+        DecideResponseResultItemAnswersValueScoreAction,
+        Field(title="DecideResponseResultItemAnswersValueScoreAction"),
+    ]
+    type: Literal["score"] = "score"
+    score: float
+    legend: Annotated[
+        DecideResponseResultItemAnswersValueScoreLegend,
+        Field(title="DecideResponseResultItemAnswersValueScoreLegend"),
+    ]
+    probabilities: Annotated[
+        DecideResponseResultItemAnswersValueScoreProbabilities,
+        Field(title="DecideResponseResultItemAnswersValueScoreProbabilities"),
+    ]
+
+
+class DecideResponseResultItemAnswersValueNoulAction(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    act_probability: float
+
+
+class DecideResponseResultItemAnswersValueNoul(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    answer_confidence: float
+    confidence: float
+    action: Annotated[
+        DecideResponseResultItemAnswersValueNoulAction,
+        Field(title="DecideResponseResultItemAnswersValueNoulAction"),
+    ]
+    type: Literal["noul"] = "noul"
+    noul: float
+
+
+class DecideResponseResultItemAnswers(
+    RootModel[
+        dict[
+            str,
+            DecideResponseResultItemAnswersValueChoice
+            | DecideResponseResultItemAnswersValueScore
+            | DecideResponseResultItemAnswersValueNoul,
+        ]
+    ]
+):
+    root: Annotated[
+        dict[
+            str,
+            DecideResponseResultItemAnswersValueChoice
+            | DecideResponseResultItemAnswersValueScore
+            | DecideResponseResultItemAnswersValueNoul,
+        ],
+        Field(title="DecideResponseResultItemAnswers"),
+    ]
+
+
+class DecideResponseResultItemUsageOptionsValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total: float
+    distinct: float
+    tokens_per_option: float | None
+
+
+class DecideResponseResultItemUsageOptions(
+    RootModel[dict[str, DecideResponseResultItemUsageOptionsValue]]
+):
+    root: Annotated[
+        dict[str, DecideResponseResultItemUsageOptionsValue],
+        Field(title="DecideResponseResultItemUsageOptions"),
+    ]
+
+
+class DecideResponseResultItemUsage(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    input_tokens: float
+    output_tokens: float
+    state_tokens: float
+    state_tokens_dropped: float
+    truncated: bool
+    truncated_questions: list[str]
+    options: Annotated[
+        DecideResponseResultItemUsageOptions | None,
+        Field(title="DecideResponseResultItemUsageOptions"),
+    ] = None
+
+
+class DecideResponseResultItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model: str
+    answers: Annotated[
+        DecideResponseResultItemAnswers, Field(title="DecideResponseResultItemAnswers")
+    ]
+    usage: Annotated[
+        DecideResponseResultItemUsage, Field(title="DecideResponseResultItemUsage")
+    ]
+
+
+class DecideResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["decide"] = "decide"
+    result: DecideResponseResult | list[DecideResponseResultItem]
 
 
 class DeleteCacheAllRequest(GeneratedBaseModel):
@@ -9011,6 +9801,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -9646,6 +10437,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -10223,6 +11015,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -10920,6 +11713,186 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     ]
 
 
+class LoadModelSrcRequestLlamacppDecisionModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn(Enum):
+    on = "on"
+    off = "off"
+    auto = "auto"
+
+
+class MainGpu2(RootModel[int]):
+    root: Annotated[
+        int, Field(description="GPU index or device class.", ge=0, le=9007199254740991)
+    ]
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu(Enum):
+    integrated = "integrated"
+    dedicated = "dedicated"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode(Enum):
+    none = "none"
+    layer = "layer"
+
+
+class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    device: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfigDevice | None,
+        Field(
+            description="Compute device. Default 'gpu'.",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigDevice",
+        ),
+    ] = None
+    gpu_layers: Annotated[
+        int | None,
+        Field(
+            description="Layers to offload. Unset lets the addon choose placement.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    batch_size: Annotated[
+        int | None,
+        Field(
+            description="Tokens per forward pass. Default 2048; each sequence must fit.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU threads, at most the CPU count. Zero or below uses all logical CPUs.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    threads_batch: Annotated[
+        int | None,
+        Field(
+            alias="threads-batch",
+            description="Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    flash_attn: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn | None,
+        Field(
+            description="Flash attention mode. Default auto.",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn",
+        ),
+    ] = None
+    verbosity: Annotated[
+        int | None,
+        Field(
+            description="Native log level: 0 error, 1 warn, 2 info, 3 debug.",
+            ge=0,
+            le=3,
+        ),
+    ] = None
+    main_gpu: Annotated[
+        MainGpu2 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
+        Field(alias="main-gpu", description="GPU index or device class."),
+    ] = None
+    split_mode: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode | None,
+        Field(
+            alias="split-mode",
+            description="Multi-GPU split mode.",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode",
+        ),
+    ] = None
+    tensor_split: Annotated[
+        str | None,
+        Field(alias="tensor-split", description="Per-GPU tensor split proportions."),
+    ] = None
+    opencl_cache_dir: Annotated[
+        str | None,
+        Field(
+            alias="openclCacheDir",
+            description="Writable OpenCL kernel cache directory, required on Android.",
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestLlamacppDecision(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
+        ),
+    ]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
+    require_http_checksum: Annotated[
+        bool | None,
+        Field(
+            alias="requireHttpChecksum",
+            description="Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    require_secure_transport: Annotated[
+        bool | None,
+        Field(
+            alias="requireSecureTransport",
+            description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestLlamacppDecisionModelFitPolicy",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["llamacpp-decision"], Field(alias="modelType")] = (
+        "llamacpp-decision"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestLlamacppDecisionModelConfig | None,
+        Field(
+            alias="modelConfig", title="LoadModelSrcRequestLlamacppDecisionModelConfig"
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
     log = "log"
     refuse = "refuse"
@@ -11049,6 +12022,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -11157,6 +12131,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -11271,6 +12246,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -11381,6 +12357,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -11491,6 +12468,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -11988,6 +12966,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12094,6 +13073,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12202,6 +13182,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12308,6 +13289,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12414,6 +13396,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12522,6 +13505,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12887,6 +13871,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12995,6 +13980,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13289,6 +14275,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13397,6 +14384,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13786,6 +14774,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13894,6 +14883,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14002,6 +14992,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14110,6 +15101,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddo
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14220,6 +15212,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14484,6 +15477,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14592,6 +15586,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14700,6 +15695,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14932,6 +15928,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15040,6 +16037,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15148,6 +16146,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15254,6 +16253,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15570,6 +16570,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15844,7 +16845,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     cpu = "cpu"
 
 
-class MainGpu2(RootModel[int]):
+class MainGpu3(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -15909,6 +16910,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16015,6 +17017,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16121,6 +17124,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16227,6 +17231,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16333,6 +17338,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16441,6 +17447,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16549,6 +17556,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16655,6 +17663,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16763,6 +17772,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16871,6 +17881,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16979,6 +17990,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17085,6 +18097,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17302,6 +18315,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17484,7 +18498,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu2 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
+        MainGpu3 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
             alias="main-gpu",
             description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
@@ -17766,6 +18780,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17874,6 +18889,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17980,6 +18996,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18086,6 +19103,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18278,6 +19296,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18384,6 +19403,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18929,6 +19949,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestBciWhispercppTranscription
         | LoadModelSrcRequestParakeetTranscription
         | LoadModelSrcRequestLlamacppEmbedding
+        | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -18945,6 +19966,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestBciWhispercppTranscription
         | LoadModelSrcRequestParakeetTranscription
         | LoadModelSrcRequestLlamacppEmbedding
+        | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -19040,6 +20062,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19525,6 +20548,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19663,6 +20687,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19822,6 +20847,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -22916,7 +23942,13 @@ class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
     ]
 
 
-class Request_2(
+class Request_2(RootModel[DecideSingleRequest | DecideBatchRequest]):
+    root: Annotated[
+        DecideSingleRequest | DecideBatchRequest, Field(title="DecideRequest")
+    ]
+
+
+class Request_3(
     RootModel[
         DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
     ]
@@ -22927,7 +23959,7 @@ class Request_2(
     ]
 
 
-class Request_3(
+class Request_4(
     RootModel[FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest]
 ):
     root: Annotated[
@@ -22936,13 +23968,13 @@ class Request_3(
     ]
 
 
-class Request_4(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
+class Request_5(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
     root: Annotated[
         LoadModelSrcRequest | ReloadConfigRequest, Field(title="LoadModelRequest")
     ]
 
 
-class Request_5(
+class Request_6(
     RootModel[
         RagRequestChunk
         | RagRequestIngest
@@ -22996,13 +24028,13 @@ class Response_1(
     ]
 
 
-class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
+class Request_7(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
     root: Annotated[
         TranslateNmtRequest | TranslateLlmRequest, Field(title="TranslateRequest")
     ]
 
 
-class Request_7(
+class Request_8(
     RootModel[
         VectorIndexRequestCreate
         | VectorIndexRequestLoad
@@ -23041,16 +24073,17 @@ class Request(
         | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
+        | Request_3
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | EmbedRequest
-        | Request_3
+        | Request_4
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_4
+        | Request_5
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -23058,7 +24091,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_5
+        | Request_6
         | ResumeRequest
         | StartRpcServerRequest
         | StateRequest
@@ -23068,10 +24101,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_6
+        | Request_7
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_7
+        | Request_8
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest
@@ -23090,16 +24123,17 @@ class Request(
         | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
+        | Request_3
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | EmbedRequest
-        | Request_3
+        | Request_4
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_4
+        | Request_5
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -23107,7 +24141,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_5
+        | Request_6
         | ResumeRequest
         | StartRpcServerRequest
         | StateRequest
@@ -23117,10 +24151,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_6
+        | Request_7
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_7
+        | Request_8
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest,
@@ -23169,6 +24203,7 @@ class Response(
         | ClassifyResponse
         | CompletionOrchestrateResponse
         | CompletionStreamResponse
+        | DecideResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
         | DiscoverRpcServersResponse
@@ -23222,6 +24257,7 @@ class Response(
         | ClassifyResponse
         | CompletionOrchestrateResponse
         | CompletionStreamResponse
+        | DecideResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
         | DiscoverRpcServersResponse

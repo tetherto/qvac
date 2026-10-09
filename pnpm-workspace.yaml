@@ -55,7 +55,7 @@ minimumReleaseAgeExclude:
   - '@qvac/fabric-android-arm64@0.20.0'
   - '@qvac/fabric-ios@0.20.0'
   - '@qvac/classification-ggml@0.29.0'
-  - '@qvac/embed-llamacpp@0.45.0'
+  - '@qvac/embed-llamacpp@0.46.0'
   - '@qvac/fabric-darwin-arm64@0.20.0'
   - '@qvac/fabric-darwin-x64@0.20.0'
   - '@qvac/fabric-linux-arm64@0.20.0'

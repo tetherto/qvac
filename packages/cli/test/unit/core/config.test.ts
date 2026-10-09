@@ -6,6 +6,14 @@ import { resolveExplicitServeModel, resolveModelConstant } from '@/serve/core/co
 import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model-src'
 
 describe('resolveExplicitServeModel', () => {
+  it('routes the decisions model type to its own endpoint category', () => {
+    assert.deepEqual(resolveExplicitServeModel('llamacpp-decision', { device: 'gpu' }), {
+      sdkType: 'llamacpp-decision',
+      endpointCategory: 'decision',
+      config: { device: 'gpu' }
+    })
+  })
+
   it('maps whispercpp-audio-translation to whispercpp-transcription and audio-translation', () => {
     const r = resolveExplicitServeModel('whispercpp-audio-translation', {
       whisperConfig: { language: 'auto', n_threads: 4 }

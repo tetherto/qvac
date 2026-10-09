@@ -162,6 +162,10 @@
     "./ggml-rpc-server/provider": {
       "types": "./dist/src/worker/ggml-rpc-server-provider.d.ts",
       "import": "./dist/src/worker/ggml-rpc-server-provider.js"
+    },
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/src/worker/plugins/llamacpp-decision.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-decision.js"
     }
   },
   "imports": {
@@ -221,7 +225,7 @@
     "@qvac/classification-ggml": "^0.29.0",
     "@qvac/decoder-audio": "^0.8.0",
     "@qvac/diffusion-cpp": "^0.26.0",
-    "@qvac/embed-llamacpp": "^0.45.0",
+    "@qvac/embed-llamacpp": "^0.46.0",
     "@qvac/error": "^0.1.1",
     "@qvac/ggml-rpc-server": "^0.2.0",
     "@qvac/inference": "^0.21.0",

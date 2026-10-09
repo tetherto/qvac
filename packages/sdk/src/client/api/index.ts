@@ -58,3 +58,5 @@ export { audioGen } from '@/client/api/audio-gen'
 export { audioEdit } from '@/client/api/audio-edit'
 export { audioUnderstand } from '@/client/api/audio-understand'
 export { startRpcServer, stopRpcServer, discoverRpcServers } from './rpc-server'
+
+export { decide } from './decide'

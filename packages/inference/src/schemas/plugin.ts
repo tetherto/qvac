@@ -356,6 +356,7 @@ export const PLUGIN_LLM = '@qvac/inference/llamacpp-completion/plugin' as const
  * Text embedding plugin (llama.cpp).
  * Provides: vector embeddings for RAG and semantic search.
  */
+export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
 export const PLUGIN_EMBEDDING = '@qvac/inference/llamacpp-embedding/plugin' as const
 
 /**
@@ -431,6 +432,7 @@ export const PLUGIN_CLASSIFICATION = '@qvac/inference/ggml-classification/plugin
 export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_PARAKEET,
