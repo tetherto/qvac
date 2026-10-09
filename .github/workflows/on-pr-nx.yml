@@ -15,6 +15,11 @@ on:
       - "cmake/qvac-addon/**"
   workflow_dispatch:
     inputs:
+      packages:
+        description: "JSON array of package short-names to test. Empty = normal affected selection."
+        required: false
+        type: string
+        default: '[]'
       repository:
         description: "Repo to build (owner/name). Defaults to this repo."
         required: false
@@ -138,6 +143,7 @@ jobs:
         with:
           target: on-pr
           config-ref: ${{ inputs.config_ref_override || github.event.repository.default_branch }}
+          packages: ${{ github.event_name == 'workflow_dispatch' && inputs.packages || '[]' }}
       # PR head, matching on-pr-fabric: a PR that adds itself as a consumer must
       # get the overlay in that same PR. Own path, so it cannot clobber the
       # trusted checkout above.
