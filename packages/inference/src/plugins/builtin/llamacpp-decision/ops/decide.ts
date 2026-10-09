@@ -11,15 +11,15 @@ import {
   type DecideRequest,
   type LayaResponse
 } from '@/schemas/index'
-import { transformDecisionsRequest } from '@/plugins/builtin/llamacpp-decisions/helpers'
+import { transformDecisionRequest } from '@/plugins/builtin/llamacpp-decision/helpers'
 import type { LayaDecisions } from '@qvac/embed-llamacpp'
 
 export async function decide(request: DecideRequest) {
   const { modelId, requestId, type: _type, ...input } = request
-  const nativeRequest = transformDecisionsRequest(layaRequestSchema.parse(input))
+  const nativeRequest = transformDecisionRequest(layaRequestSchema.parse(input))
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
-    kind: 'decisions',
+    kind: 'decision',
     modelId
   })
   const requestLogger = withRequestContext(getEngineLogger(), ctx)

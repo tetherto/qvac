@@ -7,8 +7,8 @@ import { resolveNestedModelSrcConstants } from '@/serve/core/config/nested-model
 
 describe('resolveExplicitServeModel', () => {
   it('routes the decisions model type to its own endpoint category', () => {
-    assert.deepEqual(resolveExplicitServeModel('llamacpp-decisions', { device: 'gpu' }), {
-      sdkType: 'llamacpp-decisions',
+    assert.deepEqual(resolveExplicitServeModel('llamacpp-decision', { device: 'gpu' }), {
+      sdkType: 'llamacpp-decision',
       endpointCategory: 'decision',
       config: { device: 'gpu' }
     })

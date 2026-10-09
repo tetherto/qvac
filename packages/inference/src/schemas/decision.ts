@@ -150,7 +150,7 @@ export const decideResponseSchema = z.object({
   result: layaResponseSchema
 })
 
-export const decisionsConfigBaseSchema = z
+export const decisionConfigBaseSchema = z
   .object({
     device: z.enum(['cpu', 'gpu']).optional().describe("Compute device. Default 'gpu'."),
     gpu_layers: z
@@ -198,16 +198,16 @@ export const decisionsConfigBaseSchema = z
   })
   .strict()
 
-export type DecisionsConfigInput = z.infer<typeof decisionsConfigBaseSchema>
+export type DecisionConfigInput = z.infer<typeof decisionConfigBaseSchema>
 
-export const DECISIONS_CONFIG_DEFAULTS = {
+export const DECISION_CONFIG_DEFAULTS = {
   device: 'gpu'
-} as const satisfies Partial<DecisionsConfigInput>
+} as const satisfies Partial<DecisionConfigInput>
 
-export const decisionsConfigSchema = decisionsConfigBaseSchema.transform((data) => ({
-  ...DECISIONS_CONFIG_DEFAULTS,
+export const decisionConfigSchema = decisionConfigBaseSchema.transform((data) => ({
+  ...DECISION_CONFIG_DEFAULTS,
   ...data,
-  device: data.device ?? DECISIONS_CONFIG_DEFAULTS.device
+  device: data.device ?? DECISION_CONFIG_DEFAULTS.device
 }))
 
 export type LayaState = z.infer<typeof layaStateSchema>
@@ -221,4 +221,4 @@ export type DecideParams =
   | (Extract<InferredDecideParams, { state: unknown }> & { states?: never })
   | (Extract<InferredDecideParams, { states: unknown }> & { state?: never })
 export type DecideRequest = z.infer<typeof decideRequestSchema>
-export type DecisionsConfig = z.infer<typeof decisionsConfigSchema>
+export type DecisionConfig = z.infer<typeof decisionConfigSchema>

@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { createDecisionsCall } from '@/client/api/decide'
+import { createDecisionCall } from '@/client/api/decide'
 import { InferenceCancelledError } from '@/utils/errors-server'
 import { InvalidResponseError, RequestValidationFailedError } from '@/utils/errors-client'
 import type { DecideRequest, LayaResult } from '@qvac/inference/surface'
@@ -30,14 +30,14 @@ test('decide client exposes requestId synchronously and preserves batch shape ov
     options = opts
     return { type: 'decide', result: 'states' in input ? [result, result] : result }
   }
-  const call = createDecisionsCall(params, { timeout: 1000 }, send as never)
+  const call = createDecisionCall(params, { timeout: 1000 }, send as never)
   t.ok(call.requestId)
   t.alike(await call, result)
   t.is(request?.requestId, call.requestId)
   t.alike(options, { timeout: 1000 })
   const { state, ...batch } = params
   t.alike(
-    await createDecisionsCall({ ...batch, states: [state, state] }, undefined, send as never),
+    await createDecisionCall({ ...batch, states: [state, state] }, undefined, send as never),
     [result, result]
   )
 })
@@ -49,7 +49,7 @@ test('decide client rejects input before RPC and rejects malformed or mismatched
     return { type: 'decide', result }
   }
   await t.exception(
-    createDecisionsCall({ ...params, max_len: -1 }, undefined, send as never),
+    createDecisionCall({ ...params, max_len: -1 }, undefined, send as never),
     RequestValidationFailedError as unknown as new () => Error
   )
   t.is(sends, 0)
@@ -59,13 +59,13 @@ test('decide client rejects input before RPC and rejects malformed or mismatched
     { type: 'decide', result: {} }
   ]) {
     await t.exception(
-      createDecisionsCall(params, undefined, (async () => reply) as never),
+      createDecisionCall(params, undefined, (async () => reply) as never),
       InvalidResponseError as unknown as new () => Error
     )
   }
   const { state, ...batch } = params
   await t.exception(
-    createDecisionsCall({ ...batch, states: [state] }, undefined, (async () => ({
+    createDecisionCall({ ...batch, states: [state] }, undefined, (async () => ({
       type: 'decide',
       result: []
     })) as never),
@@ -79,7 +79,7 @@ test('decide client preserves cancellation and native failures', async (t) => {
     new Error('Native decode failed')
   ]) {
     try {
-      await createDecisionsCall(params, undefined, (async () => {
+      await createDecisionCall(params, undefined, (async () => {
         throw failure
       }) as never)
       t.fail('The transport failure must reject')
@@ -88,7 +88,7 @@ test('decide client preserves cancellation and native failures', async (t) => {
     }
   }
   try {
-    await createDecisionsCall({ ...params, max_len: -1 }, undefined, (async () => {}) as never)
+    await createDecisionCall({ ...params, max_len: -1 }, undefined, (async () => {}) as never)
   } catch (error) {
     t.ok(error instanceof RequestValidationFailedError)
   }

@@ -61,7 +61,7 @@ class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -167,7 +167,7 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -3401,7 +3401,7 @@ class CancelRequestBroadKind(Enum):
     completion = "completion"
     batch_completion = "batchCompletion"
     embeddings = "embeddings"
-    decisions = "decisions"
+    decision = "decision"
     transcribe = "transcribe"
     translate = "translate"
     diffusion = "diffusion"
@@ -4772,7 +4772,7 @@ class ModelType(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -4788,7 +4788,7 @@ class ModelType(Enum):
 class PluginId(Enum):
     llm = "@qvac/sdk/llamacpp-completion/plugin"
     embedding = "@qvac/sdk/llamacpp-embedding/plugin"
-    decisions = "@qvac/sdk/llamacpp-decisions/plugin"
+    decision = "@qvac/sdk/llamacpp-decision/plugin"
     whisper = "@qvac/sdk/whispercpp-transcription/plugin"
     bci = "@qvac/sdk/bci-whispercpp-transcription/plugin"
     moss_transcribe = "@qvac/sdk/moss-transcribe/plugin"
@@ -10526,7 +10526,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -11170,7 +11170,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -11749,7 +11749,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -12586,18 +12586,18 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     ]
 
 
-class LoadModelSrcRequestLlamacppDecisionsModelFitPolicy(Enum):
+class LoadModelSrcRequestLlamacppDecisionModelFitPolicy(Enum):
     log = "log"
     refuse = "refuse"
     off = "off"
 
 
-class LoadModelSrcRequestLlamacppDecisionsModelConfigDevice(Enum):
+class LoadModelSrcRequestLlamacppDecisionModelConfigDevice(Enum):
     cpu = "cpu"
     gpu = "gpu"
 
 
-class LoadModelSrcRequestLlamacppDecisionsModelConfigFlashAttn(Enum):
+class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn(Enum):
     on = "on"
     off = "off"
     auto = "auto"
@@ -12609,25 +12609,25 @@ class MainGpu2(RootModel[int]):
     ]
 
 
-class LoadModelSrcRequestLlamacppDecisionsModelConfigMainGpu(Enum):
+class LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu(Enum):
     integrated = "integrated"
     dedicated = "dedicated"
 
 
-class LoadModelSrcRequestLlamacppDecisionsModelConfigSplitMode(Enum):
+class LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode(Enum):
     none = "none"
     layer = "layer"
 
 
-class LoadModelSrcRequestLlamacppDecisionsModelConfig(GeneratedBaseModel):
+class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     device: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfigDevice | None,
+        LoadModelSrcRequestLlamacppDecisionModelConfigDevice | None,
         Field(
             description="Compute device. Default 'gpu'.",
-            title="LoadModelSrcRequestLlamacppDecisionsModelConfigDevice",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigDevice",
         ),
     ] = None
     gpu_layers: Annotated[
@@ -12664,10 +12664,10 @@ class LoadModelSrcRequestLlamacppDecisionsModelConfig(GeneratedBaseModel):
         ),
     ] = None
     flash_attn: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfigFlashAttn | None,
+        LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn | None,
         Field(
             description="Flash attention mode. Default auto.",
-            title="LoadModelSrcRequestLlamacppDecisionsModelConfigFlashAttn",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn",
         ),
     ] = None
     verbosity: Annotated[
@@ -12679,15 +12679,15 @@ class LoadModelSrcRequestLlamacppDecisionsModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu2 | LoadModelSrcRequestLlamacppDecisionsModelConfigMainGpu | None,
+        MainGpu2 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
         Field(alias="main-gpu", description="GPU index or device class."),
     ] = None
     split_mode: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfigSplitMode | None,
+        LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
             description="Multi-GPU split mode.",
-            title="LoadModelSrcRequestLlamacppDecisionsModelConfigSplitMode",
+            title="LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode",
         ),
     ] = None
     tensor_split: Annotated[
@@ -12703,7 +12703,7 @@ class LoadModelSrcRequestLlamacppDecisionsModelConfig(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestLlamacppDecisions(GeneratedBaseModel):
+class LoadModelSrcRequestLlamacppDecision(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -12740,11 +12740,11 @@ class LoadModelSrcRequestLlamacppDecisions(GeneratedBaseModel):
         ),
     ] = None
     model_fit_policy: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelFitPolicy | None,
+        LoadModelSrcRequestLlamacppDecisionModelFitPolicy | None,
         Field(
             alias="modelFitPolicy",
             description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
-            title="LoadModelSrcRequestLlamacppDecisionsModelFitPolicy",
+            title="LoadModelSrcRequestLlamacppDecisionModelFitPolicy",
         ),
     ] = None
     request_id: Annotated[
@@ -12755,13 +12755,13 @@ class LoadModelSrcRequestLlamacppDecisions(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["llamacpp-decisions"], Field(alias="modelType")] = (
-        "llamacpp-decisions"
+    model_type: Annotated[Literal["llamacpp-decision"], Field(alias="modelType")] = (
+        "llamacpp-decision"
     )
     model_config_: Annotated[
-        LoadModelSrcRequestLlamacppDecisionsModelConfig | None,
+        LoadModelSrcRequestLlamacppDecisionModelConfig | None,
         Field(
-            alias="modelConfig", title="LoadModelSrcRequestLlamacppDecisionsModelConfig"
+            alias="modelConfig", title="LoadModelSrcRequestLlamacppDecisionModelConfig"
         ),
     ] = None
 
@@ -12901,7 +12901,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13011,7 +13011,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13127,7 +13127,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13239,7 +13239,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13351,7 +13351,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13850,7 +13850,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -13958,7 +13958,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14068,7 +14068,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14176,7 +14176,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14284,7 +14284,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14394,7 +14394,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14761,7 +14761,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -14871,7 +14871,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15167,7 +15167,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15277,7 +15277,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15668,7 +15668,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15778,7 +15778,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15888,7 +15888,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -15998,7 +15998,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddo
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16110,7 +16110,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16376,7 +16376,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16486,7 +16486,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16596,7 +16596,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16830,7 +16830,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -16940,7 +16940,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(Enu
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17050,7 +17050,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17158,7 +17158,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(En
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -17732,7 +17732,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18073,7 +18073,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18181,7 +18181,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18289,7 +18289,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18397,7 +18397,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18505,7 +18505,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18615,7 +18615,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18725,7 +18725,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18833,7 +18833,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -18943,7 +18943,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19053,7 +19053,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19163,7 +19163,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19271,7 +19271,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19490,7 +19490,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -19956,7 +19956,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -20066,7 +20066,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -20174,7 +20174,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -20282,7 +20282,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -20483,7 +20483,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -20591,7 +20591,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -21153,7 +21153,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestParakeetTranscription
         | LoadModelSrcRequestMossTranscribe
         | LoadModelSrcRequestLlamacppEmbedding
-        | LoadModelSrcRequestLlamacppDecisions
+        | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -21171,7 +21171,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestParakeetTranscription
         | LoadModelSrcRequestMossTranscribe
         | LoadModelSrcRequestLlamacppEmbedding
-        | LoadModelSrcRequestLlamacppDecisions
+        | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -21267,7 +21267,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -21755,7 +21755,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -21896,7 +21896,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
@@ -22059,7 +22059,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"

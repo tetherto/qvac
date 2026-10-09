@@ -4,7 +4,7 @@ import {
   defineHandler,
   ModelType,
   ADDON_EMBEDDING,
-  decisionsConfigSchema,
+  decisionConfigSchema,
   decideRequestSchema,
   decideResponseSchema,
   type CreateModelParams
@@ -13,33 +13,33 @@ import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logg
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { decide } from './ops/decide'
-import { transformDecisionsConfig, decisionsModelFiles } from './helpers'
+import { transformDecisionConfig, decisionModelFiles } from './helpers'
 
-function createDecisionsModel(params: CreateModelParams): LayaDecisions {
-  const config = { ...transformDecisionsConfig(decisionsConfigSchema.parse(params.modelConfig)) }
+function createDecisionModel(params: CreateModelParams): LayaDecisions {
+  const config = { ...transformDecisionConfig(decisionConfigSchema.parse(params.modelConfig)) }
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(config)
     if (stripped.length > 0) {
       getEngineLogger().warn(
-        `[${ModelType.llamacppDecisions}:${params.modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile. Removing them from config; model will load with single-GPU defaults.`
+        `[${ModelType.llamacppDecision}:${params.modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile. Removing them from config; model will load with single-GPU defaults.`
       )
     }
   }
-  const logger = createStreamLogger(params.modelId, ModelType.llamacppDecisions)
-  registerAddonLogger(params.modelId, ModelType.llamacppDecisions, logger)
+  const logger = createStreamLogger(params.modelId, ModelType.llamacppDecision)
+  registerAddonLogger(params.modelId, ModelType.llamacppDecision, logger)
   return new LayaDecisions({
-    files: { model: decisionsModelFiles(params.modelPath) },
+    files: { model: decisionModelFiles(params.modelPath) },
     config,
     logger
   })
 }
 
-export const decisionsPlugin = definePlugin({
-  modelType: ModelType.llamacppDecisions,
+export const decisionPlugin = definePlugin({
+  modelType: ModelType.llamacppDecision,
   displayName: 'Laya decisions (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
-  loadConfigSchema: decisionsConfigSchema,
-  createModel: (params) => ({ model: createDecisionsModel(params) }),
+  loadConfigSchema: decisionConfigSchema,
+  createModel: (params) => ({ model: createDecisionModel(params) }),
   handlers: {
     decide: defineHandler({
       requestSchema: decideRequestSchema,

@@ -22,7 +22,7 @@ const RULES: Rule[] = [
     }
   },
   {
-    match: /^decisions-/,
+    match: /^decision-/,
     skip: {
       reason: 'Laya decision tests require the local QVAC_LAYA_MODEL desktop fixture',
       platforms: ['mobile']

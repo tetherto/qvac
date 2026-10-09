@@ -11,7 +11,7 @@ export const ModelType = {
   whispercppTranscription: 'whispercpp-transcription',
   bciWhispercppTranscription: 'bci-whispercpp-transcription',
   llamacppEmbedding: 'llamacpp-embedding',
-  llamacppDecisions: 'llamacpp-decisions',
+  llamacppDecision: 'llamacpp-decision',
   nmtcppTranslation: 'nmtcpp-translation',
   onnxTts: 'onnx-tts',
   ttsGgml: 'tts-ggml',

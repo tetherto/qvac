@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/request-context'
-import { decide } from '@/plugins/builtin/llamacpp-decisions/ops/decide'
+import { decide } from '@/plugins/builtin/llamacpp-decision/ops/decide'
 import { ModelType, type LayaResult } from '@/schemas/index'
 import {
   InferenceCancelledError,
@@ -43,7 +43,7 @@ function fixture(
     model: { run, cancel } as unknown as AnyModel,
     path: '/tmp/laya.gguf',
     config: {},
-    modelType: ModelType.llamacppDecisions
+    modelType: ModelType.llamacppDecision
   })
   t.teardown(() => {
     unregisterModel(id)
@@ -52,7 +52,7 @@ function fixture(
 
 test('decisions unwrap the addon response once and preserve single and batch results', async (t) => {
   let input: unknown
-  fixture(t, 'decisions-result', async (request) => {
+  fixture(t, 'decision-result', async (request) => {
     input = request
     return {
       await: async () => [
@@ -62,7 +62,7 @@ test('decisions unwrap the addon response once and preserve single and batch res
   })
   const single = await decide({
     type: 'decide',
-    modelId: 'decisions-result',
+    modelId: 'decision-result',
     requestId: 'decide-single',
     state: 'Refund',
     questions
@@ -71,7 +71,7 @@ test('decisions unwrap the addon response once and preserve single and batch res
   t.alike(input, { state: 'Refund', questions })
   const batch = await decide({
     type: 'decide',
-    modelId: 'decisions-result',
+    modelId: 'decision-result',
     states: ['a', 'b'],
     questions
   })
@@ -81,7 +81,7 @@ test('decisions unwrap the addon response once and preserve single and batch res
 
 test('decisions omit undefined addon options while preserving explicit values', async (t) => {
   let input: unknown
-  fixture(t, 'decisions-options', async (request) => {
+  fixture(t, 'decision-options', async (request) => {
     input = request
     return {
       await: async () => [
@@ -156,7 +156,7 @@ test('decisions omit undefined addon options while preserving explicit values', 
   ]) {
     await decide({
       type: 'decide',
-      modelId: 'decisions-options',
+      modelId: 'decision-options',
       ...state,
       questions: requestQuestions,
       max_len: undefined,
@@ -165,7 +165,7 @@ test('decisions omit undefined addon options while preserving explicit values', 
     t.alike(input, { ...state, questions: expectedQuestions, head_max_len: 128 })
     await decide({
       type: 'decide',
-      modelId: 'decisions-options',
+      modelId: 'decision-options',
       ...state,
       questions: requestQuestions,
       max_len: 512,
@@ -177,10 +177,10 @@ test('decisions omit undefined addon options while preserving explicit values', 
 
 test('decisions reject malformed addon responses and release the model slot after failure', async (t) => {
   let output: unknown = []
-  fixture(t, 'decisions-invalid', async () => ({ await: async () => output }))
+  fixture(t, 'decision-invalid', async () => ({ await: async () => output }))
   const request = {
     type: 'decide' as const,
-    modelId: 'decisions-invalid',
+    modelId: 'decision-invalid',
     state: 'Refund',
     questions
   }
@@ -200,7 +200,7 @@ test('decisions cancel the owning job, reject concurrent calls, and allow recove
   let cancelled = 0
   fixture(
     t,
-    'decisions-cancel',
+    'decision-cancel',
     async () => ({
       await: () => {
         started()
@@ -216,7 +216,7 @@ test('decisions cancel the owning job, reject concurrent calls, and allow recove
   )
   const request = {
     type: 'decide' as const,
-    modelId: 'decisions-cancel',
+    modelId: 'decision-cancel',
     state: 'Refund',
     questions
   }
@@ -239,7 +239,7 @@ test('decisions cancel the owning job, reject concurrent calls, and allow recove
 
 test('cancel-before-begin never starts native work', async (t) => {
   let starts = 0
-  fixture(t, 'decisions-pre-cancel', async () => {
+  fixture(t, 'decision-pre-cancel', async () => {
     starts++
     return { await: async () => [result] }
   })
@@ -248,7 +248,7 @@ test('cancel-before-begin never starts native work', async (t) => {
     () =>
       decide({
         type: 'decide',
-        modelId: 'decisions-pre-cancel',
+        modelId: 'decision-pre-cancel',
         requestId: 'decide-pre-cancel',
         state: 'Refund',
         questions
