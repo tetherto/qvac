@@ -222,7 +222,35 @@ export const responseSchema = z.discriminatedUnion('type', [
   classifyResponseSchema
 ])
 
+/**
+ * The part of an `AbortSignal` that a call reads. Structural, so the signal of
+ * every runtime fits: the global one on Node, Electron and React Native, and
+ * `bare-abort-controller`'s on Bare.
+ */
+export interface AbortSignalLike {
+  readonly aborted: boolean
+  readonly reason?: unknown
+  addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
+  removeEventListener(type: 'abort', listener: () => void): void
+}
+
+function isAbortSignalLike(value: unknown): value is AbortSignalLike {
+  if (typeof value !== 'object' || value === null) return false
+  const signal = value as Partial<AbortSignalLike>
+  return (
+    typeof signal.aborted === 'boolean' &&
+    typeof signal.addEventListener === 'function' &&
+    typeof signal.removeEventListener === 'function'
+  )
+}
+
 export const rpcOptionsSchema = z.object({
+  signal: z
+    .custom<AbortSignalLike>(isAbortSignalLike, 'Expected an AbortSignal')
+    .optional()
+    .describe(
+      'Ends a streaming call when aborted: the stream finishes without an error and the worker releases what it held for it. Single-reply calls ignore it.'
+    ),
   timeout: z
     .number()
     .min(100)

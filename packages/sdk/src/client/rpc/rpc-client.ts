@@ -14,6 +14,8 @@ import {
   extractProfilingMeta,
   stripProfilingMeta,
   recordFailure,
+  untilAborted,
+  type AbortSignalLike,
   type Request,
   type Response,
   type RPCOptions
@@ -201,6 +203,25 @@ async function* iterateWithLifeSignal<T>(source: AsyncGenerator<T>): AsyncGenera
   }
 }
 
+// Destroying the response stream is what stops the worker: bare-rpc sends it a
+// DESTROY frame, and the worker aborts the engine stream behind it, so a
+// handler waiting on a source (a log subscription) releases it. This runs from
+// the signal's own listener, so it happens even while the caller is not
+// reading. It is registered before `untilAborted` listens, so by the time the
+// destroyed stream rejects its pending read, `untilAborted` has already ended
+// the iteration and drops that rejection instead of `iterateWithLifeSignal`
+// taking it for a dead worker.
+function destroyOnAbort(responseStream: { destroy(): void }, signal?: AbortSignalLike): () => void {
+  if (!signal) return () => {}
+  const onAbort = () => responseStream.destroy()
+  if (signal.aborted) {
+    onAbort()
+    return () => {}
+  }
+  signal.addEventListener('abort', onAbort, { once: true })
+  return () => signal.removeEventListener('abort', onAbort)
+}
+
 function checkAndThrowError(response: Response): void {
   if (response.type === 'error') {
     // Use the typed-error reconstructor map in `rpc-error.ts` so the
@@ -377,12 +398,19 @@ async function sendProfiled<T extends Request>(
   }
 }
 
+/**
+ * Sends a request and yields its responses. Aborting `options.signal` ends the
+ * stream without an error and tells the worker to stop; a signal that is
+ * already aborted sends nothing.
+ */
 export async function* stream<T extends Request>(
   request: T,
   options: RPCOptions = {},
   rpc?: RPC
 ): AsyncGenerator<Response> {
+  if (options.signal?.aborted) return
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc)
+  if (options.signal?.aborted) return
 
   if (!ctx.profilingEnabled) {
     yield* streamBase(request, ctx.rpc, options, ctx.signalDisable)
@@ -406,6 +434,7 @@ async function* streamBase<T extends Request>(
   req.send(JSON.stringify(payloadObj), 'utf-8')
 
   const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+  const stopDestroyOnAbort = destroyOnAbort(responseStream, options.signal)
   let buffer = ''
 
   async function* processStream(): AsyncGenerator<Buffer> {
@@ -416,22 +445,28 @@ async function* streamBase<T extends Request>(
 
   const streamWithTimeout = withTimeoutStream(processStream(), options?.timeout)
 
-  for await (const chunk of iterateWithLifeSignal(streamWithTimeout)) {
-    buffer += chunk.toString()
+  try {
+    for await (const chunk of iterateWithLifeSignal(
+      untilAborted(streamWithTimeout, options.signal)
+    )) {
+      buffer += chunk.toString()
 
-    // Process complete lines (newline-delimited JSON)
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || '' // Keep incomplete line in buffer
+      // Process complete lines (newline-delimited JSON)
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
 
-    for (const line of lines) {
-      if (line.trim()) {
-        const response = responseSchema.parse(JSON.parse(line))
+      for (const line of lines) {
+        if (line.trim()) {
+          const response = responseSchema.parse(JSON.parse(line))
 
-        checkAndThrowError(response)
+          checkAndThrowError(response)
 
-        yield response
+          yield response
+        }
       }
     }
+  } finally {
+    stopDestroyOnAbort()
   }
 }
 
@@ -446,6 +481,7 @@ async function* streamProfiled<T extends Request>(
   const includeResources = shouldIncludeResourceGauges(options?.profiling)
   const timings = createClientStreamTimings(profileId, requestType)
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined
+  let stopDestroyOnAbort = () => {}
 
   try {
     const zodStart = nowMs()
@@ -466,6 +502,7 @@ async function* streamProfiled<T extends Request>(
     req.send(payload, 'utf-8')
 
     const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+    stopDestroyOnAbort = destroyOnAbort(responseStream, options.signal)
     let buffer = ''
 
     async function* processStream(): AsyncGenerator<Buffer> {
@@ -476,7 +513,9 @@ async function* streamProfiled<T extends Request>(
 
     const streamWithTimeout = withTimeoutStream(processStream(), options?.timeout)
 
-    for await (const chunk of iterateWithLifeSignal(streamWithTimeout)) {
+    for await (const chunk of iterateWithLifeSignal(
+      untilAborted(streamWithTimeout, options.signal)
+    )) {
       const chunkTime = nowMs()
       if (timings.firstChunkAt === undefined) {
         timings.firstChunkAt = chunkTime
@@ -518,6 +557,7 @@ async function* streamProfiled<T extends Request>(
     }
     throw error
   } finally {
+    stopDestroyOnAbort()
     if (timings.chunkCount > 0) {
       timings.requestEnd = nowMs()
       recordClientStreamEvents(timings, profilingMeta)

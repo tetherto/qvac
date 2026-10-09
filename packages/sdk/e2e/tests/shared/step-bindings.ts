@@ -257,14 +257,13 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     const id = p.id ?? SDK_LOG_ID
     const collected: LogEntry[] = []
     const streamId = `logs-${++loggingStreamSeq}`
-    const state: LoggingStream = { collected, cutoffMs: 0, done: false }
+    const state: LoggingStream = { collected, cutoffMs: 0, controller: new AbortController() }
     LOGGING_STREAMS.set(streamId, state)
     // Read in the background: the catalog triggers the operation between this step and the collect,
     // and nothing would be listening in between.
     state.pump = (async () => {
       try {
-        for await (const entry of loggingStream({ id })) {
-          if (state.done) break
+        for await (const entry of loggingStream({ id }, { signal: state.controller.signal })) {
           collected.push(entry as LogEntry)
         }
       } catch {
@@ -300,8 +299,11 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
     const streamId = (params as { streamId?: string }).streamId
     const state = streamId ? LOGGING_STREAMS.get(streamId) : undefined
     if (!state) return { closed: false }
-    state.done = true
     LOGGING_STREAMS.delete(streamId as string)
+    // Aborting releases the worker's subscription now; waiting on the pump confirms the stream ended
+    // here too, rather than on the next entry.
+    state.controller.abort()
+    await state.pump
     return { closed: true }
   },
 
@@ -690,7 +692,7 @@ type LogEntry = { timestamp: number; level: string; namespace: string; message: 
 type LoggingStream = {
   collected: LogEntry[]
   cutoffMs: number
-  done: boolean
+  controller: AbortController
   pump?: Promise<void>
 }
 

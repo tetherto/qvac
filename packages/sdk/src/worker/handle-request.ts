@@ -6,6 +6,7 @@ import {
   type ProfilingRequestMeta
 } from '@qvac/inference/surface'
 import { send, stream, duplex, dispatchTransport } from '@qvac/inference/engine'
+import { AbortController } from 'bare-abort-controller'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
 import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
@@ -90,6 +91,15 @@ async function streamToWire(
   profiler.startHandler()
   let sentFinalChunk = false
 
+  // A client that stops reading destroys its end (`RPCOptions.signal`), which
+  // closes this one. Abort the engine stream with it: a handler waiting on a
+  // source, such as a log subscription, would otherwise hold it until it next
+  // had something to send.
+  const controller = new AbortController()
+  const onWireClosed = () => controller.abort(new Error('The client closed the stream'))
+  wire.on('close', onWireClosed)
+  wire.on('error', onWireClosed)
+
   // A progress stream (a reply op that streams because of `withProgress`) can
   // emit hundreds of updates, so batch them on a time window before writing to
   // keep IPC and UI churn down. Native data streams like completion tokens pass
@@ -101,7 +111,7 @@ async function streamToWire(
     : undefined
 
   try {
-    for await (const response of stream(request)) {
+    for await (const response of stream(request, { signal: controller.signal })) {
       if (isTerminalChunk(response)) {
         throttle?.flush()
         profiler.endHandler()
@@ -113,6 +123,9 @@ async function streamToWire(
         wire.write(profiler.serialize(response, false) + '\n', 'utf-8')
       }
     }
+
+    // The client destroyed its end, so nothing is left to send it.
+    if (controller.signal.aborted) return
 
     if (!sentFinalChunk) {
       throttle?.flush()

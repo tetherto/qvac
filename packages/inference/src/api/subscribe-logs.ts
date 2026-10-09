@@ -1,3 +1,4 @@
+import { AbortController } from 'bare-abort-controller'
 import { getAppLogger, ALL_LOG_ID } from '@/logging/index'
 import { loggingStream } from '@/api/logging-stream'
 import type { LoggingStreamResponse } from '@/schemas/logging-stream'
@@ -19,7 +20,8 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void
  * stream that the engine fans every log into.
  *
  * @param handler - called once per log line.
- * @returns a function that stops the subscription.
+ * @returns a function that stops the subscription at once, without waiting for
+ *   another log.
  *
  * @example
  * ```typescript
@@ -31,7 +33,8 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void
  * ```
  */
 export function subscribeServerLogs(handler: ServerLogHandler) {
-  const streamIterator = loggingStream({ id: ALL_LOG_ID })
+  const controller = new AbortController()
+  const streamIterator = loggingStream({ id: ALL_LOG_ID }, { signal: controller.signal })
 
   void (async () => {
     try {
@@ -44,6 +47,6 @@ export function subscribeServerLogs(handler: ServerLogHandler) {
   })()
 
   return () => {
-    void streamIterator.return(undefined)
+    controller.abort(new Error('Unsubscribed from server logs'))
   }
 }

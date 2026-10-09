@@ -1,5 +1,6 @@
-import { AbortController, type AbortSignal } from 'bare-abort-controller'
+import { AbortController } from 'bare-abort-controller'
 import { createDisposableScope, type DisposableScope } from '@/runtime/disposable-scope'
+import type { AbortSignalLike } from '@/schemas/common'
 import type { RequestContext, RequestKind, RequestState } from '@/runtime/request-context'
 import { RequestIdConflictError, RequestRejectedByPolicyError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
@@ -21,9 +22,10 @@ export interface BeginOpts {
    * Optional parent abort signal — typically the process-level "shutdown"
    * signal. When the parent aborts, the request's own signal aborts too.
    * Composes through a `addEventListener("abort", ...)` hook so cancelling
-   * the parent does not require iterating the registry.
+   * the parent does not require iterating the registry. A stream handler's
+   * `StreamHandlerContext.signal` fits here as well.
    */
-  parentSignal?: AbortSignal
+  parentSignal?: AbortSignalLike
   /**
    * Per-request override of the kind policy's `maxConcurrentPerModel`. The
    * policy value is one number for every model of a kind, but handlers may

@@ -40,7 +40,9 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
   - SDK server logs using `SDK_LOG_ID`, or
   - per-model addon logs using the model ID returned by `loadModel()`.
 
-* **Global subscription (`subscribeServerLogs`)** — Receive every server-side log (SDK server, all models, RAG) through a single subscription, without knowing the stream IDs ahead of time. The handler is called once per log line, and each log carries its origin in `log.id` (`SDK_LOG_ID`, a model ID, or a RAG workspace key) so you can still tell the sources apart. It is built on `loggingStream` and the reserved `SDK_ALL_LOG_ID` stream that the worker fans all logs into. The call returns an `unsubscribe()` function — invoke it to stop receiving logs.
+  To stop a stream from outside its `for await` loop, pass an `AbortSignal` and abort it: `loggingStream({ id }, { signal: controller.signal })`. The stream ends without an error and the worker releases the subscription at once, even for a model that logs nothing more. Breaking out of the loop only releases it when the next log arrives.
+
+* **Global subscription (`subscribeServerLogs`)** — Receive every server-side log (SDK server, all models, RAG) through a single subscription, without knowing the stream IDs ahead of time. The handler is called once per log line, and each log carries its origin in `log.id` (`SDK_LOG_ID`, a model ID, or a RAG workspace key) so you can still tell the sources apart. It is built on `loggingStream` and the reserved `SDK_ALL_LOG_ID` stream that the worker fans all logs into. The call returns an `unsubscribe()` function — invoke it to stop receiving logs; the worker releases the subscription at once.
 
 * **Logger API (`getLogger`)** — Create loggers for your application code with custom transports. Console output enabled by default; set `enableConsole: false` to use only custom transports.
 
