@@ -1,12 +1,18 @@
 import { type QvacConfig, type RuntimeContext } from '@qvac/inference/surface'
 import type RPC from 'bare-rpc'
-import { setConfig, setRuntimeContext } from '@qvac/inference/engine'
+import {
+  cleanupForTerminate,
+  initialize,
+  setConfig,
+  setRuntimeContext
+} from '@qvac/inference/engine'
 
 // Internal config initialization (bypasses schema)
 type InitConfigMessage = {
   type: '__init_config'
-  config: QvacConfig
+  config?: QvacConfig
   runtimeContext?: RuntimeContext
+  homeDir?: string
 }
 
 export function isInitConfigMessage(data: unknown): data is InitConfigMessage {
@@ -17,6 +23,7 @@ export function isInitConfigMessage(data: unknown): data is InitConfigMessage {
 
 export function handleInitConfig(req: RPC.IncomingRequest, data: InitConfigMessage) {
   try {
+    initialize({ homeDir: data.homeDir })
     if (data.config) {
       setConfig(data.config)
     }
@@ -54,7 +61,6 @@ export function isShutdownMessage(data: unknown): data is ShutdownMessage {
 
 export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
   try {
-    const { cleanupForTerminate } = await import('@/worker/lifecycle')
     await cleanupForTerminate()
     req.reply(JSON.stringify({ success: true }), 'utf-8')
   } catch (error) {
