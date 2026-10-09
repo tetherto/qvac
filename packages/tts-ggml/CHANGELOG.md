@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-09#1` to fix Chatterbox Turbo and
+  Multilingual KV-cache writes on Android OpenCL backends.
+
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS, MOSS,
   MOSS-TTSD, MOSS-SoundEffect and MOSS-Speech run one stage each on a Core ML
   sidecar staged next to the GGUF (see the README's Core ML sidecars on
