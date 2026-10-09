@@ -33,7 +33,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HOST_ADDON_IMPORT = '#host-addon';
-const PLATFORM_INDEX_SOURCE = 'module.exports = require.addon()\n';
+export const PLATFORM_INDEX_SOURCE = 'module.exports = require.addon()\n';
 const STAGING_DIR = '.qvac-platform-packages';
 
 export const TARGET_HOSTS = {

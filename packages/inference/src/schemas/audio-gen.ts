@@ -96,7 +96,7 @@ const commonAudioGenRuntimeConfigShape = {
     .min(1)
     .optional()
     .describe(
-      'Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
+      'Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
     )
 }
 

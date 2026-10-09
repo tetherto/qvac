@@ -9,6 +9,14 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  PLATFORM_INDEX_SOURCE as slicerIndexSource,
+  SLICE_DEFINITIONS,
+  mangledAddonName as slicerMangledAddonName,
+} from '../../../../scripts/ci/slice-platform-packages.mjs';
+
+import {
+  PLATFORM_INDEX_SOURCE,
+  TARGET_HOSTS,
   enableInstallLinks,
   findHostAddonPackages,
   installPlatformPackages,
@@ -86,6 +94,19 @@ test('resolvePlatformPackageName reads the arm64 arm on Android and the flat iOS
 test('mangledAddonName matches the module name cmake-bare derives', () => {
   assert.equal(mangledAddonName('@qvac/fabric-android-arm64'), 'qvac__fabric-android-arm64');
   assert.equal(mangledAddonName('plain-ios'), 'plain-ios');
+});
+
+test('assembly constants match the publish-time slicer', () => {
+  assert.equal(PLATFORM_INDEX_SOURCE, slicerIndexSource);
+  for (const name of ['@qvac/fabric-android-arm64', '@qvac/fabric-ios', 'plain-ios']) {
+    assert.equal(mangledAddonName(name), slicerMangledAddonName(name));
+  }
+  const crossBuilt = SLICE_DEFINITIONS.filter((slice) => slice.crossBuilt);
+  const hosts = {
+    android: crossBuilt.filter((slice) => slice.suffix.startsWith('android')).flatMap((slice) => slice.hosts),
+    ios: crossBuilt.filter((slice) => slice.suffix === 'ios').flatMap((slice) => slice.hosts),
+  };
+  assert.deepEqual(TARGET_HOSTS, hosts);
 });
 
 test('findHostAddonPackages finds scoped, nested, and symlinked packages once', (t) => {

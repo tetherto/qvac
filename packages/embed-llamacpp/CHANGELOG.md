@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- An explicit `backendsDir` is scanned as given. It is no longer a prebuilds
+  root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
+  the backends it ships, next to its runtime.
+- `resolveBackendsDir()` is removed.
+
 ## [0.45.0] - 2026-10-08
 
 ### Added

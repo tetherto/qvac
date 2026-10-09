@@ -10925,7 +10925,7 @@
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
-                      "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                      "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                       "type": "string"
                     },
                     "vad_params": {
@@ -11546,7 +11546,7 @@
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
-                      "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                      "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                       "type": "string"
                     },
                     "openclCacheDir": {
@@ -12740,7 +12740,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -13438,7 +13438,7 @@
                           "minLength": 1
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -13810,7 +13810,7 @@
                           "type": "boolean"
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -14127,7 +14127,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -14685,7 +14685,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -15027,7 +15027,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -17290,7 +17290,7 @@
                           "maximum": 9007199254740991
                         },
                         "backendsDir": {
-                          "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+                          "description": "Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -17715,7 +17715,7 @@
                           "maximum": 9007199254740991
                         },
                         "backendsDir": {
-                          "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+                          "description": "Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -18381,7 +18381,7 @@
                   "maximum": 9007199254740991
                 },
                 "backendsDir": {
-                  "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                  "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                   "type": "string"
                 },
                 "vad_params": {

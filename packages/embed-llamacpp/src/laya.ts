@@ -235,6 +235,8 @@ export class LayaInterface {
     outputCb: AddonOutputCallback,
   ) {
     this._binding = binding as LayaBinding;
+    // createLayaInstance reads the key unconditionally.
+    configurationParams.backendsDir ??= "";
     this._handle = this._binding.createLayaInstance(this, configurationParams, outputCb);
   }
 

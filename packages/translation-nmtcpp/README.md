@@ -288,7 +288,7 @@ const backendSettings = {
   use_gpu: true,              // Enable GPU inference (default: false → CPU-only)
   gpu_backend: 'vulkan',      // Optional: pick a specific backend by name substring
   gpu_device: 0,              // Optional: ordinal within matching devices (default: 0)
-  backendsDir: './prebuilds', // Optional override of the fabric backends root
+  backendsDir: '/abs/path/to/backends', // Optional. Scanned as given; omit to use the backends @qvac/fabric ships
   openclCacheDir: '/path/ok'  // Optional (Android only): OpenCL kernel-cache dir
 }
 ```

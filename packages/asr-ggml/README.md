@@ -525,7 +525,7 @@ fit.report
 | `audioSeconds` | Longest single transcribe the projection must cover. Defaults to 300. |
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet projects on the CPU and whisper on the GPU, matching what each load does. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet. |
-| `backendsDir` | The prebuilds root. The backends are read from the per-target subdir under it, the same path a load reads. |
+| `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset scans next to the loaded module. |
 | `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
@@ -676,7 +676,7 @@ and one streaming chunk.
 | --- | --- | --- |
 | `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
 | `useGPU` | `false` | Use the linked ggml GPU backend (Metal / Vulkan / OpenCL / CUDA). |
-| `backendsDir` | package `prebuilds/` | Directory of the dynamically loaded ggml backends. |
+| `backendsDir` | next to the loaded module | Directory scanned as given for the dynamically loaded ggml backends. |
 
 Any other key throws `INVALID_CONFIG` (24015). Prompt, hotwords and the token
 bound are per call; see

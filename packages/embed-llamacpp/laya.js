@@ -39,6 +39,8 @@ class LayaInterface {
     _handle;
     constructor(binding, configurationParams, outputCb) {
         this._binding = binding;
+        // createLayaInstance reads the key unconditionally.
+        configurationParams.backendsDir ??= "";
         this._handle = this._binding.createLayaInstance(this, configurationParams, outputCb);
     }
     async cancel() {
