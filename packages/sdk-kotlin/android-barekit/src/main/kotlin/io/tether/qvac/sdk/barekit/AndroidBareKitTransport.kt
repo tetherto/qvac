@@ -8,11 +8,13 @@ import io.tether.qvac.sdk.requireSuccessfulWorkerControlResponse
 import io.tether.qvac.sdk.rpc.BareRpcProtocolException
 import io.tether.qvac.sdk.rpc.BareRpcSession
 import io.tether.qvac.sdk.rpc.JsonLinesDecoder
+import io.tether.qvac.sdk.rpc.StowChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -29,6 +31,7 @@ import to.holepunch.bare.kit.Worklet
 
 class AndroidBareKitTransport private constructor(
     private val session: BareRpcSession,
+    private val stow: StowChannel,
     private val worklet: Worklet,
     private val json: Json,
     override val runtimeProfile: QvacRuntimeProfile,
@@ -63,9 +66,7 @@ class AndroidBareKitTransport private constructor(
             closed = true
 
             withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) {
-                runCatching {
-                    session.request("""{"type":"__shutdown__"}""".encodeToByteArray())
-                }
+                runCatching { stow.terminate() }
             }
             runCatching { session.close() }
             runCatching { worklet.terminate() }
@@ -142,42 +143,36 @@ class AndroidBareKitTransport private constructor(
             }
             val options = Worklet.Options().memoryLimit(memoryLimitBytes)
             val worklet = Worklet(options)
-            var channel: BareKitRpcChannel? = null
+            var channel: StowChannel? = null
             var session: BareRpcSession? = null
 
             try {
-                val arguments = arrayOf(
-                    "qvac-sdk-kotlin",
-                    "worker.js",
-                    buildJsonObject { put("HOME_DIR", homeDirectory) }.toString(),
-                )
                 context.assets.open(assetName).use { source ->
-                    worklet.start(assetName, source, arguments)
+                    worklet.start(assetName, source, emptyArray())
                 }
 
-                val ipc = IPC(worklet)
-                val connectedChannel = BareKitRpcChannel(ipc)
-                channel = connectedChannel
-                val connectedSession = BareRpcSession(connectedChannel, rpcLimits)
+                val stow = StowChannel(BareKitRpcChannel(IPC(worklet)))
+                channel = stow
+                withTimeout(START_TIMEOUT_MS) { stow.awaitReady() }
+                val connectedSession = BareRpcSession(stow, rpcLimits)
                 session = connectedSession
                 val transport = AndroidBareKitTransport(
                     connectedSession,
+                    stow,
                     worklet,
                     json,
                     AndroidRuntimeProfile.load(context),
                     rpcLimits,
                 )
-                val effectiveRuntimeContext = androidRuntimeContext(runtimeContext)
-                if (config.isNotEmpty() || effectiveRuntimeContext.isNotEmpty()) {
-                    val response = transport.call(
-                        buildJsonObject {
-                            put("type", "__init_config")
-                            if (config.isNotEmpty()) put("config", config)
-                            put("runtimeContext", effectiveRuntimeContext)
-                        },
-                    )
-                    requireSuccessfulWorkerControlResponse("configuration", response)
-                }
+                val response = transport.call(
+                    buildJsonObject {
+                        put("type", "__init_config")
+                        if (config.isNotEmpty()) put("config", config)
+                        put("runtimeContext", androidRuntimeContext(runtimeContext))
+                        put("homeDir", homeDirectory)
+                    },
+                )
+                requireSuccessfulWorkerControlResponse("configuration", response)
                 return transport
             } catch (error: Throwable) {
                 withContext(NonCancellable) {
@@ -198,5 +193,6 @@ class AndroidBareKitTransport private constructor(
         private const val DEFAULT_MEMORY_LIMIT_BYTES = 0
         private const val DEFAULT_LINGER_MS = 30_000
         private const val SHUTDOWN_TIMEOUT_MS = 10_000L
+        private const val START_TIMEOUT_MS = 30_000L
     }
 }

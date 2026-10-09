@@ -55,18 +55,24 @@ await fs.mkdir(assetsDirectory, { recursive: true })
 await fs.mkdir(addonsDirectory, { recursive: true })
 if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recursive: true })
 
-const bundle = await bundleSdk({
-  projectRoot,
-  configPath,
-  hosts: ['android-arm64'],
-  defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
-  quiet: true
-})
+const bundleWorker = () =>
+  bundleSdk({
+    projectRoot,
+    configPath,
+    target: 'react-native',
+    hosts: ['android-arm64'],
+    defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile'],
+    link: false,
+    quiet: true
+  })
+
+let bundle = await bundleWorker()
 
 // Addon native prebuilds ship in per-platform packages that are not
 // dependencies of the meta, so install the ones this bundle's addons name for
-// android-arm64, at each meta's installed version.
-await ensureHostPrebuilds(bundle.manifestPath, 'android-arm64')
+// android-arm64, at each meta's installed version. The bundle resolved a
+// missing package's `#host-addon` to its fallback, so bundle again after.
+if (installHostPrebuilds(bundle.addons, 'android-arm64')) bundle = await bundleWorker()
 
 const verification = await verifyBundle({
   projectRoot,
@@ -80,14 +86,14 @@ if (hasErrors(verification)) {
 }
 
 const bundleModule = await fs.readFile(bundle.bundlePath, 'utf8')
-const bundleExportPrefix = 'module.exports = '
+const bundleExportPrefix = 'export default '
 if (!bundleModule.startsWith(bundleExportPrefix)) {
-  throw new Error('bare-pack produced an unsupported mobile bundle module')
+  throw new Error('bare-stow produced an unsupported react-native bundle module')
 }
 
 const workerBundle = JSON.parse(bundleModule.slice(bundleExportPrefix.length))
 if (typeof workerBundle !== 'string') {
-  throw new Error('bare-pack mobile bundle did not export a string')
+  throw new Error('bare-stow react-native bundle did not export a string')
 }
 await fs.writeFile(path.join(assetsDirectory, 'worker.bundle'), workerBundle)
 const runtimeAssets = [
@@ -104,48 +110,18 @@ if (includesClassification) {
 }
 await Promise.all(runtimeAssets)
 
-const manifest = JSON.parse(await fs.readFile(bundle.manifestPath, 'utf8'))
 const sdkPackage = JSON.parse(
   await fs.readFile(path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json'), 'utf8')
 )
-const addons = Array.isArray(manifest.addons) ? manifest.addons : []
-const packageFilter =
-  addons.length === 0
-    ? { name: 'qvac-kotlin-no-addons', version: '0.0.0', dependencies: {} }
-    : {
-        name: 'qvac-kotlin-addon-linker',
-        version: '0.0.0',
-        dependencies: Object.fromEntries(addons.map((name) => [name, '*']))
-      }
+const addons = bundle.addons
 
 const linkedResources = new Set()
-for await (const resource of link(
-  projectRoot,
-  {
-    hosts: ['android-arm64'],
-    out: addonsDirectory
-  },
-  packageFilter
-)) {
+for await (const resource of link(bundle.entryPath, {
+  hosts: ['android-arm64'],
+  out: addonsDirectory
+})) {
   linkedResources.add(path.resolve(String(resource)))
   console.log(`Linked ${resource}`)
-}
-
-// bare-link from the project root reaches only the meta packages. Split addons
-// keep their binaries in a per-platform package, so link each installed one
-// from its own `addon` directory or its .so never reaches the AAR.
-for (const platformAddon of platformAddonRoots(addons, 'android-arm64')) {
-  for await (const resource of link(
-    platformAddon.dir,
-    {
-      hosts: ['android-arm64'],
-      out: addonsDirectory
-    },
-    platformAddon.pkg
-  )) {
-    linkedResources.add(path.resolve(String(resource)))
-    console.log(`Linked ${resource}`)
-  }
 }
 
 async function sha256(filePath) {
@@ -200,45 +176,6 @@ await fs.writeFile(
 
 console.log(`Prepared QVAC Android runtime with ${addons.length} addon(s)`)
 
-async function pathExists(target) {
-  try {
-    await fs.access(target)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * The installed platform-package `addon` directories for the given metas, ready
- * for a bare-link pass. Mirrors `resolvePlatformAddonRoots` in the Expo linker.
- */
-function platformAddonRoots(addonNames, host) {
-  const roots = []
-  for (const name of addonNames) {
-    const metaPath = path.join(projectRoot, 'node_modules', ...name.split('/'), 'package.json')
-    let meta
-    try {
-      meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf8'))
-    } catch {
-      continue
-    }
-    const platformPackage = platformPackageForHost(meta, host)
-    if (platformPackage === null) continue
-    const addonDir = path.join(projectRoot, 'node_modules', ...platformPackage.split('/'), 'addon')
-    let addonManifest
-    try {
-      addonManifest = JSON.parse(fsSync.readFileSync(path.join(addonDir, 'package.json'), 'utf8'))
-    } catch {
-      continue
-    }
-    if (addonManifest.addon !== true) continue
-    if (!fsSync.existsSync(path.join(addonDir, 'prebuilds'))) continue
-    roots.push({ dir: addonDir, pkg: addonManifest })
-  }
-  return roots
-}
-
 async function readInstalledVersion(packageName) {
   try {
     const meta = JSON.parse(
@@ -283,33 +220,34 @@ function platformPackageForHost(meta, host) {
 /**
  * Install the per-platform prebuild packages the bundled addons need for `host`,
  * derived from each addon's own `#host-addon` map at the meta's installed
- * version. `--no-save` keeps package.json free of hand-maintained pins.
+ * version, and report whether anything was installed. `--no-save` keeps
+ * package.json free of hand-maintained pins.
  */
-async function ensureHostPrebuilds(manifestPath, host) {
-  const manifestJson = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
-  const manifestAddons = Array.isArray(manifestJson.addons) ? manifestJson.addons : []
+function installHostPrebuilds(addonNames, host) {
   const specs = []
-  for (const addon of manifestAddons) {
-    const addonRoot = path.join(projectRoot, 'node_modules', addon)
+  for (const addon of addonNames) {
+    const addonRoot = path.join(projectRoot, 'node_modules', ...addon.split('/'))
     // A local fat `prebuilds/<host>` already resolves; only a meta without one
     // needs its per-platform package installed.
-    if (await pathExists(path.join(addonRoot, 'prebuilds', host))) continue
+    if (fsSync.existsSync(path.join(addonRoot, 'prebuilds', host))) continue
     let meta
     try {
-      meta = JSON.parse(await fs.readFile(path.join(addonRoot, 'package.json'), 'utf8'))
+      meta = JSON.parse(fsSync.readFileSync(path.join(addonRoot, 'package.json'), 'utf8'))
     } catch {
       continue
     }
     const platformPackage = platformPackageForHost(meta, host)
-    if (platformPackage !== null && typeof meta.version === 'string') {
-      specs.push(`${platformPackage}@${meta.version}`)
-    }
+    if (platformPackage === null || typeof meta.version !== 'string') continue
+    const platformRoot = path.join(projectRoot, 'node_modules', ...platformPackage.split('/'))
+    if (fsSync.existsSync(platformRoot)) continue
+    specs.push(`${platformPackage}@${meta.version}`)
   }
-  if (specs.length === 0) return
+  if (specs.length === 0) return false
   console.log(`Installing ${host} prebuild packages: ${specs.join(', ')}`)
   execFileSync(
     'npm',
     ['install', '--no-save', '--no-package-lock', '--ignore-scripts', '--legacy-peer-deps', ...specs],
     { cwd: projectRoot, stdio: 'inherit' }
   )
+  return true
 }
