@@ -39,6 +39,11 @@ async function getRuntimeContext(): Promise<RuntimeContext> {
   return cachedRuntimeContext
 }
 
+async function getHomeDir(): Promise<string> {
+  const { Paths } = await import('expo-file-system')
+  return Paths.document.uri.replace('file://', '')
+}
+
 // No child-process exit on Expo (Worklet lifecycle) — `#rpc` interface stub.
 export function getWorkerLifeSignal(): AbortSignal | null {
   return null
@@ -63,7 +68,7 @@ export async function getRPC() {
       // Only initialize once per worklet - server state persists
       if (!workletInitialized) {
         const runtimeContext = await getRuntimeContext()
-        await initializeConfig(rpcInstance, resolveConfig, runtimeContext)
+        await initializeConfig(rpcInstance, resolveConfig, runtimeContext, await getHomeDir())
         workletInitialized = true
       }
       return rpcInstance
@@ -107,7 +112,7 @@ export async function getRPC() {
     })
 
     const runtimeContext = await getRuntimeContext()
-    await initializeConfig(rpcInstance, resolveConfig, runtimeContext)
+    await initializeConfig(rpcInstance, resolveConfig, runtimeContext, await getHomeDir())
     workletInitialized = true
 
     return rpcInstance

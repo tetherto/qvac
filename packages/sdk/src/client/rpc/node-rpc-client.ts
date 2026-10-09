@@ -1,354 +1,205 @@
 import RPC from 'bare-rpc'
-import spawn, { type ChildProcess as BareChildProcess } from 'bare-runtime/spawn'
-import type { Duplex, DuplexEvents } from 'bare-stream'
-import { randomBytes } from 'node:crypto'
-import fs, { existsSync, unlinkSync } from 'node:fs'
-import { createServer } from 'node:net'
+import host from 'bare-stow/host'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { initializeConfig } from '@/client/init-hooks'
 import { resolveConfig } from '@/client/config-loader/resolve-config.node'
-import { getClientLogger, getLogger, SDK_SERVER_NAMESPACE } from '@/logging'
+import { getClientLogger } from '@/logging'
 import {
-  BareRuntimeBinaryNotFoundError,
   RPCInitTimeoutError,
   WorkerCrashedError,
-  WorkerShutdownError
+  WorkerShutdownError,
+  WorkerStartupError
 } from '@/utils/errors-client'
 import type { QvacConfig, RuntimeContext } from '@qvac/inference/surface'
-import { createRPCInitTimeoutCause, type WorkerExit } from './worker-startup-error'
 import { RPC_INIT_TIMEOUT_ENV_VAR, resolveRPCInitTimeoutMs } from './init-timeout'
 
-const WORKER_STDERR_TAIL_CHARS = 16_384
+type WorkerIPC = InstanceType<typeof host.IPC>
+
+/** A folder written by `bundleSdk` for `bare-sidecar`, or a worker entry run unbundled. */
+type WorkerSource = { harness: string } | { entry: string }
 
 const logger = getClientLogger()
-// Addons route real logs through their JS callback; anything written straight to the
-// worker's stderr is treated as debug.
-const workerLogger = getLogger(SDK_SERVER_NAMESPACE, { enableConsole: false })
+
+const STOWED_HARNESS = 'index.mjs'
+const STOWED_BUNDLE = 'index.bundle'
 
 let rpcInstance: RPC | null = null
 let rpcPromise: Promise<RPC> | null = null
-let bareWorkerProc: BareChildProcess | null = null
-let ipcServer: ReturnType<typeof createServer> | null = null
-let currentSocketPath: string | null = null
+let workerIpc: WorkerIPC | null = null
 let closePromise: Promise<void> | null = null
-// Aborted when the worker dies (crash) or close() runs (planned). Used
-// to unblock in-flight `req.reply()` callers — bare-rpc's `_onerror`
-// does not iterate `_outgoingRequests`, so without this signal they
-// would hang on the dead socket.
+// Bumped by close(); a start that finishes under an older generation stops its
+// own worker, so a caller waiting on that start never receives a closed client.
+let generation = 0
+// Aborted when the worker dies (crash) or close() runs (planned). Unblocks
+// in-flight `req.reply()` callers: bare-rpc does not reject outgoing requests
+// when its stream closes.
 let workerLifeController: AbortController | null = null
 
-/**
- * Find project root by looking for package.json (sync version)
- * Safe to call at module load time
- */
 function findProjectRootSync(): string | undefined {
   let dir = process.cwd()
   const root = path.parse(dir).root
 
   while (dir !== root) {
-    if (fs.existsSync(path.join(dir, 'package.json'))) {
-      return dir
-    }
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir
     dir = path.dirname(dir)
   }
 
   return undefined
 }
 
-function getResourcesPathSync(): string | undefined {
+function stowedHarness(dir: string): string | undefined {
+  const harness = path.join(dir, STOWED_HARNESS)
+  return fs.existsSync(harness) && fs.existsSync(path.join(dir, STOWED_BUNDLE))
+    ? harness
+    : undefined
+}
+
+function packagedWorkerDir(): string | undefined {
   const { resourcesPath } = process as { resourcesPath?: string }
-  return typeof resourcesPath === 'string' ? resourcesPath : undefined
-}
+  if (typeof resourcesPath !== 'string') return undefined
 
-function resolvePackagedWorkerPath(): string | undefined {
-  const resourcesPath = getResourcesPathSync()
-  if (!resourcesPath) return undefined
-
-  const candidates = [
-    path.join(resourcesPath, 'app.asar.unpacked', 'qvac', 'worker.entry.mjs'),
-    path.join(resourcesPath, 'app', 'qvac', 'worker.entry.mjs'),
-    path.join(resourcesPath, 'qvac', 'worker.entry.mjs')
-  ]
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) return candidate
-  }
-
-  return undefined
+  return [
+    path.join(resourcesPath, 'app.asar.unpacked', 'qvac', 'worker'),
+    path.join(resourcesPath, 'app', 'qvac', 'worker'),
+    path.join(resourcesPath, 'qvac', 'worker')
+  ].find((dir) => stowedHarness(dir) !== undefined)
 }
 
 /**
- * Resolve the SDK's default worker entry via bundler-visible asset references.
- *
- * The worker is transpiled with its `@/` aliases resolved into
- * `dist/src/worker/index.js`; Bare cannot run the `@/`-laden source. This file
- * compiles to `dist/src/client/rpc/node-rpc-client.js`, so the built worker sits
- * at `../../worker/index.js` for both the dev and packaged layouts.
- *
- * `path.resolve(__dirname, ...)` is invisible to static analysis, so packaged
- * consumers ship without the worker. We use `import.meta.asset(<literal>)` on
- * Bare (detected by bare-module-lexer) and fall back to
- * `new URL(<literal>, import.meta.url)` elsewhere. The spec must be a string
- * literal at the call site.
+ * Asset references keep these files visible to bundlers of the host app:
+ * `import.meta.asset(<literal>)` on Bare, `new URL(<literal>, import.meta.url)`
+ * elsewhere. This module compiles to `dist/src/client/rpc/`.
  */
-function getDefaultWorkerPath(): string {
+function sdkWorkerFile(which: 'entry' | 'shim'): string {
   type ImportMetaAsset = { asset?: (spec: string) => string }
-  const hasAsset = typeof (import.meta as ImportMetaAsset).asset === 'function'
-
-  const workerUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../worker/index.js'))
-    : new URL('../../worker/index.js', import.meta.url)
-  return fileURLToPath(workerUrl)
+  const asset = (import.meta as ImportMetaAsset).asset
+  if (which === 'entry') {
+    return fileURLToPath(
+      asset ? asset('../../worker/index.js') : new URL('../../worker/index.js', import.meta.url)
+    )
+  }
+  return fileURLToPath(
+    asset
+      ? asset('../../worker/unbundled-shim.js')
+      : new URL('../../worker/unbundled-shim.js', import.meta.url)
+  )
 }
 
 /**
- * Resolve worker path with priority:
- * 1. QVAC_WORKER_PATH environment variable
- * 2. Packaged Electron app worker entry
- * 3. qvac/worker.entry.mjs in project root (generated by npx qvac bundle sdk)
- * 4. Default SDK worker
+ * The worker to start, in order:
+ * 1. QVAC_WORKER_PATH: a bundled worker folder, or a worker entry file
+ * 2. The packaged Electron app's bundled worker
+ * 3. `qvac/worker/` in the project root, written by `bundleSdk`
+ * 4. `qvac/worker.entry.mjs` in the project root, run unbundled
+ * 5. The SDK's default worker, run unbundled
  */
-function resolveWorkerPath(): string {
-  const envWorkerPath = process.env['QVAC_WORKER_PATH']
-  if (envWorkerPath) {
-    const normalized = path.resolve(envWorkerPath)
-    if (fs.existsSync(normalized)) {
-      logger.info(`🔧 Using worker entry from QVAC_WORKER_PATH: ${normalized}`)
-      return normalized
+function resolveWorkerSource(): WorkerSource {
+  const envPath = process.env['QVAC_WORKER_PATH']
+  if (envPath) {
+    const resolved = path.resolve(envPath)
+    const harness = stowedHarness(resolved)
+    if (harness) {
+      logger.info(`🔧 Using bundled worker from QVAC_WORKER_PATH: ${resolved}`)
+      return { harness }
     }
-    logger.warn(`⚠️ QVAC_WORKER_PATH was set but file was not found: ${normalized}. Falling back.`)
+    if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+      logger.info(`🔧 Using worker entry from QVAC_WORKER_PATH: ${resolved}`)
+      return { entry: resolved }
+    }
+    logger.warn(`⚠️ QVAC_WORKER_PATH was set but no worker was found at ${resolved}. Falling back.`)
   }
 
-  // Prefer packaged worker entry when running as a packaged Electron app.
-  // This avoids accidental coupling to the project's cwd, and ensures the
-  // bare worker reads JS modules from the filesystem (not app.asar).
-  const packagedWorker = resolvePackagedWorkerPath()
-  if (packagedWorker) {
-    logger.info(`🔧 Using packaged worker entry: ${packagedWorker}`)
-    return packagedWorker
+  const packaged = packagedWorkerDir()
+  if (packaged) {
+    logger.info(`🔧 Using packaged worker: ${packaged}`)
+    return { harness: path.join(packaged, STOWED_HARNESS) }
   }
 
-  // Check for custom worker entry at project root
-  // Note: We use worker.entry.mjs (unbundled ESM) for desktop because bare can
-  // load ES modules directly. The packed bundle is for mobile only.
   const projectRoot = findProjectRootSync()
   if (projectRoot) {
-    const customEntry = path.join(projectRoot, 'qvac', 'worker.entry.mjs')
-    if (fs.existsSync(customEntry)) {
-      logger.info(`🔧 Using custom worker entry: ${customEntry}`)
-      return customEntry
+    const harness = stowedHarness(path.join(projectRoot, 'qvac', 'worker'))
+    if (harness) {
+      logger.info(`🔧 Using bundled worker: ${harness}`)
+      return { harness }
+    }
+    const entry = path.join(projectRoot, 'qvac', 'worker.entry.mjs')
+    if (fs.existsSync(entry)) {
+      logger.info(`🔧 Using worker entry: ${entry}`)
+      return { entry }
     }
   }
 
-  // Fallback to default SDK worker
-  const defaultPath = getDefaultWorkerPath()
-  logger.debug(`🔧 Using default SDK worker: ${defaultPath}`)
-  return defaultPath
+  const entry = sdkWorkerFile('entry')
+  logger.debug(`🔧 Using default SDK worker: ${entry}`)
+  return { entry }
 }
 
-const WORKER_PATH = resolveWorkerPath()
+const WORKER_SOURCE = resolveWorkerSource()
 
-function createSocketPath() {
-  const timestamp = Date.now().toString(36)
-  const randomSuffix = randomBytes(2).toString('hex')
-  const socketName = `qvac-worker-${process.pid}-${timestamp}-${randomSuffix}`
-  return process.platform === 'win32'
-    ? `\\\\.\\pipe\\${socketName}`
-    : path.join(os.tmpdir(), `${socketName}.sock`)
+interface StartingWorker {
+  ready: Promise<WorkerIPC>
+  /** Stops the worker if it is still starting. */
+  abort(): void
 }
 
-function bestEffortUnlinkSocket(socketPath: string | null) {
-  // Windows named pipes are not filesystem paths, so unlink is Unix-only.
-  if (!socketPath || process.platform === 'win32') return
-  try {
-    if (existsSync(socketPath)) {
-      unlinkSync(socketPath)
-    }
-  } catch (error) {
-    logger.debug('Failed to unlink IPC socket path', { socketPath, error })
-  }
-}
-
-function appendWorkerStderrTail(current: string, chunk: string) {
-  const next = current + chunk
-  if (next.length <= WORKER_STDERR_TAIL_CHARS) return next
-  return next.slice(next.length - WORKER_STDERR_TAIL_CHARS)
-}
-
-function resetModuleState() {
-  rpcInstance = null
-  rpcPromise = null
-  bareWorkerProc = null
-  ipcServer = null
-  currentSocketPath = null
-  workerLifeController = null
-}
-
-function snapshotAndResetState() {
-  const workerToClose = bareWorkerProc
-  const serverToClose = ipcServer
-  const socketPathToClose = currentSocketPath
-
-  resetModuleState()
-
-  return { workerToClose, serverToClose, socketPathToClose }
-}
-
-// Shared cleanup for every init reject path: reset module state, stop the
-// worker + IPC server, and remove the socket so a failed start never leaks
-// resources. Mirrors closeSyncForExit without the planned-shutdown abort.
-function teardownFailedInit() {
-  const { workerToClose, serverToClose, socketPathToClose } = snapshotAndResetState()
-
-  if (workerToClose) {
-    try {
-      workerToClose.kill('SIGTERM')
-    } catch (error) {
-      logger.debug('Failed to kill bare worker after init failure', { error })
+function startWorker(source: WorkerSource): StartingWorker {
+  if ('harness' in source) {
+    let aborted = false
+    const ready = (async () => {
+      const harness = (await import(pathToFileURL(source.harness).href)) as {
+        start(): Promise<{ ipc: WorkerIPC }>
+      }
+      const { ipc } = await harness.start()
+      if (aborted) ipc.destroy()
+      return ipc
+    })()
+    return {
+      ready,
+      abort() {
+        aborted = true
+      }
     }
   }
 
-  if (serverToClose) {
-    try {
-      serverToClose.close()
-    } catch (error) {
-      logger.debug('Failed to close IPC server after init failure', { error })
+  let ipc: WorkerIPC | null = null
+  let aborted = false
+  const ready = (async () => {
+    // Loaded here: bare-sidecar resolves the Bare binary for this platform on load.
+    const { default: Sidecar } = await import('bare-sidecar')
+    if (aborted) throw new WorkerShutdownError()
+
+    const worker = new host.IPC(
+      new Sidecar(sdkWorkerFile('shim'), [source.entry], { stdio: 'inherit' })
+    ) as WorkerIPC
+    ipc = worker
+    await Promise.race([
+      worker.ready,
+      new Promise<never>((_, reject) => {
+        worker.once('close', () => reject(new Error('Worker exited before signalling ready')))
+      })
+    ])
+    return worker
+  })()
+  return {
+    ready,
+    abort() {
+      aborted = true
+      ipc?.destroy()
     }
   }
-
-  bestEffortUnlinkSocket(socketPathToClose)
-}
-
-export function getWorkerLifeSignal(): AbortSignal | null {
-  return workerLifeController?.signal ?? null
-}
-
-// Called by the RPC layer when it detects the channel closed out from under
-// an in-flight call (bare-rpc's own teardown beat the child `'exit'` event
-// we normally rely on). Tears down immediately rather than waiting on that
-// slower signal, so the next call respawns instead of reusing the dead
-// connection. A no-op if the life signal already aborted — e.g. the real
-// exit handler got there first, or a concurrent caller already tore down.
-export function notifyChannelClosed(): void {
-  const controller = workerLifeController
-  if (!controller || controller.signal.aborted) return
-
-  const { workerToClose, serverToClose, socketPathToClose } = snapshotAndResetState()
-
-  if (workerToClose) {
-    try {
-      workerToClose.kill('SIGTERM')
-    } catch (error) {
-      logger.debug('Failed to kill bare worker after channel close', { error })
-    }
-  }
-
-  if (serverToClose) {
-    try {
-      serverToClose.close()
-    } catch (error) {
-      logger.debug('Failed to close IPC server after channel close', { error })
-    }
-  }
-
-  bestEffortUnlinkSocket(socketPathToClose)
-  controller.abort(new WorkerCrashedError(null, null))
-}
-
-interface SpawnResources {
-  controller: AbortController
-  server: ReturnType<typeof createServer>
-  socketPath: string
-}
-
-interface WorkerStderrStream {
-  on(event: 'data', listener: (chunk: Buffer | string) => void): void
-}
-
-function getWorkerStderr(proc: BareChildProcess): WorkerStderrStream | null {
-  return (proc as { stderr?: WorkerStderrStream | null }).stderr ?? null
-}
-
-// `bare-runtime` resolves its platform binary with
-// `require('bare-runtime-<platform>-<arch>')` and throws a terse
-// `No binaries found for target '<platform>-<arch>'` whenever that package —
-// or one of its nested deps — is absent. Under pnpm that happens even on a
-// supported platform, so surface an actionable error instead of the raw throw.
-function mapBareSpawnError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error)
-  if (/No binar(?:y|ies) found for target/i.test(message)) {
-    return new BareRuntimeBinaryNotFoundError(process.platform, process.arch, error)
-  }
-  return error instanceof Error ? error : new Error(message)
-}
-
-// `spawn` carries this listener's own captured resources. Module-level
-// state may belong to a newer ensureRPC() by the time we fire.
-function handlePostHandshakeExit(
-  code: number | null,
-  exitSignal: NodeJS.Signals | null,
-  spawn: SpawnResources
-): void {
-  if (spawn.controller.signal.aborted) {
-    // close() already handled teardown.
-    logger.debug(`Bare worker exited after planned shutdown (code=${code}, signal=${exitSignal})`)
-    return
-  }
-
-  logger.info(`🪦 Bare worker exited post-handshake (code=${code}, signal=${exitSignal})`)
-
-  // Only clear module state if we're still the active spawn.
-  if (workerLifeController === spawn.controller) {
-    resetModuleState()
-  }
-
-  try {
-    spawn.server.close()
-  } catch (err) {
-    logger.debug('Failed to close IPC server after worker crash', { err })
-  }
-  spawn.controller.abort(new WorkerCrashedError(code, exitSignal))
-  bestEffortUnlinkSocket(spawn.socketPath)
-}
-
-function closeSyncForExit() {
-  // Abort before kill so the exit handler sees planned intent.
-  workerLifeController?.abort(new WorkerShutdownError())
-
-  const { workerToClose, serverToClose, socketPathToClose } = snapshotAndResetState()
-
-  if (workerToClose) {
-    try {
-      workerToClose.kill('SIGTERM')
-    } catch (error) {
-      logger.debug('Failed to kill bare worker during process exit', { error })
-    }
-  }
-
-  if (serverToClose) {
-    try {
-      serverToClose.close()
-    } catch (error) {
-      logger.debug('Failed to close IPC server during process exit', { error })
-    }
-  }
-
-  bestEffortUnlinkSocket(socketPathToClose)
 }
 
 /** Distinguishes "config file failed to load" from "no config file present". */
 const CONFIG_UNRESOLVED = Symbol('config-unresolved')
 
 /**
- * The handshake timeout has to be known before the worker is spawned, but the
- * config file is normally read after it (init-hooks). Read it early and hand
- * the same object to init-hooks so the file is not parsed twice.
- *
- * A config that fails to load is swallowed here. init-hooks re-runs the
- * resolver post-handshake, so the config error surfaces there rather than as a
- * spawn failure.
+ * The startup timeout has to be known before the worker starts, but the config
+ * file is normally read after it (init-hooks). Read it early and hand the same
+ * object to init-hooks so the file is not parsed twice. A config that fails to
+ * load surfaces from init-hooks, which resolves it again.
  */
 async function preresolveConfig(): Promise<QvacConfig | undefined | typeof CONFIG_UNRESOLVED> {
   try {
@@ -359,154 +210,110 @@ async function preresolveConfig(): Promise<QvacConfig | undefined | typeof CONFI
   }
 }
 
+function startWithTimeout(timeoutMs: number): Promise<WorkerIPC> {
+  return new Promise((resolve, reject) => {
+    const starting = startWorker(WORKER_SOURCE)
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      starting.abort()
+      reject(new RPCInitTimeoutError(timeoutMs))
+    }, timeoutMs)
+
+    starting.ready.then(
+      (ipc) => {
+        if (timedOut) return
+        clearTimeout(timer)
+        resolve(ipc)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        if (!timedOut) {
+          reject(new WorkerStartupError('Worker failed before signalling ready', error))
+        }
+      }
+    )
+  })
+}
+
+function watchWorker(ipc: WorkerIPC, controller: AbortController) {
+  let exited = false
+  ipc.on('exit', () => {
+    exited = true
+  })
+  ipc.on('close', () => {
+    if (controller.signal.aborted) return
+    logger.info(`🪦 Bare worker ${exited ? 'exited' : 'closed'} unexpectedly`)
+    if (workerLifeController === controller) resetModuleState()
+    controller.abort(new WorkerCrashedError(null, null))
+  })
+}
+
+function resetModuleState() {
+  rpcInstance = null
+  rpcPromise = null
+  workerIpc = null
+  workerLifeController = null
+}
+
 async function ensureRPC(): Promise<RPC> {
   if (rpcInstance) return rpcInstance
   if (rpcPromise) return rpcPromise
-  if (closePromise) {
-    await closePromise
+  if (closePromise) await closePromise
+
+  const startGeneration = generation
+  rpcPromise = (async () => {
+    const preresolved = await preresolveConfig()
+    const initTimeoutMs = resolveRPCInitTimeoutMs({
+      envValue: process.env[RPC_INIT_TIMEOUT_ENV_VAR],
+      configValue:
+        preresolved === CONFIG_UNRESOLVED
+          ? undefined
+          : (preresolved?.rpcInitTimeoutMs ?? undefined),
+      onInvalidEnvValue: (value) =>
+        logger.warn(
+          `Ignoring invalid ${RPC_INIT_TIMEOUT_ENV_VAR}=${value}; expected a positive integer of milliseconds`
+        )
+    })
+
+    const ipc = await startWithTimeout(initTimeoutMs)
+    if (startGeneration !== generation) {
+      await ipc.terminate()
+      throw new WorkerShutdownError()
+    }
+    const controller = new AbortController()
+    workerIpc = ipc
+    workerLifeController = controller
+    watchWorker(ipc, controller)
+
+    const rpc = new RPC(ipc, () => {})
+
+    const runtimeContext: RuntimeContext = {
+      runtime: 'node',
+      platform: process.platform as 'darwin' | 'linux' | 'win32'
+    }
+    // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
+    const homeDir = process.env['SNAP_USER_COMMON'] ?? os.homedir()
+    const resolveConfigForInit =
+      preresolved === CONFIG_UNRESOLVED ? resolveConfig : async () => preresolved
+
+    await Promise.race([
+      initializeConfig(rpc, resolveConfigForInit, runtimeContext, homeDir),
+      rejectOnAbort(controller.signal)
+    ])
+
+    rpcInstance = rpc
+    return rpc
+  })()
+
+  try {
+    return await rpcPromise
+  } catch (error) {
+    const ipc = workerIpc
+    resetModuleState()
+    ipc?.destroy()
+    throw error
   }
-
-  const preresolved = await preresolveConfig()
-  const initTimeoutMs = resolveRPCInitTimeoutMs({
-    envValue: process.env[RPC_INIT_TIMEOUT_ENV_VAR],
-    configValue:
-      preresolved === CONFIG_UNRESOLVED ? undefined : (preresolved?.rpcInitTimeoutMs ?? undefined),
-    onInvalidEnvValue: (value) =>
-      logger.warn(
-        `Ignoring invalid ${RPC_INIT_TIMEOUT_ENV_VAR}=${value}; expected a positive integer of milliseconds`
-      )
-  })
-
-  const socketPath = createSocketPath()
-  currentSocketPath = socketPath
-
-  // Allocated here so the init race and exit handler share one controller.
-  const spawnController = new AbortController()
-  workerLifeController = spawnController
-
-  rpcPromise = new Promise((resolve, reject) => {
-    let settled = false
-    let workerStderrTail = ''
-    let workerExitBeforeHandshake: WorkerExit | null = null
-
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      const cause = createRPCInitTimeoutCause(workerStderrTail, workerExitBeforeHandshake)
-      teardownFailedInit()
-      reject(new RPCInitTimeoutError(initTimeoutMs, cause))
-    }, initTimeoutMs)
-
-    ipcServer = createServer((socket) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      rpcInstance = new RPC(socket as unknown as Duplex<DuplexEvents>, () => {})
-      resolve(rpcInstance)
-    })
-
-    ipcServer.on('error', (error) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      teardownFailedInit()
-      reject(error)
-    })
-
-    ipcServer.listen(socketPath, () => {
-      const spawnResources: SpawnResources = {
-        controller: spawnController,
-        server: ipcServer!,
-        socketPath
-      }
-
-      try {
-        bareWorkerProc = spawn('bare', {
-          args: [
-            WORKER_PATH,
-            JSON.stringify({
-              QVAC_IPC_SOCKET_PATH: socketPath,
-              // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
-              HOME_DIR: process.env['SNAP_USER_COMMON']
-                ? String(process.env['SNAP_USER_COMMON'])
-                : os.homedir()
-            })
-          ],
-          platform: process.platform,
-          arch: process.arch,
-          stdio: ['inherit', 'inherit', 'pipe']
-        })
-      } catch (error) {
-        // `spawn` resolves the bare binary synchronously and can throw before
-        // the worker exists, so there is no process to emit "exit". Without
-        // this, the throw escapes the `listen` callback as an uncaught
-        // exception and crashes the host process.
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        teardownFailedInit()
-        reject(mapBareSpawnError(error))
-        return
-      }
-
-      if (bareWorkerProc) {
-        getWorkerStderr(bareWorkerProc)?.on('data', (chunk) => {
-          const text = chunk.toString()
-          workerStderrTail = appendWorkerStderrTail(workerStderrTail, text)
-          for (const line of text.split('\n')) {
-            if (line.trim()) workerLogger.debug(line)
-          }
-        })
-
-        bareWorkerProc.on('exit', (code: number | null, exitSignal: string | null) => {
-          if (settled) {
-            handlePostHandshakeExit(code, exitSignal as NodeJS.Signals | null, spawnResources)
-            return
-          }
-          // Keep waiting for "close" so piped stderr can drain, but retain the
-          // exit status in case a slow stream (for example, a core dump) lets
-          // the initialization timer win that race.
-          workerExitBeforeHandshake = { code, signal: exitSignal }
-        })
-
-        bareWorkerProc.on('close', (...args: unknown[]) => {
-          if (settled) return
-          const code = typeof args[0] === 'number' ? args[0] : null
-          const exitSignal = typeof args[1] === 'string' ? args[1] : null
-
-          // Worker died before handshake. Use close, not exit, so piped
-          // stderr has drained before we build the error cause.
-          settled = true
-          clearTimeout(timer)
-          teardownFailedInit()
-          reject(
-            new RPCInitTimeoutError(
-              initTimeoutMs,
-              createRPCInitTimeoutCause(workerStderrTail, { code, signal: exitSignal })
-            )
-          )
-        })
-      }
-    })
-  })
-
-  const rpc = await rpcPromise
-
-  const runtimeContext: RuntimeContext = {
-    runtime: 'node',
-    platform: process.platform as 'darwin' | 'linux' | 'win32'
-  }
-
-  // init-hooks calls bare-rpc directly, bypassing rpc-client's race.
-  const resolveConfigForInit =
-    preresolved === CONFIG_UNRESOLVED ? resolveConfig : async () => preresolved
-
-  await Promise.race([
-    initializeConfig(rpc, resolveConfigForInit, runtimeContext),
-    rejectOnAbort(spawnController.signal)
-  ])
-
-  return rpc
 }
 
 function rejectOnAbort(signal: AbortSignal): Promise<never> {
@@ -519,6 +326,23 @@ function rejectOnAbort(signal: AbortSignal): Promise<never> {
     }
     signal.addEventListener('abort', fail, { once: true })
   })
+}
+
+export function getWorkerLifeSignal(): AbortSignal | null {
+  return workerLifeController?.signal ?? null
+}
+
+// Called by the RPC layer when it sees the channel close under an in-flight
+// call before the worker's `close` event arrives. Tears down now, so the next
+// call starts a new worker. A no-op once the life signal has aborted.
+export function notifyChannelClosed(): void {
+  const controller = workerLifeController
+  if (!controller || controller.signal.aborted) return
+
+  const ipc = workerIpc
+  resetModuleState()
+  controller.abort(new WorkerCrashedError(null, null))
+  ipc?.destroy()
 }
 
 export async function getRPC() {
@@ -538,12 +362,8 @@ export async function createDuplexSession(payload: string, commandId: number) {
     const onAbort = () => {
       const err =
         lifeSignal.reason instanceof Error ? lifeSignal.reason : new WorkerCrashedError(null, null)
-      try {
-        ;(requestStream as { destroy?: (err?: Error) => void }).destroy?.(err)
-      } catch {}
-      try {
-        ;(responseStream as { destroy?: (err?: Error) => void }).destroy?.(err)
-      } catch {}
+      requestStream.destroy(err)
+      responseStream.destroy(err)
     }
     lifeSignal.addEventListener('abort', onAbort, { once: true })
   }
@@ -557,39 +377,21 @@ export async function close() {
     return
   }
 
-  if (!rpcInstance && !rpcPromise && !bareWorkerProc && !ipcServer) return
-
-  logger.info('🧹 Closing RPC client')
-
-  // Abort before kill: exit handler sees planned intent; any in-flight
-  // caller (contract violators) rejects with WorkerShutdownError.
-  workerLifeController?.abort(new WorkerShutdownError())
-
-  const { workerToClose, serverToClose, socketPathToClose } = snapshotAndResetState()
-
+  generation++
   closePromise = (async () => {
-    if (workerToClose) {
-      logger.info('🐻🔫 Killing bare worker process')
-      try {
-        workerToClose.kill('SIGTERM')
-      } catch (error) {
-        logger.debug('Failed to kill bare worker process', { error })
-      }
+    const ipc = workerIpc
+    if (!ipc) {
+      await rpcPromise?.catch(() => {})
+      return
     }
 
-    if (serverToClose) {
-      logger.info('🔌 Closing IPC server')
-      await new Promise<void>((resolve) => {
-        try {
-          serverToClose.close(() => resolve())
-        } catch (error) {
-          logger.debug('Failed to close IPC server', { error })
-          resolve()
-        }
-      })
-    }
+    logger.info('🧹 Closing RPC client')
 
-    bestEffortUnlinkSocket(socketPathToClose)
+    // Abort before terminating: the close handler sees planned intent, and any
+    // in-flight caller rejects with WorkerShutdownError.
+    workerLifeController?.abort(new WorkerShutdownError())
+    resetModuleState()
+    await ipc.terminate()
   })()
 
   try {
@@ -598,14 +400,3 @@ export async function close() {
     closePromise = null
   }
 }
-
-function handleTerminationSignal(signal: NodeJS.Signals) {
-  logger.info(`Received ${signal}, closing RPC resources...`)
-  closeSyncForExit()
-  process.kill(process.pid, signal)
-}
-
-process.once('SIGINT', () => handleTerminationSignal('SIGINT'))
-process.once('SIGTERM', () => handleTerminationSignal('SIGTERM'))
-process.once('SIGHUP', () => handleTerminationSignal('SIGHUP'))
-process.once('exit', closeSyncForExit)
