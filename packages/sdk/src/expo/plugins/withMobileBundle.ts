@@ -6,8 +6,8 @@ import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from '@/
 import { createCommandLogger } from '@/commands/command-logger'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
 import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
+import { linkAddons } from '@/commands/bundle/link'
 import { getProjectRootFromMod } from '@/expo/plugins/get-project-root'
-import { linkAddons } from '@/expo/plugins/link-addons'
 import { BundleVerificationFailedError } from '@/utils/errors-client'
 
 const { withDangerousMod } = configPlugins
