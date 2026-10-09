@@ -68,10 +68,6 @@ target_include_directories(
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/addon/src
 )
-target_include_directories(
-  ${inference-addon-llama}
-  SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/addon/src/vendor
-)
 target_link_libraries(
   ${inference-addon-llama}
   PRIVATE
@@ -119,10 +115,6 @@ if(BUILD_CLI)
           ${PROJECT_SOURCE_DIR}/addon/src
           ${PICOJSON_INCLUDE_DIRS}
           ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-  )
-  target_include_directories(
-    cli_tool
-    SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/addon/src/vendor
   )
 
   # Link required libraries

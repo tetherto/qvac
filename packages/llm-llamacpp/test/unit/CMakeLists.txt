@@ -114,10 +114,6 @@ target_include_directories(
   ${PICOJSON_INCLUDE_DIRS}
   ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
-target_include_directories(
-  addon-test
-  SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/addon/src/vendor
-)
 
 # Set C++20 standard for std::views support (required by inference-addon-cpp)
 target_compile_features(addon-test PRIVATE cxx_std_20)

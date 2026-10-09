@@ -28,8 +28,8 @@
 
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
-// Keep this header in sync with fabric's vendor/stb/stb_image.h.
-#include <stb_image.h>
+// fabric's copy, so the dimension check parses headers like mtmd-helper does.
+#include <stb/stb_image.h>
 
 namespace image_pixel_limit {
 namespace {
