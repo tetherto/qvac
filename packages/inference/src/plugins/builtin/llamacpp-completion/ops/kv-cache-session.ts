@@ -297,6 +297,11 @@ async function deleteInactiveAutoCaches(): Promise<void> {
 export interface TurnHandle {
   /** Resolved on-disk cache file path the addon will read from / write to. */
   readonly cachePath: string
+  /**
+   * True when no cache existed at this path when the turn began: nothing
+   * committed is there to keep, so an unwind drops whatever this turn wrote.
+   */
+  readonly createdCache: boolean
 }
 
 export interface BeginCustomTurnInput {
@@ -361,12 +366,13 @@ export interface KvCacheSession {
 
   /**
    * Roll back an in-flight turn — atomically deletes the on-disk cache
-   * file, clears the in-memory `initializedCaches` entry, releases the
-   * active-path ref, and removes orphaned marker metadata. Idempotent: a turn that has
-   * already been committed or rolled back is a no-op on subsequent
-   * calls. Handlers register this via `ctx.scope.defer(...)` so it
-   * runs regardless of how the handler exits (success branch removes
-   * itself via `commitTurn`).
+   * file, drops the addon's copy of the conversation through
+   * `options.discardCache`, clears the in-memory `initializedCaches` entry,
+   * releases the active-path ref, and removes orphaned marker metadata.
+   * Idempotent: a turn that has already been committed or rolled back is a
+   * no-op on subsequent calls. Handlers register this via
+   * `ctx.scope.defer(...)` so it runs regardless of how the handler exits
+   * (success branch removes itself via `commitTurn`).
    */
   rollback(turn: TurnHandle): Promise<void>
   /**
@@ -402,13 +408,17 @@ interface InternalTurnState {
  * Construct a session bound to one `(modelId, turn-owning request)`
  * scope. `options.logger` is the per-instance logger the session emits
  * through (typically `withRequestContext(getEngineLogger(), ctx)`);
- * falls back to the module-scoped logger when omitted.
+ * falls back to the module-scoped logger when omitted. `options.discardCache`
+ * drops the addon's copy of a conversation whose cache the session rolls
+ * back; without it the addon writes that conversation to the deleted path at
+ * its next key switch or unload.
  */
 export function createKvCacheSession(
   modelId: string,
-  options?: { logger?: Logger }
+  options?: { logger?: Logger; discardCache?: (cachePath: string) => Promise<void> }
 ): KvCacheSession {
   const logger = options?.logger ?? moduleLogger
+  const discardCache = options?.discardCache
   // Per-session map: each `TurnHandle` carries an opaque entry here. A
   // WeakMap so handles drop their state once the handler scope releases
   // the reference; the module-scoped maps above survive.
@@ -420,7 +430,12 @@ export function createKvCacheSession(
     releaseWriteLock: () => void = () => {},
     signal?: AbortSignal
   ): TurnHandle {
-    const handle: TurnHandle = { cachePath }
+    const handle: TurnHandle = {
+      cachePath,
+      get createdCache(): boolean {
+        return turnState.get(handle)?.createdByThisTurn ?? false
+      }
+    }
     turnState.set(handle, {
       cachePath,
       ...(autoCacheKey !== undefined && { autoCacheKey }),
@@ -603,9 +618,11 @@ export function createKvCacheSession(
     // resolving to the same file can't observe it before it is recorded. Abortable: a cancel while waiting for the lock rejects here.
     const releaseTargetLock = await acquireCachePathWriteLock(result.targetCachePath, state.signal)
     try {
-      // A cancel that landed while we waited for the target lock must not commit.
+      // A cancel that landed while we waited for the target lock must not
+      // commit. The file holds what the addon kept, so it stays unless this
+      // turn created it.
       if (state.signal?.aborted) {
-        await runRollback(state)
+        await runRelease(state)
         return
       }
 
@@ -682,6 +699,10 @@ export function createKvCacheSession(
     const state = turnState.get(turn)
     if (!state) return
     if (state.committed || state.rolledBack) return
+    await runRelease(state)
+  }
+
+  async function runRelease(state: InternalTurnState): Promise<void> {
     // Nothing committed exists to keep, so a failed first turn is destructive.
     if (state.createdByThisTurn) {
       await runRollback(state)
@@ -706,6 +727,15 @@ export function createKvCacheSession(
       if ((unlinkError as { code?: string }).code !== 'ENOENT') {
         logger.warn(
           `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
+        )
+      }
+    }
+    if (discardCache) {
+      try {
+        await discardCache(state.cachePath)
+      } catch (discardError) {
+        logger.warn(
+          `[kv-cache] Failed to discard the addon's copy of a rolled-back cache; a later unload may write it back. path=${state.cachePath} error=${discardError instanceof Error ? discardError.message : String(discardError)}`
         )
       }
     }
@@ -814,8 +844,17 @@ async function verifySaveAndRecord(cachePath: string): Promise<boolean> {
   }
 }
 
-/** Adopt a `.bin` left by an earlier process run. Returns whether the file exists. */
+/**
+ * Adopt a `.bin` left by an earlier process run. Returns whether the file
+ * exists. Earlier releases kept a `<bin>.meta.json` boundary sidecar beside
+ * it; nothing reads one now, so it goes on first contact.
+ */
 async function adoptPersistedCache(cachePath: string): Promise<boolean> {
+  try {
+    await fsPromises.unlink(`${cachePath}.meta.json`)
+  } catch {
+    // No sidecar for this path.
+  }
   try {
     await fsPromises.access(cachePath)
   } catch {

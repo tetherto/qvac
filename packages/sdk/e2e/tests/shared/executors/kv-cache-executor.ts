@@ -9,6 +9,63 @@ interface ChatMessage {
   content: string
 }
 
+interface DeclaredTool {
+  name: string
+  parameters?: { required?: string[] }
+}
+
+type ToolTurnOutcome =
+  | { ok: true; response: string; toolName: string; cacheTokens: number }
+  | { ok: false; output: string }
+
+// One tool-calling turn over a named cache. The call must name a declared tool
+// and carry its required arguments; `label` names the turn in a failure.
+async function runToolTurn(
+  modelId: string,
+  cacheKey: string,
+  history: ChatMessage[],
+  tools: DeclaredTool[],
+  generationParams: Record<string, unknown> | undefined,
+  label: string
+): Promise<ToolTurnOutcome> {
+  const declared = new Map(tools.map((tool) => [tool.name, tool.parameters?.required ?? []]))
+  const result = completion({
+    modelId,
+    history: [...history],
+    stream: true,
+    kvCache: cacheKey,
+    tools: tools as never,
+    ...(generationParams && { generationParams })
+  })
+
+  let response = ''
+  for await (const token of result.tokenStream) {
+    response += token
+  }
+
+  const toolCalls = result.toolCalls ? await result.toolCalls : []
+  const call = toolCalls.find((candidate) => declared.has(candidate.name))
+  if (!call) {
+    return {
+      ok: false,
+      output:
+        `${label} emitted no call to a declared tool. ` +
+        `Got: [${toolCalls.map((candidate) => candidate.name).join(', ')}]`
+    }
+  }
+  const missingArgs = (declared.get(call.name) ?? []).filter((key) => !(key in call.arguments))
+  if (missingArgs.length > 0) {
+    return {
+      ok: false,
+      output: `${label} call '${call.name}' is missing required arguments: ${missingArgs.join(', ')}`
+    }
+  }
+
+  const stats = await result.stats
+  const cacheTokens = ((stats as Record<string, unknown>)?.cacheTokens as number) ?? 0
+  return { ok: true, response, toolName: call.name, cacheTokens }
+}
+
 export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> {
   pattern = /^kv-cache-/
 
@@ -24,6 +81,10 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         return [test.testId, this.statsVerification.bind(this)]
       if (test.testId === 'kv-cache-tools-sequential-save')
         return [test.testId, this.toolsSequentialSave.bind(this)]
+      if (test.testId === 'kv-cache-tool-set-change')
+        return [test.testId, this.toolSetChange.bind(this)]
+      if (test.testId === 'kv-cache-warm-tool-choice-required')
+        return [test.testId, this.warmToolChoiceRequired.bind(this)]
       if (test.testId === 'kv-cache-cancel-then-new-prompt')
         return [test.testId, this.cancelThenNewPrompt.bind(this)]
       if (test.testId === 'kv-cache-cancel-keeps-committed-cache')
@@ -840,6 +901,144 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `Tools sequential save failed: ${errorMsg}` }
+    }
+  }
+
+  // A tool set that changes between turns on one named key reuses the same
+  // cache file up to where the prompts differ, and the turn after that is warm
+  // again under the new set. A fresh file would report no cached tokens on the
+  // turn that changed the set.
+  async toolSetChange(
+    params: {
+      cacheKey: string
+      tools: unknown[]
+      changedTools: unknown[]
+      messages: string[]
+      generationParams?: Record<string, unknown>
+      addedTool: string
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('tools')
+    const toolSets = [params.tools, params.changedTools, params.changedTools] as DeclaredTool[][]
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* ignore ENOENT */
+      }
+
+      const history: ChatMessage[] = [
+        { role: 'system', content: 'You are a helpful assistant with access to tools. Be brief.' }
+      ]
+      const cacheTokens: number[] = []
+
+      for (const [index, message] of params.messages.entries()) {
+        history.push({ role: 'user', content: message })
+        const turn = await runToolTurn(
+          modelId,
+          params.cacheKey,
+          history,
+          toolSets[index]!,
+          params.generationParams,
+          `Turn ${index + 1}`
+        )
+        if (!turn.ok) return { passed: false, output: turn.output }
+        if (index === 1 && turn.toolName !== params.addedTool) {
+          return {
+            passed: false,
+            output: `Turn 2 called '${turn.toolName}' instead of the tool the changed set added ('${params.addedTool}')`
+          }
+        }
+        cacheTokens.push(turn.cacheTokens)
+        history.push({ role: 'assistant', content: turn.response })
+      }
+
+      const [, second, third] = cacheTokens
+      if (second! < 1) {
+        return {
+          passed: false,
+          output: `The changed tool set opened a fresh cache instead of reusing the file: turn 2 reported ${second} cached tokens`
+        }
+      }
+      if (third! <= second!) {
+        return {
+          passed: false,
+          output: `The cache was not re-established under the changed tool set: turn 3 reported ${third} cached tokens, turn 2 ${second}`
+        }
+      }
+      return ValidationHelpers.validate(
+        `Tool set change: cacheTokens=${cacheTokens.join(',')}`,
+        expectation
+      )
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Tool set change failed: ${errorMsg}` }
+    }
+  }
+
+  // `tool_choice: 'required'` on a warm turn forces a call: the grammar is armed
+  // from the tool block every turn carries, so a prompt that would otherwise be
+  // answered in prose calls the tool, and the turn still reuses the cache.
+  async warmToolChoiceRequired(
+    params: {
+      cacheKey: string
+      tools: unknown[]
+      messages: string[]
+      generationParams?: Record<string, unknown>
+      requiredGenerationParams: Record<string, unknown>
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('tools')
+    const tools = params.tools as DeclaredTool[]
+
+    try {
+      try {
+        await deleteCache({ kvCacheKey: params.cacheKey })
+      } catch {
+        /* ignore ENOENT */
+      }
+
+      const history: ChatMessage[] = [
+        { role: 'system', content: 'You are a helpful assistant with access to tools. Be brief.' },
+        { role: 'user', content: params.messages[0]! }
+      ]
+      const first = await runToolTurn(
+        modelId,
+        params.cacheKey,
+        history,
+        tools,
+        params.generationParams,
+        'Turn 1'
+      )
+      if (!first.ok) return { passed: false, output: first.output }
+
+      history.push({ role: 'assistant', content: first.response })
+      history.push({ role: 'user', content: params.messages[1]! })
+      const second = await runToolTurn(
+        modelId,
+        params.cacheKey,
+        history,
+        tools,
+        params.requiredGenerationParams,
+        'Turn 2 (tool_choice required)'
+      )
+      if (!second.ok) return { passed: false, output: second.output }
+      if (second.cacheTokens < 1) {
+        return {
+          passed: false,
+          output: `The warm turn under tool_choice 'required' reused no cached tokens`
+        }
+      }
+      return ValidationHelpers.validate(
+        `Warm tool_choice required: call=${second.toolName} cacheTokens=${second.cacheTokens}`,
+        expectation
+      )
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Warm tool_choice required failed: ${errorMsg}` }
     }
   }
 }

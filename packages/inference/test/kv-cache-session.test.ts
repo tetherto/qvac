@@ -1320,8 +1320,12 @@ test('kv-cache-session: a restarted process adopts a committed .bin as initializ
       customKey: 'restart-a',
       configHash
     })
+    t.ok(first.createdCache, 'a cold turn creates its cache')
     writeFakeCache(first.cachePath)
     await session.commitTurn(first, { kind: 'static' })
+    // The boundary sidecar an earlier release wrote beside the file.
+    const sidecarPath = `${first.cachePath}.meta.json`
+    fs.writeFileSync(sidecarPath, '{"messages":2,"toolBlock":false,"binSize":19}')
 
     mod.__kvCacheSessionTestHooks.resetForTest()
 
@@ -1335,9 +1339,135 @@ test('kv-cache-session: a restarted process adopts a committed .bin as initializ
       mod.__kvCacheSessionTestHooks.hasInitializedPath(second.cachePath),
       'the on-disk cache is adopted by the restarted session'
     )
+    t.absent(second.createdCache, 'an adopted cache was not created by this turn')
+    t.absent(fs.existsSync(sidecarPath), 'the sidecar an earlier release wrote is removed')
     // An adopted cache was not created by this turn, so releasing keeps it.
     await restarted.releaseTurn(second)
     t.ok(fs.existsSync(second.cachePath), 'releasing the adopted turn keeps the file')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: rollback discards the addon copy of the conversation', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const discarded: string[] = []
+    const session = mod.createKvCacheSession('test-model', {
+      discardCache: async (cachePath) => {
+        discarded.push(cachePath)
+      }
+    })
+    const configHash = mod.generateConfigHash('sys')
+    const turn = await session.beginTurn({ kind: 'custom', customKey: 'discard-a', configHash })
+    writeFakeCache(turn.cachePath)
+
+    await session.rollback(turn)
+
+    t.alike(discarded, [turn.cachePath], 'the rolled-back path is discarded from the addon')
+    t.absent(fs.existsSync(turn.cachePath), 'the file is removed')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: releasing an adopted cache keeps the addon copy', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const discarded: string[] = []
+    const session = mod.createKvCacheSession('test-model', {
+      discardCache: async (cachePath) => {
+        discarded.push(cachePath)
+      }
+    })
+    const configHash = mod.generateConfigHash('sys')
+    writeFakeCache(await utils.getCacheFilePath('test-model', configHash, 'release-a'))
+    const turn = await session.beginTurn({ kind: 'custom', customKey: 'release-a', configHash })
+    t.absent(turn.createdCache, 'the found file was not created by this turn')
+
+    await session.releaseTurn(turn)
+
+    t.alike(discarded, [], 'nothing is discarded')
+    t.ok(fs.existsSync(turn.cachePath), 'the file is kept')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: a failed discard is logged and the rollback completes', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const warnings: string[] = []
+    const logger = {
+      error: () => {},
+      warn: (...args: unknown[]) => {
+        warnings.push(String(args[0]))
+      },
+      info: () => {},
+      debug: () => {}
+    }
+    const session = mod.createKvCacheSession('test-model', {
+      logger: logger as never,
+      discardCache: () => Promise.reject(new Error('a request on the key is still running'))
+    })
+    const configHash = mod.generateConfigHash('sys')
+    const turn = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'discard-fails',
+      configHash
+    })
+    writeFakeCache(turn.cachePath)
+
+    await session.rollback(turn)
+
+    t.absent(fs.existsSync(turn.cachePath), 'the file is still removed')
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(turn.cachePath),
+      'the path is no longer initialized'
+    )
+    t.is(warnings.filter((line) => /discard/.test(line)).length, 1, 'the failure is logged once')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: an auto turn cancelled before commit keeps the file it was found by', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys')
+    const history = [
+      { role: 'system' as const, content: 'sys' },
+      { role: 'user' as const, content: 'hello' }
+    ]
+    // The file an earlier turn left under this history.
+    const found = await utils.getCurrentCacheInfo('test-model', configHash, history)
+    writeFakeCache(found.cachePath)
+
+    const session = mod.createKvCacheSession('test-model')
+    const { AbortController } = await import('bare-abort-controller')
+    const ac = new AbortController()
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash,
+      history,
+      signal: ac.signal as never
+    })
+    t.is(turn.cachePath, found.cachePath, 'the turn runs on the file it found')
+    t.absent(turn.createdCache, 'the found file was not created by this turn')
+    const target = await utils.getCurrentCacheInfo('test-model', configHash, [
+      ...history,
+      { role: 'assistant', content: 'hi' }
+    ])
+
+    // Cancelled after decoding, before the commit reaches the target lock.
+    ac.abort(new Error('aborted'))
+    await session.commitTurn(turn, {
+      kind: 'autoRename',
+      targetCachePath: target.cachePath
+    })
+
+    t.ok(fs.existsSync(found.cachePath), 'the file the turn was found by is kept')
+    t.absent(fs.existsSync(target.cachePath), 'nothing is moved to the target')
   } finally {
     cleanup()
   }

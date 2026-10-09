@@ -102,17 +102,29 @@ async function writeCacheFile(cachePath: string): Promise<void> {
   fs.writeFileSync(cachePath, 'kv-cache-bytes')
 }
 
-// The addon keeps a run's conversation in memory under its key, and
-// `saveCache` writes it, rejecting a key it holds nothing for.
+// The addon keeps a run's conversation in memory under its key: `saveCache`
+// writes it, rejecting a key it holds nothing for, and `discardCache` drops it.
 function heldConversations() {
   const held = new Set<string>()
+  const saved: string[] = []
+  const discarded: string[] = []
   return {
+    saved,
+    discarded,
     hold(cacheKey: string | undefined): void {
       if (cacheKey !== undefined) held.add(cacheKey)
     },
     saveCache(cacheKey: string): Promise<void> {
-      if (!held.has(cacheKey)) return Promise.reject(new Error(`nothing cached under ${cacheKey}`))
+      saved.push(cacheKey)
+      if (!held.has(cacheKey)) {
+        return Promise.reject(new Error(`saveCache: no conversation is cached under '${cacheKey}'`))
+      }
       return writeCacheFile(cacheKey)
+    },
+    discardCache(cacheKey: string): Promise<void> {
+      discarded.push(cacheKey)
+      held.delete(cacheKey)
+      return Promise.resolve()
     }
   }
 }
@@ -136,11 +148,12 @@ function registerRecordingModel(
   config: Record<string, unknown> = { tools: true },
   cachePaths?: string[],
   stats: Record<string, unknown> = {}
-): void {
+): ReturnType<typeof heldConversations> {
   const conversations = heldConversations()
   registerModel(modelId, {
     model: {
       saveCache: conversations.saveCache,
+      discardCache: conversations.discardCache,
       run(
         prompt: unknown,
         opts?: {
@@ -169,6 +182,7 @@ function registerRecordingModel(
     config,
     modelType: ModelType.llamacppCompletion
   })
+  return conversations
 }
 
 // `kvCache` is a named key, `true` for the auto key, or `undefined` for none.
@@ -811,6 +825,8 @@ test('completion: kv-cache survives an unrecognised addon failure between turns'
 // the addon reports for the run; by default a cancelled run reports the
 // `none` stop reason and any other run `eos`. `statsThrowOnRun` makes reading
 // `stats` throw, an engine-side failure that lands after the addon saved.
+// `saveRejectsOnRun` makes the save after that run fail the way a full disk
+// does, with the conversation still in memory.
 function registerScriptedModel(
   modelId: string,
   calls: RecordedCall[],
@@ -820,15 +836,23 @@ function registerScriptedModel(
     tokensOnRun?: (run: number) => string[]
     statsOnRun?: (run: number) => Record<string, unknown>
     statsThrowOnRun?: number
+    saveRejectsOnRun?: number
     config?: Record<string, unknown>
   }
-): void {
+): ReturnType<typeof heldConversations> {
   const registry = getRequestRegistry()
   let runCount = 0
   const conversations = heldConversations()
   registerModel(modelId, {
     model: {
-      saveCache: conversations.saveCache,
+      saveCache(cacheKey: string) {
+        if (runCount === script.saveRejectsOnRun) {
+          conversations.saved.push(cacheKey)
+          return Promise.reject(new Error(`failed to save session file ${cacheKey}`))
+        }
+        return conversations.saveCache(cacheKey)
+      },
+      discardCache: conversations.discardCache,
       run(prompt: unknown, opts?: { prefill?: boolean; cacheKey?: string }) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
@@ -863,10 +887,11 @@ function registerScriptedModel(
     config: script.config ?? {},
     modelType: ModelType.llamacppCompletion
   })
+  return conversations
 }
 
 // Once the run returns, the file holds whatever the addon kept — it commits
-// or rewinds the request itself — so a named key keeps it whatever the stop.
+// or rolls back the request itself — so a named key keeps it whatever the stop.
 const keptAfterStop: {
   name: string
   script: Parameters<typeof registerScriptedModel>[3]
@@ -937,6 +962,105 @@ test('completion: kv-cache keeps the file the addon saved for a cancelled first 
   await complete([user('Area of a triangle, base 10 height 5?')])
 
   t.ok(await holdsCommittedBytes(cachePaths.at(-1)), 'the saved prompt prefix is kept')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A write that fails leaves the previous file in place. The turn still
+// returns, and the next one re-decodes what the file lacks.
+test('completion: kv-cache keeps the committed file when a warm save fails', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-save-fails-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  const conversations = registerScriptedModel(modelId, calls, cachePaths, { saveRejectsOnRun: 2 })
+  const { refusal, fileSurvivedRefusal, turnCalls } = await runRefusalScenario(
+    modelId,
+    calls,
+    cachePaths,
+    'save-fails-key'
+  )
+  t.is(refusal, undefined, 'turn two returns rather than throws')
+  t.ok(fileSurvivedRefusal, 'the file the first turn committed is still on disk')
+  t.is(conversations.saved.length, 3, 'every turn asked the addon to save')
+  assertRetryReusesCache(t, turnCalls, cachePaths)
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// An auto cache has no key to move a tool-call turn to, so the turn is dropped
+// before anything is written, and the addon's copy goes with it.
+test('completion: kv-cache drops an auto tool-call turn unwritten', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-auto-tool-call-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  const conversations = registerScriptedModel(modelId, calls, cachePaths, {
+    config: { tools: true },
+    tokensOnRun: () => [
+      '<tool_call>\n{"name": "calculate_triangle_area", "arguments": {"base": 10, "height": 5}}\n</tool_call>'
+    ]
+  })
+  await completer(modelId, true)([user('Area of a triangle, base 10 height 5?')], [areaTool])
+
+  const fs = await import('bare-fs')
+  t.is(cachePaths.length, 1, 'the turn ran under one auto cache path')
+  t.alike(conversations.saved, [], 'nothing is written for a turn that is dropped')
+  t.alike(conversations.discarded, cachePaths, "the addon's copy of the turn is discarded")
+  t.absent(fs.existsSync(cachePaths[0]!), 'no cache file is left behind')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A first auto turn that is cancelled has no file to keep and no key to move
+// to, so nothing is written for it either.
+test('completion: kv-cache writes nothing for a cancelled first auto turn', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-auto-cancel-cold-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  const conversations = registerScriptedModel(modelId, calls, cachePaths, { cancelOnRun: 1 })
+  await completer(modelId, true)([user('Area of a triangle, base 10 height 5?')])
+
+  const fs = await import('bare-fs')
+  t.is(cachePaths.length, 1, 'the turn ran under one auto cache path')
+  t.alike(conversations.saved, [], 'no save is asked for')
+  t.alike(conversations.discarded, cachePaths, "the addon's copy of the turn is discarded")
+  t.absent(fs.existsSync(cachePaths[0]!), 'no cache file is left behind')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A warm auto turn that is cancelled writes what the addon kept into the file
+// it was found by, which stays where it is.
+test('completion: kv-cache writes a cancelled warm auto turn into the file it was found by', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-auto-cancel-warm-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  const conversations = registerScriptedModel(modelId, calls, cachePaths, { cancelOnRun: 2 })
+  const complete = completer(modelId, true)
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first])
+  await complete([first, assistant('The area is 25 square units.'), user('And base 4 height 3?')])
+
+  t.is(cachePaths.length, 2, 'both turns ran under an auto cache path')
+  t.not(cachePaths[0], cachePaths[1], 'the second turn ran on the file the first turn moved to')
+  t.alike(conversations.saved, cachePaths, 'both turns were written under the path they ran with')
+  t.alike(conversations.discarded, [], 'nothing is discarded')
+  t.ok(await holdsCommittedBytes(cachePaths[1]), 'the file the cancelled turn was found by is kept')
 
   unregisterModel(modelId)
   clearRegistry()

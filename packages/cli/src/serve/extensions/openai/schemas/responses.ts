@@ -55,7 +55,8 @@ export const RESPONSES_UNSUPPORTED_PARAMS = [
   'stop',
   'truncation',
   'service_tier',
-  'reasoning'
+  'reasoning',
+  'remove_thinking_from_context'
 ] as const
 
 export class UnsupportedToolTypeError extends Error {

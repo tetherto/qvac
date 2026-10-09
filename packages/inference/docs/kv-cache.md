@@ -20,8 +20,10 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
   otherwise keeps it in memory, and the session, the auto-cache rename and a
   restart all read the file.
 - Validate a newly written cache before marking it initialized. The addon
-  rewinds a cancelled or failed request itself, so keep the file rather than
-  deleting it; only an auto cache with no key to move to is dropped.
+  commits or rolls back a cancelled or failed request itself (a cancel after
+  prefill keeps the prompt and the tokens streamed so far), so keep the file
+  rather than deleting it; only an auto cache with no key to move to is
+  dropped, and the addon's copy of the conversation goes with the file.
 - Use `deleteCache({ auto: true })` to reclaim inactive auto caches without
   deleting caller-owned named caches; active cache keys remain protected.
 
