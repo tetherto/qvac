@@ -35,8 +35,9 @@ function indent(lines: string[]) {
 }
 
 /**
- * Compares every package's engines.bare with the Bare build each target runs:
- * the one inside react-native-bare-kit for mobile, bare-runtime for desktop.
+ * Compares every package's engines.bare with the Bare build inside the app's
+ * react-native-bare-kit. Desktop projects run the Bare that bare-sidecar
+ * installs with the SDK, so the check applies to phone projects only.
  * Reads the generated worker bundle when there is one, since it names exactly
  * what ships; otherwise scans node_modules, which also includes build tools.
  */
@@ -69,41 +70,45 @@ export async function checkBareEngines(
     }
   }
 
-  // A project with react-native-bare-kit ships to phones, where the desktop
-  // Bare never runs; any other project runs on this host's Bare.
-  const isPhoneProject = commands.isReactNativeBareKitInstalled(projectRoot)
-  const hosts = isPhoneProject ? MOBILE_HOSTS : [`${process.platform}-${process.arch}`]
-  const bundlePath = path.join(
-    projectRoot,
-    'qvac',
-    'worker',
-    isPhoneProject ? 'index.bundle.mjs' : 'index.bundle'
-  )
+  if (!commands.isReactNativeBareKitInstalled(projectRoot)) {
+    return {
+      id: 'project-bare-engines',
+      label: LABEL,
+      status: 'skip',
+      severity: 'recommended',
+      value: 'not a phone project (no react-native-bare-kit)'
+    }
+  }
+
+  const bundlePath = path.join(projectRoot, 'qvac', 'worker', 'index.bundle.mjs')
   const addonsSource = fs.existsSync(bundlePath) ? bundlePath : nodeModules
 
   const result = await commands.verifyBundle({
     projectRoot,
     addonsSource,
-    hosts,
+    hosts: MOBILE_HOSTS,
     ...(options.network !== undefined ? { network: options.network } : {}),
     ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
   })
 
-  const runtimes = (result.runtimes ?? []).map((group) =>
-    group.resolution.resolved
-      ? `${group.hosts.join(', ')}: Bare ${group.resolution.runtime.version} (${commands.formatRuntimeSource(group.resolution.runtime)})`
-      : `${group.hosts.join(', ')}: unknown (${group.resolution.error.reason})`
-  )
+  const hostList = MOBILE_HOSTS.join(', ')
+  const runtime =
+    result.runtime === null
+      ? null
+      : result.runtime.resolved
+        ? `${hostList}: Bare ${result.runtime.runtime.version} (${commands.formatRuntimeSource(result.runtime.runtime)})`
+        : `${hostList}: unknown (${result.runtime.error.reason})`
   const source = `Checked ${path.relative(projectRoot, addonsSource) || addonsSource}`
+  const detail = runtime === null ? source : `${source}\n${runtime}`
   const errors = result.issues.filter((issue) => ENGINES_ISSUE_CODES.has(issue.code))
 
   if (errors.length > 0) {
     const hint = [
-      `These packages need a newer Bare than ${hosts.join(', ')} run${hosts.length === 1 ? 's' : ''}, so they fail to load there:`,
+      `These packages need a newer Bare than ${hostList} run, so they fail to load there:`,
       ...errors.map((issue) => `  - ${issue.message}`),
       ''
     ]
-    for (const advice of result.advice ?? []) hint.push(...commands.formatEnginesAdvice(advice))
+    if (result.advice !== undefined) hint.push(...commands.formatEnginesAdvice(result.advice))
     return {
       id: 'project-bare-engines',
       label: LABEL,
@@ -112,24 +117,19 @@ export async function checkBareEngines(
       code: 'engines-mismatch',
       value: `${errors.length} package${errors.length === 1 ? '' : 's'} need a newer Bare`,
       hint: indent(hint),
-      detail: [source, ...runtimes].join('\n')
+      detail
     }
   }
 
-  const unchecked = (result.runtimes ?? []).flatMap((group) =>
-    group.resolution.resolved
-      ? []
-      : [`engines.bare not checked for ${group.hosts.join(', ')}: ${group.resolution.error.reason}`]
-  )
-  if (unchecked.length > 0) {
+  if (result.runtime !== null && !result.runtime.resolved) {
     return {
       id: 'project-bare-engines',
       label: LABEL,
       status: 'warn',
       severity: 'recommended',
       value: 'runtime version unknown, not checked',
-      hint: indent(unchecked),
-      detail: [source, ...runtimes].join('\n')
+      hint: indent([`engines.bare not checked for ${hostList}: ${result.runtime.error.reason}`]),
+      detail
     }
   }
 
@@ -138,7 +138,7 @@ export async function checkBareEngines(
     label: LABEL,
     status: 'pass',
     severity: 'recommended',
-    value: runtimes.join('; '),
+    value: runtime ?? hostList,
     detail: source
   }
 }

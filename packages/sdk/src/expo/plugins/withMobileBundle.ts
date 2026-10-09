@@ -15,13 +15,6 @@ const { withDangerousMod } = configPlugins
 /** Modules to defer from mobile bundles (not available at bundle time) */
 const DEFERRED_MODULES = ['expo-file-system', 'react-native-bare-kit']
 
-/**
- * Desktop-only spawn path. `bare-runtime` maps `process` to `bare-process`
- * under Bare, which pulls `bare-posix` (no `android-arm64` prebuild), so
- * bare-pack must not walk it.
- */
-const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn']
-
 type MobilePlatform = 'android' | 'ios'
 
 const MOBILE_HOSTS_BY_PLATFORM: Record<MobilePlatform, string[]> = {
@@ -71,11 +64,7 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
     console.log('🕚 QVAC: No config found, generating default bundle (all plugins)...')
   }
 
-  const deferredModules = [
-    ...DEFERRED_MODULES,
-    ...MOBILE_UNSUPPORTED_MODULES,
-    `${sdkPackage.name}/worker.mobile`
-  ]
+  const deferredModules = [...DEFERRED_MODULES, `${sdkPackage.name}/worker.mobile`]
   // The bundle is one shared artifact both platforms import, so it is built
   // for every mobile host: a dual-platform `expo prebuild` runs this mod twice
   // and the second run would otherwise overwrite the first platform's bundle
@@ -89,8 +78,7 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
     defer: deferredModules,
     quiet: true,
     installMissingPrebuilds: options.installMissingPrebuilds === true,
-    // runVerifier checks engines.bare right after, with progress output.
-    checkEngines: false,
+    verify: false,
     link: false
   })
   if (result.installedPrebuilds.length > 0) {
@@ -98,13 +86,13 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
     console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
   }
 
-  await runVerifier(projectRoot, result.bundlePath, configPath, platformHosts)
+  await runVerifier(projectRoot, result.bundlePath, platformHosts)
 
   copyWorker(path.dirname(result.harnessPath), path.join(sdkPackage.dir, 'dist', 'worker-mobile'))
 
   const linked = await linkAddons({
     projectRoot,
-    entryPath: result.entryPath,
+    addonModules: result.addonModules,
     hosts: platformHosts,
     logger
   })
@@ -134,17 +122,11 @@ function findConfigFile(projectRoot: string): string | null {
   return null
 }
 
-async function runVerifier(
-  projectRoot: string,
-  bundlePath: string,
-  configPath: string | null,
-  hosts: string[]
-) {
+async function runVerifier(projectRoot: string, bundlePath: string, hosts: string[]) {
   const result = await verifyBundle({
     projectRoot,
     addonsSource: bundlePath,
     hosts,
-    ...(configPath ? { configPath } : {}),
     onProgress: (message) => console.log(`🕚 QVAC: ${message}`)
   })
 
@@ -161,13 +143,7 @@ function copyWorker(workerDir: string, outDir: string) {
   }
 }
 
-export {
-  MOBILE_HOSTS,
-  MOBILE_HOSTS_BY_PLATFORM,
-  MOBILE_UNSUPPORTED_MODULES,
-  buildMobileBundle,
-  mobileHostsForPlatform
-}
+export { MOBILE_HOSTS, MOBILE_HOSTS_BY_PLATFORM, buildMobileBundle, mobileHostsForPlatform }
 export type { MobileBundleOptions, MobilePlatform }
 
 export default withMobileBundle

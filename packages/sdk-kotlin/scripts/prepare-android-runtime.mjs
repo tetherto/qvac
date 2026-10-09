@@ -83,8 +83,7 @@ const bundle = await bundleSdk({
 const verification = await verifyBundle({
   projectRoot: modulesRoot,
   addonsSource: bundle.bundlePath,
-  hosts: ['android-arm64'],
-  configPath
+  hosts: ['android-arm64']
 })
 
 if (hasErrors(verification)) {
@@ -122,13 +121,13 @@ const sdkPackagePath = bundleSdkPath
 const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
 const addons = bundle.addons
 
-// bare-link 4 links the addons the worker entry's module graph loads on the
-// host, resolving each meta's per-platform split package (installed above by
-// ensureHostPrebuilds) in one pass. It rewrites existing DT_NEEDED entries
-// rather than adding one per installed addon, so the split @qvac/fabric layout
-// links a single libqvac__fabric-android-arm64.
+// bare-link 4 links the addons the bundle loads on the host, resolving each
+// meta's per-platform split package (installed above by ensureHostPrebuilds)
+// in one pass. It rewrites existing DT_NEEDED entries rather than adding one
+// per installed addon, so the split @qvac/fabric layout links a single
+// libqvac__fabric-android-arm64.
 const linkedResources = new Set()
-for await (const resource of link(bundle.entryPath, {
+for await (const resource of link(bundle.addonModules, {
   hosts: ['android-arm64'],
   out: addonsDirectory
 })) {
@@ -191,8 +190,12 @@ console.log(`Prepared QVAC Android runtime with ${addons.length} addon(s)`)
 
 function ensureWorkspaceSdk(sdkDir) {
   if (!fsSync.existsSync(path.join(sdkDir, 'package.json'))) return undefined
-  const worker = path.join(sdkDir, 'dist', 'src', 'worker', 'index.js')
-  if (!fsSync.existsSync(worker)) {
+  const built = [
+    path.join(sdkDir, 'dist', 'src', 'worker', 'index.js'),
+    path.join(sdkDir, 'dist', 'src', 'worker', 'tcp-shim.js'),
+    path.join(sdkDir, 'dist', 'src', 'commands', 'bundle', 'targets.js')
+  ]
+  if (!built.every((file) => fsSync.existsSync(file))) {
     execFileSync('python3', [path.join(sdkDir, '..', 'sdk-python', 'scripts', 'build_worker.py')], {
       stdio: 'inherit'
     })

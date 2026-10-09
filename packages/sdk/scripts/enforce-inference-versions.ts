@@ -14,9 +14,8 @@
 //    below 1.0.0 (^0.19.0 is >=0.19.0 <0.20.0) but not from 1.0.0 up (^1.19.0
 //    also allows 1.20.0), so a tilde is required there.
 //
-// 3. Bare runtime. Every version allowed by the SDK's bare-runtime dependency
-//    must satisfy inference's engines.bare requirement, including versions
-//    retained by a consumer's existing lockfile.
+// 3. Desktop Bare. The Bare runtime bare-sidecar ships, which runs the desktop
+//    worker, must satisfy inference's engines.bare.
 //
 // The second rule reads @qvac/sdk's manifest alone and never
 // packages/inference's version. The two move independently between releases —
@@ -26,10 +25,21 @@
 // The checks take manifests rather than reading them, so test/enforce-inference-
 // versions.test.ts can drive them over manifest shapes the repo does not hold.
 
-import { readFileSync } from 'fs'
+import { spawnSync } from 'child_process'
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
+import { createRequire } from 'module'
+import { tmpdir } from 'os'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { subset, validRange } from 'semver'
+import { satisfies, validRange } from 'semver'
 
 type Ranges = Record<string, string>
 
@@ -138,42 +148,63 @@ export function checkSharedMajorMinor(sdkPkg: Manifest) {
   return []
 }
 
-export function checkBareRuntimeRange(inferencePkg: Manifest, sdkPkg: Manifest) {
+export function checkDesktopBare(inferencePkg: Manifest, bareVersion: string | null) {
   const required = inferencePkg.engines?.['bare']
   if (required === undefined) return []
   if (validRange(required) === null) {
-    return [`@qvac/inference engines.bare "${required}" is not a valid semver range.`]
+    return [`${dependency} engines.bare "${required}" is not a valid semver range.`]
   }
-
-  const runtime = sdkPkg.dependencies?.['bare-runtime']
-  if (runtime === undefined || validRange(runtime) === null) {
-    return [`${sdkManifest} must declare a valid bare-runtime dependency range.`]
+  if (bareVersion === null) {
+    return ['Could not read the Bare version that bare-sidecar ships.']
   }
-  if (!subset(runtime, required)) {
+  if (!satisfies(bareVersion, required)) {
     return [
-      `SDK bare-runtime "${runtime}" permits versions outside inference's engines.bare "${required}". ` +
-        'Align the runtime dependency so an existing consumer lockfile cannot retain an unsupported worker.'
+      `bare-sidecar ships Bare ${bareVersion}, outside ${dependency} engines.bare "${required}". ` +
+        'Move the SDK to a bare-sidecar release whose Bare satisfies it.'
     ]
   }
   return []
 }
 
 export function collectVersionFailures(inferencePkg: Manifest, sdkPkg: Manifest) {
-  return [
-    ...checkAddonRanges(inferencePkg, sdkPkg),
-    ...checkSharedMajorMinor(sdkPkg),
-    ...checkBareRuntimeRange(inferencePkg, sdkPkg)
-  ]
+  return [...checkAddonRanges(inferencePkg, sdkPkg), ...checkSharedMajorMinor(sdkPkg)]
 }
 
 function readManifest(dir: string) {
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as Manifest
 }
 
+function readSidecarBareVersion(sdkDir: string): string | null {
+  const sidecarDir = dirname(
+    createRequire(join(sdkDir, 'package.json')).resolve('bare-sidecar/package')
+  )
+  const executable = process.platform === 'win32' ? 'bare.exe' : 'bare'
+  const bare = join(sidecarDir, 'prebuilds', `${process.platform}-${process.arch}`, executable)
+  try {
+    accessSync(bare, constants.X_OK)
+  } catch {
+    chmodSync(bare, 0o755)
+  }
+  const scriptDir = mkdtempSync(join(tmpdir(), 'qvac-bare-version-'))
+  try {
+    const script = join(scriptDir, 'version.js')
+    writeFileSync(script, 'console.log(Bare.version)\n')
+    const result = spawnSync(bare, [script], { encoding: 'utf8' })
+    const version = result.status === 0 ? result.stdout.trim().replace(/^v/, '') : ''
+    return version === '' ? null : version
+  } finally {
+    rmSync(scriptDir, { recursive: true, force: true })
+  }
+}
+
 export function runEnforceInferenceVersionsCli() {
   const sdkDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
   const inferenceDir = resolve(sdkDir, '..', 'inference')
-  const failures = collectVersionFailures(readManifest(inferenceDir), readManifest(sdkDir))
+  const inferencePkg = readManifest(inferenceDir)
+  const failures = [
+    ...collectVersionFailures(inferencePkg, readManifest(sdkDir)),
+    ...checkDesktopBare(inferencePkg, readSidecarBareVersion(sdkDir))
+  ]
 
   if (failures.length > 0) {
     console.error(failures.join('\n\n'))
