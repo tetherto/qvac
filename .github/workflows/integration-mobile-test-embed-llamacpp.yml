@@ -133,7 +133,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
@@ -144,7 +144,7 @@ jobs:
       # stale validation. Data only — nothing here is executed; the composite
       # action stays on the trusted workflow ref checked out above.
       - name: Checkout validation data (matches the built ref)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
@@ -183,14 +183,14 @@ jobs:
       id-token: write
     steps:
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
@@ -201,7 +201,7 @@ jobs:
       # node is job-managed on the self-hosted runners (only on PATH after this
       # step); the seed action shells out to node, so it must run first.
       - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
           node-version: lts/*
 
@@ -252,14 +252,14 @@ jobs:
           fi
 
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
@@ -336,7 +336,7 @@ jobs:
       # the manifest above; presign its US-bucket object for the pre-stage steps
       # below, as ocr-ggml presigns its S3-only models.
       - name: Configure AWS credentials (us-west-2) for the Laya model
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # 6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2

@@ -71,7 +71,7 @@ jobs:
       run_mobile: ${{ steps.route.outputs.run_mobile }}
     steps:
       - name: Checkout ci-router composite (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/ci-router
@@ -92,7 +92,7 @@ jobs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
       - name: Checkout authorize-pr (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/authorize-pr
@@ -129,7 +129,7 @@ jobs:
       # Load the action + options.ci ONLY from the trusted default branch (never
       # PR head). Full checkout: sparse config leaks into the action and breaks the pnpm pin.
       - name: Checkout nx-project-matrix composite (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -142,7 +142,7 @@ jobs:
       # get the overlay in that same PR. Own path, so it cannot clobber the
       # trusted checkout above.
       - name: Checkout fabric-consumers manifest (PR head)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           sparse-checkout: .github/fabric-consumers.json
@@ -212,7 +212,7 @@ jobs:
       # A dispatch opts in by naming the fabric run that built the artifact.
       needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && (github.event_name == 'pull_request_target' || (github.event_name == 'workflow_dispatch' && inputs.fabric_run_id != '')) }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
       - id: detect
@@ -234,7 +234,7 @@ jobs:
       # A relative `uses:` resolves from the job workspace, so the action has to
       # be checked out first. Trusted ref, same as detect-fabric-stack; the
       # action takes its token as an input and needs no git credentials.
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -288,7 +288,7 @@ jobs:
           run-id: ${{ inputs.fabric_run_id }}
           github-token: ${{ github.token }}
       - name: Re-publish fabric-prebuilds for downstream jobs
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # 6.0.0
         with:
           name: fabric-prebuilds
           path: fabric-prebuilds-staging
@@ -404,7 +404,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
       - name: Run Sanity checks
@@ -474,7 +474,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
       - name: Verify qvac-fabric versions are lockstep
         uses: ./.github/actions/verify-qvac-fabric-lockstep
 
@@ -492,7 +492,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repo (composites + perf scripts)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
@@ -500,7 +500,7 @@ jobs:
             ${{ matrix.perfReportMediaDir }}
           sparse-checkout-cone-mode: false
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
           node-version: lts/*
       - name: Combine performance reports
@@ -525,7 +525,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download desktop RTF artifacts
@@ -546,7 +546,7 @@ jobs:
       - name: Add unified performance summary
         run: node -e "process.stdout.write(require('fs').readFileSync('benchmark-artifacts/${{ matrix.perfReportOutputStem }}.md', 'utf8'))" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload unified performance report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # 6.0.0
         with:
           name: ${{ matrix.perfReportOutputStem }}
           path: |
@@ -574,14 +574,14 @@ jobs:
         include: ${{ fromJSON(needs.matrix.outputs.linking || '[]') }}
     steps:
       - name: Checkout linking checker (trusted ref)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
           sparse-checkout: ${{ matrix.prebuildLinkingScript }}
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
           node-version: lts/*
       - name: Download merged prebuilds
@@ -626,7 +626,7 @@ jobs:
         include: ${{ fromJSON(needs.matrix.outputs.prebuilds || '[]') }}
     steps:
       - name: Checkout prebuild-status scripts (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts/prebuild-status
@@ -668,7 +668,7 @@ jobs:
         include: ${{ fromJSON(needs.matrix.outputs.cpptests || '[]') }}
     steps:
       - name: Checkout prebuild-status scripts (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts/prebuild-status

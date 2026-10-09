@@ -460,7 +460,7 @@ jobs:
       NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
     steps:
       - id: checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
@@ -471,7 +471,7 @@ jobs:
             .github/actions/sdk-e2e-prepare-inference
           sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
           node-version: 22
 
@@ -518,7 +518,7 @@ jobs:
 
       - name: Upload branch inference package
         if: steps.inference.outputs.source == 'branch'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # 6.0.0
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: ${{ steps.inference.outputs.artifact-path }}
@@ -544,7 +544,7 @@ jobs:
       NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
     steps:
       - id: checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
@@ -555,7 +555,7 @@ jobs:
             .github/actions/sdk-e2e-prepare-test-suite
           sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
           node-version: 22
 
@@ -598,7 +598,7 @@ jobs:
 
       - name: Upload branch test-suite package
         if: steps.test-suite.outputs.source == 'branch'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # 6.0.0
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: ${{ steps.test-suite.outputs.artifact-path }}
@@ -729,7 +729,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.prepare-inference.outputs.checkout-sha }}
           persist-credentials: false
@@ -739,7 +739,7 @@ jobs:
             .github/scripts
           sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
           node-version: lts/*
 
