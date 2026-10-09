@@ -603,7 +603,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
     return value->as<double>(env);
   };
-  bool rejected = false;
+  const auto mode = args.getMapEntry(0, "mode");
+  workload.upscaleOnly = mode == "upscale";
+  bool rejected = !mode.empty() && mode != "diffusion" && mode != "upscale";
   auto count =
       [&](const char* name, double lo, double hi) -> std::optional<int> {
     auto value = number(name);
@@ -627,6 +629,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   }
   if (auto frames = count("videoFrames", 1, kMaxFrames)) {
     workload.videoFrames = *frames;
+  }
+  if (auto repeats = count("upscaleRepeats", 1, 64)) {
+    workload.upscaleRepeats = *repeats;
   }
   if (request.has_value()) {
     if (auto tiling =

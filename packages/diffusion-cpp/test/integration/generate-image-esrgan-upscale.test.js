@@ -636,11 +636,8 @@ test(
         upscalerImages[0]
       )
 
-      const [modelResponse2, upscalerResponse2] = await Promise.all([
-        model.run(LONG_PARAMS),
-        upscaler.upscale(TINY_PNG_16X16, { repeats: 3 })
-      ])
-      const modelImages2Promise = collectImages(modelResponse2)
+      const modelImages2Promise = model.run(LONG_PARAMS).then(collectImages)
+      const upscalerResponse2 = await upscaler.upscale(TINY_PNG_16X16, { repeats: 3 })
       const upscalerImages2 = []
       const upscalerChain = upscalerResponse2
         .onUpdate((data) => {

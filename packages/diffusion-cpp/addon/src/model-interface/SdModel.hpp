@@ -95,6 +95,8 @@ public:
     int vaeTileSizeX = 512;
     int vaeTileSizeY = 512;
     float vaeTileOverlap = 0.5F;
+    bool upscaleOnly = false;
+    int upscaleRepeats = 1;
   };
 
   struct FitOutcome {
