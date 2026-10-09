@@ -6001,31 +6001,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:331e18e3ada91e8de3caab9b62b899ffac722814188c8f80dfd5507a21776902",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-hyperdrive/src/HyperdriveProgressTracker.js",
-        "symbol": "HyperdriveProgressTracker > _monitorDownloadProgress#1"
-      },
-      "summary": "HyperdriveProgressTracker > _monitorDownloadProgress#1 in packages/dl-hyperdrive/src/HyperdriveProgressTracker.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/dl-hyperdrive/src/HyperdriveProgressTracker.js",
-        "line": 224,
-        "column": 3
-      },
-      "measurement": {
-        "value": 52,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:33356e2b99a19ec97abb9223b59c229d476de6c16cc5cdbfd0b4b12ca98024ad",
       "detector": "structure",
       "rule": "function-lines",
@@ -9467,31 +9442,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:4fc84332e477dcbfbd5d8921c6e1a368b8e941583a0f618fa1583346cafe8355",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-filesystem/test/helpers/filesystem.js",
-        "symbol": "createRealisticTestData#1"
-      },
-      "summary": "createRealisticTestData#1 in packages/dl-filesystem/test/helpers/filesystem.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/dl-filesystem/test/helpers/filesystem.js",
-        "line": 19,
-        "column": 1
-      },
-      "measurement": {
-        "value": 140,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:50616eba7a12644de52c43e99de05cb01c0cd5ad56adfffb802abe1d9f327554",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -10176,31 +10126,6 @@
       "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
       "primaryLocation": {
         "path": "packages/inference/src/api/index.ts"
-      }
-    },
-    {
-      "fingerprint": "quality-v1:58cdeccc1a2abe97deec28120311edb68ef32d223bb0b5afbb90feeca69dfc8f",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-hyperdrive/src/HyperdriveProgressTracker.js",
-        "symbol": "HyperdriveProgressTracker > _saveFileToDisk#1 > <anonymous>#1"
-      },
-      "summary": "HyperdriveProgressTracker > _saveFileToDisk#1 > <anonymous>#1 in packages/dl-hyperdrive/src/HyperdriveProgressTracker.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/dl-hyperdrive/src/HyperdriveProgressTracker.js",
-        "line": 102,
-        "column": 25
-      },
-      "measurement": {
-        "value": 51,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -13215,31 +13140,6 @@
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
-      }
-    },
-    {
-      "fingerprint": "quality-v1:701275cccb889936f64d68af626eaf29f5618a44bd066600fe980db52f9f6a8d",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-filesystem/test/helpers/filesystem.js",
-        "symbol": "createRealisticTestData#1"
-      },
-      "summary": "createRealisticTestData#1 in packages/dl-filesystem/test/helpers/filesystem.js exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/dl-filesystem/test/helpers/filesystem.js",
-        "line": 19,
-        "column": 1
-      },
-      "measurement": {
-        "value": 24,
-        "unit": "branches",
-        "advisoryThreshold": 20,
-        "highThreshold": 35
       }
     },
     {
@@ -17260,31 +17160,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:936ef9be43201021d87334ef179285d9ead352b7e7d9124ca9759f3a8a860832",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "high",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-hyperdrive/src/HyperdriveProgressTracker.js",
-        "symbol": "HyperdriveProgressTracker > _saveFileToDisk#1"
-      },
-      "summary": "HyperdriveProgressTracker > _saveFileToDisk#1 in packages/dl-hyperdrive/src/HyperdriveProgressTracker.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/dl-hyperdrive/src/HyperdriveProgressTracker.js",
-        "line": 53,
-        "column": 3
-      },
-      "measurement": {
-        "value": 124,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:93efe5da2ff64c2215567d711308fbad73eb56bf8732fc198a6f998855d95629",
       "detector": "structure",
       "rule": "function-lines",
@@ -20583,31 +20458,6 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
-      }
-    },
-    {
-      "fingerprint": "quality-v1:b1cde7a020baf773ef89e96f826b374b31de3755eb78d571e6d16ddd1e727a3d",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-hyperdrive/index.js",
-        "symbol": "HyperDriveDL > download#1"
-      },
-      "summary": "HyperDriveDL > download#1 in packages/dl-hyperdrive/index.js exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/dl-hyperdrive/index.js",
-        "line": 308,
-        "column": 3
-      },
-      "measurement": {
-        "value": 21,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {
@@ -26508,31 +26358,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:e84ad26e1c97c9f5a6adf1d75a3a8742a58f55640cb551c49f548292d274d4dd",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-hyperdrive/index.js",
-        "symbol": "HyperDriveDL > _open#1"
-      },
-      "summary": "HyperDriveDL > _open#1 in packages/dl-hyperdrive/index.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/dl-hyperdrive/index.js",
-        "line": 73,
-        "column": 3
-      },
-      "measurement": {
-        "value": 75,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:e8fd8fedf3435ddec4392a33ea475c63ccda693503bc4965beb6b9642c60ab7c",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -27686,31 +27511,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:f1144eaeb89d480440513c4d363d872ae5fe51b6c46fb70e4a0e63a76f0d674f",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/dl-hyperdrive/index.js",
-        "symbol": "HyperDriveDL > download#1"
-      },
-      "summary": "HyperDriveDL > download#1 in packages/dl-hyperdrive/index.js exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/dl-hyperdrive/index.js",
-        "line": 308,
-        "column": 3
-      },
-      "measurement": {
-        "value": 73,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
       "fingerprint": "quality-v1:f11b2de3c617d926be74e0c8dfce6af66b0e1997ef127533015b7310edf7d630",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -28446,30 +28246,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:f5f777a96cf428992a7a7b60591a8c1be71eb838f1521a68ec042e868c885bf4",
-      "detector": "structure",
-      "rule": "file-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "file",
-        "path": "packages/dl-hyperdrive/index.js"
-      },
-      "summary": "packages/dl-hyperdrive/index.js exceeds the file-lines threshold",
-      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
-      "primaryLocation": {
-        "path": "packages/dl-hyperdrive/index.js",
-        "line": 403,
-        "column": 1
-      },
-      "measurement": {
-        "value": 361,
-        "unit": "code lines",
-        "advisoryThreshold": 300,
-        "highThreshold": 500
       }
     },
     {
