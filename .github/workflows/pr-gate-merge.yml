@@ -269,6 +269,72 @@ jobs:
           KIND: cpp-tests
         run: node .github/scripts/prebuild-status/verify.mjs
 
+  # Detects whether a Kotlin-relevant path changed. Kept separate from the addon
+  # `changes` job so this non-addon filter key never leaks into that job's
+  # package list (it must not drive sanity-checks or a prebuild expectation).
+  # Paths mirror pr-checks-sdk-kotlin.yml's own trigger.
+  sdk-kotlin-changes:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.filter.outputs.sdk-kotlin }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        id: filter
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            sdk-kotlin:
+              - "packages/sdk-kotlin/**"
+              - "packages/inference/package.json"
+              - "packages/inference/src/schemas/**"
+              - "packages/sdk/src/worker/**"
+              - "packages/sdk/e2e/conformance/**"
+              - "packages/sdk/contract/**"
+              - "packages/sdk/package.json"
+              - ".github/workflows/pr-checks-sdk-kotlin.yml"
+              - ".github/workflows/publish-sdk-kotlin.yml"
+              - ".github/workflows/on-pr-sdk-kotlin-e2e.yml"
+
+  # Verifies the Kotlin SDK checks without executing PR code here. The
+  # non-privileged pr-checks-sdk-kotlin.yml (pull_request) runs the build and
+  # posts a qvac/sdk-kotlin commit status on the PR head; this job only reads it,
+  # binds it to that workflow's run, and trusts it only when the run was
+  # triggered at/after this PR event. Keeping the build out of this
+  # pull_request_target context is what avoids the cache-poisoning exposure.
+  # Expected only when a Kotlin-relevant path changed (CHANGED_PACKAGES=["kotlin"]).
+  verify-sdk-kotlin:
+    needs: [authorize, sdk-kotlin-changes, fork-approval]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 190
+    permissions:
+      contents: read
+      statuses: read
+      actions: read
+    steps:
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify sdk-kotlin status on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED_PACKAGES: ${{ needs.sdk-kotlin-changes.outputs.changed == 'true' && '["kotlin"]' || '[]' }}
+          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+          KIND: sdk-kotlin
+        run: node .github/scripts/prebuild-status/verify.mjs
+
   # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
   # pre-filter: the called workflow self-detects SDK pod changes and is a fast
   # no-op when none changed, so this stays graceful for addon-only / non-SDK PRs.
@@ -290,10 +356,13 @@ jobs:
         verify-prebuilds,
         verify-cpp-tests,
         sdk-pod-checks,
+        sdk-kotlin-changes,
+        verify-sdk-kotlin,
       ]
     if: |
       always() && !cancelled() &&
-      (needs.changes.result == 'success' || needs.changes.result == 'skipped')
+      (needs.changes.result == 'success' || needs.changes.result == 'skipped') &&
+      (needs.sdk-kotlin-changes.result == 'success' || needs.sdk-kotlin-changes.result == 'skipped')
     permissions:
       contents: read
       packages: read
@@ -302,10 +371,11 @@ jobs:
       # A skipped gated job maps to success ONLY when the PR was actually
       # authorized. Without this, an unapproved fork (fork-approval failed,
       # authorize skipped, or authorize returned allowed=false) would skip
-      # sanity-checks / verify-prebuilds / verify-cpp-tests / sdk-pod-checks and their
+      # sanity-checks / verify-prebuilds / verify-cpp-tests / sdk-pod-checks /
+      # verify-sdk-kotlin and their
       # skipped=success would green the required check. Require the full
       # authorization chain up front so those skips fail closed instead.
       sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
       build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
-      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
+      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.verify-sdk-kotlin.result == 'success' || needs.verify-sdk-kotlin.result == 'skipped') }}
       cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}

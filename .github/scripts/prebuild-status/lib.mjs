@@ -76,6 +76,13 @@ export function expectedCppTests(changedPackages, keys = CPP_TEST_KEYS) {
   return expectedPrebuilds(changedPackages, keys)
 }
 
+// The sdk-kotlin gate is a single logical "package" named 'kotlin'; it is
+// expected only when the merge guard saw a Kotlin-relevant change (it passes
+// CHANGED_PACKAGES=["kotlin"] then, [] otherwise).
+export function expectedSdkKotlin(changedPackages) {
+  return expectedPrebuilds(changedPackages, ['kotlin'])
+}
+
 // `gh api --paginate --slurp` returns one array per page wrapped in an outer
 // array; flatten a single level so a context that appears on more than one page
 // is considered together. Tolerates an already-flat array of status objects.
@@ -108,6 +115,11 @@ export function selectNewestBotStatus(statuses, context) {
 // on-pr-nx is the producer for every consolidated package.
 export const NX_PRODUCER = '.github/workflows/on-pr-nx.yml'
 
+// Producer for the single sdk-kotlin merge-gate status (KIND 'sdk-kotlin').
+// Bound explicitly (not via the addon producer map) so only this workflow's own
+// run can satisfy the gate.
+export const SDK_KOTLIN_PRODUCER = '.github/workflows/pr-checks-sdk-kotlin.yml'
+
 // These three are carved out of on-pr-nx and keep their own orchestrators.
 // Per-package, not a flat allowlist: on-pr-vla.yml must not be able to post for
 // classification-ggml. Keys use the PREBUILD_KEYS spelling, so `vla`.
@@ -117,10 +129,18 @@ export const CARVED_OUT_PRODUCERS = {
   vla: '.github/workflows/on-pr-vla.yml',
 }
 
+// The producer workflow a package's status must come from. Addons use on-pr-nx
+// (or a carved-out orchestrator); a kind with a single fixed producer passes it
+// explicitly via `producerPath`, bypassing the per-package map.
+function producerFor(pkg, producerPath) {
+  if (producerPath) return producerPath
+  return CARVED_OUT_PRODUCERS[pkg] ?? NX_PRODUCER
+}
+
 // Trust only a fresh run of this package's own producer: rejects superseded
 // pre-label runs, cross-package forgery, and any other workflow's co-post.
-export function isRunFresh(run, pkg, prUpdatedEpoch) {
-  const expected = CARVED_OUT_PRODUCERS[pkg] ?? NX_PRODUCER
+export function isRunFresh(run, pkg, prUpdatedEpoch, producerPath) {
+  const expected = producerFor(pkg, producerPath)
   if (!run || run.path !== expected) return false
   const createdMs = Date.parse(run.created_at)
   if (Number.isNaN(createdMs)) return false
@@ -148,6 +168,7 @@ export function evaluatePackage(
   prUpdatedEpoch,
   lookupRun,
   contextPrefix = 'qvac/prebuild',
+  producerPath,
 ) {
   // Trusted+fresh first, then newest: newest-first would let another workflow's
   // co-post mask the real producer.
@@ -163,7 +184,7 @@ export function evaluatePackage(
     // pass on a 502. Go back to pending instead and let verify.mjs retry to its
     // deadline, which is what turns persistent failure into a hard fail.
     if (run === LOOKUP_FAILED) return 'pending'
-    if (isRunFresh(run, pkg, prUpdatedEpoch)) trusted.push(s)
+    if (isRunFresh(run, pkg, prUpdatedEpoch, producerPath)) trusted.push(s)
   }
   if (trusted.length === 0) return 'pending'
   const newest = trusted.reduce((best, s) =>
@@ -183,6 +204,7 @@ export function evaluatePackage(
 export async function pollStatuses({
   expected,
   contextPrefix,
+  producerPath,
   prUpdatedEpoch,
   fetchStatuses,
   lookupRun,
@@ -221,6 +243,7 @@ export async function pollStatuses({
         prUpdatedEpoch,
         lookupRun,
         contextPrefix,
+        producerPath,
       )
       const context = `${contextPrefix}-${pkg}`
       if (outcome === 'failed') failed.push(context)
@@ -265,5 +288,20 @@ export async function pollCppTests(opts) {
     fetchFailTitle: 'C++ test verification failed',
     successMessage: 'All required C++ test statuses succeeded (fresh vs this PR event).',
     waitingPrefix: 'Waiting on C++ test status(es)',
+  })
+}
+
+// Single context qvac/sdk-kotlin (contextPrefix 'qvac/sdk' + pkg 'kotlin'),
+// bound to the pr-checks-sdk-kotlin.yml run that posted it.
+export async function pollSdkKotlin(opts) {
+  return pollStatuses({
+    ...opts,
+    contextPrefix: 'qvac/sdk',
+    producerPath: SDK_KOTLIN_PRODUCER,
+    failTitle: 'SDK Kotlin checks have not returned success',
+    timeoutTitle: 'SDK Kotlin verification timed out',
+    fetchFailTitle: 'SDK Kotlin verification failed',
+    successMessage: 'SDK Kotlin status succeeded (fresh vs this PR event).',
+    waitingPrefix: 'Waiting on SDK Kotlin status',
   })
 }
