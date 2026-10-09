@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS, MOSS,
+  MOSS-TTSD, MOSS-SoundEffect and MOSS-Speech run one stage each on a Core ML
+  sidecar staged next to the GGUF (see the README's Core ML sidecars on
+  Apple); without one nothing changes. CosyVoice3 bf16 flow weights loaded on
+  an ARM CPU are expanded to f32, which avoids a slow scalar path at twice the
+  memory for those weights, and Audio8 with GPU offload on Adreno (OpenCL) no
+  longer fails its strided key-cache copies.
 - Raise the `speech-cpp` floor to `2026-10-07`. CosyVoice3 with GPU offload on
   Android (OpenCL on Adreno) no longer aborts in the language model's first
   step, which the `2026-10-06` `ggml-speech` floor would otherwise cause. Other
