@@ -107,7 +107,7 @@ jobs:
         working-directory: .
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
           submodules: recursive
@@ -117,7 +117,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@673ea9417d34758d16214eb60be64fe237915c4c
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
@@ -138,7 +138,7 @@ jobs:
         uses: ./.github/actions/setup-cuda
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@673ea9417d34758d16214eb60be64fe237915c4c
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -152,7 +152,7 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
           node-version: lts/*
 
@@ -205,7 +205,7 @@ jobs:
       # if the artifact has no linux-x64/ instead of silently overlaying nothing.
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Overlay PR @qvac/fabric prebuilds
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@f74adc06b42f6dedea3cf893586ab902d8574839
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
