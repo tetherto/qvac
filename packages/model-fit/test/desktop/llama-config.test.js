@@ -40,7 +40,13 @@ function runRunner(input) {
   })
 }
 
-function runDirectBinding(config, loadKind = 'completion', mode = 'sync') {
+// A cold darwin spawn compiles the embedded Metal library before the fitter
+// can answer. Two of those overlapping on the paravirtual GPU do not finish,
+// and Brittle's 30s default aborts the process before either child reports
+// stderr. Same budget as the v1 native runner in process.test.js.
+const NATIVE_FIT_DEADLINE_MS = 120_000
+
+function runDirectBinding(config, loadKind = 'completion', mode = 'sync', deadlineMs) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
@@ -53,6 +59,30 @@ function runDirectBinding(config, loadKind = 'completion', mode = 'sync') {
     )
     let stdout = ''
     let stderr = ''
+    let settled = false
+    const deadline =
+      deadlineMs === undefined
+        ? null
+        : setTimeout(() => {
+            if (settled) return
+            settled = true
+            child.kill('SIGKILL')
+            reject(
+              new Error(
+                `direct binding did not exit within ${deadlineMs}ms; ` +
+                  `stdout=${JSON.stringify(stdout)} stderr=${JSON.stringify(stderr)}`
+              )
+            )
+          }, deadlineMs)
+
+    function finish(error, result) {
+      if (settled) return
+      settled = true
+      if (deadline !== null) clearTimeout(deadline)
+      if (error !== undefined) reject(error)
+      else resolve(result)
+    }
+
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
     child.stdout.on('data', (chunk) => {
@@ -61,8 +91,8 @@ function runDirectBinding(config, loadKind = 'completion', mode = 'sync') {
     child.stderr.on('data', (chunk) => {
       stderr += chunk
     })
-    child.on('error', reject)
-    child.on('close', (code, signal) => resolve({ code, signal, stdout, stderr }))
+    child.on('error', (error) => finish(error))
+    child.on('close', (code, signal) => finish(undefined, { code, signal, stdout, stderr }))
   })
 }
 
@@ -509,6 +539,9 @@ test(
   'direct binding async entry point settles like the synchronous one',
   { skip: !HAS_NATIVE_PREBUILD },
   async (t) => {
+    // The reject-before-backend call, then one native fit at a time.
+    t.timeout(NATIVE_FIT_DEADLINE_MS * 2 + 30_000)
+
     const invalid = await runDirectBinding({ ...config, unknown: true }, 'completion', 'async')
     t.is(invalid.signal, null)
     t.is(invalid.code, 0)
@@ -516,13 +549,17 @@ test(
     t.is(rejected.ok, false)
     t.ok(rejected.message.includes('unknown'))
 
-    // Missing model: the cheapest path to a full verdict.
-    const [sync, async] = await Promise.all([
-      runDirectBinding(config),
-      runDirectBinding(config, 'completion', 'async')
-    ])
+    // Missing model: the cheapest path to a full verdict. Sequential, because
+    // the check compares verdicts and does not need the two inits to overlap.
+    const sync = await runDirectBinding(config, 'completion', 'sync', NATIVE_FIT_DEADLINE_MS)
+    const asyncOutcome = await runDirectBinding(
+      config,
+      'completion',
+      'async',
+      NATIVE_FIT_DEADLINE_MS
+    )
     const syncResult = JSON.parse(sync.stdout)
-    const asyncResult = JSON.parse(async.stdout)
+    const asyncResult = JSON.parse(asyncOutcome.stdout)
     t.is(syncResult.ok, true)
     t.is(asyncResult.ok, true)
     t.is(asyncResult.result.status, syncResult.result.status)

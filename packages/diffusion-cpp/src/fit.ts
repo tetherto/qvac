@@ -80,7 +80,11 @@ interface FitBinding {
 export function assessFit(
   request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest
 ): DiffusionFitResult {
+  if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {
+    throw new TypeError(`unsupported fit mode: ${String(request.mode)}`)
+  }
   const standalone = request.mode === 'upscale'
+  if (standalone) assertAbsolute('esrgan', request.files.esrgan)
   const files = standalone
     ? { model: request.files.esrgan, esrgan: request.files.esrgan }
     : request.files

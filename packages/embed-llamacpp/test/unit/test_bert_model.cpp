@@ -1365,6 +1365,31 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeBothKeysRejects) {
       qvac_errors::StatusError);
 }
 
+// The split path does not apply `backend`, so the pair must fail the load
+// rather than run on another backend. The check runs before the model is read,
+// so no model file is needed.
+TEST_F(BertModelTest, BackendWithSplitModeRejected) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "gpu";
+  config["backend"] = "cuda";
+  config["split-mode"] = "layer";
+
+  // Mobile rejects any split-mode earlier with its own message.
+#if defined(__ANDROID__) ||                                                    \
+    (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+  const std::string expected = "not supported on mobile";
+#else
+  const std::string expected = "'backend' cannot be combined with 'split-mode'";
+#endif
+  try {
+    setupParams(getInvalidModelPath(), config);
+    FAIL() << "'backend' with 'split-mode' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(std::string(error.what()).find(expected), std::string::npos)
+        << error.what();
+  }
+}
+
 TEST_F(BertModelTest, DeprecatedNoMmapAliasLoadsWithoutMmap) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

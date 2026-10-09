@@ -22,7 +22,7 @@ function tempFile(t, name, contents) {
   return filePath
 }
 
-function esrganHeader(t) {
+function esrganHeader(t, scale = 4) {
   const header = {}
   let offset = 0
   function convolution(name, input, output) {
@@ -41,7 +41,12 @@ function esrganHeader(t) {
       convolution(`body.0.rdb${block}.conv${layer}`, 64 + (layer - 1) * 32, layer === 5 ? 64 : 32)
     }
   }
-  for (const name of ['conv_body', 'conv_up1', 'conv_up2', 'conv_hr']) {
+  for (const name of [
+    'conv_body',
+    ...(scale >= 2 ? ['conv_up1'] : []),
+    ...(scale === 4 ? ['conv_up2'] : []),
+    'conv_hr'
+  ]) {
     convolution(name, 64, 64)
   }
   convolution('conv_last', 64, 3)
@@ -68,8 +73,19 @@ test('standalone ESRGAN projects a CPU load from headers without weights', (t) =
 test('standalone ESRGAN validates paths and workload numbers', async (t) => {
   await t.exception.all(
     () => assessFit({ mode: 'upscale', files: { esrgan: 'relative.safetensors' } }),
-    TypeError
+    {
+      name: 'TypeError',
+      message: 'files.esrgan must be an absolute path (got: relative.safetensors)'
+    }
   )
+  await t.exception.all(() => assessFit({ mode: 'upscale', files: {} }), {
+    name: 'TypeError',
+    message: 'files.esrgan must be an absolute path string'
+  })
+  await t.exception.all(() => assessFit({ mode: 'esrgan', files: {} }), {
+    name: 'TypeError',
+    message: 'unsupported fit mode: esrgan'
+  })
   const esrgan = esrganHeader(t)
   for (const workload of [{ upscaleRepeats: 0 }, { upscaleRepeats: 1.5 }, { width: Infinity }]) {
     const fit = assessFit({ mode: 'upscale', files: { esrgan }, workload })
@@ -88,7 +104,7 @@ test('standalone ESRGAN sizes full-image RAM even when tiles stay small', (t) =>
   const request = {
     mode: 'upscale',
     files: { esrgan },
-    config: { device: 'cpu', upscaler_tile_size: 16 }
+    config: { device: 'cpu', upscaler_tile_size: 16, max_image_pixels: 268435456 }
   }
   const small = assessFit({ ...request, workload: { width: 128, height: 96 } })
   const large = assessFit({ ...request, workload: { width: 4096, height: 4096 } })
@@ -105,6 +121,33 @@ test('standalone ESRGAN sizes full-image RAM even when tiles stay small', (t) =>
   t.ok(hostMiB(large) >= 4080, 'the full image buffers need 4080 MiB despite small tiles')
   t.ok(hostMiB(repeated) >= 4083, 'repeated scaling includes intermediate and final images')
   t.ok(hostMiB(large) > hostMiB(small))
+})
+
+test('ESRGAN fit enforces the runtime output limits', (t) => {
+  const esrgan = esrganHeader(t)
+  for (const workload of [
+    { width: 1024, height: 1024, upscaleRepeats: 2 },
+    { width: 4097, height: 1 }
+  ]) {
+    const fit = assessFit({ mode: 'upscale', files: { esrgan }, workload })
+    t.is(fit.reason, 'unsupported-config')
+  }
+  const fit = assessFit({
+    mode: 'upscale',
+    files: { esrgan },
+    config: { max_image_pixels: 1000 },
+    workload: { width: 16, height: 16 }
+  })
+  t.is(fit.reason, 'unsupported-config', 'a configured pixel limit also applies to fit')
+  for (const scale of [1, 2, 4]) {
+    const scaled = assessFit({
+      mode: 'upscale',
+      files: { esrgan: esrganHeader(t, scale) },
+      config: { device: 'cpu', max_image_pixels: 1000 },
+      workload: { width: 16, height: 16 }
+    })
+    t.is(scaled.reason, scale === 1 ? 'fits' : 'unsupported-config', `${scale}x checkpoint limits`)
+  }
 })
 
 test('an unreadable model returns an error outcome', (t) => {
@@ -215,6 +258,35 @@ safeTest(
     t.ok(fit.status === 'fits' || fit.status === 'does-not-fit')
     t.ok(fit.report.includes('upscaler'), 'combined measurement includes ESRGAN')
     t.ok(fit.report.includes('host memory'), 'combined measurement includes upscaler image buffers')
+    const tooLarge = assessFit({
+      files: { model, esrgan },
+      workload: { width: 1024, height: 1024, upscaleRepeats: 2 }
+    })
+    t.is(tooLarge.reason, 'unsupported-config', 'combined fit enforces the same output limits')
+  }
+)
+
+safeTest(
+  'video fit ignores the separate ESRGAN image upscaler',
+  { timeout: 600_000, skip: skip || os.platform() === 'darwin' },
+  async (t) => {
+    const files = {
+      model: await ensureModelPath({ modelName: 'wan2.1_t2v_1.3B_fp16.safetensors' }),
+      vae: await ensureModelPath({ modelName: 'wan_2.1_vae.safetensors' }),
+      t5Xxl: await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
+    }
+    for (const videoFrames of [1, 5]) {
+      const request = { files, workload: { width: 256, height: 256, videoFrames, vaeTiling: true } }
+      const base = assessFit(request)
+      t.ok(base.status === 'fits' || base.status === 'does-not-fit', 'valid video projection')
+      const unused = assessFit({
+        ...request,
+        files: { ...files, esrgan: '/missing/unused-esrgan.safetensors' }
+      })
+      t.is(unused.status, base.status)
+      t.is(unused.reason, base.reason)
+      t.is(unused.report, base.report, 'unused image upscaler does not affect video memory')
+    }
   }
 )
 

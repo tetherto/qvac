@@ -599,10 +599,28 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
           config_.device);
 
   sd_fit_result_t result{};
+  const bool useUpscaler =
+      workload.upscaleOnly ||
+      (!config_.esrganPath.empty() && workload.videoFrames <= 1 &&
+       !sd_model_supports_video(
+           config_.modelPath.empty() ? config_.diffusionModelPath.c_str()
+                                     : config_.modelPath.c_str()));
+  if (useUpscaler) {
+    const int scale = sd_upscaler_model_scale(config_.esrganPath.c_str());
+    if (scale > 0 && !qvac_lib_inference_addon_sd::esrganOutputFitsLimits(
+                         workload.width,
+                         workload.height,
+                         scale,
+                         workload.upscaleRepeats,
+                         config_.maxImagePixels)) {
+      outcome.reason = "unsupported-config";
+      return outcome;
+    }
+  }
   try {
     if (workload.upscaleOnly) {
       outcome.status = sd_upscaler_fit_params(&upscaler, &result);
-    } else if (!config_.esrganPath.empty()) {
+    } else if (useUpscaler) {
       outcome.status = sd_fit_params_with_upscaler(
           &ctx.params, &request, &upscaler, &result);
     } else {
