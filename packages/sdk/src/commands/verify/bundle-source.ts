@@ -1,8 +1,8 @@
 import path from 'node:path'
 import type Bundle from 'bare-bundle'
 import { DEFAULT_HOSTS } from '@/commands/bundle/constants'
-import { buildNestedPathIndex } from '@/commands/bundle/manifest'
-import { readBundle } from '@/commands/bundle/read-bundle'
+import { buildNestedPathIndex } from '@/commands/bundle/addons'
+import { bundleRoot, readBundle } from '@/commands/bundle/read-bundle'
 import {
   createLimiter,
   deduplicateAddons,
@@ -76,13 +76,14 @@ export async function collectAddonsFromBundle(
     diagnostics.emptyResolutions = true
   }
 
-  const pathsByPackage = buildNestedPathIndex(resolutions, projectRoot)
+  const root = bundleRoot(main, projectRoot)
+  const pathsByPackage = buildNestedPathIndex(resolutions, root)
   const analysed = analyseLinkedHosts({
     resolutions,
     main,
     imports,
     hosts: hosts ?? [],
-    projectRoot,
+    projectRoot: root,
     pathsByPackage
   })
 
