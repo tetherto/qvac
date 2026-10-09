@@ -4,7 +4,7 @@ import path = require('bare-path')
 
 import type { DiffusionFiles, EsrganFiles, EsrganUpscalerConfig, SdConfig } from './index'
 import type { DiffusionVideoFiles } from './file-paths'
-import { assertFilePaths, toFilePaths } from './file-paths'
+import { assertAbsolute, assertFilePaths, toFilePaths } from './file-paths'
 
 export interface DiffusionFitWorkload {
   /** Token count drives the text-encoder memory; a default stands in when absent. */
@@ -70,7 +70,11 @@ interface FitBinding {
  * throws.
  */
 export function assessFit(request: DiffusionFitRequest | EsrganFitRequest): DiffusionFitResult {
+  if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale') {
+    throw new TypeError(`unsupported fit mode: ${String(request.mode)}`)
+  }
   const standalone = request.mode === 'upscale'
+  if (standalone) assertAbsolute('esrgan', request.files.esrgan)
   const files = standalone
     ? { model: request.files.esrgan, esrgan: request.files.esrgan }
     : request.files
@@ -96,7 +100,7 @@ export function assessFit(request: DiffusionFitRequest | EsrganFitRequest): Diff
 
   return binding.assessFit({
     ...toFilePaths(files),
-    mode: standalone ? 'upscale' : 'diffusion',
+    mode: request.mode ?? 'diffusion',
     config,
     request: request.workload ?? {}
   })
