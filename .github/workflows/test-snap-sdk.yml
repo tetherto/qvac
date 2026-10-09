@@ -1,17 +1,15 @@
-name: QVAC Node Consumer Tests
-# Reusable workflow for the runner-hosted SDK consumers that share one job
-# shape: desktop, electron, and python. Strict Snap needs LXD, snapd and its own
-# model cache, so it runs from test-snap-sdk.yml; both build their legs from the
-# same sdk-e2e-node-* actions.
+name: QVAC Snap Consumer Tests
+# Reusable workflow for the strict-confinement Snap consumer. Snap builds two
+# revisions through LXD, installs one system-wide with snapd, and keeps its
+# models inside the snap's own data directory, so none of that belongs in the
+# job desktop, electron and python share (test-node-sdk.yml). The steps every
+# runner-hosted family shares come from the same sdk-e2e-node-* actions, and
+# the job names and artifacts keep the `snap` family contract the report and
+# rerun machinery reads.
 
 on:
   workflow_call:
     inputs:
-      consumer:
-        description: "Consumer to run (desktop, electron, or python); Snap runs from test-snap-sdk.yml"
-        required: false
-        type: string
-        default: desktop
       working-directory:
         description: "Working directory for tests (consumer/test runner)"
         required: false
@@ -22,7 +20,7 @@ on:
         required: true
         type: string
       platforms:
-        description: 'JSON array of runner labels (e.g., ["qvac-ubuntu2404-x64"] or ["qvac-ubuntu2404-x64-gpu", "qvac-macos26-arm64-gpu"])'
+        description: 'JSON array of Linux runner labels with snapd and LXD (e.g., ["qvac-ubuntu2204-x64-gpu"])'
         required: true
         type: string
       consumer-timeout:
@@ -45,8 +43,8 @@ on:
       rerun-plan:
         description: >-
           JSON {family: {platform: [testId]}} of previously failed tests. When set,
-          each matrix leg replaces `filter` with the list recorded for its own
-          platform. Empty = normal run.
+          each matrix leg replaces `filter` with the list recorded under `snap`
+          for its own platform. Empty = normal run.
         required: false
         type: string
         default: ""
@@ -132,7 +130,7 @@ permissions:
 
 jobs:
   report-start:
-    name: "[${{ inputs.consumer }}] report-start"
+    name: "[snap] report-start"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -146,22 +144,15 @@ jobs:
           sparse-checkout: .github/actions/sdk-e2e-report-start
           sparse-checkout-cone-mode: false
 
-      - name: Derive node platform keys
+      # Snap is Linux-only. A runner label that maps anywhere else is a
+      # misconfigured override, not a platform to report on.
+      - name: Derive Snap platform keys
         id: keys
         shell: node {0}
         env:
-          CONSUMER: ${{ inputs.consumer }}
           PLATFORMS_IN: ${{ inputs.platforms }}
         run: |
           const fs = require('fs');
-          // A Snap leg here would skip the Snap build and install, so a caller
-          // still pointing it at this workflow must turn the run red.
-          if (!['desktop', 'electron', 'python'].includes(process.env.CONSUMER)) {
-            console.log(
-              `::error::Unsupported consumer "${process.env.CONSUMER}". Snap runs from test-snap-sdk.yml.`
-            );
-            process.exit(1);
-          }
           const runners = JSON.parse(process.env.PLATFORMS_IN || '[]');
           const keys = runners.map((r) => {
             const s = String(r).toLowerCase();
@@ -170,6 +161,11 @@ jobs:
             return 'linux';
           });
           const unique = [...new Set(keys)];
+          const foreign = unique.filter((key) => key !== 'linux');
+          if (foreign.length > 0) {
+            console.log(`::error::Snap runs on Linux only; got runners for ${foreign.join(', ')}.`);
+            process.exit(1);
+          }
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `platforms=${JSON.stringify(unique)}\n`);
           console.log(`Derived platform keys: ${JSON.stringify(unique)}`);
 
@@ -177,7 +173,7 @@ jobs:
         id: report
         uses: ./.github/actions/sdk-e2e-report-start
         with:
-          family: ${{ inputs.consumer }}
+          family: snap
           platforms: ${{ steps.keys.outputs.platforms }}
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.rerun-plan != '' && 'rerun of previously failed tests' || inputs.filter }}
@@ -185,8 +181,8 @@ jobs:
           inference-provenance: ${{ inputs.inference-provenance }}
           test-suite-provenance: ${{ inputs.test-suite-provenance }}
 
-  test-node:
-    name: "[${{ inputs.consumer }}] test (${{ matrix.os }})"
+  test-snap:
+    name: "[snap] test (${{ matrix.os }})"
     strategy:
       matrix:
         os: ${{ fromJSON(inputs.platforms) }}
@@ -203,10 +199,10 @@ jobs:
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
-      # The Windows GPU runner is the maintained two-GPU host. The macOS and
-      # Ubuntu GPU runners currently provide one eligible GPU, so multi-GPU
-      # tests must skip there instead of submitting a two-way tensor split.
-      QVAC_HAS_MULTI_GPU: ${{ startsWith(matrix.os, 'qvac-win25-x64-gpu') && '1' || '0' }}
+      # GitHub-hosted runners have no LXD, so snapcraft builds on the host there.
+      QVAC_TEST_SNAP_BUILD_MODE: ${{ startsWith(matrix.os, 'ubuntu-') && 'destructive' || 'lxd' }}
+      # Only the Windows GPU runner has two GPUs; every Snap runner is Linux.
+      QVAC_HAS_MULTI_GPU: "0"
     steps:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -220,11 +216,9 @@ jobs:
           sparse-checkout: |
             ${{ inputs.project-directory }}
             packages/inference
-            ${{ inputs.consumer == 'python' && 'packages/sdk-python' || '' }}
             .github/actions/sdk-e2e-fail-on-failures
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
-            .github/actions/sdk-python-venv
 
       # The shared steps come from the commit this workflow was loaded from, not
       # from the code under test: a PR that predates them, or a dispatch with an
@@ -255,11 +249,11 @@ jobs:
         id: leg
         uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-node-leg
         with:
-          family: ${{ inputs.consumer }}
+          family: snap
           runner-label: ${{ matrix.os }}
           filter: ${{ inputs.filter }}
           rerun-plan: ${{ inputs.rerun-plan }}
-          allowed-families: desktop,electron,python
+          allowed-platforms: linux
 
       - name: Install and build
         uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-node-prepare
@@ -278,90 +272,185 @@ jobs:
           mqtt-client-cert: ${{ secrets.MQTT_CLIENT_CERT }}
           mqtt-client-key: ${{ secrets.MQTT_CLIENT_KEY }}
 
-      # The Python client runs from source; the action carries the reason the
-      # runner's own Python is used rather than actions/setup-python.
-      - name: Set up the Python client
-        if: inputs.consumer == 'python'
-        uses: ./.github/actions/sdk-python-venv
-
-      # Python too: the external consumer's config points its client at this
-      # worker entry, so both legs drive the same binary and a difference in a
-      # result can only have come from the client.
-      - name: Bundle SDK worker (custom plugins)
-        if: inputs.consumer == 'desktop' || inputs.consumer == 'python'
+      # The snap packages the consumer directory; registry tokens must not
+      # ride along into the artifact.
+      - name: Remove consumer package credentials
         working-directory: ${{ inputs.working-directory }}
-        run: npm run bundle:sdk
-
-      - name: Configure SDK cache directory
         shell: node {0}
         run: |
           const fs = require('fs');
-          const path = require('path');
-          const cacheDir = path.resolve('${{ inputs.working-directory }}', '.qvac-cache');
-          fs.mkdirSync(cacheDir, { recursive: true });
-          const config = { cacheDirectory: cacheDir };
-          const configPath = path.resolve('${{ inputs.working-directory }}', 'qvac.config.ci.json');
-          fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-          fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_CONFIG_PATH=${configPath}\n`);
-          console.log(`SDK cache dir: ${cacheDir}`);
-          console.log(`Config written to: ${configPath}`);
+          fs.rmSync('.npmrc', { force: true });
 
-      - name: Restore models cache
-        id: models-cache
-        if: inputs.cache-models != false
+      - name: Verify Snap tooling
+        run: |
+          if ! command -v snapcraft; then
+            sudo snap install snapcraft --classic
+          fi
+          if [ "$QVAC_TEST_SNAP_BUILD_MODE" = "lxd" ]; then
+            if ! command -v lxc; then
+              echo "::error::LXD is required for non-destructive Snap builds on this runner"
+              exit 1
+            fi
+            lxc info
+          fi
+          snap version
+          snapcraft --version
+
+      # Preflight: snapcraft's gpu-2404/graphics-core22 part clones github.com
+      # (IPv4-only) from inside the LXD build instance. If the runner drops IPv4
+      # forwarding off the lxdbr0 bridge (Docker's `iptables -P FORWARD DROP` with
+      # no ACCEPT for lxdbr0), that clone hangs ~2 min and dies with exit 128 — and
+      # IPv6-capable mirrors (snap store, archive) keep working, hiding the cause.
+      # Reproduce the exact path cheaply and fail in ~15s with an actionable message.
+      # LXD-only (self-hosted); the github-hosted `destructive` build has no LXD.
+      - name: Preflight — LXD instance IPv4 egress to GitHub
+        if: env.QVAC_TEST_SNAP_BUILD_MODE == 'lxd'
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe="qvac-egress-preflight-$$"
+          cleanup() { lxc delete -f "$probe" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          # Don't swallow launch output: under `set -e` a failed launch would exit
+          # with an empty log and never reach the actionable `::error::` below.
+          lxc launch ubuntu:22.04 "$probe"
+          for _ in $(seq 1 20); do
+            if lxc exec "$probe" -- getent hosts github.com >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          if lxc exec "$probe" -- curl -4 -fsS --max-time 15 -o /dev/null https://github.com; then
+            echo "IPv4 egress from an LXD instance to github.com is OK."
+          else
+            echo "::error::LXD build instances cannot reach github.com over IPv4, so snapcraft's gpu-2404/graphics-core22 part will hang cloning it. This is almost always Docker's 'iptables -P FORWARD DROP' with no ACCEPT for the lxdbr0 bridge. Fix on the runner: ensure lxd-docker-forward.service is enabled (qvac-devops ansible: --tags snap-fw) so DOCKER-USER accepts lxdbr0 in+out."
+            exit 1
+          fi
+
+      - name: Build first Snap revision
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          QVAC_TEST_SNAP_BUILD_ID: first
+          TMPDIR: ${{ runner.temp }}
+        run: npx qvac-test build:consumer:snap --config=. --skip-install
+
+      - name: Preserve first Snap revision
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          fs.copyFileSync('snap/dist/qvac-sdk-e2e.snap', 'snap/dist/qvac-sdk-e2e-first.snap');
+
+      - name: Build second Snap revision
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          QVAC_TEST_SNAP_BUILD_ID: second
+          TMPDIR: ${{ runner.temp }}
+        run: npx qvac-test build:consumer:snap --config=. --skip-install
+
+      - name: Verify Snap refresh persistence
+        working-directory: ${{ inputs.working-directory }}
+        run: >-
+          npm run test:snap:refresh --
+          --first snap/dist/qvac-sdk-e2e-first.snap
+          --second snap/dist/qvac-sdk-e2e.snap
+
+      - name: Show Snap confinement denials
+        if: failure()
+        continue-on-error: true
+        run: >-
+          sudo journalctl --dmesg --no-pager
+          --since "10 minutes ago"
+          --grep 'apparmor="DENIED"|audit'
+
+      - name: Install Snap revision for e2e
+        working-directory: ${{ inputs.working-directory }}
+        run: sudo snap install --dangerous snap/dist/qvac-sdk-e2e.snap
+
+      - name: Connect Snap GPU interfaces
+        run: |
+          sudo snap connect qvac-sdk-e2e:opengl
+          sudo snap connect qvac-sdk-e2e:hardware-observe
+          sudo snap connect qvac-sdk-e2e:graphics-core22 mesa-core22:graphics-core22
+          snap list mesa-core22
+          snap connections qvac-sdk-e2e
+
+      # A run of only snap-storage-* tests needs no model, so it skips the
+      # multi-gigabyte cache restore and bootstrap.
+      - name: Determine Snap model requirements
+        id: snap-model-requirements
+        shell: node {0}
+        env:
+          TEST_FILTER: ${{ steps.leg.outputs.filter }}
+        run: |
+          const fs = require('fs');
+          const filters = (process.env.TEST_FILTER || '')
+            .split(',')
+            .map((filter) => filter.trim())
+            .filter(Boolean);
+          const requiresModels =
+            filters.length === 0 || filters.some((filter) => !filter.startsWith('snap-storage'));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `required=${requiresModels}\n`);
+
+      - name: Restore Snap models cache
+        id: snap-models-cache
+        if: steps.snap-model-requirements.outputs.required == 'true' && inputs.cache-models != false
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
-          enableCrossOsArchive: true
+          path: ~/snap/qvac-sdk-e2e/common/.qvac/models
+          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
 
-      # The Python leg resolves the same resource table against the same
-      # registry, so it bootstraps and caches as `desktop` rather than paying
-      # for a second copy of every model.
-      - name: Bootstrap (download models)
-        if: steps.models-cache.outputs.cache-hit != 'true'
+      - name: Bootstrap models inside Snap
+        if: steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.working-directory }}
-        run: npx qvac-test run:bootstrap:${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }} --config=.
+        run: >-
+          npx qvac-test run:bootstrap:snap
+          --config=.
+          --skip-build
+          --skip-snap-install
 
-      # Save right after bootstrap. On parallel runners, first to finish reserves the key;
-      # others get a non-fatal "unable to reserve" warning which is expected.
-      - name: Save models cache
-        if: steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
+      - name: Save Snap models cache
+        if: steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
-          enableCrossOsArchive: true
+          path: ~/snap/qvac-sdk-e2e/common/.qvac/models
+          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
 
-      - name: Build Electron package
-        if: inputs.consumer == 'electron'
-        working-directory: ${{ inputs.working-directory }}
-        run: npx qvac-test build:consumer:electron --config=. --skip-install
-
-      # A non-JS client is not its own consumer: the framework drives it over
-      # the stdin/stdout bridge, so the command is the external consumer and
-      # the client is named in the config.
       - name: Run tests
         timeout-minutes: 60
         uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-node-run
         with:
-          family: ${{ inputs.consumer }}
+          family: snap
           runner-label: ${{ matrix.os }}
           platform: ${{ steps.leg.outputs.platform }}
           working-directory: ${{ inputs.working-directory }}
-          consumer-command: ${{ inputs.consumer == 'python' && 'run:consumer:external' || format('run:consumer:{0}', inputs.consumer) }}
-          consumer-args: ${{ inputs.consumer == 'python' && '--name=python' || inputs.consumer == 'electron' && '--skip-build' || '' }}
+          consumer-command: run:consumer:snap
+          consumer-args: --skip-build --skip-snap-install
           consumer-timeout: ${{ inputs.consumer-timeout }}
           filter: ${{ steps.leg.outputs.filter }}
           suite: ${{ inputs.suite }}
           exclude-suite: ${{ inputs.exclude-suite }}
           include: ${{ inputs.include }}
 
+      # Snap is Linux-only, so the artifact name does not wait on the leg.
+      - name: Upload Snap artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: snap-artifacts-linux
+          path: ${{ inputs.working-directory }}/snap/dist/*.snap
+          retention-days: 7
+
+      # Removing the snap stops any app still running inside it, so the run's
+      # confined processes are gone before its results are collected.
+      - name: Remove Snap consumer
+        if: always()
+        continue-on-error: true
+        run: sudo snap remove --purge qvac-sdk-e2e
+
       - name: Collect results
         if: always() && steps.leg.outputs.platform != ''
         uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-node-results
         with:
-          family: ${{ inputs.consumer }}
+          family: snap
           platform: ${{ steps.leg.outputs.platform }}
           working-directory: ${{ inputs.working-directory }}
 
@@ -382,8 +471,8 @@ jobs:
           }
 
   report-finalize:
-    name: "[${{ inputs.consumer }}] report-finalize"
-    needs: [report-start, test-node]
+    name: "[snap] report-finalize"
+    needs: [report-start, test-snap]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -398,7 +487,7 @@ jobs:
 
       - uses: ./.github/actions/sdk-e2e-report-finalize
         with:
-          family: ${{ inputs.consumer }}
+          family: snap
           platforms: ${{ needs.report-start.outputs.platform-keys }}
           comment-ids: ${{ needs.report-start.outputs.comment-ids }}
           suite: ${{ inputs.suite }}

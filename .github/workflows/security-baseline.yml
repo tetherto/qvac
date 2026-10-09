@@ -133,6 +133,15 @@ jobs:
           node --test
           .github/scripts/test/sdk-e2e-rerun.test.mjs
 
+      # Snap runs from its own workflow and every runner-hosted family builds
+      # its job from the shared sdk-e2e-node-* actions. This pins that split:
+      # no Snap step back in the shared job, every local action checked out,
+      # and job names the runId lookup can find.
+      - name: Run SDK e2e workflow layout tests
+        run: >-
+          node --test
+          .github/scripts/test/sdk-e2e-node-workflows.test.mjs
+
       # The prepare-inference action is checked out from the PR head in
       # test-sdk.yml, but not every PR runs e2e. This suite pins the win32
       # `file:C:/…` tarball spec without needing a Windows runner.
