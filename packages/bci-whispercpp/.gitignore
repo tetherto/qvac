@@ -12,6 +12,7 @@ vcpkg/ports/
 test/fixtures/*.bin
 test/mobile/testAssets/*.bin
 test/mobile/testAssets/manifest.json
+test/mobile/testAssets/*.fit.gguf
 test/unit/all.js
 test/integration/all.js
 
