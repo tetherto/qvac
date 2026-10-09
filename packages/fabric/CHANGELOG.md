@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.20.2] - 2026-10-08
+
+Supersedes 0.20.1, whose publish stopped at `@qvac/fabric-linux-arm64` (npm
+`413 Payload Too Large`). `@qvac/fabric` 0.20.1 was never published, so no
+release uses the platform packages that 0.20.1 did publish.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11018.0.0#1` -> `11018.0.0#2`, which narrows
+  the CUDA architectures so every platform package fits npm's size limit. Same
+  fabric source (`v11018.0.0`); no API change for this package.
+  - linux-x64 and win32-x64: the CUDA 13 module covers sm_75 (PTX),
+    sm_80/86/89, sm_90 (PTX) and sm_120a. It drops the DGX Spark arch, which
+    is arm64 only, and the sm_80 PTX, which no x64 GPU selects. Every x64 GPU
+    0.20.1 covered is still covered.
+  - linux-arm64: the CUDA 13 module is built for DGX Spark (GB10, sm_121a)
+    only. Other arm64 NVIDIA GPUs, such as Grace Hopper and Grace Blackwell
+    servers, skip it and use Vulkan or CPU.
+  - linux-arm64 also ships the CUDA 12 Jetson Orin module
+    (`libqvac-ggml-cuda-jetson.so`, sm_87), now with compressed kernels (141 to
+    52 MB). The release build enables `QVAC_CUDA_JETSON`, so the published
+    package carries it, unlike the 0.20.1 note below says.
+
 ## [0.20.1] - 2026-10-08
 
 ### Added
