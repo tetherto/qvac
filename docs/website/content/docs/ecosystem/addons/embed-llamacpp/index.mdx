@@ -1,17 +1,17 @@
 ---
 title: "@qvac/embed-llamacpp"
 titleStyle: code
-description: Vector embedding generation for semantic search, clustering, and retrieval that seamlessly supports retrieval-augmented generation workflow.
+description: Text embeddings for semantic search and retrieval, and typed decisions with Laya checkpoints.
 schemaType: APIReference
 ---
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for text embeddings and RAG in QVAC using [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine.
+[Bare module](https://bare.pears.com) that adds support for text embeddings, RAG, and Laya decisions in QVAC using [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine. Use `GGMLBert` for embeddings and [`LayaDecisions`](#laya-decisions) for typed questions about a state.
 
 ## Models
 
-You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embeddings model. Model file format: `*.gguf`.
+`GGMLBert` loads [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embedding models in GGUF format. `LayaDecisions` requires a Laya decision checkpoint in GGUF format. An embedding-only model cannot answer decision questions.
 
 ## Requirement
 
@@ -170,6 +170,12 @@ bare index.js
 const GGMLBert = require('@qvac/embed-llamacpp')
 ```
 
+For decisions, import the named `LayaDecisions` class:
+
+```js
+const { LayaDecisions } = require('@qvac/embed-llamacpp')
+```
+
 ### 2. Create Local Model Paths
 
 The addon reads GGUF files directly from disk. Download the model, then pass absolute local paths to `files.model`.
@@ -206,8 +212,7 @@ The `args` obj contains the following properties:
 
 ### 4. Create `config`
 
-The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-*All parameters must be strings.*
+The following configuration applies to `GGMLBert`. For decisions, use [Laya configuration](#laya-configuration). All parameter values must be strings.
 
 ```js
 // an example of possible configuration
@@ -248,6 +253,12 @@ const config = {
 const model = new GGMLBert(args)
 ```
 
+For a Laya GGUF, use the decision class with the same `args` object and [Laya configuration](#laya-configuration):
+
+```js
+const model = new LayaDecisions(args)
+```
+
 ### 6. Load the model
 
 ```js
@@ -256,15 +267,66 @@ await model.load()
 
 `load()` reads the file(s) listed in `files.model` directly from disk and activates the model. The caller is responsible for ensuring the files already exist at those paths.
 
-### 7. Generate embeddings for input sequence
+### 7. Run inference
 
-The model outputs a vector for the input sequence.
+`GGMLBert` outputs a vector for the input sequence:
 
 ```js
 const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
 const response = await model.run(query)
 const embeddings = await response.await()
 ```
+
+#### Laya decisions
+
+`LayaDecisions.run()` answers typed questions about a state. It returns probabilities and typed answers without generating text. If you use the SDK, see [Laya decisions](/sdk/ai-capabilities/laya-decisions) for `loadModel()` and `decide()` with `modelType: 'llamacpp-decision'`.
+
+```js
+const questions = {
+  department: {
+    type: 'choice',
+    instructions: 'Which team should handle this ticket?',
+    criteria: {
+      billing: 'payments, refunds, invoices',
+      technical: 'bugs, outages, errors'
+    }
+  },
+  urgency: {
+    type: 'score',
+    instructions: 'How urgent is this?',
+    criteria: ['not urgent', 'somewhat urgent', 'very urgent']
+  },
+  refund: {
+    type: 'noul',
+    instructions: 'The customer asks for a refund.'
+  }
+}
+
+const response = await model.run({
+  state: 'I was charged twice. Please refund the duplicate payment.',
+  questions
+})
+const [result] = await response.await()
+console.log(result.answers.department.choice)
+console.log(result.answers.urgency.score)
+console.log(result.answers.refund.noul)
+```
+
+| Parameter    | Type                                      | Description                                                                                        |
+|--------------|-------------------------------------------|----------------------------------------------------------------------------------------------------|
+| state        | String, number, boolean, object, or array | One state to evaluate. A conversation array has the newest turn last. Top-level `null` is rejected |
+| states       | Array of states                           | Several states to evaluate instead of `state`, with results in input order                         |
+| questions    | Object                                    | Questions keyed by your question IDs. Every question requires `type` and `instructions`            |
+| max_len      | Number                                    | Optional token budget per sequence, overriding the checkpoint's default                            |
+| head_max_len | Number                                    | Optional token budget for a question and its options, overriding the checkpoint's default          |
+
+| Question type | `criteria`                                               | Answer                                                                                                    |
+|---------------|----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| choice        | Array of labels or object mapping labels to descriptions | `choice` and `probabilities` keyed by label                                                               |
+| score         | Array of level descriptions, lowest first                | Expected zero-based `score`, `probabilities`, and a `legend`. Three criteria give a score between 0 and 2 |
+| noul          | Optional object describing `true` and `false`            | `noul`, the probability that the statement holds, between 0 and 1                                         |
+
+Each question accepts `option_order`, a permutation of option indices that changes the order shown to the model. Answers still use your original order. A `noul` question also accepts `labels: { false: 'no', true: 'yes' }` to change the option labels.
 
 ### 8. Release Resources
 
