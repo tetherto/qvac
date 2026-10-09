@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.46.0] - 2026-10-09
+
+### Added
+
+- CUDA backend selection on Linux x64, Linux arm64 and Windows x64 NVIDIA
+  hosts ([#4917](https://github.com/tetherto/qvac/pull/4917)). The CUDA module
+  ships in `@qvac/fabric` 0.20.2+, and Windows needs a CUDA 13 install, whose
+  runtime DLLs load from `%CUDA_PATH%\bin\x64`. If the module, driver or
+  runtime is missing, selection falls through to Vulkan, then CPU.
+- `backend` load option: a comma-separated GPU priority list of `cuda`,
+  `vulkan`, `metal`, `opencl` or `auto`, for example `backend: 'vulkan'` to
+  force Vulkan on an NVIDIA machine. An unrecognised name fails the load; a
+  recognised name with no device present is skipped. `backend` cannot be
+  combined with `split-mode`.
+
+### Changed
+
+- The default GPU order now puts CUDA before Vulkan, so an NVIDIA host that
+  ran on Vulkan before now runs on CUDA. `CUDA_VISIBLE_DEVICES=-1` or
+  `backend: 'vulkan'` restores Vulkan.
+- An integer `main-gpu` indexes ggml's full device list, so the CUDA devices
+  shift the indices an existing config was written against.
+- A single-device load no longer auto-selects an RPC device; split loads still
+  use RPC.
+- In a split, one card registered by two backends is kept once.
+
 ## [0.45.0] - 2026-10-08
 
 ### Added

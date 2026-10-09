@@ -1,6 +1,8 @@
 // Model-backed coverage for the chat template's tool grammar reaching the
 // sampler, and for it not leaking across requests. All tests GTEST_SKIP when
 // the Qwen3 unit-test model is absent (`npm run test:cpp:models`).
+#include <any>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -8,6 +10,7 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -48,10 +51,8 @@ constexpr const char* TWO_TOOLS_PROMPT =
 constexpr const char* COLOUR_SCHEMA =
     R"({"type":"object","properties":{"colour":{"type":"string"}},"required":["colour"]})";
 
-// TOOL_PROMPT and PLAIN_PROMPT without `/no_think`. The reasoning channel has
-// to stay ON for the EOS-substitution tests below: the recovery only runs
-// while `inside_reasoning` is set, which Qwen3 reaches by generating `<think>`
-// as its first token rather than having the template force it open.
+// TOOL_PROMPT and PLAIN_PROMPT without `/no_think`, for tests that need the
+// reasoning channel on.
 constexpr const char* THINKING_TOOL_PROMPT =
     R"([{"role":"system","content":"You are a helpful assistant."},)"
     R"({"type":"function","name":"get_weather","description":"Get the weather for a city",)"
@@ -70,10 +71,36 @@ constexpr const char* MEDIA_TOOL_PROMPT =
     R"({"role":"user","type":"media","content":""},)"
     R"({"role":"user","content":"Describe this image in one sentence."}])";
 
-constexpr const char* THINK_CLOSE_TAG = "</think>";
-
 bool hasToolCallBlock(const std::string& text) {
   return text.find("<tool_call>") != std::string::npos;
+}
+
+std::string jsonEscape(const std::string& value) {
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (const unsigned char ch : value) {
+    switch (ch) {
+    case '\\':
+      escaped += "\\\\";
+      break;
+    case '"':
+      escaped += "\\\"";
+      break;
+    case '\n':
+      escaped += "\\n";
+      break;
+    case '\r':
+      escaped += "\\r";
+      break;
+    case '\t':
+      escaped += "\\t";
+      break;
+    default:
+      escaped += static_cast<char>(ch);
+      break;
+    }
+  }
+  return escaped;
 }
 
 /// The first `<tool_call>` block, so a name assertion reads only the call and
@@ -321,6 +348,107 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRequiredForcesToolCall) {
   EXPECT_FALSE(s.grammar_lazy);
 }
 
+TEST_F(ToolGrammarModelTest, WarmCacheRearmsRequiredToolGrammar) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  const fs::path cacheDir = "warm_required_tool_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  auto model = createModel();
+  LlamaModel::Prompt first = makePrompt(TOOL_PROMPT);
+  first.cacheKey = cacheKey;
+  first.generationParams.tool_choice = "required";
+  EXPECT_TRUE(hasToolCallBlock(model->processPrompt(first)));
+
+  // The complete prompt (including tools) is authoritative on every turn.
+  // Reconciliation removes the previous sampled call and the same render
+  // supplies a fresh required grammar without duplicating the tool block.
+  LlamaModel::Prompt warm = makePrompt(TOOL_PROMPT);
+  warm.cacheKey = cacheKey;
+  warm.generationParams.tool_choice = "required";
+  const std::string output = model->processPrompt(warm);
+  EXPECT_TRUE(hasToolCallBlock(output)) << output;
+  EXPECT_EQ(sampling(*model).grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
+  EXPECT_FALSE(sampling(*model).grammar_lazy);
+  EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0);
+
+  fs::remove_all(cacheDir);
+}
+
+TEST_F(
+    ToolGrammarModelTest,
+    BatchWarmFullHistoryRearmsRequiredToolGrammarPerSlot) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["parallel"] = "3";
+  config_["ctx_size"] = "12288";
+  config_["n_predict"] = "96";
+  auto model = createModel();
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr);
+
+  const fs::path cacheDir =
+      fs::temp_directory_path() /
+      ("batch-warm-tool-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()));
+  fs::create_directories(cacheDir);
+
+  const std::string prefix =
+      R"([{"role":"system","content":"You are a reliable home-automation assistant. /no_think"},{"type":"function","name":"set_thermostat","description":"Set a room thermostat","parameters":{"type":"object","properties":{"room":{"type":"string"},"temperature":{"type":"integer"}},"required":["room","temperature"]}})";
+  std::vector<std::string> firstUsers;
+  std::vector<LlamaModel::Prompt> firstPrompts;
+  for (size_t user = 0; user < 3; ++user) {
+    firstUsers.push_back(
+        "Set room user-" + std::to_string(user) +
+        " to 20 degrees using the tool.");
+    LlamaModel::Prompt prompt;
+    prompt.input = prefix + R"(,{"role":"user","content":")" +
+                   firstUsers.back() + R"("}])";
+    prompt.cacheKey =
+        (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
+    prompt.generationParams.tool_choice = "required";
+    prompt.generationParams.reasoning_budget = 0;
+    firstPrompts.push_back(std::move(prompt));
+  }
+
+  const auto firstOutputs = model->processPromptBatch(firstPrompts);
+  ASSERT_EQ(firstOutputs.size(), 3u);
+  for (size_t user = 0; user < firstOutputs.size(); ++user) {
+    ASSERT_TRUE(hasToolCallBlock(firstOutputs[user]))
+        << "cold request for user " << user
+        << " did not produce a required tool call: " << firstOutputs[user];
+  }
+
+  std::vector<LlamaModel::Prompt> warmPrompts;
+  for (size_t user = 0; user < 3; ++user) {
+    LlamaModel::Prompt prompt;
+    prompt.input =
+        prefix + R"(,{"role":"user","content":")" + firstUsers[user] +
+        R"("},{"role":"assistant","content":")" +
+        jsonEscape(firstOutputs[user]) +
+        R"("},{"role":"tool","content":"{\"ok\":true}"},{"role":"user","content":"Set the same room to 21 degrees using the tool."}])";
+    prompt.cacheKey =
+        (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
+    prompt.generationParams.tool_choice = "required";
+    prompt.generationParams.reasoning_budget = 0;
+    warmPrompts.push_back(std::move(prompt));
+  }
+
+  const auto warmOutputs = model->processPromptBatch(warmPrompts);
+  ASSERT_EQ(warmOutputs.size(), 3u);
+  for (size_t user = 0; user < warmOutputs.size(); ++user) {
+    EXPECT_TRUE(hasToolCallBlock(warmOutputs[user]))
+        << "warm request for user " << user
+        << " lost its required tool grammar: " << warmOutputs[user];
+  }
+
+  fs::remove_all(cacheDir);
+}
+
 // tool_choice "none" follows llama-server: the tool definitions stay in the
 // prompt and only the grammar is switched off. The model may still choose to
 // call a tool in free text, so the contract is "no constraint", not "no call".
@@ -518,222 +646,58 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionLeavesNoMediaBehind) {
       << "a successful request drains its own media";
 }
 
-// An EOS sampled inside the reasoning channel is replaced by the cached
-// `</think>` token, and that substituted close is handed to the sampler so
-// fabric's reasoning-budget matcher leaves COUNTING. Without the accept the
-// matcher stays in COUNTING for the rest of the request, `grammar_should_apply`
-// returns false for a lazy grammar, and the tool grammar is silently disarmed
-// on the default `tool_choice: "auto"` — the constraint switching itself off
-// with no error anywhere.
-//
-// The EOS is forced rather than waited for: a 0.6B model emits a premature EOS
-// inside `<think>` only occasionally, which is no basis for a regression test.
-TEST_F(
-    ToolGrammarModelTest,
-    ReasoningEOSInsideThinkingIsReplacedAndGenerationContinues) {
-  if (!hasQwen3Model()) {
-    GTEST_SKIP() << qwen3Model_.missingMessage();
-  }
-  // Load-time budget, not a per-request one: it must survive the
-  // generation-params restore so the assertions below can still see the
-  // sampler the accept was gated on.
-  config_["reasoning-budget"] = "64";
-  // The fixture's 96 does not reach the call: after the synthetic close the
-  // model spends what is left restating the request in prose and runs out
-  // mid-sentence. 512 lets it finish and emit the call, which is what makes
-  // the end-to-end assertion at the bottom possible.
-  config_["n_predict"] = "512";
-  auto model = createModel();
-  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr)
-      << "this test must exercise the long-lived single-prompt context";
-
-  auto* textContext =
-      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
-  ASSERT_NE(textContext, nullptr);
-  const llama_token eos =
-      llama_vocab_eos(llama_model_get_vocab(textContext->getModel()));
-  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
-
-  // Armed before the request: prefill samples nothing, and the seam waits for
-  // the reasoning block to open, so this lands on the first token the model
-  // generates inside `<think>`.
-  textContext->forceNextSampledTokenInsideReasoningForTesting(eos);
-
-  // The assertion with teeth, and it has to be taken mid-generation. Nothing
-  // above depends on the substituted close reaching the *sampler* — the
-  // visible recovery happens either way — so a purely post-hoc test would
-  // pass on the very bug this exists for. And the state cannot be read after
-  // the request either: end-of-generation compaction resets the sampler.
-  //
-  // `common_sampler_reasoning_budget_force` returns true only from
-  // REASONING_BUDGET_COUNTING (fabric common/reasoning-budget.cpp:289-308),
-  // which is exactly the state that makes `grammar_should_apply` disarm a
-  // lazy tool grammar for the rest of the request. Probed on the first piece
-  // *after* the close, because the close is streamed before the accept runs.
-  // On the passing path the call is a no-op returning false; it only mutates
-  // the sampler when the assertion is already going to fail.
-  std::string streamed;
-  bool closeSeen = false;
-  bool probed = false;
-  bool budgetStillCounting = false;
-  LlamaModel::Prompt prompt = makePrompt(THINKING_TOOL_PROMPT);
-  prompt.outputCallback = [&](const std::string& piece) {
-    streamed += piece;
-    if (closeSeen && !probed) {
-      probed = true;
-      budgetStillCounting = common_sampler_reasoning_budget_force(
-          textContext->samplerForTesting());
-    }
-    closeSeen =
-        closeSeen || streamed.find(THINK_CLOSE_TAG) != std::string::npos;
-  };
-  model->processPrompt(prompt);
-  const std::string& output = streamed;
-
-  ASSERT_FALSE(output.empty()) << "the request must not end on the EOS";
-  const size_t close = output.find(THINK_CLOSE_TAG);
-  ASSERT_NE(close, std::string::npos)
-      << "EOS must be replaced by the cached close tag: " << output;
-  EXPECT_GT(output.size(), close + std::string(THINK_CLOSE_TAG).size())
-      << "generation must continue past the synthetic close (EOG is banned "
-         "for exactly one token afterwards): "
-      << output;
-
-  ASSERT_TRUE(probed)
-      << "nothing was streamed after the close, so the sampler state was "
-         "never sampled: "
-      << output;
-  EXPECT_FALSE(budgetStillCounting)
-      << "the reasoning-budget matcher was still COUNTING after the close, so "
-         "the substituted close never reached the sampler and a lazy tool "
-         "grammar would stay disarmed for the rest of the request";
-
-  // The gate the accept is conditioned on. Asserted after the fact rather
-  // than assumed: if a template or fabric change made the tool grammar eager,
-  // or stopped building the reasoning-budget sampler, the branch above would
-  // still run but would no longer accept anything — and this test would pass
-  // while covering nothing.
-  const common_params_sampling& s = sampling(*model);
-  EXPECT_EQ(s.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
-  EXPECT_TRUE(s.grammar_lazy)
-      << "an eager grammar cannot reach the substitution branch at all";
-  EXPECT_TRUE(
-      qvac_lib_inference_addon_llama::utils::reasoningBudgetSamplerBuilt(s))
-      << "without a budget sampler the accept is skipped as unsafe";
-
-  // And the end of the contract, which the sampler probe alone does not
-  // reach: the request goes on to arm the lazy grammar on `<tool_call>` and
-  // emit a call the grammar admits. A recovered request that could no longer
-  // be constrained would still satisfy every assertion above.
-  const std::string call = firstToolCallBlock(output);
-  ASSERT_FALSE(call.empty())
-      << "no tool call after the recovery, so the lazy grammar was never "
-         "armed: "
-      << output;
-  EXPECT_NE(call.find("get_weather"), std::string::npos)
-      << "the call must name the one declared tool: " << call;
-  EXPECT_NE(call.find("\"city\""), std::string::npos)
-      << "the grammar admits only the declared argument shape, whose one "
-         "required property is `city`: "
-      << call;
-}
-
-// `onLogitsReady` reaches the substitution through its own inline branch when
-// there is no inline decode batch, so the single-prompt regression above never
-// executes the scheduler's copy. Only the tools slot is forced to EOS; its
-// co-scheduled sibling generates normally, which is what makes the second
-// assertion meaningful — a throw out of the substituted token's
-// `common_sampler_accept` escapes to the scheduler's step handler and fails
-// every request in the batch, not just the one that caused it.
-TEST_F(
-    ToolGrammarModelTest, ReasoningEOSRecoveryDoesNotFailCoScheduledSibling) {
+// A per-job cancel lands between scheduler steps, when the slot holds one
+// sample recorded but not yet fed. The committed ledger must drop it, or the
+// saved cache (nPast one short of the ledger) fails to load on the next turn.
+// Whole-model cancel does not reach this: the step skips sampling once it is
+// flagged.
+TEST_F(ToolGrammarModelTest, BatchCancelMidGenerationKeepsCacheLoadable) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
   }
   config_["parallel"] = "2";
-  config_["reasoning-budget"] = "64";
-  // See the single-prompt twin: the recovered slot needs room to finish its
-  // prose and reach the call.
-  config_["n_predict"] = "512";
+  config_["n_predict"] = "256";
   auto model = createModel();
-  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
-  ASSERT_NE(scheduler, nullptr) << "parallel=2 must build the scheduler";
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr);
 
-  auto* loadedContext = LlamaModelTestPeer::llmContext(*model);
-  ASSERT_NE(loadedContext, nullptr);
-  const llama_token eos =
-      llama_vocab_eos(llama_model_get_vocab(loadedContext->getModel()));
-  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
+  const fs::path cacheDir = "batch_cancel_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
 
-  // The factory is the only seam that reaches a slot driver in time: it runs
-  // once per admission, and `slots_[seqId]` is not populated until after it
-  // returns. Armed for seq 0 alone — `processPromptBatch` submits in order and
-  // the first submission takes the first free seq id — so the recorded pointer
-  // belongs to the tools item, and the sibling stays untouched.
-  TextLlmContext* toolsDriver = nullptr;
-  qvac_lib_inference_addon_llama::batching::DriverFactory original =
-      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
-  ContinuousBatchSchedulerTestPeer::setDriverFactory(
-      *scheduler,
-      [original, eos, &toolsDriver](
-          const common_params& params, uint32_t seqId, llama_pos ceiling) {
-        std::unique_ptr<SequenceDriver> driver =
-            original(params, seqId, ceiling);
-        auto* text = dynamic_cast<TextLlmContext*>(driver.get());
-        if (text != nullptr && seqId == 0) {
-          toolsDriver = text;
-          text->forceNextSampledTokenInsideReasoningForTesting(eos);
-        }
-        return driver;
-      });
+  constexpr int kPiecesBeforeCancel = 8;
+  std::atomic<int> pieces{0};
+  LlamaModel::Prompt cancelled = makePrompt(THINKING_PLAIN_PROMPT);
+  cancelled.cacheKey = cacheKey;
+  cancelled.outputCallback = [&](const std::string&) { pieces.fetch_add(1); };
 
-  // Same mid-generation probe as the single-prompt test, against this slot's
-  // own driver: the scheduler's accept has to advance this sequence's
-  // reasoning-budget matcher off COUNTING, and the state is gone by the time
-  // the batch returns.
-  std::string streamed;
-  bool closeSeen = false;
-  bool probed = false;
-  bool budgetStillCounting = false;
-  LlamaModel::Prompt toolsPrompt = makePrompt(THINKING_TOOL_PROMPT);
-  toolsPrompt.outputCallback = [&](const std::string& piece) {
-    streamed += piece;
-    if (closeSeen && !probed && toolsDriver != nullptr) {
-      probed = true;
-      budgetStillCounting = common_sampler_reasoning_budget_force(
-          toolsDriver->samplerForTesting());
+  std::thread canceller([&] {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    while (pieces.load() < kPiecesBeforeCancel &&
+           std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    closeSeen =
-        closeSeen || streamed.find(THINK_CLOSE_TAG) != std::string::npos;
-  };
+    model->cancelById(qvac_lib_inference_addon_cpp::JobId{71});
+  });
+  try {
+    (void)model->process(
+        std::any(cancelled), qvac_lib_inference_addon_cpp::JobId{71});
+  } catch (const qvac_errors::StatusError&) {
+    // A lone cancelled request may settle either way; the cache is the point.
+  }
+  canceller.join();
+  ASSERT_GE(pieces.load(), kPiecesBeforeCancel)
+      << "generation never reached the cancel point";
+  model->saveCache(cacheKey);
+  ASSERT_TRUE(fs::exists(cacheKey)) << "the cancelled turn kept no cache";
 
-  const auto results = model->processPromptBatch(
-      {toolsPrompt, makePrompt(THINKING_PLAIN_PROMPT)});
-  ASSERT_EQ(results.size(), 2u);
-  ASSERT_NE(toolsDriver, nullptr) << "seq 0's driver was never built";
-  EXPECT_FALSE(streamed.empty()) << "the tools slot must recover from EOS";
-  EXPECT_NE(streamed.find(THINK_CLOSE_TAG), std::string::npos)
-      << "the tools slot's EOS must be replaced by the close tag: " << streamed;
-  EXPECT_FALSE(results[1].empty())
-      << "the sibling must survive the tools slot's grammar processing";
+  LlamaModel::Prompt followup = makePrompt(PLAIN_PROMPT);
+  followup.cacheKey = cacheKey;
+  EXPECT_NO_THROW((void)model->processPromptBatch({followup}))
+      << "the cache saved after a mid-generation cancel must load";
 
-  ASSERT_TRUE(probed) << "nothing was streamed after the close: " << streamed;
-  EXPECT_FALSE(budgetStillCounting)
-      << "this slot's reasoning-budget matcher was still COUNTING after the "
-         "close, so the substituted close never reached its sampler";
-
-  // Same end-of-contract assertion as the single-prompt twin: the recovered
-  // slot must go on to arm its lazy grammar and complete a call the grammar
-  // admits, while its sibling is still running.
-  const std::string call = firstToolCallBlock(streamed);
-  ASSERT_FALSE(call.empty())
-      << "the recovered slot never entered a tool call, so its lazy grammar "
-         "was never armed: "
-      << streamed;
-  EXPECT_NE(call.find("get_weather"), std::string::npos)
-      << "the call must name the one declared tool: " << call;
-  EXPECT_NE(call.find("\"city\""), std::string::npos)
-      << "the grammar admits only the declared argument shape: " << call;
+  fs::remove_all(cacheDir);
 }
 
 // `BatchToolGrammarIsPerRequest` above proves a tool grammar does not cross
@@ -883,8 +847,8 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt primed = makePrompt(TOOL_PROMPT);
   primed.cacheKey = cacheKey;
-  primed.saveCacheToDisk = true;
   EXPECT_FALSE(model->processPrompt(primed).empty());
+  model->saveCache(cacheKey);
   ASSERT_TRUE(fs::exists(cacheKey)) << "the checkpoint must be on disk first";
   const auto checkpointSize = fs::file_size(cacheKey);
   const auto checkpointWrite = fs::last_write_time(cacheKey);
@@ -896,7 +860,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt rejected = makePrompt(TOOL_PROMPT);
   rejected.cacheKey = cacheKey;
-  rejected.saveCacheToDisk = true;
   rejected.generationParams.tool_choice = "notDeclared";
   EXPECT_THROW(model->processPrompt(rejected), qvac_errors::StatusError);
 
@@ -910,7 +873,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt followUp = makePrompt(TOOL_PROMPT);
   followUp.cacheKey = cacheKey;
-  followUp.saveCacheToDisk = true;
   EXPECT_FALSE(model->processPrompt(followUp).empty())
       << "the key must still be usable after the rejection";
   EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0)
@@ -927,7 +889,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt rejectedAfterLoad = makePrompt(TOOL_PROMPT);
   rejectedAfterLoad.cacheKey = cacheKey;
-  rejectedAfterLoad.saveCacheToDisk = true;
   rejectedAfterLoad.generationParams.tool_choice = "notDeclared";
   EXPECT_THROW(
       reloaded->processPrompt(rejectedAfterLoad), qvac_errors::StatusError);
@@ -939,7 +900,6 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRejectionPreservesTheCacheCheckpoint) {
 
   LlamaModel::Prompt loadedFollowUp = makePrompt(TOOL_PROMPT);
   loadedFollowUp.cacheKey = cacheKey;
-  loadedFollowUp.saveCacheToDisk = true;
   EXPECT_FALSE(reloaded->processPrompt(loadedFollowUp).empty())
       << "a checkpoint loaded from disk must survive the rejection too";
   EXPECT_GT(
@@ -1057,225 +1017,6 @@ TEST_F(ToolGrammarModelTest, PreDrainThrowLeavesNoMediaBehind) {
   EXPECT_EQ(MtmdLlmContextTestPeer::loadedMediaCount(*mtmdContext), 0u);
 }
 
-// Multimodal twin of
-// `ReasoningEOSInsideThinkingIsReplacedAndGenerationContinues`. The two
-// contexts duplicate the EOS-substitution recovery rather than sharing it, so a
-// divergence between them is precisely what a text-only test cannot see.
-// Single-prompt path: `MtmdLlmContext::generateResponse` samples its own
-// tokens, separately from `onLogitsReady`.
-TEST_F(ToolGrammarModelTest, MtmdReasoningEOSInsideThinkingIsReplaced) {
-  using MP = test_common::TestModelPath;
-  MP qwen35(
-      "Qwen3.5-0.8B-Q8_0.gguf",
-      "QWEN35_MODEL_PATH",
-      MP::OnMissing::Skip,
-      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
-  MP mmproj(
-      "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "QWEN35_MMPROJ_PATH",
-      MP::OnMissing::Skip,
-      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
-  if (!qwen35.found() || !mmproj.found()) {
-    GTEST_SKIP() << qwen35.missingMessage() << "; " << mmproj.missingMessage();
-  }
-
-  std::unordered_map<std::string, std::string> config = config_;
-  config["ctx_size"] = "8192";
-  config["reasoning-budget"] = "64";
-  auto model = std::make_unique<LlamaModel>(
-      std::string(qwen35.path), std::string(mmproj.path), std::move(config));
-  model->waitForLoadInitialization();
-  ASSERT_TRUE(model->isLoaded());
-  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr)
-      << "this test must exercise the single-prompt path";
-
-  auto* mtmdContext =
-      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
-  ASSERT_NE(mtmdContext, nullptr);
-  const llama_token eos =
-      llama_vocab_eos(llama_model_get_vocab(mtmdContext->getModel()));
-  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
-
-  mtmdContext->forceNextSampledTokenInsideReasoningForTesting(eos);
-
-  // Probed on the piece that CARRIES the close, not the one after it, and the
-  // difference is a real divergence between the two contexts rather than a
-  // detail of this test: `MtmdLlmContext` accepts the substituted token before
-  // streaming it, where `TextLlmContext::handleReasoningEOS` streams first and
-  // accepts after. Probing "the piece after the close" — correct for the text
-  // twin — never fires here, because this path also `break`s out of generation
-  // at the close instead of banning EOG for one token and continuing.
-  std::string streamed;
-  bool probed = false;
-  bool budgetStillCounting = false;
-  LlamaModel::Prompt prompt = makePrompt(THINKING_TOOL_PROMPT);
-  prompt.outputCallback = [&](const std::string& piece) {
-    streamed += piece;
-    if (!probed && streamed.find(THINK_CLOSE_TAG) != std::string::npos) {
-      probed = true;
-      budgetStillCounting = common_sampler_reasoning_budget_force(
-          mtmdContext->samplerForTesting());
-    }
-  };
-  model->processPrompt(prompt);
-
-  ASSERT_NE(streamed.find(THINK_CLOSE_TAG), std::string::npos)
-      << "EOS must be replaced by the cached close tag: " << streamed;
-
-  ASSERT_TRUE(probed) << "the close was never streamed: " << streamed;
-  EXPECT_FALSE(budgetStillCounting)
-      << "the multimodal context's reasoning-budget matcher was still "
-         "COUNTING after the close, so its substituted close never reached "
-         "its sampler";
-}
-
-// And the multimodal scheduler path, `MtmdLlmContext::onLogitsReady`. Nothing
-// in this suite had run a multimodal model under the scheduler before, though
-// nothing prevented it: `isMultiBatchActivated` is `llama_n_seq_max(ctx) > 1`
-// with no multimodal exclusion, so `buildDriverFactory` hands out
-// `MtmdLlmContext` drivers whenever an mmproj model is loaded with parallel
-// >= 2. The first assertion below is that harness fact.
-TEST_F(ToolGrammarModelTest, MtmdBatchReasoningEOSRecoveryKeepsSlotAlive) {
-  using MP = test_common::TestModelPath;
-  MP qwen35(
-      "Qwen3.5-0.8B-Q8_0.gguf",
-      "QWEN35_MODEL_PATH",
-      MP::OnMissing::Skip,
-      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
-  MP mmproj(
-      "mmproj-Qwen3.5-0.8B-F16.gguf",
-      "QWEN35_MMPROJ_PATH",
-      MP::OnMissing::Skip,
-      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
-  if (!qwen35.found() || !mmproj.found()) {
-    GTEST_SKIP() << qwen35.missingMessage() << "; " << mmproj.missingMessage();
-  }
-
-  std::unordered_map<std::string, std::string> config = config_;
-  config["ctx_size"] = "8192";
-  config["parallel"] = "2";
-  config["reasoning-budget"] = "64";
-  auto model = std::make_unique<LlamaModel>(
-      std::string(qwen35.path), std::string(mmproj.path), std::move(config));
-  model->waitForLoadInitialization();
-  ASSERT_TRUE(model->isLoaded());
-  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
-  ASSERT_NE(scheduler, nullptr)
-      << "a multimodal model at parallel=2 must still build the scheduler";
-
-  auto* loadedContext = LlamaModelTestPeer::llmContext(*model);
-  ASSERT_NE(loadedContext, nullptr);
-  const llama_token eos =
-      llama_vocab_eos(llama_model_get_vocab(loadedContext->getModel()));
-  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
-
-  MtmdLlmContext* toolsDriver = nullptr;
-  qvac_lib_inference_addon_llama::batching::DriverFactory original =
-      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
-  ContinuousBatchSchedulerTestPeer::setDriverFactory(
-      *scheduler,
-      [original, eos, &toolsDriver](
-          const common_params& params, uint32_t seqId, llama_pos ceiling) {
-        std::unique_ptr<SequenceDriver> driver =
-            original(params, seqId, ceiling);
-        auto* mtmd = dynamic_cast<MtmdLlmContext*>(driver.get());
-        if (mtmd != nullptr && seqId == 0) {
-          toolsDriver = mtmd;
-          mtmd->forceNextSampledTokenInsideReasoningForTesting(eos);
-        }
-        return driver;
-      });
-
-  std::string streamed;
-  bool closeSeen = false;
-  bool probed = false;
-  bool budgetStillCounting = false;
-  LlamaModel::Prompt toolsPrompt = makePrompt(THINKING_TOOL_PROMPT);
-  toolsPrompt.outputCallback = [&](const std::string& piece) {
-    streamed += piece;
-    if (closeSeen && !probed && toolsDriver != nullptr) {
-      probed = true;
-      budgetStillCounting = common_sampler_reasoning_budget_force(
-          toolsDriver->samplerForTesting());
-    }
-    closeSeen =
-        closeSeen || streamed.find(THINK_CLOSE_TAG) != std::string::npos;
-  };
-
-  const auto results = model->processPromptBatch(
-      {toolsPrompt, makePrompt(THINKING_PLAIN_PROMPT)});
-  ASSERT_EQ(results.size(), 2u);
-  ASSERT_NE(toolsDriver, nullptr) << "seq 0's driver was never built";
-  EXPECT_NE(streamed.find(THINK_CLOSE_TAG), std::string::npos)
-      << "the tools slot's EOS must be replaced by the close tag: " << streamed;
-  EXPECT_FALSE(results[1].empty())
-      << "the sibling must survive the tools slot's grammar processing";
-
-  ASSERT_TRUE(probed) << "nothing was streamed after the close: " << streamed;
-  EXPECT_FALSE(budgetStillCounting)
-      << "this multimodal slot's reasoning-budget matcher was still COUNTING "
-         "after the close";
-}
-
-// The interaction this PR actually introduced between the two features:
-// EOS substitution seeds the compactor itself (`recordCloseMarkerForReplay` +
-// `requestCloseCapture` at each substitution site) because the substituted
-// close never passes through the `updateReasoningBuffer` handshake that
-// normally trips capture. Get that wrong and `compactThinkSpan` bails at
-// `end < 0` — the discard silently does not happen — or, worse, the replay
-// restores a prefix that opens a `<think>` nothing closes, which only shows up
-// on the *next* request from that cache. So this drives a synthetic close with
-// compaction on, persists the cache, and then reuses it.
-TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
-  if (!hasQwen3Model()) {
-    GTEST_SKIP() << qwen3Model_.missingMessage();
-  }
-  const fs::path cacheDir = "synthetic_close_cache_dir";
-  fs::remove_all(cacheDir);
-  fs::create_directories(cacheDir);
-  const std::string cacheKey = (cacheDir / "session.bin").string();
-
-  config_["reasoning-budget"] = "64";
-  config_["n_predict"] = "512";
-  auto model = createModel();
-  auto* textContext =
-      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
-  ASSERT_NE(textContext, nullptr);
-  const llama_token eos =
-      llama_vocab_eos(llama_model_get_vocab(textContext->getModel()));
-  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
-
-  LlamaModel::Prompt first = makePrompt(THINKING_TOOL_PROMPT);
-  first.cacheKey = cacheKey;
-  first.saveCacheToDisk = true;
-  first.generationParams.remove_thinking_from_context = true;
-  textContext->forceNextSampledTokenInsideReasoningForTesting(eos);
-
-  const std::string output = model->processPrompt(first);
-  ASSERT_NE(output.find(THINK_CLOSE_TAG), std::string::npos)
-      << "EOS must be replaced by the cached close tag: " << output;
-  EXPECT_GT(
-      test_common::getStatValue(model->runtimeStats(), "thinkingBlockDiscards"),
-      0)
-      << "the substituted close must reach the compactor, or the span end "
-         "stays unset and nothing is discarded: "
-      << output;
-  ASSERT_TRUE(fs::exists(cacheKey)) << "the cache must have been persisted";
-
-  // The part a discard assertion alone cannot catch: a compaction that
-  // rewound to an unbalanced prefix leaves a cache whose next turn is broken,
-  // not one that fails now.
-  LlamaModel::Prompt followUp = makePrompt(THINKING_TOOL_PROMPT);
-  followUp.cacheKey = cacheKey;
-  followUp.saveCacheToDisk = true;
-  followUp.generationParams.remove_thinking_from_context = true;
-  EXPECT_FALSE(model->processPrompt(followUp).empty())
-      << "the cache left behind by a compacted synthetic close must still be "
-         "usable";
-
-  fs::remove_all(cacheDir);
-}
-
 // Cancelling mid-generation with a live tool grammar. The rollback code itself
 // is untouched by this PR, but the *sampler state* is new, and it is the half
 // that survives a reset: `common_sampler_reset` clears `prev` and the chain and
@@ -1288,7 +1029,7 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
 // architecture-specific, and the sampler reset, which is not. This test covers
 // the second — the only one this PR adds state to — and deliberately does not
 // re-cover the first. Qwen3-0.6B is pure attention, so the
-// `RecurrentStateSnapshot` restore path in `TextLlmContext.cpp` is not entered
+// `SequenceStateSnapshot` restore path in `TextLlmContext.cpp` is not entered
 // here, and that path already has dedicated coverage on the Qwen3.5 hybrid
 // fixture in `test_cancel_rollback.cpp`:
 //
@@ -1305,9 +1046,6 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
 // are independent, and each already has coverage, so the combination would
 // pin no behaviour that is unpinned today.
 //
-// `remove_thinking_from_context` is forced off so the cursor assertion reads
-// the cancel rollback rather than end-of-generation compaction, which moves
-// `nPast` for its own reasons.
 TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
@@ -1328,7 +1066,6 @@ TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
   constexpr int kPiecesBeforeCancel = 8;
   std::atomic<int> pieces{0};
   LlamaModel::Prompt cancelled = makePrompt(THINKING_TOOL_PROMPT);
-  cancelled.generationParams.remove_thinking_from_context = false;
   cancelled.outputCallback = [&](const std::string&) {
     if (pieces.fetch_add(1) == kPiecesBeforeCancel) {
       model->cancel();
