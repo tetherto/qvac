@@ -3,7 +3,6 @@
 const path = require('bare-path')
 const fs = require('bare-fs')
 const proc = require('bare-process')
-const os = require('bare-os')
 const { pathToFileURL } = require('bare-url')
 
 // Force the gpu-smoke integration test (and any other test that opts
@@ -49,10 +48,6 @@ async function runIntegrationModule (relativeModulePath, options = {}) {
     return 'missing'
   }
 
-  const logPath = os.platform() === 'android' && global.testDir
-    ? path.join(global.testDir, 'tts-native-stderr.log')
-    : null
-  if (logPath) os.setEnv('QVAC_TTS_NATIVE_STDERR_PATH', logPath)
   const moduleUrl = pathToFileURL(modulePath).href
   await import(moduleUrl)
   return modulePath

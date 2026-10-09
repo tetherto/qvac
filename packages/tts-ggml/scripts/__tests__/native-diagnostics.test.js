@@ -6,12 +6,22 @@ const path = require('node:path')
 const test = require('node:test')
 const vm = require('node:vm')
 
-function loadDiagnostics() {
+function loadDiagnostics({ platform = 'darwin', testDir, environment = {} } = {}) {
   const context = {
     module: { exports: {} },
+    global: { testDir },
     require: (name) => {
       if (name === 'bare-fs') return fs
-      if (name === 'bare-os') return { getEnv: () => undefined }
+      if (name === 'bare-path') return path
+      if (name === 'bare-os') {
+        return {
+          platform: () => platform,
+          getEnv: (key) => environment[key],
+          setEnv: (key, value) => {
+            environment[key] = value
+          }
+        }
+      }
       throw new Error(`Unexpected module: ${name}`)
     },
     console
@@ -49,4 +59,17 @@ test('other platforms retain their existing assertions', () => {
 
 test('an unset diagnostics path produces no log output', () => {
   assert.equal(readNativeDiagnostics(), '')
+})
+
+test('Android enables capture when the test helper loads without invoking the mobile runner hook', () => {
+  const environment = {}
+  loadDiagnostics({ platform: 'android', testDir: '/test-sandbox', environment })
+  assert.equal(environment.QVAC_TTS_NATIVE_STDERR_PATH, '/test-sandbox/tts-native-stderr.log')
+})
+
+test('loading the helper outside the Android test sandbox leaves stderr unchanged', () => {
+  const environment = {}
+  loadDiagnostics({ platform: 'darwin', testDir: '/test-sandbox', environment })
+  loadDiagnostics({ platform: 'android', environment })
+  assert.deepEqual(environment, {})
 })

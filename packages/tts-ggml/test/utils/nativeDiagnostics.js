@@ -2,7 +2,17 @@
 
 const fs = require('bare-fs')
 const os = require('bare-os')
+const path = require('bare-path')
 let emittedLength = 0
+
+function enableNativeDiagnostics() {
+  if (os.platform() !== 'android' || !global.testDir) return
+  const logPath = path.join(global.testDir, 'tts-native-stderr.log')
+  os.setEnv('QVAC_TTS_NATIVE_STDERR_PATH', logPath)
+  console.log('[native-diagnostics] Capture enabled:', logPath)
+}
+
+enableNativeDiagnostics()
 
 function readNativeDiagnostics() {
   const logPath = os.getEnv('QVAC_TTS_NATIVE_STDERR_PATH')
