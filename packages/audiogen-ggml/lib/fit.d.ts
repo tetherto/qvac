@@ -1,22 +1,43 @@
 export type AudiogenFitEngine = 'acestep' | 'minimax'
 
 export interface AudiogenFitRequest {
-  /** Engine that would run the load. Defaults to `acestep`. */
+  /**
+   * Engine that would run the load. Defaults to `acestep`. `minimax` is
+   * projected on desktop builds; on Android and iOS it is `unsupported-engine`.
+   */
   engine?: AudiogenFitEngine
-  /** Directory holding the four stage GGUFs; explicit paths win over it. */
+  /**
+   * Directory holding the model GGUFs (the four ACE-Step stages, or the MiniMax
+   * LM and synth pair); explicit paths win over it.
+   */
   modelsDir?: string
   textEncoderPath?: string
+  /** The ACE-Step or MiniMax LM GGUF. */
   lmPath?: string
   ditPath?: string
   vaePath?: string
+  /** MiniMax synthesis GGUF; pairs with `lmPath`. */
+  synthPath?: string
 
   /** > 0 requests the GPU stack, with the fallbacks a real load applies. */
   gpuLayers?: number
+  /**
+   * MiniMax compute device, as `config.device` takes it. Without it, `gpuLayers`
+   * > 0 projects `auto` (a GPU when one is usable) and anything else `cpu`.
+   */
+  device?: 'cpu' | 'gpu' | 'auto'
   threads?: number
   backendsDir?: string
 
-  /** Longest single generation the projection must accommodate. */
+  /**
+   * Longest single generation the projection must accommodate. MiniMax converts
+   * it to 25 semantic frames per second, as `run()` does.
+   */
   durationSeconds?: number
+  /** MiniMax semantic-frame cap. Cannot be combined with `durationSeconds`. Defaults to 300. */
+  maxFrames?: number
+  /** MiniMax tokenized prompt length: caption, lyrics and template. Defaults to 1024. */
+  promptTokens?: number
   textTokens?: number
   lyricTokens?: number
   /** 0 derives it from the text and lyric budgets. */
@@ -38,7 +59,10 @@ export type AudiogenFitStatus = 'fits' | 'does-not-fit' | 'error'
 
 /** One pipeline stage, as the fitter placed it. */
 export interface AudiogenFitStage {
-  /** `textenc` | `lm` | `cond` | `detok` | `dit` | `vae`. */
+  /**
+   * ACE-Step: `textenc` | `lm` | `cond` | `detok` | `dit` | `vae`.
+   * MiniMax: `lm` | `depth` | `cond` | `dit` | `vocoder`.
+   */
   name: string
   /** Backend the stage loads on, after placement. */
   deviceName: string
@@ -46,11 +70,11 @@ export interface AudiogenFitStage {
   weightsBytes: number
   /** The portion mapped in place from the file, on the host. */
   weightsMmapBytes: number
-  /** The LM KV cache. */
+  /** The KV cache of the LM, or of the MiniMax depth decoder. */
   stateBytes: number
   /** Largest compute arena the stage holds at once. */
   computeBytes: number
-  /** Stage-phase host buffers: masks, latents, PCM. */
+  /** Stage-phase host buffers: masks, latents, PCM, staged graph inputs. */
   hostBytes: number
 }
 
@@ -63,6 +87,7 @@ export interface AudiogenFitResult {
    */
   reason: string
   modelName: string
+  /** ACE-Step turbo checkpoint; always false for MiniMax. */
   isTurbo: boolean
   deviceName: string
   deviceIsCpu: boolean
@@ -70,7 +95,10 @@ export interface AudiogenFitResult {
   deviceSharesHostMemory: boolean
   deviceFreeBytes: number
   deviceTotalBytes: number
-  /** Peak across the pipeline phases under the projected residency mode. */
+  /**
+   * Peak across the pipeline phases under the projected residency mode. MiniMax
+   * keeps its stages resident, so this is the steady state of repeated runs.
+   */
   deviceBytes: number
   hostBytes: number
   /** Host capacity, which is a budget of its own where the device has its own memory. */

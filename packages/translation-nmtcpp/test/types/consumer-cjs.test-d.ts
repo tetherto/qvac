@@ -62,6 +62,13 @@ const modelTypes: TranslationNmtcpp.TranslationNmtcppModelTypes =
   TranslationNmtcpp.ModelTypes;
 void modelTypes;
 
+const fit: TranslationNmtcpp.FitResult = TranslationNmtcpp.assessFit({
+  files: { model: "/abs/model.bin" },
+  config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
+  marginBytes: 1024,
+});
+void fit.status;
+
 const state: TranslationNmtcpp.InferenceClientState = model.getState();
 void state;
 

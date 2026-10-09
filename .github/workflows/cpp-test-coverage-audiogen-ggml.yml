@@ -1,20 +1,18 @@
 name: CPP Tests (AudioGen GGML)
 
-# Stub lane. The audiogen-ggml addon has no addon-level C++ unit tests yet
-# (CMakeLists.txt BUILD_TESTING is OFF, reserved for a future addon suite).
-# The ACE-Step engine's deterministic C++ unit tests (test_acestep_units:
-# philox, FSQ, scheduler, VAE progress) live in and run from
-# qvac-fabric-speech.cpp's engines/audiogen CI, so there is nothing to build
-# or run here today. This job exists so on-pr-audiogen-ggml.yml's
-# cpp-tests-coverage gate resolves green; replace the body with a real
-# build/coverage flow (mirror cpp-test-coverage-tts-ggml.yml) once the addon
-# grows its own C++ tests.
-
+# Cache the native build; addon-level C++ tests are still a stub.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/audiogen-ggml/**'
+      - '.github/workflows/cpp-test-coverage-audiogen-ggml.yml'
+      - '.github/actions/vcpkg-*/**'
+      - '.github/scripts/configure-cpp-build.mjs'
+      - 'vcpkg-overlays/**'
   workflow_call:
     inputs:
       ref:
-        description: "ref"
         type: string
       repository:
         type: string
@@ -24,13 +22,201 @@ permissions:
   contents: read
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   cpp-tests:
-    name: audiogen-ggml C++ tests (stub)
-    runs-on: ubuntu-latest
+    needs: runner_names
+    name: audiogen-ggml C++ build and test stub
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: audiogen-ggml
+            workdir: packages/audiogen-ggml
+            mode: native
+            platform: linux
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
+            cppBuildJobs: 2
+            hasCcache: true
     steps:
-      - name: No addon-level C++ tests yet
+      - name: Validate checkout inputs for cache-writing events
+        if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+        shell: bash
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.repository }}
+          SOURCE_REF: ${{ inputs.ref }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_NAME: ${{ github.ref_name }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SOURCE_REPOSITORY" ] && [ "$SOURCE_REPOSITORY" != "$EVENT_REPOSITORY" ]; then
+            echo '::error::Non-PR builds must use the triggering repository.'
+            exit 1
+          fi
+          case "$SOURCE_REF" in
+            ""|"$EVENT_REF"|"$EVENT_REF_NAME"|"$EVENT_SHA") ;;
+            *) echo '::error::Non-PR builds must use the triggering revision.'; exit 1 ;;
+          esac
+
+      - name: Manual Workspace Cleanup
+        if: runner.environment != 'github-hosted'
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Checkout repository
+        if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout PR code
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - name: Setup vcpkg (system-preinstalled)
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Point vcpkg at its binary cache
+        uses: ./.github/actions/vcpkg-binary-cache-dir
+        with:
+          workdir: ${{ matrix.workdir }}
+          trusted: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) }}
+
+      - name: Cleanup vcpkg
         shell: bash
         run: |
-          echo "audiogen-ggml has no addon-level C++ unit tests yet." >> "$GITHUB_STEP_SUMMARY"
-          echo "The ACE-Step engine unit tests run in qvac-fabric-speech.cpp's audiogen CI." >> "$GITHUB_STEP_SUMMARY"
-          echo "Nothing to build/run here — passing."
+          rm -rf "$VCPKG_ROOT/buildtrees"/*
+          rm -rf "$VCPKG_ROOT/packages"/*
+          rm -rf "$VCPKG_ROOT/downloads/git-tmp"
+
+      - name: Fingerprint the toolchain
+        uses: ./.github/actions/vcpkg-toolchain-fingerprint
+
+      - name: Get vcpkg cache (restore)
+        id: vcpkg-cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: >-
+            cpp-audiogen-native-v1-${{ matrix.package }}-${{ matrix.mode }}-${{ matrix.platform }}-${{ matrix.arch }}-${{
+              hashFiles(
+                format('{0}/vcpkg.json', matrix.workdir),
+                format('{0}/vcpkg-configuration.json', matrix.workdir),
+                format('{0}/vcpkg/triplets/**', matrix.workdir),
+                format('{0}/vcpkg/ports/**', matrix.workdir),
+                'vcpkg-overlays/triplets/**',
+                'vcpkg-overlays/toolchains/**'
+              )
+            }}-${{ env.TOOLCHAIN_FINGERPRINT }}
+          path: ${{ matrix.workdir }}/vcpkg/cache
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure C++ build resources
+        env:
+          CPP_BUILD_JOBS: ${{ matrix.cppBuildJobs }}
+          CPP_PACKAGE: ${{ matrix.package }}
+          CPP_HAS_CCACHE: ${{ matrix.hasCcache }}
+        run: node .github/scripts/configure-cpp-build.mjs
+
+      - name: Get ccache cache
+        if: matrix.hasCcache
+        id: ccache-cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ccache-cpp-v2-${{ matrix.package }}-${{ matrix.mode }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.TOOLCHAIN_FINGERPRINT }}-${{ hashFiles(format('{0}/vcpkg.json', matrix.workdir), format('{0}/vcpkg-configuration.json', matrix.workdir), format('{0}/vcpkg/triplets/**', matrix.workdir), 'vcpkg-overlays/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.CCACHE_DIR }}
+          restore-keys: |
+            ccache-cpp-v2-${{ matrix.package }}-${{ matrix.mode }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.TOOLCHAIN_FINGERPRINT }}-${{ hashFiles(format('{0}/vcpkg.json', matrix.workdir), format('{0}/vcpkg-configuration.json', matrix.workdir), format('{0}/vcpkg/triplets/**', matrix.workdir), 'vcpkg-overlays/**') }}-
+
+      - name: Reset ccache statistics
+        if: matrix.hasCcache
+        run: ccache -z
+
+      - name: Install bare tooling (global)
+        run: npm install -g --force bare bare-make@1.8.0
+
+      - name: Install npm dependencies
+        working-directory: ${{ matrix.workdir }}
+        run: npm install --ignore-scripts
+
+      - name: Build native addon
+        id: cpp-build
+        working-directory: ${{ matrix.workdir }}
+        run: npm run build:native
+
+      - name: Sync the host and workspace vcpkg caches
+        if: >-
+          env.VCPKG_CACHE_PERSISTENT == 'true' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository)
+        shell: bash
+        run: |
+          set +e
+          host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
+          ws_dir="${VCPKG_CACHE_DIR}"
+          echo "sync: host=${host_dir} workspace=${ws_dir}"
+          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || { echo "sync: no host dir"; exit 0; }
+          [ "${host_dir}" = "${ws_dir}" ] && exit 0
+          mkdir -p "${ws_dir}"
+          umask 000
+
+          sync_dir() {
+            find "$1" -type f 2>/dev/null | while read -r f; do
+              out="$2/${f#$1/}"
+              [ -f "$out" ] && continue
+              mkdir -p "$(dirname "$out")" 2>/dev/null
+              tmp="$out.tmp.$$"
+              cp "$f" "$tmp" 2>/dev/null && mv -f "$tmp" "$out" 2>/dev/null
+              rm -f "$tmp" 2>/dev/null
+            done
+          }
+          sync_dir "${ws_dir}" "${host_dir}"
+
+          echo "sync: host=$(find "${host_dir}" -type f 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -type f 2>/dev/null | wc -l)"
+          exit 0
+
+      - name: Save vcpkg cache (trusted contexts)
+        if: >-
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) &&
+          hashFiles(format('{0}/vcpkg/cache/**', matrix.workdir)) != ''
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+          path: ${{ matrix.workdir }}/vcpkg/cache
+
+      - name: Save ccache (trusted contexts)
+        if: >-
+          matrix.hasCcache &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository)
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ${{ steps.ccache-cache.outputs.cache-primary-key }}
+          path: ${{ env.CCACHE_DIR }}
+
+      - name: No addon-level C++ tests yet
+        run: |
+          echo 'AudioGen native build completed; no addon-level C++ unit tests yet.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'ACE-Step engine unit tests run in qvac-fabric-speech.cpp audiogen CI.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show ccache statistics
+        if: always() && !cancelled() && steps.cpp-build.outcome == 'success'
+        run: ccache -s
