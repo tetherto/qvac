@@ -22,8 +22,12 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
-import java.util.concurrent.TimeUnit
+import java.io.IOException
+import java.util.Collections
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -255,25 +259,49 @@ class JvmBareRpcTransport internal constructor(
                 ?: System.getProperty("java.io.tmpdir")
         }
 
+        /**
+         * Accepts until one connection presents [expectedToken]. Each handshake runs on
+         * its own thread with its own deadline, so a peer that connects and stays silent
+         * cannot hold the accept loop and burn the connect deadline before the child
+         * worker is served.
+         */
         private fun acceptAuthenticatedWorker(
             server: ServerSocket,
             expectedToken: String,
             timeoutMs: Int,
         ): Socket {
-            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.toLong())
-            while (true) {
-                val remainingMs = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
-                if (remainingMs <= 0) throw SocketTimeoutException("QVAC worker authentication timed out")
-                server.soTimeout = remainingMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1)
-                val candidate = server.accept()
+            val winner = CompletableFuture<Socket>()
+            val pending = Collections.synchronizedSet(HashSet<Socket>())
+            val handshakeTimeoutMs = minOf(HANDSHAKE_TIMEOUT_MS, timeoutMs)
+            val acceptor = Thread({
                 try {
-                    candidate.soTimeout = server.soTimeout
-                    val received = readAuthenticationLine(candidate, MAX_AUTH_TOKEN_BYTES)
-                    if (constantTimeEquals(received, expectedToken)) return candidate
-                } catch (_: Throwable) {
-                    // Reject this connection and continue waiting for the child worker.
+                    while (true) {
+                        val candidate = server.accept()
+                        pending += candidate
+                        Thread({
+                            val authenticated = runCatching {
+                                candidate.soTimeout = handshakeTimeoutMs
+                                constantTimeEquals(readAuthenticationLine(candidate, MAX_AUTH_TOKEN_BYTES), expectedToken)
+                            }.getOrDefault(false)
+                            pending -= candidate
+                            if (!authenticated || !winner.complete(candidate)) runCatching { candidate.close() }
+                        }, "qvac-worker-handshake").apply { isDaemon = true }.start()
+                    }
+                } catch (_: IOException) {
+                    // The server socket was closed or hit its deadline: stop accepting.
                 }
-                runCatching { candidate.close() }
+            }, "qvac-worker-accept").apply { isDaemon = true }
+            server.soTimeout = timeoutMs
+            acceptor.start()
+            try {
+                return winner.get(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            } catch (_: TimeoutException) {
+                // A handshake finishing after the deadline must not leak its socket.
+                if (!winner.cancel(false)) runCatching { winner.get().close() }
+                throw SocketTimeoutException("QVAC worker authentication timed out")
+            } finally {
+                runCatching { server.close() }
+                synchronized(pending) { pending.toList() }.forEach { runCatching { it.close() } }
             }
         }
 
@@ -306,6 +334,7 @@ class JvmBareRpcTransport internal constructor(
         private const val SHUTDOWN_TIMEOUT_MS = 10_000L
         private const val PROCESS_EXIT_TIMEOUT_SECONDS = 5L
         private const val MAX_AUTH_TOKEN_BYTES = 256
+        private const val HANDSHAKE_TIMEOUT_MS = 10_000
         private const val IPC_AUTH_TOKEN_ENV = "QVAC_IPC_AUTH_TOKEN"
     }
 }

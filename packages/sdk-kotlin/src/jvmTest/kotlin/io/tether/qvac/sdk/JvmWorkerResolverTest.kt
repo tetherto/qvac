@@ -76,6 +76,41 @@ class JvmWorkerResolverTest {
     }
 
     @Test
+    fun explicitWorkerPathNegotiatesAuthenticationFromEnclosingSdk() {
+        val bare = Files.createTempDirectory("qvac-bare").resolve("bare")
+        bare.writeText("bare")
+        bare.toFile().setExecutable(true)
+
+        fun resolve(worker: java.nio.file.Path) = JvmWorkerResolver.resolve(
+            workerPath = worker.toString(),
+            bareExecutable = bare.toString(),
+            environment = emptyMap(),
+            currentDirectory = worker.parent,
+            userHome = null,
+        )
+
+        val current = Files.createTempDirectory("qvac-explicit-current")
+        current.resolve("package.json")
+            .writeText("""{"name":"@qvac/sdk","version":"$SDK_VERSION","qvacIpcAuthentication":"token-v1"}""")
+        val currentWorker = current.resolve("dist/server/worker.js")
+        currentWorker.parent.createDirectories()
+        currentWorker.writeText("worker")
+        assertTrue(resolve(currentWorker).authenticated)
+
+        val tokenless = Files.createTempDirectory("qvac-explicit-tokenless")
+        tokenless.resolve("package.json").writeText("""{"name":"@qvac/sdk","version":"0.0.0-older"}""")
+        val tokenlessWorker = tokenless.resolve("dist/server/worker.js")
+        tokenlessWorker.parent.createDirectories()
+        tokenlessWorker.writeText("worker")
+        assertFalse(resolve(tokenlessWorker).authenticated)
+
+        // No @qvac/sdk metadata anywhere above the worker: fail closed.
+        val bareWorker = Files.createTempDirectory("qvac-explicit-bare").resolve("worker.js")
+        bareWorker.writeText("worker")
+        assertTrue(resolve(bareWorker).authenticated)
+    }
+
+    @Test
     fun negotiatesAuthenticationFromWorkerMetadata() {
         val tokenless = Files.createTempDirectory("qvac-tokenless")
         tokenless.resolve("package.json").writeText("""{"version":"$SDK_VERSION"}""")
