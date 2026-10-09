@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -17,14 +18,6 @@ const generatedRoot = process.env.QVAC_KOTLIN_GENERATED_ROOT
   : path.join(projectRoot, 'android-barekit', 'build', 'generated', 'qvac', 'aio')
 const assetsDirectory = path.join(generatedRoot, 'assets', 'qvac')
 const addonsDirectory = path.join(generatedRoot, 'addons')
-const classificationWeightsSource = path.join(
-  projectRoot,
-  'node_modules',
-  '@qvac',
-  'classification-ggml',
-  'weights',
-  'mobilenetv3_3class_v3_fp16.gguf'
-)
 const classificationAssetsDirectory = path.join(assetsDirectory, 'classification')
 const qvacConfig = JSON.parse(await fs.readFile(configPath, 'utf8'))
 const profileName = process.env.QVAC_KOTLIN_PROFILE ?? path.basename(configPath, '.json')
@@ -57,6 +50,8 @@ if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recu
 
 // Bundle the checkout's packages/sdk. The worker build owns compiling it.
 const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
+const modulesRoot = bundleSdkPath ?? projectRoot
+const classificationWeightsSource = classificationWeightsPath(modulesRoot)
 
 const bundle = await bundleSdk({
   projectRoot,
@@ -70,7 +65,7 @@ const bundle = await bundleSdk({
 // Addon native prebuilds ship in per-platform packages that are not
 // dependencies of the meta, so install the ones this bundle's addons name for
 // android-arm64, at each meta's installed version.
-await ensureHostPrebuilds(bundle.manifestPath, 'android-arm64')
+await ensureHostPrebuilds(bundle.manifestPath, 'android-arm64', modulesRoot)
 
 const verification = await verifyBundle({
   projectRoot,
@@ -125,7 +120,7 @@ const packageFilter =
 
 const linkedResources = new Set()
 for await (const resource of link(
-  projectRoot,
+  modulesRoot,
   {
     hosts: ['android-arm64'],
     out: addonsDirectory
@@ -136,10 +131,10 @@ for await (const resource of link(
   console.log(`Linked ${resource}`)
 }
 
-// bare-link from the project root reaches only the meta packages. Split addons
+// bare-link from the bundled SDK reaches the meta packages. Split addons
 // keep their binaries in a per-platform package, so link each installed one
 // from its own `addon` directory or its .so never reaches the AAR.
-for (const platformAddon of platformAddonRoots(addons, 'android-arm64')) {
+for (const platformAddon of platformAddonRoots(addons, 'android-arm64', modulesRoot)) {
   for await (const resource of link(
     platformAddon.dir,
     {
@@ -230,10 +225,21 @@ async function pathExists(target) {
  * The installed platform-package `addon` directories for the given metas, ready
  * for a bare-link pass. Mirrors `resolvePlatformAddonRoots` in the Expo linker.
  */
-function platformAddonRoots(addonNames, host) {
+function packageDir(modulesRoot, name) {
+  return path.join(modulesRoot, 'node_modules', ...name.split('/'))
+}
+
+function classificationWeightsPath(modulesRoot) {
+  const weights = path.join('weights', 'mobilenetv3_3class_v3_fp16.gguf')
+  const bundled = path.join(packageDir(modulesRoot, '@qvac/classification-ggml'), weights)
+  if (fsSync.existsSync(bundled)) return bundled
+  return path.join(packageDir(projectRoot, '@qvac/classification-ggml'), weights)
+}
+
+function platformAddonRoots(addonNames, host, modulesRoot) {
   const roots = []
   for (const name of addonNames) {
-    const metaPath = path.join(projectRoot, 'node_modules', ...name.split('/'), 'package.json')
+    const metaPath = path.join(packageDir(modulesRoot, name), 'package.json')
     let meta
     try {
       meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf8'))
@@ -242,7 +248,7 @@ function platformAddonRoots(addonNames, host) {
     }
     const platformPackage = platformPackageForHost(meta, host)
     if (platformPackage === null) continue
-    const addonDir = path.join(projectRoot, 'node_modules', ...platformPackage.split('/'), 'addon')
+    const addonDir = path.join(packageDir(modulesRoot, platformPackage), 'addon')
     let addonManifest
     try {
       addonManifest = JSON.parse(fsSync.readFileSync(path.join(addonDir, 'package.json'), 'utf8'))
@@ -300,14 +306,14 @@ function platformPackageForHost(meta, host) {
 /**
  * Install the per-platform prebuild packages the bundled addons need for `host`,
  * derived from each addon's own `#host-addon` map at the meta's installed
- * version. `--no-save` keeps package.json free of hand-maintained pins.
+ * version. Installed beside that meta, not recorded in package.json.
  */
-async function ensureHostPrebuilds(manifestPath, host) {
+async function ensureHostPrebuilds(manifestPath, host, modulesRoot) {
   const manifestJson = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
   const manifestAddons = Array.isArray(manifestJson.addons) ? manifestJson.addons : []
   const specs = []
   for (const addon of manifestAddons) {
-    const addonRoot = path.join(projectRoot, 'node_modules', addon)
+    const addonRoot = packageDir(modulesRoot, addon)
     // A local fat `prebuilds/<host>` already resolves; only a meta without one
     // needs its per-platform package installed.
     if (await pathExists(path.join(addonRoot, 'prebuilds', host))) continue
@@ -324,9 +330,26 @@ async function ensureHostPrebuilds(manifestPath, host) {
   }
   if (specs.length === 0) return
   console.log(`Installing ${host} prebuild packages: ${specs.join(', ')}`)
-  execFileSync(
-    'npm',
-    ['install', '--no-save', '--no-package-lock', '--ignore-scripts', '--legacy-peer-deps', ...specs],
-    { cwd: projectRoot, stdio: 'inherit' }
-  )
+  await installPrebuilds(modulesRoot, specs)
+}
+
+async function installPrebuilds(modulesRoot, specs) {
+  const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'qvac-android-prebuilds-'))
+  try {
+    await fs.writeFile(path.join(staging, 'package.json'), '{"private":true}\n')
+    execFileSync(
+      'npm',
+      ['install', '--ignore-scripts', '--no-package-lock', '--legacy-peer-deps', ...specs],
+      { cwd: staging, stdio: 'inherit' }
+    )
+    for (const spec of specs) {
+      const name = spec.slice(0, spec.lastIndexOf('@'))
+      await fs.cp(packageDir(staging, name), packageDir(modulesRoot, name), {
+        recursive: true,
+        force: true
+      })
+    }
+  } finally {
+    await fs.rm(staging, { recursive: true, force: true })
+  }
 }
