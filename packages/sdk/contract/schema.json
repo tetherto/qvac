@@ -1887,8 +1887,8 @@
                       "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
                     },
                     "content": {
-                      "type": "string",
-                      "description": "Message content."
+                      "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                      "type": ["string", "null"]
                     },
                     "attachments": {
                       "description": "Optional file attachments for multimodal models.",
@@ -1943,7 +1943,7 @@
                       "type": "string"
                     }
                   },
-                  "required": ["role", "content"],
+                  "required": ["role"],
                   "title": "BatchCompletionStreamRequestPromptsItemHistoryItem"
                 },
                 "description": "Array of conversation messages sent to the model."
@@ -3261,8 +3261,8 @@
                 "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "type": "string",
-                "description": "Message content."
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "type": ["string", "null"]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -3317,7 +3317,7 @@
                 "type": "string"
               }
             },
-            "required": ["role", "content"],
+            "required": ["role"],
             "title": "CompletionOrchestrateRequestHistoryItem"
           },
           "description": "Array of conversation messages sent to the model."
@@ -3945,8 +3945,8 @@
                 "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "type": "string",
-                "description": "Message content."
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "type": ["string", "null"]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -4001,7 +4001,7 @@
                 "type": "string"
               }
             },
-            "required": ["role", "content"],
+            "required": ["role"],
             "title": "CompletionStreamRequestHistoryItem"
           },
           "description": "Array of conversation messages sent to the model."

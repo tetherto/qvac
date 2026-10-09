@@ -1635,7 +1635,12 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
             description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
         ),
     ]
-    content: Annotated[str, Field(description="Message content.")]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+        ),
+    ] = None
     attachments: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
@@ -2967,7 +2972,12 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
             description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
         ),
     ]
-    content: Annotated[str, Field(description="Message content.")]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+        ),
+    ] = None
     attachments: Annotated[
         list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
@@ -3622,7 +3632,12 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
             description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
         ),
     ]
-    content: Annotated[str, Field(description="Message content.")]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+        ),
+    ] = None
     attachments: Annotated[
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),

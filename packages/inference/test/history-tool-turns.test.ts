@@ -16,6 +16,15 @@ test('historyMessageSchema: accepts tool calls on assistant turns and call ids o
   t.ok(historyMessageSchema.safeParse({ role: 'user', content: 'hi' }).success)
 })
 
+test('historyMessageSchema: null or omitted content on a tool-call turn reads as empty', (t) => {
+  const { toolCalls } = callTurn
+  t.is(historyMessageSchema.parse({ role: 'assistant', content: null, toolCalls }).content, '')
+  t.is(historyMessageSchema.parse({ role: 'assistant', toolCalls }).content, '')
+  t.is(historyMessageSchema.safeParse({ role: 'assistant', content: null }).success, false)
+  t.is(historyMessageSchema.safeParse({ role: 'assistant', toolCalls: [] }).success, false)
+  t.is(historyMessageSchema.safeParse({ role: 'user', content: null }).success, false)
+})
+
 test('historyMessageSchema: rejects tool fields on the wrong role', (t) => {
   const cases = [
     { role: 'user', content: 'hi', toolCalls: callTurn.toolCalls },

@@ -214,7 +214,12 @@ export const historyMessageSchema = z
     role: z
       .string()
       .describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
-    content: z.string().describe('Message content.'),
+    content: z
+      .string()
+      .nullish()
+      .describe(
+        'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.'
+      ),
     attachments: z
       .array(attachmentSchema)
       .optional()
@@ -235,6 +240,14 @@ export const historyMessageSchema = z
       .describe('On a `tool` turn: the name of the tool that produced the result.')
   })
   .superRefine((message, ctx) => {
+    const callsOnly = message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
+    if ((message.content === null || message.content === undefined) && !callsOnly) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`content` is required unless an assistant message carries `toolCalls`.',
+        path: ['content']
+      })
+    }
     if (message.toolCalls !== undefined && message.role !== 'assistant') {
       ctx.addIssue({
         code: 'custom',
@@ -252,6 +265,7 @@ export const historyMessageSchema = z
       }
     }
   })
+  .transform((message) => ({ ...message, content: message.content ?? '' }))
 
 export type HistoryMessage = z.infer<typeof historyMessageSchema>
 
