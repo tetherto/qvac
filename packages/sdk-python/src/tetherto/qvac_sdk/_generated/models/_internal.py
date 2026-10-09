@@ -2398,6 +2398,15 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class BciTranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2418,6 +2427,13 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
     ] = None
     speaker: Annotated[
         str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[BciTranscribeResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
     ] = None
     is_end_of_turn: Annotated[
         bool | None,
@@ -2725,6 +2741,15 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2745,6 +2770,13 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     ] = None
     speaker: Annotated[
         str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[BciTranscribeStreamResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
     ] = None
     is_end_of_turn: Annotated[
         bool | None,
@@ -10593,6 +10625,31 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
             pattern="^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$",
         ),
     ] = None
+    streaming_speaker_vad: Annotated[
+        bool | None,
+        Field(
+            alias="streamingSpeakerVad",
+            description="Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
+        ),
+    ] = None
+    diarization_threshold: Annotated[
+        float | None,
+        Field(
+            alias="diarizationThreshold",
+            description="Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    diarization_min_segment_ms: Annotated[
+        int | None,
+        Field(
+            alias="diarizationMinSegmentMs",
+            description="Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     streaming_spk_cache_enable: Annotated[
         bool | None,
         Field(
@@ -10622,7 +10679,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="streamingChunkLeftContextMs",
-            description="AOSC: encoder left-context window in ms. Default 80.",
+            description="Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.",
             ge=0,
             le=9007199254740991,
         ),
@@ -21226,6 +21283,15 @@ class TranscribeResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class TranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class TranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -21246,6 +21312,13 @@ class TranscribeResponseSegment(GeneratedBaseModel):
     ] = None
     speaker: Annotated[
         str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[TranscribeResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
     ] = None
     is_end_of_turn: Annotated[
         bool | None,
@@ -21273,6 +21346,15 @@ class TranscribeResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     speaking: bool
     probability: float
     source: Annotated[
@@ -21447,6 +21529,13 @@ class TranscribeStreamRequestParakeetStreamingConfig(GeneratedBaseModel):
     ] = None
     emit_partials: Annotated[bool | None, Field(alias="emitPartials")] = None
     emit_energy_vad: Annotated[bool | None, Field(alias="emitEnergyVad")] = None
+    emit_speaker_vad: Annotated[bool | None, Field(alias="emitSpeakerVad")] = None
+    diarization_threshold: Annotated[
+        float | None, Field(alias="diarizationThreshold", ge=0.0, le=1.0)
+    ] = None
+    diarization_min_segment_ms: Annotated[
+        int | None, Field(alias="diarizationMinSegmentMs", ge=0, le=9007199254740991)
+    ] = None
     spk_cache_enable: Annotated[bool | None, Field(alias="spkCacheEnable")] = None
     spk_cache_len: Annotated[
         int | None, Field(alias="spkCacheLen", gt=0, le=9007199254740991)
@@ -21601,6 +21690,15 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class TranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class TranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -21621,6 +21719,13 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
     ] = None
     speaker: Annotated[
         str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[TranscribeStreamResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
     ] = None
     is_end_of_turn: Annotated[
         bool | None,
@@ -21648,6 +21753,15 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     speaking: bool
     probability: float
     source: Annotated[

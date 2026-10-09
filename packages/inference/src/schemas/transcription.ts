@@ -144,6 +144,14 @@ export const ASR_BACKEND_IDS = Object.freeze({
 
 export type AsrBackendId = (typeof ASR_BACKEND_IDS)[keyof typeof ASR_BACKEND_IDS]
 
+export const transcribeSpeakerSegmentSchema = z.object({
+  speakerId: z.number().int().nonnegative(),
+  startMs: z.number().nonnegative(),
+  endMs: z.number().nonnegative()
+})
+
+export type TranscribeSpeakerSegment = z.infer<typeof transcribeSpeakerSegmentSchema>
+
 export const transcribeSegmentSchema = z.object({
   text: z.string(),
   startMs: z.number(),
@@ -157,6 +165,12 @@ export const transcribeSegmentSchema = z.object({
     .optional()
     .describe('Zero-based speaker id for diarized transcription.'),
   speaker: z.string().optional().describe('MOSS speaker label, such as S01.'),
+  speakerSegments: z
+    .array(transcribeSpeakerSegmentSchema)
+    .optional()
+    .describe(
+      'Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.'
+    ),
   isEndOfTurn: z
     .boolean()
     .optional()
@@ -172,6 +186,12 @@ export const transcribeSegmentSchema = z.object({
 })
 
 export const vadStateEventSchema = z.object({
+  speakerId: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('Dominant speaker for Parakeet diarization activity; omitted when unavailable.'),
   speaking: z.boolean(),
   probability: z.number(),
   source: z
@@ -278,6 +298,9 @@ export const parakeetStreamingRunConfigSchema = z.object({
   rightLookaheadMs: z.number().int().nonnegative().optional(),
   emitPartials: z.boolean().optional(),
   emitEnergyVad: z.boolean().optional(),
+  emitSpeakerVad: z.boolean().optional(),
+  diarizationThreshold: z.number().min(0).max(1).optional(),
+  diarizationMinSegmentMs: z.number().int().nonnegative().optional(),
   spkCacheEnable: z.boolean().optional(),
   spkCacheLen: z.number().int().positive().optional(),
   fifoLen: z.number().int().positive().optional(),

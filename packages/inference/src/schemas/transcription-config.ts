@@ -299,6 +299,29 @@ export const parakeetRuntimeConfigSchema = z.object({
       'Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.'
     ),
 
+  streamingSpeakerVad: z
+    .boolean()
+    .optional()
+    .describe(
+      'Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.'
+    ),
+  diarizationThreshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      'Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).'
+    ),
+  diarizationMinSegmentMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).'
+    ),
+
   // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) =========
   // Auto-enabled when the loaded GGUF carries
   // `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"`. Ignored
@@ -324,7 +347,9 @@ export const parakeetRuntimeConfigSchema = z.object({
     .int()
     .nonnegative()
     .optional()
-    .describe('AOSC: encoder left-context window in ms. Default 80.'),
+    .describe(
+      'Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.'
+    ),
   streamingChunkRightContextMs: z
     .number()
     .int()

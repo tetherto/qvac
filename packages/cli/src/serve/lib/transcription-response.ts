@@ -9,6 +9,7 @@ interface PartialVerboseSegment {
   text: string
   speaker?: string
   speaker_id?: number
+  speaker_segments?: { speaker_id: number; start: number; end: number }[]
 }
 
 interface PartialVerboseTranscription {
@@ -48,7 +49,11 @@ export function formatTimedTranscription(
             .trim(),
           duration:
             segments.reduce(
-              (maximumEndMs, segment) => Math.max(maximumEndMs, roundMilliseconds(segment.endMs)),
+              (maximumEndMs, segment) =>
+                (segment.speakerSegments ?? []).reduce(
+                  (maximum, turn) => Math.max(maximum, roundMilliseconds(turn.endMs)),
+                  Math.max(maximumEndMs, roundMilliseconds(segment.endMs))
+                ),
               0
             ) / 1000,
           segments: segments.map((segment) => ({
@@ -57,7 +62,16 @@ export function formatTimedTranscription(
             end: roundMilliseconds(segment.endMs) / 1000,
             text: segment.text,
             ...(segment.speaker !== undefined ? { speaker: segment.speaker } : {}),
-            ...(segment.speakerId !== undefined ? { speaker_id: segment.speakerId } : {})
+            ...(segment.speakerId !== undefined ? { speaker_id: segment.speakerId } : {}),
+            ...(segment.speakerSegments !== undefined
+              ? {
+                  speaker_segments: segment.speakerSegments.map((turn) => ({
+                    speaker_id: turn.speakerId,
+                    start: roundMilliseconds(turn.startMs) / 1000,
+                    end: roundMilliseconds(turn.endMs) / 1000
+                  }))
+                }
+              : {})
           }))
         }
       }

@@ -558,7 +558,8 @@ export function processLineConversation(
           type: 'vad',
           speaking: response.vad.speaking,
           probability: response.vad.probability,
-          ...(response.vad.source && { source: response.vad.source })
+          ...(response.vad.source && { source: response.vad.source }),
+          ...(response.vad.speakerId !== undefined && { speakerId: response.vad.speakerId })
         }
       }
       if (response.endOfTurn) {

@@ -104,6 +104,7 @@ export {
   type VadStateEvent,
   type EndOfTurnEvent,
   type TranscribeSegment,
+  type TranscribeSpeakerSegment,
   ASR_BACKEND_IDS,
   type AsrBackendId,
   type BciConfig,

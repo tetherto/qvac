@@ -29,3 +29,10 @@ batch transcription, with optional `maxThreads`, `useGPU` (Metal), and
 `maxNewTokens` belong to `transcribe`, not model configuration. Metadata results
 include timestamps and optional `speakerId` / `speaker` labels. Streaming,
 CoreML sidecars, and native memory-fit assessment are not exposed by this plugin.
+
+Nemotron 3 Diarization uses `parakeet-transcription` with a single local GGUF.
+Offline metadata retains overlapping `speakerSegments`; streaming segment and
+speaker-activity VAD events retain `speakerId`. `diarizationThreshold` and
+`diarizationMinSegmentMs` are load-time controls and per-call streaming controls.
+Omitted controls preserve native model defaults. Registry constants and model-output
+validation are pending registry weights.

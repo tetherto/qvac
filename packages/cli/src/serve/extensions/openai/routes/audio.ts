@@ -54,9 +54,10 @@ model).
 
 **\`response_format\`** accepts \`json\` (default), \`text\`, \`srt\`, \`vtt\`,
 and \`verbose_json\`. \`json\` and \`text\` work with Whisper, Parakeet,
-and MOSS transcription aliases. Timed formats require Whisper or MOSS segment metadata.
+and MOSS transcription aliases. SRT/VTT require Whisper or MOSS segment metadata.
+Parakeet also supports \`verbose_json\`, including offline diarization turns.
 \`verbose_json\` exposes text, duration, segment id/start/end/text, and available speaker/speaker_id labels.
-Its duration is the end of the last transcribed segment, not the submitted
+Its duration is the latest segment or speaker-turn end, not the submitted
 audio length.
 Unknown values return \`400 invalid_response_format\`.
 
@@ -655,6 +656,12 @@ function assertKnownTranscriptionFormat(responseFormat: string): void {
 
 function assertTimedFormatSupported(responseFormat: string, sdkType: string): void {
   if (!isTimedTranscriptionFormat(responseFormat)) return
+  if (
+    responseFormat === 'verbose_json' &&
+    (sdkType === 'parakeet' || sdkType === 'parakeet-transcription')
+  ) {
+    return
+  }
   if (
     sdkType === 'whisper' ||
     sdkType === 'whispercpp-transcription' ||

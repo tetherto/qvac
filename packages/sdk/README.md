@@ -479,3 +479,32 @@ support are deferred because the current addon does not expose those capabilitie
 The ASR dependencies temporarily use `file:../asr-ggml` for local validation.
 Replace the SDK dependency and both inference declarations with `^0.8.0` and
 regenerate the lockfile when that version is published.
+
+## Nemotron 3 Diarization
+
+Load a local Nemotron 3 Diarization GGUF with `modelType: 'parakeet-transcription'`.
+The addon detects the variant from the GGUF and supports up to eight speakers,
+including overlapping activity. This model reports speaker turns rather than words.
+The registry catalog has no Nemotron diarization model yet; native model validation
+and generated model constants will follow when the weights become available.
+
+Use `transcribe({ modelId, audioChunk, metadata: true })` for offline diarization.
+Each result can include `speakerSegments` with zero-based `speakerId`, `startMs`,
+and `endMs`. Load with `modelConfig.streaming: true` before using `transcribeStream`.
+Streaming metadata carries `speakerId` on each diarization segment.
+For streaming speaker-activity events, enable `streamingSpeakerVad` at load or
+`emitSpeakerVad` under `parakeetStreamingConfig` per `transcribeStream` call;
+conversation VAD events retain their dominant `speakerId`.
+
+`diarizationThreshold` (0–1) and `diarizationMinSegmentMs` (nonnegative integer)
+are supported in `modelConfig` and per-call `parakeetStreamingConfig`. Omit them
+to preserve model defaults. Nemotron defaults to a 0.5 threshold and 200 ms minimum
+turn; its default left context is 0 ms, while an explicitly configured 80 ms is
+preserved. CLI `verbose_json` exposes offline turns as `speaker_segments` with
+`speaker_id` and start/end timestamps in seconds.
+
+See [the local Nemotron diarization example](examples/asr/nemotron-diarization-filesystem.ts):
+
+```bash
+bun run examples/asr/nemotron-diarization-filesystem.ts ./nemotron-diarization.gguf meeting.wav
+```

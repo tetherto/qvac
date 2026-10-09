@@ -2734,6 +2734,31 @@
               "description": "MOSS speaker label, such as S01.",
               "type": "string"
             },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "BciTranscribeResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -3039,6 +3064,31 @@
             "speaker": {
               "description": "MOSS speaker label, such as S01.",
               "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "BciTranscribeStreamResponseSegmentSpeakerSegmentsItem"
+              }
             },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
@@ -11539,6 +11589,22 @@
                       "type": "string",
                       "pattern": "^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
                     },
+                    "streamingSpeakerVad": {
+                      "description": "Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
+                      "type": "boolean"
+                    },
+                    "diarizationThreshold": {
+                      "description": "Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).",
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "diarizationMinSegmentMs": {
+                      "description": "Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "streamingSpkCacheEnable": {
                       "description": "AOSC (Sortformer v2.1): enable speaker-cache streaming. Default true.",
                       "type": "boolean"
@@ -11556,7 +11622,7 @@
                       "maximum": 9007199254740991
                     },
                     "streamingChunkLeftContextMs": {
-                      "description": "AOSC: encoder left-context window in ms. Default 80.",
+                      "description": "Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
@@ -21058,6 +21124,31 @@
               "description": "MOSS speaker label, such as S01.",
               "type": "string"
             },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "TranscribeResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -21074,6 +21165,12 @@
         "vad": {
           "type": "object",
           "properties": {
+            "speakerId": {
+              "description": "Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "speaking": {
               "type": "boolean"
             },
@@ -21286,6 +21383,19 @@
             "emitEnergyVad": {
               "type": "boolean"
             },
+            "emitSpeakerVad": {
+              "type": "boolean"
+            },
+            "diarizationThreshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "diarizationMinSegmentMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "spkCacheEnable": {
               "type": "boolean"
             },
@@ -21466,6 +21576,31 @@
               "description": "MOSS speaker label, such as S01.",
               "type": "string"
             },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "TranscribeStreamResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -21482,6 +21617,12 @@
         "vad": {
           "type": "object",
           "properties": {
+            "speakerId": {
+              "description": "Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "speaking": {
               "type": "boolean"
             },

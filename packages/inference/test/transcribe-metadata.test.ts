@@ -487,3 +487,25 @@ test('MOSS request options: accepts boundaries and rejects oversized UTF-8 hotwo
   )
   t.absent(transcribeRequestSchema.safeParse({ ...request, maxNewTokens: -1 }).success)
 })
+
+test('Nemotron diarization preserves eight overlapping speaker turns in batch metadata', (t) => {
+  const speakerSegments = Array.from({ length: 8 }, (_, speakerId) => ({
+    speakerId,
+    start: 0.25,
+    end: 1.75
+  }))
+  const segment = toTranscribeSegment({ text: 'Speaker activity', speakerSegments })
+  const wire = transcribeResponseSchema.parse({ type: 'transcribe', segment })
+  t.alike(
+    wire.segment?.speakerSegments,
+    speakerSegments.map((turn) => ({ speakerId: turn.speakerId, startMs: 250, endMs: 1750 }))
+  )
+  t.absent(toTranscribeSegment({ text: 'ordinary ASR' }).speakerSegments)
+  t.alike(toTranscribeSegment({ text: '', speakerSegments: [] }).speakerSegments, [])
+  t.absent(
+    transcribeSegmentSchema.safeParse({
+      ...segment,
+      speakerSegments: [{ speakerId: -1, startMs: 0, endMs: 1 }]
+    }).success
+  )
+})

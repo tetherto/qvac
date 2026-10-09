@@ -434,3 +434,21 @@ describe('serve: MOSS transcription', () => {
     assert.equal(calls.length, 0)
   })
 })
+
+describe('serve: Parakeet diarization metadata', () => {
+  it('requests metadata for Parakeet verbose JSON', async (t) => {
+    const { app, calls } = await createReadyAudioServer(t)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audio/transcriptions',
+      ...multipart([
+        { name: 'model', value: 'parakeet-transcription' },
+        { name: 'response_format', value: 'verbose_json' },
+        EMPTY_FILE
+      ])
+    })
+    assert.equal(res.statusCode, 200)
+    assert.equal(calls[0]?.metadata, true)
+    assert.equal(res.json().segments.length, 2)
+  })
+})

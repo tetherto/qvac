@@ -11,6 +11,7 @@ export interface AsrAddonSegment {
   text: string
   speakerId?: number
   speaker?: string
+  speakerSegments?: { speakerId: number; start: number; end: number }[]
   start?: number
   end?: number
   toAppend?: boolean
@@ -37,6 +38,13 @@ export function toTranscribeSegment(
     text: chunk.text,
     ...(chunk.speakerId !== undefined && { speakerId: chunk.speakerId }),
     ...(chunk.speaker !== undefined && { speaker: chunk.speaker }),
+    ...(chunk.speakerSegments !== undefined && {
+      speakerSegments: chunk.speakerSegments.map((turn) => ({
+        speakerId: turn.speakerId,
+        startMs: turn.start * 1000,
+        endMs: turn.end * 1000
+      }))
+    }),
     startMs: (chunk.start ?? 0) * 1000,
     endMs: (chunk.end ?? 0) * 1000,
     append: chunk.toAppend ?? false,

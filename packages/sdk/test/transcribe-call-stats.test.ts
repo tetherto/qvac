@@ -95,3 +95,28 @@ test('MOSS batch call forwards request options and preserves speaker labels', as
     { text: 'QVAC', startMs: 100, endMs: 300, append: false, id: 0, speaker: 'S01', speakerId: 0 }
   ])
 })
+
+test('Nemotron batch client preserves overlapping turns for all eight speakers', async (t) => {
+  const speakerSegments = Array.from({ length: 8 }, (_, speakerId) => ({
+    speakerId,
+    startMs: 250,
+    endMs: 1750
+  }))
+  const segment = {
+    text: 'Speaker activity',
+    startMs: 0,
+    endMs: 0,
+    append: false,
+    id: 0,
+    speakerSegments
+  }
+  const result = await createTranscribeCall(
+    { modelId: 'nemotron-diarization', audioChunk: 'audio.wav', metadata: true },
+    undefined,
+    responseStream([
+      { type: 'transcribe', segment },
+      { type: 'transcribe', done: true }
+    ])
+  )
+  t.alike(result, [segment])
+})
