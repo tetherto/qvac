@@ -45,6 +45,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   HOST_PREBUILDS_INSTALL_REFUSED: 50615,
   HOST_PREBUILDS_INSTALL_FAILED: 50616,
   UNEXPECTED_DEFERRED_IMPORTS: 50617,
+  ADDON_LINK_FAILED: 50618,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800
@@ -217,6 +218,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: 'UNEXPECTED_DEFERRED_IMPORTS',
     message: (imports: string) =>
       `The worker bundle left imports unresolved that will fail at run time:\n${imports}`
+  },
+  [SDK_CLIENT_ERROR_CODES.ADDON_LINK_FAILED]: {
+    name: 'ADDON_LINK_FAILED',
+    message: (hosts: string, reason: string) =>
+      `Linking the native addons failed\n\n  Hosts: ${hosts}\n  Reason: ${reason}`
   },
 
   // Profiler Errors (50,800-50,899)

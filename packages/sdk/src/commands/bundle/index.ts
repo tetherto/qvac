@@ -18,6 +18,7 @@ import {
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
+import { linkAddons } from '@/commands/bundle/link'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import { TARGETS, type BundleTarget } from '@/commands/bundle/targets'
 import {
@@ -64,6 +65,11 @@ export interface BundleSdkOptions {
   checkEngines?: boolean | undefined
   /** Allow network lookups during the engines check. Defaults to true. */
   network?: boolean | undefined
+  /**
+   * For the `react-native` target, link the native addons for the phone hosts
+   * into react-native-bare-kit. Defaults to true.
+   */
+  link?: boolean | undefined
 }
 
 export interface BundleSdkResult {
@@ -79,6 +85,8 @@ export interface BundleSdkResult {
   manifestPath: string
   /** Platform packages `installMissingPrebuilds` installed; empty when it is off. */
   installedPrebuilds: HostPrebuildPackage[]
+  /** Paths the link step wrote. */
+  linked: string[]
 }
 
 function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
@@ -409,6 +417,13 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     })
   }
 
+  let linked: string[] = []
+  if (target === 'react-native' && options.link !== false) {
+    logger.info('\n🔗 Linking native addons into react-native-bare-kit...')
+    linked = await linkAddons({ projectRoot, entryPath, hosts, logger })
+    logger.info(`   Wrote ${linked.length} files`)
+  }
+
   if (installRefused !== undefined) throw installRefused
 
   const harnessPath = path.join(outputDir, TARGETS[target].harness)
@@ -429,6 +444,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     plugins: pluginSpecifiers,
     addons: manifestResult.addons,
     manifestPath: manifestResult.manifestPath,
-    installedPrebuilds
+    installedPrebuilds,
+    linked
   }
 }

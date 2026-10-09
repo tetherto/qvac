@@ -241,6 +241,7 @@
     "bare-events": "2.9.1",
     "bare-fs": "^4.5.1",
     "bare-gpu-info": "0.1.1",
+    "bare-link": "^4.0.1",
     "bare-os": "^3.6.2",
     "bare-pack": "^2.2.3",
     "bare-path": "^3.0.1",
@@ -301,7 +302,6 @@
   },
   "peerDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
-    "bare-link": ">=3.0.0",
     "bare-stow-target-pear-runtime": "^0.1.1",
     "expo-build-properties": ">=0.12.0",
     "expo-device": ">=8.0.0",
@@ -313,9 +313,6 @@
   },
   "peerDependenciesMeta": {
     "@electron-forge/plugin-base": {
-      "optional": true
-    },
-    "bare-link": {
       "optional": true
     },
     "bare-stow-target-pear-runtime": {
