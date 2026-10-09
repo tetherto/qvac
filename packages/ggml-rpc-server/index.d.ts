@@ -9,7 +9,7 @@ export declare class RpcServerInvalidHostError extends Error {
     constructor(host: string);
 }
 export declare class RpcServerRdmaUnavailableError extends Error {
-    constructor();
+    constructor(cause?: unknown);
 }
 /**
  * A failure reported by the native server. The addon raises plain errors with a
@@ -55,8 +55,9 @@ export interface RpcServer {
     readonly url: string;
     readonly device?: string;
     /**
-     * Whether the loaded Fabric RPC backend was built with RDMA. Such a backend
-     * negotiates RDMA with each RDMA-capable client and falls back to TCP otherwise.
+     * Whether new connections will try RDMA: the Fabric RPC backend was built
+     * with it, loaded libibverbs, and `GGML_RPC_NO_RDMA` is unset. Each connection
+     * still falls back to TCP when the client or the link cannot use RDMA.
      */
     readonly rdmaCapable: boolean;
     stop(): Promise<void>;
@@ -64,5 +65,9 @@ export interface RpcServer {
 export interface AllocateFreePortOptions {
     readonly allowNonLoopbackHost?: boolean;
 }
+/**
+ * Finds a port that is free now. Another process can take it before you bind
+ * it, so `startRpcServer()` without a `port` lets the server bind one itself.
+ */
 export declare function allocateFreePort(host?: string, options?: AllocateFreePortOptions): Promise<number>;
 export declare function startRpcServer(options?: StartRpcServerOptions): Promise<RpcServer>;
