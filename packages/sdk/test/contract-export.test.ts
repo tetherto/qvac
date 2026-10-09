@@ -45,6 +45,16 @@ function collectTitleableNodes(node: unknown, out: JsonSchema[]): void {
   }
 }
 
+function collectTypeArrays(node: unknown, out: unknown[][]): void {
+  if (Array.isArray(node)) {
+    for (const child of node) collectTypeArrays(child, out)
+    return
+  }
+  if (!isSchemaObject(node)) return
+  if (Array.isArray(node['type'])) out.push(node['type'] as unknown[])
+  for (const child of Object.values(node)) collectTypeArrays(child, out)
+}
+
 test('manifest lists every method with its call shape', (t) => {
   const { manifest } = buildContract()
   const names = manifest.methods.map((method) => method.name)
@@ -112,6 +122,13 @@ test('schema document has request and response defs for every method', (t) => {
     manifest.methods.map((method) => `#/$defs/${method.name}.request`),
     'request union references every method request'
   )
+})
+
+test('schema document uses codegen-compatible primitive unions', (t) => {
+  const { schemaDocument } = buildContract()
+  const typeArrays: unknown[][] = []
+  collectTypeArrays(schemaDocument, typeArrays)
+  t.alike(typeArrays, [], 'primitive unions use anyOf instead of type arrays')
 })
 
 test('videoStream contract exports LTX IC-LoRA field constraints and one scheduler enum', (t) => {

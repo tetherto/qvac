@@ -162,6 +162,41 @@ function isSchemaObject(node: unknown): node is JsonSchema {
   return node !== null && typeof node === 'object' && !Array.isArray(node)
 }
 
+/**
+ * Zod 4.6 emits primitive unions as `type: [...]`. That is valid JSON Schema,
+ * but the Kotlin generator represents that form as an untyped JsonElement.
+ * Keep the equivalent `anyOf` form used by earlier Zod releases so generated
+ * clients retain their typed union wrappers.
+ */
+function expandPrimitiveTypeArrays(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(expandPrimitiveTypeArrays)
+  if (!isSchemaObject(node)) return node
+
+  const expanded = Object.fromEntries(
+    Object.entries(node).map(function ([key, value]) {
+      return [key, expandPrimitiveTypeArrays(value)]
+    })
+  ) as JsonSchema
+  const types = expanded['type']
+  if (!Array.isArray(types)) return expanded
+  if (
+    !types.every(function (type) {
+      return typeof type === 'string'
+    })
+  ) {
+    throw new Error('JSON Schema type arrays must contain only strings')
+  }
+  if (expanded['anyOf'] !== undefined || expanded['oneOf'] !== undefined) {
+    throw new Error('Cannot expand a JSON Schema type array beside an existing union')
+  }
+
+  delete expanded['type']
+  expanded['anyOf'] = types.map(function (type) {
+    return { type }
+  })
+  return expanded
+}
+
 function unionArmsOf(node: JsonSchema): JsonSchema[] | undefined {
   if (Array.isArray(node['oneOf'])) return node['oneOf'] as JsonSchema[]
   if (Array.isArray(node['anyOf'])) return node['anyOf'] as JsonSchema[]
@@ -466,7 +501,8 @@ export function toWireJsonSchema(
     unrepresentable: 'any'
   }) as JsonSchema
   delete json['$schema']
-  const flattened = flattenAllOfWithUnion(json, defName)
+  const expanded = expandPrimitiveTypeArrays(json) as JsonSchema
+  const flattened = flattenAllOfWithUnion(expanded, defName)
   const collapsed = collapseSingleMemberUnions(flattened) as JsonSchema
   assertNoRefs(collapsed, defName)
   return collapsed
