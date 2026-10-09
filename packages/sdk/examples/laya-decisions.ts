@@ -11,7 +11,7 @@ try {
   console.error('▸ Loading Laya')
   modelId = await loadModel({
     modelSrc,
-    modelType: 'llamacpp-decisions',
+    modelType: 'llamacpp-decision',
     modelConfig: { device: 'cpu' }
   })
   const result = await decide({

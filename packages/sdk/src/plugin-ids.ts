@@ -1,7 +1,7 @@
 // Built-in plugin ids under the public @qvac/sdk name.
 
 export const PLUGIN_LLM = '@qvac/sdk/llamacpp-completion/plugin' as const
-export const PLUGIN_DECISIONS = '@qvac/sdk/llamacpp-decisions/plugin' as const
+export const PLUGIN_DECISION = '@qvac/sdk/llamacpp-decision/plugin' as const
 export const PLUGIN_EMBEDDING = '@qvac/sdk/llamacpp-embedding/plugin' as const
 export const PLUGIN_WHISPER = '@qvac/sdk/whispercpp-transcription/plugin' as const
 export const PLUGIN_BCI = '@qvac/sdk/bci-whispercpp-transcription/plugin' as const
@@ -17,7 +17,7 @@ export const PLUGIN_CLASSIFICATION = '@qvac/sdk/ggml-classification/plugin' as c
 export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
-  PLUGIN_DECISIONS,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_PARAKEET,

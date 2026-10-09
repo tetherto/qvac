@@ -4,10 +4,10 @@ import type {
   LayaRequest as NativeLayaRequest
 } from '@qvac/embed-llamacpp'
 import path from 'bare-path'
-import type { DecisionsConfig, LayaQuestion, LayaRequest } from '@/schemas/index'
+import type { DecisionConfig, LayaQuestion, LayaRequest } from '@/schemas/index'
 import { detectShardedModel, generateShardFilenames } from '@/utils/shard-utils'
 
-export function transformDecisionsConfig(config: DecisionsConfig): LayaConfig {
+export function transformDecisionConfig(config: DecisionConfig): LayaConfig {
   return {
     ...Object.fromEntries(
       Object.entries(config)
@@ -48,7 +48,7 @@ function transformDecisionQuestion(question: LayaQuestion): NativeLayaQuestion {
   }
 }
 
-export function transformDecisionsRequest(request: LayaRequest): NativeLayaRequest {
+export function transformDecisionRequest(request: LayaRequest): NativeLayaRequest {
   return {
     ...('states' in request ? { states: request.states } : { state: request.state }),
     questions: Object.fromEntries(
@@ -62,7 +62,7 @@ export function transformDecisionsRequest(request: LayaRequest): NativeLayaReque
   }
 }
 
-export function decisionsModelFiles(modelPath: string): string[] {
+export function decisionModelFiles(modelPath: string): string[] {
   const filename = path.basename(modelPath)
   const info = detectShardedModel(filename)
   if (!info.isSharded) return [modelPath]

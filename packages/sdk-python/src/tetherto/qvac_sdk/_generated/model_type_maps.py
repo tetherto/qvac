@@ -29,7 +29,7 @@ ENGINE_TO_ADDON: dict[str, str] = {
     "ggml-ocr": "ocr",
     "ggml-vla": "vla",
     "llamacpp-completion": "llm",
-    "llamacpp-decisions": "embeddings",
+    "llamacpp-decision": "embeddings",
     "llamacpp-embedding": "embeddings",
     "nmtcpp-translation": "nmt",
     "onnx-tts": "tts",

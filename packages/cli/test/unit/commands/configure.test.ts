@@ -37,10 +37,10 @@ describe('configure: presets / buildEntry', () => {
   it('honors an explicit decision model choice without pinning a device', () => {
     const built = buildEntry('decision', LAYA_TYPED_DECISIONS_421M_F16.name)
     assert.equal(built.aliasBase, LAYA_TYPED_DECISIONS_421M_F16.name)
-    assert.equal(built.addon, 'llamacpp-decisions')
+    assert.equal(built.addon, 'llamacpp-decision')
     assert.deepEqual(built.entry, {
       model: LAYA_TYPED_DECISIONS_421M_F16.name,
-      type: 'llamacpp-decisions',
+      type: 'llamacpp-decision',
       preload: false
     })
   })
@@ -49,10 +49,10 @@ describe('configure: presets / buildEntry', () => {
     assert.equal(modalityInfo('decision').role, 'embedding')
     const built = buildEntry('decision')
     assert.equal(built.aliasBase, LAYA_MULTILINGUAL_322M_Q8_0.name)
-    assert.equal(built.addon, 'llamacpp-decisions')
+    assert.equal(built.addon, 'llamacpp-decision')
     assert.deepEqual(built.entry, {
       model: LAYA_MULTILINGUAL_322M_Q8_0.name,
-      type: 'llamacpp-decisions',
+      type: 'llamacpp-decision',
       preload: false
     })
   })

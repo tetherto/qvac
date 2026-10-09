@@ -67,7 +67,7 @@ async function server(
       models: {
         laya: {
           src: '/models/laya.gguf',
-          type: 'llamacpp-decisions',
+          type: 'llamacpp-decision',
           default: true,
           config: { device: 'cpu' }
         },

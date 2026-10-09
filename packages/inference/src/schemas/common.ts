@@ -110,7 +110,7 @@ import {
   stateRequestSchema,
   stateResponseSchema
 } from '@/schemas/lifecycle'
-import { decideRequestSchema, decideResponseSchema } from '@/schemas/decisions'
+import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
 import {
   audioEditStreamRequestSchema,

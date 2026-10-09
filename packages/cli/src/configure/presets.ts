@@ -40,7 +40,7 @@ export const MODALITIES: ModalityInfo[] = [
     id: 'decision',
     label: 'Decision (System One)',
     role: 'embedding',
-    addon: 'llamacpp-decisions',
+    addon: 'llamacpp-decision',
     pick: true
   },
   {
@@ -175,7 +175,7 @@ export function buildEntry(modality: Modality, constantName?: string): BuiltEntr
 
   const entry: ServeModelEntry = { model: name, preload: false }
   if (modality === 'image') entry.config = { prediction: 'v' }
-  if (modality === 'decision') entry.type = 'llamacpp-decisions'
+  if (modality === 'decision') entry.type = 'llamacpp-decision'
   return { aliasBase: name, entry, addon: info.addon }
 }
 

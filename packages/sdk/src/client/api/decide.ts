@@ -40,10 +40,10 @@ export function decide(
   params: DecideParams,
   options?: RPCOptions
 ): Promise<LayaResponse> & { requestId: string } {
-  return createDecisionsCall(params, options)
+  return createDecisionCall(params, options)
 }
 
-export function createDecisionsCall(
+export function createDecisionCall(
   params: DecideParams,
   options?: RPCOptions,
   sendRequest: typeof send = send

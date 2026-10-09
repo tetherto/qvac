@@ -101,7 +101,7 @@ export {
   type LayaAnswer,
   type LayaResult,
   type LayaResponse,
-  type DecisionsConfig,
+  type DecisionConfig,
   type TranscribeStats,
   VERBOSITY,
   type Attachment,
@@ -311,7 +311,7 @@ export { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
 export {
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
-  PLUGIN_DECISIONS,
+  PLUGIN_DECISION,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_NMT,

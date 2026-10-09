@@ -10,7 +10,7 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   completion: true,
   batchCompletion: true,
   embeddings: true,
-  decisions: true,
+  decision: true,
   transcribe: true,
   translate: true,
   diffusion: true,

@@ -163,9 +163,9 @@
       "types": "./dist/src/worker/ggml-rpc-server-provider.d.ts",
       "import": "./dist/src/worker/ggml-rpc-server-provider.js"
     },
-    "./llamacpp-decisions/plugin": {
-      "types": "./dist/src/worker/plugins/llamacpp-decisions.d.ts",
-      "import": "./dist/src/worker/plugins/llamacpp-decisions.js"
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/src/worker/plugins/llamacpp-decision.d.ts",
+      "import": "./dist/src/worker/plugins/llamacpp-decision.js"
     }
   },
   "imports": {

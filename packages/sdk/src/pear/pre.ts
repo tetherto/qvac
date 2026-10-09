@@ -53,7 +53,7 @@ const CONFIG_CANDIDATES = [
 const BUILTIN_PLUGINS = [
   '@qvac/sdk/llamacpp-completion/plugin',
   '@qvac/sdk/llamacpp-embedding/plugin',
-  '@qvac/sdk/llamacpp-decisions/plugin',
+  '@qvac/sdk/llamacpp-decision/plugin',
   '@qvac/sdk/whispercpp-transcription/plugin',
   '@qvac/sdk/bci-whispercpp-transcription/plugin',
   '@qvac/sdk/nmtcpp-translation/plugin',
@@ -68,7 +68,7 @@ const BUILTIN_PLUGINS = [
 const BUILTIN_PLUGIN_EXPORTS: Record<string, string> = {
   'llamacpp-completion': 'llmPlugin',
   'llamacpp-embedding': 'embeddingsPlugin',
-  'llamacpp-decisions': 'decisionsPlugin',
+  'llamacpp-decision': 'decisionPlugin',
   'whispercpp-transcription': 'whisperPlugin',
   'bci-whispercpp-transcription': 'bciPlugin',
   'nmtcpp-translation': 'nmtPlugin',

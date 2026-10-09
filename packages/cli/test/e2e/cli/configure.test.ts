@@ -33,7 +33,7 @@ describe('cli: configure', () => {
       const config = await readConfig(dir)
       assert.deepEqual(config.serve.models['laya-multilingual-322m-q8-0'], {
         model: LAYA_MULTILINGUAL_322M_Q8_0.name,
-        type: 'llamacpp-decisions',
+        type: 'llamacpp-decision',
         preload: false
       })
       const parsed = parseServeConfig(config as Parameters<typeof parseServeConfig>[0], {})
@@ -62,7 +62,7 @@ describe('cli: configure', () => {
       const alias = 'laya-multilingual-322m-q8-0'
       assert.deepEqual(config.serve.models[alias], {
         model: LAYA_MULTILINGUAL_322M_Q8_0.name,
-        type: 'llamacpp-decisions',
+        type: 'llamacpp-decision',
         preload: false
       })
       const parsed = parseServeConfig(config as Parameters<typeof parseServeConfig>[0], {})
@@ -85,7 +85,7 @@ describe('cli: configure', () => {
     try {
       const existing = {
         src: '/models/laya.gguf',
-        type: 'llamacpp-decisions',
+        type: 'llamacpp-decision',
         preload: false,
         config: { device: 'gpu' }
       }

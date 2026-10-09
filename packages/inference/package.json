@@ -142,9 +142,9 @@
       "types": "./dist/rpc/ggml-provider.d.ts",
       "import": "./dist/rpc/ggml-provider.js"
     },
-    "./llamacpp-decisions/plugin": {
-      "types": "./dist/plugins/builtin/llamacpp-decisions/plugin.d.ts",
-      "import": "./dist/plugins/builtin/llamacpp-decisions/plugin.js"
+    "./llamacpp-decision/plugin": {
+      "types": "./dist/plugins/builtin/llamacpp-decision/plugin.d.ts",
+      "import": "./dist/plugins/builtin/llamacpp-decision/plugin.js"
     }
   },
   "files": [

@@ -1,9 +1,9 @@
 import type { TestDefinition } from '@qvac/test-suite'
 import type { LayaResult } from '@qvac/sdk'
 
-export const decisionsTests: TestDefinition[] = [
+export const decisionTests: TestDefinition[] = [
   {
-    testId: 'decisions-ticket',
+    testId: 'decision-ticket',
     params: {},
     expectation: {
       validation: 'function',
@@ -26,10 +26,10 @@ export const decisionsTests: TestDefinition[] = [
         return { passed, output: JSON.stringify(result.answers) }
       }
     },
-    metadata: { category: 'decisions', dependency: 'decisions', estimatedDurationMs: 60000 }
+    metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
   },
   {
-    testId: 'decisions-structured-batch',
+    testId: 'decision-structured-batch',
     params: {},
     expectation: {
       validation: 'function',
@@ -48,15 +48,15 @@ export const decisionsTests: TestDefinition[] = [
         }
       }
     },
-    metadata: { category: 'decisions', dependency: 'decisions', estimatedDurationMs: 60000 }
+    metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
   },
   {
-    testId: 'decisions-invalid-budget',
+    testId: 'decision-invalid-budget',
     params: {},
     expectation: {
       validation: 'contains-all',
       contains: ['rejected invalid budget', 'recovered billing']
     },
-    metadata: { category: 'decisions', dependency: 'decisions', estimatedDurationMs: 60000 }
+    metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
   }
 ]

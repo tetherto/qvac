@@ -350,8 +350,8 @@ enum class ModelType {
     bciWhispercppTranscription,
     @SerialName("llamacpp-embedding")
     llamacppEmbedding,
-    @SerialName("llamacpp-decisions")
-    llamacppDecisions,
+    @SerialName("llamacpp-decision")
+    llamacppDecision,
     @SerialName("nmtcpp-translation")
     nmtcppTranslation,
     @SerialName("onnx-tts")
@@ -378,8 +378,8 @@ enum class PluginId {
     LLM,
     @SerialName("@qvac/sdk/llamacpp-embedding/plugin")
     EMBEDDING,
-    @SerialName("@qvac/sdk/llamacpp-decisions/plugin")
-    DECISIONS,
+    @SerialName("@qvac/sdk/llamacpp-decision/plugin")
+    DECISION,
     @SerialName("@qvac/sdk/whispercpp-transcription/plugin")
     WHISPER,
     @SerialName("@qvac/sdk/bci-whispercpp-transcription/plugin")

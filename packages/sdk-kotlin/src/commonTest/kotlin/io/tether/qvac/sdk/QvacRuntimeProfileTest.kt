@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 
 class QvacRuntimeProfileTest {
     @Test
-    fun decisionsCapabilityIsCheckedBeforeDispatch() = runTest {
+    fun decisionCapabilityIsCheckedBeforeDispatch() = runTest {
         val transport = ProfileTransport(
             QvacRuntimeProfile(
                 name = "llm",
@@ -29,18 +29,18 @@ class QvacRuntimeProfileTest {
             val error = assertFailsWith<UnsupportedCapabilityException> {
                 client.call(buildJsonObject {
                     put("type", operation)
-                    if (operation == "loadModel") put("modelType", "llamacpp-decisions")
+                    if (operation == "loadModel") put("modelType", "llamacpp-decision")
                 })
             }
-            assertEquals(QvacCapability.DECISIONS, error.capability)
+            assertEquals(QvacCapability.DECISION, error.capability)
             assertFalse(transport.dispatched)
         }
     }
 
     @Test
-    fun decisionsCapabilityFromManifestAllowsDispatch() = runTest {
+    fun decisionCapabilityFromManifestAllowsDispatch() = runTest {
         val profile = Json.decodeFromString<QvacRuntimeProfile>(
-            """{"name":"aio","sdkVersion":"0.21.0","capabilities":["DECISIONS"],"plugins":["@qvac/sdk/llamacpp-decisions/plugin"]}""",
+            """{"name":"aio","sdkVersion":"0.21.0","capabilities":["DECISION"],"plugins":["@qvac/sdk/llamacpp-decision/plugin"]}""",
         )
         val transport = ProfileTransport(profile)
         val client = QvacClient(transport)
@@ -49,7 +49,7 @@ class QvacRuntimeProfileTest {
             transport.dispatched = false
             client.call(buildJsonObject {
                 put("type", operation)
-                if (operation == "loadModel") put("modelType", "llamacpp-decisions")
+                if (operation == "loadModel") put("modelType", "llamacpp-decision")
             })
             assertTrue(transport.dispatched)
         }

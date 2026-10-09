@@ -21,16 +21,16 @@ const widened: DecideParams = {} as DecideParams
 const union: Promise<LayaResponse> = decide(widened)
 const load: LoadModelOptions = {
   modelSrc: '/models/laya.gguf',
-  modelType: 'llamacpp-decisions',
+  modelType: 'llamacpp-decision',
   modelConfig: { device: 'cpu', threads: 0 }
 }
 const defaultLoad: LoadModelOptions = {
   modelSrc: '/models/laya.gguf',
-  modelType: 'llamacpp-decisions'
+  modelType: 'llamacpp-decision'
 }
 const configLoad: LoadModelOptions = {
   modelSrc: '/models/laya.gguf',
-  modelType: 'llamacpp-decisions',
+  modelType: 'llamacpp-decision',
   modelConfig: { threads: 0 }
 }
 void [single, batch, union, load, defaultLoad, configLoad]

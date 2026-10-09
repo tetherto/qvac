@@ -49,7 +49,7 @@ import {
 } from './model-types'
 import { sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
-import { decisionsConfigBaseSchema } from './decisions'
+import { decisionConfigBaseSchema } from './decision'
 import { classificationConfigSchema } from './classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
@@ -100,7 +100,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.bciWhispercppTranscription, configKeys(bciConfigSchema)],
   [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
   [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
-  [ModelType.llamacppDecisions, configKeys(decisionsConfigBaseSchema)],
+  [ModelType.llamacppDecision, configKeys(decisionConfigBaseSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
     ModelType.ttsGgml,
@@ -159,8 +159,8 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
     .object({
       ...loadModelCommonFields,
-      modelType: z.literal(ModelType.llamacppDecisions),
-      modelConfig: decisionsConfigBaseSchema.optional()
+      modelType: z.literal(ModelType.llamacppDecision),
+      modelConfig: decisionConfigBaseSchema.optional()
     })
     .strict(),
   z
@@ -485,13 +485,13 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
       ...loadModelRequestCommonFields,
-      modelType: z.literal(ModelType.llamacppDecisions),
-      modelConfig: decisionsConfigBaseSchema.optional()
+      modelType: z.literal(ModelType.llamacppDecision),
+      modelConfig: decisionConfigBaseSchema.optional()
     })
     .strict()
     .transform((data) => ({
       type: 'loadModel' as const,
-      modelType: ModelType.llamacppDecisions,
+      modelType: ModelType.llamacppDecision,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: data.modelConfig,
@@ -633,10 +633,10 @@ export const loadParakeetModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
-export const loadDecisionsModelRequestSchema = commonModelConfigSchema
+export const loadDecisionModelRequestSchema = commonModelConfigSchema
   .extend({
-    modelType: z.literal(ModelType.llamacppDecisions),
-    modelConfig: decisionsConfigBaseSchema.optional()
+    modelType: z.literal(ModelType.llamacppDecision),
+    modelConfig: decisionConfigBaseSchema.optional()
   })
   .strict()
 
@@ -714,7 +714,7 @@ export const loadModelSrcRequestSchema = z
     loadBciModelRequestSchema,
     loadParakeetModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
-    loadDecisionsModelRequestSchema,
+    loadDecisionModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,

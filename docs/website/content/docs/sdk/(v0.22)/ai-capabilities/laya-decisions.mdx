@@ -7,7 +7,7 @@ schemaType: HowTo
 
 ## Overview
 
-Laya decisions use [`@qvac/embed-llamacpp`](https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp) with the Fabric LLM inference engine. Load a Laya model using `modelType: "llamacpp-decisions"` and `modelConfig: { device: "cpu" }` or `{ device: "gpu" }`.
+Laya decisions use [`@qvac/embed-llamacpp`](https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp) with the Fabric LLM inference engine. Load a Laya model using `modelType: "llamacpp-decision"` and `modelConfig: { device: "cpu" }` or `{ device: "gpu" }`.
 
 [`decide()`](/sdk/reference/api#decide) answers typed questions about a state. Pass `state` for one result, or `states` for an array of results in input order. A state can be text, a number, a boolean, structured JSON, or a conversation array. Top-level `null` is not accepted.
 

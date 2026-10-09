@@ -1,7 +1,7 @@
 import test from 'brittle'
 import {
   decideParamsSchema,
-  decisionsConfigSchema,
+  decisionConfigSchema,
   loadModelOptionsToRequestSchema,
   loadModelSrcRequestSchema,
   deviceConfigDefaultsSchema,
@@ -9,9 +9,9 @@ import {
 } from '@/schemas/index'
 import { resolveModelConfigWithContext } from '@/runtime/model-config-utils'
 import {
-  transformDecisionsConfig,
-  decisionsModelFiles
-} from '@/plugins/builtin/llamacpp-decisions/helpers'
+  transformDecisionConfig,
+  decisionModelFiles
+} from '@/plugins/builtin/llamacpp-decision/helpers'
 
 const questions = {
   team: {
@@ -58,8 +58,8 @@ test('Laya requests preserve option order, labels, structured states and batch s
 })
 
 test('Laya passes complete shard files in addon order', (t) => {
-  t.alike(decisionsModelFiles('/models/laya.gguf'), ['/models/laya.gguf'])
-  t.alike(decisionsModelFiles('/models/laya-00002-of-00002.gguf'), [
+  t.alike(decisionModelFiles('/models/laya.gguf'), ['/models/laya.gguf'])
+  t.alike(decisionModelFiles('/models/laya-00002-of-00002.gguf'), [
     '/models/laya.tensors.txt',
     '/models/laya-00001-of-00002.gguf',
     '/models/laya-00002-of-00002.gguf'
@@ -74,18 +74,18 @@ test('Laya config accepts only supported context options and preserves native de
     batch_size: 2048,
     flash_attn: 'off' as const
   }
-  t.alike(transformDecisionsConfig(decisionsConfigSchema.parse(config)), {
+  t.alike(transformDecisionConfig(decisionConfigSchema.parse(config)), {
     device: 'cpu',
     threads: '0',
     'threads-batch': '-1',
     batch_size: '2048',
     flash_attn: 'off'
   })
-  t.alike(transformDecisionsConfig(decisionsConfigSchema.parse({ device: 'gpu' })), {
+  t.alike(transformDecisionConfig(decisionConfigSchema.parse({ device: 'gpu' })), {
     device: 'gpu'
   })
   t.alike(
-    transformDecisionsConfig(decisionsConfigSchema.parse({ device: 'cpu', batch_size: undefined })),
+    transformDecisionConfig(decisionConfigSchema.parse({ device: 'cpu', batch_size: undefined })),
     {
       device: 'cpu'
     }
@@ -96,11 +96,11 @@ test('Laya config accepts only supported context options and preserves native de
     { device: 'cpu', threads: 1.5 },
     { device: 'cpu', 'split-mode': 'row' }
   ]) {
-    t.absent(decisionsConfigSchema.safeParse(bad).success)
+    t.absent(decisionConfigSchema.safeParse(bad).success)
   }
   const loaded = loadModelOptionsToRequestSchema.parse({
     modelSrc: '/tmp/laya.gguf',
-    modelType: ModelType.llamacppDecisions,
+    modelType: ModelType.llamacppDecision,
     modelConfig: config
   })
   t.alike(loaded.modelConfig, config)
@@ -112,41 +112,41 @@ test('Laya loads without a device and resolves GPU before calling the addon', (t
   for (const modelConfig of [undefined, {}, { device: undefined }, { threads: 0 }]) {
     const request = loadModelOptionsToRequestSchema.parse({
       modelSrc: '/tmp/laya.gguf',
-      modelType: ModelType.llamacppDecisions,
+      modelType: ModelType.llamacppDecision,
       ...(modelConfig === undefined ? {} : { modelConfig })
     })
     t.ok(loadModelSrcRequestSchema.safeParse(request).success)
     t.alike(request.modelConfig, modelConfig)
-    const resolved = resolveModelConfigWithContext<Parameters<typeof transformDecisionsConfig>[0]>(
-      ModelType.llamacppDecisions,
+    const resolved = resolveModelConfigWithContext<Parameters<typeof transformDecisionConfig>[0]>(
+      ModelType.llamacppDecision,
       request.modelConfig ?? {},
       context,
       []
     )
-    t.is(transformDecisionsConfig(resolved).device, 'gpu')
+    t.is(transformDecisionConfig(resolved).device, 'gpu')
     if (modelConfig?.threads !== undefined) t.is(resolved.threads, modelConfig.threads)
   }
 })
 
 test('Laya device patterns and explicit device choices override the GPU default', (t) => {
   const context = { runtime: 'node' as const, platform: 'darwin' as const }
-  const defaults = { [ModelType.llamacppDecisions]: { threads: 2 } }
+  const defaults = { [ModelType.llamacppDecision]: { threads: 2 } }
   t.alike(deviceConfigDefaultsSchema.parse(defaults), defaults)
   const patterns = [
     {
       name: 'CPU device',
       match: {},
-      defaults: { [ModelType.llamacppDecisions]: { device: 'cpu' as const } }
+      defaults: { [ModelType.llamacppDecision]: { device: 'cpu' as const } }
     }
   ]
   const resolve = (config: Record<string, unknown>, withPattern = false) =>
-    resolveModelConfigWithContext<Parameters<typeof transformDecisionsConfig>[0]>(
-      ModelType.llamacppDecisions,
+    resolveModelConfigWithContext<Parameters<typeof transformDecisionConfig>[0]>(
+      ModelType.llamacppDecision,
       config,
       context,
       withPattern ? patterns : []
     )
-  t.is(transformDecisionsConfig(resolve({ device: 'cpu' })).device, 'cpu')
-  t.is(transformDecisionsConfig(resolve({}, true)).device, 'cpu')
-  t.is(transformDecisionsConfig(resolve({ device: 'gpu' }, true)).device, 'gpu')
+  t.is(transformDecisionConfig(resolve({ device: 'cpu' })).device, 'cpu')
+  t.is(transformDecisionConfig(resolve({}, true)).device, 'cpu')
+  t.is(transformDecisionConfig(resolve({ device: 'gpu' }, true)).device, 'gpu')
 })

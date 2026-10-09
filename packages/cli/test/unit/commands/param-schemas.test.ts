@@ -11,7 +11,7 @@ import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
   it('exposes the decision device and accepts the generated starter', () => {
-    const schema = configSchemaForAddon('llamacpp-decisions')
+    const schema = configSchemaForAddon('llamacpp-decision')
     assert.ok(schema)
     assert.ok(schema.safeParse(buildEntry('decision').entry.config ?? {}).success)
     const device = paramFields(schema).find((field) => field.name === 'device')

@@ -1,7 +1,7 @@
 export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   'llamacpp-completion': { exportName: 'llmPlugin' },
   'llamacpp-embedding': { exportName: 'embeddingsPlugin' },
-  'llamacpp-decisions': { exportName: 'decisionsPlugin' },
+  'llamacpp-decision': { exportName: 'decisionPlugin' },
   'whispercpp-transcription': { exportName: 'whisperPlugin' },
   'bci-whispercpp-transcription': { exportName: 'bciPlugin' },
   'parakeet-transcription': { exportName: 'parakeetPlugin' },
