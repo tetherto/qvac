@@ -14,7 +14,12 @@ const file_paths_1 = require("./file-paths");
  * throws.
  */
 function assessFit(request) {
+    if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale') {
+        throw new TypeError(`unsupported fit mode: ${String(request.mode)}`);
+    }
     const standalone = request.mode === 'upscale';
+    if (standalone)
+        (0, file_paths_1.assertAbsolute)('esrgan', request.files.esrgan);
     const files = standalone
         ? { model: request.files.esrgan, esrgan: request.files.esrgan }
         : request.files;
@@ -35,7 +40,7 @@ function assessFit(request) {
         .map(([key, value]) => [key, String(value)]));
     return binding.assessFit({
         ...(0, file_paths_1.toFilePaths)(files),
-        mode: standalone ? 'upscale' : 'diffusion',
+        mode: request.mode ?? 'diffusion',
         config,
         request: request.workload ?? {}
     });

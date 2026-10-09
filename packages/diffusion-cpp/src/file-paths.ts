@@ -25,7 +25,7 @@ const COMPANION_FILE_KEYS = [
   'embeddingsConnectors'
 ] as const
 
-function assertAbsolute(key: string, value: unknown): asserts value is string {
+export function assertAbsolute(key: string, value: unknown): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError(`files.${key} must be an absolute path string`)
   }
