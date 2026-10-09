@@ -110,9 +110,11 @@ cannot once the window in front of the prefix was evicted, so the addon keeps
 process-local checkpoints per sequence on all of them. A cached
 request that commits keeps one: the state at the end of the chat history,
 just before the generation prompt (`<|im_start|>assistant\n<think>\n` on
-Qwen3.5). The prefill stops there for a moment to take it. The state from
-before the prompt was sent is also snapshotted, but only to roll the request
-back on a cancel or failure; it is dropped when the request commits.
+Qwen3.5). The prefill stops there for a moment to take it. On hybrid and
+recurrent models the state from before the prompt was sent is also
+snapshotted, but only to roll the request back on a cancel or failure; it is
+dropped when the request commits. Sliding-window models roll back by trimming
+and take no such snapshot.
 
 Templates that drop a previous answer's reasoning change the prompt right
 after that answer's header, so the history before it is the longest part the
@@ -129,10 +131,12 @@ on a fresh slot.
 A checkpoint holds only the part of the memory a tail trim cannot rebuild,
 and a restore trims the rest back to its position: the recurrent state on
 recurrent and hybrid models, the sliding-window cells and compressor states
-on DeepSeek V4, the window cells on sliding-window models. Its size is
-therefore fixed by the model, not the context (about 20 MB on Qwen3.5-0.8B).
-Three load-config fields bound the footprint. None of them has any effect on
-other pure-attention models.
+on DeepSeek V4, the window cells on sliding-window models. Its size therefore
+does not grow with the conversation: about 20 MB on Qwen3.5-0.8B. On a
+sliding-window model it is every window layer's K/V for up to
+`n_swa + n_ubatch` cells (rounded up to 256), which on larger models reaches
+hundreds of MB per sequence. Three load-config fields bound the footprint.
+None of them has any effect on other pure-attention models.
 
 - `cache_checkpoints`: how many to keep per sequence (default 1, maximum
   1024). Each committed request adds one, at the end of its history, before
@@ -164,8 +168,9 @@ other pure-attention models.
   before the count: the oldest checkpoints are dropped until the total fits.
   `0` (default) is unlimited. When set, the load fails with `InvalidArgument`
   if the budget cannot hold `cache_checkpoints` checkpoints of the largest size
-  the context allows. The addon measures that size on the loaded model, so
-  the error names the exact numbers and the count that would fit.
+  the context allows (on a sliding-window model, a full window cache). The
+  addon measures that size on the loaded model, so the error names the exact
+  numbers and the count that would fit.
 - `cache_checkpoint_storage`: `memory` (default) keeps checkpoints and the
   per-request rollback snapshot in host RAM, so a cached chat never touches
   the disk; each live snapshot costs its size in RAM (about 20 MB on
@@ -482,9 +487,9 @@ prefill completes.
 A chat on a pure-attention model with one `cacheKey` therefore never touches
 the disk until it is saved, switched away from or unloaded: the conversation
 lives in the KV cache, and no snapshot or checkpoint is ever written for these
-models. On hybrid and
-recurrent models the same holds by default; `cache_checkpoint_storage:
-'disk'` moves their snapshots and checkpoints to temp files.
+models. On hybrid, recurrent and sliding-window models the same holds by
+default; `cache_checkpoint_storage: 'disk'` moves their snapshots and
+checkpoints to temp files.
 
 The same rule applies to requests without `cacheKey`. Nothing reuses their
 state, so the only visible difference is `CacheTokens`, which reports the

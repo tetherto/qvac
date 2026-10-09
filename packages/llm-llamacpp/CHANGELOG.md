@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off.
+
+### Fixed
+
+- A `cacheKey` file written by another model with the same cache shape, such
+  as another quantization type, loaded silently. The file now records a
+  fingerprint of the writing model, and a mismatch is a cold miss. A
+  fine-tune of the same base and quantization, a LoRA adapter or another
+  projector is not detected. Files from 0.58.0 still load.
+- A cache file is synced to disk (`F_FULLFSYNC` on Apple platforms) before it
+  replaces the previous one, so a power loss cannot leave it short.
+
 ## [0.58.0] - 2026-10-09
 
 ### Breaking

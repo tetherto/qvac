@@ -19,7 +19,7 @@ graph TB
         LEDGER["Ledger (RAM)<br/>one entry per resident token / media span"]
         KV["Sequence memory (GPU / RAM)<br/>KV cells, recurrent state"]
         SNAP["Pre-request snapshot<br/>full-state models only<br/>lives for one request"]
-        CKPT["Process-local checkpoints<br/>full-state models only<br/>≤ cache_checkpoints, ≤ cache_checkpoints_max_bytes"]
+        CKPT["Process-local checkpoints<br/>full-state and sliding-window models<br/>≤ cache_checkpoints, ≤ cache_checkpoints_max_bytes"]
     end
 
     subgraph "Storage chosen by cache_checkpoint_storage"
@@ -50,30 +50,32 @@ graph TB
   prefix, and it is serialized into the `cacheKey` file next to the state.
 - The **sequence memory** is llama.cpp's own KV cache and, on hybrid or
   recurrent models, the recurrent state. It is the conversation.
-- The **pre-request snapshot** and the **checkpoints** exist only on models
-  that cannot trim their memory (see below). Pure-attention models never
-  create either, in any storage mode. Both hold only the part of the memory a
-  tail trim cannot rebuild (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`): the
-  recurrent state on hybrid and recurrent models, the sliding-window cells and
-  compressor states on DeepSeek V4. Restoring one puts that part back and
-  trims the rest to its position (see [Restoring a
+- The **pre-request snapshot** exists only on models that cannot trim their
+  memory, and the **checkpoints** on those and on sliding-window models (see
+  below). Other pure-attention models create neither, in any storage mode.
+  Both hold only the part of the memory a tail trim cannot rebuild
+  (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`): the recurrent state on hybrid and
+  recurrent models, the sliding-window cells and compressor states on
+  DeepSeek V4, the window cells on sliding-window models. Restoring one puts
+  that part back and trims the rest to its position (see [Restoring a
   checkpoint](#restoring-a-checkpoint)).
 - The **`cacheKey` file** is the only durable artifact. Checkpoints are never
   written into it and do not survive a process restart.
 
-## Two kinds of models
+## Three kinds of models
 
-| | Pure attention (Qwen3, Llama, Gemma, ...) | Full-state (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...) |
-|---|---|---|
-| Can drop a memory tail at a position | yes, `llama_memory_seq_rm` | no |
-| Reuse of a diverging history | trim to the shared prefix, decode the rest | restore the longest checkpoint that is a prefix, decode the rest; cold prefill if none |
-| Pre-request snapshot | never | at the start of every cached request |
-| Checkpoints | never | one per committed cached request, at the end of its history (the pre-request snapshot only serves rollback) |
-| Rollback target | shared prefix with the request's prompt | state before the prompt was sent (the snapshot); the restored checkpoint when the request diverged |
-| Disk writes for a chat with one `cacheKey`, before `saveCache()` or unload | none | none by default; checkpoint files in `cache_checkpoint_dir` with `cache_checkpoint_storage: disk` |
+| | Pure attention (Qwen3, Llama, ...) | Sliding window (Gemma 3/4, gpt-oss, without `swa_full`) | Full-state (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...) |
+|---|---|---|---|
+| Can drop a memory tail at a position | yes, `llama_memory_seq_rm` | yes, while the window in front of it is resident | no |
+| Reuse of a diverging history | trim to the shared prefix, decode the rest | trim as pure attention; once the window was evicted, restore the longest checkpoint within the shared prefix; cold prefill if none | restore the longest checkpoint that is a prefix, decode the rest; cold prefill if none |
+| Pre-request snapshot | never | never | at the start of every cached request |
+| Checkpoints | never | one per committed cached request, at the end of its history | one per committed cached request, at the end of its history (the pre-request snapshot only serves rollback) |
+| Rollback target | shared prefix with the request's prompt | as pure attention; cold when the request decoded past the window | state before the prompt was sent (the snapshot); the restored checkpoint when the request diverged |
+| Disk writes for a chat with one `cacheKey`, before `saveCache()` or unload | none | none by default; checkpoint files in `cache_checkpoint_dir` with `cache_checkpoint_storage: disk` | none by default; checkpoint files in `cache_checkpoint_dir` with `cache_checkpoint_storage: disk` |
 
-The decision is `needsFullStateSnapshot` in `ModelMemoryPolicy.hpp`, by
-architecture: recurrent or hybrid per llama.cpp, or DeepSeek V4. All of them
+The decision is in `ModelMemoryPolicy.hpp`: `needsFullStateSnapshot`, by
+architecture (recurrent or hybrid per llama.cpp, or DeepSeek V4), and
+`takesSlidingWindowCheckpoints` (`n_swa > 0` without `swa_full`). All of them
 snapshot only what a tail trim cannot rebuild (`untrimmableSnapshotScope`),
 and all of them keep 1 checkpoint by default (`cache_checkpoints`).
 
@@ -83,7 +85,7 @@ and all of them keep 1 checkpoint by default (`cache_checkpoints`).
 stateDiagram-v2
     [*] --> Begin: run() with cacheKey
     Begin --> Reconcile: full-state model: take pre-request snapshot
-    Reconcile --> Prefill: decode the suffix after the shared prefix<br/>full-state model: stop at the end of the<br/>history to take a checkpoint
+    Reconcile --> Prefill: decode the suffix after the shared prefix<br/>full-state or sliding-window model: stop at<br/>the end of the history to take a checkpoint
     Prefill --> Committed: prefill-only request
     Prefill --> Generation: prefill complete
     Prefill --> RolledBack: cancel during prefill<br/>decode error
@@ -95,8 +97,8 @@ stateDiagram-v2
     state Committed {
         [*] --> KeepTokens
         KeepTokens: prompt + generated tokens stay resident
-        KeepTokens --> PushCheckpoint: full-state model
-        PushCheckpoint: end-of-history state becomes<br/>a checkpoint, the snapshot is dropped
+        KeepTokens --> PushCheckpoint: full-state or sliding-window model
+        PushCheckpoint: end-of-history state becomes<br/>a checkpoint, any snapshot is dropped
     }
     state RolledBack {
         [*] --> Drop
@@ -122,7 +124,7 @@ flowchart TD
     B -->|ends inside the resident ledger| E{model type}
     E -->|pure attention| W{sliding-window cells in front<br/>of the prefix still resident?}
     W -->|yes, or no sliding window| F[Trim memory after the prefix<br/>rollback target = prefix<br/>decode the suffix]
-    W -->|evicted| I
+    W -->|evicted| G
     E -->|full-state| G{longest checkpoint that is<br/>a prefix of the new prompt?}
     G -->|found| H[Restore it<br/>decode from there]
     G -->|none| I[Cold: clear the sequence<br/>decode the whole prompt]
@@ -182,7 +184,10 @@ tokens) a turn took about 70 ms with 500 tokens of history and 180–260 ms
 with 3,200; the opt-in `KvCacheExtended.RenderCostPerTurn` test reproduces
 the measurement.
 
-## Checkpoint lifecycle (full-state models)
+## Checkpoint lifecycle (full-state and sliding-window models)
+
+Sliding-window models take no pre-request snapshot (their rollback is a
+trim), so only the end-of-history path below applies to them.
 
 ```mermaid
 stateDiagram-v2
@@ -203,13 +208,15 @@ stateDiagram-v2
 Eviction checks the byte budget first, then the count. A budget that cannot
 hold `cache_checkpoints` checkpoints of the largest size the context allows is
 rejected at model load with `InvalidArgument`; the addon measures that size on
-the loaded model rather than estimating it.
+the loaded model rather than estimating it. On a sliding-window model the
+largest size is that of a full window cache, whatever the context size.
 
 ## When checkpoints are taken
 
 Two states are captured per cached request on a full-state model, at fixed
 points of the pipeline. The **pre-request snapshot** serves only that
-request's rollback; the **end-of-history checkpoint** is the only one kept.
+request's rollback; the **end-of-history checkpoint** is the only one kept. A
+sliding-window model captures only the end-of-history checkpoint (②).
 
 Where in the conversation, for turn 2 of a chat:
 
@@ -282,7 +289,7 @@ checkpoint in front of it and reprocesses the whole conversation. In general,
 changing the user message *k*-th from the end (1 = the last) needs the
 checkpoint at the end of the user message before it, which is the
 (*k* + 1)-th newest, so `cache_checkpoints` must be at least *k* + 1 (see
-[cache-api.md](./cache-api.md#checkpoints-on-hybrid-and-recurrent-models)).
+[cache-api.md](./cache-api.md#checkpoints-on-hybrid-recurrent-and-sliding-window-models)).
 After the edit, the checkpoints past the change are pruned. During a request up to two more states exist besides the kept ones:
 the pre-request snapshot and the pending end-of-history checkpoint. Neither
 counts toward `cache_checkpoints` or `cache_checkpoints_max_bytes`.
@@ -317,10 +324,19 @@ then trims the sequence to the checkpoint's position
   has completed, and the token that completes a block rewrites its row. Rows
   from before the checkpoint are reused as they are, and rows past it are
   overwritten before anything can read them.
+- Sliding-window models: the saved part is the window cells; the
+  full-attention KV past the position is dropped, and the cells in front of it
+  are the same ones the checkpoint was taken over. A checkpoint is used only
+  within the prefix the new prompt shares with the resident ledger.
 
-Sizes are fixed by the model, whatever the conversation length: about 20 MB
-on Qwen3.5-0.8B and 18 MB on DeepSeek V4-Flash, against ~233 MB for a full
-copy of Qwen3.5-0.8B at 32k tokens. They live in host RAM by default
+Sizes do not grow with the conversation: about 20 MB on Qwen3.5-0.8B and
+18 MB on DeepSeek V4-Flash, against ~233 MB for a full copy of Qwen3.5-0.8B
+at 32k tokens. On a sliding-window model a checkpoint holds every window
+layer's K/V for up to `n_swa + n_ubatch` cells (rounded up to 256;
+`n_swa × parallel + n_ubatch` with `kv_unified`), so it grows with the window
+and with the KV type, and on larger models can reach hundreds of MB. Bound it
+with `cache_checkpoints_max_bytes`, or set `cache_checkpoints: 0`.
+Checkpoints live in host RAM by default
 (`cache_checkpoint_storage: memory`) or in files in `cache_checkpoint_dir`
 with `disk`, and are
 never written into the `cacheKey` file. On the single-prompt path a
@@ -381,10 +397,14 @@ The state is always written in full, unlike the partial snapshots and
 checkpoints, which are never written into the file. A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
 (`UnableToLoadSessionFile`), and a file without a ledger is a cold miss. So
-is a file written by another model whose cache has the same shape (another
-quantization, a fine-tune): its fingerprint (description, size, parameter
-count, training context, shape, vocabulary, RoPE scale) does not match. A file
-written before the fingerprint existed carries 0 and is accepted.
+is a file written by a model whose cache has the same shape but whose
+description, file size, parameter count, training context, shape, vocabulary
+size or RoPE scale differ (another quantization type, for example): its
+fingerprint of those does not match. The fingerprint does not see the weights
+themselves, so a fine-tune of the same base at the same quantization, a LoRA
+adapter or another multimodal projector is not told apart; give those their
+own `cacheKey`. A file written before the fingerprint existed carries 0 and is
+accepted.
 
 ### How a write is done
 
@@ -393,8 +413,10 @@ Every write, whichever path triggers it, does the same three steps:
 1. The state and the ledger are written to `<cacheKey>.tmp`. A write that
    fails, or leaves the file shorter than the state (a failed final flush),
    deletes the temporary file and raises `UnableToSaveSessionFile`.
-2. The temporary file is synced to disk (`fsync`, `FlushFileBuffers` on
-   Windows); a failed sync deletes it and raises `UnableToSaveSessionFile`.
+2. The temporary file is synced to disk (`F_FULLFSYNC` on macOS and iOS,
+   falling back to `fsync` where the filesystem refuses it; `fsync` elsewhere;
+   `FlushFileBuffers` on Windows); a failed sync deletes it and raises
+   `UnableToSaveSessionFile`.
 3. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
    and macOS, followed by a sync of the directory, and `MoveFileExW` with
    replace and write-through on Windows. Until that step succeeds the old
@@ -576,7 +598,7 @@ stateDiagram-v2
 | `ephemeral` | `runOptions` | Never write this conversation automatically: drop it instead. |
 | `saveCache(cacheKey)` | model method | Write the conversation kept for the key now (see above). |
 | `prefill` | `runOptions` | Warm the cache without generating; commits as soon as prefill completes. Needs a `cacheKey` on `parallel >= 2`. |
-| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 1: the last request's end-of-history checkpoint; 2 also serves an edit of the last user message; 0 disables them and their capture). Full-state models only. |
+| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 1: the last request's end-of-history checkpoint; 2 also serves an edit of the last user message; 0 disables them and their capture). Full-state and sliding-window models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `memory` (host RAM, default) or `disk` (files in `cache_checkpoint_dir`) for snapshots and checkpoints. |
 | `cache_checkpoint_dir` | load config | Required with `disk`, refused without it: where checkpoint files go, inside a private directory created in it (0700; on Windows, the directory itself). |
@@ -585,10 +607,10 @@ stateDiagram-v2
 
 ## Where each thing lives, at a glance
 
-| | Pure attention | Full-state, `disk` | Full-state, `memory` (default) |
+| | Pure attention | Full-state or sliding-window, `disk` | Full-state or sliding-window, `memory` (default) |
 |---|---|---|---|
 | Conversation state | sequence memory | sequence memory | sequence memory |
 | Ledger | RAM | RAM | RAM |
-| Pre-request snapshot | none | temp file, one per running request | host RAM, one per running request |
+| Pre-request snapshot | none | temp file, one per running request (full-state only) | host RAM, one per running request (full-state only) |
 | Checkpoints | none | temp files | host RAM |
 | `cacheKey` file | only on the writes in [How the `cacheKey` file is written](#how-the-cachekey-file-is-written) | same | same |

@@ -1300,7 +1300,9 @@ namespace LlmLlamacpp {
      * touches the disk, `'disk'` writes them to files in
      * `cache_checkpoint_dir`, which it requires. Each snapshot holds only the
      * state a tail trim cannot rebuild, a size fixed by the model (about 20 MB
-     * on Qwen3.5-0.8B). Also accepted as `cache-checkpoint-storage`.
+     * on Qwen3.5-0.8B; on sliding-window models the window cells, which reach
+     * hundreds of MB on larger ones). Also accepted as
+     * `cache-checkpoint-storage`.
      */
     cache_checkpoint_storage?: "disk" | "memory";
     /**

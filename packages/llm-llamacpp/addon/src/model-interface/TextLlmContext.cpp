@@ -1305,10 +1305,8 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
     bool restored = false;
     if (!canTrimSequenceTo(modelCtx_.lctx, reusePos)) {
       // Sliding-window cells before the divergence are gone. A checkpoint
-      // holds the window at its own position, and the restore trims the
-      // full-attention cells past it; without one only a full reprocess
-      // rebuilds the window. A usable checkpoint ends within the shared
-      // prefix, where the full-attention cells it keeps match the prompt.
+      // within the shared prefix brings its window back (the restore trims
+      // the full-attention cells past it); without one, go cold.
       const size_t sharedEntries = reuseTarget;
       reuseTarget = 0;
       reuse = 0;
