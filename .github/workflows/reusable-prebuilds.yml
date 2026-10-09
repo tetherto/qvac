@@ -456,6 +456,18 @@ jobs:
         shell: bash
         run: npm install
 
+      # Local install, not `npm install -g`. The global pin is bare-make
+      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
+      # is prepended so generate and the vcpkg toolchain's
+      # find_program(bare-make) both use the current package.
+      - name: Install current bare-make locally
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          npm install --no-save --ignore-scripts bare-make
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          ./node_modules/.bin/bare-make --version
+
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Download fabric-prebuilds for overlay
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
