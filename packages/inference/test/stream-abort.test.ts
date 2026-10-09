@@ -99,6 +99,27 @@ test('a logging stream delivers logs until it is aborted', async function (t) {
   }
 })
 
+test('aborting a logging stream while the caller is not reading releases it and drops queued logs', async function (t) {
+  setUp()
+  try {
+    const controller = new AbortController()
+    const logs = loggingStream({ id: 'model-a' }, { signal: controller.signal })
+    const first = logs.next()
+    t.ok(await waitFor(() => subscribed('model-a')), 'the subscription registered')
+
+    sendLogToStreams('model-a', 'info', 'llamacpp-completion', 'a')
+    sendLogToStreams('model-a', 'info', 'llamacpp-completion', 'b')
+    t.is((await first).value?.message, 'a', 'the first log arrives')
+
+    controller.abort(new Error('stop'))
+    t.absent(subscribed('model-a'), 'the subscription is released before the next read')
+
+    t.ok((await logs.next()).done, 'the queued log is dropped and the stream ends')
+  } finally {
+    await tearDown()
+  }
+})
+
 test('a logging stream with an aborted signal opens no subscription', async function (t) {
   setUp()
   try {

@@ -38,10 +38,18 @@ export async function* handleLoggingStream(
     wake()
   }
 
+  // Release the subscription and drop what it queued as soon as the caller
+  // aborts, even while it is not reading. A parked stream wakes and ends; a
+  // stream whose id gets no more logs (an unloaded model) would otherwise wait
+  // forever, and its subscription with it.
+  const onAbort = () => {
+    unregisterLoggingStream(id, streamHandler)
+    logQueue.length = 0
+    wake()
+  }
+
   registerLoggingStream(id, streamHandler)
-  // A stream whose id gets no more logs (an unloaded model) would otherwise
-  // wait forever, and its subscription with it.
-  signal?.addEventListener('abort', wake, { once: true })
+  signal?.addEventListener('abort', onAbort, { once: true })
 
   try {
     while (true) {
@@ -49,8 +57,8 @@ export async function* handleLoggingStream(
         yield logQueue.shift()!
       }
 
-      // Checked here rather than once per loop: the signal can abort while a
-      // log is being read, and its `abort` event does not fire twice.
+      // An abort while a log was being read emptied the queue and found no
+      // pending wait to wake, so end here instead of waiting.
       if (signal?.aborted) return
 
       await new Promise<void>((resolve) => {
@@ -58,7 +66,7 @@ export async function* handleLoggingStream(
       })
     }
   } finally {
-    signal?.removeEventListener('abort', wake)
+    signal?.removeEventListener('abort', onAbort)
     unregisterLoggingStream(id, streamHandler)
   }
 }
