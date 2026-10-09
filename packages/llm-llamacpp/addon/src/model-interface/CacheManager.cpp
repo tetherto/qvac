@@ -35,7 +35,7 @@ std::error_code syncFile(const std::string& path) {
   HANDLE file = CreateFileW(
       std::filesystem::path(path).wstring().c_str(),
       GENERIC_WRITE,
-      FILE_SHARE_READ | FILE_SHARE_WRITE,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
       nullptr,
       OPEN_EXISTING,
       FILE_ATTRIBUTE_NORMAL,
@@ -49,11 +49,19 @@ std::error_code syncFile(const std::string& path) {
   return flushed ? std::error_code{}
                  : std::error_code{error, std::system_category()};
 #else
-  const int fd = ::open(path.c_str(), O_RDONLY);
+  const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
   if (fd < 0) {
     return {errno, std::generic_category()};
   }
-  const int rc = ::fsync(fd);
+  int rc = -1;
+#ifdef F_FULLFSYNC
+  // Apple's fsync stops at the drive's cache; F_FULLFSYNC flushes it too.
+  // Filesystems that refuse it fall back to fsync.
+  rc = ::fcntl(fd, F_FULLFSYNC);
+#endif
+  if (rc != 0) {
+    rc = ::fsync(fd);
+  }
   const int error = errno;
   ::close(fd);
   return rc == 0 ? std::error_code{}
@@ -69,7 +77,7 @@ void syncParentDirectory(const std::string& path) {
   if (parent.empty()) {
     parent = ".";
   }
-  const int fd = ::open(parent.c_str(), O_RDONLY);
+  const int fd = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
   if (fd >= 0) {
     (void)::fsync(fd);
     ::close(fd);
