@@ -135,8 +135,12 @@ test(
       'the bundle is shared by both platforms, so an Android prebuild installs both'
     )
     t.ok(
-      existsSync(join(project.sdkPath, 'dist', 'worker.mobile.bundle.js')),
+      existsSync(join(project.sdkPath, 'dist', 'worker-mobile', 'index.bundle.mjs')),
       'the verified bundle is copied into the SDK'
+    )
+    t.ok(
+      existsSync(join(project.sdkPath, 'dist', 'worker-mobile', 'index.mjs')),
+      'the harness is copied beside it'
     )
   }
 )

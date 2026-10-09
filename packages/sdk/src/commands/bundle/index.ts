@@ -28,6 +28,7 @@ import {
   resolveAddons,
   type HostPrebuildPackage
 } from '@/commands/host-prebuilds/index'
+import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import type { NativeAddon } from '@/commands/verify/addon-source'
 import { isMobileHost } from '@/commands/verify/prebuilds'
 import { verifyBundle } from '@/commands/verify/index'
@@ -221,11 +222,6 @@ interface StowBundleOptions {
   entryPath: string
   target: BundleTarget
   outputDir: string
-  /**
-   * Folder every bundled file sits under. Unset, bare-stow takes the closest
-   * folder holding every module it bundled.
-   */
-  base: string | undefined
   hosts: string[]
   imports: Record<string, unknown>
   deferModules: string[]
@@ -233,7 +229,7 @@ interface StowBundleOptions {
 
 /** Writes the bundle, the harness and the files the bundle loads, and returns the bundle's path. */
 async function stowBundle(options: StowBundleOptions): Promise<string> {
-  const { entryPath, target, outputDir, base, hosts, imports, deferModules } = options
+  const { entryPath, target, outputDir, hosts, imports, deferModules } = options
   const spec = TARGETS[target]
   const harnessPath = path.join(outputDir, spec.harness)
 
@@ -241,9 +237,9 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
   await fsp.rm(outputDir, { recursive: true, force: true })
 
   // bare-module-traverse types its options from bare-addon-resolve, which lacks
-  // the `imports` and `defer` that bare-module-resolve takes.
+  // the `imports` and `defer` that bare-module-resolve takes. With no base,
+  // bare-stow keys the bundle from the closest folder holding every module.
   const stowOptions: stow.StowOptions & { imports: Record<string, unknown>; defer: string[] } = {
-    ...(base !== undefined && { base: pathToFileURL(base + path.sep).href }),
     imports,
     defer: deferModules,
     hosts
@@ -307,16 +303,17 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
   const imports = JSON.parse(await fsp.readFile(importsMapPath, 'utf8')) as Record<string, unknown>
 
-  // An SDK the project's node_modules does not resolve to is reached by path,
-  // and so is its bare-stow, which the generated shim imports. Its files sit
-  // outside the project, so the bundle's base covers whatever it reaches.
-  const projectSdk = sdkPath === realpath(resolveSdkPath(projectRoot))
-  const resolveImport = projectSdk ? undefined : createSdkImportResolver(sdkPath, sdkName)
-  if (!projectSdk) {
+  // The bundler resolves the SDK's dependencies from the path it reaches the
+  // SDK by, without following links. An SDK installed in node_modules is
+  // imported by name; one linked in, as pnpm installs it, or outside the
+  // project is imported by its real path, and so is its bare-stow, which the
+  // generated shim imports.
+  const sdkByName = findInAncestorNodeModules(projectRoot, sdkName) === sdkPath
+  const resolveImport = sdkByName ? undefined : createSdkImportResolver(sdkPath, sdkName)
+  if (!sdkByName) {
     const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
     imports['bare-stow/protocol'] = pathToFileURL(sdkRequire.resolve('bare-stow/protocol')).href
   }
-  const base = projectSdk ? projectRoot : undefined
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
@@ -359,7 +356,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
-  const stowOptions = { entryPath, target, outputDir, base, hosts, imports, deferModules }
+  const stowOptions = { entryPath, target, outputDir, hosts, imports, deferModules }
 
   // Missing mobile platform packages are installed, or reported, before bundling.
   const addonsMissingPlatformPackages = () =>
