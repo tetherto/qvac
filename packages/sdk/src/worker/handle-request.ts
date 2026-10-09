@@ -16,7 +16,7 @@ import {
   isShutdownMessage
 } from './handler-utils'
 import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profiling'
-import { isTerminalChunk } from '@/server/rpc/rpc-utils'
+import { isTerminalChunk, signalOnWireClose } from '@/server/rpc/rpc-utils'
 import { createProgressThrottle } from '@/server/rpc/progress-throttle'
 
 type Transport = 'reply' | 'stream' | 'progress' | 'duplex' | undefined
@@ -90,6 +90,12 @@ async function streamToWire(
   profiler.startHandler()
   let sentFinalChunk = false
 
+  // A client that aborts its stream closes this one. Abort the engine stream
+  // with it: a handler that declares `endsOnAbort`, such as the log stream,
+  // would otherwise hold its subscription until it next had something to send.
+  // The engine runs every other stream to its end.
+  const signal = signalOnWireClose(wire)
+
   // A progress stream (a reply op that streams because of `withProgress`) can
   // emit hundreds of updates, so batch them on a time window before writing to
   // keep IPC and UI churn down. Native data streams like completion tokens pass
@@ -101,7 +107,7 @@ async function streamToWire(
     : undefined
 
   try {
-    for await (const response of stream(request)) {
+    for await (const response of stream(request, { signal })) {
       if (isTerminalChunk(response)) {
         throttle?.flush()
         profiler.endHandler()
@@ -113,6 +119,9 @@ async function streamToWire(
         wire.write(profiler.serialize(response, false) + '\n', 'utf-8')
       }
     }
+
+    // The client destroyed its end, so nothing is left to send it.
+    if (signal.aborted) return
 
     if (!sentFinalChunk) {
       throttle?.flush()

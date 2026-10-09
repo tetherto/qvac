@@ -130,7 +130,7 @@ export const registry: Record<string, HandlerEntry> = {
   worldStepStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldStepStream') },
   worldSceneStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldSceneStream') },
   classify: { type: 'stream', pluginOp: true, handler: pluginStream('classify') },
-  loggingStream: { type: 'stream', handler: handleLoggingStream },
+  loggingStream: { type: 'stream', handler: handleLoggingStream, endsOnAbort: true },
   pluginInvokeStream: { type: 'stream', handler: handlePluginInvokeStream },
 
   // Duplex

@@ -222,6 +222,17 @@ export const responseSchema = z.discriminatedUnion('type', [
   classifyResponseSchema
 ])
 
+/**
+ * The part of an `AbortSignal` that a call reads. Structural, so the signal of
+ * every runtime fits: the global one on Node, Electron and React Native, and
+ * `bare-abort-controller`'s on Bare.
+ */
+export interface AbortSignalLike {
+  readonly aborted: boolean
+  addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
+  removeEventListener(type: 'abort', listener: () => void): void
+}
+
 export const rpcOptionsSchema = z.object({
   timeout: z
     .number()
@@ -247,3 +258,11 @@ export const rpcOptionsSchema = z.object({
 export type Request = z.input<typeof requestSchema>
 export type Response = z.infer<typeof responseSchema>
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>
+
+/**
+ * `RPCOptions` for a stream the caller can end early. Aborting `signal` ends the
+ * stream without an error, but only for a request whose handler declares
+ * `endsOnAbort` (the log stream); every other stream ignores it and runs to its
+ * end. An inference run is stopped with `cancel` instead.
+ */
+export type AbortableRPCOptions = RPCOptions & { signal?: AbortSignalLike }

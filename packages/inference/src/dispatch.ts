@@ -5,7 +5,8 @@ import type {
   CanonicalModelType,
   ProfilingRequestMeta,
   QvacConfig,
-  RPCOptions
+  RPCOptions,
+  AbortableRPCOptions
 } from '@/schemas/index'
 import {
   normalizeModelType,
@@ -19,7 +20,7 @@ import os from 'bare-os'
 import Buffer from 'bare-buffer'
 import { PassThrough, type Readable } from 'bare-stream'
 import { registry } from '@/registry'
-import type { HandlerEntry } from '@/handlers/types'
+import type { HandlerEntry, StreamHandler, StreamHandlerContext } from '@/handlers/types'
 import { handlerSupportsProgress, selectHandler } from '@/selection'
 import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
@@ -202,6 +203,16 @@ function invokeHandler(request: Request, handler: HandlerEntry['handler']): Hand
   return directHandler(request)
 }
 
+function invokeStreamHandler(
+  request: Request,
+  entry: HandlerEntry,
+  handler: HandlerEntry['handler'],
+  context: StreamHandlerContext
+): HandlerResult {
+  if (!entry.endsOnAbort) return invokeHandler(request, handler)
+  return (handler as StreamHandler)(request, context)
+}
+
 function isAsyncGenerator(result: HandlerResult): result is AsyncGenerator<Response> {
   return typeof result === 'object' && result !== null && Symbol.asyncIterator in result
 }
@@ -273,9 +284,15 @@ export async function send<T extends Request>(
   )
 }
 
+/**
+ * Runs a request and yields its responses. For a handler that declares
+ * `endsOnAbort`, aborting `options.signal` ends the stream without an error, and
+ * a signal that is already aborted runs nothing. Every other stream ignores the
+ * signal and runs to its end.
+ */
 export async function* stream<T extends Request>(
   request: T,
-  _options?: RPCOptions
+  options?: AbortableRPCOptions
 ): AsyncGenerator<Response> {
   await ensureReady()
   assertLifecycleAllowed(request)
@@ -283,13 +300,16 @@ export async function* stream<T extends Request>(
   const processed = prepareRequest(request)
   const entry = getHandlerEntry(processed.type)
   const handler = selectHandler(entry)
+  const signal = entry.endsOnAbort ? options?.signal : undefined
+  if (signal?.aborted) return
+  const context: StreamHandlerContext = signal ? { signal } : {}
 
   async function* run(): AsyncGenerator<Response> {
     if (handlerSupportsProgress(entry, processed)) {
       yield* streamWithProgress(processed, handler)
       return
     }
-    const result = invokeHandler(processed, handler)
+    const result = invokeStreamHandler(processed, entry, handler, context)
     if (isAsyncGenerator(result)) {
       yield* result
     } else {

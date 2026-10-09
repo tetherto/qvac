@@ -1,14 +1,26 @@
 import type { LoggingStreamRequest, LoggingStreamResponse } from '@/schemas/index'
+import type { StreamHandlerContext } from '@/handlers/types'
 import { registerLoggingStream, unregisterLoggingStream } from '@/runtime/logging-stream-registry'
 import type { LogLevel } from '@qvac/logging'
 
 export async function* handleLoggingStream(
-  request: LoggingStreamRequest
+  request: LoggingStreamRequest,
+  context: StreamHandlerContext = {}
 ): AsyncGenerator<LoggingStreamResponse> {
   const { id } = request
+  const { signal } = context
+  if (signal?.aborted) return
 
   const logQueue: LoggingStreamResponse[] = []
   let pendingResolve: (() => void) | null = null
+
+  const wake = () => {
+    if (pendingResolve) {
+      const resolve = pendingResolve
+      pendingResolve = null
+      resolve()
+    }
+  }
 
   const streamHandler = (level: LogLevel, namespace: string, message: string, sourceId: string) => {
     const logResponse: LoggingStreamResponse = {
@@ -23,15 +35,21 @@ export async function* handleLoggingStream(
     }
 
     logQueue.push(logResponse)
+    wake()
+  }
 
-    if (pendingResolve) {
-      const resolve = pendingResolve
-      pendingResolve = null
-      resolve()
-    }
+  // Release the subscription and drop what it queued as soon as the caller
+  // aborts, even while it is not reading. A parked stream wakes and ends; a
+  // stream whose id gets no more logs (an unloaded model) would otherwise wait
+  // forever, and its subscription with it.
+  const onAbort = () => {
+    unregisterLoggingStream(id, streamHandler)
+    logQueue.length = 0
+    wake()
   }
 
   registerLoggingStream(id, streamHandler)
+  signal?.addEventListener('abort', onAbort, { once: true })
 
   try {
     while (true) {
@@ -39,12 +57,16 @@ export async function* handleLoggingStream(
         yield logQueue.shift()!
       }
 
-      // Wait for new logs - stream will terminate when client disconnects
+      // An abort while a log was being read emptied the queue and found no
+      // pending wait to wake, so end here instead of waiting.
+      if (signal?.aborted) return
+
       await new Promise<void>((resolve) => {
         pendingResolve = resolve
       })
     }
   } finally {
+    signal?.removeEventListener('abort', onAbort)
     unregisterLoggingStream(id, streamHandler)
   }
 }

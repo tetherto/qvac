@@ -1,6 +1,6 @@
+import { AbortController } from 'bare-abort-controller'
 import { type Logger, getAppLogger } from '@/logging/index'
 import { loggingStream } from '@/api/logging-stream'
-import type { LoggingStreamResponse } from '@/schemas/logging-stream'
 
 const logger = getAppLogger()
 
@@ -8,7 +8,7 @@ const activeStreams = new Map<
   string,
   {
     logger: Logger
-    streamIterator: AsyncGenerator<LoggingStreamResponse>
+    controller: AbortController
   }
 >()
 
@@ -18,8 +18,10 @@ export function startLoggingStreamForModel(modelId: string, modelLogger: Logger)
     return
   }
 
-  const streamIterator = loggingStream({ id: modelId })
-  activeStreams.set(modelId, { logger: modelLogger, streamIterator })
+  const controller = new AbortController()
+  const streamIterator = loggingStream({ id: modelId }, { signal: controller.signal })
+  const entry = { logger: modelLogger, controller }
+  activeStreams.set(modelId, entry)
 
   try {
     void (async () => {
@@ -46,7 +48,8 @@ export function startLoggingStreamForModel(modelId: string, modelLogger: Logger)
       } catch (error) {
         logger.error(`Logging stream error for model ${modelId}:`, error)
       } finally {
-        activeStreams.delete(modelId)
+        // A reload under the same id may have registered a new stream by now.
+        if (activeStreams.get(modelId) === entry) activeStreams.delete(modelId)
       }
     })()
   } catch (error) {
@@ -60,9 +63,9 @@ export function stopLoggingStreamForModel(modelId: string) {
   const stream = activeStreams.get(modelId)
   if (stream) {
     activeStreams.delete(modelId)
-    // Terminate the stream iterator - this ends the in-process stream
-    // and the engine-side async generator terminates automatically
-    void stream.streamIterator.return(undefined)
+    // Abort rather than `return()`: an unloaded model logs nothing more, and
+    // `return()` waits for the next log before the stream ends.
+    stream.controller.abort(new Error(`Model ${modelId} unloaded`))
     logger.debug(`Stopped logging stream for model ${modelId}`)
   }
 }
