@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include "SequenceStateSnapshot.hpp"
 
@@ -15,15 +16,27 @@ namespace qvac_lib_inference_addon_llama::utils {
   return isRecurrent || isHybrid || isDeepSeekV4;
 }
 
-// Sliding-window models (without `swa_full`) can trim a KV tail, but only
-// while the window in front of the trim point is still resident: decoding
-// past it evicts cells no trim brings back. They take the same end-of-history
-// checkpoints as the models above (the snapshot holds the window cells), so a
-// turn that diverges behind the window restores one instead of reprocessing
-// the whole conversation. Rollback stays a tail trim.
+// Sliding-window models (without `swa_full`) trim a KV tail only while the
+// window in front of the trim point is resident, so they also take
+// end-of-history checkpoints, holding the window cells. Rollback stays a trim.
 [[nodiscard]] inline bool
 takesSlidingWindowCheckpoints(int32_t nSwa, bool swaFull) noexcept {
   return nSwa > 0 && !swaFull;
+}
+
+// Upper bound on the cells one sequence holds in a sliding-window cache, as
+// fabric's `llama_kv_cache_iswa` sizes it: the window per sequence (all of
+// them when unified) plus one ubatch, padded to 256 cells. A sliding-window
+// checkpoint holds at most this many.
+[[nodiscard]] inline uint32_t slidingWindowCacheCells(
+    int32_t nSwa, uint32_t nSeqMax, uint32_t nUbatch, bool unified) noexcept {
+  if (nSwa <= 0) {
+    return 0;
+  }
+  const uint64_t cells =
+      static_cast<uint64_t>(nSwa) * (unified ? nSeqMax : 1U) + nUbatch;
+  const uint64_t padded = (cells + 255U) / 256U * 256U;
+  return padded > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(padded);
 }
 
 // Which part of the sequence those snapshots hold: only what a tail trim
