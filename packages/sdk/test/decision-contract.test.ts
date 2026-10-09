@@ -1,7 +1,6 @@
 import test from 'brittle'
 import { decideRequestSchema, ModelType } from '@qvac/inference/surface'
 import { PLUGIN_DECISION } from '@/plugin-ids'
-import { BUILTIN_PLUGINS } from '@/commands/bundle/constants'
 import { buildContract } from '../scripts/contract/build-contract'
 import { contractValidate } from './utils/contract-validator'
 
