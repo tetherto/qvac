@@ -48,10 +48,10 @@ struct SlotStateCacheEntry {
     uint64_t total =
         state.size() + draft.bytes() + ledgerWords.size() * sizeof(llama_token);
     for (const cache::Checkpoint& checkpoint : checkpoints) {
-      // Disk-stored checkpoints hold a temp-file path, not RAM.
-      if (checkpoint.state.hasBuffer()) {
-        total += checkpoint.state.bytes();
-      }
+      // Disk-stored checkpoints hold a temp-file path, not RAM; their
+      // speculative draft side always stays in RAM.
+      total += checkpoint.state.hasBuffer() ? checkpoint.state.bytes()
+                                            : checkpoint.state.draft().bytes();
     }
     return total;
   }
