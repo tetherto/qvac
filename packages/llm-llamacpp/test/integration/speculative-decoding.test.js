@@ -4,6 +4,11 @@
 // multimodal, cached and continuous-batching paths. The model is ggml-org's
 // Qwen3.5-0.8B quant, which keeps the `blk.*.nextn.*` MTP layers that the
 // unsloth quants used elsewhere strip.
+//
+// DFlash (`spec-type: 'draft-dflash'`) shares the drafting, verification,
+// rollback, batching and cache code with MTP; only its load-time validation
+// runs here. No DFlash drafter small enough for CI exists, so its decoding
+// path is validated manually against a 27B target.
 
 const path = require('bare-path')
 const os = require('bare-os')

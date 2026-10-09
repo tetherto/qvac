@@ -60,6 +60,12 @@ graph TB
   checkpoint](#restoring-a-checkpoint)).
 - The **`cacheKey` file** is the only durable artifact. Checkpoints are never
   written into it and do not survive a process restart.
+- With speculative decoding (`spec-type`), the **draft context's state** of
+  the sequence travels with the pre-request snapshot, the checkpoints and the
+  RAM tier, and is always kept in host RAM, even for a checkpoint whose target
+  state is on disk (the RAM tier counts it). The `cacheKey` file holds the
+  target state only; loading it restarts drafting from the next decoded
+  token.
 
 ## Two kinds of models
 
@@ -376,7 +382,8 @@ The file is a standard llama.cpp sequence-state file
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
 
 The state is always written in full, unlike the partial snapshots and
-checkpoints, which are never written into the file. A load checks the ledger
+checkpoints, which are never written into the file. A speculative draft
+context's state is not written either (as in llama-server's slot files). A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
 (`UnableToLoadSessionFile`), and a file without a ledger is a cold miss.
 

@@ -263,7 +263,9 @@ projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
 
 Both work on single prompts, multimodal prompts and continuous batching (`parallel >= 2`), together with `cacheKey` conversations: the draft context's state travels with checkpoints and the RAM tier, and a `cacheKey` file (target state only, like llama-server's slot files) restarts drafting from the next decoded token.
 
-- Runtime stats gain `draftTokens` and `draftAcceptedTokens` (llama-server's `draft_n` / `draft_n_accepted`).
+- Runtime stats gain `draftTokens` and `draftAcceptedTokens` (llama-server's `draft_n` / `draft_n_accepted`); per-position acceptance rates are logged at debug level.
+- `spec-draft-n-max` is lowered at load, with a warning, so the sampled token and the draft fit one `ubatch-size` and each sequence's share of `batch-size` (`batch-size / parallel`); a batch too small for even one draft token fails the load.
+- `spec-draft-model` must be a regular local file.
 - Greedy output can differ from plain decoding where two tokens are nearly tied: the verification batch evaluates several positions at once, which changes floating-point rounding.
 - The gain depends on the device being bandwidth bound. On a Radeon 8060S, Qwen3.6-27B-MTP Q4_K_M decodes a single prompt at about 30 t/s instead of 13 t/s with 80% of the drafts accepted; with four concurrent sequences the larger verification batches cost more than they save, as they do in llama-server.
 
