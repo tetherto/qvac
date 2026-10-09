@@ -405,6 +405,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
 
   add_executable(asr_ggml_tests
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_main.cpp
     # whisper suite
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
@@ -439,7 +440,7 @@ if(BUILD_TESTING)
   )
 
   target_link_libraries(asr_ggml_tests PRIVATE
-    GTest::gmock_main
+    GTest::gmock
     whisper::whisper
     qvac::parakeet
     ggml::ggml
@@ -447,6 +448,7 @@ if(BUILD_TESTING)
 
   target_compile_definitions(asr_ggml_tests PRIVATE
     QVAC_ADDON_MODULE_NAME="${module_name}"
+    QVAC_ASR_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
     QVAC_ASR_GGML_TESTING)
 
   set_target_properties(asr_ggml_tests PROPERTIES

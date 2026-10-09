@@ -1,7 +1,7 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { QvacErrorAddonASRGgml } from "./lib/error";
-import { assessFit as assessFitImpl, type AsrFitRequest, type AsrFitResult, type AsrFitStatus, type ParakeetFitRequest, type WhisperFitRequest } from "./lib/fit";
+import { assessFit as assessFitImpl, type AsrFitRequest, type AsrFitResult, type AsrFitStatus, type MossTranscribeFitRequest, type ParakeetFitRequest, type WhisperFitRequest } from "./lib/fit";
 import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
 import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
 import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
@@ -148,6 +148,7 @@ type InferenceClientStateShape = InferenceClientState;
 type AsrFitRequestShape = AsrFitRequest;
 type AsrFitResultShape = AsrFitResult;
 type AsrFitStatusShape = AsrFitStatus;
+type MossTranscribeFitRequestShape = MossTranscribeFitRequest;
 type ParakeetFitRequestShape = ParakeetFitRequest;
 type WhisperFitRequestShape = WhisperFitRequest;
 declare namespace ASRGgml {
@@ -184,6 +185,7 @@ declare namespace ASRGgml {
     type AsrFitRequest = AsrFitRequestShape;
     type AsrFitResult = AsrFitResultShape;
     type AsrFitStatus = AsrFitStatusShape;
+    type MossTranscribeFitRequest = MossTranscribeFitRequestShape;
     type ParakeetFitRequest = ParakeetFitRequestShape;
     type WhisperFitRequest = WhisperFitRequestShape;
     export import BackendId = BackendIdEnum;

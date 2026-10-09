@@ -12,6 +12,8 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
   the backends it ships, next to its runtime.
 
+## [0.27.2] - 2026-10-09
+
 ### Added
 
 - Add `assessFit` to estimate whether EasyOCR or DocTR detector and recognizer

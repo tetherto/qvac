@@ -14,6 +14,7 @@ import {
   type AsrFitRequest,
   type AsrFitResult,
   type AsrFitStatus,
+  type MossTranscribeFitRequest,
   type ParakeetFitRequest,
   type WhisperFitRequest,
 } from "./lib/fit";
@@ -590,6 +591,7 @@ type InferenceClientStateShape = InferenceClientState;
 type AsrFitRequestShape = AsrFitRequest;
 type AsrFitResultShape = AsrFitResult;
 type AsrFitStatusShape = AsrFitStatus;
+type MossTranscribeFitRequestShape = MossTranscribeFitRequest;
 type ParakeetFitRequestShape = ParakeetFitRequest;
 type WhisperFitRequestShape = WhisperFitRequest;
 
@@ -630,6 +632,7 @@ namespace ASRGgml {
   export type AsrFitRequest = AsrFitRequestShape;
   export type AsrFitResult = AsrFitResultShape;
   export type AsrFitStatus = AsrFitStatusShape;
+  export type MossTranscribeFitRequest = MossTranscribeFitRequestShape;
   export type ParakeetFitRequest = ParakeetFitRequestShape;
   export type WhisperFitRequest = WhisperFitRequestShape;
 
