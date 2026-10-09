@@ -1,6 +1,7 @@
 import RPC from 'bare-rpc'
 import host from 'bare-stow/host'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -10,20 +11,35 @@ import { getClientLogger } from '@/logging'
 import {
   RPCInitTimeoutError,
   WorkerCrashedError,
+  WorkerFileNotFoundError,
   WorkerShutdownError,
   WorkerStartupError
 } from '@/utils/errors-client'
 import type { QvacConfig, RuntimeContext } from '@qvac/inference/surface'
 import { RPC_INIT_TIMEOUT_ENV_VAR, resolveRPCInitTimeoutMs } from './init-timeout'
+import { getPearRuntime, type PearRuntime } from './pear-runtime'
 
 type WorkerIPC = InstanceType<typeof host.IPC>
 
-/** A folder written by `bundleSdk` for `bare-sidecar`, or a worker entry run unbundled. */
-type WorkerSource = { harness: string } | { entry: string }
+/**
+ * A folder written by `bundleSdk` for `bare-sidecar` or `pear-runtime`, or a
+ * worker entry run unbundled.
+ */
+type WorkerSource =
+  { harness: string } | { pearHarness: string; pear: PearRuntime } | { entry: string }
+
+interface SidecarHarness {
+  start(): Promise<{ ipc: WorkerIPC }>
+}
+
+interface PearHarness {
+  start(pear: PearRuntime): Promise<{ ipc: WorkerIPC }>
+}
 
 const logger = getClientLogger()
 
-const STOWED_HARNESS = 'index.mjs'
+const SIDECAR_HARNESS = 'index.mjs'
+const PEAR_HARNESS = 'index.cjs'
 const STOWED_BUNDLE = 'index.bundle'
 
 let rpcInstance: RPC | null = null
@@ -50,22 +66,22 @@ function findProjectRootSync(): string | undefined {
   return undefined
 }
 
-function stowedHarness(dir: string): string | undefined {
-  const harness = path.join(dir, STOWED_HARNESS)
+function stowedHarness(dir: string, harnessFile = SIDECAR_HARNESS): string | undefined {
+  const harness = path.join(dir, harnessFile)
   return fs.existsSync(harness) && fs.existsSync(path.join(dir, STOWED_BUNDLE))
     ? harness
     : undefined
 }
 
-function packagedWorkerDir(): string | undefined {
+function packagedWorkerDirs(): string[] {
   const { resourcesPath } = process as { resourcesPath?: string }
-  if (typeof resourcesPath !== 'string') return undefined
+  if (typeof resourcesPath !== 'string') return []
 
   return [
     path.join(resourcesPath, 'app.asar.unpacked', 'qvac', 'worker'),
     path.join(resourcesPath, 'app', 'qvac', 'worker'),
     path.join(resourcesPath, 'qvac', 'worker')
-  ].find((dir) => stowedHarness(dir) !== undefined)
+  ]
 }
 
 /**
@@ -89,6 +105,30 @@ function sdkWorkerFile(which: 'entry' | 'shim'): string {
 }
 
 /**
+ * With a Pear runtime registered, the `pear-runtime` bundle from
+ * QVAC_WORKER_PATH, the packaged app, or `qvac/worker/` in the project root.
+ */
+function resolvePearWorkerSource(pear: PearRuntime): WorkerSource {
+  const envPath = process.env['QVAC_WORKER_PATH']
+  const projectRoot = findProjectRootSync()
+  const projectWorkerDir = path.join(projectRoot ?? process.cwd(), 'qvac', 'worker')
+  const dirs = [
+    ...(envPath ? [path.resolve(envPath)] : []),
+    ...packagedWorkerDirs(),
+    projectWorkerDir
+  ]
+
+  for (const dir of dirs) {
+    const pearHarness = stowedHarness(dir, PEAR_HARNESS)
+    if (pearHarness) {
+      logger.info(`🔧 Using Pear worker: ${pearHarness}`)
+      return { pearHarness, pear }
+    }
+  }
+  throw new WorkerFileNotFoundError(path.join(projectWorkerDir, PEAR_HARNESS))
+}
+
+/**
  * The worker to start, in order:
  * 1. QVAC_WORKER_PATH: a bundled worker folder, or a worker entry file
  * 2. The packaged Electron app's bundled worker
@@ -97,6 +137,9 @@ function sdkWorkerFile(which: 'entry' | 'shim'): string {
  * 5. The SDK's default worker, run unbundled
  */
 function resolveWorkerSource(): WorkerSource {
+  const pear = getPearRuntime()
+  if (pear) return resolvePearWorkerSource(pear)
+
   const envPath = process.env['QVAC_WORKER_PATH']
   if (envPath) {
     const resolved = path.resolve(envPath)
@@ -112,10 +155,12 @@ function resolveWorkerSource(): WorkerSource {
     logger.warn(`⚠️ QVAC_WORKER_PATH was set but no worker was found at ${resolved}. Falling back.`)
   }
 
-  const packaged = packagedWorkerDir()
-  if (packaged) {
-    logger.info(`🔧 Using packaged worker: ${packaged}`)
-    return { harness: path.join(packaged, STOWED_HARNESS) }
+  for (const dir of packagedWorkerDirs()) {
+    const harness = stowedHarness(dir)
+    if (harness) {
+      logger.info(`🔧 Using packaged worker: ${harness}`)
+      return { harness }
+    }
   }
 
   const projectRoot = findProjectRootSync()
@@ -137,22 +182,28 @@ function resolveWorkerSource(): WorkerSource {
   return { entry }
 }
 
-const WORKER_SOURCE = resolveWorkerSource()
-
 interface StartingWorker {
   ready: Promise<WorkerIPC>
   /** Stops the worker if it is still starting. */
   abort(): void
 }
 
+async function startHarness(
+  source: Exclude<WorkerSource, { entry: string }>
+): Promise<{ ipc: WorkerIPC }> {
+  if ('pearHarness' in source) {
+    const harness = createRequire(import.meta.url)(source.pearHarness) as PearHarness
+    return harness.start(source.pear)
+  }
+  const harness = (await import(pathToFileURL(source.harness).href)) as SidecarHarness
+  return harness.start()
+}
+
 function startWorker(source: WorkerSource): StartingWorker {
-  if ('harness' in source) {
+  if (!('entry' in source)) {
     let aborted = false
     const ready = (async () => {
-      const harness = (await import(pathToFileURL(source.harness).href)) as {
-        start(): Promise<{ ipc: WorkerIPC }>
-      }
-      const { ipc } = await harness.start()
+      const { ipc } = await startHarness(source)
       if (aborted) ipc.destroy()
       return ipc
     })()
@@ -212,7 +263,7 @@ async function preresolveConfig(): Promise<QvacConfig | undefined | typeof CONFI
 
 function startWithTimeout(timeoutMs: number): Promise<WorkerIPC> {
   return new Promise((resolve, reject) => {
-    const starting = startWorker(WORKER_SOURCE)
+    const starting = startWorker(resolveWorkerSource())
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true

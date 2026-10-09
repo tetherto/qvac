@@ -157,20 +157,6 @@ export class WorkerFileNotFoundError extends QvacErrorBase {
   }
 }
 
-export class PearWorkerEntryRequiredError extends QvacErrorBase {
-  constructor(workerEntry: string, cause?: unknown) {
-    super(
-      createErrorOptions(SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED, [workerEntry], cause)
-    )
-  }
-}
-
-export class WorkerPluginsNotRegisteredError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED, [], cause))
-  }
-}
-
 export class BundleVerificationFailedError extends QvacErrorBase {
   constructor(bundlePath: string, cause?: unknown) {
     super(
