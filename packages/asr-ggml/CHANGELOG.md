@@ -16,6 +16,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- `assessFit` supports `engine: 'moss-transcribe'` with an explicit audio duration and the existing prompt, hotword and token options. It projects weights, encoder/decoder graphs, KV cache and host memory without loading model weights.
+
 - Whisper `assessFit` takes the registry's weightless descriptions of a
   whisper model and its Silero VAD model as `modelPath` and `vadModelPath`,
   and projects them exactly as it projects the files, so a whisper load can be
@@ -48,6 +50,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Fixed
 
+- MOSS transcription memory-fit estimates count shared compute-buffer metadata once.
 - Nemotron 3 Diarization streaming preserves first-chunk predictions with left
   context, applies the same peak gain as offline inference, and retains an
   explicitly requested 80 ms left context.
