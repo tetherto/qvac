@@ -1111,6 +1111,12 @@ await response.onUpdate((data) => {
 }).await()
 ```
 
+When `maxNewTokens` is omitted, MOSS-Speech uses the remaining model context
+after the prompt instead of an implicit 1000-token budget. The JavaScript API
+currently accepts explicit budgets from 1 to 4096; the native engine also
+checks that the requested budget fits the remaining context. `maxReplySeconds`
+is optional and defaults to no time cut.
+
 The user turn is either `audio` (with `sampleRate`) or the run `input` text,
 not both; each entry of `messages` carries exactly one of `text` or `audio`
 (with its `sampleRate`).  Every call is one exchange: pass the earlier turns in
@@ -1352,6 +1358,7 @@ fit.report
 | `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
 | `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
 | `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+| `moss` | `mossBackbonePath`, `mossCodecDecoderPath`, optional `mossCodecEncoderPath` | Required `promptRows`, `referenceSamples`, `streaming`; load controls `durationTokens`, `streamChunkTokens`, `threads` |
 | `moss-sfx` | Required `mossSoundEffectPath` | Required `prompt`, `seconds`; optional `negativePrompt`, `steps`, `guidance`, `shift`, `threads` |
 
 Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
@@ -1360,7 +1367,33 @@ Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the 
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
 
-A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS Delay has no SDK fit projection on this baseline. MOSS-SoundEffect is supported. A broken request, or a host with no native binding, throws.
+A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, throws.
+
+MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
+native prompt length, including special tokens, encoded speaker references and
+TTSD continuation rows. `referenceSamples` is the total mono reference sample
+count (0 without a reference); a positive count requires the encoder path.
+`streaming` explicitly selects native chunk streaming or batch synthesis.
+The fitter does not open reference recordings. Use the TTSD backbone to assess
+dialogue, supplying its complete prompt and total reference workload.
+
+```js
+const fit = TTSGgml.assessFit({
+  engineType: 'moss',
+  mossBackbonePath: './moss-tts-delay-f16.gguf',
+  mossCodecDecoderPath: './moss-codec-decoder-f16.gguf',
+  promptRows: 128,
+  referenceSamples: 0,
+  streaming: false,
+  useGPU: true
+})
+```
+
+The result includes LM weights and KV state, codec weights and compute, streaming
+caches when applicable, and host staging/audio memory. It sums component peaks
+as a conservative upper bound, including the reference encoder when requested;
+this may reject a workload whose actual peak is smaller. The fit follows the
+load's generation settings and does not change synthesis behavior.
 
 The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
 
@@ -1426,6 +1459,11 @@ an installed package. Without them the demos still run and write the
 concatenated wav.
 
 ## Testing
+
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. The deterministic C++ tier remains a
+required gate. See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
 
 ```bash
 npm run test:unit               # mocked binding; fast

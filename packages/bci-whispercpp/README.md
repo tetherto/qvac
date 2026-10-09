@@ -357,6 +357,11 @@ A model or embedder the fitter cannot read is `status: "error"`; a broken reques
 
 ## Tests
 
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. C++ test failures block the merge guard.
+See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
+
 | Script | Purpose |
 |--------|---------|
 | `npm run test:unit` | JS unit tests (`brittle-bare test/unit/*.test.js`) — no model required |
