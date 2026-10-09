@@ -134,6 +134,16 @@ test('world fit validates its companion paths and session length', async (t) => 
   }
   const fit = assessFit({ mode: 'world', files, config: { backend: 'cpu' } })
   t.is(fit.reason, 'model-unreadable')
+  for (const config of [
+    { backend: 'gpux' },
+    { paramsBackend: 'decoder=cpu' },
+    { paramsBackend: 'diffusion=gpux' },
+    { maxVram: 'gpux=4' }
+  ]) {
+    const invalid = assessFit({ mode: 'world', files, config })
+    t.is(invalid.status, 'error')
+    t.is(invalid.reason, 'unsupported-config')
+  }
 })
 
 test('a file that is not a model is unreadable too', (t) => {

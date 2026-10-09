@@ -91,8 +91,8 @@ public:
   void load();
   [[nodiscard]] bool isLoaded() const noexcept;
 
-  [[nodiscard]] sd_fit_status_t
-  assessFit(int walkSteps, sd_fit_result_t& result) const;
+  [[nodiscard]] sd_fit_status_t assessFit(
+      int walkSteps, sd_fit_result_t& result, bool& unsupportedConfig) const;
 
   std::any process(const std::any& input) final;
   void cancel() const final;

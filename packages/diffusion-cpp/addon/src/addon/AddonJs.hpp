@@ -672,8 +672,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       sd_fit_result_t& result;
       ~FitResultGuard() { sd_fit_result_free(&result); }
     } guard{fit};
-    outcome.status = model.assessFit(walkSteps, fit);
-    outcome.reason = outcome.status == SD_FIT_SUCCESS   ? "fits"
+    bool unsupportedConfig = false;
+    outcome.status = model.assessFit(walkSteps, fit, unsupportedConfig);
+    outcome.reason = unsupportedConfig                  ? "unsupported-config"
+                     : outcome.status == SD_FIT_SUCCESS ? "fits"
                      : outcome.status == SD_FIT_FAILURE ? "does-not-fit"
                                                         : "model-unreadable";
     if (fit.report)
