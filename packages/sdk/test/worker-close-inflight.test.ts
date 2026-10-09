@@ -21,7 +21,7 @@ test('close() rejects in-flight RPC calls with WorkerShutdownError', async funct
   const call = embed({ modelId: 'irrelevant', text: 'hi' })
   call.catch(() => {})
 
-  // Let the handshake complete before close() runs.
+  // Let the worker start before close() runs.
   await new Promise((r) => setTimeout(r, 250))
 
   await close()

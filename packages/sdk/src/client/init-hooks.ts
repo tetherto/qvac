@@ -24,12 +24,14 @@ function applyClientLoggerSettings(config: QvacConfig) {
 async function sendInitMessage(
   rpc: RPCClient,
   config: QvacConfig | undefined,
-  runtimeContext: RuntimeContext | undefined
+  runtimeContext: RuntimeContext,
+  homeDir: string
 ) {
   const initMessage = {
     type: '__init_config',
     config,
-    runtimeContext
+    runtimeContext,
+    homeDir
   }
 
   const req = rpc.request(1)
@@ -46,37 +48,32 @@ async function sendInitMessage(
 }
 
 /**
- * Initializes SDK configuration and runtime context.
- * Config is loaded once and becomes immutable on the worker side.
+ * Sends the worker its first message: config, runtime context and the folder
+ * that holds `.qvac`. Config is loaded once and becomes immutable on the
+ * worker side.
  *
  * @param rpc - The RPC client instance
  * @param resolveConfig - Runtime-specific config resolver function
- * @param runtimeContext - Optional runtime context (platform, device info)
+ * @param runtimeContext - Runtime context (platform, device info)
+ * @param homeDir - Folder the worker keeps `.qvac` in
  */
 export async function initializeConfig(
   rpc: RPCClient,
   resolveConfig: ResolveConfigFn,
-  runtimeContext?: RuntimeContext
+  runtimeContext: RuntimeContext,
+  homeDir: string
 ) {
   const config = await resolveConfig()
 
-  // Nothing to initialize
-  if (!config && !runtimeContext) {
-    return
-  }
-
-  // Apply client-side logger settings
   if (config) {
     applyClientLoggerSettings(config)
     logger.info('📦 Initializing SDK config')
   }
 
-  if (runtimeContext) {
-    logger.info('📱 Runtime context:', runtimeContext)
-  }
+  logger.info('📱 Runtime context:', runtimeContext)
 
   try {
-    await sendInitMessage(rpc, config, runtimeContext)
+    await sendInitMessage(rpc, config, runtimeContext, homeDir)
     logger.info('✅ Initialization complete')
   } catch (error) {
     logger.error('❌ Initialization failed:', error)

@@ -6,7 +6,7 @@ import { RPC_INIT_TIMEOUT_ENV_VAR } from '@/client/rpc/init-timeout'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CONFIGURED_TIMEOUT_MS = 1_500
 
-// The default is 30s. A worker that never connects would sit there for all of
+// The default is 30s. A worker that never signals ready would sit there for all of
 // it, so finishing early is itself the evidence that the override took effect.
 void test('RPC init honours a configured timeout instead of the 30s default', async function (t) {
   t.timeout(20_000)
@@ -14,7 +14,8 @@ void test('RPC init honours a configured timeout instead of the 30s default', as
   process.env['QVAC_WORKER_PATH'] = path.resolve(__dirname, 'fixtures/silent-worker.mjs')
   process.env[RPC_INIT_TIMEOUT_ENV_VAR] = String(CONFIGURED_TIMEOUT_MS)
 
-  const { getRPC, close } = await import('@/client/rpc/node-rpc-client')
+  // `#rpc` loads the built client, as the SDK does, so it finds the built worker files.
+  const { getRPC, close } = await import('#rpc')
 
   t.teardown(async function () {
     try {
@@ -28,7 +29,7 @@ void test('RPC init honours a configured timeout instead of the 30s default', as
   let thrown: Error | undefined
   try {
     await getRPC()
-    t.fail('getRPC() resolved unexpectedly - the fixture worker never connects')
+    t.fail('getRPC() resolved unexpectedly - the fixture worker never signals ready')
   } catch (error) {
     thrown = error as Error
   }

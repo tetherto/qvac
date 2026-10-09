@@ -358,15 +358,9 @@ export {
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
 // rpc-client life-signal race when the bare worker exits unexpectedly
-// or close()/process-exit teardown runs while a caller is in flight.
-// `WorkerStartupError` is the pre-handshake counterpart: it is never thrown
-// directly, it is the `cause` of `RPCInitTimeoutError`, and it carries
-// `workerExited` / `exitCode` / `exitSignal` / `stderrTail` so a host can tell a
-// crashed worker from a slow one without parsing the message.
-// `BareRuntimeBinaryNotFoundError` is thrown when the worker fails to
-// spawn because the platform's `bare-runtime-<platform>-<arch>` package is
-// missing (common under pnpm). Exported so consumers can pattern-match with
-// `instanceof`.
+// or close() runs while a caller is in flight.
+// `WorkerStartupError` is thrown when the worker fails before signalling ready;
+// its `cause` is the worker's own error.
 // `StreamEndedError` is raised by the streaming result helpers (upscale, world)
 // when the RPC stream closes without a terminal `done` frame. Exported for the
 // same reason as the rest of this block: matching on it requires the class.
@@ -375,7 +369,6 @@ export {
 // throws on a write after end — its own JSDoc named it long before it was
 // exported.
 export {
-  BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
   WorkerStartupError,

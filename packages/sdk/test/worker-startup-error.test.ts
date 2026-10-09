@@ -13,7 +13,7 @@ function collectErrorDetails(error: Error | undefined) {
   return `${error.message}\n${causeMessage}`
 }
 
-test('loadModel() startup failure includes worker stderr in RPC init error cause', async function (t) {
+test('loadModel() startup failure carries the worker error as its cause', async function (t) {
   t.timeout(15_000)
 
   process.env['QVAC_WORKER_PATH'] = path.resolve(
@@ -45,11 +45,11 @@ test('loadModel() startup failure includes worker stderr in RPC init error cause
   t.ok(startupError, 'expected loadModel() to reject')
   t.is(
     (startupError as { name?: string } | undefined)?.name,
-    'RPC_INIT_TIMEOUT',
-    `expected RPC_INIT_TIMEOUT, got name=${(startupError as { name?: string } | undefined)?.name}`
+    'WORKER_STARTUP_FAILED',
+    `expected WORKER_STARTUP_FAILED, got name=${(startupError as { name?: string } | undefined)?.name}`
   )
   t.ok(
     collectErrorDetails(startupError).includes(nativeLoadErrorMarker),
-    'expected SDK error details to include worker stderr'
+    'expected SDK error details to include the worker error'
   )
 })

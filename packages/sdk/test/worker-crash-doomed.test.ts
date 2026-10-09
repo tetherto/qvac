@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Doomed worker handshakes then exits 100ms later without ever replying.
+// Doomed worker signals ready, then exits 100ms later without ever replying.
 // Without the worker-life signal the SDK call hangs forever.
-test('embed() rejects when bare worker dies post-handshake (doomed worker)', async function (t) {
+test('embed() rejects when bare worker dies after it is ready (doomed worker)', async function (t) {
   t.timeout(15_000)
 
   // WORKER_PATH is resolved at module load — set before importing.
