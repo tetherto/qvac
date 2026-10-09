@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-07#2` and the `ggml-speech` floor to
+  `2026-10-07#1`, keeping the speech packages on one engine stack. The new
+  revisions add MOSS transcription memory fit and ggml memory queries that this
+  package does not use, so published behavior is unchanged.
 - `assessFit` counts the embedder: the host RAM it keeps is reported as
   `embedderBytes` (replacing `embedderFileBytes`, its size on disk), is
   included in `hostBytes`, and is part of the verdict on devices that share
