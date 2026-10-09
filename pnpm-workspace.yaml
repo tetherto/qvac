@@ -30,6 +30,16 @@ overrides:
   # pin it to the electron fork's published registry build so blockExoticSubdeps
   # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
   "@electron/rebuild>@electron/node-gyp": "10.2.0-electron.2"
+  # TEMPORARY (one-line-binding CI test branch): fabric 0.21's platform packages
+  # are not on npm yet, so drop them from workspace resolution. Remove once
+  # @qvac/fabric@0.21.0 is published and regenerate the lockfile.
+  "@qvac/fabric-linux-x64": "-"
+  "@qvac/fabric-linux-arm64": "-"
+  "@qvac/fabric-darwin-arm64": "-"
+  "@qvac/fabric-darwin-x64": "-"
+  "@qvac/fabric-win32-x64": "-"
+  "@qvac/fabric-android-arm64": "-"
+  "@qvac/fabric-ios": "-"
 
 blockExoticSubdeps: true
 

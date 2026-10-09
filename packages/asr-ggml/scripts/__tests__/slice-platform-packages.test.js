@@ -62,11 +62,15 @@ function makeFixture(hosts) {
   return { root, workdir, outDir: path.join(root, 'out') }
 }
 
+function moduleName(host) {
+  return 'qvac__fake-ggml-' + (host.startsWith('ios-') ? 'ios' : host)
+}
+
 function populateHostDir(prebuildsDir, host) {
   const hostDir = path.join(prebuildsDir, host)
-  const backendsDir = path.join(hostDir, 'qvac__fake-ggml')
+  const backendsDir = path.join(hostDir, moduleName(host))
   fs.mkdirSync(backendsDir, { recursive: true })
-  fs.writeFileSync(path.join(hostDir, 'qvac__fake-ggml.bare'), 'binary-' + host)
+  fs.writeFileSync(path.join(hostDir, moduleName(host) + '.bare'), 'binary-' + host)
   fs.writeFileSync(path.join(backendsDir, 'libqvac-speech-ggml-cpu.so'), 'backend-' + host)
 }
 
@@ -104,17 +108,15 @@ test('generates a loadable platform package layout', async (t) => {
   assert.deepEqual(manifest.libc, ['glibc'])
   assert.equal(manifest.license, 'Apache-2.0')
   assert.deepEqual(manifest.repository, META_MANIFEST.repository)
-  assert.deepEqual(manifest.files, ['index.js', 'addon', 'NOTICE'])
+  assert.deepEqual(manifest.files, ['index.js', 'prebuilds', 'NOTICE'])
+  assert.equal(manifest.addon, true)
+  assert.equal(fs.existsSync(path.join(sliceDir, 'addon')), false)
 
-  const innerManifest = readJson(sliceDir, 'addon', 'package.json')
-  assert.equal(innerManifest.name, '@qvac/fake-ggml')
-  assert.equal(innerManifest.version, '1.2.3')
-  assert.equal(innerManifest.addon, true)
-
+  assert.equal(PLATFORM_INDEX_SOURCE, 'module.exports = require.addon()\n')
   assert.equal(fs.readFileSync(path.join(sliceDir, 'index.js'), 'utf8'), PLATFORM_INDEX_SOURCE)
   assert.equal(
     fs.readFileSync(
-      path.join(sliceDir, 'addon', 'prebuilds', 'linux-x64', 'qvac__fake-ggml.bare'),
+      path.join(sliceDir, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'),
       'utf8'
     ),
     'binary-linux-x64'
@@ -123,10 +125,9 @@ test('generates a loadable platform package layout', async (t) => {
     fs.existsSync(
       path.join(
         sliceDir,
-        'addon',
         'prebuilds',
         'linux-x64',
-        'qvac__fake-ggml',
+        'qvac__fake-ggml-linux-x64',
         'libqvac-speech-ggml-cpu.so'
       )
     )
@@ -141,13 +142,16 @@ test('groups every ios flavour into one ios package', async (t) => {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
 
   slicePlatformPackages({ workdir, outDir })
-  const prebuilds = path.join(outDir, 'qvac-fake-ggml-ios', 'addon', 'prebuilds')
+  const prebuilds = path.join(outDir, 'qvac-fake-ggml-ios', 'prebuilds')
 
   assert.deepEqual(fs.readdirSync(prebuilds).sort(), [
     'ios-arm64',
     'ios-arm64-simulator',
     'ios-x64-simulator'
   ])
+  for (const host of fs.readdirSync(prebuilds)) {
+    assert.ok(fs.existsSync(path.join(prebuilds, host, 'qvac__fake-ggml-ios.bare')), host)
+  }
   const manifest = readJson(outDir, 'qvac-fake-ggml-ios', 'package.json')
   assert.equal(manifest.os, undefined)
   assert.equal(manifest.cpu, undefined)
@@ -202,6 +206,14 @@ test('injects lockstep optionalDependencies for host-filtered slices only', asyn
     '@qvac/fake-ggml-darwin-x64': '1.2.3',
     '@qvac/fake-ggml-win32-x64': '1.2.3'
   })
+  assert.deepEqual(manifest.peerDependencies, {
+    '@qvac/fake-ggml-android-arm64': '1.2.3',
+    '@qvac/fake-ggml-ios': '1.2.3'
+  })
+  assert.deepEqual(manifest.peerDependenciesMeta, {
+    '@qvac/fake-ggml-android-arm64': { optional: true },
+    '@qvac/fake-ggml-ios': { optional: true }
+  })
 })
 
 test('fails on a host dir with no slice mapping', async (t) => {
@@ -216,9 +228,25 @@ test('fails when a host dir carries no .bare addon', async (t) => {
   const { slicePlatformPackages } = await slicerPromise
   const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
-  fs.rmSync(path.join(workdir, 'prebuilds', 'win32-x64', 'qvac__fake-ggml.bare'))
+  fs.rmSync(path.join(workdir, 'prebuilds', 'win32-x64', 'qvac__fake-ggml-win32-x64.bare'))
 
   assert.throws(() => slicePlatformPackages({ workdir, outDir }), /binary-less|No \.bare/)
+})
+
+test('fails when a host dir carries the module under the meta name', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const hostDir = path.join(workdir, 'prebuilds', 'android-arm64')
+  fs.renameSync(
+    path.join(hostDir, 'qvac__fake-ggml-android-arm64.bare'),
+    path.join(hostDir, 'qvac__fake-ggml.bare')
+  )
+
+  assert.throws(
+    () => slicePlatformPackages({ workdir, outDir }),
+    /not qvac__fake-ggml-android-arm64\.bare.*NAME qvac__fake-ggml-android-arm64/
+  )
 })
 
 test('fails when the merged artifact is missing a host', async (t) => {
@@ -252,7 +280,7 @@ test('keeps the declared meta dirs in the meta package', async (t) => {
   assert.deepEqual(fs.readdirSync(path.join(workdir, 'prebuilds')).sort(), ['include', 'share'])
   assert.ok(fs.existsSync(path.join(workdir, 'prebuilds', 'include', 'ggml.h')))
   for (const dir of sliceDirs) {
-    const prebuilds = fs.readdirSync(path.join(dir, 'addon', 'prebuilds'))
+    const prebuilds = fs.readdirSync(path.join(dir, 'prebuilds'))
     assert.ok(!prebuilds.includes('include'), path.basename(dir) + ' must not carry include/')
     assert.ok(!prebuilds.includes('share'), path.basename(dir) + ' must not carry share/')
   }
@@ -277,6 +305,37 @@ test('fails when a declared meta dir is missing from the artifact', async (t) =>
   assert.throws(
     () => slicePlatformPackages({ workdir, outDir, keepDirs: ['include', 'share'] }),
     /missing the meta package dirs: share/
+  )
+})
+
+test('links a source build as local platform packages for the built hosts', async (t) => {
+  const { linkLocalPlatformPackages, PLATFORM_INDEX_SOURCE } = await slicerPromise
+  const { root, workdir } = makeFixture(['linux-x64', 'android-arm64'])
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  addMetaDirs(workdir)
+
+  const linked = linkLocalPlatformPackages({ workdir, keepDirs: ['include', 'share'] })
+
+  const scope = path.join(workdir, 'node_modules', '@qvac')
+  assert.deepEqual(linked, [
+    path.join(scope, 'fake-ggml-linux-x64'),
+    path.join(scope, 'fake-ggml-android-arm64')
+  ])
+  const pkg = path.join(scope, 'fake-ggml-linux-x64')
+  assert.equal(readJson(pkg, 'package.json').addon, true)
+  assert.equal(fs.readFileSync(path.join(pkg, 'index.js'), 'utf8'), PLATFORM_INDEX_SOURCE)
+  assert.equal(
+    fs.readFileSync(path.join(pkg, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'), 'utf8'),
+    'binary-linux-x64'
+  )
+  assert.ok(fs.existsSync(path.join(workdir, 'prebuilds', 'linux-x64')), 'the meta keeps its prebuilds')
+  assert.deepEqual(readJson(workdir, 'package.json'), META_MANIFEST, 'the meta manifest is untouched')
+
+  fs.writeFileSync(path.join(workdir, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'), 'rebuilt')
+  assert.equal(
+    fs.readFileSync(path.join(pkg, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'), 'utf8'),
+    'rebuilt',
+    'a rebuild is visible without re-linking'
   )
 })
 

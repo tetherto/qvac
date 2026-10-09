@@ -11,6 +11,7 @@ export const SPLIT_ADDON_IOS_PACKAGE = `${SPLIT_ADDON}-ios`
 export const RUNTIME_ADDON = '@qvac/fake-runtime'
 export const RUNTIME_ADDON_VERSION = '0.4.0'
 export const RUNTIME_ADDON_ANDROID_PACKAGE = `${RUNTIME_ADDON}-android-arm64`
+export const RUNTIME_ADDON_IOS_PACKAGE = `${RUNTIME_ADDON}-ios`
 
 export interface SplitAddonProjectOptions {
   layout?: 'hoisted' | 'pnpm'
@@ -36,7 +37,7 @@ function link(target: string, linkPath: string) {
 /**
  * A project whose only plugin loads a split addon: `@qvac/fake-ggml` ships no
  * prebuilds and names its platform packages in a `#host-addon` map, the way
- * the speech addons do. The SDK is reachable at `sdkDir` inside the project,
+ * `@qvac/fabric` and the speech addons do. No platform package is installed. The SDK is reachable at `sdkDir` inside the project,
  * with a pnpm lockfile beside it.
  *
  * The `pnpm` layout reproduces pnpm's isolated install: the SDK and the addon
@@ -136,8 +137,9 @@ export function createSplitAddonProject(sdkDir: string, options: SplitAddonProje
 }
 
 /**
- * A package that ships no prebuilds and names its platform packages in a
- * `#host-addon` map, loading `dependency` first when one is given.
+ * A split addon's meta package: no prebuilds of its own, a one-line
+ * `require('#host-addon')` binding, and a `#host-addon` map naming its platform
+ * packages. Loads `dependency` first when one is given.
  */
 function writeSplitAddon(root: string, name: string, version: string, dependency: string | null) {
   writeFile(
@@ -145,16 +147,12 @@ function writeSplitAddon(root: string, name: string, version: string, dependency
     JSON.stringify({
       name,
       version,
-      addon: true,
       main: 'index.js',
       ...(dependency !== null ? { dependencies: { [dependency]: '*' } } : {}),
       imports: {
         '#host-addon': {
-          android: {
-            arm64: [`${name}-android-arm64`, './addon-unavailable.js'],
-            default: './addon-unavailable.js'
-          },
-          ios: [`${name}-ios`, './addon-unavailable.js'],
+          android: { arm64: `${name}-android-arm64`, default: './addon-unavailable.js' },
+          ios: `${name}-ios`,
           default: './addon-unavailable.js'
         }
       }
@@ -163,13 +161,7 @@ function writeSplitAddon(root: string, name: string, version: string, dependency
   writeFile(
     path.join(root, 'index.js'),
     (dependency !== null ? `require('${dependency}')\n` : '') +
-      'let addon\n' +
-      'try {\n' +
-      '  addon = require.addon()\n' +
-      '} catch {\n' +
-      "  addon = require('#host-addon')\n" +
-      '}\n' +
-      'module.exports = addon\n'
+      "module.exports = require('#host-addon')\n"
   )
   writeFile(path.join(root, 'addon-unavailable.js'), 'module.exports = null\n')
 }

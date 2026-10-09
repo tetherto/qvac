@@ -1,25 +1,23 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { join } = require("node:path");
 const { test } = require("node:test");
-const { loadAddon, packageDir } = require("./load-addon.cjs");
+const { loadAddon } = require("./load-addon.cjs");
 
-test("packed mobile bundles use the addon's staged prebuilds", async () => {
+test("the server leaves backend discovery to @qvac/fabric", async () => {
   let receivedOptions;
-  const addon = loadAddon(
-    {
-      startServer: (options) => {
-        receivedOptions = options;
-        return Promise.resolve({});
-      },
-      stopServer: () => Promise.resolve(),
+  const addon = loadAddon({
+    startServer: (options) => {
+      receivedOptions = options;
+      return Promise.resolve({});
     },
-    () => null,
-  );
+    stopServer: () => Promise.resolve(),
+  });
 
   const server = await addon.startRpcServer({ port: 50052 });
-  assert.equal(receivedOptions.backendsDir, join(packageDir, "prebuilds"));
+  // A packed bundle has no package tree to compute a directory from; fabric
+  // locates its backends natively, next to its runtime.
+  assert.equal("backendsDir" in receivedOptions, false);
   await server.stop();
 });
 

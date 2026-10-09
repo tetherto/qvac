@@ -5,7 +5,7 @@
 // These exercise *real* inference through the two migrated consumers
 // (@qvac/llm-llamacpp and @qvac/embed-llamacpp). Because both addons declare
 // @qvac/fabric as their npm dependency and dynamically link the shared
-// qvac__fabric@0.bare, running them in a single Bare process proves that the
+// qvac__fabric-<host>@0.bare, running them in a single Bare process proves that the
 // shared runtime resolves, loads once, and serves both consumers.
 
 const test = require('brittle')
@@ -118,10 +118,11 @@ function fabricMappings() {
     const idx = line.indexOf('/')
     if (idx === -1) continue
     const file = line.slice(idx).trim()
-    // The shared runtime is loaded from qvac__fabric.bare on disk; its SONAME
-    // is qvac__fabric@0.bare, so accept either spelling. dlopen dedups by
-    // SONAME, so a correctly shared runtime appears as a single mapped file.
-    if (/\/qvac__fabric(@\d+)?\.bare$/.test(file)) found.add(file)
+    // The shared runtime is loaded from qvac__fabric-<host>.bare on disk; its
+    // SONAME is qvac__fabric-<host>@0.bare, so accept either spelling. dlopen
+    // dedups by SONAME, so a correctly shared runtime appears as a single
+    // mapped file.
+    if (/\/qvac__fabric-[a-z0-9-]+?(@\d+)?\.bare$/.test(file)) found.add(file)
   }
   return found
 }
@@ -176,7 +177,7 @@ test(
       t.is(
         mappings.size,
         1,
-        `exactly one qvac__fabric@0.bare is mapped (found: ${[...mappings].join(', ') || 'none'})`
+        `exactly one qvac__fabric-<host>@0.bare is mapped (found: ${[...mappings].join(', ') || 'none'})`
       )
     }
   }

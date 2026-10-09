@@ -8,6 +8,7 @@
 
 #include <common/fit.h>
 #include <ggml-backend.h>
+#include <qvac-fabric.h>
 #include <gguf.h>
 #include <llama.h>
 
@@ -104,12 +105,6 @@ void captureProjection(
 ///
 /// Throws `std::invalid_argument` when any of those does not hold.
 ///
-/// Only the directory the caller named is validated. `BACKENDS_SUBDIR` is
-/// appended afterwards and is deliberately *not* required to exist: it is where
-/// this package installs dynamic backends on Linux, Android, and Windows. On
-/// Apple platforms the ggml backends are linked statically and the subdir is
-/// never created. Demanding it would turn "nothing to load here" into a hard
-/// error on exactly the platforms that need no loading.
 std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
   const std::filesystem::path backendsPath(backendsDir);
   if (!backendsPath.is_absolute()) {
@@ -141,8 +136,9 @@ std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
 ///
 /// Skipping it happens to work on a static build and silently produces a
 /// projection against an empty device list on a dynamic one, so do it properly:
-/// load the packaged backends when we were told where they are, otherwise fall
-/// back to ggml's default search path, then hand off to `llama_backend_init()`.
+/// load the backends from the directory we were told, otherwise the ones
+/// @qvac/fabric ships (it locates them next to its runtime and loads them once
+/// per process), then hand off to `llama_backend_init()`.
 /// The explicit load keeps this correct regardless of whether the linked llama
 /// build performs its own guarded load.
 ///
@@ -157,28 +153,13 @@ std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
 /// inference. Leaving the backends registered costs nothing: ggml's registry
 /// de-duplicates by reg pointer, and every fit needs the same inventory anyway.
 void loadBackends(const std::string& backendsDir) {
-  bool loadedFromPath = false;
-
   if (!backendsDir.empty()) {
-    std::filesystem::path backendsPath = resolveBackendsPath(backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsPath = (backendsPath / std::filesystem::path(BACKENDS_SUBDIR))
-                       .lexically_normal();
-#endif
-    // Absent on platforms that link the backends statically — see
-    // resolveBackendsPath. Nothing to load there, so fall through rather than
-    // scanning a directory that does not exist.
-    std::error_code ec;
-    if (std::filesystem::is_directory(backendsPath, ec)) {
-      ggml_backend_load_all_from_path(backendsPath.string().c_str());
-      loadedFromPath = true;
-    }
-  }
-
-  // Statically linked backends self-register when the registry is first
-  // constructed, so a non-empty registry here means there is nothing to find.
-  if (!loadedFromPath && ggml_backend_reg_count() == 0) {
-    ggml_backend_load_all();
+    const std::filesystem::path backendsPath = resolveBackendsPath(backendsDir);
+    ggml_backend_load_all_from_path(backendsPath.string().c_str());
+  } else {
+    // A no-op where the backends are linked statically (Apple): they
+    // self-register when the registry is first constructed.
+    qvac_fabric_load_backends();
   }
 
   llama_backend_init();

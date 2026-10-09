@@ -148,7 +148,7 @@ fi
 # Three layouts, because QVAC-24574 gave split addons a second and third:
 #   unsplit meta  package/prebuilds/<host>/addon.bare
 #   split meta    package.json only, slices named by its #host-addon map
-#   slice         package/addon/prebuilds/<host>/addon.bare  <- one level DEEPER
+#   slice         package/prebuilds/<host>/addon.bare, an addon of its own
 #
 # Suffixes and host dirs mirror SLICE_DEFINITIONS in
 # scripts/ci/slice-platform-packages.mjs; all three iOS host dirs ship in the
@@ -199,7 +199,7 @@ STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/package"
 
 if [ -n "$SLICE_SUFFIX" ]; then
-  printf '{"name":"%s","version":"%s"}\n' "$NAME" "$VERSION" > "$STAGE/package/package.json"
+  printf '{"name":"%s","version":"%s","addon":true}\n' "$NAME" "$VERSION" > "$STAGE/package/package.json"
   # MOCK_NPM_SLICE_NO_PREBUILDS models a corrupted publish: the slice exists and
   # passes provenance but carries no binaries.
   if [ -z "${MOCK_NPM_SLICE_NO_PREBUILDS:-}" ]; then
@@ -208,8 +208,8 @@ if [ -n "$SLICE_SUFFIX" ]; then
       *)     SLICE_HOSTS="$SLICE_SUFFIX" ;;
     esac
     for host in $SLICE_HOSTS; do
-      mkdir -p "$STAGE/package/addon/prebuilds/$host"
-      echo mock > "$STAGE/package/addon/prebuilds/$host/addon.bare"
+      mkdir -p "$STAGE/package/prebuilds/$host"
+      echo mock > "$STAGE/package/prebuilds/$host/addon.bare"
     done
   fi
 elif [ -n "${MOCK_NPM_SPLIT:-}" ]; then
@@ -240,7 +240,7 @@ elif [ -n "${MOCK_NPM_SPLIT:-}" ]; then
   IOS_ENTRY="${MOCK_NPM_HOST_ADDON_IOS:-$NAME-ios}"
   IMPORTS=""
   if [ -z "${MOCK_NPM_NO_HOST_ADDON:-}" ]; then
-    IMPORTS=",\"imports\":{\"#host-addon\":{\"android\":{\"arm64\":[\"$ANDROID_ENTRY\",\"./addon-unavailable.js\"],\"default\":\"./addon-unavailable.js\"},\"ios\":[\"$IOS_ENTRY\",\"./addon-unavailable.js\"],\"default\":\"./addon-unavailable.js\"}}"
+    IMPORTS=",\"imports\":{\"#host-addon\":{\"android\":{\"arm64\":\"$ANDROID_ENTRY\",\"default\":\"./addon-unavailable.js\"},\"ios\":\"$IOS_ENTRY\",\"default\":\"./addon-unavailable.js\"}}"
   fi
   printf '{"name":"%s","version":"%s","optionalDependencies":{%s}%s}\n' \
     "$NAME" "$VERSION_JSON" "$OPTIONAL" "$IMPORTS" > "$STAGE/package/package.json"

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `binding.js` is now `module.exports = require.addon()`. A host with no
+  prebuild throws `require.addon()`'s own error instead of a wrapped one.
+
 ## [0.11.0] - 2026-10-09
 
 ### Added

@@ -13,7 +13,11 @@ export const SLICE_DEFINITIONS = [
   { suffix: 'ios', hosts: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'], crossBuilt: true }
 ]
 
-export const PLATFORM_INDEX_SOURCE = "module.exports = require.addon('./addon')\n"
+// A platform package is an ordinary Bare addon: require.addon() resolves its
+// own prebuilds/<host>/<mangled package name>.bare, a literal call that
+// bare-pack and bare-link follow. The meta's binding.js is just
+// `module.exports = require('#host-addon')`, mapped to these packages.
+export const PLATFORM_INDEX_SOURCE = 'module.exports = require.addon()\n'
 
 const DEFAULT_MAX_SLICE_MB = 450
 const BYTES_PER_MB = 1024 * 1024
@@ -24,6 +28,25 @@ const BARE_ADDON_EXTENSION = '.bare'
 export function hostToSliceSuffix (host) {
   const definition = SLICE_DEFINITIONS.find((slice) => slice.hosts.includes(host))
   return definition ? definition.suffix : null
+}
+
+export function slicePackageName (metaName, definition) {
+  return metaName + '-' + definition.suffix
+}
+
+// Bare's mangling of a package name into an addon file name (cmake-bare's
+// bare_module_target, bare-addon-resolve): drop the @, / becomes __.
+export function mangledAddonName (packageName) {
+  return packageName.replace(/^@/, '').replace('/', '__')
+}
+
+// The file require.addon() in the platform package loads on `host`; the
+// native build must name its module after the platform package
+// (add_bare_module(... NAME <mangled name>)) for this to exist.
+export function expectedAddonFile (metaName, host) {
+  const definition = SLICE_DEFINITIONS.find((slice) => slice.hosts.includes(host))
+  if (!definition) throw new Error('No slice mapping for host ' + host)
+  return mangledAddonName(slicePackageName(metaName, definition)) + BARE_ADDON_EXTENSION
 }
 
 export function validateHostDirs (hostDirs) {
@@ -44,19 +67,28 @@ export function validateHostDirs (hostDirs) {
   }
 }
 
-function assertHostAddonPresent (prebuildsDir, host) {
+function assertHostAddonPresent (prebuildsDir, metaName, host) {
+  const expected = expectedAddonFile(metaName, host)
   const entries = fs.readdirSync(path.join(prebuildsDir, host))
-  if (!entries.some((entry) => entry.endsWith(BARE_ADDON_EXTENSION))) {
+  const addons = entries.filter((entry) => entry.endsWith(BARE_ADDON_EXTENSION))
+  if (addons.length === 0) {
     throw new Error(
       'No ' + BARE_ADDON_EXTENSION + ' addon under prebuilds/' + host +
       '. Refusing to publish a binary-less platform package.'
     )
   }
+  if (!addons.includes(expected)) {
+    throw new Error(
+      'prebuilds/' + host + ' carries ' + addons.join(', ') + ' but not ' + expected +
+      ', the only file require.addon() in the platform package loads. Build the ' +
+      'module with add_bare_module(... NAME ' + expected.slice(0, -BARE_ADDON_EXTENSION.length) + ').'
+    )
+  }
 }
 
-function assertAllHostAddonsPresent (prebuildsDir) {
+function assertAllHostAddonsPresent (prebuildsDir, metaName) {
   for (const host of collectKnownHosts()) {
-    assertHostAddonPresent(prebuildsDir, host)
+    assertHostAddonPresent(prebuildsDir, metaName, host)
   }
 }
 
@@ -70,7 +102,7 @@ function collectKnownHosts () {
 
 export function buildSliceManifest (metaManifest, definition) {
   const manifest = {
-    name: metaManifest.name + '-' + definition.suffix,
+    name: slicePackageName(metaManifest.name, definition),
     version: metaManifest.version,
     description: 'Prebuilt ' + definition.suffix + ' binaries for ' + metaManifest.name,
     main: 'index.js',
@@ -78,7 +110,8 @@ export function buildSliceManifest (metaManifest, definition) {
       '.': './index.js',
       './package': './package.json'
     },
-    files: ['index.js', 'addon', 'NOTICE'],
+    addon: true,
+    files: ['index.js', 'prebuilds', 'NOTICE'],
     repository: metaManifest.repository,
     author: metaManifest.author,
     license: metaManifest.license,
@@ -90,14 +123,6 @@ export function buildSliceManifest (metaManifest, definition) {
   if (definition.cpu) manifest.cpu = definition.cpu
   if (definition.libc) manifest.libc = definition.libc
   return manifest
-}
-
-export function buildInnerAddonManifest (metaManifest) {
-  return {
-    name: metaManifest.name,
-    version: metaManifest.version,
-    addon: true
-  }
 }
 
 export function buildSliceReadme (metaManifest, definition) {
@@ -123,9 +148,24 @@ function buildSliceReadmeUsage (metaManifest, definition) {
 export function buildOptionalDependencies (metaManifest, definitions) {
   const optionalDependencies = {}
   for (const definition of selectHostFilteredDefinitions(definitions)) {
-    optionalDependencies[metaManifest.name + '-' + definition.suffix] = metaManifest.version
+    optionalDependencies[slicePackageName(metaManifest.name, definition)] = metaManifest.version
   }
   return optionalDependencies
+}
+
+// Cross-built slices are declared as optional peers: nothing installs them
+// for the app, but tools that walk declared dependencies (bare-link 3 under
+// react-native-bare-kit, bare-pack's resolver) see the edge from the meta to
+// whichever one the app installed.
+export function buildCrossBuiltPeers (metaManifest, definitions) {
+  const peerDependencies = {}
+  const peerDependenciesMeta = {}
+  for (const definition of definitions.filter((d) => d.crossBuilt)) {
+    const name = slicePackageName(metaManifest.name, definition)
+    peerDependencies[name] = metaManifest.version
+    peerDependenciesMeta[name] = { optional: true }
+  }
+  return { peerDependencies, peerDependenciesMeta }
 }
 
 function selectHostFilteredDefinitions (definitions) {
@@ -173,16 +213,14 @@ function sliceDirName (metaManifest, definition) {
 function stageSlice (definition, context) {
   const { metaManifest, workdir, outDir, prebuildsDir } = context
   const sliceDir = path.join(outDir, sliceDirName(metaManifest, definition))
-  const addonDir = path.join(sliceDir, 'addon')
-  const addonPrebuildsDir = path.join(addonDir, 'prebuilds')
-  fs.mkdirSync(addonPrebuildsDir, { recursive: true })
+  const slicePrebuildsDir = path.join(sliceDir, 'prebuilds')
+  fs.mkdirSync(slicePrebuildsDir, { recursive: true })
 
   writeManifest(path.join(sliceDir, 'package.json'), buildSliceManifest(metaManifest, definition))
-  writeManifest(path.join(addonDir, 'package.json'), buildInnerAddonManifest(metaManifest))
   fs.writeFileSync(path.join(sliceDir, 'index.js'), PLATFORM_INDEX_SOURCE)
   fs.writeFileSync(path.join(sliceDir, 'README.md'), buildSliceReadme(metaManifest, definition))
   copyMetaFiles(workdir, sliceDir)
-  moveHostDirs(definition.hosts, prebuildsDir, addonPrebuildsDir)
+  moveHostDirs(definition.hosts, prebuildsDir, slicePrebuildsDir)
 
   return sliceDir
 }
@@ -196,9 +234,9 @@ function copyMetaFiles (workdir, sliceDir) {
   }
 }
 
-function moveHostDirs (hosts, prebuildsDir, addonPrebuildsDir) {
+function moveHostDirs (hosts, prebuildsDir, slicePrebuildsDir) {
   for (const host of hosts) {
-    fs.renameSync(path.join(prebuildsDir, host), path.join(addonPrebuildsDir, host))
+    fs.renameSync(path.join(prebuildsDir, host), path.join(slicePrebuildsDir, host))
   }
 }
 
@@ -237,7 +275,7 @@ export function slicePlatformPackages (options) {
   const prebuildsDir = path.join(workdir, 'prebuilds')
 
   validateHostDirs(listHostDirs(prebuildsDir, keepDirs))
-  assertAllHostAddonsPresent(prebuildsDir)
+  assertAllHostAddonsPresent(prebuildsDir, metaManifest.name)
   assertKeepDirsPresent(prebuildsDir, keepDirs)
   fs.mkdirSync(outDir, { recursive: true })
 
@@ -246,14 +284,59 @@ export function slicePlatformPackages (options) {
 
   removeEmptiedPrebuildsDir(prebuildsDir, keepDirs)
   metaManifest.optionalDependencies = buildOptionalDependencies(metaManifest, SLICE_DEFINITIONS)
+  const { peerDependencies, peerDependenciesMeta } = buildCrossBuiltPeers(metaManifest, SLICE_DEFINITIONS)
+  metaManifest.peerDependencies = { ...metaManifest.peerDependencies, ...peerDependencies }
+  metaManifest.peerDependenciesMeta = { ...metaManifest.peerDependenciesMeta, ...peerDependenciesMeta }
   writeManifest(metaManifestPath, metaManifest)
   log(
     'Injected ' + Object.keys(metaManifest.optionalDependencies).length +
-    ' host-filtered optionalDependencies into ' + metaManifest.name +
+    ' host-filtered optionalDependencies and ' + Object.keys(peerDependencies).length +
+    ' optional cross-built peers into ' + metaManifest.name +
     '; cross-built targets are direct dependencies of the consuming application'
   )
 
   return sliceDirs
+}
+
+// Development counterpart of slicePlatformPackages: turns a source build's
+// prebuilds/<host>/ into <workdir>/node_modules/<platform package>/, the
+// package the meta's "#host-addon" names, so a workspace-linked meta resolves,
+// bundles and links exactly as an installed release does. Host dirs are linked
+// rather than moved, so the meta keeps its prebuilds and a rebuild is picked up
+// without re-running this. Only the hosts that were built are staged.
+export function linkLocalPlatformPackages (options) {
+  const { keepDirs = [], log = () => {} } = options
+  const workdir = path.resolve(options.workdir)
+  const metaManifest = readManifest(path.join(workdir, 'package.json'))
+  const prebuildsDir = path.join(workdir, 'prebuilds')
+  const hostDirs = listHostDirs(prebuildsDir, keepDirs)
+  const known = new Set(collectKnownHosts())
+  const unknown = hostDirs.filter((host) => !known.has(host))
+  if (unknown.length > 0) {
+    throw new Error('Unknown prebuild host dirs with no slice mapping: ' + unknown.join(', '))
+  }
+  if (hostDirs.length === 0) throw new Error('No host prebuilds under ' + prebuildsDir)
+
+  const linked = []
+  for (const definition of SLICE_DEFINITIONS) {
+    const hosts = definition.hosts.filter((host) => hostDirs.includes(host))
+    if (hosts.length === 0) continue
+    for (const host of hosts) assertHostAddonPresent(prebuildsDir, metaManifest.name, host)
+
+    const name = slicePackageName(metaManifest.name, definition)
+    const packageDir = path.join(workdir, 'node_modules', ...name.split('/'))
+    fs.rmSync(packageDir, { recursive: true, force: true })
+    fs.mkdirSync(path.join(packageDir, 'prebuilds'), { recursive: true })
+    writeManifest(path.join(packageDir, 'package.json'), buildSliceManifest(metaManifest, definition))
+    fs.writeFileSync(path.join(packageDir, 'index.js'), PLATFORM_INDEX_SOURCE)
+    for (const host of hosts) {
+      // 'junction' is ignored off Windows, where it avoids needing the symlink privilege.
+      fs.symlinkSync(path.join(prebuildsDir, host), path.join(packageDir, 'prebuilds', host), 'junction')
+    }
+    log('Linked ' + name + ' (' + hosts.join(', ') + ') -> ' + path.relative(workdir, packageDir))
+    linked.push(packageDir)
+  }
+  return linked
 }
 
 function stageAllSlices (context, maxSliceMb, log) {
@@ -271,6 +354,11 @@ function parseArgs (argv) {
   const options = {}
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i]
+    if (flag === '--link-local') {
+      options.linkLocal = true
+      i -= 1
+      continue
+    }
     const value = argv[i + 1]
     if (value === undefined) throw new Error('Missing value for ' + flag)
     if (flag === '--workdir') options.workdir = value
@@ -279,10 +367,11 @@ function parseArgs (argv) {
     else if (flag === '--keep-dirs') options.keepDirs = value.split(/[\s,]+/).filter(Boolean)
     else throw new Error('Unknown option: ' + flag)
   }
-  if (!options.workdir || !options.outDir) {
+  if (!options.workdir || (!options.outDir && !options.linkLocal)) {
     throw new Error(
       'Usage: slice-platform-packages.mjs --workdir <dir> --out-dir <dir> ' +
-      '[--max-slice-mb <n>] [--keep-dirs "<dir> <dir>"]'
+      '[--max-slice-mb <n>] [--keep-dirs "<dir> <dir>"]\n' +
+      '       slice-platform-packages.mjs --link-local --workdir <dir> [--keep-dirs "<dir> <dir>"]'
     )
   }
   return options
@@ -291,7 +380,8 @@ function parseArgs (argv) {
 function main () {
   const options = parseArgs(process.argv.slice(2))
   options.log = (line) => console.log(line)
-  slicePlatformPackages(options)
+  if (options.linkLocal) linkLocalPlatformPackages(options)
+  else slicePlatformPackages(options)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

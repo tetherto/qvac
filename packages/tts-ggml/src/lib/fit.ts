@@ -1,5 +1,3 @@
-import { resolveBackendsDir } from './backends'
-
 /**
  * Settings every voice takes, spelled as `createInstance` takes them. A fit
  * request is a load config plus the workload below, so the projection reads
@@ -150,7 +148,7 @@ export interface TtsFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: TtsFitRequest & { backendsDir: string }): TtsFitResult
+  assessFit(request: TtsFitRequest): TtsFitResult
 }
 
 /**
@@ -169,14 +167,8 @@ interface FitBinding {
  * throws.
  */
 export function assessFit(request: TtsFitRequest): TtsFitResult {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
   const binding = require('../binding.js') as FitBinding
 
-  return binding.assessFit({
-    ...request,
-    backendsDir:
-      typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-        ? request.backendsDir
-        : resolveBackendsDir()
-  })
+  return binding.assessFit(request)
 }

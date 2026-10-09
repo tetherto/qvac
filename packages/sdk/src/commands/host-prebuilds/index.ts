@@ -31,7 +31,8 @@ export interface EnsureHostPrebuildsOptions {
   hosts: string[]
   /**
    * Addon package names to cover. Defaults to every addon installed for the
-   * project: in its own node_modules or in that of a workspace root listing it.
+   * project, split addon metas included: in its own node_modules or in that
+   * of a workspace root listing it.
    */
   addons?: string[] | undefined
   /** Install with this package manager instead of detecting the project's own. */
@@ -63,15 +64,16 @@ export interface EnsureHostPrebuildsResult {
  * hosts and that the project does not have yet.
  *
  * A split addon names one platform package per host in the `#host-addon` map
- * of its package.json (`<addon>-ios` covers every iOS host). Desktop platform
- * packages install as the addon's os/cpu-filtered optionalDependencies, but a
- * build host never reports a mobile os, so mobile ones have to be declared.
+ * of its package.json (`<addon>-ios` covers every iOS host), and its
+ * `binding.js` is just `require('#host-addon')`, so bare-pack cannot resolve
+ * it for a host whose package is missing. Desktop platform packages install as
+ * os/cpu-filtered optionalDependencies, but a build host never reports a
+ * mobile os, so mobile ones have to be declared.
  * This declares the missing ones in package.json, pinned to each addon's
  * exact version, using the project's own package manager.
  *
- * A host whose prebuild already resolves is skipped: a local
- * `prebuilds/<host>` in the addon (source builds) or its platform package at
- * the addon's version. Throws `HostPrebuildsInstallRefusedError` when no
+ * A host whose platform package is already installed at the addon's version
+ * is skipped. Throws `HostPrebuildsInstallRefusedError` when no
  * supported package manager (npm 7+, pnpm, bun, Yarn Berry) is found, and
  * `HostPrebuildsInstallFailedError` when the install does not produce the
  * packages.
@@ -228,23 +230,38 @@ async function choosePackageManager(
 
 /**
  * The installed addons named in `names`, or every installed addon when
- * `names` is omitted. For each name the copy in the nearest modules directory
- * wins, as it does for Node's resolver.
+ * `names` is omitted, split addon metas included. For each name the copy in
+ * the nearest modules directory wins, as it does for Node's resolver. Without
+ * `names`, the packages nested in each package's own node_modules count too.
  */
-async function resolveAddons(projectRoot: string, names: string[] | undefined, logger: Logger) {
+export async function resolveAddons(
+  projectRoot: string,
+  names: string[] | undefined,
+  logger: Logger
+) {
   const moduleDirs = await reachableModuleDirs(projectRoot)
   const wanted = names === undefined ? null : new Set(names)
   const found = new Map<string, NativeAddon>()
+  const visited = new Set<string>()
 
-  for (const modulesDir of moduleDirs) {
+  for (let i = 0; i < moduleDirs.length; i++) {
+    const modulesDir = moduleDirs[i]!
     const candidates = wanted === null ? await listPackageNames(modulesDir) : [...wanted]
     for (const name of candidates) {
+      const packageDir = path.join(modulesDir, ...name.split('/'))
+      if (wanted === null) {
+        const nested = path.join(packageDir, 'node_modules')
+        const real = await realPath(nested)
+        if (real !== null && !visited.has(real)) {
+          visited.add(real)
+          moduleDirs.push(nested)
+        }
+      }
       if (found.has(name)) continue
-      const result = await readAddonPackageJson({
-        packageJsonPath: path.join(modulesDir, ...name.split('/'), 'package.json'),
-        expectedName: name
-      })
-      if (result.addon !== undefined) found.set(name, result.addon)
+      const packageJsonPath = path.join(packageDir, 'package.json')
+      const result = await readAddonPackageJson({ packageJsonPath, expectedName: name })
+      const addon = result.addon ?? result.splitAddon?.addon
+      if (addon !== undefined) found.set(name, addon)
     }
   }
 
@@ -306,6 +323,14 @@ async function readDirNames(dir: string) {
       .map((entry) => entry.name)
   } catch {
     return []
+  }
+}
+
+async function realPath(dir: string) {
+  try {
+    return await fsp.realpath(dir)
+  } catch {
+    return null
   }
 }
 

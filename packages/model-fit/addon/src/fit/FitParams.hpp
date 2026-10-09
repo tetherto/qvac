@@ -29,9 +29,8 @@ inline constexpr uint32_t DEFAULT_N_CTX_MIN = 4096;
 struct FitRequest {
   std::string modelPath;
 
-  /// Directory the packaged ggml backends live in. `BACKENDS_SUBDIR` is
-  /// appended to it, mirroring `@qvac/llm-llamacpp`. Empty means "use ggml's
-  /// default search path", which is correct for a statically linked build.
+  /// Directory holding the ggml backend modules to load. Empty means "the
+  /// ones @qvac/fabric ships", which it locates next to its runtime.
   std::string backendsDir;
 
   /// Desired context size. 0 => let the fitter pick (down to `nCtxMin`).

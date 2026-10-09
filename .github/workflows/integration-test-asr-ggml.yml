@@ -316,9 +316,8 @@ jobs:
           rm -rf "${{ runner.temp }}/tmp/package"
           npm pack "$PREBUILD_PACKAGE" --pack-destination "${{ runner.temp }}/tmp"
           tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
-          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
-          # meta tarball; split releases ship them in the per-host platform
-          # package under addon/prebuilds/.
+          # Fat layout (GPR mono) ships prebuilds/ in the meta tarball; split
+          # releases ship them in the per-host platform package's prebuilds/.
           if [ -d "${{ runner.temp }}/tmp/package/prebuilds" ]; then
             cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
           else
@@ -336,7 +335,7 @@ jobs:
             rm -rf "${{ runner.temp }}/tmp/package"
             npm pack "$HOST_SPEC" --pack-destination "${{ runner.temp }}/tmp"
             tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
-            cp -r "${{ runner.temp }}/tmp"/package/addon/prebuilds/* prebuilds/
+            cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
           fi
           find prebuilds -type f -name 'tetherto__*' | while read f; do
             mv "$f" "${f/tetherto__/qvac__}"
@@ -360,9 +359,8 @@ jobs:
           Push-Location "${{ runner.temp }}\tmp"
           tar -xzf $tgz.Name
           Pop-Location
-          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
-          # meta tarball; split releases ship them in the per-host platform
-          # package under addon/prebuilds/.
+          # Fat layout (GPR mono) ships prebuilds/ in the meta tarball; split
+          # releases ship them in the per-host platform package's prebuilds/.
           if (Test-Path "${{ runner.temp }}\tmp\package\prebuilds") {
             Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
           } else {
@@ -382,12 +380,19 @@ jobs:
             Push-Location "${{ runner.temp }}\tmp"
             tar -xzf $tgz.Name
             Pop-Location
-            Copy-Item -Path "${{ runner.temp }}\tmp\package\addon\prebuilds\*" -Destination prebuilds -Recurse -Force
+            Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
           }
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
             Rename-Item -Path $_.FullName -NewName $newName
           }
+
+      # binding.js loads only `#host-addon`, i.e. the host's platform package, so
+      # the staged prebuilds/<host>/ is wrapped as that package in node_modules.
+      - name: Stage the platform package
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run link:platform
 
       - name: Linux arm64 - install dependencies
         if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'

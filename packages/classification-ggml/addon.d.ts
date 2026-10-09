@@ -16,7 +16,8 @@ export interface ClassificationBinding {
 export interface ClassificationConfigurationParams {
     path: string;
     config: {
-        backendsDir: string;
+        /** Directory of ggml backend modules; defaults to the ones @qvac/fabric ships. */
+        backendsDir?: string;
     };
 }
 export interface ClassificationJob {

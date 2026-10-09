@@ -46,6 +46,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
   HOST_PREBUILDS_INSTALL_REFUSED: 50615,
   HOST_PREBUILDS_INSTALL_FAILED: 50616,
+  HOST_PREBUILDS_MISSING: 50617,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800
@@ -226,6 +227,12 @@ const clientErrorDefinitions: ErrorCodesMap = {
       (dependencies
         ? `\n\n  Fix the error, or add them to the dependencies in package.json, pinned to these exact versions, and reinstall:\n${dependencies}`
         : '')
+  },
+  [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_MISSING]: {
+    name: 'HOST_PREBUILDS_MISSING',
+    message: (dependencies: string) =>
+      "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each mobile host's platform package installed." +
+      `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall (or bundle with installMissingPrebuilds):\n${dependencies}`
   },
 
   // Profiler Errors (50,800-50,899)

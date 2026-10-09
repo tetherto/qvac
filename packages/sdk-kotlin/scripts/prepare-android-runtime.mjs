@@ -55,6 +55,11 @@ await fs.mkdir(assetsDirectory, { recursive: true })
 await fs.mkdir(addonsDirectory, { recursive: true })
 if (includesClassification) await fs.mkdir(classificationAssetsDirectory, { recursive: true })
 
+// Split addons ship their native code in per-platform packages, and their
+// `binding.js` is just `require('#host-addon')`: bare-pack cannot resolve it
+// until the android-arm64 package is installed, at each meta's version.
+await ensureHostPrebuilds('android-arm64')
+
 const bundle = await bundleSdk({
   projectRoot,
   configPath,
@@ -62,11 +67,6 @@ const bundle = await bundleSdk({
   defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
   quiet: true
 })
-
-// Addon native prebuilds ship in per-platform packages that are not
-// dependencies of the meta, so install the ones this bundle's addons name for
-// android-arm64, at each meta's installed version.
-await ensureHostPrebuilds(bundle.manifestPath, 'android-arm64')
 
 const verification = await verifyBundle({
   projectRoot,
@@ -131,23 +131,6 @@ for await (const resource of link(
   console.log(`Linked ${resource}`)
 }
 
-// bare-link from the project root reaches only the meta packages. Split addons
-// keep their binaries in a per-platform package, so link each installed one
-// from its own `addon` directory or its .so never reaches the AAR.
-for (const platformAddon of platformAddonRoots(addons, 'android-arm64')) {
-  for await (const resource of link(
-    platformAddon.dir,
-    {
-      hosts: ['android-arm64'],
-      out: addonsDirectory
-    },
-    platformAddon.pkg
-  )) {
-    linkedResources.add(path.resolve(String(resource)))
-    console.log(`Linked ${resource}`)
-  }
-}
-
 async function sha256(filePath) {
   return createHash('sha256').update(await fs.readFile(filePath)).digest('hex')
 }
@@ -200,45 +183,6 @@ await fs.writeFile(
 
 console.log(`Prepared QVAC Android runtime with ${addons.length} addon(s)`)
 
-async function pathExists(target) {
-  try {
-    await fs.access(target)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * The installed platform-package `addon` directories for the given metas, ready
- * for a bare-link pass. Mirrors `resolvePlatformAddonRoots` in the Expo linker.
- */
-function platformAddonRoots(addonNames, host) {
-  const roots = []
-  for (const name of addonNames) {
-    const metaPath = path.join(projectRoot, 'node_modules', ...name.split('/'), 'package.json')
-    let meta
-    try {
-      meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf8'))
-    } catch {
-      continue
-    }
-    const platformPackage = platformPackageForHost(meta, host)
-    if (platformPackage === null) continue
-    const addonDir = path.join(projectRoot, 'node_modules', ...platformPackage.split('/'), 'addon')
-    let addonManifest
-    try {
-      addonManifest = JSON.parse(fsSync.readFileSync(path.join(addonDir, 'package.json'), 'utf8'))
-    } catch {
-      continue
-    }
-    if (addonManifest.addon !== true) continue
-    if (!fsSync.existsSync(path.join(addonDir, 'prebuilds'))) continue
-    roots.push({ dir: addonDir, pkg: addonManifest })
-  }
-  return roots
-}
-
 async function readInstalledVersion(packageName) {
   try {
     const meta = JSON.parse(
@@ -274,39 +218,33 @@ function platformPackageForHost(meta, host) {
   const platform = host.slice(0, dash)
   const arch = host.slice(dash + 1)
   const hostMap = meta.imports?.['#host-addon']?.[platform]
-  if (hostMap === undefined) return null
-  const entry = Array.isArray(hostMap) ? hostMap : hostMap[arch]
-  const candidate = Array.isArray(entry) ? entry[0] : entry
-  return typeof candidate === 'string' && candidate.startsWith('@') ? candidate : null
+  const candidate = typeof hostMap === 'string' ? hostMap : hostMap?.[arch]
+  return typeof candidate === 'string' && candidate.startsWith(`${meta.name}-`) ? candidate : null
 }
 
 /**
- * Install the per-platform prebuild packages the bundled addons need for `host`,
- * derived from each addon's own `#host-addon` map at the meta's installed
- * version. `--no-save` keeps package.json free of hand-maintained pins.
+ * Install the per-platform packages every installed split addon names for
+ * `host` in its `#host-addon` map, at the meta's installed version. Consumers
+ * declare the mobile ones as optional peers, which npm does not install.
+ * `--no-save` keeps package.json free of hand-maintained pins.
  */
-async function ensureHostPrebuilds(manifestPath, host) {
-  const manifestJson = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
-  const manifestAddons = Array.isArray(manifestJson.addons) ? manifestJson.addons : []
+async function ensureHostPrebuilds(host) {
+  const scopeDir = path.join(projectRoot, 'node_modules', '@qvac')
   const specs = []
-  for (const addon of manifestAddons) {
-    const addonRoot = path.join(projectRoot, 'node_modules', addon)
-    // A local fat `prebuilds/<host>` already resolves; only a meta without one
-    // needs its per-platform package installed.
-    if (await pathExists(path.join(addonRoot, 'prebuilds', host))) continue
+  for (const entry of await fs.readdir(scopeDir).catch(() => [])) {
     let meta
     try {
-      meta = JSON.parse(await fs.readFile(path.join(addonRoot, 'package.json'), 'utf8'))
+      meta = JSON.parse(await fs.readFile(path.join(scopeDir, entry, 'package.json'), 'utf8'))
     } catch {
       continue
     }
     const platformPackage = platformPackageForHost(meta, host)
-    if (platformPackage !== null && typeof meta.version === 'string') {
-      specs.push(`${platformPackage}@${meta.version}`)
-    }
+    if (platformPackage === null || typeof meta.version !== 'string') continue
+    if ((await readInstalledVersion(platformPackage)) === meta.version) continue
+    specs.push(`${platformPackage}@${meta.version}`)
   }
   if (specs.length === 0) return
-  console.log(`Installing ${host} prebuild packages: ${specs.join(', ')}`)
+  console.log(`Installing ${host} platform packages: ${specs.join(', ')}`)
   execFileSync(
     'npm',
     ['install', '--no-save', '--no-package-lock', '--ignore-scripts', '--legacy-peer-deps', ...specs],

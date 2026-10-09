@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -7,22 +8,25 @@
 
 using qvac::ttsggml::backendDeviceCode;
 using qvac::ttsggml::backendIdFromName;
+using qvac::ttsggml::defaultBackendsDir;
 using qvac::ttsggml::resolveBackendsDir;
 using qvac_errors::createTTSError;
 using qvac_errors::tts_error::toString;
 using qvac_errors::tts_error::TTSAddonId;
 using qvac_errors::tts_error::TTSErrorCode;
 
-TEST(BackendUtils, ResolveBackendsDirStaysUnderTheConfiguredRoot) {
-  const std::string root = "/opt/qvac/prebuilds";
-  const std::string resolved = resolveBackendsDir(root).string();
-  EXPECT_EQ(resolved.rfind(root, 0), 0u);
-#ifdef BACKENDS_SUBDIR
-  const std::string subdir = BACKENDS_SUBDIR;
-  EXPECT_EQ(resolved.substr(resolved.size() - subdir.size()), subdir);
-#else
-  EXPECT_EQ(resolved, root);
-#endif
+TEST(BackendUtils, ResolveBackendsDirUsesAConfiguredDirAsGiven) {
+  const std::string dir = "/opt/qvac/backends";
+  EXPECT_EQ(resolveBackendsDir(dir).string(), dir);
+}
+
+TEST(BackendUtils, ResolveBackendsDirDefaultsToTheModulesDirectory) {
+  // The test binary is the module here and has no <name>/ subdirectory.
+  const std::filesystem::path resolved = resolveBackendsDir("");
+  EXPECT_EQ(resolved, defaultBackendsDir());
+  ASSERT_FALSE(resolved.empty());
+  EXPECT_TRUE(std::filesystem::is_directory(resolved));
+  EXPECT_NE(resolved.filename().string(), QVAC_ADDON_MODULE_NAME);
 }
 
 TEST(BackendUtils, BackendIdCpu) {

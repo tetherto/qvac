@@ -37,10 +37,8 @@ struct WhisperConfig {
   std::map<std::string, JSValueVariant> vadCfg;
   std::map<std::string, JSValueVariant> whisperContextCfg;
 
-  // Addon prebuilds folder (`configurationParams.backendsDir` from JS).
-  // Combined with the compile-time `BACKENDS_SUBDIR` to locate the
-  // per-arch ggml `.so` modules for `ggml_backend_load_all_from_path()`.
-  // Android-only; empty elsewhere.
+  // Directory scanned, as given, for the ggml `.so` / `.dll` modules
+  // (`configurationParams.backendsDir` from JS). Empty scans the addon's own.
   std::string backendsDir;
 };
 

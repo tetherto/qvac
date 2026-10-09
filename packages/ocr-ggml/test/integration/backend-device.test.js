@@ -31,23 +31,12 @@ const {
 const TEST_TIMEOUT = 120 * 1000
 
 const vulkanBackendLib = findVulkanBackendLib(
-  isMobile
-    ? PREBUILDS_DIR
-    : (require('@qvac/fabric/backends').resolveBackendsDir() ?? PREBUILDS_DIR)
+  isMobile ? PREBUILDS_DIR : require('@qvac/fabric').backendsDir()
 )
 
 // Skip on mobile (prebuilds layout / device provisioning differ) and on any
 // host that did not ship a Vulkan backend lib.
 const shouldSkip = isMobile || !vulkanBackendLib
-
-function nativeBackendsDir() {
-  if (isMobile) return PREBUILDS_DIR
-  const dir = require('@qvac/fabric/backends').resolveBackendsDir()
-  if (dir === null) {
-    throw new Error('@qvac/fabric backends not found; is @qvac/fabric-<host> installed?')
-  }
-  return dir
-}
 
 for (const key of ['main-gpu', 'main_gpu']) {
   for (const value of [0, '+0', 'DEDICATED', 'Integrated']) {
@@ -66,7 +55,6 @@ for (const key of ['main-gpu', 'main_gpu']) {
             pathRecognizer,
             langList: ['en'],
             backendDevice,
-            backendsDir: nativeBackendsDir(),
             [key]: value
           },
           () => {}

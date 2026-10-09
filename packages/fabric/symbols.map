@@ -57,6 +57,9 @@
     napi_*;
     js_*;
 
+    # Fabric's own C API (include/qvac-fabric.h): backend discovery.
+    qvac_fabric_*;
+
     # llama.cpp public C API.
     llama_*;
     llava_*;

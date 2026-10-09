@@ -2,7 +2,6 @@ import {
   ERR_CODES_PARAKEET as ERR_CODES,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
-import { resolveBackendsDir } from "../../lib/backends";
 import {
   END_OF_INPUT,
   MAX_BUFFERED_BYTES,
@@ -224,18 +223,8 @@ export class ParakeetInterface {
     this._bufferedAudio = [];
     this._bufferedBytes = 0;
 
-    this._config = this._applyDefaults(configurationParams);
+    this._config = { ...configurationParams };
     this._createNativeInstance(this._config);
-  }
-
-  private _applyDefaults(
-    configurationParams: ParakeetConfigurationParams,
-  ): ParakeetConfigurationParams {
-    const out = { ...configurationParams };
-    if (!out.backendsDir) {
-      out.backendsDir = resolveBackendsDir();
-    }
-    return out;
   }
 
   private _setState(newState: ParakeetState): void {

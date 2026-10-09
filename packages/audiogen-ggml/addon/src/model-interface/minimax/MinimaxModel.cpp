@@ -151,7 +151,7 @@ void MinimaxModel::loadLocked() {
   } else {
     options.device = config_.useGpu ? "auto" : "cpu";
   }
-  options.backends_dir = resolveBackendsDir(config_.backendsDir);
+  options.backends_dir = resolveBackendsDir(config_.backendsDir).string();
   engine_ = tts_cpp::minimax::Engine::create(options);
   if (!engine_) {
     throw std::runtime_error("MinimaxModel: failed to create MiniMax engine");

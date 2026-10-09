@@ -13,10 +13,6 @@
 #include <string>
 #include <vector>
 
-#if defined(__ANDROID__) || defined(GGML_BACKEND_DL)
-#include <filesystem>
-#endif
-
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
@@ -24,6 +20,7 @@
 #include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/Logger.hpp>
+#include <qvac-fabric.h>
 
 #include "ImagePreprocessor.hpp"
 #include "MobileNetGraph.hpp"
@@ -129,25 +126,15 @@ void ClassificationModel::load() {
         "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
   }
 
-#if defined(__ANDROID__) || defined(GGML_BACKEND_DL)
+#if defined(GGML_BACKEND_DL)
   // Under GGML_BACKEND_DL @qvac/fabric ships CPU variants and GPU backends as
-  // modules, so we must open them from <backendsDir>/<BACKENDS_SUBDIR>/
-  // before the registry can hand out a device.
-  //
-  // backendsDir comes from JS (`path.join(__dirname, 'prebuilds')`, mirroring
-  // the llamacpp-llm addon) and BACKENDS_SUBDIR is the compile-time
-  // `<bare_target>/<module_name>` relative path.
-#if defined(__ANDROID__)
-  if (backendsDir_.empty()) {
-    throw StatusError(
-        InvalidArgument,
-        "Configuration 'config.backendsDir' is required on Android");
-  }
-#endif
+  // modules, which must be opened before the registry can hand out a device.
+  // Fabric finds the ones it ships itself; config.backendsDir only overrides
+  // that with a directory holding the modules.
   if (!backendsDir_.empty()) {
-    std::filesystem::path variantsDir =
-        std::filesystem::path(backendsDir_) / BACKENDS_SUBDIR;
-    ggml_backend_load_all_from_path(variantsDir.string().c_str());
+    ggml_backend_load_all_from_path(backendsDir_.c_str());
+  } else {
+    qvac_fabric_load_backends();
   }
 #endif
 

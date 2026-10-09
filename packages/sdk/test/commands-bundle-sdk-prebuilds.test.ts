@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { bundleSdk } from '@/commands/bundle'
-import { HostPrebuildsInstallRefusedError } from '@/utils/errors-client'
+import {
+  BarePackError,
+  HostPrebuildsInstallRefusedError,
+  HostPrebuildsMissingError
+} from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
 import {
   SPLIT_ADDON,
@@ -26,19 +30,20 @@ describe('bundleSdk installMissingPrebuilds', () => {
     const { projectRoot, sdkPath, configPath } = splitAddonProject(t)
     const pm = installFakePackageManager(projectRoot, 'pnpm')
 
-    const result = await withPath(pm.binDir, () =>
-      bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true })
+    await assert.rejects(
+      withPath(pm.binDir, () =>
+        bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true })
+      ),
+      (error: unknown) =>
+        error instanceof HostPrebuildsMissingError &&
+        error.cause instanceof BarePackError &&
+        error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION,
+      'without the platform package, #host-addon does not resolve, and the error names the pin'
     )
-
     assert.deepEqual(pm.calls(), [])
-    assert.deepEqual(result.installedPrebuilds, [])
-    assert.ok(
-      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml/addon-unavailable.js')),
-      'without the platform package, #host-addon resolves to the fallback'
-    )
   })
 
-  it('installs the missing platform package and bundles again', posixOnly, async (t) => {
+  it('installs the missing platform package before bundling', posixOnly, async (t) => {
     const { projectRoot, sdkPath, configPath } = splitAddonProject(t)
     const pm = installFakePackageManager(projectRoot, 'pnpm')
 
@@ -61,9 +66,9 @@ describe('bundleSdk installMissingPrebuilds', () => {
     ])
     assert.ok(
       bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml-android-arm64/index.js')),
-      'the second bundle resolves #host-addon to the installed platform package'
+      'the bundle resolves #host-addon to the installed platform package'
     )
-    assert.deepEqual(result.addons, [SPLIT_ADDON])
+    assert.deepEqual(result.addons, [SPLIT_ADDON_ANDROID_PACKAGE])
     assert.deepEqual(result.installedPrebuilds, [
       {
         name: SPLIT_ADDON_ANDROID_PACKAGE,
@@ -74,7 +79,7 @@ describe('bundleSdk installMissingPrebuilds', () => {
     ])
   })
 
-  it('writes the bundle and manifest before refusing the install', async (t) => {
+  it('refuses the install before writing anything', async (t) => {
     const { projectRoot, sdkPath, configPath } = splitAddonProject(t)
     // A second lockfile beside the fixture's pnpm one: no package manager can be chosen.
     fs.writeFileSync(path.join(projectRoot, 'package-lock.json'), '')
@@ -93,13 +98,8 @@ describe('bundleSdk installMissingPrebuilds', () => {
         error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION
     )
 
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, 'qvac', 'addons.manifest.json'), 'utf8')
-    ) as { addons: string[] }
-    assert.deepEqual(manifest.addons, [SPLIT_ADDON])
-    assert.ok(
-      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml/addon-unavailable.js'))
-    )
+    assert.equal(fs.existsSync(path.join(projectRoot, 'qvac', 'addons.manifest.json')), false)
+    assert.equal(fs.existsSync(path.join(projectRoot, 'qvac', 'worker.bundle.js')), false)
   })
 
   it('does not reinstall once the platform package is present', posixOnly, async (t) => {

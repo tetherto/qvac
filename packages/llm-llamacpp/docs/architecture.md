@@ -131,7 +131,7 @@ graph TB
 | @qvac/infer-base | Framework | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` |
 | @qvac/logging | Framework | `QvacLogger` wrapper |
 | inference-addon-cpp | Native | C++ addon framework (multi-job scheduler) |
-| @qvac/fabric | Native | Shared llama.cpp/ggml/mtmd inference engine, dynamically linked as `qvac__fabric@0.bare` from the `@qvac/fabric-<host>` platform package |
+| @qvac/fabric | Native | Shared llama.cpp/ggml/mtmd inference engine, dynamically linked as `qvac__fabric-<host>@0.bare` from the `@qvac/fabric-<host>` platform package |
 | bare-process | Runtime | Process/runtime integration |
 | Bare Runtime | Runtime | JavaScript execution |
 
