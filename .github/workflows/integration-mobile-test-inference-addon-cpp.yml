@@ -302,10 +302,16 @@ jobs:
       # rather than `./.github/actions/...` because this job checks out untrusted PR code
       # at $GITHUB_WORKSPACE, where a relative path would run the fork's copy.
       - name: Setup build host (Android NDK + toolchain env)
-        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        uses: tetherto/qvac/.github/actions/setup-build-host@23b88abe0199936c8bc4995938be4433d1c35a39
         with:
           platform: android
           arch: arm64
+
+      # The pinned host action predates the Bare NDK selector fix.
+      - name: Align Bare NDK selection
+        shell: bash
+        run: |
+          echo "ANDROID_NDK_LATEST_HOME=${ANDROID_NDK_HOME:?Android NDK must be selected first}" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0

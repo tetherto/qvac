@@ -140,7 +140,7 @@ export const loadedModelInfoSchema = z
     fitProbe: nativeProbeFitSchema
       .optional()
       .describe(
-        'Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.'
+        "Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`."
       )
   })
   .meta({ title: 'LoadedModelInfo' })

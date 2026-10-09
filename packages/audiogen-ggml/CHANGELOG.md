@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `assessFit({ engine: 'minimax', ... })` projects a MiniMax-Music3 model pair
+  on desktop builds instead of returning `unsupported-engine`. It reads GGUF
+  metadata only, takes `device`, `maxFrames` or `durationSeconds`, and
+  `promptTokens`, and reports `lm`, `depth`, `cond`, `dit` and `vocoder` rows.
 - Engine options and results that the speech fabric's audiogen engines already
   provided but the addon did not expose:
   - ACE-Step generation metadata: a run reports what it rendered on the PCM
@@ -31,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-10-07` for the MiniMax-Music3 memory
+  fit. Generation is unchanged.
+- Raise the `speech-cpp` and `ggml-speech` floors to `2026-10-06`. Same models,
+  same backends, no API change; ACE-Step and MiniMax-Music3 output is
+  unchanged.
 - Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
   the ggml changes of the QVAC LLM stack, so both build from the same backend
   code. Same models, same backends, no API change.

@@ -46,15 +46,13 @@ set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
 )
 
 target_sources(
@@ -106,15 +104,13 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
   )
 
   target_include_directories(

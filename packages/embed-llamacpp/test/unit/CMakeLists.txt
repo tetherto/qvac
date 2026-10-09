@@ -11,6 +11,7 @@ add_executable(
   test_backend_selection.cpp
   test_cancel_stale_flag.cpp
   test_bert_model.cpp
+  test_laya_model.cpp
   test_llama_lazy_init_backend.cpp
   test_logging.cpp
   test_model_metadata.cpp
@@ -19,6 +20,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cpp
@@ -48,13 +51,6 @@ target_include_directories(
 )
 
 target_compile_features(addon-test PRIVATE cxx_std_20)
-
-if(APPLE AND NOT IOS)
-  set_target_properties(addon-test PROPERTIES
-    XCODE_ATTRIBUTE_MACOSX_DEPLOYMENT_TARGET "14.0"
-    OSX_DEPLOYMENT_TARGET "14.0"
-  )
-endif()
 
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 target_compile_definitions(addon-test PRIVATE 

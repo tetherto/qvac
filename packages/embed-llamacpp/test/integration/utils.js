@@ -481,6 +481,36 @@ async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
   return how
 }
 
+// The Laya GGUF laya.test.js runs. It has no Hugging Face source, so it is not
+// in models.manifest.json: desktop CI points LAYA_TEST_MODEL at a copy staged
+// from S3 (project.json modelS3), and the mobile run pre-stages it from a
+// presigned URL (scripts/generate-laya-presigned-url.sh). Pinned here so the
+// staged copy is verified as a manifest model is.
+const LAYA_TEST_GGUF = {
+  name: 'laya-multilingual-Q8_0.gguf',
+  sha256: '59a61f840e6f125c25037f7cc0363efafee1aeea3394b504d25551b4bda5a219',
+  bytes: 348425664
+}
+
+// Mobile: the pre-staged Laya GGUF, verified in the writable model dir (as
+// _benchmark-perf.js places its models). Throws when it was not staged: a
+// mobile run that skipped the Laya tests would pass without testing anything.
+async function ensurePrestagedLayaModel() {
+  const { name } = LAYA_TEST_GGUF
+  const stagedDir = prestagedModelDir(name)
+  if (!stagedDir) {
+    throw new Error(`[prestage] ${name} was not pre-staged on this device`)
+  }
+  const modelDir = path.join(global.testDir || os.tmpdir(), 'test', 'model')
+  fs.mkdirSync(modelDir, { recursive: true })
+  const modelPath = path.join(modelDir, name)
+  if (fs.existsSync(modelPath) && (await verifyModelFileOnce(modelPath, LAYA_TEST_GGUF)).ok) {
+    return modelPath
+  }
+  await copyPrestagedModel({ stagedDir, modelName: name, modelPath, entry: LAYA_TEST_GGUF })
+  return modelPath
+}
+
 /**
  * Ensures the model file exists, downloading it if necessary
  * @param {Object} opts
@@ -717,6 +747,8 @@ function safeTest(name, opts, fn) {
 module.exports = {
   downloadFile,
   ensureModel,
+  ensurePrestagedLayaModel,
+  LAYA_TEST_GGUF,
   loadManifest,
   resolveModelEntry,
   verifyModelFile,
