@@ -133,9 +133,8 @@ and a restore trims the rest back to its position: the recurrent state on
 recurrent and hybrid models, the sliding-window cells and compressor states
 on DeepSeek V4, the window cells on sliding-window models. Its size therefore
 does not grow with the conversation: about 20 MB on Qwen3.5-0.8B. On a
-sliding-window model it is every window layer's K/V for up to
-`n_swa + n_ubatch` cells (rounded up to 256), which on larger models reaches
-hundreds of MB per sequence. Three load-config fields bound the footprint.
+sliding-window model it is every window layer's K/V for the last `n_swa`
+positions, which on larger models reaches hundreds of MB per sequence. Three load-config fields bound the footprint.
 None of them has any effect on other pure-attention models.
 
 - `cache_checkpoints`: how many to keep per sequence (default 1, maximum
@@ -168,7 +167,7 @@ None of them has any effect on other pure-attention models.
   before the count: the oldest checkpoints are dropped until the total fits.
   `0` (default) is unlimited. When set, the load fails with `InvalidArgument`
   if the budget cannot hold `cache_checkpoints` checkpoints of the largest size
-  the context allows (on a sliding-window model, a full window cache). The
+  the context allows (on a sliding-window model, a full window). The
   addon measures that size on the loaded model, so the error names the exact
   numbers and the count that would fit.
 - `cache_checkpoint_storage`: `memory` (default) keeps checkpoints and the

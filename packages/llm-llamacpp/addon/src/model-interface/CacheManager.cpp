@@ -60,12 +60,17 @@ std::error_code syncFile(const std::string& path) {
   rc = ::fcntl(fd, F_FULLFSYNC);
 #endif
   if (rc != 0) {
-    rc = ::fsync(fd);
+    do {
+      rc = ::fsync(fd);
+    } while (rc != 0 && errno == EINTR);
   }
   const int error = errno;
   ::close(fd);
-  return rc == 0 ? std::error_code{}
-                 : std::error_code{error, std::generic_category()};
+  // A filesystem that cannot sync at all leaves nothing more to do.
+  if (rc == 0 || error == EINVAL || error == ENOTSUP) {
+    return {};
+  }
+  return {error, std::generic_category()};
 #endif
 }
 

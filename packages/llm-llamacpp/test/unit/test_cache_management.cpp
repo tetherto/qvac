@@ -1625,21 +1625,28 @@ TEST(CacheSlidingWindowTest, RegenerateBehindTheWindowRestoresTheCheckpoint) {
       << "the restored window does not cover the cursor at " << nPast;
   model.reset();
 
+  // Keyed, so its prefill stops at the end of the history exactly as the
+  // first turn's did.
+  const fs::path coldFile = "sliding_window_checkpoint_cold.bin";
+  fs::remove(coldFile);
   auto cold = loadSlidingWindowModel(modelPath);
   ASSERT_TRUE(cold->isLoaded());
   LlamaModel::Prompt fresh;
   fresh.input = regenerate.input;
+  fresh.cacheKey = coldFile.string();
   EXPECT_EQ(fromCheckpoint, cold->processPrompt(fresh))
       << "a turn served from the restored checkpoint must match a cold run";
+  cold.reset();
 
   fs::remove(cacheFile);
+  fs::remove(coldFile);
 }
 
-// The load-time budget check bounds a sliding-window checkpoint by the window
-// cache, not the context: the bound covers a real capture after the window
-// has wrapped, and a budget of exactly one bound loads at a context many
+// The load-time budget check bounds a sliding-window checkpoint by the
+// window, not the context: the bound covers a real capture of a prompt longer
+// than the window, and a budget of exactly one bound loads at a context many
 // times the window.
-TEST(CacheSlidingWindowTest, CheckpointBudgetIsBoundedByTheWindowCache) {
+TEST(CacheSlidingWindowTest, CheckpointBudgetIsBoundedByTheWindow) {
   namespace utils = qvac_lib_inference_addon_llama::utils;
   const test_common::TestModelPath modelPath(
       "gemma-3-270m-it-Q8_0.gguf",
@@ -1658,14 +1665,11 @@ TEST(CacheSlidingWindowTest, CheckpointBudgetIsBoundedByTheWindowCache) {
   ASSERT_NE(context, nullptr);
   llama_context* lctx = context->getCtx();
   const llama_model* mdl = llama_get_model(lctx);
-  const uint32_t windowCells = utils::slidingWindowCacheCells(
-      llama_model_n_swa(mdl),
-      llama_n_seq_max(lctx),
-      llama_n_ubatch(lctx),
-      context->getParams().kv_unified);
+  const uint32_t windowCells =
+      utils::slidingWindowCheckpointCells(llama_model_n_swa(mdl));
   ASSERT_GT(windowCells, 0u);
   ASSERT_LT(windowCells * 8, llama_n_ctx_seq(lctx))
-      << "test setup: the context must dwarf the window cache";
+      << "test setup: the context must dwarf the window";
   // Measured on the empty sequence, before the prompt below fills it.
   const uint64_t bound = utils::estimateMaxSequenceStateBytes(
       lctx,
@@ -1681,7 +1685,7 @@ TEST(CacheSlidingWindowTest, CheckpointBudgetIsBoundedByTheWindowCache) {
   EXPECT_TRUE(probe->processPrompt(primer).empty());
   const llama_pos nPast = context->getNPast();
   ASSERT_GT(nPast, static_cast<llama_pos>(windowCells))
-      << "test setup: the prompt must wrap the window cache";
+      << "test setup: the prompt must outgrow the window";
   utils::SequenceStateSnapshot snap;
   ASSERT_TRUE(
       utils::snapshotSequenceState(
@@ -1702,7 +1706,7 @@ TEST(CacheSlidingWindowTest, CheckpointBudgetIsBoundedByTheWindowCache) {
   std::unique_ptr<LlamaModel> budgeted;
   ASSERT_NO_THROW(
       budgeted = loadSlidingWindowModel(modelPath, "32768", std::move(budget)))
-      << "a budget that holds one window-cache checkpoint must load";
+      << "a budget that holds one window checkpoint must load";
   EXPECT_TRUE(budgeted->isLoaded());
 }
 

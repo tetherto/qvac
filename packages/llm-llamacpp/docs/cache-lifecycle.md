@@ -70,7 +70,7 @@ graph TB
 | Reuse of a diverging history | trim to the shared prefix, decode the rest | trim as pure attention; once the window was evicted, restore the longest checkpoint within the shared prefix; cold prefill if none | restore the longest checkpoint that is a prefix, decode the rest; cold prefill if none |
 | Pre-request snapshot | never | never | at the start of every cached request |
 | Checkpoints | never | one per committed cached request, at the end of its history | one per committed cached request, at the end of its history (the pre-request snapshot only serves rollback) |
-| Rollback target | shared prefix with the request's prompt | as pure attention; cold when the request decoded past the window | state before the prompt was sent (the snapshot); the restored checkpoint when the request diverged |
+| Rollback target | shared prefix with the request's prompt | as pure attention, or the restored checkpoint when the request diverged; cold when the request decoded past the window | state before the prompt was sent (the snapshot); the restored checkpoint when the request diverged |
 | Disk writes for a chat with one `cacheKey`, before `saveCache()` or unload | none | none by default; checkpoint files in `cache_checkpoint_dir` with `cache_checkpoint_storage: disk` | none by default; checkpoint files in `cache_checkpoint_dir` with `cache_checkpoint_storage: disk` |
 
 The decision is in `ModelMemoryPolicy.hpp`: `needsFullStateSnapshot`, by
@@ -209,7 +209,8 @@ Eviction checks the byte budget first, then the count. A budget that cannot
 hold `cache_checkpoints` checkpoints of the largest size the context allows is
 rejected at model load with `InvalidArgument`; the addon measures that size on
 the loaded model rather than estimating it. On a sliding-window model the
-largest size is that of a full window cache, whatever the context size.
+largest size is that of a full window (`n_swa` positions, or the context when
+it is shorter).
 
 ## When checkpoints are taken
 
@@ -332,9 +333,9 @@ then trims the sequence to the checkpoint's position
 Sizes do not grow with the conversation: about 20 MB on Qwen3.5-0.8B and
 18 MB on DeepSeek V4-Flash, against ~233 MB for a full copy of Qwen3.5-0.8B
 at 32k tokens. On a sliding-window model a checkpoint holds every window
-layer's K/V for up to `n_swa + n_ubatch` cells (rounded up to 256;
-`n_swa × parallel + n_ubatch` with `kv_unified`), so it grows with the window
-and with the KV type, and on larger models can reach hundreds of MB. Bound it
+layer's K/V for the last `n_swa` positions (the snapshot skips cells the
+window has masked), so it grows with the window and with the KV type, and on
+larger models can reach hundreds of MB. Bound it
 with `cache_checkpoints_max_bytes`, or set `cache_checkpoints: 0`.
 Checkpoints live in host RAM by default
 (`cache_checkpoint_storage: memory`) or in files in `cache_checkpoint_dir`
@@ -398,7 +399,7 @@ checkpoints, which are never written into the file. A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
 (`UnableToLoadSessionFile`), and a file without a ledger is a cold miss. So
 is a file written by a model whose cache has the same shape but whose
-description, file size, parameter count, training context, shape, vocabulary
+description, tensor size, parameter count, training context, shape, vocabulary
 size or RoPE scale differ (another quantization type, for example): its
 fingerprint of those does not match. The fingerprint does not see the weights
 themselves, so a fine-tune of the same base at the same quantization, a LoRA
@@ -416,7 +417,8 @@ Every write, whichever path triggers it, does the same three steps:
 2. The temporary file is synced to disk (`F_FULLFSYNC` on macOS and iOS,
    falling back to `fsync` where the filesystem refuses it; `fsync` elsewhere;
    `FlushFileBuffers` on Windows); a failed sync deletes it and raises
-   `UnableToSaveSessionFile`.
+   `UnableToSaveSessionFile`. A filesystem that does not support syncing
+   skips this step.
 3. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
    and macOS, followed by a sync of the directory, and `MoveFileExW` with
    replace and write-through on Windows. Until that step succeeds the old

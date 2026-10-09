@@ -311,7 +311,7 @@ inline uint64_t checksum(const std::vector<llama_token>& words, size_t begin) {
 }
 
 /// Identifies the model a cache file was written with: its description
-/// (architecture, size class, quantization), file size, parameter count,
+/// (architecture, size class, quantization), tensor size, parameter count,
 /// training context, shape, vocabulary and RoPE scale. Never 0, which marks a
 /// file written without one.
 inline uint32_t modelFingerprint(const llama_model* model) {

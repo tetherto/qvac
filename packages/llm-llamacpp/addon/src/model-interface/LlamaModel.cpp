@@ -354,17 +354,12 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   if (!fullState && !slidingWindow) {
     return;
   }
-  // A sliding-window checkpoint grows per token only until the window cache
-  // is full, so the extrapolation stops there.
+  // A sliding-window checkpoint grows per token only until the window is
+  // full, so the extrapolation stops there.
   uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
   if (slidingWindow) {
-    perSeqTokens = std::min(
-        perSeqTokens,
-        utils::slidingWindowCacheCells(
-            nSwa,
-            llama_n_seq_max(ctx),
-            llama_n_ubatch(ctx),
-            params.kv_unified));
+    perSeqTokens =
+        std::min(perSeqTokens, utils::slidingWindowCheckpointCells(nSwa));
   }
   const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
       ctx,

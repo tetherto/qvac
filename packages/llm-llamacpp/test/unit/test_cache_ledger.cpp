@@ -310,17 +310,14 @@ TEST(ModelMemoryPolicy, UntrimmableModelsSnapshotPartially) {
 }
 
 // Sliding-window models without `swa_full` take checkpoints, and one holds at
-// most the window cache: the window (per sequence, or all of them when
-// unified) plus one ubatch, padded to 256 cells.
-TEST(ModelMemoryPolicy, SlidingWindowCheckpointsAreBoundedByTheWindowCache) {
+// most the window's `n_swa` cells.
+TEST(ModelMemoryPolicy, SlidingWindowCheckpointsAreBoundedByTheWindow) {
   namespace utils = qvac_lib_inference_addon_llama::utils;
   EXPECT_TRUE(utils::takesSlidingWindowCheckpoints(512, false));
   EXPECT_FALSE(utils::takesSlidingWindowCheckpoints(512, true));
   EXPECT_FALSE(utils::takesSlidingWindowCheckpoints(0, false));
 
-  EXPECT_EQ(utils::slidingWindowCacheCells(512, 1, 512, false), 1024u);
-  EXPECT_EQ(utils::slidingWindowCacheCells(1024, 4, 512, false), 1536u);
-  EXPECT_EQ(utils::slidingWindowCacheCells(1024, 4, 512, true), 4608u);
-  EXPECT_EQ(utils::slidingWindowCacheCells(128, 1, 100, false), 256u);
-  EXPECT_EQ(utils::slidingWindowCacheCells(0, 1, 512, false), 0u);
+  EXPECT_EQ(utils::slidingWindowCheckpointCells(512), 512u);
+  EXPECT_EQ(utils::slidingWindowCheckpointCells(0), 0u);
+  EXPECT_EQ(utils::slidingWindowCheckpointCells(-1), 0u);
 }

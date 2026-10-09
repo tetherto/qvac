@@ -24,19 +24,12 @@ takesSlidingWindowCheckpoints(int32_t nSwa, bool swaFull) noexcept {
   return nSwa > 0 && !swaFull;
 }
 
-// Upper bound on the cells one sequence holds in a sliding-window cache, as
-// fabric's `llama_kv_cache_iswa` sizes it: the window per sequence (all of
-// them when unified) plus one ubatch, padded to 256 cells. A sliding-window
-// checkpoint holds at most this many.
-[[nodiscard]] inline uint32_t slidingWindowCacheCells(
-    int32_t nSwa, uint32_t nSeqMax, uint32_t nUbatch, bool unified) noexcept {
-  if (nSwa <= 0) {
-    return 0;
-  }
-  const uint64_t cells =
-      static_cast<uint64_t>(nSwa) * (unified ? nSeqMax : 1U) + nUbatch;
-  const uint64_t padded = (cells + 255U) / 256U * 256U;
-  return padded > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(padded);
+// Most cells a sliding-window checkpoint holds: a sequence snapshot skips the
+// cells its window has masked (`llama_kv_cache::state_write`), which leaves
+// the last `n_swa` positions, one cell each.
+[[nodiscard]] inline uint32_t
+slidingWindowCheckpointCells(int32_t nSwa) noexcept {
+  return nSwa > 0 ? static_cast<uint32_t>(nSwa) : 0U;
 }
 
 // Which part of the sequence those snapshots hold: only what a tail trim

@@ -1299,8 +1299,8 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
     // rollback target moves to the divergence point instead of the
     // pre-request state. That is the state the next request wants anyway:
     // a retry of this prompt shares exactly this prefix with the cache, and
-    // restoring the old tail would only have it trimmed again. No snapshot
-    // is ever written for pure-attention memory.
+    // restoring the old tail would only have it trimmed again. No
+    // pre-request snapshot is written for this memory.
     llama_pos reusePos = residentLedger_.positions(reuseTarget);
     bool restored = false;
     if (!canTrimSequenceTo(modelCtx_.lctx, reusePos)) {
