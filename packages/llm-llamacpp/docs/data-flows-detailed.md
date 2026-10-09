@@ -32,7 +32,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 
 **Session Cache:**
 - Optional KV cache persistence to disk via `CacheManager`
-- Controlled via `runOptions` fields (`cacheKey`, `saveCacheToDisk`)
+- Controlled via `runOptions` fields (`cacheKey`, `ephemeral`) and `saveCache(cacheKey)`
 - Context overflow only affects RAM; disk cache preserved until explicit save
 
 </details>
@@ -451,28 +451,25 @@ Images can be provided in two ways:
 
 ## Session Cache Flow
 
-`CacheManager` persists KV cache state between inference calls for multi-turn conversations. Cache is controlled via `runOptions` fields (`cacheKey`, `saveCacheToDisk`).
+`CacheManager` persists KV cache state between inference calls for multi-turn conversations. Cache is controlled via `runOptions` fields (`cacheKey`, `ephemeral`) and the `saveCache(cacheKey)` method.
 
 ```mermaid
 flowchart TD
     Start([New inference]) --> CheckKey{cacheKey<br/>provided?}
-    CheckKey -->|No| ClearRAM[Save & clear active cache]
+    CheckKey -->|No| ClearRAM[Save active cache if unsaved<br/>unless ephemeral, then clear]
     ClearRAM --> NormalInference[Process without cache]
     CheckKey -->|Yes| SameKey{Same as<br/>active key?}
     SameKey -->|Yes| Reuse[Reuse in-memory cache]
-    SameKey -->|No / first use| SaveOld[Save old session if active]
+    SameKey -->|No / first use| SaveOld[Save old session if it has unsaved turns<br/>RAM tier: move it; ephemeral: drop it]
     SaveOld --> LoadNew[Load cache from disk]
     Reuse --> Generate[Generate response]
     LoadNew --> Generate
     NormalInference --> Generate
-    Generate --> CheckSave{saveCacheToDisk?}
-    CheckSave -->|Yes| WriteDisk[Write cache to disk]
-    CheckSave -->|No| End([Return response])
-    WriteDisk --> End
+    Generate --> End([Return response<br/>conversation stays in memory])
 ```
 
 **Cache Control:**
-- Disk cache only modified on explicit `saveCacheToDisk: true` or session switch
+- Disk cache only modified by `saveCache(cacheKey)`, a session switch, an eviction, a reload or an unload; never for ephemeral conversations except by `saveCache`
 - Context overflow discards tokens from RAM only; disk cache preserves state before overflow
 - No automatic cache invalidation in the addon
 
