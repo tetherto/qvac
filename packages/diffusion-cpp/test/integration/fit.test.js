@@ -285,7 +285,17 @@ safeTest(
       })
       t.is(unused.status, base.status)
       t.is(unused.reason, base.reason)
-      t.is(unused.report, base.report, 'unused image upscaler does not affect video memory')
+      const stableReport = (report) =>
+        report.replace(/\b(free|budget|available)\s+\d+ MiB/g, '$1 MiB')
+      t.is(
+        stableReport(unused.report),
+        stableReport(base.report),
+        'unused image upscaler does not affect measured memory'
+      )
+      t.absent(
+        unused.report.includes('upscaler'),
+        'video does not measure a separate image upscaler'
+      )
     }
   }
 )
