@@ -31,14 +31,16 @@
   answer's reasoning does not reprocess the whole conversation.
 - `cache_checkpoint_storage` (`memory` by default, or `disk`) and
   `cache_checkpoint_dir`, required with `disk`.
-- CUDA backend on NVIDIA GPUs (Linux x64 and arm64, Windows x64), with
-  `@qvac/fabric` 0.20.2 or later. It is preferred over Vulkan, and without a
-  CUDA module, driver or device the load falls back to Vulkan, then CPU.
+- CUDA backend on NVIDIA GPUs (Linux x64 and arm64, Windows x64). It is
+  preferred over Vulkan, and without a CUDA module, driver or device the load
+  falls back to Vulkan, then CPU.
 - `backend` load-config field: comma-separated GPU backend priority list
   (`cuda`, `vulkan`, `metal`, `opencl`, or `auto`), e.g. `'cuda,vulkan'`.
 
 ### Changed
 
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.20.2`, the first release
+  that ships the CUDA module.
 - With `parallel >= 2`, a conversation stays in its scheduler slot between
   requests, and requests on the same `cacheKey` run one at a time.
 - Cancelling after prefill keeps the prompt and the streamed tokens in the
