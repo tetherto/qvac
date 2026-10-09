@@ -15,6 +15,7 @@ import {
   translate
 } from '@qvac/sdk'
 import { type Expectation, type TestResult } from '@qvac/test-suite'
+import { callWhenAddonIdle } from '../utils/addon-idle.js'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   cancelBeforeBeginCompletion,
@@ -700,15 +701,24 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       { role: 'user' as const, content: params.prompt }
     ]
 
-    // Fire two completions at the same model in the same tick. The default
-    // completion policy serializes same-model requests FIFO instead of
-    // rejecting the second, so BOTH must succeed — the second simply waits
-    // for the first to release the native llama.cpp context, then runs.
-    const run1 = completion({ modelId, history, stream: true })
-    const run2 = completion({ modelId, history, stream: true })
+    // Two completions at the same model in the same tick: the policy serializes them FIFO, so
+    // both must succeed. They start on an idle slot, since a job the previous test still holds
+    // is refused at dispatch and says nothing about the policy; a real rejection comes back
+    // through `captureFinal` as data and never reaches the retry.
+    const { obs1, obs2, final1, final2 } = await callWhenAddonIdle(async () => {
+      const run1 = completion({ modelId, history, stream: true })
+      const run2 = completion({ modelId, history, stream: true })
 
-    const [obs1, obs2] = await Promise.all([observeStream(run1.events), observeStream(run2.events)])
-    const [final1, final2] = await Promise.all([captureFinal(run1.final), captureFinal(run2.final)])
+      const [first, second] = await Promise.all([
+        observeStream(run1.events),
+        observeStream(run2.events)
+      ])
+      const [firstFinal, secondFinal] = await Promise.all([
+        captureFinal(run1.final),
+        captureFinal(run2.final)
+      ])
+      return { obs1: first, obs2: second, final1: firstFinal, final2: secondFinal }
+    })
 
     const checks: Array<[string, StreamObservation, FinalOutcome]> = [
       ['run1', obs1, final1],

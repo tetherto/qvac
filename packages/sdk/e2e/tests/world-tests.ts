@@ -230,6 +230,8 @@ export const worldConcurrentStepRejected = createWorldTest(
 // load, so it only appears if the SDK really did drop the cancelled session and
 // rebuild it from the promoted pack. A session that survived the cancel would
 // deliver 12 and fail here.
+// Keeps its hand-written body: the cancel has to name the started call's request id, which a
+// step cannot. As data it became a broad cancel on a timer, and a fast GPU finished first.
 export const worldCancelThenReload = createWorldTest(
   'world-cancel-then-reload',
   { image: 'elephant.jpg', keys: ['W'] },
@@ -363,35 +365,6 @@ worldConcurrentStepRejected.steps = [
   { settle: { of: '$running', as: 'first' } },
   { project: { from: '$first', path: 'all', as: 'firstFrames' } },
   { assert: { on: '$firstFrames', named: 'lengthAtLeast', with: { length: 1 } } }
-]
-
-worldCancelThenReload.steps = [
-  ...createScene(),
-  // Warm the session with a COMPLETED step first, or the cancel races the deferred activation and
-  // is refused before dispatch -- a real path, but not the one this test is named for.
-  ...walk('$params.keys', 'warmup'),
-  { assert: { on: '$warmupFrames', named: 'lengthAtLeast', with: { length: 1 } } },
-  {
-    start: {
-      method: 'worldStep',
-      collect: 'all',
-      params: { modelId: '$model', keys: '$params.keys' },
-      as: 'inflight'
-    }
-  },
-  // A broad cancel on the model rather than by request id: only one step is in flight, and the id
-  // of a started call is not something a step can name.
-  { call: { method: 'cancel', params: { modelId: '$model' } } },
-  // An accepted cancel must make the step reject. The original accepted either outcome, which made
-  // it unfalsifiable: with cancellation removed entirely every run would take the "resolved" branch
-  // and still pass.
-  { settle: { of: '$inflight', as: 'cancelled', expect: 'reject' } },
-  { assert: { on: '$cancelled', named: 'errorIsStructured' } },
-  // Nine rather than twelve is the assertion that matters: nine is the first block after a load, so
-  // it only appears if the SDK really did drop the cancelled session and rebuild it from the
-  // promoted pack.
-  ...walk('$params.keys', 'step'),
-  blockOf(9, 'step')
 ]
 
 export const worldTests = [
