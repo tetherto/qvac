@@ -19,7 +19,7 @@ function testAssetPath(directory, filename) {
 
 const MODEL_PATH =
   (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
-  (isMobile ? getMobileAssetPath(MODEL_FILE) : getModelPath(MODEL_FILE))
+  getModelPath(MODEL_FILE)
 
 const EMBEDDER_PATH = path.join(path.dirname(MODEL_PATH), 'bci-embedder.bin')
 
