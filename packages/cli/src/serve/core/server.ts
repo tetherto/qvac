@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
+import { z } from 'zod'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import {
@@ -18,6 +19,7 @@ import {
   extensionTags,
   type ServeExtension
 } from '@/serve/core/extensions'
+import { IDENTITY_NONCE_PATTERN, IDENTITY_PATH, identityProof } from '@/serve/core/identity'
 import { shutdownSDK } from '@/serve/core/lifecycle'
 import authPlugin from '@/serve/core/plugins/auth'
 import cancelBridgePlugin from '@/serve/core/plugins/cancel-bridge'
@@ -107,7 +109,19 @@ export async function createCoreServer(
   await app.register(cancelBridgePlugin)
 
   if (options.apiKey) {
-    await app.register(authPlugin, { apiKey: options.apiKey })
+    const apiKey = options.apiKey
+    await app.register(authPlugin, { apiKey })
+    app.get(
+      IDENTITY_PATH,
+      {
+        schema: {
+          hide: true,
+          querystring: z.object({ nonce: z.string().regex(IDENTITY_NONCE_PATTERN) })
+        }
+      },
+      // lunte-disable-next-line require-await
+      async (req) => ({ proof: identityProof(apiKey, req.query.nonce, req.socket.localPort ?? 0) })
+    )
   }
 
   // lunte-disable-next-line require-await
