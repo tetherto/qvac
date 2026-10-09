@@ -87,8 +87,8 @@ void appendSpeculativeStats(
           static_cast<unsigned long long>(speculative.draftAccepted),
           static_cast<unsigned long long>(speculative.draftTokens),
           speculative.verifySteps > 0
-              ? 1.0 + static_cast<double>(speculative.draftAccepted) /
-                          verifySteps
+              ? 1.0 +
+                    static_cast<double>(speculative.draftAccepted) / verifySteps
               : 1.0,
           perPos.c_str()));
 }
