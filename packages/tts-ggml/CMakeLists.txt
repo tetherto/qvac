@@ -402,6 +402,7 @@ if(BUILD_TESTING)
       addon/tests/test_output_resampler.cpp
       addon/tests/test_pcm_conversion.cpp
       addon/tests/test_log_forwarding.cpp
+      addon/tests/test_native_stderr_diagnostics.cpp
       addon/tests/test_number_conversion.cpp
       addon/tests/test_runtime_stats.cpp
       addon/tests/test_voice_controls_query.cpp

@@ -31,6 +31,7 @@
 #include <tts-cpp/supertonic/fit.h>
 
 #include "addon/GgmlLogForwarding.hpp"
+#include "addon/NativeStderrDiagnostics.hpp"
 #include "addon/VoiceControlsCatalog.hpp"
 #include "js-interface/JSAdapter.hpp"
 #include "model-interface/EnhancerLoader.hpp"
@@ -65,7 +66,12 @@ using supertonic::SupertonicModel;
 // tts-cpp routes them through its own log sink.
 inline void installNativeLogForwarderOnce() {
   static std::once_flag once;
-  std::call_once(once, [] { tts_cpp_log_set(&forwardGgmlLog, nullptr); });
+  std::call_once(once, [] {
+#ifdef __ANDROID__
+    captureNativeStderr(std::getenv("QVAC_TTS_NATIVE_STDERR_PATH"));
+#endif
+    tts_cpp_log_set(&forwardGgmlLog, nullptr);
+  });
 }
 
 struct JsAudioOutputHandler

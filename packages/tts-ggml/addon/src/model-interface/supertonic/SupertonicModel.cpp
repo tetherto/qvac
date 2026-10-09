@@ -16,6 +16,7 @@
 #include <tts-cpp/supertonic/engine.h>
 
 #include "addon/TTSErrors.hpp"
+#include "addon/NativeStderrDiagnostics.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/DenoiserLoader.hpp"
@@ -264,6 +265,7 @@ void SupertonicModel::loadLocked() {
   }
 
   backendName_   = engine_->backend_name();
+  recordNativeBackend(backendName_);
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();

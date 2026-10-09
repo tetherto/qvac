@@ -6,6 +6,7 @@ const os = require('bare-os')
 const { createWavBuffer } = require('./wav-helper')
 const { splitTtsText } = require('@qvac/tts-ggml/text-chunker')
 const { concatenatePcmChunks } = require('./pcmConcatenator')
+const { emitNativeDiagnostics } = require('./nativeDiagnostics')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -121,6 +122,8 @@ async function runTTSWithSplit(model, params, expectation = {}, options = {}) {
       passed: false,
       data: { error: error.message }
     }
+  } finally {
+    emitNativeDiagnostics()
   }
 }
 
@@ -276,6 +279,8 @@ async function runTTS(model, params, expectation = {}, options = {}) {
       passed: false,
       data: { error: error.message }
     }
+  } finally {
+    emitNativeDiagnostics()
   }
 }
 

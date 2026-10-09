@@ -39,6 +39,11 @@ on:
   # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
+      build_native_diagnostics:
+        description: "Build the branch's Android native diagnostics before testing."
+        type: boolean
+        required: false
+        default: false
       platform:
         description: "Platform to run on (a manual run targets one platform)."
         type: choice
@@ -165,14 +170,29 @@ jobs:
   # continue-on-error). Mobile is on-demand for this addon (not part of
   # on-pr-tts-ggml.yml's PR lane), so this does not gate PR merges — it makes
   # manual/scheduled runs trustworthy instead of silently green.
+  native-diagnostics:
+    needs: validate-devices
+    if: inputs.build_native_diagnostics && inputs.platform == 'Android'
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: packages/tts-ggml
+      ref: ${{ github.sha }}
+      matrix-include: '[{"os":"ubuntu-24.04","runner_key":"ubuntu_2404","platform":"android","arch":"arm64"}]'
+    secrets: inherit
+
   build-and-test:
     name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && ' enh' || '' }}${{ matrix.denoiser == 'lavasr' && ' den' || '' }}) and Run E2E Tests
     # workflow_call: validate-devices is skipped; the `skipped` branch of the
     # condition keeps this job running exactly as before.
     # workflow_dispatch: a bad/empty device selection fails validate-devices
     # and blocks this job (no build, no Device Farm cost).
-    needs: [runner_names, validate-devices]
-    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    needs: [runner_names, validate-devices, native-diagnostics]
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (needs.native-diagnostics.result == 'success' || needs.native-diagnostics.result == 'skipped') }}
     runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     # Functional shards can spend up to 120 minutes in Device Farm plus queue
@@ -242,7 +262,7 @@ jobs:
           force-npm-prebuild: ${{ (inputs.prebuild_package != '' || inputs.package_spec != '') && 'true' || 'false' }}
           # Dispatch-only: under workflow_call this input does not exist and
           # resolves empty, leaving the artifact-first path untouched.
-          prebuild-run-id: ${{ inputs.prebuild_run_id }}
+          prebuild-run-id: ${{ inputs.build_native_diagnostics && github.run_id || inputs.prebuild_run_id }}
 
       # The release environment authorizes GitHub OIDC to assume the scoped AWS
       # role used for model-manifest signing; no long-lived AWS keys are stored.

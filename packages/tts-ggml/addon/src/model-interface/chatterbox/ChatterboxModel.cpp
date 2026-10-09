@@ -17,6 +17,7 @@
 #include <tts-cpp/lavasr/enhancer.h>
 
 #include "addon/TTSErrors.hpp"
+#include "addon/NativeStderrDiagnostics.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/DenoiserLoader.hpp"
@@ -567,6 +568,7 @@ void ChatterboxModel::loadLocked() {
   }
 
   backendName_   = engine_->backend_name();
+  recordNativeBackend(backendName_);
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
 

@@ -34,6 +34,7 @@ const {
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
 const { GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
+const { readNativeDiagnostics, denoiserDeclinesGpu } = require('../utils/nativeDiagnostics')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -1051,11 +1052,12 @@ test(
           `(${backendIdToName(denoiserBackendId)})`
       )
       t.not(denoiserBackendDevice, -1, 'denoiser was loaded (denoiserBackendDevice != -1)')
-      t.is(denoiserBackendDevice, backendDevice, 'denoiser runs on the engine device')
-      if (backendDevice === 1) {
+      const policyCpu = denoiserDeclinesGpu(platform, readNativeDiagnostics())
+      t.is(denoiserBackendDevice, policyCpu ? 0 : backendDevice, 'denoiser follows its GPU policy')
+      if (backendDevice === 1 && !policyCpu) {
         t.is(denoiserBackendId, backendId, 'GPU denoiser uses the engine backend')
       } else {
-        t.is(denoiserBackendId, 0, 'a CPU-fallback engine keeps the denoiser on CPU')
+        t.is(denoiserBackendId, 0, 'a CPU engine or a declined Mali GPU keeps the denoiser on CPU')
       }
     } finally {
       try {
