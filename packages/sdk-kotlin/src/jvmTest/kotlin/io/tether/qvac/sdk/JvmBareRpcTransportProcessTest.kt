@@ -69,6 +69,10 @@ private object FakeJvmWorker {
                 unauthenticated.getOutputStream().write("wrong-token\n".encodeToByteArray())
                 unauthenticated.getOutputStream().flush()
             }
+            // A peer that connects first and never writes must not hold up the
+            // handshake of the real worker behind it.
+            val silent = Socket("127.0.0.1", endpoint)
+            Runtime.getRuntime().addShutdownHook(Thread { runCatching { silent.close() } })
             Socket("127.0.0.1", endpoint).also {
                 it.getOutputStream().write((authToken + "\n").encodeToByteArray())
                 it.getOutputStream().flush()
