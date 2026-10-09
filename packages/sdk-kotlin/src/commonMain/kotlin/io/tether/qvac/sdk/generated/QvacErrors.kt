@@ -210,14 +210,10 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("ADDON_LINK_FAILED", reportedCode, message, payload)
     class ClientBareImportsMapNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_IMPORTS_MAP_NOT_FOUND", reportedCode, message, payload)
-    class ClientBarePackError(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("BARE_PACK_ERROR", reportedCode, message, payload)
     class ClientBarePackNodeUnsupported(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_PACK_NODE_UNSUPPORTED", reportedCode, message, payload)
-    class ClientBarePackNotInstalled(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("BARE_PACK_NOT_INSTALLED", reportedCode, message, payload)
-    class ClientBareRuntimeBinaryNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("BARE_RUNTIME_BINARY_NOT_FOUND", reportedCode, message, payload)
+    class ClientBundleFailed(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("BUNDLE_FAILED", reportedCode, message, payload)
     class ClientBundleVerificationFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BUNDLE_VERIFICATION_FAILED", reportedCode, message, payload)
     class ClientConfigFileInvalid(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -254,16 +250,12 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("MULTIPLE_SDK_INSTALLATIONS", reportedCode, message, payload)
     class ClientOcrFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("OCR_FAILED", reportedCode, message, payload)
-    class ClientPearWorkerEntryRequired(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("PEAR_WORKER_ENTRY_REQUIRED", reportedCode, message, payload)
     class ClientProfilerInvalidCapacity(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("PROFILER_INVALID_CAPACITY", reportedCode, message, payload)
     class ClientRequestValidationFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("REQUEST_VALIDATION_FAILED", reportedCode, message, payload)
     class ClientRpcConnectionFailed(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("RPC_CONNECTION_FAILED", reportedCode, message, payload)
-    class ClientRpcInitTimeout(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("RPC_INIT_TIMEOUT", reportedCode, message, payload)
     class ClientRpcNoHandler(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("RPC_NO_HANDLER", reportedCode, message, payload)
     class ClientRpcRequestNotSent(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -278,8 +270,6 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("WORKER_CRASHED", reportedCode, message, payload)
     class ClientWorkerFileNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("WORKER_FILE_NOT_FOUND", reportedCode, message, payload)
-    class ClientWorkerPluginsNotRegistered(message: String, payload: JsonObject, reportedCode: Int?) :
-        QvacKnownException("WORKER_PLUGINS_NOT_REGISTERED", reportedCode, message, payload)
     class ClientWorkerShutdown(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("WORKER_SHUTDOWN", reportedCode, message, payload)
     class ClientWorkerStartupFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -395,10 +385,8 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "VECTOR_INDEX_PROVIDER_UNAVAILABLE" && (code == null || code == 52850) -> QvacKnownException.ServerVectorIndexProviderUnavailable(message, payload, code)
     name == "ADDON_LINK_FAILED" && (code == null || code == 50617) -> QvacKnownException.ClientAddonLinkFailed(message, payload, code)
     name == "BARE_IMPORTS_MAP_NOT_FOUND" && (code == null || code == 50613) -> QvacKnownException.ClientBareImportsMapNotFound(message, payload, code)
-    name == "BARE_PACK_ERROR" && (code == null || code == 50611) -> QvacKnownException.ClientBarePackError(message, payload, code)
     name == "BARE_PACK_NODE_UNSUPPORTED" && (code == null || code == 50618) -> QvacKnownException.ClientBarePackNodeUnsupported(message, payload, code)
-    name == "BARE_PACK_NOT_INSTALLED" && (code == null || code == 50610) -> QvacKnownException.ClientBarePackNotInstalled(message, payload, code)
-    name == "BARE_RUNTIME_BINARY_NOT_FOUND" && (code == null || code == 50614) -> QvacKnownException.ClientBareRuntimeBinaryNotFound(message, payload, code)
+    name == "BUNDLE_FAILED" && (code == null || code == 50611) -> QvacKnownException.ClientBundleFailed(message, payload, code)
     name == "BUNDLE_VERIFICATION_FAILED" && (code == null || code == 50609) -> QvacKnownException.ClientBundleVerificationFailed(message, payload, code)
     name == "CONFIG_FILE_INVALID" && (code == null || code == 50603) -> QvacKnownException.ClientConfigFileInvalid(message, payload, code)
     name == "CONFIG_FILE_NOT_FOUND" && (code == null || code == 50602) -> QvacKnownException.ClientConfigFileNotFound(message, payload, code)
@@ -417,11 +405,9 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "MODEL_TYPE_REQUIRED" && (code == null || code == 50008) -> QvacKnownException.ClientModelTypeRequired(message, payload, code)
     name == "MULTIPLE_SDK_INSTALLATIONS" && (code == null || code == 50607) -> QvacKnownException.ClientMultipleSdkInstallations(message, payload, code)
     name == "OCR_FAILED" && code == 50007 -> QvacKnownException.ClientOcrFailed(message, payload, code)
-    name == "PEAR_WORKER_ENTRY_REQUIRED" && (code == null || code == 50606) -> QvacKnownException.ClientPearWorkerEntryRequired(message, payload, code)
     name == "PROFILER_INVALID_CAPACITY" && (code == null || code == 50800) -> QvacKnownException.ClientProfilerInvalidCapacity(message, payload, code)
     name == "REQUEST_VALIDATION_FAILED" && (code == null || code == 50010) -> QvacKnownException.ClientRequestValidationFailed(message, payload, code)
     name == "RPC_CONNECTION_FAILED" && (code == null || code == 50203) -> QvacKnownException.ClientRpcConnectionFailed(message, payload, code)
-    name == "RPC_INIT_TIMEOUT" && (code == null || code == 50204) -> QvacKnownException.ClientRpcInitTimeout(message, payload, code)
     name == "RPC_NO_HANDLER" && (code == null || code == 50200) -> QvacKnownException.ClientRpcNoHandler(message, payload, code)
     name == "RPC_REQUEST_NOT_SENT" && (code == null || code == 50201) -> QvacKnownException.ClientRpcRequestNotSent(message, payload, code)
     name == "RPC_RESPONSE_STREAM_NOT_CREATED" && (code == null || code == 50202) -> QvacKnownException.ClientRpcResponseStreamNotCreated(message, payload, code)
@@ -429,7 +415,6 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "STREAM_ENDED_WITHOUT_RESPONSE" && (code == null || code == 50003) -> QvacKnownException.ClientStreamEndedWithoutResponse(message, payload, code)
     name == "WORKER_CRASHED" && (code == null || code == 50205) -> QvacKnownException.ClientWorkerCrashed(message, payload, code)
     name == "WORKER_FILE_NOT_FOUND" && (code == null || code == 50601) -> QvacKnownException.ClientWorkerFileNotFound(message, payload, code)
-    name == "WORKER_PLUGINS_NOT_REGISTERED" && (code == null || code == 50608) -> QvacKnownException.ClientWorkerPluginsNotRegistered(message, payload, code)
     name == "WORKER_SHUTDOWN" && (code == null || code == 50206) -> QvacKnownException.ClientWorkerShutdown(message, payload, code)
     name == "WORKER_STARTUP_FAILED" && (code == null || code == 50207) -> QvacKnownException.ClientWorkerStartupFailed(message, payload, code)
     name == "FAILED_TO_CLOSE" && (code == null || code == 19002) -> QvacKnownException.RegistryFailedToClose(message, payload, code)
