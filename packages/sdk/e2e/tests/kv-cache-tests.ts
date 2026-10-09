@@ -84,7 +84,8 @@ const toolTurn = (
         }
       }
     },
-    { project: { from: `$${as}Turn`, path: 'stats.cacheTokens', as: `${as}CacheTokens` } }
+    { project: { from: `$${as}Turn`, path: 'stats.cacheTokens', as: `${as}CacheTokens` } },
+    { project: { from: `$${as}Turn`, path: 'stats.promptTokens', as: `${as}PromptTokens` } }
   ]
 }
 
@@ -602,7 +603,10 @@ export const kvCacheToolSetChange: TestDefinition = {
       'third',
       { tools: '$params.changedTools', declared: ['$params.declaredTool', '$params.addedTool'] }
     ),
-    { compare: { left: '$thirdCacheTokens', right: '$secondCacheTokens', named: 'greaterThan' } }
+    // The third turn carries the longer history but decodes less of it than the second, whose
+    // changed tool block diverged near the start. Resident tokens are no measure: a template that
+    // drops earlier reasoning leaves the third turn holding fewer than the second.
+    { compare: { left: '$secondPromptTokens', right: '$thirdPromptTokens', named: 'greaterThan' } }
   ],
   finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.cacheKey' } } }],
   metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 120000 }
