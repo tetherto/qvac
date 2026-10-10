@@ -5,7 +5,8 @@ const net = require("bare-net");
 const { startRpcServer } = require("../../index");
 const { probeRpcServerProtocol } = require("../mobile/rpc-protocol.cjs");
 
-// Fabric builds its RPC backend with RDMA only for desktop Linux.
+// Fabric builds its RPC backend with RDMA only for desktop Linux, and uses it
+// only where libibverbs is installed, as on every Linux leg that runs this test.
 const RDMA_EXPECTED = Bare.platform === "linux";
 
 async function rejection(promise) {
@@ -40,6 +41,16 @@ test("serves the RPC protocol on the CPU device", async (t) => {
 
   const probe = await probeRpcServerProtocol(net, server.host, server.port);
   t.ok(probe.deviceCount >= 1, `served ${probe.deviceCount} device(s)`);
+});
+
+test("binds a free port itself when none is given", async (t) => {
+  const server = await startStopped(t, { device: "CPU" });
+
+  t.ok(
+    Number.isInteger(server.port) && server.port > 0 && server.port <= 65535,
+    `bound port ${server.port}`,
+  );
+  await probeRpcServerProtocol(net, server.host, server.port);
 });
 
 test("starts with the default device selection", async (t) => {
