@@ -261,6 +261,25 @@ public:
     return {};
   }
 
+  /// Appends the driver's newest checkpoint to the cacheKey file being
+  /// written at `path`, after its sequence state
+  /// (`cache::appendCheckpointSection`), so a later process can restore it.
+  /// Best effort: a failure leaves the file with the state only. Drivers
+  /// without checkpoints write nothing.
+  virtual void appendCheckpointsToCacheFile(const std::string& path) const {
+    (void)path;
+  }
+
+  /// Adopts the checkpoint kept in the cacheKey file at `path`, whose
+  /// sequence state ends at `offset`, after that state was loaded and
+  /// accepted (`cache::readCheckpointSection`). Drivers without checkpoints
+  /// ignore them.
+  virtual void
+  adoptCheckpointsFromCacheFile(const std::string& path, uint64_t offset) {
+    (void)path;
+    (void)offset;
+  }
+
   /// The scheduler fed the plan up to `checkpointAtTextTokens` and decoded
   /// it; live memory for this sequence ends at `pos`. Drivers without
   /// checkpoints ignore it.

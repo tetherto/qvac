@@ -120,9 +120,12 @@ an edit of the last user message. A diverging history restores the longest check
 that is still a prefix of the new prompt and re-prefills from there. See
 [When checkpoints are taken](./cache-lifecycle.md#when-checkpoints-are-taken)
 for the exact points in the pipeline. Checkpoints are pruned as soon as they stop
-matching and are lost when the process exits. With `parallel >= 2` the
-scheduler keeps them per `cacheKey` between requests, since each request runs
-on a fresh slot.
+matching. With `parallel >= 2` the scheduler keeps them per `cacheKey` between
+requests, since each request runs on a fresh slot. The newest one is also
+written into the `cacheKey` file (see [Save the cache to
+disk](#save-the-cache-to-disk)), so a conversation loaded from its file, in
+this process or a new one, continues an ordinary next turn or a regenerate
+from it instead of reprocessing the whole conversation.
 
 A checkpoint holds only the part of the memory a tail trim cannot rebuild,
 and a restore trims the rest back to its position: the recurrent state on
@@ -153,8 +156,10 @@ None of them has any effect on pure-attention models.
   With fewer, nothing usable is left and the whole prompt is reprocessed, so
   with the default 1 an edit of the last user message reprocesses the entire
   conversation. That holds only while the turns in between each committed a
-  checkpoint and `cache_checkpoints_max_bytes` did not evict it; a restart
-  clears them. An edit also drops the checkpoints after it, which no longer
+  checkpoint and `cache_checkpoints_max_bytes` did not evict it. A
+  conversation loaded from its file brings back only the newest checkpoint,
+  so after a restart the edits that need older ones reprocess the whole
+  conversation. An edit also drops the checkpoints after it, which no longer
   match. `0` keeps none and takes none, which makes every divergent turn a
   cold prefill.
 - `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
@@ -183,9 +188,9 @@ disk](#save-the-cache-to-disk): `saveCache()`, or the conversation leaving
 memory with unsaved turns. So a chat can run entirely in memory and be
 persisted at any point with `model.saveCache(cacheKey)`; the file then holds
 the full conversation state and a later run, including one after a process
-restart, loads it and continues from there. Checkpoints are never persisted:
-after a restart the list is empty in both modes and the first diverging turn
-on a hybrid model is a cold prefill.
+restart, loads it and continues from there. On a hybrid model the file also
+holds the newest checkpoint, in both modes, so the next turn after a restart
+restores it rather than reprocessing the whole conversation.
 
 ```js
 const model = new LlmLlamacpp({
@@ -272,8 +277,11 @@ in-memory state (KV cache, plus the recurrent state on hybrid and recurrent
 models) and the cache ledger, and is written in two ways: on request, with
 `saveCache()`, and automatically, when the conversation would otherwise be
 lost with turns the file does not hold yet ("unsaved turns": a request ran on
-it since its file was last written or loaded). Checkpoints are never written
-to the file.
+it since its file was last written or loaded). On hybrid and recurrent models
+the file also holds the conversation's newest checkpoint, after the state, so
+a load in a new process continues the next turn from it. Older checkpoints
+are not written. Older addon versions load these files and ignore the
+checkpoint.
 
 Every write goes to `<cacheKey>.tmp` first and then replaces `<cacheKey>` in
 one rename, so a process crash or a failed write never leaves a half-written
@@ -488,8 +496,8 @@ state, so the only visible difference is `CacheTokens`, which reports the
 tokens actually decoded rather than the pre-request cursor.
 
 The `cacheKey` file changes only through the writes described in [Save the
-cache to disk](#save-the-cache-to-disk). Process-local checkpoints are never
-written into it.
+cache to disk](#save-the-cache-to-disk), which also carry the newest
+checkpoint.
 
 ## Save failures
 

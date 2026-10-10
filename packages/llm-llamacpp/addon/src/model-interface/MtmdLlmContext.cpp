@@ -12,6 +12,7 @@
 #include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
 
+#include "CacheCheckpointFile.hpp"
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "MediaLoadOrder.hpp"
@@ -2231,6 +2232,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   }
   acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
+  adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
   return true;
 }
 
@@ -2255,7 +2257,24 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
         toString(UnableToSaveSessionFile),
         "MtmdLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
   }
+  appendCheckpointsToCacheFile(tmpCacheKey);
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
+}
+
+// Whatever checkpoints the context keeps: none on a model that takes none,
+// so its file is unchanged.
+void MtmdLlmContext::appendCheckpointsToCacheFile(
+    const std::string& path) const {
+  (void)cache::appendCheckpointSection(path, cacheCheckpoints_);
+}
+
+// Through `adoptCheckpoints`, so the file's checkpoint is kept exactly when
+// the context would keep one it captured itself.
+void MtmdLlmContext::adoptCheckpointsFromCacheFile(
+    const std::string& path, uint64_t offset) {
+  adoptCheckpoints(
+      cache::readCheckpointSection(
+          path, offset, residentLedger_, cacheCheckpointPolicy_));
 }
 
 void MtmdLlmContext::snapshotPreRequestCursor() {

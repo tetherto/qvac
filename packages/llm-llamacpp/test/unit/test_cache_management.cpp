@@ -3119,3 +3119,85 @@ TEST(BatchedCheckpointStoreTest, KeepsAtMostOneCheckpointSetPerSlot) {
     fs::remove(key);
   }
 }
+
+// The cacheKey file keeps the newest end-of-history checkpoint, so a model
+// loaded in a new process continues a thinking chat on a hybrid model from
+// it: the template rewrites the last answer without its reasoning, and
+// without a checkpoint the next turn would reprocess the whole conversation.
+// Destroying the model drops every in-process checkpoint, as a restart does.
+TEST(CacheHistoryCheckpointTest, HybridCheckpointSurvivesAReload) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "reloaded_history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const auto keyed = [&]() {
+    LlamaModel::Prompt prompt;
+    prompt.input = chatInput(chat);
+    prompt.cacheKey = cacheFile.string();
+    return prompt;
+  };
+  {
+    auto model = loadHybridChatModel(modelPath, nullptr);
+    ASSERT_TRUE(model->isLoaded());
+    const std::string first = model->processPrompt(keyed());
+    ASSERT_FALSE(first.empty());
+    model->saveCache(cacheFile.string());
+    chat.emplace_back("assistant", first);
+  }
+
+  auto model = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+  chat.emplace_back("user", "Which of them is warmest?");
+  const std::string next = model->processPrompt(keyed());
+  ASSERT_FALSE(next.empty());
+  EXPECT_GT(text->lastCacheReuseForTesting(), 0u)
+      << "the reloaded conversation restored no checkpoint and reprocessed "
+         "the whole history";
+  expectAnswersFromTheWholeChat(next);
+
+  model.reset();
+  fs::remove(cacheFile);
+}
+
+// The same on a parallel model: the file written by the scheduler's save
+// carries the checkpoint, and a slot that loads it in a new model restores it.
+TEST(CacheHistoryCheckpointTest, BatchedHybridCheckpointSurvivesAReload) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "batched_reloaded_history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  {
+    auto model = loadHybridChatModel(modelPath, "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    const BatchedTurn first =
+        harness.run(chatInput(chat), cacheFile.string(), /*saveAfter=*/true);
+    ASSERT_FALSE(first.output.empty());
+    chat.emplace_back("assistant", first.output);
+  }
+
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  chat.emplace_back("user", "Which of them is warmest?");
+  const BatchedTurn next = harness.run(chatInput(chat), cacheFile.string());
+  ASSERT_FALSE(next.output.empty());
+  EXPECT_GT(next.reuse, 0u)
+      << "the reloaded conversation restored no checkpoint and reprocessed "
+         "the whole history";
+  expectAnswersFromTheWholeChat(next.output);
+
+  model.reset();
+  fs::remove(cacheFile);
+}
