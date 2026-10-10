@@ -473,7 +473,10 @@ safeTest(
         `global_steps should be ${expectedGlobalSteps}, got ${result.stats?.global_steps}`
       )
 
+      // Cached requests resend the full history; the cache reuses its prefix.
       const postPrompt = [
+        ...sessionPrompt,
+        { role: 'assistant', content: preOutput },
         {
           role: 'user',
           content: 'What is the output of the previous computation? answer with a number. /no_think'

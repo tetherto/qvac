@@ -110,7 +110,9 @@ timestamped segments labelled with the speaker (`S01`, `S02`, ...).
 It is validated for Spanish (2.1-3.9 % WER) and Chinese (9.4-12.1 % CER) on
 2- to 30-minute files; English is not usable (the reference model itself
 skips whole spans). A GGUF sniffs as parakeet, so always pass
-`engine: 'moss-transcribe'`.
+`engine: 'moss-transcribe'`. On macOS and iOS its audio encoder can run on an
+optional Core ML sidecar; see
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
 
 ## Choosing a model
 
@@ -516,20 +518,55 @@ fit.hostBytes
 fit.report
 ```
 
-`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet reports `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
+`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet and MOSS report `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
 
 | Option | Description |
 | --- | --- |
 | `modelPath` | **Required.** Absolute path to the model, or to the registry's weightless copy where one exists. |
-| `audioSeconds` | Longest single transcribe the projection must cover. Defaults to 300. |
-| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet projects on the CPU and whisper on the GPU, matching what each load does. |
-| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet. |
+| `audioSeconds` | Longest single transcribe the projection must cover. Required for MOSS; defaults to 300 for whisper and parakeet. |
+| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
+| `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
 | `backendsDir` | The prebuilds root. The backends are read from the per-target subdir under it, the same path a load reads. |
 | `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
 | `threads`, `longFormWindowFrames`, `longFormContextFrames` | Parakeet: as the load takes them. |
 | `nemotronChunkMs` | Nemotron: the streaming operating point the projection must also cover. 0 projects the largest allowed one. |
+
+MOSS-Transcribe-Diarize uses an explicit duration and the same per-call options as `run`:
+
+```js
+const fit = ASRGgml.assessFit({
+  engine: 'moss-transcribe',
+  modelPath: '/models/moss-transcribe-diarize-q8_0.gguf',
+  audioSeconds: 90,
+  hotwords: ['QVAC', 'Tether'],
+  maxNewTokens: 1024,
+  threads: 4,
+  gpuLayers: 1
+})
+console.log(fit.report)
+```
+
+`audioSeconds` is required and must be positive and finite. `threads` follows
+`maxThreads` at load time (0 or omitted keeps the existing engine default).
+`prompt`, `hotwords` and `maxNewTokens` follow the transcription rules, including
+prompt/hotword exclusion and 0 or omitted token allowance selecting the GGUF default.
+The projection reads GGUF metadata only and supports a metadata-only copy with the
+same tensor table and tokenizer. It measures the runtime encoder and decoder graphs,
+the aligned KV cache, and host buffers. A workload exceeding the model context returns
+`error` / `workload-too-large`.
+
+Encoder and decoder reuse one scheduler allocation: `decoderComputeBytes` is the
+additional compute above `encoderComputeBytes`, so their sum is the peak allocation.
+On CPU and unified-memory GPUs, host bytes also count against available device memory.
+This projection covers one batch transcription, matching MOSS's existing API.
+
+Run [`examples/moss-transcribe-fit.js`](examples/moss-transcribe-fit.js) with:
+
+```sh
+bare examples/moss-transcribe-fit.js /models/moss-transcribe-diarize-q8_0.gguf 90
+```
 
 A model the fitter cannot read is `status: "error"` with the engine's reason; only a broken request throws.
 
@@ -825,6 +862,7 @@ ggml.
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
 | Sortformer v1 | none | — | always |
 | Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
+| MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
 
 `getBackendInfo().encoderOnCoreml` (with `encoderBackend: 'coreml'`) and
 `RuntimeStats.encoderOnCoreml` report that a sidecar loaded at `load()`, not
@@ -844,6 +882,16 @@ tree at the ref `speech-cpp` pins; its
 has the per-model export commands. The
 [Core ML RTF lanes](#core-ml-apple-neural-engine-rtf-lanes) record what the
 TDT sidecar gains over Metal.
+
+MOSS-Transcribe-Diarize has its own switches: `MOSS_COREML_DISABLE=1` forces
+ggml, and `MOSS_COREML_COMPUTE_UNITS=cpu_and_gpu` keeps the encoder off the
+Neural Engine. The default placement runs the encoder 1.79x faster than Metal
+on an Apple M4, but on a large GPU the Neural Engine loses (0.57x on an M3
+Ultra, 1.11x with `cpu_and_gpu`); the decoder dominates a transcription, so a
+whole run gains about 5 % on the M4. Its placement is not reported in
+`getBackendInfo()` or `RuntimeStats`. Export it with
+`engines/parakeet/scripts/export-moss-transcribe-encoder-coreml.py`; see the
+[MOSS-Transcribe-Diarize guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/moss-transcribe.md#core-ml-encoder-sidecar).
 
 ## Staging Models
 
@@ -1128,6 +1176,7 @@ Parakeet:
 
 MOSS-Transcribe-Diarize:
 
+- [`examples/moss-transcribe-fit.js`](examples/moss-transcribe-fit.js) — metadata-only memory preflight for a model and audio duration
 - [`examples/moss-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/moss-transcribe.js) — speaker-labelled transcript of a WAV or raw 16 kHz file, with optional `--hotwords "a,b"` and `--gpu`
 
 The npm tarball includes the dependency-clean Whisper quickstart. The other
