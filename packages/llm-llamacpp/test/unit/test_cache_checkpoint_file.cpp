@@ -196,11 +196,11 @@ TEST_F(CacheCheckpointFileTest, RamTierFileKeepsTheNewestCheckpoint) {
   entry.checkpoints.push_back(checkpoint(9, 'h'));
   ASSERT_TRUE(SlotStateCache::writeStateFile(path_, entry));
 
-  const uint64_t stateEnd = 3 * sizeof(uint32_t) +
-                            entry.ledgerWords.size() * sizeof(llama_token) +
-                            entry.state.size();
+  const uint64_t sectionStart = 3 * sizeof(uint32_t) +
+                                entry.ledgerWords.size() * sizeof(llama_token) +
+                                entry.state.size();
   const cache::Checkpoints read =
-      cache::readCheckpointSection(path_, stateEnd, resident(), policy());
+      cache::readCheckpointSection(path_, sectionStart, resident(), policy());
   ASSERT_EQ(read.size(), 1u);
   EXPECT_EQ(read.front().state.nPast, 9);
   EXPECT_EQ(

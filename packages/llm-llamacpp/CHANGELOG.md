@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- On hybrid and recurrent models (Qwen3.5 and later, Jamba, DeepSeek V4) the
+  `cacheKey` file also keeps the conversation's newest end-of-history
+  checkpoint. A conversation loaded from its file, including in a new
+  process, continues its next turn or a regenerate from that checkpoint
+  instead of reprocessing the whole conversation, which thinking templates
+  forced because they rewrite the previous answer. Older checkpoints stay in
+  memory only. Files written this way still load in earlier versions, which
+  ignore the checkpoint.
+
 ## [0.58.0] - 2026-10-09
 
 ### Breaking

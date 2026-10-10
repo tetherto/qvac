@@ -28,7 +28,7 @@ graph TB
     end
 
     subgraph "Durable"
-        FILE["cacheKey file<br/>sequence state + ledger"]
+        FILE["cacheKey file<br/>sequence state + ledger<br/>+ newest checkpoint"]
     end
 
     HIST -->|render + tokenize| LEDGER
@@ -58,8 +58,10 @@ graph TB
   compressor states on DeepSeek V4. Restoring one puts that part back and
   trims the rest to its position (see [Restoring a
   checkpoint](#restoring-a-checkpoint)).
-- The **`cacheKey` file** is the only durable artifact. Checkpoints are never
-  written into it and do not survive a process restart.
+- The **`cacheKey` file** is the only durable artifact. On full-state models
+  it also carries the newest checkpoint after the sequence state, so a
+  conversation loaded in a new process restores it on its next turn. Older
+  checkpoints do not survive a process restart.
 
 ## Two kinds of models
 
@@ -194,6 +196,8 @@ stateDiagram-v2
     Restored --> Checkpoint: stays in the list
     Checkpoint --> [*]: pruned, no longer a prefix<br/>of a later prompt
     Checkpoint --> [*]: evicted, oldest first,<br/>when the list exceeds<br/>cache_checkpoints_max_bytes<br/>or cache_checkpoints
+    Checkpoint --> InFile: newest one, written with<br/>the cacheKey file
+    InFile --> Checkpoint: conversation loaded<br/>from its file, any process
     Checkpoint --> [*]: cacheKey switched without cache_ram_mib,<br/>cleared, or loaded from its file<br/>(cache_ram_mib, parallel >= 2: kept with<br/>the conversation across requests)
     Checkpoint --> [*]: process exits
 ```
@@ -320,11 +324,11 @@ Sizes are fixed by the model, whatever the conversation length: about 20 MB
 on Qwen3.5-0.8B and 18 MB on DeepSeek V4-Flash, against ~233 MB for a full
 copy of Qwen3.5-0.8B at 32k tokens. They live in host RAM by default
 (`cache_checkpoint_storage: memory`) or in files in `cache_checkpoint_dir`
-with `disk`, and are
-never written into the `cacheKey` file. On the single-prompt path a
-conversation loaded from its file starts without checkpoints; with
-`parallel >= 2` the scheduler keeps a key's checkpoints across that file
-round-trip while the process lives. After a restart there are none.
+with `disk`. Every write of the `cacheKey` file appends the newest one after
+the sequence state, and a conversation loaded from its file starts with it,
+on both paths and after a restart. With `parallel >= 2` the scheduler also
+keeps a key's other checkpoints across a file round-trip while the process
+lives, and those replace the one from the file.
 
 ## The `cacheKey` file
 
@@ -347,12 +351,14 @@ stateDiagram-v2
     Resident --> Resident: rolled-back request<br/>(file untouched)
 ```
 
-Loading a file restores the sequence state and the ledger, with an empty
-checkpoint list, except with `parallel >= 2`: there the scheduler hands the
-new slot the checkpoints the previous request on the same `cacheKey` left
-behind, and each is checked against the loaded ledger before use. The first
-diverging turn after a restart on a full-state model is a cold prefill until
-new checkpoints accumulate.
+Loading a file restores the sequence state and the ledger, and the newest
+checkpoint when the file carries one. With `parallel >= 2` the scheduler
+instead hands the new slot the checkpoints the previous request on the same
+`cacheKey` left behind, when it still has them. Each checkpoint is checked
+against the loaded ledger before use. After a restart a full-state model
+therefore continues an ordinary next turn or a regenerate from the file's
+checkpoint; an edit further back is a cold prefill until new checkpoints
+accumulate.
 
 Every edge into `Written` and `Dropped` is detailed in the next section.
 
@@ -374,9 +380,14 @@ The file is a standard llama.cpp sequence-state file
 | llama.cpp header | magic, format version, number of tokens that follow |
 | ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
+| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (1); the newest checkpoint's `nPast`, KV-cell count, its ledger in the format above, and its partial state; a checksum over everything but the state bytes |
 
-The state is always written in full, unlike the partial snapshots and
-checkpoints, which are never written into the file. A load checks the ledger
+The state is always written in full; the checkpoint after it holds only the
+partial state, as in memory. `llama_state_seq_load_file` stops reading at the
+end of the sequence state, so older addon versions load these files and
+ignore the checkpoint. A checkpoint that is damaged, from a newer format, or
+not a prefix of the loaded ledger is skipped with a warning and the state
+still loads. The pre-request snapshot is never written. A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
 (`UnableToLoadSessionFile`), and a file without a ledger is a cold miss.
 
