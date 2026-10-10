@@ -217,5 +217,21 @@ bool restoreSequenceState(
     ::llama_context* lctx, llama_seq_id seqId,
     const SequenceStateSnapshot& snapshot);
 
+// Copies the bytes of a partial snapshot (its buffer, or the contents of its
+// file) into `out`, as `llama_state_seq_get_data_ext` produced them. Returns
+// false for a full or empty snapshot, or when its file cannot be read. Used to
+// keep checkpoints in a cacheKey file.
+[[nodiscard]] bool readPartialSnapshotPayload(
+    const SequenceStateSnapshot& snapshot, std::vector<uint8_t>& out);
+
+// Turns `payload`, bytes read back by `readPartialSnapshotPayload` (a
+// checkpoint kept in a cacheKey file), into a partial snapshot at `nPastAt`,
+// stored as a fresh capture would be: in memory, or in a new file of this
+// process's snapshot directory under `directory`. Returns false, with `out`
+// cleared, when the payload is empty or the file cannot be written.
+[[nodiscard]] bool partialSnapshotFromPayload(
+    std::vector<uint8_t> payload, llama_pos nPastAt, SnapshotStorage storage,
+    const std::string& directory, SequenceStateSnapshot& out);
+
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

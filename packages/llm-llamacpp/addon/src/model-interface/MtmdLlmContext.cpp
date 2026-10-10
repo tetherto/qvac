@@ -12,6 +12,7 @@
 #include <llama/mtmd/mtmd-helper.h>
 #include <llama/mtmd/mtmd.h>
 
+#include "CacheCheckpointFile.hpp"
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "MediaLoadOrder.hpp"
@@ -2231,6 +2232,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   }
   acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
+  adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
   return true;
 }
 
@@ -2255,7 +2257,23 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
         toString(UnableToSaveSessionFile),
         "MtmdLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
   }
+  appendCheckpointsToCacheFile(tmpCacheKey);
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
+}
+
+void MtmdLlmContext::appendCheckpointsToCacheFile(
+    const std::string& path) const {
+  if (needsFullStateSnapshot_) {
+    (void)cache::appendCheckpointSection(path, cacheCheckpoints_);
+  }
+}
+
+void MtmdLlmContext::adoptCheckpointsFromCacheFile(
+    const std::string& path, uint64_t offset) {
+  if (needsFullStateSnapshot_) {
+    cacheCheckpoints_ = cache::readCheckpointSection(
+        path, offset, residentLedger_, cacheCheckpointPolicy_);
+  }
 }
 
 void MtmdLlmContext::snapshotPreRequestCursor() {

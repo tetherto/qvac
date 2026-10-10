@@ -509,5 +509,46 @@ bool restoreSequenceState(
   return loadedBytes != 0;
 }
 
+bool readPartialSnapshotPayload(
+    const SequenceStateSnapshot& snapshot, std::vector<uint8_t>& out) {
+  out.clear();
+  if (snapshot.empty() || snapshot.scope() != SnapshotScope::Partial) {
+    return false;
+  }
+  if (snapshot.hasBuffer()) {
+    out = snapshot.buffer();
+    return true;
+  }
+  return snapshot.hasFile() && readFile(snapshot.filePath(), out) &&
+         !out.empty();
+}
+
+bool partialSnapshotFromPayload(
+    std::vector<uint8_t> payload, llama_pos nPastAt, SnapshotStorage storage,
+    const std::string& directory, SequenceStateSnapshot& out) {
+  out.clear();
+  if (payload.empty() || nPastAt <= 0) {
+    return false;
+  }
+  if (storage == SnapshotStorage::Memory) {
+    out.adoptBuffer(std::move(payload), nPastAt);
+  } else {
+    std::string path;
+    try {
+      path = makeUniqueSnapshotPath(0, directory);
+    } catch (const std::exception&) {
+      return false;
+    }
+    if (!writeFile(path, payload)) {
+      removeFileQuiet(path);
+      return false;
+    }
+    out.adoptFile(std::move(path), nPastAt, payload.size());
+    snapshotFilesWritten().fetch_add(1, std::memory_order_relaxed);
+  }
+  out.setScope(SnapshotScope::Partial);
+  return true;
+}
+
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

@@ -696,14 +696,18 @@ private:
   chooseSeqIdLocked(const std::string& cacheKey);
   void evictParkedLocked(uint32_t seqId) noexcept;
   /// Writes the live state of `seqId`, described by `ledgerWords`, to
-  /// `cacheKey` through a temp file. Returns false (logged) on failure.
+  /// `cacheKey` through a temp file, followed by the newest of the
+  /// conversation's `checkpoints` (see `cache::appendCheckpointSection`).
+  /// Returns false (logged) on failure.
   bool writeStateToFileLocked(
       uint32_t seqId, const std::string& cacheKey,
-      const std::vector<llama_token>& ledgerWords) noexcept;
+      const std::vector<llama_token>& ledgerWords,
+      const cache::Checkpoints& checkpoints) noexcept;
   /// Throwing variant for the caller's explicit save.
   void writeStateToFileOrThrowLocked(
       uint32_t seqId, const std::string& cacheKey,
-      const std::vector<llama_token>& ledgerWords);
+      const std::vector<llama_token>& ledgerWords,
+      const cache::Checkpoints& checkpoints);
   /// Runs the explicit saves whose key has no request in a slot.
   void serviceSaveJobsLocked() noexcept;
   /// Drops everything kept for `cacheKey` without writing it.

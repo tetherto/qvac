@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "CacheCheckpointFile.hpp"
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "RequestRecoveryHelpers.hpp"
@@ -1609,6 +1610,7 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   }
   acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
+  adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
   return true;
 }
 
@@ -1633,7 +1635,23 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
         toString(UnableToSaveSessionFile),
         "TextLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
   }
+  appendCheckpointsToCacheFile(tmpCacheKey);
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
+}
+
+void TextLlmContext::appendCheckpointsToCacheFile(
+    const std::string& path) const {
+  if (needsFullStateSnapshot_) {
+    (void)cache::appendCheckpointSection(path, cacheCheckpoints_);
+  }
+}
+
+void TextLlmContext::adoptCheckpointsFromCacheFile(
+    const std::string& path, uint64_t offset) {
+  if (needsFullStateSnapshot_) {
+    cacheCheckpoints_ = cache::readCheckpointSection(
+        path, offset, residentLedger_, cacheCheckpointPolicy_);
+  }
 }
 
 void TextLlmContext::snapshotPreRequestCursor() {

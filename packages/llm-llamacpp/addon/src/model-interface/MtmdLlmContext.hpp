@@ -158,6 +158,9 @@ public:
   releaseCheckpoints() override {
     return std::exchange(cacheCheckpoints_, {});
   }
+  void appendCheckpointsToCacheFile(const std::string& path) const override;
+  void adoptCheckpointsFromCacheFile(
+      const std::string& path, uint64_t offset) override;
   [[nodiscard]] std::optional<
       qvac_lib_inference_addon_llama::utils::ReasoningTags>
   historyReasoningTags() const override {
