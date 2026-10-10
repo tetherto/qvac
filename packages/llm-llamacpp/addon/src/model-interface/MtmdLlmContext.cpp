@@ -2261,19 +2261,20 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
 }
 
+// Whatever checkpoints the context keeps: none on a model that takes none,
+// so its file is unchanged.
 void MtmdLlmContext::appendCheckpointsToCacheFile(
     const std::string& path) const {
-  if (needsFullStateSnapshot_) {
-    (void)cache::appendCheckpointSection(path, cacheCheckpoints_);
-  }
+  (void)cache::appendCheckpointSection(path, cacheCheckpoints_);
 }
 
+// Through `adoptCheckpoints`, so the file's checkpoint is kept exactly when
+// the context would keep one it captured itself.
 void MtmdLlmContext::adoptCheckpointsFromCacheFile(
     const std::string& path, uint64_t offset) {
-  if (needsFullStateSnapshot_) {
-    cacheCheckpoints_ = cache::readCheckpointSection(
-        path, offset, residentLedger_, cacheCheckpointPolicy_);
-  }
+  adoptCheckpoints(
+      cache::readCheckpointSection(
+          path, offset, residentLedger_, cacheCheckpointPolicy_));
 }
 
 void MtmdLlmContext::snapshotPreRequestCursor() {
