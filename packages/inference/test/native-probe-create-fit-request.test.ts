@@ -691,3 +691,55 @@ test('a model type with no fitter is refused by name', (t) => {
     { supported: false, detail: `no fitter for model type: ${ModelType.ggmlOcr}` }
   )
 })
+
+test('MOSS: fit projects the declared recording and matching decoding options', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.mossTranscribe,
+    modelPath: '/models/moss.gguf',
+    modelConfig: { useGPU: true, maxThreads: 4, backendsDir: '/backends' },
+    transcriptionWorkload: { audioSeconds: 90, hotwords: ['Erin'], maxNewTokens: 0 },
+    marginBytes: 1024,
+    isShardedModel: false
+  })
+  t.alike(plan, {
+    supported: true,
+    probe: {
+      engine: 'asr-ggml',
+      request: {
+        engine: 'moss-transcribe',
+        modelPath: '/models/moss.gguf',
+        audioSeconds: 90,
+        hotwords: ['Erin'],
+        maxNewTokens: 0,
+        gpuLayers: 1,
+        threads: 4,
+        backendsDir: '/backends',
+        marginBytes: 1024
+      }
+    }
+  })
+})
+
+test('MOSS: missing workload cannot claim a fit; default load remains CPU', (t) => {
+  const base = {
+    modelType: ModelType.mossTranscribe,
+    modelPath: '/models/moss.gguf',
+    modelConfig: {},
+    isShardedModel: false
+  }
+  t.is(createFitRequest(base).supported, false)
+  const plan = createFitRequest({
+    ...base,
+    transcriptionWorkload: { audioSeconds: 30, prompt: 'Transcribe.' }
+  })
+  t.ok(plan.supported)
+  if (plan.supported && plan.probe.engine === 'asr-ggml') t.is(plan.probe.request.gpuLayers, 0)
+  t.is(
+    createFitRequest({
+      ...base,
+      modelType: ModelType.parakeetTranscription,
+      transcriptionWorkload: { audioSeconds: 30 }
+    }).supported,
+    false
+  )
+})

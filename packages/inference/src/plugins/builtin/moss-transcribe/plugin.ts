@@ -45,6 +45,7 @@ export const mossTranscribePlugin = definePlugin({
   displayName: 'MOSS-Transcribe-Diarize',
   addonPackage: ADDON_ASR,
   loadConfigSchema: mossTranscribeConfigSchema,
+  assessFit: ASRGgml.assessFit,
 
   resolveConfig(cfg: MossTranscribeConfig): Promise<ResolveResult<MossTranscribeConfig>> {
     return Promise.resolve({ config: cfg })

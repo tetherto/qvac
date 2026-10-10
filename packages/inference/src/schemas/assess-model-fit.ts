@@ -2,6 +2,17 @@ import { z } from 'zod'
 import { modelRegistryEntrySchema } from '@/schemas/registry'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 import { modelTypeInputSchema } from '@/schemas/model-types'
+import { transcribeParamsSchema } from '@/schemas/transcription'
+
+export const transcriptionFitWorkloadSchema = transcribeParamsSchema
+  .pick({ prompt: true, hotwords: true, maxNewTokens: true })
+  .extend({ audioSeconds: z.number().positive().describe('Longest whole recording to project.') })
+  .strict()
+  .refine((value) => value.prompt === undefined || !value.hotwords?.length, {
+    message: 'MOSS prompt cannot be combined with hotwords'
+  })
+
+export type TranscriptionFitWorkload = z.infer<typeof transcriptionFitWorkloadSchema>
 
 /**
  * Advisory outcome of a pre-download fit assessment.
@@ -75,6 +86,11 @@ export const modelFitExecutionSchema = z.enum(['sequential', 'concurrent'])
  * artifact, or to the file itself where it is already on disk.
  */
 export const modelFitCandidateSchema = z.object({
+  transcriptionWorkload: transcriptionFitWorkloadSchema
+    .optional()
+    .describe(
+      'MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.'
+    ),
   modelSrc: modelSrcInputSchema
     .optional()
     .describe(

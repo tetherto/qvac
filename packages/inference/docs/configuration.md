@@ -28,7 +28,12 @@ batch transcription, with optional `maxThreads`, `useGPU` (Metal), and
 `backendsDir` model configuration. Per-request `hotwords` or `prompt` and
 `maxNewTokens` belong to `transcribe`, not model configuration. Metadata results
 include timestamps and optional `speakerId` / `speaker` labels. Streaming,
-CoreML sidecars, and native memory-fit assessment are not exposed by this plugin.
+and CoreML sidecars are not exposed by this plugin. `assessModelFit` accepts
+a MOSS candidate with `transcriptionWorkload: { audioSeconds, prompt?, hotwords?,
+maxNewTokens? }`, separate from `modelConfig`. An explicit positive recording
+duration is required for native fit evidence; omitted workloads remain unknown.
+The projection uses the same GPU/thread settings as the load, and uses registry
+descriptions or local files without reading full weights into memory.
 
 Nemotron 3 Diarization uses `parakeet-transcription` with a single local GGUF.
 Offline metadata retains overlapping `speakerSegments`; streaming segment and

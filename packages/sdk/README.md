@@ -473,9 +473,27 @@ be combined with hotwords. `maxNewTokens: 0` uses the model default. These two
 MOSS-specific options are rejected for Whisper and Parakeet models.
 
 The published addon contains Whisper v1.9.4, so existing Whisper calls keep
-their API and use the updated backend. MOSS memory-fit assessment is not yet
-exposed by the SDK; the native fitter requires an explicit audio workload. MOSS
-CoreML support is unavailable in the addon.
+their API and use the updated backend. MOSS memory-fit assessment projects the
+declared recording and decoding options without loading weights:
+
+```typescript
+const fit = await assessModelFit({
+  models: [
+    {
+      modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
+      modelConfig: { useGPU: false },
+      transcriptionWorkload: { audioSeconds: 300, hotwords: ['Erin'], maxNewTokens: 0 }
+    }
+  ]
+})
+```
+
+Import `assessModelFit` from `@qvac/sdk`. Use the longest recording you intend
+to transcribe, with the same prompt/hotwords and token limit as the request.
+Without `transcriptionWorkload`, MOSS has no native fit evidence and the result
+can remain `unknown`. Assessment uses a registry description when available,
+or a local model path; it downloads no full weights. MOSS CoreML requires an
+addon revision newer than the published 0.8.0 release.
 
 The SDK and inference use the published `@qvac/asr-ggml` package at `^0.8.0`.
 

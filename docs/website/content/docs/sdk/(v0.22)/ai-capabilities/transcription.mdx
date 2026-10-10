@@ -104,6 +104,33 @@ at most 64 UTF-8 bytes. A custom `prompt` cannot be combined with hotwords.
 `maxNewTokens: 0` uses the model default. MOSS supports whole-recording batch
 inference; duplex streaming and configuration reload are unavailable.
 
+Before downloading weights, call `assessModelFit` with the longest recording
+you plan to transcribe and matching decoding options:
+
+```ts
+import { assessModelFit, MOSS_TRANSCRIBE_DIARIZE_Q8_0 } from "@qvac/sdk";
+
+const fit = await assessModelFit({
+  models: [
+    {
+      modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
+      modelConfig: { useGPU: false },
+      transcriptionWorkload: {
+        audioSeconds: 300,
+        hotwords: ["QVAC"],
+        maxNewTokens: 0,
+      },
+    },
+  ],
+});
+```
+
+`transcriptionWorkload` is fit-only and requires a positive duration in seconds.
+It accepts the same prompt, hotwords, and token limit as MOSS transcription;
+omit either prompt or hotwords. Without a declared workload or an available
+registry description/local model, the assessment can remain `unknown`.
+Assessment does not load the model, reserve memory, or block transcription.
+
 ## Nemotron 3 speaker diarization
 
 Nemotron 3 Diarization runs through `parakeet-transcription` and identifies up to

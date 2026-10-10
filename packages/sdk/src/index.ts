@@ -199,6 +199,7 @@ export {
   type SystemResourceSample,
   type SystemResources,
   type AssessModelFitInput,
+  type TranscriptionFitWorkload,
   type AssessModelFitResult,
   type LoadedInstance,
   type CacheFileInfo,

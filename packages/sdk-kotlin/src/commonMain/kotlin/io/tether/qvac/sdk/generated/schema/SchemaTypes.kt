@@ -222,9 +222,18 @@ data class AssessModelFitRequest(
 
 @Serializable
 data class AssessModelFitRequestModelsItem(
+    @SerialName("transcriptionWorkload") val `transcriptionWorkload`: AssessModelFitRequestModelsItemTranscriptionWorkload? = null,
     @SerialName("modelSrc") val `modelSrc`: AssessModelFitRequestModelsItemModelSrc? = null,
     @SerialName("modelType") val `modelType`: AssessModelFitRequestModelsItemModelType? = null,
     @SerialName("modelConfig") val `modelConfig`: Map<String, JsonElement>? = null,
+)
+
+@Serializable
+data class AssessModelFitRequestModelsItemTranscriptionWorkload(
+    @SerialName("prompt") val `prompt`: String? = null,
+    @SerialName("hotwords") val `hotwords`: List<String>? = null,
+    @SerialName("maxNewTokens") val `maxNewTokens`: Long? = null,
+    @SerialName("audioSeconds") val `audioSeconds`: Double,
 )
 
 @Serializable(with = AssessModelFitRequestModelsItemModelSrcSerializer::class)

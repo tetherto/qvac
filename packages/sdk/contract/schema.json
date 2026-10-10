@@ -313,6 +313,38 @@
           "items": {
             "type": "object",
             "properties": {
+              "transcriptionWorkload": {
+                "description": "MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "hotwords": {
+                    "description": "MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+                    "maxItems": 64,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "maxNewTokens": {
+                    "description": "MOSS generated-token limit; 0 uses the model default.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  },
+                  "audioSeconds": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Longest whole recording to project."
+                  }
+                },
+                "required": ["audioSeconds"],
+                "additionalProperties": false,
+                "title": "AssessModelFitRequestModelsItemTranscriptionWorkload"
+              },
               "modelSrc": {
                 "description": "The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.",
                 "anyOf": [

@@ -21,6 +21,41 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
+class Hotword(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class AssessModelFitRequestModelsItemTranscriptionWorkload(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    prompt: str | None = None
+    hotwords: Annotated[
+        list[Hotword] | None,
+        Field(
+            description="MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+            max_length=64,
+        ),
+    ] = None
+    max_new_tokens: Annotated[
+        int | None,
+        Field(
+            alias="maxNewTokens",
+            description="MOSS generated-token limit; 0 uses the model default.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    audio_seconds: Annotated[
+        float,
+        Field(
+            alias="audioSeconds",
+            description="Longest whole recording to project.",
+            gt=0.0,
+        ),
+    ]
+
+
 class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -166,6 +201,14 @@ class AssessModelFitRequestModelsItemModelConfig(RootModel[dict[str, Any]]):
 
 
 class AssessModelFitRequestModelsItem(GeneratedBaseModel):
+    transcription_workload: Annotated[
+        AssessModelFitRequestModelsItemTranscriptionWorkload | None,
+        Field(
+            alias="transcriptionWorkload",
+            description="MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+            title="AssessModelFitRequestModelsItemTranscriptionWorkload",
+        ),
+    ] = None
     model_src: Annotated[
         str | AssessModelFitRequestModelsItemModelSrc | None,
         Field(
@@ -21141,10 +21184,6 @@ class TranscribeRequestAudioChunkBase64(GeneratedBaseModel):
 class TranscribeRequestAudioChunkFilePath(GeneratedBaseModel):
     type: Literal["filePath"] = "filePath"
     value: str
-
-
-class Hotword(RootModel[str]):
-    root: Annotated[str, Field(min_length=1)]
 
 
 class TranscribeRequest(GeneratedBaseModel):
