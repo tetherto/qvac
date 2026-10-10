@@ -478,6 +478,10 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
   const lower = filename.toLowerCase()
   const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
 
+  if (lower.includes('nemotron-3-diarization') && lower.endsWith('.gguf')) {
+    return `PARAKEET_NEMOTRON_3_DIARIZATION_${cleanPart(quantization)}`
+  }
+
   let variant = ''
   if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
     variant = 'SORTFORMER'

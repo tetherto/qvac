@@ -7,7 +7,6 @@
  *
  * Defaults to examples/audio/diarization-sample-16k.wav in the source repository.
  * Supply a 16 kHz mono PCM WAV when copying this example elsewhere.
- * No registry constant is available yet; model-output validation is pending weights.
  */
 import { access, constants } from 'node:fs/promises'
 import { loadModel, unloadModel, transcribe, close } from '@qvac/sdk'

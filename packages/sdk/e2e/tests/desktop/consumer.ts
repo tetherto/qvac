@@ -1,3 +1,4 @@
+import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { createExecutor, type TestDefinition } from '@qvac/test-suite'
 import { createStepBindings } from '../shared/step-bindings.js'
@@ -130,6 +131,7 @@ const stepBindings = createStepBindings(resources)
 
 export const executor = createExecutor({
   handlers: [
+    new SpeakerAwareExecutor(resources),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath

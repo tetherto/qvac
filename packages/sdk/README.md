@@ -436,7 +436,7 @@ This will:
 
 ## Speaker-aware transcription
 
-The local ASR 0.8 integration adds `MODEL_TYPES.mossTranscribe` and the
+ASR 0.8 adds `MODEL_TYPES.mossTranscribe` and the
 `@qvac/sdk/moss-transcribe/plugin` entry point. MOSS processes a whole recording;
 use `transcribe`, since it has no duplex streaming or configuration reload.
 
@@ -472,21 +472,18 @@ Segments retain `speaker` labels such as `S01`, zero-based `speakerId`, and
 be combined with hotwords. `maxNewTokens: 0` uses the model default. These two
 MOSS-specific options are rejected for Whisper and Parakeet models.
 
-The local addon already contains Whisper v1.9.4, so existing Whisper calls keep
-their API and use the updated backend. MOSS memory-fit assessment and CoreML
-support are deferred because the current addon does not expose those capabilities.
+The published addon contains Whisper v1.9.4, so existing Whisper calls keep
+their API and use the updated backend. MOSS memory-fit assessment is not yet
+exposed by the SDK; the native fitter requires an explicit audio workload. MOSS
+CoreML support is unavailable in the addon.
 
-The ASR dependencies temporarily use `file:../asr-ggml` for local validation.
-Replace the SDK dependency and both inference declarations with `^0.8.0` and
-regenerate the lockfile when that version is published.
+The SDK and inference use the published `@qvac/asr-ggml` package at `^0.8.0`.
 
 ## Nemotron 3 Diarization
 
 Load a local Nemotron 3 Diarization GGUF with `modelType: 'parakeet-transcription'`.
 The addon detects the variant from the GGUF and supports up to eight speakers,
 including overlapping activity. This model reports speaker turns rather than words.
-The registry catalog has no Nemotron diarization model yet; native model validation
-and generated model constants will follow when the weights become available.
 
 Use `transcribe({ modelId, audioChunk, metadata: true })` for offline diarization.
 Each result can include `speakerSegments` with zero-based `speakerId`, `startMs`,

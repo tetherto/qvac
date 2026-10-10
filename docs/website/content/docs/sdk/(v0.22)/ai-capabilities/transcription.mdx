@@ -7,7 +7,7 @@ schemaType: HowTo
 
 ## Overview
 
-Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer), and end-of-utterance detection (EOU) for duplex streaming.
+Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer and Nemotron 3), and end-of-utterance detection (EOU) for duplex streaming.
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
@@ -78,6 +78,57 @@ For model artifacts available as constants, see [SDK — Models](/sdk#models).
 <Callout type="info">
 **On VAD:** when using `qvac-fabric-speech.cpp`, you can optionally provide a separate model for voice activity detection (VAD); this is recommended. In turn, Parakeet handles VAD internally, so no additional model or configuration is required.
 </Callout>
+
+## Speaker-aware MOSS transcription
+
+MOSS-Transcribe-Diarize performs batch transcription with timestamps and speaker labels.
+Load `MOSS_TRANSCRIBE_DIARIZE_Q8_0` (or the F16/Q5_0 variant) with the
+`moss-transcribe` model type. Registry constants select the type automatically.
+
+```ts
+import { loadModel, transcribe, MOSS_TRANSCRIBE_DIARIZE_Q8_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({ modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0 })
+const segments = await transcribe({
+  modelId,
+  audioChunk: 'meeting.wav',
+  metadata: true,
+  hotwords: ['QVAC'],
+  maxNewTokens: 2048
+})
+```
+
+Segments include `speaker` labels such as `S01`, zero-based `speakerId`, and
+`startMs`/`endMs`. Hotwords are request-specific: up to 64 nonempty terms, each
+at most 64 UTF-8 bytes. A custom `prompt` cannot be combined with hotwords.
+`maxNewTokens: 0` uses the model default. MOSS supports whole-recording batch
+inference; duplex streaming and configuration reload are unavailable.
+
+## Nemotron 3 speaker diarization
+
+Nemotron 3 Diarization runs through `parakeet-transcription` and identifies up to
+eight speakers, including overlapping activity. It returns speaker turns rather
+than recognized words. For local weights:
+
+```ts
+const modelId = await loadModel({
+  modelSrc: './Nemotron-3-Diarization.q8_0.gguf',
+  modelType: 'parakeet-transcription'
+})
+const segments = await transcribe({ modelId, audioChunk: 'meeting.wav', metadata: true })
+const turns = segments.flatMap(segment => segment.speakerSegments ?? [])
+```
+
+Each turn has zero-based `speakerId` and `startMs`/`endMs`. Configure
+`diarizationThreshold` (0–1) and `diarizationMinSegmentMs` (a nonnegative integer)
+at load or per stream in `parakeetStreamingConfig`; omit them to retain native
+model defaults. Load with `streaming: true` before calling `transcribeStream`.
+Enable `streamingSpeakerVad` at load or `emitSpeakerVad` per stream to receive
+speaker-activity events. Streaming diarization metadata retains speaker IDs.
+
+The CLI accepts MOSS `hotwords` and `max_new_tokens` in transcription requests.
+Its `verbose_json` response includes MOSS speaker labels and Nemotron
+`speaker_segments` with `speaker_id`, `start`, and `end` in seconds.
 
 ## Streaming with `transcribeStream()`
 

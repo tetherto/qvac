@@ -1,3 +1,4 @@
+import { speakerAwareTests } from './speaker-aware-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
@@ -453,6 +454,7 @@ const catalog: TestDefinition[] = [
 
   // Parakeet transcription tests
   ...parakeetTests,
+  ...speakerAwareTests,
   ...parakeetStreamTests,
 
   // Completion tests
