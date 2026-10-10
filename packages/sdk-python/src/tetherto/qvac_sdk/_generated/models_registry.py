@@ -4295,6 +4295,60 @@ MOE_35B_INST_Q8_0 = ModelConstant(
     params="35B",
 )
 
+MOSS_TRANSCRIBE_DIARIZE_F16 = ModelConstant(
+    name="MOSS_TRANSCRIBE_DIARIZE_F16",
+    src="registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-f16.gguf",
+    registry_path="qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-f16.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1413282,
+    blob_block_length=27876,
+    blob_byte_offset=92615814446,
+    model_id="moss-transcribe-diarize-f16.gguf",
+    expected_size=1826866496,
+    sha256_checksum="4a0b77c718c57f0cbb59841a47b0a18b3a249406646793ec10ce63f0d3fe8078",
+    addon="moss-transcribe",
+    engine="moss-transcribe",
+    quantization="f16",
+    params="",
+)
+
+MOSS_TRANSCRIBE_DIARIZE_Q5_0 = ModelConstant(
+    name="MOSS_TRANSCRIBE_DIARIZE_Q5_0",
+    src="registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q5_0.gguf",
+    registry_path="qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q5_0.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1441159,
+    blob_block_length=9787,
+    blob_byte_offset=94442725678,
+    model_id="moss-transcribe-diarize-q5_0.gguf",
+    expected_size=641393984,
+    sha256_checksum="69b481694bc2933432a865c05b579db762f90f340a64d0c51e50464b867686f1",
+    addon="moss-transcribe",
+    engine="moss-transcribe",
+    quantization="q5_0",
+    params="",
+)
+
+MOSS_TRANSCRIBE_DIARIZE_Q8_0 = ModelConstant(
+    name="MOSS_TRANSCRIBE_DIARIZE_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1450947,
+    blob_block_length=14956,
+    blob_byte_offset=95084164398,
+    model_id="moss-transcribe-diarize-q8_0.gguf",
+    expected_size=980100416,
+    sha256_checksum="c55e9e912a5e934f7fb9dc74e0d8b0e495c5fe6737bcffe0f325759417c4432c",
+    addon="moss-transcribe",
+    engine="moss-transcribe",
+    quantization="q8_0",
+    params="",
+)
+
 OCR_0_6B_MULTIMODAL_Q4_K_M = ModelConstant(
     name="OCR_0_6B_MULTIMODAL_Q4_K_M",
     src="registry://hf/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
@@ -8404,6 +8458,9 @@ __all__ = [
     "MOE_35B_INST_IQ2_XXS",
     "MOE_35B_INST_Q4_K_M",
     "MOE_35B_INST_Q8_0",
+    "MOSS_TRANSCRIBE_DIARIZE_F16",
+    "MOSS_TRANSCRIBE_DIARIZE_Q5_0",
+    "MOSS_TRANSCRIBE_DIARIZE_Q8_0",
     "OCR_0_6B_MULTIMODAL_Q4_K_M",
     "OCR_3B_MULTIMODAL_Q4_0",
     "OCR_CRAFT",

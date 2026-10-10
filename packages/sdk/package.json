@@ -162,6 +162,10 @@
     "./ggml-rpc-server/provider": {
       "types": "./dist/src/worker/ggml-rpc-server-provider.d.ts",
       "import": "./dist/src/worker/ggml-rpc-server-provider.js"
+    },
+    "./moss-transcribe/plugin": {
+      "types": "./dist/src/worker/plugins/moss-transcribe.d.ts",
+      "import": "./dist/src/worker/plugins/moss-transcribe.js"
     }
   },
   "imports": {
@@ -215,7 +219,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/asr-ggml": "^0.7.0",
+    "@qvac/asr-ggml": "^0.8.0",
     "@qvac/audiogen-ggml": "^0.5.0",
     "@qvac/bci-whispercpp": "^0.10.0",
     "@qvac/classification-ggml": "^0.29.0",

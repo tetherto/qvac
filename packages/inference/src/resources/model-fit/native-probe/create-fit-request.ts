@@ -1,7 +1,8 @@
-import { ModelType, type CanonicalModelType } from '@/schemas/index'
+import { ModelType, type CanonicalModelType, type TranscriptionFitWorkload } from '@/schemas/index'
 import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
 import {
   createBciFitRequest,
+  createMossTranscribeFitRequest,
   createParakeetFitRequest,
   createWhisperFitRequest
 } from '@/resources/model-fit/native-probe/engines/asr'
@@ -20,6 +21,7 @@ export interface CreateFitRequestParams {
   modelType: CanonicalModelType
   modelPath: string
   modelConfig: unknown
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
   artifacts?: Record<string, string> | undefined
   isShardedModel: boolean
   /** Free memory that must remain for the projection to count as fitting. */
@@ -38,6 +40,13 @@ export interface CreateFitRequestParams {
 export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan {
   const { modelType, modelPath, modelConfig, artifacts, marginBytes } = params
 
+  if (params.transcriptionWorkload !== undefined && modelType !== ModelType.mossTranscribe) {
+    return {
+      supported: false,
+      detail: 'transcriptionWorkload is supported only for MOSS transcription'
+    }
+  }
+
   // Every engine reads whole files rather than a shard set, so a split model is
   // not a shape any of them can be pointed at.
   if (params.isShardedModel) {
@@ -52,6 +61,11 @@ export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan
   const common = { modelPath, modelConfig, artifacts, marginBytes }
 
   switch (modelType) {
+    case ModelType.mossTranscribe:
+      return createMossTranscribeFitRequest({
+        ...common,
+        transcriptionWorkload: params.transcriptionWorkload
+      })
     case ModelType.whispercppTranscription:
       return createWhisperFitRequest(common)
     case ModelType.parakeetTranscription:

@@ -1055,8 +1055,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/asr-ggml':
-        specifier: ^0.7.0
-        version: 0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.8.0
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
         specifier: ^0.5.0
         version: 0.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1074,7 +1074,7 @@ importers:
         version: 0.26.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: ^0.45.0
-        version: link:../embed-llamacpp
+        version: 0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ggml-rpc-server':
         specifier: ^0.2.0
         version: link:../ggml-rpc-server
@@ -1095,7 +1095,7 @@ importers:
         version: 0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/vla-ggml':
         specifier: ^0.30.0
-        version: link:../vla-ggml
+        version: 0.30.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@types/brittle':
         specifier: ^3.5.0
         version: 3.5.0
@@ -1492,7 +1492,7 @@ importers:
     devDependencies:
       '@qvac/embed-llamacpp':
         specifier: ^0.45.0
-        version: link:../embed-llamacpp
+        version: 0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/llm-llamacpp':
         specifier: ^0.57.0
         version: 0.57.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1742,8 +1742,8 @@ importers:
   packages/sdk:
     dependencies:
       '@qvac/asr-ggml':
-        specifier: ^0.7.0
-        version: 0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.8.0
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
         specifier: ^0.5.0
         version: 0.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1761,7 +1761,7 @@ importers:
         version: 0.26.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: ^0.45.0
-        version: link:../embed-llamacpp
+        version: 0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
@@ -1791,7 +1791,7 @@ importers:
         version: 0.10.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/vla-ggml':
         specifier: ^0.30.0
-        version: link:../vla-ggml
+        version: 0.30.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-abort-controller:
         specifier: ^1.0.0
         version: 1.1.2
@@ -4320,44 +4320,8 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
-  '@qvac/asr-ggml-darwin-arm64@0.7.0':
-    resolution: {integrity: sha512-jGpV4vYlpOn3+vjH3+ejulssyDi8D8L2I1OBOUYUcHCEQlKGiQuOlY172f+AldC4pWqI10y3L9P5OAhAVwgR5Q==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@qvac/asr-ggml-darwin-x64@0.7.0':
-    resolution: {integrity: sha512-eCrYCGFsTu19WwSo7JLKkFwttogZSdKMMR5sETBJYspV94t5DRvmGW78N4IOR5UT5N2Vtp/o8NVx0hVixYwH8A==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@qvac/asr-ggml-linux-arm64@0.7.0':
-    resolution: {integrity: sha512-Xb9jIBkYiHhIllYy47+Aquushl8PQtAUPhWt0kb0wvXNR1uRJvOCm45VkcIR8GAtELxAqLlPHCe2y3gexnFjmw==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/asr-ggml-linux-x64@0.7.0':
-    resolution: {integrity: sha512-qF45QUDYoudIHkajoZ+YomwhukH2K3yggVPlgflwqo+dJ10KKK+9UMoox5DAbc7CO4t00y+GuJqALjR+tCTrAg==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/asr-ggml-win32-x64@0.7.0':
-    resolution: {integrity: sha512-KB3xVFi3c98irYXXJk7QsU9cUb57R26I6XEq98od3Uai13zGdNSafvqKp0DpBg4XbV06vG+GS3XPgn60jn+HPg==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [x64]
-    os: [win32]
-
   '@qvac/asr-ggml@0.3.3':
     resolution: {integrity: sha512-Ywgx3+y4DgxOz8wQe35/QMxt4eUND8cqdWKRhrD3ag5Nf5cBwV1eQSN9uXZlA75J4InJyi5sI7sAC4pXlnYmKQ==}
-    engines: {bare: '>=1.20.0'}
-
-  '@qvac/asr-ggml@0.7.0':
-    resolution: {integrity: sha512-lwqdGU67niMt5DufhWh9LeU8Tz7bOgaJ3fyS2WJJv9bBdANPh7N4lAhlmq4GVDWaxNKQHwD9Y0uXQszOIYEdXw==}
     engines: {bare: '>=1.20.0'}
 
   '@qvac/audiogen-ggml-darwin-arm64@0.5.1':
@@ -4415,6 +4379,10 @@ packages:
   '@qvac/dl-hyperdrive@0.1.1':
     resolution: {integrity: sha512-jTrtxgjSr43uHHs5UoIMQZ4ztaH92d4xVwWSB/GC/FgD424S6BK0C0NUo3TJ5p07kjdYXvnYzu1HazxQ0IJa5Q==}
     deprecated: 'Deprecated: no longer maintained; removed from the QVAC monorepo.'
+
+  '@qvac/embed-llamacpp@0.45.0':
+    resolution: {integrity: sha512-qlSKct7g9NTXyXRQIHfMGdsF9ZoZqHj7MmfdVlaaQi9McFjKM0TM69aiAyI9kriTIJJKNPTavP8lD2jHAoEHOQ==}
+    engines: {bare: '>=1.24.0'}
 
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
@@ -4550,6 +4518,10 @@ packages:
   '@qvac/tts-ggml@0.10.1':
     resolution: {integrity: sha512-UNqFQy2XItu8Lwaa/6kEexay1ihJOekq9rUVIsADWn2JxrD2Rx84f/B5g+47lSo5hBukezVe2Sn4zjTKQzWCvA==}
     engines: {bare: '>=1.19.0'}
+
+  '@qvac/vla-ggml@0.30.0':
+    resolution: {integrity: sha512-OW8HSJALYN8D2v5CKpA2Jp0fmXFsp3D3Y9eLshczNXcxoO8du1ABc37o7qd6GcvFd+w3oGgKnEUxZY6tTTF7Qg==}
+    engines: {bare: '>=1.24.0'}
 
   '@react-native/assets-registry@0.86.0':
     resolution: {integrity: sha512-nIaXbm2jX1OTYp0qbviJ3O6KZivoE8z3BnhUQ2LsqfZSWRoOK/n1qsiAr6oALiNKWnXY3j2KPwtYORnZzp8xew==}
@@ -13630,21 +13602,6 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
-  '@qvac/asr-ggml-darwin-arm64@0.7.0':
-    optional: true
-
-  '@qvac/asr-ggml-darwin-x64@0.7.0':
-    optional: true
-
-  '@qvac/asr-ggml-linux-arm64@0.7.0':
-    optional: true
-
-  '@qvac/asr-ggml-linux-x64@0.7.0':
-    optional: true
-
-  '@qvac/asr-ggml-win32-x64@0.7.0':
-    optional: true
-
   '@qvac/asr-ggml@0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/error': 0.1.1
@@ -13654,26 +13611,6 @@ snapshots:
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url: 2.4.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
-  '@qvac/asr-ggml@0.7.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-    optionalDependencies:
-      '@qvac/asr-ggml-darwin-arm64': 0.7.0
-      '@qvac/asr-ggml-darwin-x64': 0.7.0
-      '@qvac/asr-ggml-linux-arm64': 0.7.0
-      '@qvac/asr-ggml-linux-x64': 0.7.0
-      '@qvac/asr-ggml-win32-x64': 0.7.0
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -13765,6 +13702,18 @@ snapshots:
       - bare-url
       - react-native-b4a
       - sodium-javascript
+
+  '@qvac/embed-llamacpp@0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/fabric': 0.20.0
+      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
 
   '@qvac/error@0.1.1': {}
 
@@ -14078,6 +14027,19 @@ snapshots:
       - bare-events
       - bare-pipe
       - bare-tcp
+      - react-native-b4a
+
+  '@qvac/vla-ggml@0.30.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/fabric': 0.20.0
+      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
       - react-native-b4a
 
   '@react-native/assets-registry@0.86.0': {}

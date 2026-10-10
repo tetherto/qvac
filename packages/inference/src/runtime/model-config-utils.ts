@@ -7,7 +7,11 @@ import {
   type RuntimeContext
 } from '@/schemas/index'
 import { llmConfigSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetRuntimeConfigSchema } from '@/schemas/transcription-config'
+import {
+  whisperConfigSchema,
+  parakeetRuntimeConfigSchema,
+  mossTranscribeConfigSchema
+} from '@/schemas/transcription-config'
 import { bciConfigSchema } from '@/schemas/bci-config'
 import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
@@ -21,6 +25,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.whispercppTranscription]: 'whisper',
   [ModelType.bciWhispercppTranscription]: 'bci',
   [ModelType.parakeetTranscription]: 'parakeet',
+  [ModelType.mossTranscribe]: 'moss-transcribe',
   [ModelType.nmtcppTranslation]: 'nmt',
   [ModelType.onnxTts]: 'tts',
   [ModelType.ttsGgml]: 'tts',
@@ -37,6 +42,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
+  [ModelType.mossTranscribe]: mossTranscribeConfigSchema,
   [ModelType.ggmlOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,
   [ModelType.audiogenGgml]: audioGenConfigSchema,

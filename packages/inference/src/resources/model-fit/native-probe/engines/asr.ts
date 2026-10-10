@@ -1,6 +1,16 @@
-import type { ParakeetFitRequest, WhisperFitRequest } from '@qvac/asr-ggml'
+import type {
+  ParakeetFitRequest,
+  WhisperFitRequest,
+  MossTranscribeFitRequest
+} from '@qvac/asr-ggml'
 
-import type { BciConfig, ParakeetConfig, WhisperConfig } from '@/schemas/index'
+import type {
+  BciConfig,
+  ParakeetConfig,
+  WhisperConfig,
+  MossTranscribeConfig,
+  TranscriptionFitWorkload
+} from '@/schemas/index'
 import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-fit-request'
 import { gpuLayersFromGate } from '@/resources/model-fit/native-probe/engines/gpu'
 
@@ -9,6 +19,32 @@ export interface AsrFitRequestParams {
   modelConfig: unknown
   artifacts?: Record<string, string> | undefined
   marginBytes?: number | undefined
+}
+
+export function createMossTranscribeFitRequest(
+  params: AsrFitRequestParams & { transcriptionWorkload?: TranscriptionFitWorkload | undefined }
+): FitRequestPlan {
+  if (params.transcriptionWorkload === undefined) {
+    return {
+      supported: false,
+      detail: 'MOSS fit requires transcriptionWorkload with explicit audioSeconds'
+    }
+  }
+  const config = (params.modelConfig ?? {}) as MossTranscribeConfig
+  const workload = params.transcriptionWorkload
+  const request: MossTranscribeFitRequest = {
+    engine: 'moss-transcribe',
+    modelPath: params.modelPath,
+    audioSeconds: workload.audioSeconds,
+    ...(workload.prompt !== undefined && { prompt: workload.prompt }),
+    ...(workload.hotwords !== undefined && { hotwords: workload.hotwords }),
+    ...(workload.maxNewTokens !== undefined && { maxNewTokens: workload.maxNewTokens }),
+    gpuLayers: gpuLayersFromGate(config.useGPU),
+    ...(config.maxThreads !== undefined && { threads: config.maxThreads }),
+    ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir }),
+    ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes })
+  }
+  return { supported: true, probe: { engine: 'asr-ggml', request } }
 }
 
 /**

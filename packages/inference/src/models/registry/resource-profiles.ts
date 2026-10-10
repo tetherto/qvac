@@ -1582,6 +1582,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     artifactBytes: 22864691,
     assumptions: ['artifactBytes sums 4 companion-set files']
   },
+  '4a0b77c718c57f0cbb59841a47b0a18b3a249406646793ec10ce63f0d3fe8078': {
+    schemaVersion: 1,
+    engine: 'moss-transcribe',
+    artifactBytes: 1826866496
+  },
   '4a37286742244a130548b79823c9707bc0e56f373361e2cb56402f82e862c2b0': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2221,6 +2226,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 3572436
+  },
+  '69b481694bc2933432a865c05b579db762f90f340a64d0c51e50464b867686f1': {
+    schemaVersion: 1,
+    engine: 'moss-transcribe',
+    artifactBytes: 641393984
   },
   '69f00c782198dc911062c9d1222fe39c85a6f954211a96796050aec3f0980ed7': {
     schemaVersion: 1,
@@ -4314,6 +4324,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'whispercpp-transcription',
     artifactBytes: 81768585
+  },
+  c55e9e912a5e934f7fb9dc74e0d8b0e495c5fe6737bcffe0f325759417c4432c: {
+    schemaVersion: 1,
+    engine: 'moss-transcribe',
+    artifactBytes: 980100416
   },
   c577b9a86e7e048a0b7eada054f4dd79a56bbfa911fbdacf900ac5b567cbb7d9: {
     schemaVersion: 1,

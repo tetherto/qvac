@@ -40,7 +40,9 @@ function buildTranscribeRequest(
       typeof params.audioChunk === 'string'
         ? { type: 'filePath', value: params.audioChunk }
         : { type: 'base64', value: params.audioChunk.toString('base64') },
-    ...(params.prompt && { prompt: params.prompt }),
+    ...(params.prompt !== undefined && { prompt: params.prompt }),
+    ...(params.hotwords !== undefined && { hotwords: params.hotwords }),
+    ...(params.maxNewTokens !== undefined && { maxNewTokens: params.maxNewTokens }),
     ...(params.metadata === true && { metadata: true }),
     requestId
   }
@@ -582,7 +584,8 @@ export function processLineConversation(
           type: 'vad',
           speaking: response.vad.speaking,
           probability: response.vad.probability,
-          ...(response.vad.source && { source: response.vad.source })
+          ...(response.vad.source && { source: response.vad.source }),
+          ...(response.vad.speakerId !== undefined && { speakerId: response.vad.speakerId })
         }
       }
       if (response.endOfTurn) {

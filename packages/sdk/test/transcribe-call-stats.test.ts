@@ -59,3 +59,64 @@ test('batch transcription rejects stats when the response stream fails', async (
   t.is((outcomes[0] as PromiseRejectedResult).reason, failure)
   t.is((outcomes[1] as PromiseRejectedResult).reason, failure)
 })
+
+test('MOSS batch call forwards request options and preserves speaker labels', async (t) => {
+  let request: unknown
+  const responses = async function* (value: unknown) {
+    request = value
+    yield {
+      type: 'transcribe',
+      segment: {
+        text: 'QVAC',
+        startMs: 100,
+        endMs: 300,
+        append: false,
+        id: 0,
+        speaker: 'S01',
+        speakerId: 0
+      }
+    }
+    yield { type: 'transcribe', done: true }
+  } as typeof stream
+  const result = await createTranscribeCall(
+    {
+      modelId: 'moss',
+      audioChunk: 'audio.wav',
+      metadata: true,
+      hotwords: ['QVAC'],
+      maxNewTokens: 0
+    },
+    undefined,
+    responses
+  )
+  t.alike((request as { hotwords: string[] }).hotwords, ['QVAC'])
+  t.is((request as { maxNewTokens: number }).maxNewTokens, 0)
+  t.alike(result, [
+    { text: 'QVAC', startMs: 100, endMs: 300, append: false, id: 0, speaker: 'S01', speakerId: 0 }
+  ])
+})
+
+test('Nemotron batch client preserves overlapping turns for all eight speakers', async (t) => {
+  const speakerSegments = Array.from({ length: 8 }, (_, speakerId) => ({
+    speakerId,
+    startMs: 250,
+    endMs: 1750
+  }))
+  const segment = {
+    text: 'Speaker activity',
+    startMs: 0,
+    endMs: 0,
+    append: false,
+    id: 0,
+    speakerSegments
+  }
+  const result = await createTranscribeCall(
+    { modelId: 'nemotron-diarization', audioChunk: 'audio.wav', metadata: true },
+    undefined,
+    responseStream([
+      { type: 'transcribe', segment },
+      { type: 'transcribe', done: true }
+    ])
+  )
+  t.alike(result, [segment])
+})

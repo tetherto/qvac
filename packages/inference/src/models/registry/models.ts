@@ -3749,6 +3749,54 @@ export const models = [
     params: '3B'
   },
   {
+    name: 'MOSS_TRANSCRIBE_DIARIZE_F16',
+    registryPath: 'qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 1413282,
+    blobBlockLength: 27876,
+    blobByteOffset: 92615814446,
+    modelId: 'moss-transcribe-diarize-f16.gguf',
+    addon: 'moss-transcribe',
+    expectedSize: 1826866496,
+    sha256Checksum: '4a0b77c718c57f0cbb59841a47b0a18b3a249406646793ec10ce63f0d3fe8078',
+    engine: 'moss-transcribe',
+    quantization: 'f16',
+    params: ''
+  },
+  {
+    name: 'MOSS_TRANSCRIBE_DIARIZE_Q5_0',
+    registryPath: 'qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q5_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 1441159,
+    blobBlockLength: 9787,
+    blobByteOffset: 94442725678,
+    modelId: 'moss-transcribe-diarize-q5_0.gguf',
+    addon: 'moss-transcribe',
+    expectedSize: 641393984,
+    sha256Checksum: '69b481694bc2933432a865c05b579db762f90f340a64d0c51e50464b867686f1',
+    engine: 'moss-transcribe',
+    quantization: 'q5_0',
+    params: ''
+  },
+  {
+    name: 'MOSS_TRANSCRIBE_DIARIZE_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: 'dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1',
+    blobBlockOffset: 1450947,
+    blobBlockLength: 14956,
+    blobByteOffset: 95084164398,
+    modelId: 'moss-transcribe-diarize-q8_0.gguf',
+    addon: 'moss-transcribe',
+    expectedSize: 980100416,
+    sha256Checksum: 'c55e9e912a5e934f7fb9dc74e0d8b0e495c5fe6737bcffe0f325759417c4432c',
+    engine: 'moss-transcribe',
+    quantization: 'q8_0',
+    params: ''
+  },
+  {
     name: 'BERGAMOT_AR_EN_LEX',
     registryPath: 'qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/lex.50.50.aren.s2t.bin',
     registrySource: 's3',
@@ -23326,8 +23374,44 @@ export const OCR_3B_MULTIMODAL_Q4_0 = {
   params: models[184].params
 } as const
 
-export const BERGAMOT_AR_EN = {
-  name: 'BERGAMOT_AR_EN',
+export const MOSS_TRANSCRIBE_DIARIZE_F16 = {
+  name: 'MOSS_TRANSCRIBE_DIARIZE_F16',
+  src: `registry://${models[185].registrySource}/${models[185].registryPath}`,
+  registryPath: models[185].registryPath,
+  registrySource: models[185].registrySource,
+  blobCoreKey: models[185].blobCoreKey,
+  blobBlockOffset: models[185].blobBlockOffset,
+  blobBlockLength: models[185].blobBlockLength,
+  blobByteOffset: models[185].blobByteOffset,
+  modelId: models[185].modelId,
+  expectedSize: models[185].expectedSize,
+  sha256Checksum: models[185].sha256Checksum,
+  addon: models[185].addon,
+  engine: models[185].engine,
+  quantization: models[185].quantization,
+  params: models[185].params
+} as const
+
+export const MOSS_TRANSCRIBE_DIARIZE_Q5_0 = {
+  name: 'MOSS_TRANSCRIBE_DIARIZE_Q5_0',
+  src: `registry://${models[186].registrySource}/${models[186].registryPath}`,
+  registryPath: models[186].registryPath,
+  registrySource: models[186].registrySource,
+  blobCoreKey: models[186].blobCoreKey,
+  blobBlockOffset: models[186].blobBlockOffset,
+  blobBlockLength: models[186].blobBlockLength,
+  blobByteOffset: models[186].blobByteOffset,
+  modelId: models[186].modelId,
+  expectedSize: models[186].expectedSize,
+  sha256Checksum: models[186].sha256Checksum,
+  addon: models[186].addon,
+  engine: models[186].engine,
+  quantization: models[186].quantization,
+  params: models[186].params
+} as const
+
+export const MOSS_TRANSCRIBE_DIARIZE_Q8_0 = {
+  name: 'MOSS_TRANSCRIBE_DIARIZE_Q8_0',
   src: `registry://${models[187].registrySource}/${models[187].registryPath}`,
   registryPath: models[187].registryPath,
   registrySource: models[187].registrySource,
@@ -23344,1844 +23428,1826 @@ export const BERGAMOT_AR_EN = {
   params: models[187].params
 } as const
 
+export const BERGAMOT_AR_EN = {
+  name: 'BERGAMOT_AR_EN',
+  src: `registry://${models[190].registrySource}/${models[190].registryPath}`,
+  registryPath: models[190].registryPath,
+  registrySource: models[190].registrySource,
+  blobCoreKey: models[190].blobCoreKey,
+  blobBlockOffset: models[190].blobBlockOffset,
+  blobBlockLength: models[190].blobBlockLength,
+  blobByteOffset: models[190].blobByteOffset,
+  modelId: models[190].modelId,
+  expectedSize: models[190].expectedSize,
+  sha256Checksum: models[190].sha256Checksum,
+  addon: models[190].addon,
+  engine: models[190].engine,
+  quantization: models[190].quantization,
+  params: models[190].params
+} as const
+
 export const BERGAMOT_AZ_EN = {
   name: 'BERGAMOT_AZ_EN',
-  src: `registry://${models[191].registrySource}/${models[191].registryPath}`,
-  registryPath: models[191].registryPath,
-  registrySource: models[191].registrySource,
-  blobCoreKey: models[191].blobCoreKey,
-  blobBlockOffset: models[191].blobBlockOffset,
-  blobBlockLength: models[191].blobBlockLength,
-  blobByteOffset: models[191].blobByteOffset,
-  modelId: models[191].modelId,
-  expectedSize: models[191].expectedSize,
-  sha256Checksum: models[191].sha256Checksum,
-  addon: models[191].addon,
-  engine: models[191].engine,
-  quantization: models[191].quantization,
-  params: models[191].params
+  src: `registry://${models[194].registrySource}/${models[194].registryPath}`,
+  registryPath: models[194].registryPath,
+  registrySource: models[194].registrySource,
+  blobCoreKey: models[194].blobCoreKey,
+  blobBlockOffset: models[194].blobBlockOffset,
+  blobBlockLength: models[194].blobBlockLength,
+  blobByteOffset: models[194].blobByteOffset,
+  modelId: models[194].modelId,
+  expectedSize: models[194].expectedSize,
+  sha256Checksum: models[194].sha256Checksum,
+  addon: models[194].addon,
+  engine: models[194].engine,
+  quantization: models[194].quantization,
+  params: models[194].params
 } as const
 
 export const BERGAMOT_BE_EN = {
   name: 'BERGAMOT_BE_EN',
-  src: `registry://${models[195].registrySource}/${models[195].registryPath}`,
-  registryPath: models[195].registryPath,
-  registrySource: models[195].registrySource,
-  blobCoreKey: models[195].blobCoreKey,
-  blobBlockOffset: models[195].blobBlockOffset,
-  blobBlockLength: models[195].blobBlockLength,
-  blobByteOffset: models[195].blobByteOffset,
-  modelId: models[195].modelId,
-  expectedSize: models[195].expectedSize,
-  sha256Checksum: models[195].sha256Checksum,
-  addon: models[195].addon,
-  engine: models[195].engine,
-  quantization: models[195].quantization,
-  params: models[195].params
+  src: `registry://${models[198].registrySource}/${models[198].registryPath}`,
+  registryPath: models[198].registryPath,
+  registrySource: models[198].registrySource,
+  blobCoreKey: models[198].blobCoreKey,
+  blobBlockOffset: models[198].blobBlockOffset,
+  blobBlockLength: models[198].blobBlockLength,
+  blobByteOffset: models[198].blobByteOffset,
+  modelId: models[198].modelId,
+  expectedSize: models[198].expectedSize,
+  sha256Checksum: models[198].sha256Checksum,
+  addon: models[198].addon,
+  engine: models[198].engine,
+  quantization: models[198].quantization,
+  params: models[198].params
 } as const
 
 export const BERGAMOT_BG_EN = {
   name: 'BERGAMOT_BG_EN',
-  src: `registry://${models[199].registrySource}/${models[199].registryPath}`,
-  registryPath: models[199].registryPath,
-  registrySource: models[199].registrySource,
-  blobCoreKey: models[199].blobCoreKey,
-  blobBlockOffset: models[199].blobBlockOffset,
-  blobBlockLength: models[199].blobBlockLength,
-  blobByteOffset: models[199].blobByteOffset,
-  modelId: models[199].modelId,
-  expectedSize: models[199].expectedSize,
-  sha256Checksum: models[199].sha256Checksum,
-  addon: models[199].addon,
-  engine: models[199].engine,
-  quantization: models[199].quantization,
-  params: models[199].params
+  src: `registry://${models[202].registrySource}/${models[202].registryPath}`,
+  registryPath: models[202].registryPath,
+  registrySource: models[202].registrySource,
+  blobCoreKey: models[202].blobCoreKey,
+  blobBlockOffset: models[202].blobBlockOffset,
+  blobBlockLength: models[202].blobBlockLength,
+  blobByteOffset: models[202].blobByteOffset,
+  modelId: models[202].modelId,
+  expectedSize: models[202].expectedSize,
+  sha256Checksum: models[202].sha256Checksum,
+  addon: models[202].addon,
+  engine: models[202].engine,
+  quantization: models[202].quantization,
+  params: models[202].params
 } as const
 
 export const BERGAMOT_BN_EN = {
   name: 'BERGAMOT_BN_EN',
-  src: `registry://${models[203].registrySource}/${models[203].registryPath}`,
-  registryPath: models[203].registryPath,
-  registrySource: models[203].registrySource,
-  blobCoreKey: models[203].blobCoreKey,
-  blobBlockOffset: models[203].blobBlockOffset,
-  blobBlockLength: models[203].blobBlockLength,
-  blobByteOffset: models[203].blobByteOffset,
-  modelId: models[203].modelId,
-  expectedSize: models[203].expectedSize,
-  sha256Checksum: models[203].sha256Checksum,
-  addon: models[203].addon,
-  engine: models[203].engine,
-  quantization: models[203].quantization,
-  params: models[203].params
+  src: `registry://${models[206].registrySource}/${models[206].registryPath}`,
+  registryPath: models[206].registryPath,
+  registrySource: models[206].registrySource,
+  blobCoreKey: models[206].blobCoreKey,
+  blobBlockOffset: models[206].blobBlockOffset,
+  blobBlockLength: models[206].blobBlockLength,
+  blobByteOffset: models[206].blobByteOffset,
+  modelId: models[206].modelId,
+  expectedSize: models[206].expectedSize,
+  sha256Checksum: models[206].sha256Checksum,
+  addon: models[206].addon,
+  engine: models[206].engine,
+  quantization: models[206].quantization,
+  params: models[206].params
 } as const
 
 export const BERGAMOT_BS_EN = {
   name: 'BERGAMOT_BS_EN',
-  src: `registry://${models[207].registrySource}/${models[207].registryPath}`,
-  registryPath: models[207].registryPath,
-  registrySource: models[207].registrySource,
-  blobCoreKey: models[207].blobCoreKey,
-  blobBlockOffset: models[207].blobBlockOffset,
-  blobBlockLength: models[207].blobBlockLength,
-  blobByteOffset: models[207].blobByteOffset,
-  modelId: models[207].modelId,
-  expectedSize: models[207].expectedSize,
-  sha256Checksum: models[207].sha256Checksum,
-  addon: models[207].addon,
-  engine: models[207].engine,
-  quantization: models[207].quantization,
-  params: models[207].params
+  src: `registry://${models[210].registrySource}/${models[210].registryPath}`,
+  registryPath: models[210].registryPath,
+  registrySource: models[210].registrySource,
+  blobCoreKey: models[210].blobCoreKey,
+  blobBlockOffset: models[210].blobBlockOffset,
+  blobBlockLength: models[210].blobBlockLength,
+  blobByteOffset: models[210].blobByteOffset,
+  modelId: models[210].modelId,
+  expectedSize: models[210].expectedSize,
+  sha256Checksum: models[210].sha256Checksum,
+  addon: models[210].addon,
+  engine: models[210].engine,
+  quantization: models[210].quantization,
+  params: models[210].params
 } as const
 
 export const BERGAMOT_CA_EN = {
   name: 'BERGAMOT_CA_EN',
-  src: `registry://${models[211].registrySource}/${models[211].registryPath}`,
-  registryPath: models[211].registryPath,
-  registrySource: models[211].registrySource,
-  blobCoreKey: models[211].blobCoreKey,
-  blobBlockOffset: models[211].blobBlockOffset,
-  blobBlockLength: models[211].blobBlockLength,
-  blobByteOffset: models[211].blobByteOffset,
-  modelId: models[211].modelId,
-  expectedSize: models[211].expectedSize,
-  sha256Checksum: models[211].sha256Checksum,
-  addon: models[211].addon,
-  engine: models[211].engine,
-  quantization: models[211].quantization,
-  params: models[211].params
+  src: `registry://${models[214].registrySource}/${models[214].registryPath}`,
+  registryPath: models[214].registryPath,
+  registrySource: models[214].registrySource,
+  blobCoreKey: models[214].blobCoreKey,
+  blobBlockOffset: models[214].blobBlockOffset,
+  blobBlockLength: models[214].blobBlockLength,
+  blobByteOffset: models[214].blobByteOffset,
+  modelId: models[214].modelId,
+  expectedSize: models[214].expectedSize,
+  sha256Checksum: models[214].sha256Checksum,
+  addon: models[214].addon,
+  engine: models[214].engine,
+  quantization: models[214].quantization,
+  params: models[214].params
 } as const
 
 export const BERGAMOT_CS_EN = {
   name: 'BERGAMOT_CS_EN',
-  src: `registry://${models[215].registrySource}/${models[215].registryPath}`,
-  registryPath: models[215].registryPath,
-  registrySource: models[215].registrySource,
-  blobCoreKey: models[215].blobCoreKey,
-  blobBlockOffset: models[215].blobBlockOffset,
-  blobBlockLength: models[215].blobBlockLength,
-  blobByteOffset: models[215].blobByteOffset,
-  modelId: models[215].modelId,
-  expectedSize: models[215].expectedSize,
-  sha256Checksum: models[215].sha256Checksum,
-  addon: models[215].addon,
-  engine: models[215].engine,
-  quantization: models[215].quantization,
-  params: models[215].params
+  src: `registry://${models[218].registrySource}/${models[218].registryPath}`,
+  registryPath: models[218].registryPath,
+  registrySource: models[218].registrySource,
+  blobCoreKey: models[218].blobCoreKey,
+  blobBlockOffset: models[218].blobBlockOffset,
+  blobBlockLength: models[218].blobBlockLength,
+  blobByteOffset: models[218].blobByteOffset,
+  modelId: models[218].modelId,
+  expectedSize: models[218].expectedSize,
+  sha256Checksum: models[218].sha256Checksum,
+  addon: models[218].addon,
+  engine: models[218].engine,
+  quantization: models[218].quantization,
+  params: models[218].params
 } as const
 
 export const BERGAMOT_DA_EN = {
   name: 'BERGAMOT_DA_EN',
-  src: `registry://${models[219].registrySource}/${models[219].registryPath}`,
-  registryPath: models[219].registryPath,
-  registrySource: models[219].registrySource,
-  blobCoreKey: models[219].blobCoreKey,
-  blobBlockOffset: models[219].blobBlockOffset,
-  blobBlockLength: models[219].blobBlockLength,
-  blobByteOffset: models[219].blobByteOffset,
-  modelId: models[219].modelId,
-  expectedSize: models[219].expectedSize,
-  sha256Checksum: models[219].sha256Checksum,
-  addon: models[219].addon,
-  engine: models[219].engine,
-  quantization: models[219].quantization,
-  params: models[219].params
+  src: `registry://${models[222].registrySource}/${models[222].registryPath}`,
+  registryPath: models[222].registryPath,
+  registrySource: models[222].registrySource,
+  blobCoreKey: models[222].blobCoreKey,
+  blobBlockOffset: models[222].blobBlockOffset,
+  blobBlockLength: models[222].blobBlockLength,
+  blobByteOffset: models[222].blobByteOffset,
+  modelId: models[222].modelId,
+  expectedSize: models[222].expectedSize,
+  sha256Checksum: models[222].sha256Checksum,
+  addon: models[222].addon,
+  engine: models[222].engine,
+  quantization: models[222].quantization,
+  params: models[222].params
 } as const
 
 export const BERGAMOT_DE_EN = {
   name: 'BERGAMOT_DE_EN',
-  src: `registry://${models[223].registrySource}/${models[223].registryPath}`,
-  registryPath: models[223].registryPath,
-  registrySource: models[223].registrySource,
-  blobCoreKey: models[223].blobCoreKey,
-  blobBlockOffset: models[223].blobBlockOffset,
-  blobBlockLength: models[223].blobBlockLength,
-  blobByteOffset: models[223].blobByteOffset,
-  modelId: models[223].modelId,
-  expectedSize: models[223].expectedSize,
-  sha256Checksum: models[223].sha256Checksum,
-  addon: models[223].addon,
-  engine: models[223].engine,
-  quantization: models[223].quantization,
-  params: models[223].params
+  src: `registry://${models[226].registrySource}/${models[226].registryPath}`,
+  registryPath: models[226].registryPath,
+  registrySource: models[226].registrySource,
+  blobCoreKey: models[226].blobCoreKey,
+  blobBlockOffset: models[226].blobBlockOffset,
+  blobBlockLength: models[226].blobBlockLength,
+  blobByteOffset: models[226].blobByteOffset,
+  modelId: models[226].modelId,
+  expectedSize: models[226].expectedSize,
+  sha256Checksum: models[226].sha256Checksum,
+  addon: models[226].addon,
+  engine: models[226].engine,
+  quantization: models[226].quantization,
+  params: models[226].params
 } as const
 
 export const BERGAMOT_EL_EN = {
   name: 'BERGAMOT_EL_EN',
-  src: `registry://${models[227].registrySource}/${models[227].registryPath}`,
-  registryPath: models[227].registryPath,
-  registrySource: models[227].registrySource,
-  blobCoreKey: models[227].blobCoreKey,
-  blobBlockOffset: models[227].blobBlockOffset,
-  blobBlockLength: models[227].blobBlockLength,
-  blobByteOffset: models[227].blobByteOffset,
-  modelId: models[227].modelId,
-  expectedSize: models[227].expectedSize,
-  sha256Checksum: models[227].sha256Checksum,
-  addon: models[227].addon,
-  engine: models[227].engine,
-  quantization: models[227].quantization,
-  params: models[227].params
+  src: `registry://${models[230].registrySource}/${models[230].registryPath}`,
+  registryPath: models[230].registryPath,
+  registrySource: models[230].registrySource,
+  blobCoreKey: models[230].blobCoreKey,
+  blobBlockOffset: models[230].blobBlockOffset,
+  blobBlockLength: models[230].blobBlockLength,
+  blobByteOffset: models[230].blobByteOffset,
+  modelId: models[230].modelId,
+  expectedSize: models[230].expectedSize,
+  sha256Checksum: models[230].sha256Checksum,
+  addon: models[230].addon,
+  engine: models[230].engine,
+  quantization: models[230].quantization,
+  params: models[230].params
 } as const
 
 export const BERGAMOT_EN_AR = {
   name: 'BERGAMOT_EN_AR',
-  src: `registry://${models[231].registrySource}/${models[231].registryPath}`,
-  registryPath: models[231].registryPath,
-  registrySource: models[231].registrySource,
-  blobCoreKey: models[231].blobCoreKey,
-  blobBlockOffset: models[231].blobBlockOffset,
-  blobBlockLength: models[231].blobBlockLength,
-  blobByteOffset: models[231].blobByteOffset,
-  modelId: models[231].modelId,
-  expectedSize: models[231].expectedSize,
-  sha256Checksum: models[231].sha256Checksum,
-  addon: models[231].addon,
-  engine: models[231].engine,
-  quantization: models[231].quantization,
-  params: models[231].params
+  src: `registry://${models[234].registrySource}/${models[234].registryPath}`,
+  registryPath: models[234].registryPath,
+  registrySource: models[234].registrySource,
+  blobCoreKey: models[234].blobCoreKey,
+  blobBlockOffset: models[234].blobBlockOffset,
+  blobBlockLength: models[234].blobBlockLength,
+  blobByteOffset: models[234].blobByteOffset,
+  modelId: models[234].modelId,
+  expectedSize: models[234].expectedSize,
+  sha256Checksum: models[234].sha256Checksum,
+  addon: models[234].addon,
+  engine: models[234].engine,
+  quantization: models[234].quantization,
+  params: models[234].params
 } as const
 
 export const BERGAMOT_EN_AZ = {
   name: 'BERGAMOT_EN_AZ',
-  src: `registry://${models[235].registrySource}/${models[235].registryPath}`,
-  registryPath: models[235].registryPath,
-  registrySource: models[235].registrySource,
-  blobCoreKey: models[235].blobCoreKey,
-  blobBlockOffset: models[235].blobBlockOffset,
-  blobBlockLength: models[235].blobBlockLength,
-  blobByteOffset: models[235].blobByteOffset,
-  modelId: models[235].modelId,
-  expectedSize: models[235].expectedSize,
-  sha256Checksum: models[235].sha256Checksum,
-  addon: models[235].addon,
-  engine: models[235].engine,
-  quantization: models[235].quantization,
-  params: models[235].params
+  src: `registry://${models[238].registrySource}/${models[238].registryPath}`,
+  registryPath: models[238].registryPath,
+  registrySource: models[238].registrySource,
+  blobCoreKey: models[238].blobCoreKey,
+  blobBlockOffset: models[238].blobBlockOffset,
+  blobBlockLength: models[238].blobBlockLength,
+  blobByteOffset: models[238].blobByteOffset,
+  modelId: models[238].modelId,
+  expectedSize: models[238].expectedSize,
+  sha256Checksum: models[238].sha256Checksum,
+  addon: models[238].addon,
+  engine: models[238].engine,
+  quantization: models[238].quantization,
+  params: models[238].params
 } as const
 
 export const BERGAMOT_EN_BG = {
   name: 'BERGAMOT_EN_BG',
-  src: `registry://${models[239].registrySource}/${models[239].registryPath}`,
-  registryPath: models[239].registryPath,
-  registrySource: models[239].registrySource,
-  blobCoreKey: models[239].blobCoreKey,
-  blobBlockOffset: models[239].blobBlockOffset,
-  blobBlockLength: models[239].blobBlockLength,
-  blobByteOffset: models[239].blobByteOffset,
-  modelId: models[239].modelId,
-  expectedSize: models[239].expectedSize,
-  sha256Checksum: models[239].sha256Checksum,
-  addon: models[239].addon,
-  engine: models[239].engine,
-  quantization: models[239].quantization,
-  params: models[239].params
+  src: `registry://${models[242].registrySource}/${models[242].registryPath}`,
+  registryPath: models[242].registryPath,
+  registrySource: models[242].registrySource,
+  blobCoreKey: models[242].blobCoreKey,
+  blobBlockOffset: models[242].blobBlockOffset,
+  blobBlockLength: models[242].blobBlockLength,
+  blobByteOffset: models[242].blobByteOffset,
+  modelId: models[242].modelId,
+  expectedSize: models[242].expectedSize,
+  sha256Checksum: models[242].sha256Checksum,
+  addon: models[242].addon,
+  engine: models[242].engine,
+  quantization: models[242].quantization,
+  params: models[242].params
 } as const
 
 export const BERGAMOT_EN_BN = {
   name: 'BERGAMOT_EN_BN',
-  src: `registry://${models[243].registrySource}/${models[243].registryPath}`,
-  registryPath: models[243].registryPath,
-  registrySource: models[243].registrySource,
-  blobCoreKey: models[243].blobCoreKey,
-  blobBlockOffset: models[243].blobBlockOffset,
-  blobBlockLength: models[243].blobBlockLength,
-  blobByteOffset: models[243].blobByteOffset,
-  modelId: models[243].modelId,
-  expectedSize: models[243].expectedSize,
-  sha256Checksum: models[243].sha256Checksum,
-  addon: models[243].addon,
-  engine: models[243].engine,
-  quantization: models[243].quantization,
-  params: models[243].params
+  src: `registry://${models[246].registrySource}/${models[246].registryPath}`,
+  registryPath: models[246].registryPath,
+  registrySource: models[246].registrySource,
+  blobCoreKey: models[246].blobCoreKey,
+  blobBlockOffset: models[246].blobBlockOffset,
+  blobBlockLength: models[246].blobBlockLength,
+  blobByteOffset: models[246].blobByteOffset,
+  modelId: models[246].modelId,
+  expectedSize: models[246].expectedSize,
+  sha256Checksum: models[246].sha256Checksum,
+  addon: models[246].addon,
+  engine: models[246].engine,
+  quantization: models[246].quantization,
+  params: models[246].params
 } as const
 
 export const BERGAMOT_EN_BS = {
   name: 'BERGAMOT_EN_BS',
-  src: `registry://${models[247].registrySource}/${models[247].registryPath}`,
-  registryPath: models[247].registryPath,
-  registrySource: models[247].registrySource,
-  blobCoreKey: models[247].blobCoreKey,
-  blobBlockOffset: models[247].blobBlockOffset,
-  blobBlockLength: models[247].blobBlockLength,
-  blobByteOffset: models[247].blobByteOffset,
-  modelId: models[247].modelId,
-  expectedSize: models[247].expectedSize,
-  sha256Checksum: models[247].sha256Checksum,
-  addon: models[247].addon,
-  engine: models[247].engine,
-  quantization: models[247].quantization,
-  params: models[247].params
+  src: `registry://${models[250].registrySource}/${models[250].registryPath}`,
+  registryPath: models[250].registryPath,
+  registrySource: models[250].registrySource,
+  blobCoreKey: models[250].blobCoreKey,
+  blobBlockOffset: models[250].blobBlockOffset,
+  blobBlockLength: models[250].blobBlockLength,
+  blobByteOffset: models[250].blobByteOffset,
+  modelId: models[250].modelId,
+  expectedSize: models[250].expectedSize,
+  sha256Checksum: models[250].sha256Checksum,
+  addon: models[250].addon,
+  engine: models[250].engine,
+  quantization: models[250].quantization,
+  params: models[250].params
 } as const
 
 export const BERGAMOT_EN_CA = {
   name: 'BERGAMOT_EN_CA',
-  src: `registry://${models[251].registrySource}/${models[251].registryPath}`,
-  registryPath: models[251].registryPath,
-  registrySource: models[251].registrySource,
-  blobCoreKey: models[251].blobCoreKey,
-  blobBlockOffset: models[251].blobBlockOffset,
-  blobBlockLength: models[251].blobBlockLength,
-  blobByteOffset: models[251].blobByteOffset,
-  modelId: models[251].modelId,
-  expectedSize: models[251].expectedSize,
-  sha256Checksum: models[251].sha256Checksum,
-  addon: models[251].addon,
-  engine: models[251].engine,
-  quantization: models[251].quantization,
-  params: models[251].params
+  src: `registry://${models[254].registrySource}/${models[254].registryPath}`,
+  registryPath: models[254].registryPath,
+  registrySource: models[254].registrySource,
+  blobCoreKey: models[254].blobCoreKey,
+  blobBlockOffset: models[254].blobBlockOffset,
+  blobBlockLength: models[254].blobBlockLength,
+  blobByteOffset: models[254].blobByteOffset,
+  modelId: models[254].modelId,
+  expectedSize: models[254].expectedSize,
+  sha256Checksum: models[254].sha256Checksum,
+  addon: models[254].addon,
+  engine: models[254].engine,
+  quantization: models[254].quantization,
+  params: models[254].params
 } as const
 
 export const BERGAMOT_EN_CS = {
   name: 'BERGAMOT_EN_CS',
-  src: `registry://${models[255].registrySource}/${models[255].registryPath}`,
-  registryPath: models[255].registryPath,
-  registrySource: models[255].registrySource,
-  blobCoreKey: models[255].blobCoreKey,
-  blobBlockOffset: models[255].blobBlockOffset,
-  blobBlockLength: models[255].blobBlockLength,
-  blobByteOffset: models[255].blobByteOffset,
-  modelId: models[255].modelId,
-  expectedSize: models[255].expectedSize,
-  sha256Checksum: models[255].sha256Checksum,
-  addon: models[255].addon,
-  engine: models[255].engine,
-  quantization: models[255].quantization,
-  params: models[255].params
+  src: `registry://${models[258].registrySource}/${models[258].registryPath}`,
+  registryPath: models[258].registryPath,
+  registrySource: models[258].registrySource,
+  blobCoreKey: models[258].blobCoreKey,
+  blobBlockOffset: models[258].blobBlockOffset,
+  blobBlockLength: models[258].blobBlockLength,
+  blobByteOffset: models[258].blobByteOffset,
+  modelId: models[258].modelId,
+  expectedSize: models[258].expectedSize,
+  sha256Checksum: models[258].sha256Checksum,
+  addon: models[258].addon,
+  engine: models[258].engine,
+  quantization: models[258].quantization,
+  params: models[258].params
 } as const
 
 export const BERGAMOT_EN_DA = {
   name: 'BERGAMOT_EN_DA',
-  src: `registry://${models[259].registrySource}/${models[259].registryPath}`,
-  registryPath: models[259].registryPath,
-  registrySource: models[259].registrySource,
-  blobCoreKey: models[259].blobCoreKey,
-  blobBlockOffset: models[259].blobBlockOffset,
-  blobBlockLength: models[259].blobBlockLength,
-  blobByteOffset: models[259].blobByteOffset,
-  modelId: models[259].modelId,
-  expectedSize: models[259].expectedSize,
-  sha256Checksum: models[259].sha256Checksum,
-  addon: models[259].addon,
-  engine: models[259].engine,
-  quantization: models[259].quantization,
-  params: models[259].params
+  src: `registry://${models[262].registrySource}/${models[262].registryPath}`,
+  registryPath: models[262].registryPath,
+  registrySource: models[262].registrySource,
+  blobCoreKey: models[262].blobCoreKey,
+  blobBlockOffset: models[262].blobBlockOffset,
+  blobBlockLength: models[262].blobBlockLength,
+  blobByteOffset: models[262].blobByteOffset,
+  modelId: models[262].modelId,
+  expectedSize: models[262].expectedSize,
+  sha256Checksum: models[262].sha256Checksum,
+  addon: models[262].addon,
+  engine: models[262].engine,
+  quantization: models[262].quantization,
+  params: models[262].params
 } as const
 
 export const BERGAMOT_EN_DE = {
   name: 'BERGAMOT_EN_DE',
-  src: `registry://${models[263].registrySource}/${models[263].registryPath}`,
-  registryPath: models[263].registryPath,
-  registrySource: models[263].registrySource,
-  blobCoreKey: models[263].blobCoreKey,
-  blobBlockOffset: models[263].blobBlockOffset,
-  blobBlockLength: models[263].blobBlockLength,
-  blobByteOffset: models[263].blobByteOffset,
-  modelId: models[263].modelId,
-  expectedSize: models[263].expectedSize,
-  sha256Checksum: models[263].sha256Checksum,
-  addon: models[263].addon,
-  engine: models[263].engine,
-  quantization: models[263].quantization,
-  params: models[263].params
+  src: `registry://${models[266].registrySource}/${models[266].registryPath}`,
+  registryPath: models[266].registryPath,
+  registrySource: models[266].registrySource,
+  blobCoreKey: models[266].blobCoreKey,
+  blobBlockOffset: models[266].blobBlockOffset,
+  blobBlockLength: models[266].blobBlockLength,
+  blobByteOffset: models[266].blobByteOffset,
+  modelId: models[266].modelId,
+  expectedSize: models[266].expectedSize,
+  sha256Checksum: models[266].sha256Checksum,
+  addon: models[266].addon,
+  engine: models[266].engine,
+  quantization: models[266].quantization,
+  params: models[266].params
 } as const
 
 export const BERGAMOT_EN_EL = {
   name: 'BERGAMOT_EN_EL',
-  src: `registry://${models[267].registrySource}/${models[267].registryPath}`,
-  registryPath: models[267].registryPath,
-  registrySource: models[267].registrySource,
-  blobCoreKey: models[267].blobCoreKey,
-  blobBlockOffset: models[267].blobBlockOffset,
-  blobBlockLength: models[267].blobBlockLength,
-  blobByteOffset: models[267].blobByteOffset,
-  modelId: models[267].modelId,
-  expectedSize: models[267].expectedSize,
-  sha256Checksum: models[267].sha256Checksum,
-  addon: models[267].addon,
-  engine: models[267].engine,
-  quantization: models[267].quantization,
-  params: models[267].params
+  src: `registry://${models[270].registrySource}/${models[270].registryPath}`,
+  registryPath: models[270].registryPath,
+  registrySource: models[270].registrySource,
+  blobCoreKey: models[270].blobCoreKey,
+  blobBlockOffset: models[270].blobBlockOffset,
+  blobBlockLength: models[270].blobBlockLength,
+  blobByteOffset: models[270].blobByteOffset,
+  modelId: models[270].modelId,
+  expectedSize: models[270].expectedSize,
+  sha256Checksum: models[270].sha256Checksum,
+  addon: models[270].addon,
+  engine: models[270].engine,
+  quantization: models[270].quantization,
+  params: models[270].params
 } as const
 
 export const BERGAMOT_EN_ES = {
   name: 'BERGAMOT_EN_ES',
-  src: `registry://${models[271].registrySource}/${models[271].registryPath}`,
-  registryPath: models[271].registryPath,
-  registrySource: models[271].registrySource,
-  blobCoreKey: models[271].blobCoreKey,
-  blobBlockOffset: models[271].blobBlockOffset,
-  blobBlockLength: models[271].blobBlockLength,
-  blobByteOffset: models[271].blobByteOffset,
-  modelId: models[271].modelId,
-  expectedSize: models[271].expectedSize,
-  sha256Checksum: models[271].sha256Checksum,
-  addon: models[271].addon,
-  engine: models[271].engine,
-  quantization: models[271].quantization,
-  params: models[271].params
+  src: `registry://${models[274].registrySource}/${models[274].registryPath}`,
+  registryPath: models[274].registryPath,
+  registrySource: models[274].registrySource,
+  blobCoreKey: models[274].blobCoreKey,
+  blobBlockOffset: models[274].blobBlockOffset,
+  blobBlockLength: models[274].blobBlockLength,
+  blobByteOffset: models[274].blobByteOffset,
+  modelId: models[274].modelId,
+  expectedSize: models[274].expectedSize,
+  sha256Checksum: models[274].sha256Checksum,
+  addon: models[274].addon,
+  engine: models[274].engine,
+  quantization: models[274].quantization,
+  params: models[274].params
 } as const
 
 export const BERGAMOT_EN_ET = {
   name: 'BERGAMOT_EN_ET',
-  src: `registry://${models[275].registrySource}/${models[275].registryPath}`,
-  registryPath: models[275].registryPath,
-  registrySource: models[275].registrySource,
-  blobCoreKey: models[275].blobCoreKey,
-  blobBlockOffset: models[275].blobBlockOffset,
-  blobBlockLength: models[275].blobBlockLength,
-  blobByteOffset: models[275].blobByteOffset,
-  modelId: models[275].modelId,
-  expectedSize: models[275].expectedSize,
-  sha256Checksum: models[275].sha256Checksum,
-  addon: models[275].addon,
-  engine: models[275].engine,
-  quantization: models[275].quantization,
-  params: models[275].params
+  src: `registry://${models[278].registrySource}/${models[278].registryPath}`,
+  registryPath: models[278].registryPath,
+  registrySource: models[278].registrySource,
+  blobCoreKey: models[278].blobCoreKey,
+  blobBlockOffset: models[278].blobBlockOffset,
+  blobBlockLength: models[278].blobBlockLength,
+  blobByteOffset: models[278].blobByteOffset,
+  modelId: models[278].modelId,
+  expectedSize: models[278].expectedSize,
+  sha256Checksum: models[278].sha256Checksum,
+  addon: models[278].addon,
+  engine: models[278].engine,
+  quantization: models[278].quantization,
+  params: models[278].params
 } as const
 
 export const BERGAMOT_EN_FA = {
   name: 'BERGAMOT_EN_FA',
-  src: `registry://${models[279].registrySource}/${models[279].registryPath}`,
-  registryPath: models[279].registryPath,
-  registrySource: models[279].registrySource,
-  blobCoreKey: models[279].blobCoreKey,
-  blobBlockOffset: models[279].blobBlockOffset,
-  blobBlockLength: models[279].blobBlockLength,
-  blobByteOffset: models[279].blobByteOffset,
-  modelId: models[279].modelId,
-  expectedSize: models[279].expectedSize,
-  sha256Checksum: models[279].sha256Checksum,
-  addon: models[279].addon,
-  engine: models[279].engine,
-  quantization: models[279].quantization,
-  params: models[279].params
+  src: `registry://${models[282].registrySource}/${models[282].registryPath}`,
+  registryPath: models[282].registryPath,
+  registrySource: models[282].registrySource,
+  blobCoreKey: models[282].blobCoreKey,
+  blobBlockOffset: models[282].blobBlockOffset,
+  blobBlockLength: models[282].blobBlockLength,
+  blobByteOffset: models[282].blobByteOffset,
+  modelId: models[282].modelId,
+  expectedSize: models[282].expectedSize,
+  sha256Checksum: models[282].sha256Checksum,
+  addon: models[282].addon,
+  engine: models[282].engine,
+  quantization: models[282].quantization,
+  params: models[282].params
 } as const
 
 export const BERGAMOT_EN_FI = {
   name: 'BERGAMOT_EN_FI',
-  src: `registry://${models[283].registrySource}/${models[283].registryPath}`,
-  registryPath: models[283].registryPath,
-  registrySource: models[283].registrySource,
-  blobCoreKey: models[283].blobCoreKey,
-  blobBlockOffset: models[283].blobBlockOffset,
-  blobBlockLength: models[283].blobBlockLength,
-  blobByteOffset: models[283].blobByteOffset,
-  modelId: models[283].modelId,
-  expectedSize: models[283].expectedSize,
-  sha256Checksum: models[283].sha256Checksum,
-  addon: models[283].addon,
-  engine: models[283].engine,
-  quantization: models[283].quantization,
-  params: models[283].params
+  src: `registry://${models[286].registrySource}/${models[286].registryPath}`,
+  registryPath: models[286].registryPath,
+  registrySource: models[286].registrySource,
+  blobCoreKey: models[286].blobCoreKey,
+  blobBlockOffset: models[286].blobBlockOffset,
+  blobBlockLength: models[286].blobBlockLength,
+  blobByteOffset: models[286].blobByteOffset,
+  modelId: models[286].modelId,
+  expectedSize: models[286].expectedSize,
+  sha256Checksum: models[286].sha256Checksum,
+  addon: models[286].addon,
+  engine: models[286].engine,
+  quantization: models[286].quantization,
+  params: models[286].params
 } as const
 
 export const BERGAMOT_EN_FR = {
   name: 'BERGAMOT_EN_FR',
-  src: `registry://${models[287].registrySource}/${models[287].registryPath}`,
-  registryPath: models[287].registryPath,
-  registrySource: models[287].registrySource,
-  blobCoreKey: models[287].blobCoreKey,
-  blobBlockOffset: models[287].blobBlockOffset,
-  blobBlockLength: models[287].blobBlockLength,
-  blobByteOffset: models[287].blobByteOffset,
-  modelId: models[287].modelId,
-  expectedSize: models[287].expectedSize,
-  sha256Checksum: models[287].sha256Checksum,
-  addon: models[287].addon,
-  engine: models[287].engine,
-  quantization: models[287].quantization,
-  params: models[287].params
+  src: `registry://${models[290].registrySource}/${models[290].registryPath}`,
+  registryPath: models[290].registryPath,
+  registrySource: models[290].registrySource,
+  blobCoreKey: models[290].blobCoreKey,
+  blobBlockOffset: models[290].blobBlockOffset,
+  blobBlockLength: models[290].blobBlockLength,
+  blobByteOffset: models[290].blobByteOffset,
+  modelId: models[290].modelId,
+  expectedSize: models[290].expectedSize,
+  sha256Checksum: models[290].sha256Checksum,
+  addon: models[290].addon,
+  engine: models[290].engine,
+  quantization: models[290].quantization,
+  params: models[290].params
 } as const
 
 export const BERGAMOT_EN_GU = {
   name: 'BERGAMOT_EN_GU',
-  src: `registry://${models[291].registrySource}/${models[291].registryPath}`,
-  registryPath: models[291].registryPath,
-  registrySource: models[291].registrySource,
-  blobCoreKey: models[291].blobCoreKey,
-  blobBlockOffset: models[291].blobBlockOffset,
-  blobBlockLength: models[291].blobBlockLength,
-  blobByteOffset: models[291].blobByteOffset,
-  modelId: models[291].modelId,
-  expectedSize: models[291].expectedSize,
-  sha256Checksum: models[291].sha256Checksum,
-  addon: models[291].addon,
-  engine: models[291].engine,
-  quantization: models[291].quantization,
-  params: models[291].params
+  src: `registry://${models[294].registrySource}/${models[294].registryPath}`,
+  registryPath: models[294].registryPath,
+  registrySource: models[294].registrySource,
+  blobCoreKey: models[294].blobCoreKey,
+  blobBlockOffset: models[294].blobBlockOffset,
+  blobBlockLength: models[294].blobBlockLength,
+  blobByteOffset: models[294].blobByteOffset,
+  modelId: models[294].modelId,
+  expectedSize: models[294].expectedSize,
+  sha256Checksum: models[294].sha256Checksum,
+  addon: models[294].addon,
+  engine: models[294].engine,
+  quantization: models[294].quantization,
+  params: models[294].params
 } as const
 
 export const BERGAMOT_EN_HE = {
   name: 'BERGAMOT_EN_HE',
-  src: `registry://${models[295].registrySource}/${models[295].registryPath}`,
-  registryPath: models[295].registryPath,
-  registrySource: models[295].registrySource,
-  blobCoreKey: models[295].blobCoreKey,
-  blobBlockOffset: models[295].blobBlockOffset,
-  blobBlockLength: models[295].blobBlockLength,
-  blobByteOffset: models[295].blobByteOffset,
-  modelId: models[295].modelId,
-  expectedSize: models[295].expectedSize,
-  sha256Checksum: models[295].sha256Checksum,
-  addon: models[295].addon,
-  engine: models[295].engine,
-  quantization: models[295].quantization,
-  params: models[295].params
+  src: `registry://${models[298].registrySource}/${models[298].registryPath}`,
+  registryPath: models[298].registryPath,
+  registrySource: models[298].registrySource,
+  blobCoreKey: models[298].blobCoreKey,
+  blobBlockOffset: models[298].blobBlockOffset,
+  blobBlockLength: models[298].blobBlockLength,
+  blobByteOffset: models[298].blobByteOffset,
+  modelId: models[298].modelId,
+  expectedSize: models[298].expectedSize,
+  sha256Checksum: models[298].sha256Checksum,
+  addon: models[298].addon,
+  engine: models[298].engine,
+  quantization: models[298].quantization,
+  params: models[298].params
 } as const
 
 export const BERGAMOT_EN_HI = {
   name: 'BERGAMOT_EN_HI',
-  src: `registry://${models[299].registrySource}/${models[299].registryPath}`,
-  registryPath: models[299].registryPath,
-  registrySource: models[299].registrySource,
-  blobCoreKey: models[299].blobCoreKey,
-  blobBlockOffset: models[299].blobBlockOffset,
-  blobBlockLength: models[299].blobBlockLength,
-  blobByteOffset: models[299].blobByteOffset,
-  modelId: models[299].modelId,
-  expectedSize: models[299].expectedSize,
-  sha256Checksum: models[299].sha256Checksum,
-  addon: models[299].addon,
-  engine: models[299].engine,
-  quantization: models[299].quantization,
-  params: models[299].params
+  src: `registry://${models[302].registrySource}/${models[302].registryPath}`,
+  registryPath: models[302].registryPath,
+  registrySource: models[302].registrySource,
+  blobCoreKey: models[302].blobCoreKey,
+  blobBlockOffset: models[302].blobBlockOffset,
+  blobBlockLength: models[302].blobBlockLength,
+  blobByteOffset: models[302].blobByteOffset,
+  modelId: models[302].modelId,
+  expectedSize: models[302].expectedSize,
+  sha256Checksum: models[302].sha256Checksum,
+  addon: models[302].addon,
+  engine: models[302].engine,
+  quantization: models[302].quantization,
+  params: models[302].params
 } as const
 
 export const BERGAMOT_EN_HR = {
   name: 'BERGAMOT_EN_HR',
-  src: `registry://${models[303].registrySource}/${models[303].registryPath}`,
-  registryPath: models[303].registryPath,
-  registrySource: models[303].registrySource,
-  blobCoreKey: models[303].blobCoreKey,
-  blobBlockOffset: models[303].blobBlockOffset,
-  blobBlockLength: models[303].blobBlockLength,
-  blobByteOffset: models[303].blobByteOffset,
-  modelId: models[303].modelId,
-  expectedSize: models[303].expectedSize,
-  sha256Checksum: models[303].sha256Checksum,
-  addon: models[303].addon,
-  engine: models[303].engine,
-  quantization: models[303].quantization,
-  params: models[303].params
+  src: `registry://${models[306].registrySource}/${models[306].registryPath}`,
+  registryPath: models[306].registryPath,
+  registrySource: models[306].registrySource,
+  blobCoreKey: models[306].blobCoreKey,
+  blobBlockOffset: models[306].blobBlockOffset,
+  blobBlockLength: models[306].blobBlockLength,
+  blobByteOffset: models[306].blobByteOffset,
+  modelId: models[306].modelId,
+  expectedSize: models[306].expectedSize,
+  sha256Checksum: models[306].sha256Checksum,
+  addon: models[306].addon,
+  engine: models[306].engine,
+  quantization: models[306].quantization,
+  params: models[306].params
 } as const
 
 export const BERGAMOT_EN_HU = {
   name: 'BERGAMOT_EN_HU',
-  src: `registry://${models[307].registrySource}/${models[307].registryPath}`,
-  registryPath: models[307].registryPath,
-  registrySource: models[307].registrySource,
-  blobCoreKey: models[307].blobCoreKey,
-  blobBlockOffset: models[307].blobBlockOffset,
-  blobBlockLength: models[307].blobBlockLength,
-  blobByteOffset: models[307].blobByteOffset,
-  modelId: models[307].modelId,
-  expectedSize: models[307].expectedSize,
-  sha256Checksum: models[307].sha256Checksum,
-  addon: models[307].addon,
-  engine: models[307].engine,
-  quantization: models[307].quantization,
-  params: models[307].params
+  src: `registry://${models[310].registrySource}/${models[310].registryPath}`,
+  registryPath: models[310].registryPath,
+  registrySource: models[310].registrySource,
+  blobCoreKey: models[310].blobCoreKey,
+  blobBlockOffset: models[310].blobBlockOffset,
+  blobBlockLength: models[310].blobBlockLength,
+  blobByteOffset: models[310].blobByteOffset,
+  modelId: models[310].modelId,
+  expectedSize: models[310].expectedSize,
+  sha256Checksum: models[310].sha256Checksum,
+  addon: models[310].addon,
+  engine: models[310].engine,
+  quantization: models[310].quantization,
+  params: models[310].params
 } as const
 
 export const BERGAMOT_EN_ID = {
   name: 'BERGAMOT_EN_ID',
-  src: `registry://${models[311].registrySource}/${models[311].registryPath}`,
-  registryPath: models[311].registryPath,
-  registrySource: models[311].registrySource,
-  blobCoreKey: models[311].blobCoreKey,
-  blobBlockOffset: models[311].blobBlockOffset,
-  blobBlockLength: models[311].blobBlockLength,
-  blobByteOffset: models[311].blobByteOffset,
-  modelId: models[311].modelId,
-  expectedSize: models[311].expectedSize,
-  sha256Checksum: models[311].sha256Checksum,
-  addon: models[311].addon,
-  engine: models[311].engine,
-  quantization: models[311].quantization,
-  params: models[311].params
+  src: `registry://${models[314].registrySource}/${models[314].registryPath}`,
+  registryPath: models[314].registryPath,
+  registrySource: models[314].registrySource,
+  blobCoreKey: models[314].blobCoreKey,
+  blobBlockOffset: models[314].blobBlockOffset,
+  blobBlockLength: models[314].blobBlockLength,
+  blobByteOffset: models[314].blobByteOffset,
+  modelId: models[314].modelId,
+  expectedSize: models[314].expectedSize,
+  sha256Checksum: models[314].sha256Checksum,
+  addon: models[314].addon,
+  engine: models[314].engine,
+  quantization: models[314].quantization,
+  params: models[314].params
 } as const
 
 export const BERGAMOT_EN_IS = {
   name: 'BERGAMOT_EN_IS',
-  src: `registry://${models[315].registrySource}/${models[315].registryPath}`,
-  registryPath: models[315].registryPath,
-  registrySource: models[315].registrySource,
-  blobCoreKey: models[315].blobCoreKey,
-  blobBlockOffset: models[315].blobBlockOffset,
-  blobBlockLength: models[315].blobBlockLength,
-  blobByteOffset: models[315].blobByteOffset,
-  modelId: models[315].modelId,
-  expectedSize: models[315].expectedSize,
-  sha256Checksum: models[315].sha256Checksum,
-  addon: models[315].addon,
-  engine: models[315].engine,
-  quantization: models[315].quantization,
-  params: models[315].params
+  src: `registry://${models[318].registrySource}/${models[318].registryPath}`,
+  registryPath: models[318].registryPath,
+  registrySource: models[318].registrySource,
+  blobCoreKey: models[318].blobCoreKey,
+  blobBlockOffset: models[318].blobBlockOffset,
+  blobBlockLength: models[318].blobBlockLength,
+  blobByteOffset: models[318].blobByteOffset,
+  modelId: models[318].modelId,
+  expectedSize: models[318].expectedSize,
+  sha256Checksum: models[318].sha256Checksum,
+  addon: models[318].addon,
+  engine: models[318].engine,
+  quantization: models[318].quantization,
+  params: models[318].params
 } as const
 
 export const BERGAMOT_EN_IT = {
   name: 'BERGAMOT_EN_IT',
-  src: `registry://${models[319].registrySource}/${models[319].registryPath}`,
-  registryPath: models[319].registryPath,
-  registrySource: models[319].registrySource,
-  blobCoreKey: models[319].blobCoreKey,
-  blobBlockOffset: models[319].blobBlockOffset,
-  blobBlockLength: models[319].blobBlockLength,
-  blobByteOffset: models[319].blobByteOffset,
-  modelId: models[319].modelId,
-  expectedSize: models[319].expectedSize,
-  sha256Checksum: models[319].sha256Checksum,
-  addon: models[319].addon,
-  engine: models[319].engine,
-  quantization: models[319].quantization,
-  params: models[319].params
+  src: `registry://${models[322].registrySource}/${models[322].registryPath}`,
+  registryPath: models[322].registryPath,
+  registrySource: models[322].registrySource,
+  blobCoreKey: models[322].blobCoreKey,
+  blobBlockOffset: models[322].blobBlockOffset,
+  blobBlockLength: models[322].blobBlockLength,
+  blobByteOffset: models[322].blobByteOffset,
+  modelId: models[322].modelId,
+  expectedSize: models[322].expectedSize,
+  sha256Checksum: models[322].sha256Checksum,
+  addon: models[322].addon,
+  engine: models[322].engine,
+  quantization: models[322].quantization,
+  params: models[322].params
 } as const
 
 export const BERGAMOT_EN_JA = {
   name: 'BERGAMOT_EN_JA',
-  src: `registry://${models[323].registrySource}/${models[323].registryPath}`,
-  registryPath: models[323].registryPath,
-  registrySource: models[323].registrySource,
-  blobCoreKey: models[323].blobCoreKey,
-  blobBlockOffset: models[323].blobBlockOffset,
-  blobBlockLength: models[323].blobBlockLength,
-  blobByteOffset: models[323].blobByteOffset,
-  modelId: models[323].modelId,
-  expectedSize: models[323].expectedSize,
-  sha256Checksum: models[323].sha256Checksum,
-  addon: models[323].addon,
-  engine: models[323].engine,
-  quantization: models[323].quantization,
-  params: models[323].params
+  src: `registry://${models[326].registrySource}/${models[326].registryPath}`,
+  registryPath: models[326].registryPath,
+  registrySource: models[326].registrySource,
+  blobCoreKey: models[326].blobCoreKey,
+  blobBlockOffset: models[326].blobBlockOffset,
+  blobBlockLength: models[326].blobBlockLength,
+  blobByteOffset: models[326].blobByteOffset,
+  modelId: models[326].modelId,
+  expectedSize: models[326].expectedSize,
+  sha256Checksum: models[326].sha256Checksum,
+  addon: models[326].addon,
+  engine: models[326].engine,
+  quantization: models[326].quantization,
+  params: models[326].params
 } as const
 
 export const BERGAMOT_EN_KN = {
   name: 'BERGAMOT_EN_KN',
-  src: `registry://${models[328].registrySource}/${models[328].registryPath}`,
-  registryPath: models[328].registryPath,
-  registrySource: models[328].registrySource,
-  blobCoreKey: models[328].blobCoreKey,
-  blobBlockOffset: models[328].blobBlockOffset,
-  blobBlockLength: models[328].blobBlockLength,
-  blobByteOffset: models[328].blobByteOffset,
-  modelId: models[328].modelId,
-  expectedSize: models[328].expectedSize,
-  sha256Checksum: models[328].sha256Checksum,
-  addon: models[328].addon,
-  engine: models[328].engine,
-  quantization: models[328].quantization,
-  params: models[328].params
+  src: `registry://${models[331].registrySource}/${models[331].registryPath}`,
+  registryPath: models[331].registryPath,
+  registrySource: models[331].registrySource,
+  blobCoreKey: models[331].blobCoreKey,
+  blobBlockOffset: models[331].blobBlockOffset,
+  blobBlockLength: models[331].blobBlockLength,
+  blobByteOffset: models[331].blobByteOffset,
+  modelId: models[331].modelId,
+  expectedSize: models[331].expectedSize,
+  sha256Checksum: models[331].sha256Checksum,
+  addon: models[331].addon,
+  engine: models[331].engine,
+  quantization: models[331].quantization,
+  params: models[331].params
 } as const
 
 export const BERGAMOT_EN_KO = {
   name: 'BERGAMOT_EN_KO',
-  src: `registry://${models[332].registrySource}/${models[332].registryPath}`,
-  registryPath: models[332].registryPath,
-  registrySource: models[332].registrySource,
-  blobCoreKey: models[332].blobCoreKey,
-  blobBlockOffset: models[332].blobBlockOffset,
-  blobBlockLength: models[332].blobBlockLength,
-  blobByteOffset: models[332].blobByteOffset,
-  modelId: models[332].modelId,
-  expectedSize: models[332].expectedSize,
-  sha256Checksum: models[332].sha256Checksum,
-  addon: models[332].addon,
-  engine: models[332].engine,
-  quantization: models[332].quantization,
-  params: models[332].params
+  src: `registry://${models[335].registrySource}/${models[335].registryPath}`,
+  registryPath: models[335].registryPath,
+  registrySource: models[335].registrySource,
+  blobCoreKey: models[335].blobCoreKey,
+  blobBlockOffset: models[335].blobBlockOffset,
+  blobBlockLength: models[335].blobBlockLength,
+  blobByteOffset: models[335].blobByteOffset,
+  modelId: models[335].modelId,
+  expectedSize: models[335].expectedSize,
+  sha256Checksum: models[335].sha256Checksum,
+  addon: models[335].addon,
+  engine: models[335].engine,
+  quantization: models[335].quantization,
+  params: models[335].params
 } as const
 
 export const BERGAMOT_EN_LT = {
   name: 'BERGAMOT_EN_LT',
-  src: `registry://${models[337].registrySource}/${models[337].registryPath}`,
-  registryPath: models[337].registryPath,
-  registrySource: models[337].registrySource,
-  blobCoreKey: models[337].blobCoreKey,
-  blobBlockOffset: models[337].blobBlockOffset,
-  blobBlockLength: models[337].blobBlockLength,
-  blobByteOffset: models[337].blobByteOffset,
-  modelId: models[337].modelId,
-  expectedSize: models[337].expectedSize,
-  sha256Checksum: models[337].sha256Checksum,
-  addon: models[337].addon,
-  engine: models[337].engine,
-  quantization: models[337].quantization,
-  params: models[337].params
+  src: `registry://${models[340].registrySource}/${models[340].registryPath}`,
+  registryPath: models[340].registryPath,
+  registrySource: models[340].registrySource,
+  blobCoreKey: models[340].blobCoreKey,
+  blobBlockOffset: models[340].blobBlockOffset,
+  blobBlockLength: models[340].blobBlockLength,
+  blobByteOffset: models[340].blobByteOffset,
+  modelId: models[340].modelId,
+  expectedSize: models[340].expectedSize,
+  sha256Checksum: models[340].sha256Checksum,
+  addon: models[340].addon,
+  engine: models[340].engine,
+  quantization: models[340].quantization,
+  params: models[340].params
 } as const
 
 export const BERGAMOT_EN_LV = {
   name: 'BERGAMOT_EN_LV',
-  src: `registry://${models[341].registrySource}/${models[341].registryPath}`,
-  registryPath: models[341].registryPath,
-  registrySource: models[341].registrySource,
-  blobCoreKey: models[341].blobCoreKey,
-  blobBlockOffset: models[341].blobBlockOffset,
-  blobBlockLength: models[341].blobBlockLength,
-  blobByteOffset: models[341].blobByteOffset,
-  modelId: models[341].modelId,
-  expectedSize: models[341].expectedSize,
-  sha256Checksum: models[341].sha256Checksum,
-  addon: models[341].addon,
-  engine: models[341].engine,
-  quantization: models[341].quantization,
-  params: models[341].params
+  src: `registry://${models[344].registrySource}/${models[344].registryPath}`,
+  registryPath: models[344].registryPath,
+  registrySource: models[344].registrySource,
+  blobCoreKey: models[344].blobCoreKey,
+  blobBlockOffset: models[344].blobBlockOffset,
+  blobBlockLength: models[344].blobBlockLength,
+  blobByteOffset: models[344].blobByteOffset,
+  modelId: models[344].modelId,
+  expectedSize: models[344].expectedSize,
+  sha256Checksum: models[344].sha256Checksum,
+  addon: models[344].addon,
+  engine: models[344].engine,
+  quantization: models[344].quantization,
+  params: models[344].params
 } as const
 
 export const BERGAMOT_EN_ML = {
   name: 'BERGAMOT_EN_ML',
-  src: `registry://${models[345].registrySource}/${models[345].registryPath}`,
-  registryPath: models[345].registryPath,
-  registrySource: models[345].registrySource,
-  blobCoreKey: models[345].blobCoreKey,
-  blobBlockOffset: models[345].blobBlockOffset,
-  blobBlockLength: models[345].blobBlockLength,
-  blobByteOffset: models[345].blobByteOffset,
-  modelId: models[345].modelId,
-  expectedSize: models[345].expectedSize,
-  sha256Checksum: models[345].sha256Checksum,
-  addon: models[345].addon,
-  engine: models[345].engine,
-  quantization: models[345].quantization,
-  params: models[345].params
+  src: `registry://${models[348].registrySource}/${models[348].registryPath}`,
+  registryPath: models[348].registryPath,
+  registrySource: models[348].registrySource,
+  blobCoreKey: models[348].blobCoreKey,
+  blobBlockOffset: models[348].blobBlockOffset,
+  blobBlockLength: models[348].blobBlockLength,
+  blobByteOffset: models[348].blobByteOffset,
+  modelId: models[348].modelId,
+  expectedSize: models[348].expectedSize,
+  sha256Checksum: models[348].sha256Checksum,
+  addon: models[348].addon,
+  engine: models[348].engine,
+  quantization: models[348].quantization,
+  params: models[348].params
 } as const
 
 export const BERGAMOT_EN_MS = {
   name: 'BERGAMOT_EN_MS',
-  src: `registry://${models[349].registrySource}/${models[349].registryPath}`,
-  registryPath: models[349].registryPath,
-  registrySource: models[349].registrySource,
-  blobCoreKey: models[349].blobCoreKey,
-  blobBlockOffset: models[349].blobBlockOffset,
-  blobBlockLength: models[349].blobBlockLength,
-  blobByteOffset: models[349].blobByteOffset,
-  modelId: models[349].modelId,
-  expectedSize: models[349].expectedSize,
-  sha256Checksum: models[349].sha256Checksum,
-  addon: models[349].addon,
-  engine: models[349].engine,
-  quantization: models[349].quantization,
-  params: models[349].params
+  src: `registry://${models[352].registrySource}/${models[352].registryPath}`,
+  registryPath: models[352].registryPath,
+  registrySource: models[352].registrySource,
+  blobCoreKey: models[352].blobCoreKey,
+  blobBlockOffset: models[352].blobBlockOffset,
+  blobBlockLength: models[352].blobBlockLength,
+  blobByteOffset: models[352].blobByteOffset,
+  modelId: models[352].modelId,
+  expectedSize: models[352].expectedSize,
+  sha256Checksum: models[352].sha256Checksum,
+  addon: models[352].addon,
+  engine: models[352].engine,
+  quantization: models[352].quantization,
+  params: models[352].params
 } as const
 
 export const BERGAMOT_EN_NB = {
   name: 'BERGAMOT_EN_NB',
-  src: `registry://${models[353].registrySource}/${models[353].registryPath}`,
-  registryPath: models[353].registryPath,
-  registrySource: models[353].registrySource,
-  blobCoreKey: models[353].blobCoreKey,
-  blobBlockOffset: models[353].blobBlockOffset,
-  blobBlockLength: models[353].blobBlockLength,
-  blobByteOffset: models[353].blobByteOffset,
-  modelId: models[353].modelId,
-  expectedSize: models[353].expectedSize,
-  sha256Checksum: models[353].sha256Checksum,
-  addon: models[353].addon,
-  engine: models[353].engine,
-  quantization: models[353].quantization,
-  params: models[353].params
+  src: `registry://${models[356].registrySource}/${models[356].registryPath}`,
+  registryPath: models[356].registryPath,
+  registrySource: models[356].registrySource,
+  blobCoreKey: models[356].blobCoreKey,
+  blobBlockOffset: models[356].blobBlockOffset,
+  blobBlockLength: models[356].blobBlockLength,
+  blobByteOffset: models[356].blobByteOffset,
+  modelId: models[356].modelId,
+  expectedSize: models[356].expectedSize,
+  sha256Checksum: models[356].sha256Checksum,
+  addon: models[356].addon,
+  engine: models[356].engine,
+  quantization: models[356].quantization,
+  params: models[356].params
 } as const
 
 export const BERGAMOT_EN_NL = {
   name: 'BERGAMOT_EN_NL',
-  src: `registry://${models[357].registrySource}/${models[357].registryPath}`,
-  registryPath: models[357].registryPath,
-  registrySource: models[357].registrySource,
-  blobCoreKey: models[357].blobCoreKey,
-  blobBlockOffset: models[357].blobBlockOffset,
-  blobBlockLength: models[357].blobBlockLength,
-  blobByteOffset: models[357].blobByteOffset,
-  modelId: models[357].modelId,
-  expectedSize: models[357].expectedSize,
-  sha256Checksum: models[357].sha256Checksum,
-  addon: models[357].addon,
-  engine: models[357].engine,
-  quantization: models[357].quantization,
-  params: models[357].params
+  src: `registry://${models[360].registrySource}/${models[360].registryPath}`,
+  registryPath: models[360].registryPath,
+  registrySource: models[360].registrySource,
+  blobCoreKey: models[360].blobCoreKey,
+  blobBlockOffset: models[360].blobBlockOffset,
+  blobBlockLength: models[360].blobBlockLength,
+  blobByteOffset: models[360].blobByteOffset,
+  modelId: models[360].modelId,
+  expectedSize: models[360].expectedSize,
+  sha256Checksum: models[360].sha256Checksum,
+  addon: models[360].addon,
+  engine: models[360].engine,
+  quantization: models[360].quantization,
+  params: models[360].params
 } as const
 
 export const BERGAMOT_EN_NO = {
   name: 'BERGAMOT_EN_NO',
-  src: `registry://${models[361].registrySource}/${models[361].registryPath}`,
-  registryPath: models[361].registryPath,
-  registrySource: models[361].registrySource,
-  blobCoreKey: models[361].blobCoreKey,
-  blobBlockOffset: models[361].blobBlockOffset,
-  blobBlockLength: models[361].blobBlockLength,
-  blobByteOffset: models[361].blobByteOffset,
-  modelId: models[361].modelId,
-  expectedSize: models[361].expectedSize,
-  sha256Checksum: models[361].sha256Checksum,
-  addon: models[361].addon,
-  engine: models[361].engine,
-  quantization: models[361].quantization,
-  params: models[361].params
+  src: `registry://${models[364].registrySource}/${models[364].registryPath}`,
+  registryPath: models[364].registryPath,
+  registrySource: models[364].registrySource,
+  blobCoreKey: models[364].blobCoreKey,
+  blobBlockOffset: models[364].blobBlockOffset,
+  blobBlockLength: models[364].blobBlockLength,
+  blobByteOffset: models[364].blobByteOffset,
+  modelId: models[364].modelId,
+  expectedSize: models[364].expectedSize,
+  sha256Checksum: models[364].sha256Checksum,
+  addon: models[364].addon,
+  engine: models[364].engine,
+  quantization: models[364].quantization,
+  params: models[364].params
 } as const
 
 export const BERGAMOT_EN_PL = {
   name: 'BERGAMOT_EN_PL',
-  src: `registry://${models[365].registrySource}/${models[365].registryPath}`,
-  registryPath: models[365].registryPath,
-  registrySource: models[365].registrySource,
-  blobCoreKey: models[365].blobCoreKey,
-  blobBlockOffset: models[365].blobBlockOffset,
-  blobBlockLength: models[365].blobBlockLength,
-  blobByteOffset: models[365].blobByteOffset,
-  modelId: models[365].modelId,
-  expectedSize: models[365].expectedSize,
-  sha256Checksum: models[365].sha256Checksum,
-  addon: models[365].addon,
-  engine: models[365].engine,
-  quantization: models[365].quantization,
-  params: models[365].params
+  src: `registry://${models[368].registrySource}/${models[368].registryPath}`,
+  registryPath: models[368].registryPath,
+  registrySource: models[368].registrySource,
+  blobCoreKey: models[368].blobCoreKey,
+  blobBlockOffset: models[368].blobBlockOffset,
+  blobBlockLength: models[368].blobBlockLength,
+  blobByteOffset: models[368].blobByteOffset,
+  modelId: models[368].modelId,
+  expectedSize: models[368].expectedSize,
+  sha256Checksum: models[368].sha256Checksum,
+  addon: models[368].addon,
+  engine: models[368].engine,
+  quantization: models[368].quantization,
+  params: models[368].params
 } as const
 
 export const BERGAMOT_EN_PT = {
   name: 'BERGAMOT_EN_PT',
-  src: `registry://${models[369].registrySource}/${models[369].registryPath}`,
-  registryPath: models[369].registryPath,
-  registrySource: models[369].registrySource,
-  blobCoreKey: models[369].blobCoreKey,
-  blobBlockOffset: models[369].blobBlockOffset,
-  blobBlockLength: models[369].blobBlockLength,
-  blobByteOffset: models[369].blobByteOffset,
-  modelId: models[369].modelId,
-  expectedSize: models[369].expectedSize,
-  sha256Checksum: models[369].sha256Checksum,
-  addon: models[369].addon,
-  engine: models[369].engine,
-  quantization: models[369].quantization,
-  params: models[369].params
+  src: `registry://${models[372].registrySource}/${models[372].registryPath}`,
+  registryPath: models[372].registryPath,
+  registrySource: models[372].registrySource,
+  blobCoreKey: models[372].blobCoreKey,
+  blobBlockOffset: models[372].blobBlockOffset,
+  blobBlockLength: models[372].blobBlockLength,
+  blobByteOffset: models[372].blobByteOffset,
+  modelId: models[372].modelId,
+  expectedSize: models[372].expectedSize,
+  sha256Checksum: models[372].sha256Checksum,
+  addon: models[372].addon,
+  engine: models[372].engine,
+  quantization: models[372].quantization,
+  params: models[372].params
 } as const
 
 export const BERGAMOT_EN_RO = {
   name: 'BERGAMOT_EN_RO',
-  src: `registry://${models[373].registrySource}/${models[373].registryPath}`,
-  registryPath: models[373].registryPath,
-  registrySource: models[373].registrySource,
-  blobCoreKey: models[373].blobCoreKey,
-  blobBlockOffset: models[373].blobBlockOffset,
-  blobBlockLength: models[373].blobBlockLength,
-  blobByteOffset: models[373].blobByteOffset,
-  modelId: models[373].modelId,
-  expectedSize: models[373].expectedSize,
-  sha256Checksum: models[373].sha256Checksum,
-  addon: models[373].addon,
-  engine: models[373].engine,
-  quantization: models[373].quantization,
-  params: models[373].params
+  src: `registry://${models[376].registrySource}/${models[376].registryPath}`,
+  registryPath: models[376].registryPath,
+  registrySource: models[376].registrySource,
+  blobCoreKey: models[376].blobCoreKey,
+  blobBlockOffset: models[376].blobBlockOffset,
+  blobBlockLength: models[376].blobBlockLength,
+  blobByteOffset: models[376].blobByteOffset,
+  modelId: models[376].modelId,
+  expectedSize: models[376].expectedSize,
+  sha256Checksum: models[376].sha256Checksum,
+  addon: models[376].addon,
+  engine: models[376].engine,
+  quantization: models[376].quantization,
+  params: models[376].params
 } as const
 
 export const BERGAMOT_EN_RU = {
   name: 'BERGAMOT_EN_RU',
-  src: `registry://${models[377].registrySource}/${models[377].registryPath}`,
-  registryPath: models[377].registryPath,
-  registrySource: models[377].registrySource,
-  blobCoreKey: models[377].blobCoreKey,
-  blobBlockOffset: models[377].blobBlockOffset,
-  blobBlockLength: models[377].blobBlockLength,
-  blobByteOffset: models[377].blobByteOffset,
-  modelId: models[377].modelId,
-  expectedSize: models[377].expectedSize,
-  sha256Checksum: models[377].sha256Checksum,
-  addon: models[377].addon,
-  engine: models[377].engine,
-  quantization: models[377].quantization,
-  params: models[377].params
+  src: `registry://${models[380].registrySource}/${models[380].registryPath}`,
+  registryPath: models[380].registryPath,
+  registrySource: models[380].registrySource,
+  blobCoreKey: models[380].blobCoreKey,
+  blobBlockOffset: models[380].blobBlockOffset,
+  blobBlockLength: models[380].blobBlockLength,
+  blobByteOffset: models[380].blobByteOffset,
+  modelId: models[380].modelId,
+  expectedSize: models[380].expectedSize,
+  sha256Checksum: models[380].sha256Checksum,
+  addon: models[380].addon,
+  engine: models[380].engine,
+  quantization: models[380].quantization,
+  params: models[380].params
 } as const
 
 export const BERGAMOT_EN_SK = {
   name: 'BERGAMOT_EN_SK',
-  src: `registry://${models[381].registrySource}/${models[381].registryPath}`,
-  registryPath: models[381].registryPath,
-  registrySource: models[381].registrySource,
-  blobCoreKey: models[381].blobCoreKey,
-  blobBlockOffset: models[381].blobBlockOffset,
-  blobBlockLength: models[381].blobBlockLength,
-  blobByteOffset: models[381].blobByteOffset,
-  modelId: models[381].modelId,
-  expectedSize: models[381].expectedSize,
-  sha256Checksum: models[381].sha256Checksum,
-  addon: models[381].addon,
-  engine: models[381].engine,
-  quantization: models[381].quantization,
-  params: models[381].params
+  src: `registry://${models[384].registrySource}/${models[384].registryPath}`,
+  registryPath: models[384].registryPath,
+  registrySource: models[384].registrySource,
+  blobCoreKey: models[384].blobCoreKey,
+  blobBlockOffset: models[384].blobBlockOffset,
+  blobBlockLength: models[384].blobBlockLength,
+  blobByteOffset: models[384].blobByteOffset,
+  modelId: models[384].modelId,
+  expectedSize: models[384].expectedSize,
+  sha256Checksum: models[384].sha256Checksum,
+  addon: models[384].addon,
+  engine: models[384].engine,
+  quantization: models[384].quantization,
+  params: models[384].params
 } as const
 
 export const BERGAMOT_EN_SL = {
   name: 'BERGAMOT_EN_SL',
-  src: `registry://${models[385].registrySource}/${models[385].registryPath}`,
-  registryPath: models[385].registryPath,
-  registrySource: models[385].registrySource,
-  blobCoreKey: models[385].blobCoreKey,
-  blobBlockOffset: models[385].blobBlockOffset,
-  blobBlockLength: models[385].blobBlockLength,
-  blobByteOffset: models[385].blobByteOffset,
-  modelId: models[385].modelId,
-  expectedSize: models[385].expectedSize,
-  sha256Checksum: models[385].sha256Checksum,
-  addon: models[385].addon,
-  engine: models[385].engine,
-  quantization: models[385].quantization,
-  params: models[385].params
+  src: `registry://${models[388].registrySource}/${models[388].registryPath}`,
+  registryPath: models[388].registryPath,
+  registrySource: models[388].registrySource,
+  blobCoreKey: models[388].blobCoreKey,
+  blobBlockOffset: models[388].blobBlockOffset,
+  blobBlockLength: models[388].blobBlockLength,
+  blobByteOffset: models[388].blobByteOffset,
+  modelId: models[388].modelId,
+  expectedSize: models[388].expectedSize,
+  sha256Checksum: models[388].sha256Checksum,
+  addon: models[388].addon,
+  engine: models[388].engine,
+  quantization: models[388].quantization,
+  params: models[388].params
 } as const
 
 export const BERGAMOT_EN_SQ = {
   name: 'BERGAMOT_EN_SQ',
-  src: `registry://${models[389].registrySource}/${models[389].registryPath}`,
-  registryPath: models[389].registryPath,
-  registrySource: models[389].registrySource,
-  blobCoreKey: models[389].blobCoreKey,
-  blobBlockOffset: models[389].blobBlockOffset,
-  blobBlockLength: models[389].blobBlockLength,
-  blobByteOffset: models[389].blobByteOffset,
-  modelId: models[389].modelId,
-  expectedSize: models[389].expectedSize,
-  sha256Checksum: models[389].sha256Checksum,
-  addon: models[389].addon,
-  engine: models[389].engine,
-  quantization: models[389].quantization,
-  params: models[389].params
+  src: `registry://${models[392].registrySource}/${models[392].registryPath}`,
+  registryPath: models[392].registryPath,
+  registrySource: models[392].registrySource,
+  blobCoreKey: models[392].blobCoreKey,
+  blobBlockOffset: models[392].blobBlockOffset,
+  blobBlockLength: models[392].blobBlockLength,
+  blobByteOffset: models[392].blobByteOffset,
+  modelId: models[392].modelId,
+  expectedSize: models[392].expectedSize,
+  sha256Checksum: models[392].sha256Checksum,
+  addon: models[392].addon,
+  engine: models[392].engine,
+  quantization: models[392].quantization,
+  params: models[392].params
 } as const
 
 export const BERGAMOT_EN_SR = {
   name: 'BERGAMOT_EN_SR',
-  src: `registry://${models[393].registrySource}/${models[393].registryPath}`,
-  registryPath: models[393].registryPath,
-  registrySource: models[393].registrySource,
-  blobCoreKey: models[393].blobCoreKey,
-  blobBlockOffset: models[393].blobBlockOffset,
-  blobBlockLength: models[393].blobBlockLength,
-  blobByteOffset: models[393].blobByteOffset,
-  modelId: models[393].modelId,
-  expectedSize: models[393].expectedSize,
-  sha256Checksum: models[393].sha256Checksum,
-  addon: models[393].addon,
-  engine: models[393].engine,
-  quantization: models[393].quantization,
-  params: models[393].params
+  src: `registry://${models[396].registrySource}/${models[396].registryPath}`,
+  registryPath: models[396].registryPath,
+  registrySource: models[396].registrySource,
+  blobCoreKey: models[396].blobCoreKey,
+  blobBlockOffset: models[396].blobBlockOffset,
+  blobBlockLength: models[396].blobBlockLength,
+  blobByteOffset: models[396].blobByteOffset,
+  modelId: models[396].modelId,
+  expectedSize: models[396].expectedSize,
+  sha256Checksum: models[396].sha256Checksum,
+  addon: models[396].addon,
+  engine: models[396].engine,
+  quantization: models[396].quantization,
+  params: models[396].params
 } as const
 
 export const BERGAMOT_EN_SV = {
   name: 'BERGAMOT_EN_SV',
-  src: `registry://${models[397].registrySource}/${models[397].registryPath}`,
-  registryPath: models[397].registryPath,
-  registrySource: models[397].registrySource,
-  blobCoreKey: models[397].blobCoreKey,
-  blobBlockOffset: models[397].blobBlockOffset,
-  blobBlockLength: models[397].blobBlockLength,
-  blobByteOffset: models[397].blobByteOffset,
-  modelId: models[397].modelId,
-  expectedSize: models[397].expectedSize,
-  sha256Checksum: models[397].sha256Checksum,
-  addon: models[397].addon,
-  engine: models[397].engine,
-  quantization: models[397].quantization,
-  params: models[397].params
+  src: `registry://${models[400].registrySource}/${models[400].registryPath}`,
+  registryPath: models[400].registryPath,
+  registrySource: models[400].registrySource,
+  blobCoreKey: models[400].blobCoreKey,
+  blobBlockOffset: models[400].blobBlockOffset,
+  blobBlockLength: models[400].blobBlockLength,
+  blobByteOffset: models[400].blobByteOffset,
+  modelId: models[400].modelId,
+  expectedSize: models[400].expectedSize,
+  sha256Checksum: models[400].sha256Checksum,
+  addon: models[400].addon,
+  engine: models[400].engine,
+  quantization: models[400].quantization,
+  params: models[400].params
 } as const
 
 export const BERGAMOT_EN_TA = {
   name: 'BERGAMOT_EN_TA',
-  src: `registry://${models[401].registrySource}/${models[401].registryPath}`,
-  registryPath: models[401].registryPath,
-  registrySource: models[401].registrySource,
-  blobCoreKey: models[401].blobCoreKey,
-  blobBlockOffset: models[401].blobBlockOffset,
-  blobBlockLength: models[401].blobBlockLength,
-  blobByteOffset: models[401].blobByteOffset,
-  modelId: models[401].modelId,
-  expectedSize: models[401].expectedSize,
-  sha256Checksum: models[401].sha256Checksum,
-  addon: models[401].addon,
-  engine: models[401].engine,
-  quantization: models[401].quantization,
-  params: models[401].params
+  src: `registry://${models[404].registrySource}/${models[404].registryPath}`,
+  registryPath: models[404].registryPath,
+  registrySource: models[404].registrySource,
+  blobCoreKey: models[404].blobCoreKey,
+  blobBlockOffset: models[404].blobBlockOffset,
+  blobBlockLength: models[404].blobBlockLength,
+  blobByteOffset: models[404].blobByteOffset,
+  modelId: models[404].modelId,
+  expectedSize: models[404].expectedSize,
+  sha256Checksum: models[404].sha256Checksum,
+  addon: models[404].addon,
+  engine: models[404].engine,
+  quantization: models[404].quantization,
+  params: models[404].params
 } as const
 
 export const BERGAMOT_EN_TE = {
   name: 'BERGAMOT_EN_TE',
-  src: `registry://${models[405].registrySource}/${models[405].registryPath}`,
-  registryPath: models[405].registryPath,
-  registrySource: models[405].registrySource,
-  blobCoreKey: models[405].blobCoreKey,
-  blobBlockOffset: models[405].blobBlockOffset,
-  blobBlockLength: models[405].blobBlockLength,
-  blobByteOffset: models[405].blobByteOffset,
-  modelId: models[405].modelId,
-  expectedSize: models[405].expectedSize,
-  sha256Checksum: models[405].sha256Checksum,
-  addon: models[405].addon,
-  engine: models[405].engine,
-  quantization: models[405].quantization,
-  params: models[405].params
+  src: `registry://${models[408].registrySource}/${models[408].registryPath}`,
+  registryPath: models[408].registryPath,
+  registrySource: models[408].registrySource,
+  blobCoreKey: models[408].blobCoreKey,
+  blobBlockOffset: models[408].blobBlockOffset,
+  blobBlockLength: models[408].blobBlockLength,
+  blobByteOffset: models[408].blobByteOffset,
+  modelId: models[408].modelId,
+  expectedSize: models[408].expectedSize,
+  sha256Checksum: models[408].sha256Checksum,
+  addon: models[408].addon,
+  engine: models[408].engine,
+  quantization: models[408].quantization,
+  params: models[408].params
 } as const
 
 export const BERGAMOT_EN_TH = {
   name: 'BERGAMOT_EN_TH',
-  src: `registry://${models[409].registrySource}/${models[409].registryPath}`,
-  registryPath: models[409].registryPath,
-  registrySource: models[409].registrySource,
-  blobCoreKey: models[409].blobCoreKey,
-  blobBlockOffset: models[409].blobBlockOffset,
-  blobBlockLength: models[409].blobBlockLength,
-  blobByteOffset: models[409].blobByteOffset,
-  modelId: models[409].modelId,
-  expectedSize: models[409].expectedSize,
-  sha256Checksum: models[409].sha256Checksum,
-  addon: models[409].addon,
-  engine: models[409].engine,
-  quantization: models[409].quantization,
-  params: models[409].params
+  src: `registry://${models[412].registrySource}/${models[412].registryPath}`,
+  registryPath: models[412].registryPath,
+  registrySource: models[412].registrySource,
+  blobCoreKey: models[412].blobCoreKey,
+  blobBlockOffset: models[412].blobBlockOffset,
+  blobBlockLength: models[412].blobBlockLength,
+  blobByteOffset: models[412].blobByteOffset,
+  modelId: models[412].modelId,
+  expectedSize: models[412].expectedSize,
+  sha256Checksum: models[412].sha256Checksum,
+  addon: models[412].addon,
+  engine: models[412].engine,
+  quantization: models[412].quantization,
+  params: models[412].params
 } as const
 
 export const BERGAMOT_EN_TR = {
   name: 'BERGAMOT_EN_TR',
-  src: `registry://${models[413].registrySource}/${models[413].registryPath}`,
-  registryPath: models[413].registryPath,
-  registrySource: models[413].registrySource,
-  blobCoreKey: models[413].blobCoreKey,
-  blobBlockOffset: models[413].blobBlockOffset,
-  blobBlockLength: models[413].blobBlockLength,
-  blobByteOffset: models[413].blobByteOffset,
-  modelId: models[413].modelId,
-  expectedSize: models[413].expectedSize,
-  sha256Checksum: models[413].sha256Checksum,
-  addon: models[413].addon,
-  engine: models[413].engine,
-  quantization: models[413].quantization,
-  params: models[413].params
+  src: `registry://${models[416].registrySource}/${models[416].registryPath}`,
+  registryPath: models[416].registryPath,
+  registrySource: models[416].registrySource,
+  blobCoreKey: models[416].blobCoreKey,
+  blobBlockOffset: models[416].blobBlockOffset,
+  blobBlockLength: models[416].blobBlockLength,
+  blobByteOffset: models[416].blobByteOffset,
+  modelId: models[416].modelId,
+  expectedSize: models[416].expectedSize,
+  sha256Checksum: models[416].sha256Checksum,
+  addon: models[416].addon,
+  engine: models[416].engine,
+  quantization: models[416].quantization,
+  params: models[416].params
 } as const
 
 export const BERGAMOT_EN_UK = {
   name: 'BERGAMOT_EN_UK',
-  src: `registry://${models[417].registrySource}/${models[417].registryPath}`,
-  registryPath: models[417].registryPath,
-  registrySource: models[417].registrySource,
-  blobCoreKey: models[417].blobCoreKey,
-  blobBlockOffset: models[417].blobBlockOffset,
-  blobBlockLength: models[417].blobBlockLength,
-  blobByteOffset: models[417].blobByteOffset,
-  modelId: models[417].modelId,
-  expectedSize: models[417].expectedSize,
-  sha256Checksum: models[417].sha256Checksum,
-  addon: models[417].addon,
-  engine: models[417].engine,
-  quantization: models[417].quantization,
-  params: models[417].params
+  src: `registry://${models[420].registrySource}/${models[420].registryPath}`,
+  registryPath: models[420].registryPath,
+  registrySource: models[420].registrySource,
+  blobCoreKey: models[420].blobCoreKey,
+  blobBlockOffset: models[420].blobBlockOffset,
+  blobBlockLength: models[420].blobBlockLength,
+  blobByteOffset: models[420].blobByteOffset,
+  modelId: models[420].modelId,
+  expectedSize: models[420].expectedSize,
+  sha256Checksum: models[420].sha256Checksum,
+  addon: models[420].addon,
+  engine: models[420].engine,
+  quantization: models[420].quantization,
+  params: models[420].params
 } as const
 
 export const BERGAMOT_EN_VI = {
   name: 'BERGAMOT_EN_VI',
-  src: `registry://${models[421].registrySource}/${models[421].registryPath}`,
-  registryPath: models[421].registryPath,
-  registrySource: models[421].registrySource,
-  blobCoreKey: models[421].blobCoreKey,
-  blobBlockOffset: models[421].blobBlockOffset,
-  blobBlockLength: models[421].blobBlockLength,
-  blobByteOffset: models[421].blobByteOffset,
-  modelId: models[421].modelId,
-  expectedSize: models[421].expectedSize,
-  sha256Checksum: models[421].sha256Checksum,
-  addon: models[421].addon,
-  engine: models[421].engine,
-  quantization: models[421].quantization,
-  params: models[421].params
+  src: `registry://${models[424].registrySource}/${models[424].registryPath}`,
+  registryPath: models[424].registryPath,
+  registrySource: models[424].registrySource,
+  blobCoreKey: models[424].blobCoreKey,
+  blobBlockOffset: models[424].blobBlockOffset,
+  blobBlockLength: models[424].blobBlockLength,
+  blobByteOffset: models[424].blobByteOffset,
+  modelId: models[424].modelId,
+  expectedSize: models[424].expectedSize,
+  sha256Checksum: models[424].sha256Checksum,
+  addon: models[424].addon,
+  engine: models[424].engine,
+  quantization: models[424].quantization,
+  params: models[424].params
 } as const
 
 export const BERGAMOT_EN_ZH = {
   name: 'BERGAMOT_EN_ZH',
-  src: `registry://${models[425].registrySource}/${models[425].registryPath}`,
-  registryPath: models[425].registryPath,
-  registrySource: models[425].registrySource,
-  blobCoreKey: models[425].blobCoreKey,
-  blobBlockOffset: models[425].blobBlockOffset,
-  blobBlockLength: models[425].blobBlockLength,
-  blobByteOffset: models[425].blobByteOffset,
-  modelId: models[425].modelId,
-  expectedSize: models[425].expectedSize,
-  sha256Checksum: models[425].sha256Checksum,
-  addon: models[425].addon,
-  engine: models[425].engine,
-  quantization: models[425].quantization,
-  params: models[425].params
+  src: `registry://${models[428].registrySource}/${models[428].registryPath}`,
+  registryPath: models[428].registryPath,
+  registrySource: models[428].registrySource,
+  blobCoreKey: models[428].blobCoreKey,
+  blobBlockOffset: models[428].blobBlockOffset,
+  blobBlockLength: models[428].blobBlockLength,
+  blobByteOffset: models[428].blobByteOffset,
+  modelId: models[428].modelId,
+  expectedSize: models[428].expectedSize,
+  sha256Checksum: models[428].sha256Checksum,
+  addon: models[428].addon,
+  engine: models[428].engine,
+  quantization: models[428].quantization,
+  params: models[428].params
 } as const
 
 export const BERGAMOT_ES_EN = {
   name: 'BERGAMOT_ES_EN',
-  src: `registry://${models[430].registrySource}/${models[430].registryPath}`,
-  registryPath: models[430].registryPath,
-  registrySource: models[430].registrySource,
-  blobCoreKey: models[430].blobCoreKey,
-  blobBlockOffset: models[430].blobBlockOffset,
-  blobBlockLength: models[430].blobBlockLength,
-  blobByteOffset: models[430].blobByteOffset,
-  modelId: models[430].modelId,
-  expectedSize: models[430].expectedSize,
-  sha256Checksum: models[430].sha256Checksum,
-  addon: models[430].addon,
-  engine: models[430].engine,
-  quantization: models[430].quantization,
-  params: models[430].params
+  src: `registry://${models[433].registrySource}/${models[433].registryPath}`,
+  registryPath: models[433].registryPath,
+  registrySource: models[433].registrySource,
+  blobCoreKey: models[433].blobCoreKey,
+  blobBlockOffset: models[433].blobBlockOffset,
+  blobBlockLength: models[433].blobBlockLength,
+  blobByteOffset: models[433].blobByteOffset,
+  modelId: models[433].modelId,
+  expectedSize: models[433].expectedSize,
+  sha256Checksum: models[433].sha256Checksum,
+  addon: models[433].addon,
+  engine: models[433].engine,
+  quantization: models[433].quantization,
+  params: models[433].params
 } as const
 
 export const BERGAMOT_ET_EN = {
   name: 'BERGAMOT_ET_EN',
-  src: `registry://${models[434].registrySource}/${models[434].registryPath}`,
-  registryPath: models[434].registryPath,
-  registrySource: models[434].registrySource,
-  blobCoreKey: models[434].blobCoreKey,
-  blobBlockOffset: models[434].blobBlockOffset,
-  blobBlockLength: models[434].blobBlockLength,
-  blobByteOffset: models[434].blobByteOffset,
-  modelId: models[434].modelId,
-  expectedSize: models[434].expectedSize,
-  sha256Checksum: models[434].sha256Checksum,
-  addon: models[434].addon,
-  engine: models[434].engine,
-  quantization: models[434].quantization,
-  params: models[434].params
+  src: `registry://${models[437].registrySource}/${models[437].registryPath}`,
+  registryPath: models[437].registryPath,
+  registrySource: models[437].registrySource,
+  blobCoreKey: models[437].blobCoreKey,
+  blobBlockOffset: models[437].blobBlockOffset,
+  blobBlockLength: models[437].blobBlockLength,
+  blobByteOffset: models[437].blobByteOffset,
+  modelId: models[437].modelId,
+  expectedSize: models[437].expectedSize,
+  sha256Checksum: models[437].sha256Checksum,
+  addon: models[437].addon,
+  engine: models[437].engine,
+  quantization: models[437].quantization,
+  params: models[437].params
 } as const
 
 export const BERGAMOT_FA_EN = {
   name: 'BERGAMOT_FA_EN',
-  src: `registry://${models[438].registrySource}/${models[438].registryPath}`,
-  registryPath: models[438].registryPath,
-  registrySource: models[438].registrySource,
-  blobCoreKey: models[438].blobCoreKey,
-  blobBlockOffset: models[438].blobBlockOffset,
-  blobBlockLength: models[438].blobBlockLength,
-  blobByteOffset: models[438].blobByteOffset,
-  modelId: models[438].modelId,
-  expectedSize: models[438].expectedSize,
-  sha256Checksum: models[438].sha256Checksum,
-  addon: models[438].addon,
-  engine: models[438].engine,
-  quantization: models[438].quantization,
-  params: models[438].params
+  src: `registry://${models[441].registrySource}/${models[441].registryPath}`,
+  registryPath: models[441].registryPath,
+  registrySource: models[441].registrySource,
+  blobCoreKey: models[441].blobCoreKey,
+  blobBlockOffset: models[441].blobBlockOffset,
+  blobBlockLength: models[441].blobBlockLength,
+  blobByteOffset: models[441].blobByteOffset,
+  modelId: models[441].modelId,
+  expectedSize: models[441].expectedSize,
+  sha256Checksum: models[441].sha256Checksum,
+  addon: models[441].addon,
+  engine: models[441].engine,
+  quantization: models[441].quantization,
+  params: models[441].params
 } as const
 
 export const BERGAMOT_FI_EN = {
   name: 'BERGAMOT_FI_EN',
-  src: `registry://${models[442].registrySource}/${models[442].registryPath}`,
-  registryPath: models[442].registryPath,
-  registrySource: models[442].registrySource,
-  blobCoreKey: models[442].blobCoreKey,
-  blobBlockOffset: models[442].blobBlockOffset,
-  blobBlockLength: models[442].blobBlockLength,
-  blobByteOffset: models[442].blobByteOffset,
-  modelId: models[442].modelId,
-  expectedSize: models[442].expectedSize,
-  sha256Checksum: models[442].sha256Checksum,
-  addon: models[442].addon,
-  engine: models[442].engine,
-  quantization: models[442].quantization,
-  params: models[442].params
+  src: `registry://${models[445].registrySource}/${models[445].registryPath}`,
+  registryPath: models[445].registryPath,
+  registrySource: models[445].registrySource,
+  blobCoreKey: models[445].blobCoreKey,
+  blobBlockOffset: models[445].blobBlockOffset,
+  blobBlockLength: models[445].blobBlockLength,
+  blobByteOffset: models[445].blobByteOffset,
+  modelId: models[445].modelId,
+  expectedSize: models[445].expectedSize,
+  sha256Checksum: models[445].sha256Checksum,
+  addon: models[445].addon,
+  engine: models[445].engine,
+  quantization: models[445].quantization,
+  params: models[445].params
 } as const
 
 export const BERGAMOT_FR_EN = {
   name: 'BERGAMOT_FR_EN',
-  src: `registry://${models[446].registrySource}/${models[446].registryPath}`,
-  registryPath: models[446].registryPath,
-  registrySource: models[446].registrySource,
-  blobCoreKey: models[446].blobCoreKey,
-  blobBlockOffset: models[446].blobBlockOffset,
-  blobBlockLength: models[446].blobBlockLength,
-  blobByteOffset: models[446].blobByteOffset,
-  modelId: models[446].modelId,
-  expectedSize: models[446].expectedSize,
-  sha256Checksum: models[446].sha256Checksum,
-  addon: models[446].addon,
-  engine: models[446].engine,
-  quantization: models[446].quantization,
-  params: models[446].params
+  src: `registry://${models[449].registrySource}/${models[449].registryPath}`,
+  registryPath: models[449].registryPath,
+  registrySource: models[449].registrySource,
+  blobCoreKey: models[449].blobCoreKey,
+  blobBlockOffset: models[449].blobBlockOffset,
+  blobBlockLength: models[449].blobBlockLength,
+  blobByteOffset: models[449].blobByteOffset,
+  modelId: models[449].modelId,
+  expectedSize: models[449].expectedSize,
+  sha256Checksum: models[449].sha256Checksum,
+  addon: models[449].addon,
+  engine: models[449].engine,
+  quantization: models[449].quantization,
+  params: models[449].params
 } as const
 
 export const BERGAMOT_GU_EN = {
   name: 'BERGAMOT_GU_EN',
-  src: `registry://${models[450].registrySource}/${models[450].registryPath}`,
-  registryPath: models[450].registryPath,
-  registrySource: models[450].registrySource,
-  blobCoreKey: models[450].blobCoreKey,
-  blobBlockOffset: models[450].blobBlockOffset,
-  blobBlockLength: models[450].blobBlockLength,
-  blobByteOffset: models[450].blobByteOffset,
-  modelId: models[450].modelId,
-  expectedSize: models[450].expectedSize,
-  sha256Checksum: models[450].sha256Checksum,
-  addon: models[450].addon,
-  engine: models[450].engine,
-  quantization: models[450].quantization,
-  params: models[450].params
+  src: `registry://${models[453].registrySource}/${models[453].registryPath}`,
+  registryPath: models[453].registryPath,
+  registrySource: models[453].registrySource,
+  blobCoreKey: models[453].blobCoreKey,
+  blobBlockOffset: models[453].blobBlockOffset,
+  blobBlockLength: models[453].blobBlockLength,
+  blobByteOffset: models[453].blobByteOffset,
+  modelId: models[453].modelId,
+  expectedSize: models[453].expectedSize,
+  sha256Checksum: models[453].sha256Checksum,
+  addon: models[453].addon,
+  engine: models[453].engine,
+  quantization: models[453].quantization,
+  params: models[453].params
 } as const
 
 export const BERGAMOT = {
   name: 'BERGAMOT',
-  src: `registry://${models[454].registrySource}/${models[454].registryPath}`,
-  registryPath: models[454].registryPath,
-  registrySource: models[454].registrySource,
-  blobCoreKey: models[454].blobCoreKey,
-  blobBlockOffset: models[454].blobBlockOffset,
-  blobBlockLength: models[454].blobBlockLength,
-  blobByteOffset: models[454].blobByteOffset,
-  modelId: models[454].modelId,
-  expectedSize: models[454].expectedSize,
-  sha256Checksum: models[454].sha256Checksum,
-  addon: models[454].addon,
-  engine: models[454].engine,
-  quantization: models[454].quantization,
-  params: models[454].params
+  src: `registry://${models[457].registrySource}/${models[457].registryPath}`,
+  registryPath: models[457].registryPath,
+  registrySource: models[457].registrySource,
+  blobCoreKey: models[457].blobCoreKey,
+  blobBlockOffset: models[457].blobBlockOffset,
+  blobBlockLength: models[457].blobBlockLength,
+  blobByteOffset: models[457].blobByteOffset,
+  modelId: models[457].modelId,
+  expectedSize: models[457].expectedSize,
+  sha256Checksum: models[457].sha256Checksum,
+  addon: models[457].addon,
+  engine: models[457].engine,
+  quantization: models[457].quantization,
+  params: models[457].params
 } as const
 
 export const BERGAMOT_HE_EN = {
   name: 'BERGAMOT_HE_EN',
-  src: `registry://${models[458].registrySource}/${models[458].registryPath}`,
-  registryPath: models[458].registryPath,
-  registrySource: models[458].registrySource,
-  blobCoreKey: models[458].blobCoreKey,
-  blobBlockOffset: models[458].blobBlockOffset,
-  blobBlockLength: models[458].blobBlockLength,
-  blobByteOffset: models[458].blobByteOffset,
-  modelId: models[458].modelId,
-  expectedSize: models[458].expectedSize,
-  sha256Checksum: models[458].sha256Checksum,
-  addon: models[458].addon,
-  engine: models[458].engine,
-  quantization: models[458].quantization,
-  params: models[458].params
+  src: `registry://${models[461].registrySource}/${models[461].registryPath}`,
+  registryPath: models[461].registryPath,
+  registrySource: models[461].registrySource,
+  blobCoreKey: models[461].blobCoreKey,
+  blobBlockOffset: models[461].blobBlockOffset,
+  blobBlockLength: models[461].blobBlockLength,
+  blobByteOffset: models[461].blobByteOffset,
+  modelId: models[461].modelId,
+  expectedSize: models[461].expectedSize,
+  sha256Checksum: models[461].sha256Checksum,
+  addon: models[461].addon,
+  engine: models[461].engine,
+  quantization: models[461].quantization,
+  params: models[461].params
 } as const
 
 export const BERGAMOT_HI_EN = {
   name: 'BERGAMOT_HI_EN',
-  src: `registry://${models[462].registrySource}/${models[462].registryPath}`,
-  registryPath: models[462].registryPath,
-  registrySource: models[462].registrySource,
-  blobCoreKey: models[462].blobCoreKey,
-  blobBlockOffset: models[462].blobBlockOffset,
-  blobBlockLength: models[462].blobBlockLength,
-  blobByteOffset: models[462].blobByteOffset,
-  modelId: models[462].modelId,
-  expectedSize: models[462].expectedSize,
-  sha256Checksum: models[462].sha256Checksum,
-  addon: models[462].addon,
-  engine: models[462].engine,
-  quantization: models[462].quantization,
-  params: models[462].params
+  src: `registry://${models[465].registrySource}/${models[465].registryPath}`,
+  registryPath: models[465].registryPath,
+  registrySource: models[465].registrySource,
+  blobCoreKey: models[465].blobCoreKey,
+  blobBlockOffset: models[465].blobBlockOffset,
+  blobBlockLength: models[465].blobBlockLength,
+  blobByteOffset: models[465].blobByteOffset,
+  modelId: models[465].modelId,
+  expectedSize: models[465].expectedSize,
+  sha256Checksum: models[465].sha256Checksum,
+  addon: models[465].addon,
+  engine: models[465].engine,
+  quantization: models[465].quantization,
+  params: models[465].params
 } as const
 
 export const BERGAMOT_HR_EN = {
   name: 'BERGAMOT_HR_EN',
-  src: `registry://${models[466].registrySource}/${models[466].registryPath}`,
-  registryPath: models[466].registryPath,
-  registrySource: models[466].registrySource,
-  blobCoreKey: models[466].blobCoreKey,
-  blobBlockOffset: models[466].blobBlockOffset,
-  blobBlockLength: models[466].blobBlockLength,
-  blobByteOffset: models[466].blobByteOffset,
-  modelId: models[466].modelId,
-  expectedSize: models[466].expectedSize,
-  sha256Checksum: models[466].sha256Checksum,
-  addon: models[466].addon,
-  engine: models[466].engine,
-  quantization: models[466].quantization,
-  params: models[466].params
+  src: `registry://${models[469].registrySource}/${models[469].registryPath}`,
+  registryPath: models[469].registryPath,
+  registrySource: models[469].registrySource,
+  blobCoreKey: models[469].blobCoreKey,
+  blobBlockOffset: models[469].blobBlockOffset,
+  blobBlockLength: models[469].blobBlockLength,
+  blobByteOffset: models[469].blobByteOffset,
+  modelId: models[469].modelId,
+  expectedSize: models[469].expectedSize,
+  sha256Checksum: models[469].sha256Checksum,
+  addon: models[469].addon,
+  engine: models[469].engine,
+  quantization: models[469].quantization,
+  params: models[469].params
 } as const
 
 export const BERGAMOT_HU_EN = {
   name: 'BERGAMOT_HU_EN',
-  src: `registry://${models[470].registrySource}/${models[470].registryPath}`,
-  registryPath: models[470].registryPath,
-  registrySource: models[470].registrySource,
-  blobCoreKey: models[470].blobCoreKey,
-  blobBlockOffset: models[470].blobBlockOffset,
-  blobBlockLength: models[470].blobBlockLength,
-  blobByteOffset: models[470].blobByteOffset,
-  modelId: models[470].modelId,
-  expectedSize: models[470].expectedSize,
-  sha256Checksum: models[470].sha256Checksum,
-  addon: models[470].addon,
-  engine: models[470].engine,
-  quantization: models[470].quantization,
-  params: models[470].params
+  src: `registry://${models[473].registrySource}/${models[473].registryPath}`,
+  registryPath: models[473].registryPath,
+  registrySource: models[473].registrySource,
+  blobCoreKey: models[473].blobCoreKey,
+  blobBlockOffset: models[473].blobBlockOffset,
+  blobBlockLength: models[473].blobBlockLength,
+  blobByteOffset: models[473].blobByteOffset,
+  modelId: models[473].modelId,
+  expectedSize: models[473].expectedSize,
+  sha256Checksum: models[473].sha256Checksum,
+  addon: models[473].addon,
+  engine: models[473].engine,
+  quantization: models[473].quantization,
+  params: models[473].params
 } as const
 
 export const BERGAMOT_ID_EN = {
   name: 'BERGAMOT_ID_EN',
-  src: `registry://${models[474].registrySource}/${models[474].registryPath}`,
-  registryPath: models[474].registryPath,
-  registrySource: models[474].registrySource,
-  blobCoreKey: models[474].blobCoreKey,
-  blobBlockOffset: models[474].blobBlockOffset,
-  blobBlockLength: models[474].blobBlockLength,
-  blobByteOffset: models[474].blobByteOffset,
-  modelId: models[474].modelId,
-  expectedSize: models[474].expectedSize,
-  sha256Checksum: models[474].sha256Checksum,
-  addon: models[474].addon,
-  engine: models[474].engine,
-  quantization: models[474].quantization,
-  params: models[474].params
+  src: `registry://${models[477].registrySource}/${models[477].registryPath}`,
+  registryPath: models[477].registryPath,
+  registrySource: models[477].registrySource,
+  blobCoreKey: models[477].blobCoreKey,
+  blobBlockOffset: models[477].blobBlockOffset,
+  blobBlockLength: models[477].blobBlockLength,
+  blobByteOffset: models[477].blobByteOffset,
+  modelId: models[477].modelId,
+  expectedSize: models[477].expectedSize,
+  sha256Checksum: models[477].sha256Checksum,
+  addon: models[477].addon,
+  engine: models[477].engine,
+  quantization: models[477].quantization,
+  params: models[477].params
 } as const
 
 export const BERGAMOT_IS_EN = {
   name: 'BERGAMOT_IS_EN',
-  src: `registry://${models[478].registrySource}/${models[478].registryPath}`,
-  registryPath: models[478].registryPath,
-  registrySource: models[478].registrySource,
-  blobCoreKey: models[478].blobCoreKey,
-  blobBlockOffset: models[478].blobBlockOffset,
-  blobBlockLength: models[478].blobBlockLength,
-  blobByteOffset: models[478].blobByteOffset,
-  modelId: models[478].modelId,
-  expectedSize: models[478].expectedSize,
-  sha256Checksum: models[478].sha256Checksum,
-  addon: models[478].addon,
-  engine: models[478].engine,
-  quantization: models[478].quantization,
-  params: models[478].params
+  src: `registry://${models[481].registrySource}/${models[481].registryPath}`,
+  registryPath: models[481].registryPath,
+  registrySource: models[481].registrySource,
+  blobCoreKey: models[481].blobCoreKey,
+  blobBlockOffset: models[481].blobBlockOffset,
+  blobBlockLength: models[481].blobBlockLength,
+  blobByteOffset: models[481].blobByteOffset,
+  modelId: models[481].modelId,
+  expectedSize: models[481].expectedSize,
+  sha256Checksum: models[481].sha256Checksum,
+  addon: models[481].addon,
+  engine: models[481].engine,
+  quantization: models[481].quantization,
+  params: models[481].params
 } as const
 
 export const BERGAMOT_IT_EN = {
   name: 'BERGAMOT_IT_EN',
-  src: `registry://${models[482].registrySource}/${models[482].registryPath}`,
-  registryPath: models[482].registryPath,
-  registrySource: models[482].registrySource,
-  blobCoreKey: models[482].blobCoreKey,
-  blobBlockOffset: models[482].blobBlockOffset,
-  blobBlockLength: models[482].blobBlockLength,
-  blobByteOffset: models[482].blobByteOffset,
-  modelId: models[482].modelId,
-  expectedSize: models[482].expectedSize,
-  sha256Checksum: models[482].sha256Checksum,
-  addon: models[482].addon,
-  engine: models[482].engine,
-  quantization: models[482].quantization,
-  params: models[482].params
+  src: `registry://${models[485].registrySource}/${models[485].registryPath}`,
+  registryPath: models[485].registryPath,
+  registrySource: models[485].registrySource,
+  blobCoreKey: models[485].blobCoreKey,
+  blobBlockOffset: models[485].blobBlockOffset,
+  blobBlockLength: models[485].blobBlockLength,
+  blobByteOffset: models[485].blobByteOffset,
+  modelId: models[485].modelId,
+  expectedSize: models[485].expectedSize,
+  sha256Checksum: models[485].sha256Checksum,
+  addon: models[485].addon,
+  engine: models[485].engine,
+  quantization: models[485].quantization,
+  params: models[485].params
 } as const
 
 export const BERGAMOT_JA_EN = {
   name: 'BERGAMOT_JA_EN',
-  src: `registry://${models[486].registrySource}/${models[486].registryPath}`,
-  registryPath: models[486].registryPath,
-  registrySource: models[486].registrySource,
-  blobCoreKey: models[486].blobCoreKey,
-  blobBlockOffset: models[486].blobBlockOffset,
-  blobBlockLength: models[486].blobBlockLength,
-  blobByteOffset: models[486].blobByteOffset,
-  modelId: models[486].modelId,
-  expectedSize: models[486].expectedSize,
-  sha256Checksum: models[486].sha256Checksum,
-  addon: models[486].addon,
-  engine: models[486].engine,
-  quantization: models[486].quantization,
-  params: models[486].params
+  src: `registry://${models[489].registrySource}/${models[489].registryPath}`,
+  registryPath: models[489].registryPath,
+  registrySource: models[489].registrySource,
+  blobCoreKey: models[489].blobCoreKey,
+  blobBlockOffset: models[489].blobBlockOffset,
+  blobBlockLength: models[489].blobBlockLength,
+  blobByteOffset: models[489].blobByteOffset,
+  modelId: models[489].modelId,
+  expectedSize: models[489].expectedSize,
+  sha256Checksum: models[489].sha256Checksum,
+  addon: models[489].addon,
+  engine: models[489].engine,
+  quantization: models[489].quantization,
+  params: models[489].params
 } as const
 
 export const BERGAMOT_KN_EN = {
   name: 'BERGAMOT_KN_EN',
-  src: `registry://${models[490].registrySource}/${models[490].registryPath}`,
-  registryPath: models[490].registryPath,
-  registrySource: models[490].registrySource,
-  blobCoreKey: models[490].blobCoreKey,
-  blobBlockOffset: models[490].blobBlockOffset,
-  blobBlockLength: models[490].blobBlockLength,
-  blobByteOffset: models[490].blobByteOffset,
-  modelId: models[490].modelId,
-  expectedSize: models[490].expectedSize,
-  sha256Checksum: models[490].sha256Checksum,
-  addon: models[490].addon,
-  engine: models[490].engine,
-  quantization: models[490].quantization,
-  params: models[490].params
+  src: `registry://${models[493].registrySource}/${models[493].registryPath}`,
+  registryPath: models[493].registryPath,
+  registrySource: models[493].registrySource,
+  blobCoreKey: models[493].blobCoreKey,
+  blobBlockOffset: models[493].blobBlockOffset,
+  blobBlockLength: models[493].blobBlockLength,
+  blobByteOffset: models[493].blobByteOffset,
+  modelId: models[493].modelId,
+  expectedSize: models[493].expectedSize,
+  sha256Checksum: models[493].sha256Checksum,
+  addon: models[493].addon,
+  engine: models[493].engine,
+  quantization: models[493].quantization,
+  params: models[493].params
 } as const
 
 export const BERGAMOT_KO_EN = {
   name: 'BERGAMOT_KO_EN',
-  src: `registry://${models[494].registrySource}/${models[494].registryPath}`,
-  registryPath: models[494].registryPath,
-  registrySource: models[494].registrySource,
-  blobCoreKey: models[494].blobCoreKey,
-  blobBlockOffset: models[494].blobBlockOffset,
-  blobBlockLength: models[494].blobBlockLength,
-  blobByteOffset: models[494].blobByteOffset,
-  modelId: models[494].modelId,
-  expectedSize: models[494].expectedSize,
-  sha256Checksum: models[494].sha256Checksum,
-  addon: models[494].addon,
-  engine: models[494].engine,
-  quantization: models[494].quantization,
-  params: models[494].params
+  src: `registry://${models[497].registrySource}/${models[497].registryPath}`,
+  registryPath: models[497].registryPath,
+  registrySource: models[497].registrySource,
+  blobCoreKey: models[497].blobCoreKey,
+  blobBlockOffset: models[497].blobBlockOffset,
+  blobBlockLength: models[497].blobBlockLength,
+  blobByteOffset: models[497].blobByteOffset,
+  modelId: models[497].modelId,
+  expectedSize: models[497].expectedSize,
+  sha256Checksum: models[497].sha256Checksum,
+  addon: models[497].addon,
+  engine: models[497].engine,
+  quantization: models[497].quantization,
+  params: models[497].params
 } as const
 
 export const BERGAMOT_LT_EN = {
   name: 'BERGAMOT_LT_EN',
-  src: `registry://${models[498].registrySource}/${models[498].registryPath}`,
-  registryPath: models[498].registryPath,
-  registrySource: models[498].registrySource,
-  blobCoreKey: models[498].blobCoreKey,
-  blobBlockOffset: models[498].blobBlockOffset,
-  blobBlockLength: models[498].blobBlockLength,
-  blobByteOffset: models[498].blobByteOffset,
-  modelId: models[498].modelId,
-  expectedSize: models[498].expectedSize,
-  sha256Checksum: models[498].sha256Checksum,
-  addon: models[498].addon,
-  engine: models[498].engine,
-  quantization: models[498].quantization,
-  params: models[498].params
+  src: `registry://${models[501].registrySource}/${models[501].registryPath}`,
+  registryPath: models[501].registryPath,
+  registrySource: models[501].registrySource,
+  blobCoreKey: models[501].blobCoreKey,
+  blobBlockOffset: models[501].blobBlockOffset,
+  blobBlockLength: models[501].blobBlockLength,
+  blobByteOffset: models[501].blobByteOffset,
+  modelId: models[501].modelId,
+  expectedSize: models[501].expectedSize,
+  sha256Checksum: models[501].sha256Checksum,
+  addon: models[501].addon,
+  engine: models[501].engine,
+  quantization: models[501].quantization,
+  params: models[501].params
 } as const
 
 export const BERGAMOT_LV_EN = {
   name: 'BERGAMOT_LV_EN',
-  src: `registry://${models[502].registrySource}/${models[502].registryPath}`,
-  registryPath: models[502].registryPath,
-  registrySource: models[502].registrySource,
-  blobCoreKey: models[502].blobCoreKey,
-  blobBlockOffset: models[502].blobBlockOffset,
-  blobBlockLength: models[502].blobBlockLength,
-  blobByteOffset: models[502].blobByteOffset,
-  modelId: models[502].modelId,
-  expectedSize: models[502].expectedSize,
-  sha256Checksum: models[502].sha256Checksum,
-  addon: models[502].addon,
-  engine: models[502].engine,
-  quantization: models[502].quantization,
-  params: models[502].params
+  src: `registry://${models[505].registrySource}/${models[505].registryPath}`,
+  registryPath: models[505].registryPath,
+  registrySource: models[505].registrySource,
+  blobCoreKey: models[505].blobCoreKey,
+  blobBlockOffset: models[505].blobBlockOffset,
+  blobBlockLength: models[505].blobBlockLength,
+  blobByteOffset: models[505].blobByteOffset,
+  modelId: models[505].modelId,
+  expectedSize: models[505].expectedSize,
+  sha256Checksum: models[505].sha256Checksum,
+  addon: models[505].addon,
+  engine: models[505].engine,
+  quantization: models[505].quantization,
+  params: models[505].params
 } as const
 
 export const BERGAMOT_ML_EN = {
   name: 'BERGAMOT_ML_EN',
-  src: `registry://${models[506].registrySource}/${models[506].registryPath}`,
-  registryPath: models[506].registryPath,
-  registrySource: models[506].registrySource,
-  blobCoreKey: models[506].blobCoreKey,
-  blobBlockOffset: models[506].blobBlockOffset,
-  blobBlockLength: models[506].blobBlockLength,
-  blobByteOffset: models[506].blobByteOffset,
-  modelId: models[506].modelId,
-  expectedSize: models[506].expectedSize,
-  sha256Checksum: models[506].sha256Checksum,
-  addon: models[506].addon,
-  engine: models[506].engine,
-  quantization: models[506].quantization,
-  params: models[506].params
+  src: `registry://${models[509].registrySource}/${models[509].registryPath}`,
+  registryPath: models[509].registryPath,
+  registrySource: models[509].registrySource,
+  blobCoreKey: models[509].blobCoreKey,
+  blobBlockOffset: models[509].blobBlockOffset,
+  blobBlockLength: models[509].blobBlockLength,
+  blobByteOffset: models[509].blobByteOffset,
+  modelId: models[509].modelId,
+  expectedSize: models[509].expectedSize,
+  sha256Checksum: models[509].sha256Checksum,
+  addon: models[509].addon,
+  engine: models[509].engine,
+  quantization: models[509].quantization,
+  params: models[509].params
 } as const
 
 export const BERGAMOT_MS_EN = {
   name: 'BERGAMOT_MS_EN',
-  src: `registry://${models[510].registrySource}/${models[510].registryPath}`,
-  registryPath: models[510].registryPath,
-  registrySource: models[510].registrySource,
-  blobCoreKey: models[510].blobCoreKey,
-  blobBlockOffset: models[510].blobBlockOffset,
-  blobBlockLength: models[510].blobBlockLength,
-  blobByteOffset: models[510].blobByteOffset,
-  modelId: models[510].modelId,
-  expectedSize: models[510].expectedSize,
-  sha256Checksum: models[510].sha256Checksum,
-  addon: models[510].addon,
-  engine: models[510].engine,
-  quantization: models[510].quantization,
-  params: models[510].params
+  src: `registry://${models[513].registrySource}/${models[513].registryPath}`,
+  registryPath: models[513].registryPath,
+  registrySource: models[513].registrySource,
+  blobCoreKey: models[513].blobCoreKey,
+  blobBlockOffset: models[513].blobBlockOffset,
+  blobBlockLength: models[513].blobBlockLength,
+  blobByteOffset: models[513].blobByteOffset,
+  modelId: models[513].modelId,
+  expectedSize: models[513].expectedSize,
+  sha256Checksum: models[513].sha256Checksum,
+  addon: models[513].addon,
+  engine: models[513].engine,
+  quantization: models[513].quantization,
+  params: models[513].params
 } as const
 
 export const BERGAMOT_MT_EN = {
   name: 'BERGAMOT_MT_EN',
-  src: `registry://${models[514].registrySource}/${models[514].registryPath}`,
-  registryPath: models[514].registryPath,
-  registrySource: models[514].registrySource,
-  blobCoreKey: models[514].blobCoreKey,
-  blobBlockOffset: models[514].blobBlockOffset,
-  blobBlockLength: models[514].blobBlockLength,
-  blobByteOffset: models[514].blobByteOffset,
-  modelId: models[514].modelId,
-  expectedSize: models[514].expectedSize,
-  sha256Checksum: models[514].sha256Checksum,
-  addon: models[514].addon,
-  engine: models[514].engine,
-  quantization: models[514].quantization,
-  params: models[514].params
+  src: `registry://${models[517].registrySource}/${models[517].registryPath}`,
+  registryPath: models[517].registryPath,
+  registrySource: models[517].registrySource,
+  blobCoreKey: models[517].blobCoreKey,
+  blobBlockOffset: models[517].blobBlockOffset,
+  blobBlockLength: models[517].blobBlockLength,
+  blobByteOffset: models[517].blobByteOffset,
+  modelId: models[517].modelId,
+  expectedSize: models[517].expectedSize,
+  sha256Checksum: models[517].sha256Checksum,
+  addon: models[517].addon,
+  engine: models[517].engine,
+  quantization: models[517].quantization,
+  params: models[517].params
 } as const
 
 export const BERGAMOT_NB_EN = {
   name: 'BERGAMOT_NB_EN',
-  src: `registry://${models[518].registrySource}/${models[518].registryPath}`,
-  registryPath: models[518].registryPath,
-  registrySource: models[518].registrySource,
-  blobCoreKey: models[518].blobCoreKey,
-  blobBlockOffset: models[518].blobBlockOffset,
-  blobBlockLength: models[518].blobBlockLength,
-  blobByteOffset: models[518].blobByteOffset,
-  modelId: models[518].modelId,
-  expectedSize: models[518].expectedSize,
-  sha256Checksum: models[518].sha256Checksum,
-  addon: models[518].addon,
-  engine: models[518].engine,
-  quantization: models[518].quantization,
-  params: models[518].params
+  src: `registry://${models[521].registrySource}/${models[521].registryPath}`,
+  registryPath: models[521].registryPath,
+  registrySource: models[521].registrySource,
+  blobCoreKey: models[521].blobCoreKey,
+  blobBlockOffset: models[521].blobBlockOffset,
+  blobBlockLength: models[521].blobBlockLength,
+  blobByteOffset: models[521].blobByteOffset,
+  modelId: models[521].modelId,
+  expectedSize: models[521].expectedSize,
+  sha256Checksum: models[521].sha256Checksum,
+  addon: models[521].addon,
+  engine: models[521].engine,
+  quantization: models[521].quantization,
+  params: models[521].params
 } as const
 
 export const BERGAMOT_NL_EN = {
   name: 'BERGAMOT_NL_EN',
-  src: `registry://${models[522].registrySource}/${models[522].registryPath}`,
-  registryPath: models[522].registryPath,
-  registrySource: models[522].registrySource,
-  blobCoreKey: models[522].blobCoreKey,
-  blobBlockOffset: models[522].blobBlockOffset,
-  blobBlockLength: models[522].blobBlockLength,
-  blobByteOffset: models[522].blobByteOffset,
-  modelId: models[522].modelId,
-  expectedSize: models[522].expectedSize,
-  sha256Checksum: models[522].sha256Checksum,
-  addon: models[522].addon,
-  engine: models[522].engine,
-  quantization: models[522].quantization,
-  params: models[522].params
+  src: `registry://${models[525].registrySource}/${models[525].registryPath}`,
+  registryPath: models[525].registryPath,
+  registrySource: models[525].registrySource,
+  blobCoreKey: models[525].blobCoreKey,
+  blobBlockOffset: models[525].blobBlockOffset,
+  blobBlockLength: models[525].blobBlockLength,
+  blobByteOffset: models[525].blobByteOffset,
+  modelId: models[525].modelId,
+  expectedSize: models[525].expectedSize,
+  sha256Checksum: models[525].sha256Checksum,
+  addon: models[525].addon,
+  engine: models[525].engine,
+  quantization: models[525].quantization,
+  params: models[525].params
 } as const
 
 export const BERGAMOT_NN_EN = {
   name: 'BERGAMOT_NN_EN',
-  src: `registry://${models[526].registrySource}/${models[526].registryPath}`,
-  registryPath: models[526].registryPath,
-  registrySource: models[526].registrySource,
-  blobCoreKey: models[526].blobCoreKey,
-  blobBlockOffset: models[526].blobBlockOffset,
-  blobBlockLength: models[526].blobBlockLength,
-  blobByteOffset: models[526].blobByteOffset,
-  modelId: models[526].modelId,
-  expectedSize: models[526].expectedSize,
-  sha256Checksum: models[526].sha256Checksum,
-  addon: models[526].addon,
-  engine: models[526].engine,
-  quantization: models[526].quantization,
-  params: models[526].params
+  src: `registry://${models[529].registrySource}/${models[529].registryPath}`,
+  registryPath: models[529].registryPath,
+  registrySource: models[529].registrySource,
+  blobCoreKey: models[529].blobCoreKey,
+  blobBlockOffset: models[529].blobBlockOffset,
+  blobBlockLength: models[529].blobBlockLength,
+  blobByteOffset: models[529].blobByteOffset,
+  modelId: models[529].modelId,
+  expectedSize: models[529].expectedSize,
+  sha256Checksum: models[529].sha256Checksum,
+  addon: models[529].addon,
+  engine: models[529].engine,
+  quantization: models[529].quantization,
+  params: models[529].params
 } as const
 
 export const BERGAMOT_NO_EN = {
   name: 'BERGAMOT_NO_EN',
-  src: `registry://${models[530].registrySource}/${models[530].registryPath}`,
-  registryPath: models[530].registryPath,
-  registrySource: models[530].registrySource,
-  blobCoreKey: models[530].blobCoreKey,
-  blobBlockOffset: models[530].blobBlockOffset,
-  blobBlockLength: models[530].blobBlockLength,
-  blobByteOffset: models[530].blobByteOffset,
-  modelId: models[530].modelId,
-  expectedSize: models[530].expectedSize,
-  sha256Checksum: models[530].sha256Checksum,
-  addon: models[530].addon,
-  engine: models[530].engine,
-  quantization: models[530].quantization,
-  params: models[530].params
+  src: `registry://${models[533].registrySource}/${models[533].registryPath}`,
+  registryPath: models[533].registryPath,
+  registrySource: models[533].registrySource,
+  blobCoreKey: models[533].blobCoreKey,
+  blobBlockOffset: models[533].blobBlockOffset,
+  blobBlockLength: models[533].blobBlockLength,
+  blobByteOffset: models[533].blobByteOffset,
+  modelId: models[533].modelId,
+  expectedSize: models[533].expectedSize,
+  sha256Checksum: models[533].sha256Checksum,
+  addon: models[533].addon,
+  engine: models[533].engine,
+  quantization: models[533].quantization,
+  params: models[533].params
 } as const
 
 export const BERGAMOT_PL_EN = {
   name: 'BERGAMOT_PL_EN',
-  src: `registry://${models[534].registrySource}/${models[534].registryPath}`,
-  registryPath: models[534].registryPath,
-  registrySource: models[534].registrySource,
-  blobCoreKey: models[534].blobCoreKey,
-  blobBlockOffset: models[534].blobBlockOffset,
-  blobBlockLength: models[534].blobBlockLength,
-  blobByteOffset: models[534].blobByteOffset,
-  modelId: models[534].modelId,
-  expectedSize: models[534].expectedSize,
-  sha256Checksum: models[534].sha256Checksum,
-  addon: models[534].addon,
-  engine: models[534].engine,
-  quantization: models[534].quantization,
-  params: models[534].params
+  src: `registry://${models[537].registrySource}/${models[537].registryPath}`,
+  registryPath: models[537].registryPath,
+  registrySource: models[537].registrySource,
+  blobCoreKey: models[537].blobCoreKey,
+  blobBlockOffset: models[537].blobBlockOffset,
+  blobBlockLength: models[537].blobBlockLength,
+  blobByteOffset: models[537].blobByteOffset,
+  modelId: models[537].modelId,
+  expectedSize: models[537].expectedSize,
+  sha256Checksum: models[537].sha256Checksum,
+  addon: models[537].addon,
+  engine: models[537].engine,
+  quantization: models[537].quantization,
+  params: models[537].params
 } as const
 
 export const BERGAMOT_PT_EN = {
   name: 'BERGAMOT_PT_EN',
-  src: `registry://${models[538].registrySource}/${models[538].registryPath}`,
-  registryPath: models[538].registryPath,
-  registrySource: models[538].registrySource,
-  blobCoreKey: models[538].blobCoreKey,
-  blobBlockOffset: models[538].blobBlockOffset,
-  blobBlockLength: models[538].blobBlockLength,
-  blobByteOffset: models[538].blobByteOffset,
-  modelId: models[538].modelId,
-  expectedSize: models[538].expectedSize,
-  sha256Checksum: models[538].sha256Checksum,
-  addon: models[538].addon,
-  engine: models[538].engine,
-  quantization: models[538].quantization,
-  params: models[538].params
+  src: `registry://${models[541].registrySource}/${models[541].registryPath}`,
+  registryPath: models[541].registryPath,
+  registrySource: models[541].registrySource,
+  blobCoreKey: models[541].blobCoreKey,
+  blobBlockOffset: models[541].blobBlockOffset,
+  blobBlockLength: models[541].blobBlockLength,
+  blobByteOffset: models[541].blobByteOffset,
+  modelId: models[541].modelId,
+  expectedSize: models[541].expectedSize,
+  sha256Checksum: models[541].sha256Checksum,
+  addon: models[541].addon,
+  engine: models[541].engine,
+  quantization: models[541].quantization,
+  params: models[541].params
 } as const
 
 export const BERGAMOT_RO_EN = {
   name: 'BERGAMOT_RO_EN',
-  src: `registry://${models[542].registrySource}/${models[542].registryPath}`,
-  registryPath: models[542].registryPath,
-  registrySource: models[542].registrySource,
-  blobCoreKey: models[542].blobCoreKey,
-  blobBlockOffset: models[542].blobBlockOffset,
-  blobBlockLength: models[542].blobBlockLength,
-  blobByteOffset: models[542].blobByteOffset,
-  modelId: models[542].modelId,
-  expectedSize: models[542].expectedSize,
-  sha256Checksum: models[542].sha256Checksum,
-  addon: models[542].addon,
-  engine: models[542].engine,
-  quantization: models[542].quantization,
-  params: models[542].params
+  src: `registry://${models[545].registrySource}/${models[545].registryPath}`,
+  registryPath: models[545].registryPath,
+  registrySource: models[545].registrySource,
+  blobCoreKey: models[545].blobCoreKey,
+  blobBlockOffset: models[545].blobBlockOffset,
+  blobBlockLength: models[545].blobBlockLength,
+  blobByteOffset: models[545].blobByteOffset,
+  modelId: models[545].modelId,
+  expectedSize: models[545].expectedSize,
+  sha256Checksum: models[545].sha256Checksum,
+  addon: models[545].addon,
+  engine: models[545].engine,
+  quantization: models[545].quantization,
+  params: models[545].params
 } as const
 
 export const BERGAMOT_RU_EN = {
   name: 'BERGAMOT_RU_EN',
-  src: `registry://${models[546].registrySource}/${models[546].registryPath}`,
-  registryPath: models[546].registryPath,
-  registrySource: models[546].registrySource,
-  blobCoreKey: models[546].blobCoreKey,
-  blobBlockOffset: models[546].blobBlockOffset,
-  blobBlockLength: models[546].blobBlockLength,
-  blobByteOffset: models[546].blobByteOffset,
-  modelId: models[546].modelId,
-  expectedSize: models[546].expectedSize,
-  sha256Checksum: models[546].sha256Checksum,
-  addon: models[546].addon,
-  engine: models[546].engine,
-  quantization: models[546].quantization,
-  params: models[546].params
+  src: `registry://${models[549].registrySource}/${models[549].registryPath}`,
+  registryPath: models[549].registryPath,
+  registrySource: models[549].registrySource,
+  blobCoreKey: models[549].blobCoreKey,
+  blobBlockOffset: models[549].blobBlockOffset,
+  blobBlockLength: models[549].blobBlockLength,
+  blobByteOffset: models[549].blobByteOffset,
+  modelId: models[549].modelId,
+  expectedSize: models[549].expectedSize,
+  sha256Checksum: models[549].sha256Checksum,
+  addon: models[549].addon,
+  engine: models[549].engine,
+  quantization: models[549].quantization,
+  params: models[549].params
 } as const
 
 export const BERGAMOT_SK_EN = {
   name: 'BERGAMOT_SK_EN',
-  src: `registry://${models[550].registrySource}/${models[550].registryPath}`,
-  registryPath: models[550].registryPath,
-  registrySource: models[550].registrySource,
-  blobCoreKey: models[550].blobCoreKey,
-  blobBlockOffset: models[550].blobBlockOffset,
-  blobBlockLength: models[550].blobBlockLength,
-  blobByteOffset: models[550].blobByteOffset,
-  modelId: models[550].modelId,
-  expectedSize: models[550].expectedSize,
-  sha256Checksum: models[550].sha256Checksum,
-  addon: models[550].addon,
-  engine: models[550].engine,
-  quantization: models[550].quantization,
-  params: models[550].params
+  src: `registry://${models[553].registrySource}/${models[553].registryPath}`,
+  registryPath: models[553].registryPath,
+  registrySource: models[553].registrySource,
+  blobCoreKey: models[553].blobCoreKey,
+  blobBlockOffset: models[553].blobBlockOffset,
+  blobBlockLength: models[553].blobBlockLength,
+  blobByteOffset: models[553].blobByteOffset,
+  modelId: models[553].modelId,
+  expectedSize: models[553].expectedSize,
+  sha256Checksum: models[553].sha256Checksum,
+  addon: models[553].addon,
+  engine: models[553].engine,
+  quantization: models[553].quantization,
+  params: models[553].params
 } as const
 
 export const BERGAMOT_SL_EN = {
   name: 'BERGAMOT_SL_EN',
-  src: `registry://${models[554].registrySource}/${models[554].registryPath}`,
-  registryPath: models[554].registryPath,
-  registrySource: models[554].registrySource,
-  blobCoreKey: models[554].blobCoreKey,
-  blobBlockOffset: models[554].blobBlockOffset,
-  blobBlockLength: models[554].blobBlockLength,
-  blobByteOffset: models[554].blobByteOffset,
-  modelId: models[554].modelId,
-  expectedSize: models[554].expectedSize,
-  sha256Checksum: models[554].sha256Checksum,
-  addon: models[554].addon,
-  engine: models[554].engine,
-  quantization: models[554].quantization,
-  params: models[554].params
+  src: `registry://${models[557].registrySource}/${models[557].registryPath}`,
+  registryPath: models[557].registryPath,
+  registrySource: models[557].registrySource,
+  blobCoreKey: models[557].blobCoreKey,
+  blobBlockOffset: models[557].blobBlockOffset,
+  blobBlockLength: models[557].blobBlockLength,
+  blobByteOffset: models[557].blobByteOffset,
+  modelId: models[557].modelId,
+  expectedSize: models[557].expectedSize,
+  sha256Checksum: models[557].sha256Checksum,
+  addon: models[557].addon,
+  engine: models[557].engine,
+  quantization: models[557].quantization,
+  params: models[557].params
 } as const
 
 export const BERGAMOT_SQ_EN = {
   name: 'BERGAMOT_SQ_EN',
-  src: `registry://${models[558].registrySource}/${models[558].registryPath}`,
-  registryPath: models[558].registryPath,
-  registrySource: models[558].registrySource,
-  blobCoreKey: models[558].blobCoreKey,
-  blobBlockOffset: models[558].blobBlockOffset,
-  blobBlockLength: models[558].blobBlockLength,
-  blobByteOffset: models[558].blobByteOffset,
-  modelId: models[558].modelId,
-  expectedSize: models[558].expectedSize,
-  sha256Checksum: models[558].sha256Checksum,
-  addon: models[558].addon,
-  engine: models[558].engine,
-  quantization: models[558].quantization,
-  params: models[558].params
+  src: `registry://${models[561].registrySource}/${models[561].registryPath}`,
+  registryPath: models[561].registryPath,
+  registrySource: models[561].registrySource,
+  blobCoreKey: models[561].blobCoreKey,
+  blobBlockOffset: models[561].blobBlockOffset,
+  blobBlockLength: models[561].blobBlockLength,
+  blobByteOffset: models[561].blobByteOffset,
+  modelId: models[561].modelId,
+  expectedSize: models[561].expectedSize,
+  sha256Checksum: models[561].sha256Checksum,
+  addon: models[561].addon,
+  engine: models[561].engine,
+  quantization: models[561].quantization,
+  params: models[561].params
 } as const
 
 export const BERGAMOT_SR_EN = {
   name: 'BERGAMOT_SR_EN',
-  src: `registry://${models[562].registrySource}/${models[562].registryPath}`,
-  registryPath: models[562].registryPath,
-  registrySource: models[562].registrySource,
-  blobCoreKey: models[562].blobCoreKey,
-  blobBlockOffset: models[562].blobBlockOffset,
-  blobBlockLength: models[562].blobBlockLength,
-  blobByteOffset: models[562].blobByteOffset,
-  modelId: models[562].modelId,
-  expectedSize: models[562].expectedSize,
-  sha256Checksum: models[562].sha256Checksum,
-  addon: models[562].addon,
-  engine: models[562].engine,
-  quantization: models[562].quantization,
-  params: models[562].params
+  src: `registry://${models[565].registrySource}/${models[565].registryPath}`,
+  registryPath: models[565].registryPath,
+  registrySource: models[565].registrySource,
+  blobCoreKey: models[565].blobCoreKey,
+  blobBlockOffset: models[565].blobBlockOffset,
+  blobBlockLength: models[565].blobBlockLength,
+  blobByteOffset: models[565].blobByteOffset,
+  modelId: models[565].modelId,
+  expectedSize: models[565].expectedSize,
+  sha256Checksum: models[565].sha256Checksum,
+  addon: models[565].addon,
+  engine: models[565].engine,
+  quantization: models[565].quantization,
+  params: models[565].params
 } as const
 
 export const BERGAMOT_SV_EN = {
   name: 'BERGAMOT_SV_EN',
-  src: `registry://${models[566].registrySource}/${models[566].registryPath}`,
-  registryPath: models[566].registryPath,
-  registrySource: models[566].registrySource,
-  blobCoreKey: models[566].blobCoreKey,
-  blobBlockOffset: models[566].blobBlockOffset,
-  blobBlockLength: models[566].blobBlockLength,
-  blobByteOffset: models[566].blobByteOffset,
-  modelId: models[566].modelId,
-  expectedSize: models[566].expectedSize,
-  sha256Checksum: models[566].sha256Checksum,
-  addon: models[566].addon,
-  engine: models[566].engine,
-  quantization: models[566].quantization,
-  params: models[566].params
+  src: `registry://${models[569].registrySource}/${models[569].registryPath}`,
+  registryPath: models[569].registryPath,
+  registrySource: models[569].registrySource,
+  blobCoreKey: models[569].blobCoreKey,
+  blobBlockOffset: models[569].blobBlockOffset,
+  blobBlockLength: models[569].blobBlockLength,
+  blobByteOffset: models[569].blobByteOffset,
+  modelId: models[569].modelId,
+  expectedSize: models[569].expectedSize,
+  sha256Checksum: models[569].sha256Checksum,
+  addon: models[569].addon,
+  engine: models[569].engine,
+  quantization: models[569].quantization,
+  params: models[569].params
 } as const
 
 export const BERGAMOT_TA_EN = {
   name: 'BERGAMOT_TA_EN',
-  src: `registry://${models[570].registrySource}/${models[570].registryPath}`,
-  registryPath: models[570].registryPath,
-  registrySource: models[570].registrySource,
-  blobCoreKey: models[570].blobCoreKey,
-  blobBlockOffset: models[570].blobBlockOffset,
-  blobBlockLength: models[570].blobBlockLength,
-  blobByteOffset: models[570].blobByteOffset,
-  modelId: models[570].modelId,
-  expectedSize: models[570].expectedSize,
-  sha256Checksum: models[570].sha256Checksum,
-  addon: models[570].addon,
-  engine: models[570].engine,
-  quantization: models[570].quantization,
-  params: models[570].params
+  src: `registry://${models[573].registrySource}/${models[573].registryPath}`,
+  registryPath: models[573].registryPath,
+  registrySource: models[573].registrySource,
+  blobCoreKey: models[573].blobCoreKey,
+  blobBlockOffset: models[573].blobBlockOffset,
+  blobBlockLength: models[573].blobBlockLength,
+  blobByteOffset: models[573].blobByteOffset,
+  modelId: models[573].modelId,
+  expectedSize: models[573].expectedSize,
+  sha256Checksum: models[573].sha256Checksum,
+  addon: models[573].addon,
+  engine: models[573].engine,
+  quantization: models[573].quantization,
+  params: models[573].params
 } as const
 
 export const BERGAMOT_TE_EN = {
   name: 'BERGAMOT_TE_EN',
-  src: `registry://${models[574].registrySource}/${models[574].registryPath}`,
-  registryPath: models[574].registryPath,
-  registrySource: models[574].registrySource,
-  blobCoreKey: models[574].blobCoreKey,
-  blobBlockOffset: models[574].blobBlockOffset,
-  blobBlockLength: models[574].blobBlockLength,
-  blobByteOffset: models[574].blobByteOffset,
-  modelId: models[574].modelId,
-  expectedSize: models[574].expectedSize,
-  sha256Checksum: models[574].sha256Checksum,
-  addon: models[574].addon,
-  engine: models[574].engine,
-  quantization: models[574].quantization,
-  params: models[574].params
+  src: `registry://${models[577].registrySource}/${models[577].registryPath}`,
+  registryPath: models[577].registryPath,
+  registrySource: models[577].registrySource,
+  blobCoreKey: models[577].blobCoreKey,
+  blobBlockOffset: models[577].blobBlockOffset,
+  blobBlockLength: models[577].blobBlockLength,
+  blobByteOffset: models[577].blobByteOffset,
+  modelId: models[577].modelId,
+  expectedSize: models[577].expectedSize,
+  sha256Checksum: models[577].sha256Checksum,
+  addon: models[577].addon,
+  engine: models[577].engine,
+  quantization: models[577].quantization,
+  params: models[577].params
 } as const
 
 export const BERGAMOT_TH_EN = {
   name: 'BERGAMOT_TH_EN',
-  src: `registry://${models[578].registrySource}/${models[578].registryPath}`,
-  registryPath: models[578].registryPath,
-  registrySource: models[578].registrySource,
-  blobCoreKey: models[578].blobCoreKey,
-  blobBlockOffset: models[578].blobBlockOffset,
-  blobBlockLength: models[578].blobBlockLength,
-  blobByteOffset: models[578].blobByteOffset,
-  modelId: models[578].modelId,
-  expectedSize: models[578].expectedSize,
-  sha256Checksum: models[578].sha256Checksum,
-  addon: models[578].addon,
-  engine: models[578].engine,
-  quantization: models[578].quantization,
-  params: models[578].params
+  src: `registry://${models[581].registrySource}/${models[581].registryPath}`,
+  registryPath: models[581].registryPath,
+  registrySource: models[581].registrySource,
+  blobCoreKey: models[581].blobCoreKey,
+  blobBlockOffset: models[581].blobBlockOffset,
+  blobBlockLength: models[581].blobBlockLength,
+  blobByteOffset: models[581].blobByteOffset,
+  modelId: models[581].modelId,
+  expectedSize: models[581].expectedSize,
+  sha256Checksum: models[581].sha256Checksum,
+  addon: models[581].addon,
+  engine: models[581].engine,
+  quantization: models[581].quantization,
+  params: models[581].params
 } as const
 
 export const BERGAMOT_TR_EN = {
   name: 'BERGAMOT_TR_EN',
-  src: `registry://${models[582].registrySource}/${models[582].registryPath}`,
-  registryPath: models[582].registryPath,
-  registrySource: models[582].registrySource,
-  blobCoreKey: models[582].blobCoreKey,
-  blobBlockOffset: models[582].blobBlockOffset,
-  blobBlockLength: models[582].blobBlockLength,
-  blobByteOffset: models[582].blobByteOffset,
-  modelId: models[582].modelId,
-  expectedSize: models[582].expectedSize,
-  sha256Checksum: models[582].sha256Checksum,
-  addon: models[582].addon,
-  engine: models[582].engine,
-  quantization: models[582].quantization,
-  params: models[582].params
+  src: `registry://${models[585].registrySource}/${models[585].registryPath}`,
+  registryPath: models[585].registryPath,
+  registrySource: models[585].registrySource,
+  blobCoreKey: models[585].blobCoreKey,
+  blobBlockOffset: models[585].blobBlockOffset,
+  blobBlockLength: models[585].blobBlockLength,
+  blobByteOffset: models[585].blobByteOffset,
+  modelId: models[585].modelId,
+  expectedSize: models[585].expectedSize,
+  sha256Checksum: models[585].sha256Checksum,
+  addon: models[585].addon,
+  engine: models[585].engine,
+  quantization: models[585].quantization,
+  params: models[585].params
 } as const
 
 export const BERGAMOT_UK_EN = {
   name: 'BERGAMOT_UK_EN',
-  src: `registry://${models[586].registrySource}/${models[586].registryPath}`,
-  registryPath: models[586].registryPath,
-  registrySource: models[586].registrySource,
-  blobCoreKey: models[586].blobCoreKey,
-  blobBlockOffset: models[586].blobBlockOffset,
-  blobBlockLength: models[586].blobBlockLength,
-  blobByteOffset: models[586].blobByteOffset,
-  modelId: models[586].modelId,
-  expectedSize: models[586].expectedSize,
-  sha256Checksum: models[586].sha256Checksum,
-  addon: models[586].addon,
-  engine: models[586].engine,
-  quantization: models[586].quantization,
-  params: models[586].params
+  src: `registry://${models[589].registrySource}/${models[589].registryPath}`,
+  registryPath: models[589].registryPath,
+  registrySource: models[589].registrySource,
+  blobCoreKey: models[589].blobCoreKey,
+  blobBlockOffset: models[589].blobBlockOffset,
+  blobBlockLength: models[589].blobBlockLength,
+  blobByteOffset: models[589].blobByteOffset,
+  modelId: models[589].modelId,
+  expectedSize: models[589].expectedSize,
+  sha256Checksum: models[589].sha256Checksum,
+  addon: models[589].addon,
+  engine: models[589].engine,
+  quantization: models[589].quantization,
+  params: models[589].params
 } as const
 
 export const BERGAMOT_VI_EN = {
   name: 'BERGAMOT_VI_EN',
-  src: `registry://${models[590].registrySource}/${models[590].registryPath}`,
-  registryPath: models[590].registryPath,
-  registrySource: models[590].registrySource,
-  blobCoreKey: models[590].blobCoreKey,
-  blobBlockOffset: models[590].blobBlockOffset,
-  blobBlockLength: models[590].blobBlockLength,
-  blobByteOffset: models[590].blobByteOffset,
-  modelId: models[590].modelId,
-  expectedSize: models[590].expectedSize,
-  sha256Checksum: models[590].sha256Checksum,
-  addon: models[590].addon,
-  engine: models[590].engine,
-  quantization: models[590].quantization,
-  params: models[590].params
+  src: `registry://${models[593].registrySource}/${models[593].registryPath}`,
+  registryPath: models[593].registryPath,
+  registrySource: models[593].registrySource,
+  blobCoreKey: models[593].blobCoreKey,
+  blobBlockOffset: models[593].blobBlockOffset,
+  blobBlockLength: models[593].blobBlockLength,
+  blobByteOffset: models[593].blobByteOffset,
+  modelId: models[593].modelId,
+  expectedSize: models[593].expectedSize,
+  sha256Checksum: models[593].sha256Checksum,
+  addon: models[593].addon,
+  engine: models[593].engine,
+  quantization: models[593].quantization,
+  params: models[593].params
 } as const
 
 export const BERGAMOT_ZH_EN = {
   name: 'BERGAMOT_ZH_EN',
-  src: `registry://${models[594].registrySource}/${models[594].registryPath}`,
-  registryPath: models[594].registryPath,
-  registrySource: models[594].registrySource,
-  blobCoreKey: models[594].blobCoreKey,
-  blobBlockOffset: models[594].blobBlockOffset,
-  blobBlockLength: models[594].blobBlockLength,
-  blobByteOffset: models[594].blobByteOffset,
-  modelId: models[594].modelId,
-  expectedSize: models[594].expectedSize,
-  sha256Checksum: models[594].sha256Checksum,
-  addon: models[594].addon,
-  engine: models[594].engine,
-  quantization: models[594].quantization,
-  params: models[594].params
-} as const
-
-export const MARIAN_EN_HI_INDIC_1B_F16 = {
-  name: 'MARIAN_EN_HI_INDIC_1B_F16',
-  src: `registry://${models[596].registrySource}/${models[596].registryPath}`,
-  registryPath: models[596].registryPath,
-  registrySource: models[596].registrySource,
-  blobCoreKey: models[596].blobCoreKey,
-  blobBlockOffset: models[596].blobBlockOffset,
-  blobBlockLength: models[596].blobBlockLength,
-  blobByteOffset: models[596].blobByteOffset,
-  modelId: models[596].modelId,
-  expectedSize: models[596].expectedSize,
-  sha256Checksum: models[596].sha256Checksum,
-  addon: models[596].addon,
-  engine: models[596].engine,
-  quantization: models[596].quantization,
-  params: models[596].params
-} as const
-
-export const MARIAN_EN_HI_INDIC_200M_F16 = {
-  name: 'MARIAN_EN_HI_INDIC_200M_F16',
   src: `registry://${models[597].registrySource}/${models[597].registryPath}`,
   registryPath: models[597].registryPath,
   registrySource: models[597].registrySource,
@@ -25198,26 +25264,8 @@ export const MARIAN_EN_HI_INDIC_200M_F16 = {
   params: models[597].params
 } as const
 
-export const MARIAN_HI_EN_INDIC_1B_F16 = {
-  name: 'MARIAN_HI_EN_INDIC_1B_F16',
-  src: `registry://${models[598].registrySource}/${models[598].registryPath}`,
-  registryPath: models[598].registryPath,
-  registrySource: models[598].registrySource,
-  blobCoreKey: models[598].blobCoreKey,
-  blobBlockOffset: models[598].blobBlockOffset,
-  blobBlockLength: models[598].blobBlockLength,
-  blobByteOffset: models[598].blobByteOffset,
-  modelId: models[598].modelId,
-  expectedSize: models[598].expectedSize,
-  sha256Checksum: models[598].sha256Checksum,
-  addon: models[598].addon,
-  engine: models[598].engine,
-  quantization: models[598].quantization,
-  params: models[598].params
-} as const
-
-export const MARIAN_HI_EN_INDIC_200M_F16 = {
-  name: 'MARIAN_HI_EN_INDIC_200M_F16',
+export const MARIAN_EN_HI_INDIC_1B_F16 = {
+  name: 'MARIAN_EN_HI_INDIC_1B_F16',
   src: `registry://${models[599].registrySource}/${models[599].registryPath}`,
   registryPath: models[599].registryPath,
   registrySource: models[599].registrySource,
@@ -25234,8 +25282,8 @@ export const MARIAN_HI_EN_INDIC_200M_F16 = {
   params: models[599].params
 } as const
 
-export const MARIAN_HI_HI_INDIC_1B_F16 = {
-  name: 'MARIAN_HI_HI_INDIC_1B_F16',
+export const MARIAN_EN_HI_INDIC_200M_F16 = {
+  name: 'MARIAN_EN_HI_INDIC_200M_F16',
   src: `registry://${models[600].registrySource}/${models[600].registryPath}`,
   registryPath: models[600].registryPath,
   registrySource: models[600].registrySource,
@@ -25252,8 +25300,8 @@ export const MARIAN_HI_HI_INDIC_1B_F16 = {
   params: models[600].params
 } as const
 
-export const MARIAN_HI_HI_INDIC_320M_F16 = {
-  name: 'MARIAN_HI_HI_INDIC_320M_F16',
+export const MARIAN_HI_EN_INDIC_1B_F16 = {
+  name: 'MARIAN_HI_EN_INDIC_1B_F16',
   src: `registry://${models[601].registrySource}/${models[601].registryPath}`,
   registryPath: models[601].registryPath,
   registrySource: models[601].registrySource,
@@ -25270,8 +25318,8 @@ export const MARIAN_HI_HI_INDIC_320M_F16 = {
   params: models[601].params
 } as const
 
-export const MARIAN_EN_HI_INDIC_1B_Q4_0 = {
-  name: 'MARIAN_EN_HI_INDIC_1B_Q4_0',
+export const MARIAN_HI_EN_INDIC_200M_F16 = {
+  name: 'MARIAN_HI_EN_INDIC_200M_F16',
   src: `registry://${models[602].registrySource}/${models[602].registryPath}`,
   registryPath: models[602].registryPath,
   registrySource: models[602].registrySource,
@@ -25288,8 +25336,8 @@ export const MARIAN_EN_HI_INDIC_1B_Q4_0 = {
   params: models[602].params
 } as const
 
-export const MARIAN_EN_HI_INDIC_200M_Q4_0 = {
-  name: 'MARIAN_EN_HI_INDIC_200M_Q4_0',
+export const MARIAN_HI_HI_INDIC_1B_F16 = {
+  name: 'MARIAN_HI_HI_INDIC_1B_F16',
   src: `registry://${models[603].registrySource}/${models[603].registryPath}`,
   registryPath: models[603].registryPath,
   registrySource: models[603].registrySource,
@@ -25306,8 +25354,8 @@ export const MARIAN_EN_HI_INDIC_200M_Q4_0 = {
   params: models[603].params
 } as const
 
-export const MARIAN_HI_EN_INDIC_1B_Q4_0 = {
-  name: 'MARIAN_HI_EN_INDIC_1B_Q4_0',
+export const MARIAN_HI_HI_INDIC_320M_F16 = {
+  name: 'MARIAN_HI_HI_INDIC_320M_F16',
   src: `registry://${models[604].registrySource}/${models[604].registryPath}`,
   registryPath: models[604].registryPath,
   registrySource: models[604].registrySource,
@@ -25324,8 +25372,8 @@ export const MARIAN_HI_EN_INDIC_1B_Q4_0 = {
   params: models[604].params
 } as const
 
-export const MARIAN_HI_EN_INDIC_200M_Q4_0 = {
-  name: 'MARIAN_HI_EN_INDIC_200M_Q4_0',
+export const MARIAN_EN_HI_INDIC_1B_Q4_0 = {
+  name: 'MARIAN_EN_HI_INDIC_1B_Q4_0',
   src: `registry://${models[605].registrySource}/${models[605].registryPath}`,
   registryPath: models[605].registryPath,
   registrySource: models[605].registrySource,
@@ -25342,8 +25390,8 @@ export const MARIAN_HI_EN_INDIC_200M_Q4_0 = {
   params: models[605].params
 } as const
 
-export const MARIAN_HI_HI_INDIC_1B_Q4_0 = {
-  name: 'MARIAN_HI_HI_INDIC_1B_Q4_0',
+export const MARIAN_EN_HI_INDIC_200M_Q4_0 = {
+  name: 'MARIAN_EN_HI_INDIC_200M_Q4_0',
   src: `registry://${models[606].registrySource}/${models[606].registryPath}`,
   registryPath: models[606].registryPath,
   registrySource: models[606].registrySource,
@@ -25360,8 +25408,8 @@ export const MARIAN_HI_HI_INDIC_1B_Q4_0 = {
   params: models[606].params
 } as const
 
-export const MARIAN_HI_HI_INDIC_320M_Q4_0 = {
-  name: 'MARIAN_HI_HI_INDIC_320M_Q4_0',
+export const MARIAN_HI_EN_INDIC_1B_Q4_0 = {
+  name: 'MARIAN_HI_EN_INDIC_1B_Q4_0',
   src: `registry://${models[607].registrySource}/${models[607].registryPath}`,
   registryPath: models[607].registryPath,
   registrySource: models[607].registrySource,
@@ -25378,8 +25426,8 @@ export const MARIAN_HI_HI_INDIC_320M_Q4_0 = {
   params: models[607].params
 } as const
 
-export const OCR_DOCTR = {
-  name: 'OCR_DOCTR',
+export const MARIAN_HI_EN_INDIC_200M_Q4_0 = {
+  name: 'MARIAN_HI_EN_INDIC_200M_Q4_0',
   src: `registry://${models[608].registrySource}/${models[608].registryPath}`,
   registryPath: models[608].registryPath,
   registrySource: models[608].registrySource,
@@ -25396,8 +25444,8 @@ export const OCR_DOCTR = {
   params: models[608].params
 } as const
 
-export const OCR_DOCTR_1 = {
-  name: 'OCR_DOCTR_1',
+export const MARIAN_HI_HI_INDIC_1B_Q4_0 = {
+  name: 'MARIAN_HI_HI_INDIC_1B_Q4_0',
   src: `registry://${models[609].registrySource}/${models[609].registryPath}`,
   registryPath: models[609].registryPath,
   registrySource: models[609].registrySource,
@@ -25414,8 +25462,8 @@ export const OCR_DOCTR_1 = {
   params: models[609].params
 } as const
 
-export const OCR_CRAFT = {
-  name: 'OCR_CRAFT',
+export const MARIAN_HI_HI_INDIC_320M_Q4_0 = {
+  name: 'MARIAN_HI_HI_INDIC_320M_Q4_0',
   src: `registry://${models[610].registrySource}/${models[610].registryPath}`,
   registryPath: models[610].registryPath,
   registrySource: models[610].registrySource,
@@ -25432,8 +25480,8 @@ export const OCR_CRAFT = {
   params: models[610].params
 } as const
 
-export const OCR_LATIN = {
-  name: 'OCR_LATIN',
+export const OCR_DOCTR = {
+  name: 'OCR_DOCTR',
   src: `registry://${models[611].registrySource}/${models[611].registryPath}`,
   registryPath: models[611].registryPath,
   registrySource: models[611].registrySource,
@@ -25450,8 +25498,8 @@ export const OCR_LATIN = {
   params: models[611].params
 } as const
 
-export const PARAKEET_CTC_0_6B_Q8_0 = {
-  name: 'PARAKEET_CTC_0_6B_Q8_0',
+export const OCR_DOCTR_1 = {
+  name: 'OCR_DOCTR_1',
   src: `registry://${models[612].registrySource}/${models[612].registryPath}`,
   registryPath: models[612].registryPath,
   registrySource: models[612].registrySource,
@@ -25468,8 +25516,8 @@ export const PARAKEET_CTC_0_6B_Q8_0 = {
   params: models[612].params
 } as const
 
-export const PARAKEET_SORTFORMER_4SPK_V1_Q8_0 = {
-  name: 'PARAKEET_SORTFORMER_4SPK_V1_Q8_0',
+export const OCR_CRAFT = {
+  name: 'OCR_CRAFT',
   src: `registry://${models[613].registrySource}/${models[613].registryPath}`,
   registryPath: models[613].registryPath,
   registrySource: models[613].registrySource,
@@ -25486,8 +25534,8 @@ export const PARAKEET_SORTFORMER_4SPK_V1_Q8_0 = {
   params: models[613].params
 } as const
 
-export const PARAKEET_SORTFORMER_4SPK_V1_Q4_0 = {
-  name: 'PARAKEET_SORTFORMER_4SPK_V1_Q4_0',
+export const OCR_LATIN = {
+  name: 'OCR_LATIN',
   src: `registry://${models[614].registrySource}/${models[614].registryPath}`,
   registryPath: models[614].registryPath,
   registrySource: models[614].registrySource,
@@ -25504,8 +25552,8 @@ export const PARAKEET_SORTFORMER_4SPK_V1_Q4_0 = {
   params: models[614].params
 } as const
 
-export const PARAKEET_CTC_0_6B_F16 = {
-  name: 'PARAKEET_CTC_0_6B_F16',
+export const PARAKEET_CTC_0_6B_Q8_0 = {
+  name: 'PARAKEET_CTC_0_6B_Q8_0',
   src: `registry://${models[615].registrySource}/${models[615].registryPath}`,
   registryPath: models[615].registryPath,
   registrySource: models[615].registrySource,
@@ -25522,8 +25570,8 @@ export const PARAKEET_CTC_0_6B_F16 = {
   params: models[615].params
 } as const
 
-export const PARAKEET_CTC_0_6B_Q4_0 = {
-  name: 'PARAKEET_CTC_0_6B_Q4_0',
+export const PARAKEET_SORTFORMER_4SPK_V1_Q8_0 = {
+  name: 'PARAKEET_SORTFORMER_4SPK_V1_Q8_0',
   src: `registry://${models[616].registrySource}/${models[616].registryPath}`,
   registryPath: models[616].registryPath,
   registrySource: models[616].registrySource,
@@ -25540,8 +25588,8 @@ export const PARAKEET_CTC_0_6B_Q4_0 = {
   params: models[616].params
 } as const
 
-export const PARAKEET_SORTFORMER_4SPK_V1_F16 = {
-  name: 'PARAKEET_SORTFORMER_4SPK_V1_F16',
+export const PARAKEET_SORTFORMER_4SPK_V1_Q4_0 = {
+  name: 'PARAKEET_SORTFORMER_4SPK_V1_Q4_0',
   src: `registry://${models[617].registrySource}/${models[617].registryPath}`,
   registryPath: models[617].registryPath,
   registrySource: models[617].registrySource,
@@ -25558,62 +25606,62 @@ export const PARAKEET_SORTFORMER_4SPK_V1_F16 = {
   params: models[617].params
 } as const
 
+export const PARAKEET_CTC_0_6B_F16 = {
+  name: 'PARAKEET_CTC_0_6B_F16',
+  src: `registry://${models[618].registrySource}/${models[618].registryPath}`,
+  registryPath: models[618].registryPath,
+  registrySource: models[618].registrySource,
+  blobCoreKey: models[618].blobCoreKey,
+  blobBlockOffset: models[618].blobBlockOffset,
+  blobBlockLength: models[618].blobBlockLength,
+  blobByteOffset: models[618].blobByteOffset,
+  modelId: models[618].modelId,
+  expectedSize: models[618].expectedSize,
+  sha256Checksum: models[618].sha256Checksum,
+  addon: models[618].addon,
+  engine: models[618].engine,
+  quantization: models[618].quantization,
+  params: models[618].params
+} as const
+
+export const PARAKEET_CTC_0_6B_Q4_0 = {
+  name: 'PARAKEET_CTC_0_6B_Q4_0',
+  src: `registry://${models[619].registrySource}/${models[619].registryPath}`,
+  registryPath: models[619].registryPath,
+  registrySource: models[619].registrySource,
+  blobCoreKey: models[619].blobCoreKey,
+  blobBlockOffset: models[619].blobBlockOffset,
+  blobBlockLength: models[619].blobBlockLength,
+  blobByteOffset: models[619].blobByteOffset,
+  modelId: models[619].modelId,
+  expectedSize: models[619].expectedSize,
+  sha256Checksum: models[619].sha256Checksum,
+  addon: models[619].addon,
+  engine: models[619].engine,
+  quantization: models[619].quantization,
+  params: models[619].params
+} as const
+
+export const PARAKEET_SORTFORMER_4SPK_V1_F16 = {
+  name: 'PARAKEET_SORTFORMER_4SPK_V1_F16',
+  src: `registry://${models[620].registrySource}/${models[620].registryPath}`,
+  registryPath: models[620].registryPath,
+  registrySource: models[620].registrySource,
+  blobCoreKey: models[620].blobCoreKey,
+  blobBlockOffset: models[620].blobBlockOffset,
+  blobBlockLength: models[620].blobBlockLength,
+  blobByteOffset: models[620].blobByteOffset,
+  modelId: models[620].modelId,
+  expectedSize: models[620].expectedSize,
+  sha256Checksum: models[620].sha256Checksum,
+  addon: models[620].addon,
+  engine: models[620].engine,
+  quantization: models[620].quantization,
+  params: models[620].params
+} as const
+
 export const PARAKEET_SORTFORMER_4SPK_V2_1_F16 = {
   name: 'PARAKEET_SORTFORMER_4SPK_V2_1_F16',
-  src: `registry://${models[663].registrySource}/${models[663].registryPath}`,
-  registryPath: models[663].registryPath,
-  registrySource: models[663].registrySource,
-  blobCoreKey: models[663].blobCoreKey,
-  blobBlockOffset: models[663].blobBlockOffset,
-  blobBlockLength: models[663].blobBlockLength,
-  blobByteOffset: models[663].blobByteOffset,
-  modelId: models[663].modelId,
-  expectedSize: models[663].expectedSize,
-  sha256Checksum: models[663].sha256Checksum,
-  addon: models[663].addon,
-  engine: models[663].engine,
-  quantization: models[663].quantization,
-  params: models[663].params
-} as const
-
-export const PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0 = {
-  name: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0',
-  src: `registry://${models[664].registrySource}/${models[664].registryPath}`,
-  registryPath: models[664].registryPath,
-  registrySource: models[664].registrySource,
-  blobCoreKey: models[664].blobCoreKey,
-  blobBlockOffset: models[664].blobBlockOffset,
-  blobBlockLength: models[664].blobBlockLength,
-  blobByteOffset: models[664].blobByteOffset,
-  modelId: models[664].modelId,
-  expectedSize: models[664].expectedSize,
-  sha256Checksum: models[664].sha256Checksum,
-  addon: models[664].addon,
-  engine: models[664].engine,
-  quantization: models[664].quantization,
-  params: models[664].params
-} as const
-
-export const PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0 = {
-  name: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0',
-  src: `registry://${models[665].registrySource}/${models[665].registryPath}`,
-  registryPath: models[665].registryPath,
-  registrySource: models[665].registrySource,
-  blobCoreKey: models[665].blobCoreKey,
-  blobBlockOffset: models[665].blobBlockOffset,
-  blobBlockLength: models[665].blobBlockLength,
-  blobByteOffset: models[665].blobByteOffset,
-  modelId: models[665].modelId,
-  expectedSize: models[665].expectedSize,
-  sha256Checksum: models[665].sha256Checksum,
-  addon: models[665].addon,
-  engine: models[665].engine,
-  quantization: models[665].quantization,
-  params: models[665].params
-} as const
-
-export const PARAKEET_INDIC_CONFORMER_600M_F16 = {
-  name: 'PARAKEET_INDIC_CONFORMER_600M_F16',
   src: `registry://${models[666].registrySource}/${models[666].registryPath}`,
   registryPath: models[666].registryPath,
   registrySource: models[666].registrySource,
@@ -25630,8 +25678,8 @@ export const PARAKEET_INDIC_CONFORMER_600M_F16 = {
   params: models[666].params
 } as const
 
-export const PARAKEET_INDIC_CONFORMER_600M_Q4_0 = {
-  name: 'PARAKEET_INDIC_CONFORMER_600M_Q4_0',
+export const PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0 = {
+  name: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0',
   src: `registry://${models[667].registrySource}/${models[667].registryPath}`,
   registryPath: models[667].registryPath,
   registrySource: models[667].registrySource,
@@ -25648,8 +25696,8 @@ export const PARAKEET_INDIC_CONFORMER_600M_Q4_0 = {
   params: models[667].params
 } as const
 
-export const PARAKEET_INDIC_CONFORMER_600M_Q8_0 = {
-  name: 'PARAKEET_INDIC_CONFORMER_600M_Q8_0',
+export const PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0 = {
+  name: 'PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0',
   src: `registry://${models[668].registrySource}/${models[668].registryPath}`,
   registryPath: models[668].registryPath,
   registrySource: models[668].registrySource,
@@ -25666,8 +25714,8 @@ export const PARAKEET_INDIC_CONFORMER_600M_Q8_0 = {
   params: models[668].params
 } as const
 
-export const PARAKEET_NEMOTRON_0_6B_F16 = {
-  name: 'PARAKEET_NEMOTRON_0_6B_F16',
+export const PARAKEET_INDIC_CONFORMER_600M_F16 = {
+  name: 'PARAKEET_INDIC_CONFORMER_600M_F16',
   src: `registry://${models[669].registrySource}/${models[669].registryPath}`,
   registryPath: models[669].registryPath,
   registrySource: models[669].registrySource,
@@ -25684,8 +25732,8 @@ export const PARAKEET_NEMOTRON_0_6B_F16 = {
   params: models[669].params
 } as const
 
-export const PARAKEET_NEMOTRON_0_6B_Q4_0 = {
-  name: 'PARAKEET_NEMOTRON_0_6B_Q4_0',
+export const PARAKEET_INDIC_CONFORMER_600M_Q4_0 = {
+  name: 'PARAKEET_INDIC_CONFORMER_600M_Q4_0',
   src: `registry://${models[670].registrySource}/${models[670].registryPath}`,
   registryPath: models[670].registryPath,
   registrySource: models[670].registrySource,
@@ -25702,8 +25750,8 @@ export const PARAKEET_NEMOTRON_0_6B_Q4_0 = {
   params: models[670].params
 } as const
 
-export const PARAKEET_NEMOTRON_0_6B_Q8_0 = {
-  name: 'PARAKEET_NEMOTRON_0_6B_Q8_0',
+export const PARAKEET_INDIC_CONFORMER_600M_Q8_0 = {
+  name: 'PARAKEET_INDIC_CONFORMER_600M_Q8_0',
   src: `registry://${models[671].registrySource}/${models[671].registryPath}`,
   registryPath: models[671].registryPath,
   registrySource: models[671].registrySource,
@@ -25720,8 +25768,8 @@ export const PARAKEET_NEMOTRON_0_6B_Q8_0 = {
   params: models[671].params
 } as const
 
-export const PARAKEET_EOU_120M_V1_F16 = {
-  name: 'PARAKEET_EOU_120M_V1_F16',
+export const PARAKEET_NEMOTRON_0_6B_F16 = {
+  name: 'PARAKEET_NEMOTRON_0_6B_F16',
   src: `registry://${models[672].registrySource}/${models[672].registryPath}`,
   registryPath: models[672].registryPath,
   registrySource: models[672].registrySource,
@@ -25738,8 +25786,8 @@ export const PARAKEET_EOU_120M_V1_F16 = {
   params: models[672].params
 } as const
 
-export const PARAKEET_EOU_120M_V1_Q4_0 = {
-  name: 'PARAKEET_EOU_120M_V1_Q4_0',
+export const PARAKEET_NEMOTRON_0_6B_Q4_0 = {
+  name: 'PARAKEET_NEMOTRON_0_6B_Q4_0',
   src: `registry://${models[673].registrySource}/${models[673].registryPath}`,
   registryPath: models[673].registryPath,
   registrySource: models[673].registrySource,
@@ -25756,8 +25804,8 @@ export const PARAKEET_EOU_120M_V1_Q4_0 = {
   params: models[673].params
 } as const
 
-export const PARAKEET_EOU_120M_V1_Q8_0 = {
-  name: 'PARAKEET_EOU_120M_V1_Q8_0',
+export const PARAKEET_NEMOTRON_0_6B_Q8_0 = {
+  name: 'PARAKEET_NEMOTRON_0_6B_Q8_0',
   src: `registry://${models[674].registrySource}/${models[674].registryPath}`,
   registryPath: models[674].registryPath,
   registrySource: models[674].registrySource,
@@ -25774,8 +25822,8 @@ export const PARAKEET_EOU_120M_V1_Q8_0 = {
   params: models[674].params
 } as const
 
-export const PARAKEET_TDT_0_6B_V3_F16 = {
-  name: 'PARAKEET_TDT_0_6B_V3_F16',
+export const PARAKEET_EOU_120M_V1_F16 = {
+  name: 'PARAKEET_EOU_120M_V1_F16',
   src: `registry://${models[675].registrySource}/${models[675].registryPath}`,
   registryPath: models[675].registryPath,
   registrySource: models[675].registrySource,
@@ -25792,8 +25840,8 @@ export const PARAKEET_TDT_0_6B_V3_F16 = {
   params: models[675].params
 } as const
 
-export const PARAKEET_TDT_0_6B_V3_Q4_0 = {
-  name: 'PARAKEET_TDT_0_6B_V3_Q4_0',
+export const PARAKEET_EOU_120M_V1_Q4_0 = {
+  name: 'PARAKEET_EOU_120M_V1_Q4_0',
   src: `registry://${models[676].registrySource}/${models[676].registryPath}`,
   registryPath: models[676].registryPath,
   registrySource: models[676].registrySource,
@@ -25810,8 +25858,8 @@ export const PARAKEET_TDT_0_6B_V3_Q4_0 = {
   params: models[676].params
 } as const
 
-export const PARAKEET_TDT_0_6B_V3_Q8_0 = {
-  name: 'PARAKEET_TDT_0_6B_V3_Q8_0',
+export const PARAKEET_EOU_120M_V1_Q8_0 = {
+  name: 'PARAKEET_EOU_120M_V1_Q8_0',
   src: `registry://${models[677].registrySource}/${models[677].registryPath}`,
   registryPath: models[677].registryPath,
   registrySource: models[677].registrySource,
@@ -25828,8 +25876,8 @@ export const PARAKEET_TDT_0_6B_V3_Q8_0 = {
   params: models[677].params
 } as const
 
-export const PARAKEET_TDT_1_1B_F16 = {
-  name: 'PARAKEET_TDT_1_1B_F16',
+export const PARAKEET_TDT_0_6B_V3_F16 = {
+  name: 'PARAKEET_TDT_0_6B_V3_F16',
   src: `registry://${models[678].registrySource}/${models[678].registryPath}`,
   registryPath: models[678].registryPath,
   registrySource: models[678].registrySource,
@@ -25846,8 +25894,8 @@ export const PARAKEET_TDT_1_1B_F16 = {
   params: models[678].params
 } as const
 
-export const PARAKEET_TDT_1_1B_Q8_0 = {
-  name: 'PARAKEET_TDT_1_1B_Q8_0',
+export const PARAKEET_TDT_0_6B_V3_Q4_0 = {
+  name: 'PARAKEET_TDT_0_6B_V3_Q4_0',
   src: `registry://${models[679].registrySource}/${models[679].registryPath}`,
   registryPath: models[679].registryPath,
   registrySource: models[679].registrySource,
@@ -25864,8 +25912,8 @@ export const PARAKEET_TDT_1_1B_Q8_0 = {
   params: models[679].params
 } as const
 
-export const PARAKEET_UNIFIED_0_6B_F16 = {
-  name: 'PARAKEET_UNIFIED_0_6B_F16',
+export const PARAKEET_TDT_0_6B_V3_Q8_0 = {
+  name: 'PARAKEET_TDT_0_6B_V3_Q8_0',
   src: `registry://${models[680].registrySource}/${models[680].registryPath}`,
   registryPath: models[680].registryPath,
   registrySource: models[680].registrySource,
@@ -25882,8 +25930,8 @@ export const PARAKEET_UNIFIED_0_6B_F16 = {
   params: models[680].params
 } as const
 
-export const PARAKEET_UNIFIED_0_6B_Q4_0 = {
-  name: 'PARAKEET_UNIFIED_0_6B_Q4_0',
+export const PARAKEET_TDT_1_1B_F16 = {
+  name: 'PARAKEET_TDT_1_1B_F16',
   src: `registry://${models[681].registrySource}/${models[681].registryPath}`,
   registryPath: models[681].registryPath,
   registrySource: models[681].registrySource,
@@ -25900,8 +25948,8 @@ export const PARAKEET_UNIFIED_0_6B_Q4_0 = {
   params: models[681].params
 } as const
 
-export const PARAKEET_UNIFIED_0_6B_Q8_0 = {
-  name: 'PARAKEET_UNIFIED_0_6B_Q8_0',
+export const PARAKEET_TDT_1_1B_Q8_0 = {
+  name: 'PARAKEET_TDT_1_1B_Q8_0',
   src: `registry://${models[682].registrySource}/${models[682].registryPath}`,
   registryPath: models[682].registryPath,
   registrySource: models[682].registrySource,
@@ -25918,8 +25966,8 @@ export const PARAKEET_UNIFIED_0_6B_Q8_0 = {
   params: models[682].params
 } as const
 
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX',
+export const PARAKEET_UNIFIED_0_6B_F16 = {
+  name: 'PARAKEET_UNIFIED_0_6B_F16',
   src: `registry://${models[683].registrySource}/${models[683].registryPath}`,
   registryPath: models[683].registryPath,
   registrySource: models[683].registrySource,
@@ -25936,8 +25984,8 @@ export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX = {
   params: models[683].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX',
+export const PARAKEET_UNIFIED_0_6B_Q4_0 = {
+  name: 'PARAKEET_UNIFIED_0_6B_Q4_0',
   src: `registry://${models[684].registrySource}/${models[684].registryPath}`,
   registryPath: models[684].registryPath,
   registrySource: models[684].registrySource,
@@ -25954,8 +26002,8 @@ export const TTS_S3GEN_EN_CHATTERBOX = {
   params: models[684].params
 } as const
 
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16 = {
-  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_FP16',
+export const PARAKEET_UNIFIED_0_6B_Q8_0 = {
+  name: 'PARAKEET_UNIFIED_0_6B_Q8_0',
   src: `registry://${models[685].registrySource}/${models[685].registryPath}`,
   registryPath: models[685].registryPath,
   registrySource: models[685].registrySource,
@@ -25972,8 +26020,8 @@ export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16 = {
   params: models[685].params
 } as const
 
-export const TTS_T3_TURBO_EN_CHATTERBOX_FP16 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_FP16',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX',
   src: `registry://${models[686].registrySource}/${models[686].registryPath}`,
   registryPath: models[686].registryPath,
   registrySource: models[686].registrySource,
@@ -25990,8 +26038,8 @@ export const TTS_T3_TURBO_EN_CHATTERBOX_FP16 = {
   params: models[686].params
 } as const
 
-export const TTS_MECAB_IPADIC_CHATTERBOX = {
-  name: 'TTS_MECAB_IPADIC_CHATTERBOX',
+export const TTS_S3GEN_EN_CHATTERBOX = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX',
   src: `registry://${models[687].registrySource}/${models[687].registryPath}`,
   registryPath: models[687].registryPath,
   registrySource: models[687].registrySource,
@@ -26008,62 +26056,62 @@ export const TTS_MECAB_IPADIC_CHATTERBOX = {
   params: models[687].params
 } as const
 
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16 = {
+  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_FP16',
+  src: `registry://${models[688].registrySource}/${models[688].registryPath}`,
+  registryPath: models[688].registryPath,
+  registrySource: models[688].registrySource,
+  blobCoreKey: models[688].blobCoreKey,
+  blobBlockOffset: models[688].blobBlockOffset,
+  blobBlockLength: models[688].blobBlockLength,
+  blobByteOffset: models[688].blobByteOffset,
+  modelId: models[688].modelId,
+  expectedSize: models[688].expectedSize,
+  sha256Checksum: models[688].sha256Checksum,
+  addon: models[688].addon,
+  engine: models[688].engine,
+  quantization: models[688].quantization,
+  params: models[688].params
+} as const
+
+export const TTS_T3_TURBO_EN_CHATTERBOX_FP16 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_FP16',
+  src: `registry://${models[689].registrySource}/${models[689].registryPath}`,
+  registryPath: models[689].registryPath,
+  registrySource: models[689].registrySource,
+  blobCoreKey: models[689].blobCoreKey,
+  blobBlockOffset: models[689].blobBlockOffset,
+  blobBlockLength: models[689].blobBlockLength,
+  blobByteOffset: models[689].blobByteOffset,
+  modelId: models[689].modelId,
+  expectedSize: models[689].expectedSize,
+  sha256Checksum: models[689].sha256Checksum,
+  addon: models[689].addon,
+  engine: models[689].engine,
+  quantization: models[689].quantization,
+  params: models[689].params
+} as const
+
+export const TTS_MECAB_IPADIC_CHATTERBOX = {
+  name: 'TTS_MECAB_IPADIC_CHATTERBOX',
+  src: `registry://${models[690].registrySource}/${models[690].registryPath}`,
+  registryPath: models[690].registryPath,
+  registrySource: models[690].registrySource,
+  blobCoreKey: models[690].blobCoreKey,
+  blobBlockOffset: models[690].blobBlockOffset,
+  blobBlockLength: models[690].blobBlockLength,
+  blobByteOffset: models[690].blobByteOffset,
+  modelId: models[690].modelId,
+  expectedSize: models[690].expectedSize,
+  sha256Checksum: models[690].sha256Checksum,
+  addon: models[690].addon,
+  engine: models[690].engine,
+  quantization: models[690].quantization,
+  params: models[690].params
+} as const
+
 export const TTS_CODEC_DECODER_AUDIO8_FP16 = {
   name: 'TTS_CODEC_DECODER_AUDIO8_FP16',
-  src: `registry://${models[693].registrySource}/${models[693].registryPath}`,
-  registryPath: models[693].registryPath,
-  registrySource: models[693].registrySource,
-  blobCoreKey: models[693].blobCoreKey,
-  blobBlockOffset: models[693].blobBlockOffset,
-  blobBlockLength: models[693].blobBlockLength,
-  blobByteOffset: models[693].blobByteOffset,
-  modelId: models[693].modelId,
-  expectedSize: models[693].expectedSize,
-  sha256Checksum: models[693].sha256Checksum,
-  addon: models[693].addon,
-  engine: models[693].engine,
-  quantization: models[693].quantization,
-  params: models[693].params
-} as const
-
-export const TTS_CODEC_DECODER_AUDIO8_Q8_0 = {
-  name: 'TTS_CODEC_DECODER_AUDIO8_Q8_0',
-  src: `registry://${models[694].registrySource}/${models[694].registryPath}`,
-  registryPath: models[694].registryPath,
-  registrySource: models[694].registrySource,
-  blobCoreKey: models[694].blobCoreKey,
-  blobBlockOffset: models[694].blobBlockOffset,
-  blobBlockLength: models[694].blobBlockLength,
-  blobByteOffset: models[694].blobByteOffset,
-  modelId: models[694].modelId,
-  expectedSize: models[694].expectedSize,
-  sha256Checksum: models[694].sha256Checksum,
-  addon: models[694].addon,
-  engine: models[694].engine,
-  quantization: models[694].quantization,
-  params: models[694].params
-} as const
-
-export const TTS_CODEC_ENCODER_AUDIO8_FP16 = {
-  name: 'TTS_CODEC_ENCODER_AUDIO8_FP16',
-  src: `registry://${models[695].registrySource}/${models[695].registryPath}`,
-  registryPath: models[695].registryPath,
-  registrySource: models[695].registrySource,
-  blobCoreKey: models[695].blobCoreKey,
-  blobBlockOffset: models[695].blobBlockOffset,
-  blobBlockLength: models[695].blobBlockLength,
-  blobByteOffset: models[695].blobByteOffset,
-  modelId: models[695].modelId,
-  expectedSize: models[695].expectedSize,
-  sha256Checksum: models[695].sha256Checksum,
-  addon: models[695].addon,
-  engine: models[695].engine,
-  quantization: models[695].quantization,
-  params: models[695].params
-} as const
-
-export const TTS_CODEC_ENCODER_AUDIO8_Q8_0 = {
-  name: 'TTS_CODEC_ENCODER_AUDIO8_Q8_0',
   src: `registry://${models[696].registrySource}/${models[696].registryPath}`,
   registryPath: models[696].registryPath,
   registrySource: models[696].registrySource,
@@ -26080,8 +26128,8 @@ export const TTS_CODEC_ENCODER_AUDIO8_Q8_0 = {
   params: models[696].params
 } as const
 
-export const TTS_LM_MULTILINGUAL_AUDIO8_FP16 = {
-  name: 'TTS_LM_MULTILINGUAL_AUDIO8_FP16',
+export const TTS_CODEC_DECODER_AUDIO8_Q8_0 = {
+  name: 'TTS_CODEC_DECODER_AUDIO8_Q8_0',
   src: `registry://${models[697].registrySource}/${models[697].registryPath}`,
   registryPath: models[697].registryPath,
   registrySource: models[697].registrySource,
@@ -26098,8 +26146,8 @@ export const TTS_LM_MULTILINGUAL_AUDIO8_FP16 = {
   params: models[697].params
 } as const
 
-export const TTS_LM_MULTILINGUAL_AUDIO8_Q8_0 = {
-  name: 'TTS_LM_MULTILINGUAL_AUDIO8_Q8_0',
+export const TTS_CODEC_ENCODER_AUDIO8_FP16 = {
+  name: 'TTS_CODEC_ENCODER_AUDIO8_FP16',
   src: `registry://${models[698].registrySource}/${models[698].registryPath}`,
   registryPath: models[698].registryPath,
   registrySource: models[698].registrySource,
@@ -26116,62 +26164,62 @@ export const TTS_LM_MULTILINGUAL_AUDIO8_Q8_0 = {
   params: models[698].params
 } as const
 
+export const TTS_CODEC_ENCODER_AUDIO8_Q8_0 = {
+  name: 'TTS_CODEC_ENCODER_AUDIO8_Q8_0',
+  src: `registry://${models[699].registrySource}/${models[699].registryPath}`,
+  registryPath: models[699].registryPath,
+  registrySource: models[699].registrySource,
+  blobCoreKey: models[699].blobCoreKey,
+  blobBlockOffset: models[699].blobBlockOffset,
+  blobBlockLength: models[699].blobBlockLength,
+  blobByteOffset: models[699].blobByteOffset,
+  modelId: models[699].modelId,
+  expectedSize: models[699].expectedSize,
+  sha256Checksum: models[699].sha256Checksum,
+  addon: models[699].addon,
+  engine: models[699].engine,
+  quantization: models[699].quantization,
+  params: models[699].params
+} as const
+
+export const TTS_LM_MULTILINGUAL_AUDIO8_FP16 = {
+  name: 'TTS_LM_MULTILINGUAL_AUDIO8_FP16',
+  src: `registry://${models[700].registrySource}/${models[700].registryPath}`,
+  registryPath: models[700].registryPath,
+  registrySource: models[700].registrySource,
+  blobCoreKey: models[700].blobCoreKey,
+  blobBlockOffset: models[700].blobBlockOffset,
+  blobBlockLength: models[700].blobBlockLength,
+  blobByteOffset: models[700].blobByteOffset,
+  modelId: models[700].modelId,
+  expectedSize: models[700].expectedSize,
+  sha256Checksum: models[700].sha256Checksum,
+  addon: models[700].addon,
+  engine: models[700].engine,
+  quantization: models[700].quantization,
+  params: models[700].params
+} as const
+
+export const TTS_LM_MULTILINGUAL_AUDIO8_Q8_0 = {
+  name: 'TTS_LM_MULTILINGUAL_AUDIO8_Q8_0',
+  src: `registry://${models[701].registrySource}/${models[701].registryPath}`,
+  registryPath: models[701].registryPath,
+  registrySource: models[701].registrySource,
+  blobCoreKey: models[701].blobCoreKey,
+  blobBlockOffset: models[701].blobBlockOffset,
+  blobBlockLength: models[701].blobBlockLength,
+  blobByteOffset: models[701].blobByteOffset,
+  modelId: models[701].modelId,
+  expectedSize: models[701].expectedSize,
+  sha256Checksum: models[701].sha256Checksum,
+  addon: models[701].addon,
+  engine: models[701].engine,
+  quantization: models[701].quantization,
+  params: models[701].params
+} as const
+
 export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0 = {
   name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0',
-  src: `registry://${models[704].registrySource}/${models[704].registryPath}`,
-  registryPath: models[704].registryPath,
-  registrySource: models[704].registrySource,
-  blobCoreKey: models[704].blobCoreKey,
-  blobBlockOffset: models[704].blobBlockOffset,
-  blobBlockLength: models[704].blobBlockLength,
-  blobByteOffset: models[704].blobByteOffset,
-  modelId: models[704].modelId,
-  expectedSize: models[704].expectedSize,
-  sha256Checksum: models[704].sha256Checksum,
-  addon: models[704].addon,
-  engine: models[704].engine,
-  quantization: models[704].quantization,
-  params: models[704].params
-} as const
-
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0 = {
-  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0',
-  src: `registry://${models[705].registrySource}/${models[705].registryPath}`,
-  registryPath: models[705].registryPath,
-  registrySource: models[705].registrySource,
-  blobCoreKey: models[705].blobCoreKey,
-  blobBlockOffset: models[705].blobBlockOffset,
-  blobBlockLength: models[705].blobBlockLength,
-  blobByteOffset: models[705].blobByteOffset,
-  modelId: models[705].modelId,
-  expectedSize: models[705].expectedSize,
-  sha256Checksum: models[705].sha256Checksum,
-  addon: models[705].addon,
-  engine: models[705].engine,
-  quantization: models[705].quantization,
-  params: models[705].params
-} as const
-
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q4_0',
-  src: `registry://${models[706].registrySource}/${models[706].registryPath}`,
-  registryPath: models[706].registryPath,
-  registrySource: models[706].registrySource,
-  blobCoreKey: models[706].blobCoreKey,
-  blobBlockOffset: models[706].blobBlockOffset,
-  blobBlockLength: models[706].blobBlockLength,
-  blobByteOffset: models[706].blobByteOffset,
-  modelId: models[706].modelId,
-  expectedSize: models[706].expectedSize,
-  sha256Checksum: models[706].sha256Checksum,
-  addon: models[706].addon,
-  engine: models[706].engine,
-  quantization: models[706].quantization,
-  params: models[706].params
-} as const
-
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q8_0',
   src: `registry://${models[707].registrySource}/${models[707].registryPath}`,
   registryPath: models[707].registryPath,
   registrySource: models[707].registrySource,
@@ -26188,8 +26236,8 @@ export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0 = {
   params: models[707].params
 } as const
 
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0 = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0',
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0 = {
+  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0',
   src: `registry://${models[708].registrySource}/${models[708].registryPath}`,
   registryPath: models[708].registryPath,
   registrySource: models[708].registrySource,
@@ -26206,8 +26254,8 @@ export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0 = {
   params: models[708].params
 } as const
 
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0 = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0',
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q4_0',
   src: `registry://${models[709].registrySource}/${models[709].registryPath}`,
   registryPath: models[709].registryPath,
   registrySource: models[709].registrySource,
@@ -26224,8 +26272,8 @@ export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0 = {
   params: models[709].params
 } as const
 
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0 = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0',
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q8_0',
   src: `registry://${models[710].registrySource}/${models[710].registryPath}`,
   registryPath: models[710].registryPath,
   registrySource: models[710].registrySource,
@@ -26242,8 +26290,8 @@ export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0 = {
   params: models[710].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX_Q4_0 = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX_Q4_0',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0 = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0',
   src: `registry://${models[711].registrySource}/${models[711].registryPath}`,
   registryPath: models[711].registryPath,
   registrySource: models[711].registrySource,
@@ -26260,8 +26308,8 @@ export const TTS_S3GEN_EN_CHATTERBOX_Q4_0 = {
   params: models[711].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX_Q5_0 = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX_Q5_0',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0 = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0',
   src: `registry://${models[712].registrySource}/${models[712].registryPath}`,
   registryPath: models[712].registryPath,
   registrySource: models[712].registrySource,
@@ -26278,8 +26326,8 @@ export const TTS_S3GEN_EN_CHATTERBOX_Q5_0 = {
   params: models[712].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX_Q8_0 = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX_Q8_0',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0 = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0',
   src: `registry://${models[713].registrySource}/${models[713].registryPath}`,
   registryPath: models[713].registryPath,
   registrySource: models[713].registrySource,
@@ -26296,8 +26344,8 @@ export const TTS_S3GEN_EN_CHATTERBOX_Q8_0 = {
   params: models[713].params
 } as const
 
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0 = {
-  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0',
+export const TTS_S3GEN_EN_CHATTERBOX_Q4_0 = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX_Q4_0',
   src: `registry://${models[714].registrySource}/${models[714].registryPath}`,
   registryPath: models[714].registryPath,
   registrySource: models[714].registrySource,
@@ -26314,8 +26362,8 @@ export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0 = {
   params: models[714].params
 } as const
 
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q5_0',
+export const TTS_S3GEN_EN_CHATTERBOX_Q5_0 = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX_Q5_0',
   src: `registry://${models[715].registrySource}/${models[715].registryPath}`,
   registryPath: models[715].registryPath,
   registrySource: models[715].registrySource,
@@ -26332,8 +26380,8 @@ export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0 = {
   params: models[715].params
 } as const
 
-export const TTS_CANGJIE_ZH_CHATTERBOX = {
-  name: 'TTS_CANGJIE_ZH_CHATTERBOX',
+export const TTS_S3GEN_EN_CHATTERBOX_Q8_0 = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX_Q8_0',
   src: `registry://${models[716].registrySource}/${models[716].registryPath}`,
   registryPath: models[716].registryPath,
   registrySource: models[716].registrySource,
@@ -26350,8 +26398,8 @@ export const TTS_CANGJIE_ZH_CHATTERBOX = {
   params: models[716].params
 } as const
 
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP32 = {
-  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_FP32',
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0 = {
+  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0',
   src: `registry://${models[717].registrySource}/${models[717].registryPath}`,
   registryPath: models[717].registryPath,
   registrySource: models[717].registrySource,
@@ -26368,8 +26416,8 @@ export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP32 = {
   params: models[717].params
 } as const
 
-export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP32 = {
-  name: 'TTS_COSYVOICE3_HIFT_COSYVOICE_FP32',
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q5_0',
   src: `registry://${models[718].registrySource}/${models[718].registryPath}`,
   registryPath: models[718].registryPath,
   registrySource: models[718].registrySource,
@@ -26386,8 +26434,8 @@ export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP32 = {
   params: models[718].params
 } as const
 
-export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0 = {
-  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0',
+export const TTS_CANGJIE_ZH_CHATTERBOX = {
+  name: 'TTS_CANGJIE_ZH_CHATTERBOX',
   src: `registry://${models[719].registrySource}/${models[719].registryPath}`,
   registryPath: models[719].registryPath,
   registrySource: models[719].registrySource,
@@ -26404,8 +26452,8 @@ export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0 = {
   params: models[719].params
 } as const
 
-export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE = {
-  name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE',
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP32 = {
+  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_FP32',
   src: `registry://${models[720].registrySource}/${models[720].registryPath}`,
   registryPath: models[720].registryPath,
   registrySource: models[720].registrySource,
@@ -26422,8 +26470,8 @@ export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE = {
   params: models[720].params
 } as const
 
-export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1 = {
-  name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1',
+export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP32 = {
+  name: 'TTS_COSYVOICE3_HIFT_COSYVOICE_FP32',
   src: `registry://${models[721].registrySource}/${models[721].registryPath}`,
   registryPath: models[721].registryPath,
   registrySource: models[721].registrySource,
@@ -26440,8 +26488,8 @@ export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1 = {
   params: models[721].params
 } as const
 
-export const TTS_COSYVOICE3_VOICE_COSYVOICE = {
-  name: 'TTS_COSYVOICE3_VOICE_COSYVOICE',
+export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0 = {
+  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0',
   src: `registry://${models[722].registrySource}/${models[722].registryPath}`,
   registryPath: models[722].registryPath,
   registrySource: models[722].registrySource,
@@ -26458,8 +26506,8 @@ export const TTS_COSYVOICE3_VOICE_COSYVOICE = {
   params: models[722].params
 } as const
 
-export const TTS_COSYVOICE3_VOICE_COSYVOICE_1 = {
-  name: 'TTS_COSYVOICE3_VOICE_COSYVOICE_1',
+export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE = {
+  name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE',
   src: `registry://${models[723].registrySource}/${models[723].registryPath}`,
   registryPath: models[723].registryPath,
   registrySource: models[723].registrySource,
@@ -26476,8 +26524,8 @@ export const TTS_COSYVOICE3_VOICE_COSYVOICE_1 = {
   params: models[723].params
 } as const
 
-export const TTS_COSYVOICE3_VOICE_COSYVOICE_2 = {
-  name: 'TTS_COSYVOICE3_VOICE_COSYVOICE_2',
+export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1 = {
+  name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1',
   src: `registry://${models[724].registrySource}/${models[724].registryPath}`,
   registryPath: models[724].registryPath,
   registrySource: models[724].registrySource,
@@ -26494,8 +26542,8 @@ export const TTS_COSYVOICE3_VOICE_COSYVOICE_2 = {
   params: models[724].params
 } as const
 
-export const TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32 = {
-  name: 'TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32',
+export const TTS_COSYVOICE3_VOICE_COSYVOICE = {
+  name: 'TTS_COSYVOICE3_VOICE_COSYVOICE',
   src: `registry://${models[725].registrySource}/${models[725].registryPath}`,
   registryPath: models[725].registryPath,
   registrySource: models[725].registrySource,
@@ -26512,8 +26560,8 @@ export const TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32 = {
   params: models[725].params
 } as const
 
-export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16 = {
-  name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16',
+export const TTS_COSYVOICE3_VOICE_COSYVOICE_1 = {
+  name: 'TTS_COSYVOICE3_VOICE_COSYVOICE_1',
   src: `registry://${models[726].registrySource}/${models[726].registryPath}`,
   registryPath: models[726].registryPath,
   registrySource: models[726].registrySource,
@@ -26530,8 +26578,8 @@ export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16 = {
   params: models[726].params
 } as const
 
-export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32 = {
-  name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32',
+export const TTS_COSYVOICE3_VOICE_COSYVOICE_2 = {
+  name: 'TTS_COSYVOICE3_VOICE_COSYVOICE_2',
   src: `registry://${models[727].registrySource}/${models[727].registryPath}`,
   registryPath: models[727].registryPath,
   registrySource: models[727].registrySource,
@@ -26548,8 +26596,8 @@ export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32 = {
   params: models[727].params
 } as const
 
-export const TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0 = {
-  name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0',
+export const TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32 = {
+  name: 'TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32',
   src: `registry://${models[728].registrySource}/${models[728].registryPath}`,
   registryPath: models[728].registryPath,
   registrySource: models[728].registrySource,
@@ -26566,8 +26614,8 @@ export const TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0 = {
   params: models[728].params
 } as const
 
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_BF16 = {
-  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_BF16',
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16 = {
+  name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16',
   src: `registry://${models[729].registrySource}/${models[729].registryPath}`,
   registryPath: models[729].registryPath,
   registrySource: models[729].registrySource,
@@ -26584,8 +26632,8 @@ export const TTS_COSYVOICE3_FLOW_COSYVOICE_BF16 = {
   params: models[729].params
 } as const
 
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP16 = {
-  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_FP16',
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32 = {
+  name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32',
   src: `registry://${models[730].registrySource}/${models[730].registryPath}`,
   registryPath: models[730].registryPath,
   registrySource: models[730].registrySource,
@@ -26602,8 +26650,8 @@ export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP16 = {
   params: models[730].params
 } as const
 
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0 = {
-  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0',
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0 = {
+  name: 'TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0',
   src: `registry://${models[731].registrySource}/${models[731].registryPath}`,
   registryPath: models[731].registryPath,
   registrySource: models[731].registrySource,
@@ -26620,8 +26668,8 @@ export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0 = {
   params: models[731].params
 } as const
 
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0 = {
-  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0',
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_BF16 = {
+  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_BF16',
   src: `registry://${models[732].registrySource}/${models[732].registryPath}`,
   registryPath: models[732].registryPath,
   registrySource: models[732].registrySource,
@@ -26638,8 +26686,8 @@ export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0 = {
   params: models[732].params
 } as const
 
-export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP16 = {
-  name: 'TTS_COSYVOICE3_HIFT_COSYVOICE_FP16',
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP16 = {
+  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_FP16',
   src: `registry://${models[733].registrySource}/${models[733].registryPath}`,
   registryPath: models[733].registryPath,
   registrySource: models[733].registrySource,
@@ -26656,8 +26704,8 @@ export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP16 = {
   params: models[733].params
 } as const
 
-export const TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0 = {
-  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0',
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0 = {
+  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0',
   src: `registry://${models[734].registrySource}/${models[734].registryPath}`,
   registryPath: models[734].registryPath,
   registrySource: models[734].registrySource,
@@ -26674,8 +26722,8 @@ export const TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0 = {
   params: models[734].params
 } as const
 
-export const TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0 = {
-  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0',
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0 = {
+  name: 'TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0',
   src: `registry://${models[735].registrySource}/${models[735].registryPath}`,
   registryPath: models[735].registryPath,
   registrySource: models[735].registrySource,
@@ -26692,8 +26740,8 @@ export const TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0 = {
   params: models[735].params
 } as const
 
-export const TTS_ENHANCER_LAVASR_FP16 = {
-  name: 'TTS_ENHANCER_LAVASR_FP16',
+export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP16 = {
+  name: 'TTS_COSYVOICE3_HIFT_COSYVOICE_FP16',
   src: `registry://${models[736].registrySource}/${models[736].registryPath}`,
   registryPath: models[736].registryPath,
   registrySource: models[736].registrySource,
@@ -26710,8 +26758,8 @@ export const TTS_ENHANCER_LAVASR_FP16 = {
   params: models[736].params
 } as const
 
-export const TTS_ENHANCER_LAVASR_FP32 = {
-  name: 'TTS_ENHANCER_LAVASR_FP32',
+export const TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0 = {
+  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0',
   src: `registry://${models[737].registrySource}/${models[737].registryPath}`,
   registryPath: models[737].registryPath,
   registrySource: models[737].registrySource,
@@ -26728,8 +26776,8 @@ export const TTS_ENHANCER_LAVASR_FP32 = {
   params: models[737].params
 } as const
 
-export const TTS_DENOISER_LAVASR_FP16 = {
-  name: 'TTS_DENOISER_LAVASR_FP16',
+export const TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0 = {
+  name: 'TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0',
   src: `registry://${models[738].registrySource}/${models[738].registryPath}`,
   registryPath: models[738].registryPath,
   registrySource: models[738].registrySource,
@@ -26746,8 +26794,8 @@ export const TTS_DENOISER_LAVASR_FP16 = {
   params: models[738].params
 } as const
 
-export const TTS_DENOISER_LAVASR_FP32 = {
-  name: 'TTS_DENOISER_LAVASR_FP32',
+export const TTS_ENHANCER_LAVASR_FP16 = {
+  name: 'TTS_ENHANCER_LAVASR_FP16',
   src: `registry://${models[739].registrySource}/${models[739].registryPath}`,
   registryPath: models[739].registryPath,
   registrySource: models[739].registrySource,
@@ -26764,8 +26812,8 @@ export const TTS_DENOISER_LAVASR_FP32 = {
   params: models[739].params
 } as const
 
-export const TTS_CODEC_DECODER_MOSS_TTS_F16 = {
-  name: 'TTS_CODEC_DECODER_MOSS_TTS_F16',
+export const TTS_ENHANCER_LAVASR_FP32 = {
+  name: 'TTS_ENHANCER_LAVASR_FP32',
   src: `registry://${models[740].registrySource}/${models[740].registryPath}`,
   registryPath: models[740].registryPath,
   registrySource: models[740].registrySource,
@@ -26782,8 +26830,8 @@ export const TTS_CODEC_DECODER_MOSS_TTS_F16 = {
   params: models[740].params
 } as const
 
-export const TTS_CODEC_ENCODER_MOSS_TTS_F16 = {
-  name: 'TTS_CODEC_ENCODER_MOSS_TTS_F16',
+export const TTS_DENOISER_LAVASR_FP16 = {
+  name: 'TTS_DENOISER_LAVASR_FP16',
   src: `registry://${models[741].registrySource}/${models[741].registryPath}`,
   registryPath: models[741].registryPath,
   registrySource: models[741].registrySource,
@@ -26800,8 +26848,8 @@ export const TTS_CODEC_ENCODER_MOSS_TTS_F16 = {
   params: models[741].params
 } as const
 
-export const TTS_DELAY_LLM_MOSS_TTS_F16 = {
-  name: 'TTS_DELAY_LLM_MOSS_TTS_F16',
+export const TTS_DENOISER_LAVASR_FP32 = {
+  name: 'TTS_DENOISER_LAVASR_FP32',
   src: `registry://${models[742].registrySource}/${models[742].registryPath}`,
   registryPath: models[742].registryPath,
   registrySource: models[742].registrySource,
@@ -26818,8 +26866,8 @@ export const TTS_DELAY_LLM_MOSS_TTS_F16 = {
   params: models[742].params
 } as const
 
-export const TTS_MOSS_SPEECH_BF16 = {
-  name: 'TTS_MOSS_SPEECH_BF16',
+export const TTS_CODEC_DECODER_MOSS_TTS_F16 = {
+  name: 'TTS_CODEC_DECODER_MOSS_TTS_F16',
   src: `registry://${models[743].registrySource}/${models[743].registryPath}`,
   registryPath: models[743].registryPath,
   registrySource: models[743].registrySource,
@@ -26836,8 +26884,8 @@ export const TTS_MOSS_SPEECH_BF16 = {
   params: models[743].params
 } as const
 
-export const TTS_CODEC_MOSS_SPEECH_F16 = {
-  name: 'TTS_CODEC_MOSS_SPEECH_F16',
+export const TTS_CODEC_ENCODER_MOSS_TTS_F16 = {
+  name: 'TTS_CODEC_ENCODER_MOSS_TTS_F16',
   src: `registry://${models[744].registrySource}/${models[744].registryPath}`,
   registryPath: models[744].registryPath,
   registrySource: models[744].registrySource,
@@ -26854,8 +26902,8 @@ export const TTS_CODEC_MOSS_SPEECH_F16 = {
   params: models[744].params
 } as const
 
-export const TTS_MOSS_SPEECH_Q8_0 = {
-  name: 'TTS_MOSS_SPEECH_Q8_0',
+export const TTS_DELAY_LLM_MOSS_TTS_F16 = {
+  name: 'TTS_DELAY_LLM_MOSS_TTS_F16',
   src: `registry://${models[745].registrySource}/${models[745].registryPath}`,
   registryPath: models[745].registryPath,
   registrySource: models[745].registrySource,
@@ -26872,8 +26920,8 @@ export const TTS_MOSS_SPEECH_Q8_0 = {
   params: models[745].params
 } as const
 
-export const TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16 = {
-  name: 'TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16',
+export const TTS_MOSS_SPEECH_BF16 = {
+  name: 'TTS_MOSS_SPEECH_BF16',
   src: `registry://${models[746].registrySource}/${models[746].registryPath}`,
   registryPath: models[746].registryPath,
   registrySource: models[746].registrySource,
@@ -26890,8 +26938,8 @@ export const TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16 = {
   params: models[746].params
 } as const
 
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16 = {
-  name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16',
+export const TTS_CODEC_MOSS_SPEECH_F16 = {
+  name: 'TTS_CODEC_MOSS_SPEECH_F16',
   src: `registry://${models[747].registrySource}/${models[747].registryPath}`,
   registryPath: models[747].registryPath,
   registrySource: models[747].registrySource,
@@ -26908,8 +26956,8 @@ export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16 = {
   params: models[747].params
 } as const
 
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32 = {
-  name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32',
+export const TTS_MOSS_SPEECH_Q8_0 = {
+  name: 'TTS_MOSS_SPEECH_Q8_0',
   src: `registry://${models[748].registrySource}/${models[748].registryPath}`,
   registryPath: models[748].registryPath,
   registrySource: models[748].registrySource,
@@ -26926,8 +26974,8 @@ export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32 = {
   params: models[748].params
 } as const
 
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0 = {
-  name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0',
+export const TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16 = {
+  name: 'TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16',
   src: `registry://${models[749].registrySource}/${models[749].registryPath}`,
   registryPath: models[749].registryPath,
   registrySource: models[749].registrySource,
@@ -26944,8 +26992,8 @@ export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0 = {
   params: models[749].params
 } as const
 
-export const TTS_LARGE_V1_EN_PARLER_TTS_FP16 = {
-  name: 'TTS_LARGE_V1_EN_PARLER_TTS_FP16',
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16 = {
+  name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16',
   src: `registry://${models[750].registrySource}/${models[750].registryPath}`,
   registryPath: models[750].registryPath,
   registrySource: models[750].registrySource,
@@ -26962,8 +27010,8 @@ export const TTS_LARGE_V1_EN_PARLER_TTS_FP16 = {
   params: models[750].params
 } as const
 
-export const TTS_LARGE_V1_EN_PARLER_TTS_FP32 = {
-  name: 'TTS_LARGE_V1_EN_PARLER_TTS_FP32',
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32 = {
+  name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32',
   src: `registry://${models[751].registrySource}/${models[751].registryPath}`,
   registryPath: models[751].registryPath,
   registrySource: models[751].registrySource,
@@ -26980,8 +27028,8 @@ export const TTS_LARGE_V1_EN_PARLER_TTS_FP32 = {
   params: models[751].params
 } as const
 
-export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0 = {
-  name: 'TTS_LARGE_V1_EN_PARLER_TTS_Q8_0',
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0 = {
+  name: 'TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0',
   src: `registry://${models[752].registrySource}/${models[752].registryPath}`,
   registryPath: models[752].registryPath,
   registrySource: models[752].registrySource,
@@ -26998,8 +27046,8 @@ export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0 = {
   params: models[752].params
 } as const
 
-export const TTS_MINI_V1_EN_PARLER_TTS_FP16 = {
-  name: 'TTS_MINI_V1_EN_PARLER_TTS_FP16',
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP16 = {
+  name: 'TTS_LARGE_V1_EN_PARLER_TTS_FP16',
   src: `registry://${models[753].registrySource}/${models[753].registryPath}`,
   registryPath: models[753].registryPath,
   registrySource: models[753].registrySource,
@@ -27016,8 +27064,8 @@ export const TTS_MINI_V1_EN_PARLER_TTS_FP16 = {
   params: models[753].params
 } as const
 
-export const TTS_MINI_V1_EN_PARLER_TTS_FP32 = {
-  name: 'TTS_MINI_V1_EN_PARLER_TTS_FP32',
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP32 = {
+  name: 'TTS_LARGE_V1_EN_PARLER_TTS_FP32',
   src: `registry://${models[754].registrySource}/${models[754].registryPath}`,
   registryPath: models[754].registryPath,
   registrySource: models[754].registrySource,
@@ -27034,8 +27082,8 @@ export const TTS_MINI_V1_EN_PARLER_TTS_FP32 = {
   params: models[754].params
 } as const
 
-export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0 = {
-  name: 'TTS_MINI_V1_EN_PARLER_TTS_Q8_0',
+export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0 = {
+  name: 'TTS_LARGE_V1_EN_PARLER_TTS_Q8_0',
   src: `registry://${models[755].registrySource}/${models[755].registryPath}`,
   registryPath: models[755].registryPath,
   registrySource: models[755].registrySource,
@@ -27052,8 +27100,8 @@ export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0 = {
   params: models[755].params
 } as const
 
-export const TTS_EN_SUPERTONIC_Q4_0 = {
-  name: 'TTS_EN_SUPERTONIC_Q4_0',
+export const TTS_MINI_V1_EN_PARLER_TTS_FP16 = {
+  name: 'TTS_MINI_V1_EN_PARLER_TTS_FP16',
   src: `registry://${models[756].registrySource}/${models[756].registryPath}`,
   registryPath: models[756].registryPath,
   registrySource: models[756].registrySource,
@@ -27070,8 +27118,8 @@ export const TTS_EN_SUPERTONIC_Q4_0 = {
   params: models[756].params
 } as const
 
-export const TTS_EN_SUPERTONIC_Q8_0 = {
-  name: 'TTS_EN_SUPERTONIC_Q8_0',
+export const TTS_MINI_V1_EN_PARLER_TTS_FP32 = {
+  name: 'TTS_MINI_V1_EN_PARLER_TTS_FP32',
   src: `registry://${models[757].registrySource}/${models[757].registryPath}`,
   registryPath: models[757].registryPath,
   registrySource: models[757].registrySource,
@@ -27088,8 +27136,8 @@ export const TTS_EN_SUPERTONIC_Q8_0 = {
   params: models[757].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q4_0',
+export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0 = {
+  name: 'TTS_MINI_V1_EN_PARLER_TTS_Q8_0',
   src: `registry://${models[758].registrySource}/${models[758].registryPath}`,
   registryPath: models[758].registryPath,
   registrySource: models[758].registrySource,
@@ -27106,8 +27154,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0 = {
   params: models[758].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q8_0',
+export const TTS_EN_SUPERTONIC_Q4_0 = {
+  name: 'TTS_EN_SUPERTONIC_Q4_0',
   src: `registry://${models[759].registrySource}/${models[759].registryPath}`,
   registryPath: models[759].registryPath,
   registrySource: models[759].registrySource,
@@ -27124,8 +27172,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0 = {
   params: models[759].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP16 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP16',
+export const TTS_EN_SUPERTONIC_Q8_0 = {
+  name: 'TTS_EN_SUPERTONIC_Q8_0',
   src: `registry://${models[760].registrySource}/${models[760].registryPath}`,
   registryPath: models[760].registryPath,
   registrySource: models[760].registrySource,
@@ -27142,8 +27190,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_FP16 = {
   params: models[760].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP32 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP32',
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q4_0',
   src: `registry://${models[761].registrySource}/${models[761].registryPath}`,
   registryPath: models[761].registryPath,
   registrySource: models[761].registrySource,
@@ -27160,8 +27208,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_FP32 = {
   params: models[761].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q8_0',
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q8_0',
   src: `registry://${models[762].registrySource}/${models[762].registryPath}`,
   registryPath: models[762].registryPath,
   registrySource: models[762].registrySource,
@@ -27178,8 +27226,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0 = {
   params: models[762].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q4_0',
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP16 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP16',
   src: `registry://${models[763].registrySource}/${models[763].registryPath}`,
   registryPath: models[763].registryPath,
   registrySource: models[763].registrySource,
@@ -27196,8 +27244,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0 = {
   params: models[763].params
 } as const
 
-export const GROOT_Q5_VF16 = {
-  name: 'GROOT_Q5_VF16',
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP32 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP32',
   src: `registry://${models[764].registrySource}/${models[764].registryPath}`,
   registryPath: models[764].registryPath,
   registrySource: models[764].registrySource,
@@ -27214,8 +27262,8 @@ export const GROOT_Q5_VF16 = {
   params: models[764].params
 } as const
 
-export const GROOT_Q8_VF16 = {
-  name: 'GROOT_Q8_VF16',
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q8_0',
   src: `registry://${models[765].registrySource}/${models[765].registryPath}`,
   registryPath: models[765].registryPath,
   registrySource: models[765].registrySource,
@@ -27232,8 +27280,8 @@ export const GROOT_Q8_VF16 = {
   params: models[765].params
 } as const
 
-export const GROOT_MULTI_Q5_VF16 = {
-  name: 'GROOT_MULTI_Q5_VF16',
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q4_0',
   src: `registry://${models[766].registrySource}/${models[766].registryPath}`,
   registryPath: models[766].registryPath,
   registrySource: models[766].registrySource,
@@ -27250,8 +27298,8 @@ export const GROOT_MULTI_Q5_VF16 = {
   params: models[766].params
 } as const
 
-export const GROOT_MULTI_Q8_VF16 = {
-  name: 'GROOT_MULTI_Q8_VF16',
+export const GROOT_Q5_VF16 = {
+  name: 'GROOT_Q5_VF16',
   src: `registry://${models[767].registrySource}/${models[767].registryPath}`,
   registryPath: models[767].registryPath,
   registrySource: models[767].registrySource,
@@ -27268,8 +27316,8 @@ export const GROOT_MULTI_Q8_VF16 = {
   params: models[767].params
 } as const
 
-export const PI05_BASE_Q_AGGRESSIVE = {
-  name: 'PI05_BASE_Q_AGGRESSIVE',
+export const GROOT_Q8_VF16 = {
+  name: 'GROOT_Q8_VF16',
   src: `registry://${models[768].registrySource}/${models[768].registryPath}`,
   registryPath: models[768].registryPath,
   registrySource: models[768].registrySource,
@@ -27286,8 +27334,8 @@ export const PI05_BASE_Q_AGGRESSIVE = {
   params: models[768].params
 } as const
 
-export const SMOLVLA_LIBERO_VISION_Q8 = {
-  name: 'SMOLVLA_LIBERO_VISION_Q8',
+export const GROOT_MULTI_Q5_VF16 = {
+  name: 'GROOT_MULTI_Q5_VF16',
   src: `registry://${models[769].registrySource}/${models[769].registryPath}`,
   registryPath: models[769].registryPath,
   registrySource: models[769].registrySource,
@@ -27304,8 +27352,8 @@ export const SMOLVLA_LIBERO_VISION_Q8 = {
   params: models[769].params
 } as const
 
-export const WHISPER_BASE_Q8_0 = {
-  name: 'WHISPER_BASE_Q8_0',
+export const GROOT_MULTI_Q8_VF16 = {
+  name: 'GROOT_MULTI_Q8_VF16',
   src: `registry://${models[770].registrySource}/${models[770].registryPath}`,
   registryPath: models[770].registryPath,
   registrySource: models[770].registrySource,
@@ -27322,8 +27370,8 @@ export const WHISPER_BASE_Q8_0 = {
   params: models[770].params
 } as const
 
-export const WHISPER_BASE_Q0F16 = {
-  name: 'WHISPER_BASE_Q0F16',
+export const PI05_BASE_Q_AGGRESSIVE = {
+  name: 'PI05_BASE_Q_AGGRESSIVE',
   src: `registry://${models[771].registrySource}/${models[771].registryPath}`,
   registryPath: models[771].registryPath,
   registrySource: models[771].registrySource,
@@ -27340,8 +27388,8 @@ export const WHISPER_BASE_Q0F16 = {
   params: models[771].params
 } as const
 
-export const WHISPER_EN_BASE_Q8_0 = {
-  name: 'WHISPER_EN_BASE_Q8_0',
+export const SMOLVLA_LIBERO_VISION_Q8 = {
+  name: 'SMOLVLA_LIBERO_VISION_Q8',
   src: `registry://${models[772].registrySource}/${models[772].registryPath}`,
   registryPath: models[772].registryPath,
   registrySource: models[772].registrySource,
@@ -27358,8 +27406,8 @@ export const WHISPER_EN_BASE_Q8_0 = {
   params: models[772].params
 } as const
 
-export const WHISPER_EN_BASE_Q0F16 = {
-  name: 'WHISPER_EN_BASE_Q0F16',
+export const WHISPER_BASE_Q8_0 = {
+  name: 'WHISPER_BASE_Q8_0',
   src: `registry://${models[773].registrySource}/${models[773].registryPath}`,
   registryPath: models[773].registryPath,
   registrySource: models[773].registrySource,
@@ -27376,8 +27424,8 @@ export const WHISPER_EN_BASE_Q0F16 = {
   params: models[773].params
 } as const
 
-export const WHISPER_LARGE_V3_TURBO = {
-  name: 'WHISPER_LARGE_V3_TURBO',
+export const WHISPER_BASE_Q0F16 = {
+  name: 'WHISPER_BASE_Q0F16',
   src: `registry://${models[774].registrySource}/${models[774].registryPath}`,
   registryPath: models[774].registryPath,
   registrySource: models[774].registrySource,
@@ -27394,8 +27442,8 @@ export const WHISPER_LARGE_V3_TURBO = {
   params: models[774].params
 } as const
 
-export const WHISPER_SMALL_Q8_0 = {
-  name: 'WHISPER_SMALL_Q8_0',
+export const WHISPER_EN_BASE_Q8_0 = {
+  name: 'WHISPER_EN_BASE_Q8_0',
   src: `registry://${models[775].registrySource}/${models[775].registryPath}`,
   registryPath: models[775].registryPath,
   registrySource: models[775].registrySource,
@@ -27412,8 +27460,8 @@ export const WHISPER_SMALL_Q8_0 = {
   params: models[775].params
 } as const
 
-export const WHISPER_SMALL_Q0F16 = {
-  name: 'WHISPER_SMALL_Q0F16',
+export const WHISPER_EN_BASE_Q0F16 = {
+  name: 'WHISPER_EN_BASE_Q0F16',
   src: `registry://${models[776].registrySource}/${models[776].registryPath}`,
   registryPath: models[776].registryPath,
   registrySource: models[776].registrySource,
@@ -27430,8 +27478,8 @@ export const WHISPER_SMALL_Q0F16 = {
   params: models[776].params
 } as const
 
-export const WHISPER_EN_SMALL_Q8_0 = {
-  name: 'WHISPER_EN_SMALL_Q8_0',
+export const WHISPER_LARGE_V3_TURBO = {
+  name: 'WHISPER_LARGE_V3_TURBO',
   src: `registry://${models[777].registrySource}/${models[777].registryPath}`,
   registryPath: models[777].registryPath,
   registrySource: models[777].registrySource,
@@ -27448,8 +27496,8 @@ export const WHISPER_EN_SMALL_Q8_0 = {
   params: models[777].params
 } as const
 
-export const WHISPER_EN_SMALL_Q0F16 = {
-  name: 'WHISPER_EN_SMALL_Q0F16',
+export const WHISPER_SMALL_Q8_0 = {
+  name: 'WHISPER_SMALL_Q8_0',
   src: `registry://${models[778].registrySource}/${models[778].registryPath}`,
   registryPath: models[778].registryPath,
   registrySource: models[778].registrySource,
@@ -27466,8 +27514,8 @@ export const WHISPER_EN_SMALL_Q0F16 = {
   params: models[778].params
 } as const
 
-export const WHISPER_TINY_Q8_0 = {
-  name: 'WHISPER_TINY_Q8_0',
+export const WHISPER_SMALL_Q0F16 = {
+  name: 'WHISPER_SMALL_Q0F16',
   src: `registry://${models[779].registrySource}/${models[779].registryPath}`,
   registryPath: models[779].registryPath,
   registrySource: models[779].registrySource,
@@ -27484,8 +27532,8 @@ export const WHISPER_TINY_Q8_0 = {
   params: models[779].params
 } as const
 
-export const WHISPER_TINY = {
-  name: 'WHISPER_TINY',
+export const WHISPER_EN_SMALL_Q8_0 = {
+  name: 'WHISPER_EN_SMALL_Q8_0',
   src: `registry://${models[780].registrySource}/${models[780].registryPath}`,
   registryPath: models[780].registryPath,
   registrySource: models[780].registrySource,
@@ -27502,8 +27550,8 @@ export const WHISPER_TINY = {
   params: models[780].params
 } as const
 
-export const WHISPER_EN_TINY_Q8_0 = {
-  name: 'WHISPER_EN_TINY_Q8_0',
+export const WHISPER_EN_SMALL_Q0F16 = {
+  name: 'WHISPER_EN_SMALL_Q0F16',
   src: `registry://${models[781].registrySource}/${models[781].registryPath}`,
   registryPath: models[781].registryPath,
   registrySource: models[781].registrySource,
@@ -27520,8 +27568,8 @@ export const WHISPER_EN_TINY_Q8_0 = {
   params: models[781].params
 } as const
 
-export const WHISPER_EN_TINY_Q0F16 = {
-  name: 'WHISPER_EN_TINY_Q0F16',
+export const WHISPER_TINY_Q8_0 = {
+  name: 'WHISPER_TINY_Q8_0',
   src: `registry://${models[782].registrySource}/${models[782].registryPath}`,
   registryPath: models[782].registryPath,
   registrySource: models[782].registrySource,
@@ -27538,8 +27586,8 @@ export const WHISPER_EN_TINY_Q0F16 = {
   params: models[782].params
 } as const
 
-export const VAD_SILERO_5_1_2 = {
-  name: 'VAD_SILERO_5_1_2',
+export const WHISPER_TINY = {
+  name: 'WHISPER_TINY',
   src: `registry://${models[783].registrySource}/${models[783].registryPath}`,
   registryPath: models[783].registryPath,
   registrySource: models[783].registrySource,
@@ -27556,8 +27604,8 @@ export const VAD_SILERO_5_1_2 = {
   params: models[783].params
 } as const
 
-export const WHISPER_FRENCH_BASE_F16 = {
-  name: 'WHISPER_FRENCH_BASE_F16',
+export const WHISPER_EN_TINY_Q8_0 = {
+  name: 'WHISPER_EN_TINY_Q8_0',
   src: `registry://${models[784].registrySource}/${models[784].registryPath}`,
   registryPath: models[784].registryPath,
   registrySource: models[784].registrySource,
@@ -27574,8 +27622,8 @@ export const WHISPER_FRENCH_BASE_F16 = {
   params: models[784].params
 } as const
 
-export const WHISPER_FRENCH_BASE_Q8_0 = {
-  name: 'WHISPER_FRENCH_BASE_Q8_0',
+export const WHISPER_EN_TINY_Q0F16 = {
+  name: 'WHISPER_EN_TINY_Q0F16',
   src: `registry://${models[785].registrySource}/${models[785].registryPath}`,
   registryPath: models[785].registryPath,
   registrySource: models[785].registrySource,
@@ -27592,8 +27640,8 @@ export const WHISPER_FRENCH_BASE_Q8_0 = {
   params: models[785].params
 } as const
 
-export const WHISPER_FRENCH_TINY_F16 = {
-  name: 'WHISPER_FRENCH_TINY_F16',
+export const VAD_SILERO_5_1_2 = {
+  name: 'VAD_SILERO_5_1_2',
   src: `registry://${models[786].registrySource}/${models[786].registryPath}`,
   registryPath: models[786].registryPath,
   registrySource: models[786].registrySource,
@@ -27610,8 +27658,8 @@ export const WHISPER_FRENCH_TINY_F16 = {
   params: models[786].params
 } as const
 
-export const WHISPER_FRENCH_TINY_Q8_0 = {
-  name: 'WHISPER_FRENCH_TINY_Q8_0',
+export const WHISPER_FRENCH_BASE_F16 = {
+  name: 'WHISPER_FRENCH_BASE_F16',
   src: `registry://${models[787].registrySource}/${models[787].registryPath}`,
   registryPath: models[787].registryPath,
   registrySource: models[787].registrySource,
@@ -27628,8 +27676,8 @@ export const WHISPER_FRENCH_TINY_Q8_0 = {
   params: models[787].params
 } as const
 
-export const WHISPER_GERMAN_BASE_F16 = {
-  name: 'WHISPER_GERMAN_BASE_F16',
+export const WHISPER_FRENCH_BASE_Q8_0 = {
+  name: 'WHISPER_FRENCH_BASE_Q8_0',
   src: `registry://${models[788].registrySource}/${models[788].registryPath}`,
   registryPath: models[788].registryPath,
   registrySource: models[788].registrySource,
@@ -27646,8 +27694,8 @@ export const WHISPER_GERMAN_BASE_F16 = {
   params: models[788].params
 } as const
 
-export const WHISPER_GERMAN_BASE_Q8_0 = {
-  name: 'WHISPER_GERMAN_BASE_Q8_0',
+export const WHISPER_FRENCH_TINY_F16 = {
+  name: 'WHISPER_FRENCH_TINY_F16',
   src: `registry://${models[789].registrySource}/${models[789].registryPath}`,
   registryPath: models[789].registryPath,
   registrySource: models[789].registrySource,
@@ -27664,8 +27712,8 @@ export const WHISPER_GERMAN_BASE_Q8_0 = {
   params: models[789].params
 } as const
 
-export const WHISPER_GERMAN_TINY_F16 = {
-  name: 'WHISPER_GERMAN_TINY_F16',
+export const WHISPER_FRENCH_TINY_Q8_0 = {
+  name: 'WHISPER_FRENCH_TINY_Q8_0',
   src: `registry://${models[790].registrySource}/${models[790].registryPath}`,
   registryPath: models[790].registryPath,
   registrySource: models[790].registrySource,
@@ -27682,8 +27730,8 @@ export const WHISPER_GERMAN_TINY_F16 = {
   params: models[790].params
 } as const
 
-export const WHISPER_GERMAN_TINY_Q8_0 = {
-  name: 'WHISPER_GERMAN_TINY_Q8_0',
+export const WHISPER_GERMAN_BASE_F16 = {
+  name: 'WHISPER_GERMAN_BASE_F16',
   src: `registry://${models[791].registrySource}/${models[791].registryPath}`,
   registryPath: models[791].registryPath,
   registrySource: models[791].registrySource,
@@ -27700,8 +27748,8 @@ export const WHISPER_GERMAN_TINY_Q8_0 = {
   params: models[791].params
 } as const
 
-export const WHISPER_ITALIAN_BASE_F16 = {
-  name: 'WHISPER_ITALIAN_BASE_F16',
+export const WHISPER_GERMAN_BASE_Q8_0 = {
+  name: 'WHISPER_GERMAN_BASE_Q8_0',
   src: `registry://${models[792].registrySource}/${models[792].registryPath}`,
   registryPath: models[792].registryPath,
   registrySource: models[792].registrySource,
@@ -27718,8 +27766,8 @@ export const WHISPER_ITALIAN_BASE_F16 = {
   params: models[792].params
 } as const
 
-export const WHISPER_ITALIAN_BASE_Q8_0 = {
-  name: 'WHISPER_ITALIAN_BASE_Q8_0',
+export const WHISPER_GERMAN_TINY_F16 = {
+  name: 'WHISPER_GERMAN_TINY_F16',
   src: `registry://${models[793].registrySource}/${models[793].registryPath}`,
   registryPath: models[793].registryPath,
   registrySource: models[793].registrySource,
@@ -27736,8 +27784,8 @@ export const WHISPER_ITALIAN_BASE_Q8_0 = {
   params: models[793].params
 } as const
 
-export const WHISPER_ITALIAN_TINY_F16 = {
-  name: 'WHISPER_ITALIAN_TINY_F16',
+export const WHISPER_GERMAN_TINY_Q8_0 = {
+  name: 'WHISPER_GERMAN_TINY_Q8_0',
   src: `registry://${models[794].registrySource}/${models[794].registryPath}`,
   registryPath: models[794].registryPath,
   registrySource: models[794].registrySource,
@@ -27754,8 +27802,8 @@ export const WHISPER_ITALIAN_TINY_F16 = {
   params: models[794].params
 } as const
 
-export const WHISPER_ITALIAN_TINY_Q8_0 = {
-  name: 'WHISPER_ITALIAN_TINY_Q8_0',
+export const WHISPER_ITALIAN_BASE_F16 = {
+  name: 'WHISPER_ITALIAN_BASE_F16',
   src: `registry://${models[795].registrySource}/${models[795].registryPath}`,
   registryPath: models[795].registryPath,
   registrySource: models[795].registrySource,
@@ -27772,8 +27820,8 @@ export const WHISPER_ITALIAN_TINY_Q8_0 = {
   params: models[795].params
 } as const
 
-export const WHISPER_JAPANESE_BASE_F16 = {
-  name: 'WHISPER_JAPANESE_BASE_F16',
+export const WHISPER_ITALIAN_BASE_Q8_0 = {
+  name: 'WHISPER_ITALIAN_BASE_Q8_0',
   src: `registry://${models[796].registrySource}/${models[796].registryPath}`,
   registryPath: models[796].registryPath,
   registrySource: models[796].registrySource,
@@ -27790,8 +27838,8 @@ export const WHISPER_JAPANESE_BASE_F16 = {
   params: models[796].params
 } as const
 
-export const WHISPER_JAPANESE_BASE_Q8_0 = {
-  name: 'WHISPER_JAPANESE_BASE_Q8_0',
+export const WHISPER_ITALIAN_TINY_F16 = {
+  name: 'WHISPER_ITALIAN_TINY_F16',
   src: `registry://${models[797].registrySource}/${models[797].registryPath}`,
   registryPath: models[797].registryPath,
   registrySource: models[797].registrySource,
@@ -27808,8 +27856,8 @@ export const WHISPER_JAPANESE_BASE_Q8_0 = {
   params: models[797].params
 } as const
 
-export const WHISPER_JAPANESE_TINY_F16 = {
-  name: 'WHISPER_JAPANESE_TINY_F16',
+export const WHISPER_ITALIAN_TINY_Q8_0 = {
+  name: 'WHISPER_ITALIAN_TINY_Q8_0',
   src: `registry://${models[798].registrySource}/${models[798].registryPath}`,
   registryPath: models[798].registryPath,
   registrySource: models[798].registrySource,
@@ -27826,8 +27874,8 @@ export const WHISPER_JAPANESE_TINY_F16 = {
   params: models[798].params
 } as const
 
-export const WHISPER_JAPANESE_TINY_Q8_0 = {
-  name: 'WHISPER_JAPANESE_TINY_Q8_0',
+export const WHISPER_JAPANESE_BASE_F16 = {
+  name: 'WHISPER_JAPANESE_BASE_F16',
   src: `registry://${models[799].registrySource}/${models[799].registryPath}`,
   registryPath: models[799].registryPath,
   registrySource: models[799].registrySource,
@@ -27844,8 +27892,8 @@ export const WHISPER_JAPANESE_TINY_Q8_0 = {
   params: models[799].params
 } as const
 
-export const WHISPER_NORWEGIAN_TINY = {
-  name: 'WHISPER_NORWEGIAN_TINY',
+export const WHISPER_JAPANESE_BASE_Q8_0 = {
+  name: 'WHISPER_JAPANESE_BASE_Q8_0',
   src: `registry://${models[800].registrySource}/${models[800].registryPath}`,
   registryPath: models[800].registryPath,
   registrySource: models[800].registrySource,
@@ -27862,8 +27910,8 @@ export const WHISPER_NORWEGIAN_TINY = {
   params: models[800].params
 } as const
 
-export const WHISPER_PORTUGUESE_BASE_F16 = {
-  name: 'WHISPER_PORTUGUESE_BASE_F16',
+export const WHISPER_JAPANESE_TINY_F16 = {
+  name: 'WHISPER_JAPANESE_TINY_F16',
   src: `registry://${models[801].registrySource}/${models[801].registryPath}`,
   registryPath: models[801].registryPath,
   registrySource: models[801].registrySource,
@@ -27880,8 +27928,8 @@ export const WHISPER_PORTUGUESE_BASE_F16 = {
   params: models[801].params
 } as const
 
-export const WHISPER_PORTUGUESE_BASE_Q8_0 = {
-  name: 'WHISPER_PORTUGUESE_BASE_Q8_0',
+export const WHISPER_JAPANESE_TINY_Q8_0 = {
+  name: 'WHISPER_JAPANESE_TINY_Q8_0',
   src: `registry://${models[802].registrySource}/${models[802].registryPath}`,
   registryPath: models[802].registryPath,
   registrySource: models[802].registrySource,
@@ -27898,8 +27946,8 @@ export const WHISPER_PORTUGUESE_BASE_Q8_0 = {
   params: models[802].params
 } as const
 
-export const WHISPER_PORTUGUESE_TINY_F16 = {
-  name: 'WHISPER_PORTUGUESE_TINY_F16',
+export const WHISPER_NORWEGIAN_TINY = {
+  name: 'WHISPER_NORWEGIAN_TINY',
   src: `registry://${models[803].registrySource}/${models[803].registryPath}`,
   registryPath: models[803].registryPath,
   registrySource: models[803].registrySource,
@@ -27916,8 +27964,8 @@ export const WHISPER_PORTUGUESE_TINY_F16 = {
   params: models[803].params
 } as const
 
-export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
-  name: 'WHISPER_PORTUGUESE_TINY_Q8_0',
+export const WHISPER_PORTUGUESE_BASE_F16 = {
+  name: 'WHISPER_PORTUGUESE_BASE_F16',
   src: `registry://${models[804].registrySource}/${models[804].registryPath}`,
   registryPath: models[804].registryPath,
   registrySource: models[804].registrySource,
@@ -27934,8 +27982,8 @@ export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
   params: models[804].params
 } as const
 
-export const WHISPER_RUSSIAN_BASE_F16 = {
-  name: 'WHISPER_RUSSIAN_BASE_F16',
+export const WHISPER_PORTUGUESE_BASE_Q8_0 = {
+  name: 'WHISPER_PORTUGUESE_BASE_Q8_0',
   src: `registry://${models[805].registrySource}/${models[805].registryPath}`,
   registryPath: models[805].registryPath,
   registrySource: models[805].registrySource,
@@ -27952,8 +28000,8 @@ export const WHISPER_RUSSIAN_BASE_F16 = {
   params: models[805].params
 } as const
 
-export const WHISPER_RUSSIAN_BASE_Q8_0 = {
-  name: 'WHISPER_RUSSIAN_BASE_Q8_0',
+export const WHISPER_PORTUGUESE_TINY_F16 = {
+  name: 'WHISPER_PORTUGUESE_TINY_F16',
   src: `registry://${models[806].registrySource}/${models[806].registryPath}`,
   registryPath: models[806].registryPath,
   registrySource: models[806].registrySource,
@@ -27970,8 +28018,8 @@ export const WHISPER_RUSSIAN_BASE_Q8_0 = {
   params: models[806].params
 } as const
 
-export const WHISPER_RUSSIAN_TINY_F16 = {
-  name: 'WHISPER_RUSSIAN_TINY_F16',
+export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
+  name: 'WHISPER_PORTUGUESE_TINY_Q8_0',
   src: `registry://${models[807].registrySource}/${models[807].registryPath}`,
   registryPath: models[807].registryPath,
   registrySource: models[807].registrySource,
@@ -27988,8 +28036,8 @@ export const WHISPER_RUSSIAN_TINY_F16 = {
   params: models[807].params
 } as const
 
-export const WHISPER_RUSSIAN_TINY_Q8_0 = {
-  name: 'WHISPER_RUSSIAN_TINY_Q8_0',
+export const WHISPER_RUSSIAN_BASE_F16 = {
+  name: 'WHISPER_RUSSIAN_BASE_F16',
   src: `registry://${models[808].registrySource}/${models[808].registryPath}`,
   registryPath: models[808].registryPath,
   registrySource: models[808].registrySource,
@@ -28006,8 +28054,8 @@ export const WHISPER_RUSSIAN_TINY_Q8_0 = {
   params: models[808].params
 } as const
 
-export const WHISPER_SPANISH_TINY_F16 = {
-  name: 'WHISPER_SPANISH_TINY_F16',
+export const WHISPER_RUSSIAN_BASE_Q8_0 = {
+  name: 'WHISPER_RUSSIAN_BASE_Q8_0',
   src: `registry://${models[809].registrySource}/${models[809].registryPath}`,
   registryPath: models[809].registryPath,
   registrySource: models[809].registrySource,
@@ -28024,8 +28072,8 @@ export const WHISPER_SPANISH_TINY_F16 = {
   params: models[809].params
 } as const
 
-export const WHISPER_SPANISH_TINY_Q8_0 = {
-  name: 'WHISPER_SPANISH_TINY_Q8_0',
+export const WHISPER_RUSSIAN_TINY_F16 = {
+  name: 'WHISPER_RUSSIAN_TINY_F16',
   src: `registry://${models[810].registrySource}/${models[810].registryPath}`,
   registryPath: models[810].registryPath,
   registrySource: models[810].registrySource,
@@ -28042,8 +28090,8 @@ export const WHISPER_SPANISH_TINY_Q8_0 = {
   params: models[810].params
 } as const
 
-export const WHISPER_Q8_0 = {
-  name: 'WHISPER_Q8_0',
+export const WHISPER_RUSSIAN_TINY_Q8_0 = {
+  name: 'WHISPER_RUSSIAN_TINY_Q8_0',
   src: `registry://${models[811].registrySource}/${models[811].registryPath}`,
   registryPath: models[811].registryPath,
   registrySource: models[811].registrySource,
@@ -28060,8 +28108,8 @@ export const WHISPER_Q8_0 = {
   params: models[811].params
 } as const
 
-export const WHISPER_Q8_0_1 = {
-  name: 'WHISPER_Q8_0_1',
+export const WHISPER_SPANISH_TINY_F16 = {
+  name: 'WHISPER_SPANISH_TINY_F16',
   src: `registry://${models[812].registrySource}/${models[812].registryPath}`,
   registryPath: models[812].registryPath,
   registrySource: models[812].registrySource,
@@ -28076,6 +28124,60 @@ export const WHISPER_Q8_0_1 = {
   engine: models[812].engine,
   quantization: models[812].quantization,
   params: models[812].params
+} as const
+
+export const WHISPER_SPANISH_TINY_Q8_0 = {
+  name: 'WHISPER_SPANISH_TINY_Q8_0',
+  src: `registry://${models[813].registrySource}/${models[813].registryPath}`,
+  registryPath: models[813].registryPath,
+  registrySource: models[813].registrySource,
+  blobCoreKey: models[813].blobCoreKey,
+  blobBlockOffset: models[813].blobBlockOffset,
+  blobBlockLength: models[813].blobBlockLength,
+  blobByteOffset: models[813].blobByteOffset,
+  modelId: models[813].modelId,
+  expectedSize: models[813].expectedSize,
+  sha256Checksum: models[813].sha256Checksum,
+  addon: models[813].addon,
+  engine: models[813].engine,
+  quantization: models[813].quantization,
+  params: models[813].params
+} as const
+
+export const WHISPER_Q8_0 = {
+  name: 'WHISPER_Q8_0',
+  src: `registry://${models[814].registrySource}/${models[814].registryPath}`,
+  registryPath: models[814].registryPath,
+  registrySource: models[814].registrySource,
+  blobCoreKey: models[814].blobCoreKey,
+  blobBlockOffset: models[814].blobBlockOffset,
+  blobBlockLength: models[814].blobBlockLength,
+  blobByteOffset: models[814].blobByteOffset,
+  modelId: models[814].modelId,
+  expectedSize: models[814].expectedSize,
+  sha256Checksum: models[814].sha256Checksum,
+  addon: models[814].addon,
+  engine: models[814].engine,
+  quantization: models[814].quantization,
+  params: models[814].params
+} as const
+
+export const WHISPER_Q8_0_1 = {
+  name: 'WHISPER_Q8_0_1',
+  src: `registry://${models[815].registrySource}/${models[815].registryPath}`,
+  registryPath: models[815].registryPath,
+  registrySource: models[815].registrySource,
+  blobCoreKey: models[815].blobCoreKey,
+  blobBlockOffset: models[815].blobBlockOffset,
+  blobBlockLength: models[815].blobBlockLength,
+  blobByteOffset: models[815].blobByteOffset,
+  modelId: models[815].modelId,
+  expectedSize: models[815].expectedSize,
+  sha256Checksum: models[815].sha256Checksum,
+  addon: models[815].addon,
+  engine: models[815].engine,
+  quantization: models[815].quantization,
+  params: models[815].params
 } as const
 
 export const PARAKEET_0_6B_F16 = {

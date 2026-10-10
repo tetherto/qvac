@@ -111,3 +111,22 @@ test('parakeetRuntimeConfigSchema: rejects invalid language values', (t) => {
 test('parakeetRuntimeConfigSchema: rejects negative streamingSpkCacheLen', (t) => {
   t.exception(() => parakeetRuntimeConfigSchema.parse({ streamingSpkCacheLen: -1 }))
 })
+
+test('Nemotron diarization load and streaming controls preserve defaults and explicit context', (t) => {
+  const config = {
+    diarizationThreshold: 0.5,
+    diarizationMinSegmentMs: 200,
+    streamingSpeakerVad: true,
+    streamingChunkLeftContextMs: 80
+  }
+  t.alike(parakeetRuntimeConfigSchema.parse(config), config)
+  t.alike(parakeetRuntimeConfigSchema.parse({}), {})
+  for (const config of [
+    { diarizationThreshold: -0.1 },
+    { diarizationThreshold: 1.1 },
+    { diarizationMinSegmentMs: -1 },
+    { diarizationMinSegmentMs: 0.5 }
+  ]) {
+    t.exception(() => parakeetRuntimeConfigSchema.parse(config))
+  }
+})

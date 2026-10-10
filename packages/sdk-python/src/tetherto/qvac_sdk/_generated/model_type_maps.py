@@ -30,6 +30,7 @@ ENGINE_TO_ADDON: dict[str, str] = {
     "ggml-vla": "vla",
     "llamacpp-completion": "llm",
     "llamacpp-embedding": "embeddings",
+    "moss-transcribe": "moss-transcribe",
     "nmtcpp-translation": "nmt",
     "onnx-tts": "tts",
     "onnx-vad": "vad",

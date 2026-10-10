@@ -153,6 +153,8 @@ function generateBaseName(input: BaseNameInput): string {
       return generateTtsName(input)
     case 'ocr':
       return generateOcrName(input)
+    case 'moss-transcribe':
+      return cleanPart(input.filename.replace(/\.gguf$/, ''))
     case 'parakeet':
       return generateParakeetName(input)
     case 'diffusion':
@@ -475,6 +477,10 @@ function isIndicConformer(filename: string, lowerPath: string) {
 function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
   const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
+
+  if (lower.includes('nemotron-3-diarization') && lower.endsWith('.gguf')) {
+    return `PARAKEET_NEMOTRON_3_DIARIZATION_${cleanPart(quantization)}`
+  }
 
   let variant = ''
   if (lower.includes('sortformer') || lower.includes('diar_streaming')) {

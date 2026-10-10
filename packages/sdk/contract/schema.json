@@ -313,6 +313,38 @@
           "items": {
             "type": "object",
             "properties": {
+              "transcriptionWorkload": {
+                "description": "MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "hotwords": {
+                    "description": "MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+                    "maxItems": 64,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "maxNewTokens": {
+                    "description": "MOSS generated-token limit; 0 uses the model default.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  },
+                  "audioSeconds": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Longest whole recording to project."
+                  }
+                },
+                "required": ["audioSeconds"],
+                "additionalProperties": false,
+                "title": "AssessModelFitRequestModelsItemTranscriptionWorkload"
+              },
               "modelSrc": {
                 "description": "The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.",
                 "anyOf": [
@@ -376,6 +408,7 @@
                               "onnx-tts",
                               "tts-ggml",
                               "parakeet-transcription",
+                              "moss-transcribe",
                               "ggml-ocr",
                               "sdcpp-generation",
                               "audiogen-ggml",
@@ -420,6 +453,7 @@
                   "onnx-tts",
                   "tts-ggml",
                   "parakeet-transcription",
+                  "moss-transcribe",
                   "ggml-ocr",
                   "sdcpp-generation",
                   "audiogen-ggml",
@@ -2722,6 +2756,41 @@
             "id": {
               "type": "number"
             },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "BciTranscribeResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -3017,6 +3086,41 @@
             },
             "id": {
               "type": "number"
+            },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "BciTranscribeStreamResponseSegmentSpeakerSegmentsItem"
+              }
             },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
@@ -4533,6 +4637,7 @@
         "onnx-tts",
         "tts-ggml",
         "parakeet-transcription",
+        "moss-transcribe",
         "ggml-ocr",
         "sdcpp-generation",
         "audiogen-ggml",
@@ -4548,6 +4653,7 @@
         "onnxTts",
         "ttsGgml",
         "parakeetTranscription",
+        "mossTranscribe",
         "ggmlOcr",
         "sdcppGeneration",
         "audiogenGgml",
@@ -6378,6 +6484,7 @@
                 "whisper",
                 "bci",
                 "parakeet",
+                "moss-transcribe",
                 "embeddings",
                 "nmt",
                 "vad",
@@ -10644,6 +10751,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -11065,6 +11173,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -11344,6 +11453,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -11511,6 +11621,22 @@
                       "type": "string",
                       "pattern": "^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
                     },
+                    "streamingSpeakerVad": {
+                      "description": "Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
+                      "type": "boolean"
+                    },
+                    "diarizationThreshold": {
+                      "description": "Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).",
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "diarizationMinSegmentMs": {
+                      "description": "Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "streamingSpkCacheEnable": {
                       "description": "AOSC (Sortformer v2.1): enable speaker-cache streaming. Default true.",
                       "type": "boolean"
@@ -11528,7 +11654,7 @@
                       "maximum": 9007199254740991
                     },
                     "streamingChunkLeftContextMs": {
-                      "description": "AOSC: encoder left-context window in ms. Default 80.",
+                      "description": "Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
@@ -11570,6 +11696,79 @@
               "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
               "title": "LoadModelSrcRequestParakeetTranscription"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestMossTranscribeModelFitPolicy"
+                },
+                "requestId": {
+                  "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelType": {
+                  "type": "string",
+                  "const": "moss-transcribe"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "maxThreads": {
+                      "description": "CPU threads; 0 lets the engine choose.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "useGPU": {
+                      "description": "Enable the linked GPU backend, including Metal. Default false.",
+                      "type": "boolean"
+                    },
+                    "backendsDir": {
+                      "description": "Directory containing dynamically loaded ggml backend libraries.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "title": "LoadModelSrcRequestMossTranscribeModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestMossTranscribe"
             },
             {
               "type": "object",
@@ -11986,6 +12185,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -12081,6 +12281,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -12221,6 +12422,7 @@
                                             "onnx-tts",
                                             "tts-ggml",
                                             "parakeet-transcription",
+                                            "moss-transcribe",
                                             "ggml-ocr",
                                             "sdcpp-generation",
                                             "audiogen-ggml",
@@ -12317,6 +12519,7 @@
                                             "onnx-tts",
                                             "tts-ggml",
                                             "parakeet-transcription",
+                                            "moss-transcribe",
                                             "ggml-ocr",
                                             "sdcpp-generation",
                                             "audiogen-ggml",
@@ -12412,6 +12615,7 @@
                                             "onnx-tts",
                                             "tts-ggml",
                                             "parakeet-transcription",
+                                            "moss-transcribe",
                                             "ggml-ocr",
                                             "sdcpp-generation",
                                             "audiogen-ggml",
@@ -12812,6 +13016,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -12907,6 +13112,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13002,6 +13208,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13097,6 +13304,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13192,6 +13400,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13287,6 +13496,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13510,6 +13720,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13605,6 +13816,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13877,6 +14089,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13972,6 +14185,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14199,6 +14413,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14294,6 +14509,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14389,6 +14605,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14484,6 +14701,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14579,6 +14797,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14751,6 +14970,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14847,6 +15067,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14942,6 +15163,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15093,6 +15315,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15189,6 +15412,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15284,6 +15508,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15383,6 +15608,7 @@
                                           "onnx-tts",
                                           "tts-ggml",
                                           "parakeet-transcription",
+                                          "moss-transcribe",
                                           "ggml-ocr",
                                           "sdcpp-generation",
                                           "audiogen-ggml",
@@ -15611,6 +15837,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -15904,6 +16131,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -15999,6 +16227,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16094,6 +16323,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16189,6 +16419,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16284,6 +16515,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16379,6 +16611,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16474,6 +16707,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16569,6 +16803,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16664,6 +16899,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16759,6 +16995,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16854,6 +17091,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16949,6 +17187,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -17150,6 +17389,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17373,6 +17613,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17468,6 +17709,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17563,6 +17805,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17658,6 +17901,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17793,6 +18037,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17888,6 +18133,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -18521,6 +18767,7 @@
                                 "onnx-tts",
                                 "tts-ggml",
                                 "parakeet-transcription",
+                                "moss-transcribe",
                                 "ggml-ocr",
                                 "sdcpp-generation",
                                 "audiogen-ggml",
@@ -18794,6 +19041,7 @@
                 "tts",
                 "ocr",
                 "parakeet",
+                "moss-transcribe",
                 "diffusion",
                 "audiogen",
                 "vla",
@@ -18823,6 +19071,7 @@
                 "tts-ggml",
                 "ggml-ocr",
                 "parakeet-transcription",
+                "moss-transcribe",
                 "sdcpp-generation",
                 "audiogen-ggml",
                 "ggml-vla",
@@ -18938,6 +19187,7 @@
                   "tts",
                   "ocr",
                   "parakeet",
+                  "moss-transcribe",
                   "diffusion",
                   "audiogen",
                   "vla",
@@ -18967,6 +19217,7 @@
                   "tts-ggml",
                   "ggml-ocr",
                   "parakeet-transcription",
+                  "moss-transcribe",
                   "sdcpp-generation",
                   "audiogen-ggml",
                   "ggml-vla",
@@ -19041,6 +19292,7 @@
             "tts",
             "ocr",
             "parakeet",
+            "moss-transcribe",
             "diffusion",
             "audiogen",
             "vla",
@@ -19112,6 +19364,7 @@
                   "tts",
                   "ocr",
                   "parakeet",
+                  "moss-transcribe",
                   "diffusion",
                   "audiogen",
                   "vla",
@@ -19141,6 +19394,7 @@
                   "tts-ggml",
                   "ggml-ocr",
                   "parakeet-transcription",
+                  "moss-transcribe",
                   "sdcpp-generation",
                   "audiogen-ggml",
                   "ggml-vla",
@@ -20734,6 +20988,21 @@
             }
           ]
         },
+        "hotwords": {
+          "description": "MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "maxNewTokens": {
+          "description": "MOSS generated-token limit; 0 uses the model default.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
         "type": {
           "type": "string",
           "const": "transcribe"
@@ -20877,6 +21146,41 @@
             "id": {
               "type": "number"
             },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "TranscribeResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -20893,6 +21197,12 @@
         "vad": {
           "type": "object",
           "properties": {
+            "speakerId": {
+              "description": "Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "speaking": {
               "type": "boolean"
             },
@@ -21105,6 +21415,19 @@
             "emitEnergyVad": {
               "type": "boolean"
             },
+            "emitSpeakerVad": {
+              "type": "boolean"
+            },
+            "diarizationThreshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "diarizationMinSegmentMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "spkCacheEnable": {
               "type": "boolean"
             },
@@ -21275,6 +21598,41 @@
             "id": {
               "type": "number"
             },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "TranscribeStreamResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -21291,6 +21649,12 @@
         "vad": {
           "type": "object",
           "properties": {
+            "speakerId": {
+              "description": "Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "speaking": {
               "type": "boolean"
             },

@@ -21,6 +21,41 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
+class Hotword(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class AssessModelFitRequestModelsItemTranscriptionWorkload(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    prompt: str | None = None
+    hotwords: Annotated[
+        list[Hotword] | None,
+        Field(
+            description="MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+            max_length=64,
+        ),
+    ] = None
+    max_new_tokens: Annotated[
+        int | None,
+        Field(
+            alias="maxNewTokens",
+            description="MOSS generated-token limit; 0 uses the model default.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    audio_seconds: Annotated[
+        float,
+        Field(
+            alias="audioSeconds",
+            description="Longest whole recording to project.",
+            gt=0.0,
+        ),
+    ]
+
+
 class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -30,6 +65,7 @@ class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -134,6 +170,7 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -164,6 +201,14 @@ class AssessModelFitRequestModelsItemModelConfig(RootModel[dict[str, Any]]):
 
 
 class AssessModelFitRequestModelsItem(GeneratedBaseModel):
+    transcription_workload: Annotated[
+        AssessModelFitRequestModelsItemTranscriptionWorkload | None,
+        Field(
+            alias="transcriptionWorkload",
+            description="MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+            title="AssessModelFitRequestModelsItemTranscriptionWorkload",
+        ),
+    ] = None
     model_src: Annotated[
         str | AssessModelFitRequestModelsItemModelSrc | None,
         Field(
@@ -2396,6 +2441,15 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class BciTranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2405,6 +2459,25 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[BciTranscribeResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -2711,6 +2784,15 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2720,6 +2802,25 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[BciTranscribeStreamResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -4061,6 +4162,7 @@ class ModelType(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -5381,6 +5483,7 @@ class GetModelInfoResponseModelInfoAddon(Enum):
     whisper = "whisper"
     bci = "bci"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     embeddings = "embeddings"
     nmt = "nmt"
     vad = "vad"
@@ -9015,6 +9118,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -9650,6 +9754,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -10227,6 +10332,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -10562,6 +10668,31 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
             pattern="^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$",
         ),
     ] = None
+    streaming_speaker_vad: Annotated[
+        bool | None,
+        Field(
+            alias="streamingSpeakerVad",
+            description="Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
+        ),
+    ] = None
+    diarization_threshold: Annotated[
+        float | None,
+        Field(
+            alias="diarizationThreshold",
+            description="Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    diarization_min_segment_ms: Annotated[
+        int | None,
+        Field(
+            alias="diarizationMinSegmentMs",
+            description="Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     streaming_spk_cache_enable: Annotated[
         bool | None,
         Field(
@@ -10591,7 +10722,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="streamingChunkLeftContextMs",
-            description="AOSC: encoder left-context window in ms. Default 80.",
+            description="Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.",
             ge=0,
             le=9007199254740991,
         ),
@@ -10711,6 +10842,104 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
         Field(
             alias="modelConfig",
             title="LoadModelSrcRequestParakeetTranscriptionModelConfig",
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestMossTranscribeModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
+
+
+class LoadModelSrcRequestMossTranscribeModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    max_threads: Annotated[
+        int | None,
+        Field(
+            alias="maxThreads",
+            description="CPU threads; 0 lets the engine choose.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Enable the linked GPU backend, including Metal. Default false.",
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Directory containing dynamically loaded ggml backend libraries.",
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestMossTranscribe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
+        ),
+    ]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
+    require_http_checksum: Annotated[
+        bool | None,
+        Field(
+            alias="requireHttpChecksum",
+            description="Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    require_secure_transport: Annotated[
+        bool | None,
+        Field(
+            alias="requireSecureTransport",
+            description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestMossTranscribeModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestMossTranscribeModelFitPolicy",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["moss-transcribe"], Field(alias="modelType")] = (
+        "moss-transcribe"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestMossTranscribeModelConfig | None,
+        Field(
+            alias="modelConfig", title="LoadModelSrcRequestMossTranscribeModelConfig"
         ),
     ] = None
 
@@ -11053,6 +11282,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11161,6 +11391,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11275,6 +11506,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11385,6 +11617,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11495,6 +11728,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -11992,6 +12226,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12098,6 +12333,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12206,6 +12442,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12312,6 +12549,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12418,6 +12656,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12526,6 +12765,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12891,6 +13131,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -12999,6 +13240,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13293,6 +13535,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(Enu
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13401,6 +13644,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(Enu
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13790,6 +14034,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -13898,6 +14143,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14006,6 +14252,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(Enum
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14114,6 +14361,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddo
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14224,6 +14472,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcA
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14488,6 +14737,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14596,6 +14846,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14704,6 +14955,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -14936,6 +15188,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enu
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15044,6 +15297,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(Enu
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15152,6 +15406,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15258,6 +15513,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(En
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15574,6 +15830,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -15913,6 +16170,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16019,6 +16277,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16125,6 +16384,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16231,6 +16491,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16337,6 +16598,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16445,6 +16707,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16553,6 +16816,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16659,6 +16923,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16767,6 +17032,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16875,6 +17141,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -16983,6 +17250,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17089,6 +17357,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17306,6 +17575,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17770,6 +18040,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17878,6 +18149,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -17984,6 +18256,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18090,6 +18363,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18282,6 +18556,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18388,6 +18663,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -18928,6 +19204,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestWhispercppTranscription
         | LoadModelSrcRequestBciWhispercppTranscription
         | LoadModelSrcRequestParakeetTranscription
+        | LoadModelSrcRequestMossTranscribe
         | LoadModelSrcRequestLlamacppEmbedding
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
@@ -18944,6 +19221,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestWhispercppTranscription
         | LoadModelSrcRequestBciWhispercppTranscription
         | LoadModelSrcRequestParakeetTranscription
+        | LoadModelSrcRequestMossTranscribe
         | LoadModelSrcRequestLlamacppEmbedding
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
@@ -19044,6 +19322,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
@@ -19513,6 +19792,7 @@ class ModelRegistryGetModelResponseModelAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -19530,6 +19810,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     tts_ggml = "tts-ggml"
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
@@ -19651,6 +19932,7 @@ class ModelRegistryListResponseModelsItemAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -19668,6 +19950,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     tts_ggml = "tts-ggml"
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
@@ -19782,6 +20065,7 @@ class ModelRegistrySearchRequestAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -19810,6 +20094,7 @@ class ModelRegistrySearchResponseModelsItemAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     parakeet = "parakeet"
+    moss_transcribe = "moss-transcribe"
     diffusion = "diffusion"
     audiogen = "audiogen"
     vla = "vla"
@@ -19827,6 +20112,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     tts_ggml = "tts-ggml"
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
@@ -20908,6 +21194,22 @@ class TranscribeRequest(GeneratedBaseModel):
         TranscribeRequestAudioChunkBase64 | TranscribeRequestAudioChunkFilePath,
         Field(alias="audioChunk"),
     ]
+    hotwords: Annotated[
+        list[Hotword] | None,
+        Field(
+            description="MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+            max_length=64,
+        ),
+    ] = None
+    max_new_tokens: Annotated[
+        int | None,
+        Field(
+            alias="maxNewTokens",
+            description="MOSS generated-token limit; 0 uses the model default.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
     type: Literal["transcribe"] = "transcribe"
     request_id: Annotated[
         str | None,
@@ -21020,6 +21322,15 @@ class TranscribeResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class TranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class TranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -21029,6 +21340,25 @@ class TranscribeResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[TranscribeResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -21055,6 +21385,15 @@ class TranscribeResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     speaking: bool
     probability: float
     source: Annotated[
@@ -21229,6 +21568,13 @@ class TranscribeStreamRequestParakeetStreamingConfig(GeneratedBaseModel):
     ] = None
     emit_partials: Annotated[bool | None, Field(alias="emitPartials")] = None
     emit_energy_vad: Annotated[bool | None, Field(alias="emitEnergyVad")] = None
+    emit_speaker_vad: Annotated[bool | None, Field(alias="emitSpeakerVad")] = None
+    diarization_threshold: Annotated[
+        float | None, Field(alias="diarizationThreshold", ge=0.0, le=1.0)
+    ] = None
+    diarization_min_segment_ms: Annotated[
+        int | None, Field(alias="diarizationMinSegmentMs", ge=0, le=9007199254740991)
+    ] = None
     spk_cache_enable: Annotated[bool | None, Field(alias="spkCacheEnable")] = None
     spk_cache_len: Annotated[
         int | None, Field(alias="spkCacheLen", gt=0, le=9007199254740991)
@@ -21383,6 +21729,15 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class TranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
 class TranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -21392,6 +21747,25 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Zero-based speaker id for diarized transcription.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    speaker: Annotated[
+        str | None, Field(description="MOSS speaker label, such as S01.")
+    ] = None
+    speaker_segments: Annotated[
+        list[TranscribeStreamResponseSegmentSpeakerSegmentsItem] | None,
+        Field(
+            alias="speakerSegments",
+            description="Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+        ),
+    ] = None
     is_end_of_turn: Annotated[
         bool | None,
         Field(
@@ -21418,6 +21792,15 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
+    speaker_id: Annotated[
+        int | None,
+        Field(
+            alias="speakerId",
+            description="Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     speaking: bool
     probability: float
     source: Annotated[

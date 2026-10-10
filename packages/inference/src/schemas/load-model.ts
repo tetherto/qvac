@@ -6,7 +6,11 @@ import {
   type LlmConfig,
   type EmbedConfig
 } from './llamacpp-config'
-import { whisperConfigSchema, parakeetLoadConfigSchema } from './transcription-config'
+import {
+  whisperConfigSchema,
+  parakeetLoadConfigSchema,
+  mossTranscribeConfigSchema
+} from './transcription-config'
 import type { parakeetConfigSchema } from './transcription-config'
 import { bciConfigSchema } from './bci-config'
 import { nmtConfigBaseSchema, nmtConfigSchema } from './translation-config'
@@ -33,6 +37,7 @@ import {
   whisperModelTypeSchema,
   bciModelTypeSchema,
   parakeetModelTypeSchema,
+  mossTranscribeModelTypeSchema,
   embeddingsModelTypeSchema,
   nmtModelTypeSchema,
   ttsModelTypeSchema,
@@ -98,6 +103,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.whispercppTranscription, configKeys(whisperConfigSchema)],
   [ModelType.bciWhispercppTranscription, configKeys(bciConfigSchema)],
   [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
+  [ModelType.mossTranscribe, configKeys(mossTranscribeConfigSchema)],
   [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
@@ -180,6 +186,13 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: parakeetModelTypeSchema,
       modelConfig: parakeetLoadConfigSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: mossTranscribeModelTypeSchema,
+      modelConfig: mossTranscribeConfigSchema.optional()
     })
     .strict(),
   z
@@ -350,6 +363,23 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
     .transform((data) => ({
       type: 'loadModel' as const,
       modelType: ModelType.parakeetTranscription,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      ...optionalRequestFields(data)
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
+      modelType: mossTranscribeModelTypeSchema,
+      modelConfig: mossTranscribeConfigSchema.optional()
+    })
+    .strict()
+    .transform((data) => ({
+      type: 'loadModel' as const,
+      modelType: ModelType.mossTranscribe,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: data.modelConfig,
@@ -607,6 +637,13 @@ export const loadParakeetModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
+export const loadMossTranscribeModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.mossTranscribe),
+    modelConfig: mossTranscribeConfigSchema.optional()
+  })
+  .strict()
+
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppEmbedding),
@@ -680,6 +717,7 @@ export const loadModelSrcRequestSchema = z
     loadWhisperModelRequestSchema,
     loadBciModelRequestSchema,
     loadParakeetModelRequestSchema,
+    loadMossTranscribeModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
@@ -847,13 +885,15 @@ export type InferredConfig<S> = S extends {
               ? Partial<z.input<typeof ocrConfigSchema>>
               : S extends { engine: typeof ModelType.parakeetTranscription }
                 ? z.input<typeof parakeetConfigSchema>
-                : S extends { engine: typeof ModelType.sdcppGeneration }
-                  ? SdcppConfig
-                  : S extends { engine: typeof ModelType.audiogenGgml }
-                    ? z.input<typeof audioGenConfigSchema>
-                    : S extends { engine: typeof ModelType.ggmlVla }
-                      ? z.input<typeof vlaConfigSchema>
-                      : Record<string, unknown>
+                : S extends { engine: typeof ModelType.mossTranscribe }
+                  ? z.input<typeof mossTranscribeConfigSchema>
+                  : S extends { engine: typeof ModelType.sdcppGeneration }
+                    ? SdcppConfig
+                    : S extends { engine: typeof ModelType.audiogenGgml }
+                      ? z.input<typeof audioGenConfigSchema>
+                      : S extends { engine: typeof ModelType.ggmlVla }
+                        ? z.input<typeof vlaConfigSchema>
+                        : Record<string, unknown>
 
 /**
  * `loadModel` options for descriptors that preserve a literal `engine`.
