@@ -623,17 +623,8 @@ export const kvCacheWarmToolChoiceRequired: TestDefinition = {
     tools: [CALCULATOR_TOOL],
     messages: ['What is 10 + 20?', 'Say hello.'],
     stream: true,
-    // Reasoning off so the call comes first; the cap keeps a slow device from
-    // generating past the timeout.
-    generationParams: { temp: 0, top_k: 1, seed: 42, reasoning_budget: 0, predict: 256 },
-    requiredGenerationParams: {
-      temp: 0,
-      top_k: 1,
-      seed: 42,
-      reasoning_budget: 0,
-      predict: 256,
-      tool_choice: 'required'
-    },
+    generationParams: { temp: 0, top_k: 1, seed: 42 },
+    requiredGenerationParams: { temp: 0, top_k: 1, seed: 42, tool_choice: 'required' },
     declaredTool: 'calculator',
     requiredArgs: ['operation', 'a', 'b']
   },
