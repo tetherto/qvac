@@ -52,6 +52,10 @@ jobs:
           node-version: 22
           package-manager-cache: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
       - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
         with:
           java-version: '17'
