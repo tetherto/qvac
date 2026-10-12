@@ -58,8 +58,8 @@ try {
     mode: 'img2vid',
     prompt,
     init_image,
-    width: 960,
-    height: 544,
+    width: 864,
+    height: 480,
     // H3 uses 17*k+5 frames and requires 24 FPS.
     video_frames: Number(process.env['FRAMES'] || 124),
     fps: 24,
