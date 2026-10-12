@@ -105,7 +105,8 @@ stateDiagram-v2
     state RolledBack {
         [*] --> Drop
         Drop: drop everything this request added
-        Drop --> TrimTail: pure attention
+        Drop --> TrimTail: pure attention<br/>sliding window, window still resident
+        Drop --> ClearCold: sliding window, decoded<br/>past the window
         Drop --> RestoreSnapshot: full-state model
     }
 ```

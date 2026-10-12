@@ -312,8 +312,9 @@ declare namespace LlmLlamacpp {
          * `cache_checkpoints`: the oldest checkpoints are dropped until the total
          * payload fits. `0` (default) is unlimited. When set, the model load fails
          * with `InvalidArgument` if the budget cannot hold `cache_checkpoints`
-         * checkpoints of the largest size the context allows, so a misconfigured
-         * budget is reported up front rather than discovered mid-conversation.
+         * checkpoints of the largest size the context allows (on a sliding-window
+         * model, a full window), so a misconfigured budget is reported up front
+         * rather than discovered mid-conversation.
          * Also accepted as `cache-checkpoints-max-bytes`.
          */
         cache_checkpoints_max_bytes?: NumericLike;
