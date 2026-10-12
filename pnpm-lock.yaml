@@ -4188,10 +4188,6 @@ packages:
     resolution: {integrity: sha512-qlSKct7g9NTXyXRQIHfMGdsF9ZoZqHj7MmfdVlaaQi9McFjKM0TM69aiAyI9kriTIJJKNPTavP8lD2jHAoEHOQ==}
     engines: {bare: '>=1.24.0'}
 
-  '@qvac/embed-llamacpp@0.45.0':
-    resolution: {integrity: sha512-qlSKct7g9NTXyXRQIHfMGdsF9ZoZqHj7MmfdVlaaQi9McFjKM0TM69aiAyI9kriTIJJKNPTavP8lD2jHAoEHOQ==}
-    engines: {bare: '>=1.24.0'}
-
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
 
@@ -4282,10 +4278,6 @@ packages:
 
   '@qvac/response@0.1.2':
     resolution: {integrity: sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA==}
-
-  '@qvac/vla-ggml@0.30.0':
-    resolution: {integrity: sha512-OW8HSJALYN8D2v5CKpA2Jp0fmXFsp3D3Y9eLshczNXcxoO8du1ABc37o7qd6GcvFd+w3oGgKnEUxZY6tTTF7Qg==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/vla-ggml@0.30.0':
     resolution: {integrity: sha512-OW8HSJALYN8D2v5CKpA2Jp0fmXFsp3D3Y9eLshczNXcxoO8du1ABc37o7qd6GcvFd+w3oGgKnEUxZY6tTTF7Qg==}
@@ -13075,18 +13067,6 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/embed-llamacpp@0.45.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/fabric': 0.20.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/error@0.1.1': {}
 
   '@qvac/fabric-android-arm64@0.20.0': {}
@@ -13343,19 +13323,6 @@ snapshots:
   '@qvac/response@0.1.2':
     dependencies:
       bare-events: 2.4.2
-
-  '@qvac/vla-ggml@0.30.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/fabric': 0.20.0
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
 
   '@qvac/vla-ggml@0.30.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
