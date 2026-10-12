@@ -544,6 +544,10 @@ enum class TtsEngine {
     AUDIO8,
     @SerialName("moss")
     MOSS,
+    @SerialName("moss-sfx")
+    MOSS_SFX,
+    @SerialName("moss-speech")
+    MOSS_SPEECH,
 }
 
 @Serializable
@@ -1136,22 +1140,40 @@ data class SuspendResponse(
 
 @Serializable
 data class TextToSpeechRequest(
+    val audio: List<Double>? = null,
     val description: String? = null,
     val emotion: String? = null,
     val expressivity: String? = null,
+    val greedy: Boolean? = null,
+    val guidance: Double? = null,
     val inputType: String? = null,
+    val maxNewTokens: Long? = null,
+    val maxReplySeconds: Double? = null,
+    val messages: List<JsonObject>? = null,
     val modelId: String,
+    val negativePrompt: String? = null,
     val noise: String? = null,
     val pace: String? = null,
     val pitch: String? = null,
     val quality: String? = null,
+    val replyVoice: List<Double>? = null,
+    val replyVoiceSampleRate: Long? = null,
     val requestId: String? = null,
     val reverb: String? = null,
+    val sampleRate: Long? = null,
+    val seconds: Double? = null,
     val sentenceStream: Boolean? = null,
     val sentenceStreamLocale: String? = null,
     val sentenceStreamMaxChunkScalars: Double? = null,
+    val shift: Double? = null,
+    val steps: Long? = null,
     val stream: Boolean? = null,
-    val text: String,
+    val systemPrompt: String? = null,
+    val temperature: Double? = null,
+    val text: String? = null,
+    val textReply: Boolean? = null,
+    val topK: Long? = null,
+    val topP: Double? = null,
     val type: String,
     val voice: String? = null,
     val voiceDescription: String? = null,
@@ -1167,6 +1189,7 @@ data class TextToSpeechResponse(
     val sentenceChunk: String? = null,
     val stats: JsonObject? = null,
     val stopReason: String? = null,
+    val text: String? = null,
     val type: String,
 )
 
