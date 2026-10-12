@@ -288,7 +288,7 @@ jobs:
             log=$(mktemp)
             status=0
 
-            npm install --no-fund --no-audit --ignore-scripts --loglevel=info 2>&1 | tee "$log" || status=$?
+            npm install --no-fund --no-audit --ignore-scripts --install-links --loglevel=info 2>&1 | tee "$log" || status=$?
 
             if grep -Eq 'ERESOLVE|npm warn (peerOptional|peer)( |$)' "$log"; then
               echo "::error title=SDK npm peer-resolution drift::npm install surfaced peer dependency errors or warnings"
@@ -469,7 +469,9 @@ jobs:
                 run "stage train tarballs $src" node "$WS/.github/scripts/release-train.mjs" stage . "$TRAIN_TARBALLS"
               fi
 
-              # sdk-source:workspace already installs the SDK.
+              # The SDK's workspace link script installs on its own, with
+              # --install-links. A plain install after it replaces the copied
+              # engine with a symlink.
               if [ "$PKG" = "sdk" ] && [ "$SRC" = "workspace" ]; then
                 :
               elif [ "$PM" = "npm" ]; then
