@@ -1,7 +1,10 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -217,21 +220,29 @@ bool restoreSequenceState(
     ::llama_context* lctx, llama_seq_id seqId,
     const SequenceStateSnapshot& snapshot);
 
-// Copies the bytes of a partial snapshot (its buffer, or the contents of its
-// file) into `out`, as `llama_state_seq_get_data_ext` produced them. Returns
-// false for a full or empty snapshot, or when its file cannot be read. Used to
-// keep checkpoints in a cacheKey file.
-[[nodiscard]] bool readPartialSnapshotPayload(
-    const SequenceStateSnapshot& snapshot, std::vector<uint8_t>& out);
+// Receives a snapshot's bytes in order, one chunk at a time.
+using SnapshotChunkSink = std::function<void(const uint8_t* data, size_t size)>;
 
-// Turns `payload`, bytes read back by `readPartialSnapshotPayload` (a
-// checkpoint kept in a cacheKey file), into a partial snapshot at `nPastAt`,
-// stored as a fresh capture would be: in memory, or in a new file of this
-// process's snapshot directory under `directory`. Returns false, with `out`
-// cleared, when the payload is empty or the file cannot be written.
-[[nodiscard]] bool partialSnapshotFromPayload(
-    std::vector<uint8_t> payload, llama_pos nPastAt, SnapshotStorage storage,
-    const std::string& directory, SequenceStateSnapshot& out);
+// Hands the bytes of a partial snapshot to `sink`, as
+// `llama_state_seq_get_data_ext` produced them: its buffer in one chunk, or
+// its file in chunks of at most 1 MiB, so a disk-backed payload is never held
+// whole. Returns false for a full or empty snapshot, or when its file cannot
+// be read or does not hold `bytes()` bytes; `sink` may have received some of
+// them by then. A throw from `sink` propagates. Used to keep checkpoints in a
+// cacheKey file.
+[[nodiscard]] bool streamPartialSnapshot(
+    const SequenceStateSnapshot& snapshot, const SnapshotChunkSink& sink);
+
+// Reads `size` bytes of a partial state from `in` (a checkpoint kept in a
+// cacheKey file) into a partial snapshot at `nPastAt`, stored as a fresh
+// capture would be: in memory, or copied in chunks of at most 1 MiB into a new
+// file of this process's snapshot directory under `directory`. Every byte read
+// is also handed to `observe`. Returns false, with `out` cleared and no file
+// left behind, when the bytes cannot be read or the file cannot be written.
+[[nodiscard]] bool partialSnapshotFromStream(
+    std::istream& in, uint64_t size, llama_pos nPastAt, SnapshotStorage storage,
+    const std::string& directory, const SnapshotChunkSink& observe,
+    SequenceStateSnapshot& out);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

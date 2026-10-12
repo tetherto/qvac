@@ -550,7 +550,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     }
   }
   if (!isCacheLoaded) {
-    isCacheLoaded = driver->loadCache(key);
+    // Checkpoints kept for the key replace the file's below, so the file's is
+    // not read at all.
+    isCacheLoaded = driver->loadCache(
+        key, /*adoptFileCheckpoints=*/!checkpointStore_.contains(key));
     activeCacheSavedToDisk = isCacheLoaded;
   }
   driver->setCacheReconciliationEnabled(!key.empty());

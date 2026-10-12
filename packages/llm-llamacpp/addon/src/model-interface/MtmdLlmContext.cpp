@@ -2179,7 +2179,8 @@ std::vector<llama_token> MtmdLlmContext::residentStateTokens() const {
   return cacheStateTokens();
 }
 
-bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
+bool MtmdLlmContext::loadCache(
+    const std::string& cacheKey, bool adoptFileCheckpoints) {
   if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
     return false;
   }
@@ -2228,7 +2229,9 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   }
   acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
-  adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
+  if (adoptFileCheckpoints) {
+    adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
+  }
   return true;
 }
 

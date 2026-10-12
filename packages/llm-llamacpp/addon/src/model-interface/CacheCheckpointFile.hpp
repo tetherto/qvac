@@ -18,11 +18,13 @@ namespace qvac_lib_inference_addon_llama::cache {
 //   u32 magic "QCKP" · u32 version · u32 count (1 when written by this
 //   version; readers accept any count up to the checkpoint limit)
 //   per checkpoint, oldest first:
-//     i32 nPast · i32 cacheTokens
+//     i32 nPast
 //     u32 word count · the checkpoint's ledger (`serialize`)
 //     u64 payload size · the partial state (`llama_state_seq_get_data_ext`)
+//     u64 payload hash (FNV-1a over the partial state)
 //   u64 checksum over everything above except the payloads
-// The section ends the file; a file without checkpoints has none.
+// The checkpoint's KV-cell count is its ledger's. The section ends the file;
+// a file without checkpoints has none.
 inline constexpr uint32_t CHECKPOINT_SECTION_MAGIC = 0x504b4351; // "QCKP"
 inline constexpr uint32_t CHECKPOINT_SECTION_VERSION = 1;
 
@@ -38,10 +40,10 @@ bool appendCheckpointSection(
 /// Reads the checkpoints kept in the cacheKey file at `path`, whose sequence
 /// state ends at `offset` (the value `llama_state_seq_load_file` returned).
 /// Each is stored per `policy` (memory or disk) and kept only when its ledger
-/// is a prefix of `resident`, the ledger loaded from the same file; the list
-/// is then trimmed to `policy`'s count and byte limits, oldest first. A
-/// missing section returns none; a malformed or unknown one is logged and
-/// returns none, leaving the loaded state as it is.
+/// is a prefix of `resident`, the ledger loaded from the same file, and its
+/// payload matches its hash; the list is then trimmed to `policy`'s count and
+/// byte limits, oldest first. A missing section returns none; a malformed or
+/// unknown one is logged and returns none, leaving the loaded state as it is.
 [[nodiscard]] Checkpoints readCheckpointSection(
     const std::string& path, uint64_t offset, const Ledger& resident,
     const CheckpointPolicy& policy) noexcept;

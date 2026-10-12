@@ -1566,7 +1566,8 @@ std::vector<llama_token> TextLlmContext::residentStateTokens() const {
   return cacheStateTokens();
 }
 
-bool TextLlmContext::loadCache(const std::string& cacheKey) {
+bool TextLlmContext::loadCache(
+    const std::string& cacheKey, bool adoptFileCheckpoints) {
   if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
     return false;
   }
@@ -1610,7 +1611,9 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   }
   acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
-  adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
+  if (adoptFileCheckpoints) {
+    adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
+  }
   return true;
 }
 
@@ -1650,6 +1653,7 @@ void TextLlmContext::appendCheckpointsToCacheFile(
 // the context would keep one it captured itself.
 void TextLlmContext::adoptCheckpointsFromCacheFile(
     const std::string& path, uint64_t offset) {
+  ++fileCheckpointReads_;
   adoptCheckpoints(
       cache::readCheckpointSection(
           path, offset, residentLedger_, cacheCheckpointPolicy_));

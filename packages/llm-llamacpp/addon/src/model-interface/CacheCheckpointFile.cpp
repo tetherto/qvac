@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <system_error>
 #include <utility>
@@ -19,9 +20,9 @@ namespace {
 
 namespace utils = qvac_lib_inference_addon_llama::utils;
 
-// FNV-1a like `hashBytes`, fed piece by piece. The payloads are left out:
-// a truncated payload already fails the size checks, and hashing hundreds of
-// megabytes would slow every save and load.
+// FNV-1a like `hashBytes`, fed piece by piece. The section checksum leaves the
+// payloads out so the reader can verify the metadata without reading them;
+// each payload has its own hash, checked as the payload is read.
 class SectionHash {
 public:
   void add(const void* data, size_t size) noexcept {
@@ -50,9 +51,7 @@ public:
     raw(words.data(), words.size() * sizeof(llama_token));
     hash_.add(words.data(), words.size() * sizeof(llama_token));
   }
-  void payload(const std::vector<uint8_t>& bytes) {
-    raw(bytes.data(), bytes.size());
-  }
+  void payload(const uint8_t* data, size_t size) { raw(data, size); }
   void checksum() {
     const uint64_t sum = hash_.value();
     raw(&sum, sizeof(sum));
@@ -137,19 +136,32 @@ bool keepable(const Checkpoint& checkpoint) noexcept {
          !checkpoint.ledger.entries.empty();
 }
 
-void logQuietly(Priority priority, const std::string& message) noexcept {
+// The message is composed inside the try: composing allocates, and every
+// caller is noexcept.
+template <typename... Parts>
+void logQuietly(Priority priority, const Parts&... parts) noexcept {
   try {
+    std::string message;
+    (message += ... += parts);
     QLOG_IF(priority, message);
   } catch (...) { // NOLINT(bugprone-empty-catch): logging is best effort
   }
 }
 
+void cutBackQuietly(const std::string& path, uintmax_t size) noexcept {
+  try {
+    std::error_code ec;
+    std::filesystem::resize_file(path, size, ec);
+  } catch (...) { // NOLINT(bugprone-empty-catch): the reader rejects the rest
+  }
+}
+
 struct SectionEntry {
   int32_t nPast = 0;
-  int32_t cacheTokens = 0;
   std::vector<llama_token> ledgerWords;
   uint64_t payloadOffset = 0;
   uint64_t payloadSize = 0;
+  uint64_t payloadHash = 0;
 };
 
 } // namespace
@@ -163,20 +175,32 @@ bool appendCheckpointSection(
     return true;
   }
   const Checkpoint& checkpoint = *newest;
-  std::error_code ec;
-  const uintmax_t baseSize = std::filesystem::file_size(path, ec);
-  if (ec) {
+  std::optional<uintmax_t> baseSize;
+  // Cuts the file back to the state and logs why; never throws.
+  const auto fail = [&path, &baseSize](const char* reason) noexcept {
+    if (baseSize.has_value()) {
+      cutBackQuietly(path, *baseSize);
+    }
+    logQuietly(
+        Priority::WARNING,
+        "[CacheCheckpointFile] the checkpoints were not kept in '",
+        path,
+        "' (",
+        reason,
+        "); it holds the conversation state only\n");
     return false;
-  }
+  };
   try {
+    std::error_code ec;
+    const uintmax_t size = std::filesystem::file_size(path, ec);
+    if (ec) {
+      throw std::runtime_error("cannot read its size");
+    }
+    baseSize = size;
     const utils::SequenceStateSnapshot& state = checkpoint.state;
-    std::vector<uint8_t> fromFile;
-    const std::vector<uint8_t>* payload = &state.buffer();
-    if (!state.hasBuffer()) {
-      if (!utils::readPartialSnapshotPayload(state, fromFile)) {
-        throw std::runtime_error("cannot read the checkpoint file");
-      }
-      payload = &fromFile;
+    const uint64_t payloadSize = state.bytes();
+    if (payloadSize == 0) {
+      throw std::runtime_error("the checkpoint has no payload");
     }
     std::ofstream out(path, std::ios::binary | std::ios::app);
     if (!out) {
@@ -187,15 +211,26 @@ bool appendCheckpointSection(
     writer.value(CHECKPOINT_SECTION_VERSION);
     writer.value(static_cast<uint32_t>(1));
     writer.value(static_cast<int32_t>(state.nPast));
-    writer.value(static_cast<int32_t>(checkpoint.cacheTokens));
     const std::vector<llama_token> words = serialize(
         checkpoint.ledger,
         checkpoint.ledger.positions(),
         checkpoint.ledger.cacheTokens());
     writer.value(static_cast<uint32_t>(words.size()));
     writer.words(words);
-    writer.value(static_cast<uint64_t>(payload->size()));
-    writer.payload(*payload);
+    writer.value(payloadSize);
+    // A disk-backed payload is copied in bounded chunks, never held whole.
+    SectionHash payloadHash;
+    uint64_t written = 0;
+    const bool complete = utils::streamPartialSnapshot(
+        state, [&](const uint8_t* data, size_t chunkSize) {
+          writer.payload(data, chunkSize);
+          payloadHash.add(data, chunkSize);
+          written += chunkSize;
+        });
+    if (!complete || written != payloadSize) {
+      throw std::runtime_error("cannot read the checkpoint");
+    }
+    writer.value(payloadHash.value());
     writer.checksum();
     out.close();
     if (!out) {
@@ -203,13 +238,9 @@ bool appendCheckpointSection(
     }
     return true;
   } catch (const std::exception& e) {
-    std::error_code resizeEc;
-    std::filesystem::resize_file(path, baseSize, resizeEc);
-    logQuietly(
-        Priority::WARNING,
-        "[CacheCheckpointFile] the checkpoints were not kept in '" + path +
-            "' (" + e.what() + "); it holds the conversation state only\n");
-    return false;
+    return fail(e.what());
+  } catch (...) {
+    return fail("unexpected error");
   }
 }
 
@@ -222,8 +253,11 @@ Checkpoints readCheckpointSection(
   const auto reject = [&path](const char* reason) {
     logQuietly(
         Priority::WARNING,
-        "[CacheCheckpointFile] ignoring the checkpoints in '" + path +
-            "': " + reason + "\n");
+        "[CacheCheckpointFile] ignoring the checkpoints in '",
+        path,
+        "': ",
+        reason,
+        "\n");
     return Checkpoints{};
   };
   try {
@@ -255,14 +289,14 @@ Checkpoints readCheckpointSection(
     std::vector<SectionEntry> entries(count);
     for (SectionEntry& entry : entries) {
       uint32_t wordCount = 0;
-      if (!reader.value(entry.nPast) || !reader.value(entry.cacheTokens) ||
-          !reader.value(wordCount) ||
+      if (!reader.value(entry.nPast) || !reader.value(wordCount) ||
           !reader.words(entry.ledgerWords, wordCount) ||
           !reader.value(entry.payloadSize)) {
         return reject("truncated");
       }
       entry.payloadOffset = reader.position();
-      if (entry.payloadSize == 0 || !reader.skip(entry.payloadSize)) {
+      if (entry.payloadSize == 0 || !reader.skip(entry.payloadSize) ||
+          !reader.value(entry.payloadHash)) {
         return reject("truncated");
       }
     }
@@ -278,7 +312,6 @@ Checkpoints readCheckpointSection(
     // Second pass: one payload at a time, oldest first, so the policy trims
     // the list the way it trims new checkpoints.
     Checkpoints result;
-    std::vector<uint8_t> payload;
     for (SectionEntry& entry : entries) {
       DecodedLedger decoded;
       try {
@@ -294,24 +327,39 @@ Checkpoints readCheckpointSection(
               decoded.ledger.entries.size()) {
         continue;
       }
-      payload.resize(entry.payloadSize);
       in.clear();
       in.seekg(static_cast<std::streamoff>(entry.payloadOffset));
-      in.read(
-          reinterpret_cast<char*>(payload.data()),
-          static_cast<std::streamsize>(payload.size()));
       if (!in) {
         return reject("cannot read a checkpoint");
       }
       Checkpoint checkpoint;
       checkpoint.ledger = std::move(decoded.ledger);
-      checkpoint.cacheTokens = entry.cacheTokens;
-      if (!utils::partialSnapshotFromPayload(
-              std::exchange(payload, {}),
+      // From the ledger, which `deserialize` checked against its header:
+      // the same value every writer means, whatever it kept in memory.
+      checkpoint.cacheTokens = checkpoint.ledger.cacheTokens();
+      SectionHash payloadHash;
+      if (!utils::partialSnapshotFromStream(
+              in,
+              entry.payloadSize,
               entry.nPast,
               policy.storage,
               policy.directory,
+              [&payloadHash](const uint8_t* data, size_t chunkSize) {
+                payloadHash.add(data, chunkSize);
+              },
               checkpoint.state)) {
+        if (!in) {
+          return reject("cannot read a checkpoint");
+        }
+        continue;
+      }
+      if (payloadHash.value() != entry.payloadHash) {
+        // Dropping `checkpoint` removes the snapshot file just written.
+        logQuietly(
+            Priority::WARNING,
+            "[CacheCheckpointFile] ignoring a checkpoint in '",
+            path,
+            "': its payload does not match its hash\n");
         continue;
       }
       appendProcessCheckpoint(

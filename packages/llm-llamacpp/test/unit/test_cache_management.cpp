@@ -2264,6 +2264,7 @@ loadBatchedModel(const char* cacheRamMib = nullptr) {
 struct BatchedTurn {
   std::string output;
   size_t reuse = 0;
+  size_t fileCheckpointReads = 0;
 };
 
 class BatchedCacheHarness {
@@ -2294,6 +2295,7 @@ public:
     prompt.outputCallback = [&](const std::string&) {
       if (!read && driver_ != nullptr) {
         turn.reuse = driver_->lastCacheReuseForTesting();
+        turn.fileCheckpointReads = driver_->fileCheckpointReadsForTesting();
         read = true;
       }
     };
@@ -3193,6 +3195,9 @@ TEST(CacheHistoryCheckpointTest, BatchedHybridCheckpointSurvivesAReload) {
   chat.emplace_back("user", "Which of them is warmest?");
   const BatchedTurn next = harness.run(chatInput(chat), cacheFile.string());
   ASSERT_FALSE(next.output.empty());
+  EXPECT_EQ(next.fileCheckpointReads, 1u)
+      << "a new model holds no checkpoints for the key, so the load reads the "
+         "file's";
   EXPECT_GT(next.reuse, 0u)
       << "the reloaded conversation restored no checkpoint and reprocessed "
          "the whole history";
@@ -3200,4 +3205,52 @@ TEST(CacheHistoryCheckpointTest, BatchedHybridCheckpointSurvivesAReload) {
 
   model.reset();
   fs::remove(cacheFile);
+}
+
+// A conversation evicted from its slot keeps its checkpoints in the
+// scheduler, and those replace the file's on its next load, so that load
+// does not read the file's checkpoint at all. The turn still continues from
+// a checkpoint.
+TEST(BatchedCheckpointStoreTest, StoredCheckpointsSkipTheFileSection) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const std::vector<std::string> keys = {
+      "store_skip_a.bin", "store_skip_b.bin", "store_skip_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const BatchedTurn first = harness.run(chatInput(chat), keys[0]);
+  ASSERT_FALSE(first.output.empty());
+  chat.emplace_back("assistant", first.output);
+  // Two more keys on two slots evict the first conversation to its file.
+  harness.run(chatInput({{"user", "Say one word: banana."}}), keys[1]);
+  harness.run(chatInput({{"user", "Say one word: cherry."}}), keys[2]);
+  ASSERT_TRUE(fs::exists(keys[0])) << "the first conversation was not evicted";
+  ASSERT_GE(
+      ContinuousBatchSchedulerTestPeer::checkpointStoreSize(
+          harness.scheduler()),
+      1u)
+      << "the evicted conversation kept no checkpoints in the scheduler";
+
+  chat.emplace_back("user", "Which of them is warmest?");
+  const BatchedTurn next = harness.run(chatInput(chat), keys[0]);
+  ASSERT_FALSE(next.output.empty());
+  EXPECT_EQ(next.fileCheckpointReads, 0u)
+      << "the load read the file's checkpoint although the scheduler's "
+         "replace it";
+  EXPECT_GT(next.reuse, 0u)
+      << "the reloaded conversation restored no checkpoint and reprocessed "
+         "the whole history";
+
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
 }

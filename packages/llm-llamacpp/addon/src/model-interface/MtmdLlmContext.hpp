@@ -290,7 +290,8 @@ public:
 
   /// Disk prompt-cache for a multimodal batch slot, embedding the versioned
   /// token/media ledger in the sequence-state file.
-  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;

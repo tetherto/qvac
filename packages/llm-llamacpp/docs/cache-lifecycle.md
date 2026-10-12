@@ -328,7 +328,9 @@ with `disk`. Every write of the `cacheKey` file appends the newest one after
 the sequence state, and a conversation loaded from its file starts with it,
 on both paths and after a restart. With `parallel >= 2` the scheduler also
 keeps a key's other checkpoints across a file round-trip while the process
-lives, and those replace the one from the file.
+lives, and those replace the one from the file, which is then not read. With
+`disk` the checkpoint is copied between its file and the `cacheKey` file in
+1 MiB chunks, never held whole in memory.
 
 ## The `cacheKey` file
 
@@ -380,7 +382,7 @@ The file is a standard llama.cpp sequence-state file
 | llama.cpp header | magic, format version, number of tokens that follow |
 | ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
-| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (1); the newest checkpoint's `nPast`, KV-cell count, its ledger in the format above, and its partial state; a checksum over everything but the state bytes |
+| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (1); the newest checkpoint's `nPast`, its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
 
 The state is always written in full; the checkpoint after it holds only the
 partial state, as in memory. `llama_state_seq_load_file` stops reading at the

@@ -352,8 +352,12 @@ public:
   /// Try to populate this sequence's KV-cache from a previously
   /// persisted cache. Returns true when the cache was loaded
   /// successfully; the scheduler then skips the corresponding prefix
-  /// tokens at admit time.
-  [[nodiscard]] virtual bool loadCache(const std::string& cacheKey) = 0;
+  /// tokens at admit time. With `adoptFileCheckpoints` the checkpoint kept
+  /// in the file is adopted too (`adoptCheckpointsFromCacheFile`); the
+  /// scheduler passes false when it holds checkpoints for the key that would
+  /// replace it anyway.
+  [[nodiscard]] virtual bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) = 0;
 
   /// The sequence memory already holds a state whose ledger is `stateTokens`
   /// (a slot kept resident across requests, or one just restored from the

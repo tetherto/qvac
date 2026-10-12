@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -52,14 +54,33 @@ protected:
     }
     result.ledger = cache::fromTokens(prefix);
     result.cacheTokens = static_cast<llama_pos>(tokens);
-    EXPECT_TRUE(
-        utils::partialSnapshotFromPayload(
-            std::vector<uint8_t>(32 + tokens, static_cast<uint8_t>(fill)),
-            static_cast<llama_pos>(tokens),
-            utils::SnapshotStorage::Memory,
-            {},
-            result.state));
+    result.state.adoptBuffer(
+        std::vector<uint8_t>(32 + tokens, static_cast<uint8_t>(fill)),
+        static_cast<llama_pos>(tokens));
+    result.state.setScope(utils::SnapshotScope::Partial);
     return result;
+  }
+  // A partial snapshot of `payload` stored in a file of the snapshot
+  // directory, as `cache_checkpoint_storage: disk` keeps one.
+  static utils::SequenceStateSnapshot
+  diskSnapshot(const std::vector<uint8_t>& payload, llama_pos nPast) {
+    utils::SequenceStateSnapshot result;
+    std::istringstream in(
+        std::string(payload.begin(), payload.end()), std::ios::binary);
+    EXPECT_TRUE(
+        utils::partialSnapshotFromStream(
+            in,
+            payload.size(),
+            nPast,
+            utils::SnapshotStorage::Disk,
+            fs::temp_directory_path().string(),
+            [](const uint8_t*, size_t) {},
+            result));
+    return result;
+  }
+  static std::vector<uint8_t> readAll(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(in), {}};
   }
   static cache::Ledger resident() {
     std::vector<llama_token> tokens;
@@ -180,9 +201,9 @@ TEST_F(CacheCheckpointFileTest, FollowsTheLoadingModelsPolicy) {
       cache::readCheckpointSection(path_, stateEnd(), resident(), onDisk);
   ASSERT_EQ(read.size(), 1u);
   EXPECT_TRUE(read.front().state.hasFile());
-  std::vector<uint8_t> payload;
-  ASSERT_TRUE(utils::readPartialSnapshotPayload(read.front().state, payload));
-  EXPECT_EQ(payload, checkpoints.back().state.buffer());
+  EXPECT_EQ(
+      readAll(read.front().state.filePath()),
+      checkpoints.back().state.buffer());
 }
 
 // The RAM tier writes cacheKey files itself; a conversation pushed out of a
@@ -225,4 +246,110 @@ TEST_F(CacheCheckpointFileTest, RefusesBytesAfterTheSection) {
       cache::readCheckpointSection(path_, stateEnd(), resident(), policy())
           .size(),
       1u);
+}
+
+// The KV-cell count comes from the checkpoint's ledger, not from what the
+// writer kept in memory: a text context leaves it at 0, and a multimodal
+// context that loads its file must still see the cells the ledger occupies.
+TEST_F(CacheCheckpointFileTest, CacheTokensComeFromTheLedger) {
+  cache::Ledger ledger = cache::fromTokens({100, 101});
+  ledger.entries.push_back(
+      {.kind = cache::EntryKind::Media,
+       .identity = 42,
+       .positions = 2,
+       .cacheTokens = 6});
+  cache::Checkpoint written;
+  written.ledger = ledger;
+  written.cacheTokens = 0;
+  written.state.adoptBuffer(std::vector<uint8_t>(40, 0x3c), 4);
+  written.state.setScope(utils::SnapshotScope::Partial);
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(std::move(written));
+  ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
+
+  cache::Ledger loaded = ledger;
+  loaded.appendToken(102);
+  const cache::Checkpoints read =
+      cache::readCheckpointSection(path_, stateEnd(), loaded, policy());
+  ASSERT_EQ(read.size(), 1u);
+  EXPECT_EQ(read.front().state.nPast, 4);
+  EXPECT_EQ(read.front().cacheTokens, 8)
+      << "two text cells and the six cells of the media span";
+}
+
+// The payload has its own hash: a same-length change to the state bytes
+// passes every size check and the section checksum, but is not restored.
+TEST_F(CacheCheckpointFileTest, IgnoresAChangedPayload) {
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(checkpoint(5, 'p'));
+  ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
+  ASSERT_EQ(
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy())
+          .size(),
+      1u);
+
+  // The last payload byte sits before the payload hash and the checksum.
+  {
+    std::fstream io(path_, std::ios::binary | std::ios::in | std::ios::out);
+    io.seekp(
+        static_cast<std::streamoff>(fileSize() - 2 * sizeof(uint64_t) - 1));
+    io.put('q');
+  }
+  EXPECT_TRUE(
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy())
+          .empty());
+
+  cache::CheckpointPolicy onDisk = policy();
+  onDisk.storage = utils::SnapshotStorage::Disk;
+  onDisk.directory = fs::temp_directory_path().string();
+  EXPECT_TRUE(
+      cache::readCheckpointSection(path_, stateEnd(), resident(), onDisk)
+          .empty());
+}
+
+// Disk-backed checkpoints larger than one copy chunk go into the file and
+// come back out byte for byte, into either storage.
+TEST_F(CacheCheckpointFileTest, DiskCheckpointsRoundTripAcrossChunks) {
+  std::vector<uint8_t> payload((5u << 20) / 2 + 17);
+  for (size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<uint8_t>(i * 31 + i / 4096);
+  }
+  cache::Checkpoint written = checkpoint(6, 'x');
+  written.state = diskSnapshot(payload, 6);
+  ASSERT_TRUE(written.state.hasFile());
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(std::move(written));
+  ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
+
+  const cache::Checkpoints inMemory =
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy());
+  ASSERT_EQ(inMemory.size(), 1u);
+  EXPECT_EQ(inMemory.front().state.buffer(), payload);
+
+  cache::CheckpointPolicy onDisk = policy();
+  onDisk.storage = utils::SnapshotStorage::Disk;
+  onDisk.directory = fs::temp_directory_path().string();
+  const cache::Checkpoints onFile =
+      cache::readCheckpointSection(path_, stateEnd(), resident(), onDisk);
+  ASSERT_EQ(onFile.size(), 1u);
+  ASSERT_TRUE(onFile.front().state.hasFile());
+  EXPECT_EQ(onFile.front().state.bytes(), payload.size());
+  EXPECT_EQ(readAll(onFile.front().state.filePath()), payload);
+}
+
+// A checkpoint that cannot be written leaves the file holding the state only,
+// so the save itself still succeeds.
+TEST_F(CacheCheckpointFileTest, FailedAppendCutsTheFileBackToTheState) {
+  cache::Checkpoint written = checkpoint(4, 'y');
+  written.state = diskSnapshot(std::vector<uint8_t>(64, 0x11), 4);
+  ASSERT_TRUE(written.state.hasFile());
+  fs::remove(written.state.filePath());
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(std::move(written));
+
+  EXPECT_FALSE(cache::appendCheckpointSection(path_, checkpoints));
+  EXPECT_EQ(fileSize(), stateEnd());
+  EXPECT_TRUE(
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy())
+          .empty());
 }

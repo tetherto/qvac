@@ -215,7 +215,8 @@ public:
   [[nodiscard]] bool onFailure(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
@@ -227,6 +228,10 @@ public:
   }
   [[nodiscard]] size_t cacheCheckpointCountForTesting() const noexcept {
     return cacheCheckpoints_.size();
+  }
+  /// How many times a load read the checkpoint section of its cacheKey file.
+  [[nodiscard]] size_t fileCheckpointReadsForTesting() const noexcept {
+    return fileCheckpointReads_;
   }
   /// True while the active cache request holds a pre-request full-state
   /// dump. Lets tests prove pure-attention append-only requests never write
@@ -415,6 +420,7 @@ private:
   // 0 when this request takes no end-of-history checkpoint.
   size_t historyCheckpointEntries_ = 0;
   size_t lastCacheReuse_ = 0;
+  size_t fileCheckpointReads_ = 0;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
 
