@@ -278,6 +278,7 @@
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-console": "*",
+    "bare-events": "^2.9.1",
     "bare-stdio": "^1.0.3",
     "bare-subprocess": "^6.1.0",
     "bare-timers": "*",
