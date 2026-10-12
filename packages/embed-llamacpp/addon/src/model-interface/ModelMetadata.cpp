@@ -1,6 +1,7 @@
 #include "model-interface/ModelMetadata.hpp"
 
 #include <common/common.h>
+#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama-cpp.h>
 
@@ -83,12 +84,14 @@ void ModelMetaData::parse(
         "ModelMetaData::parse: load the model metadata from disk file.\n",
         nullptr);
     loadFromDisk(modelPath);
+    diskFiles_ = {modelPath};
   } else {
     llamaLogCallback(
         GGML_LOG_LEVEL_INFO,
         "ModelMetaData::parse: load the model metadata from disk shards.\n",
         nullptr);
     loadFromDisk(shards.gguf_files.front());
+    diskFiles_ = shards.gguf_files;
   }
 }
 
@@ -112,4 +115,32 @@ std::optional<uint32_t> ModelMetaData::tryGetU32(const char* key) const {
 
 std::optional<std::string> ModelMetaData::tryGetString(const char* key) const {
   return tryGet<std::string>(metadata_, key, llama_model_meta_get_str);
+}
+
+std::optional<uint32_t> ModelMetaData::tryGetPoolingType() const {
+  const std::optional<std::string> arch = tryGetString("general.architecture");
+  if (!arch.has_value()) {
+    return std::nullopt;
+  }
+  const std::string key = *arch + ".pooling_type";
+  return tryGetU32(key.c_str());
+}
+
+std::optional<bool> ModelMetaData::hasTensor(const char* name) const {
+  if (diskFiles_.empty()) {
+    return std::nullopt;
+  }
+  for (const std::string& file : diskFiles_) {
+    gguf_context* ctx = gguf_init_from_file(
+        file.c_str(), gguf_init_params{.no_alloc = true, .ctx = nullptr});
+    if (ctx == nullptr) {
+      return std::nullopt;
+    }
+    const bool found = gguf_find_tensor(ctx, name) >= 0;
+    gguf_free(ctx);
+    if (found) {
+      return true;
+    }
+  }
+  return false;
 }

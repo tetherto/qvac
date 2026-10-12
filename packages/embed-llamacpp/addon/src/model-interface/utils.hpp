@@ -35,3 +35,10 @@ deprecatedLoadFlagMode(const std::string& flag, const std::string& value);
 
 /// @brief The `--load-mode` value that selects `mode`.
 const char* loadModeName(llama_load_mode mode);
+
+/// @brief Whether @p key sets a CPU thread count (`threads`, `threads-batch`).
+bool isThreadsKey(const std::string& key);
+
+/// @brief Throws InvalidConfiguration unless @p value is a whole number of at
+/// most the device's CPU count; 0 or below means every CPU.
+void checkThreads(const std::string& key, const std::string& value);

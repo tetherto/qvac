@@ -30,6 +30,7 @@
 - [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue)
 - [Decision 7: TypeScript Definitions](#decision-7-typescript-definitions)
 - [Decision 8: Laya Decisions as a Separate Model Class](#decision-8-laya-decisions-as-a-separate-model-class)
+- [Decision 9: Reranking in the Addon, Not in Fabric](#decision-9-reranking-in-the-addon-not-in-fabric)
 
 ### Technical Debt
 - [Limited Error Context](#1-limited-error-context)
@@ -235,6 +236,10 @@ classDiagram
 
 `LayaDecisions` (`laya.js`) has the same lifecycle as `GGMLBert` — `load()`, `run()`, `cancel()`, `unload()`, one request at a time — over its own native instance (`createLayaInstance`, wrapped by `LayaInterface`). `run(request)` takes laya's request JSON (`{ state | states, questions }`) and resolves to laya's response, typed as `LayaResult` for `state` and `LayaResult[]` for `states`. `config` is an allowlist of load options with `device` required; see the README's Laya section for the request, response and options.
 
+### Third Class: Reranker
+
+`Reranker` (`rerank.js`) has the same lifecycle over its own native instance (`createRerankInstance`, wrapped by `RerankInterface`). `run({ query, documents })` resolves to `RerankScores`: one number per document, in the order given, higher meaning more relevant. `config` is an allowlist of load options with `device` required; see the README's Rerankers section.
+
 ## Internal Architecture
 
 ### Architectural Pattern
@@ -247,6 +252,7 @@ graph TB
         APP["Application Code"]
         BERTCLASS["GGMLBert<br/>(index.js)"]
         LAYACLASS["LayaDecisions<br/>(laya.js)"]
+        RERANKCLASS["Reranker<br/>(rerank.js)"]
         JOB["createJobHandler<br/>(@qvac/infer-base)"]
         QUEUE["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
@@ -256,6 +262,7 @@ graph TB
     subgraph "Layer 2: Bridge"
         BERTIF["BertInterface<br/>(addon.js)"]
         LAYAIF["LayaInterface<br/>(laya.js)"]
+        RERANKIF["RerankInterface<br/>(rerank.js)"]
         BINDING["require.addon<br/>(binding.js)"]
     end
 
@@ -269,6 +276,7 @@ graph TB
         BERTMODEL["BertModel<br/>(model-interface/BertModel.cpp)"]
         ENCODE["encodeHostF32<br/>encodeHostF32Sequences"]
         LAYAMODEL["LayaModel<br/>(model-interface/LayaModel.cpp)"]
+        RERANKMODEL["RerankModel<br/>(model-interface/RerankModel.cpp)"]
         LOADER["LlamaModelLoader<br/>(model-interface/LlamaModelLoader.cpp)"]
         COMMONLAYA["common_laya_predict<br/>(fabric common)"]
     end
@@ -283,6 +291,9 @@ graph TB
     APP --> LAYACLASS
     LAYACLASS --> LAYAIF
     LAYAIF --> BINDING
+    APP --> RERANKCLASS
+    RERANKCLASS --> RERANKIF
+    RERANKIF --> BINDING
     BERTCLASS --> JOB
     BERTCLASS --> QUEUE
     BERTCLASS --> BERTIF
@@ -297,8 +308,11 @@ graph TB
     ADDON --> WEIGHTSLOAD
     ADDON --> BERTMODEL
     ADDON --> LAYAMODEL
+    ADDON --> RERANKMODEL
     BERTMODEL --> LOADER
     LAYAMODEL --> LOADER
+    RERANKMODEL --> LOADER
+    RERANKMODEL --> LLAMACPP
     LAYAMODEL --> COMMONLAYA
     COMMONLAYA --> LLAMACPP
     LOADER --> LLAMACPP
@@ -322,10 +336,10 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | GGMLBert and LayaDecisions (standalone classes), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
-| 2. Bridge | BertInterface, LayaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
+| 1. JavaScript API | GGMLBert, LayaDecisions and Reranker (standalone classes), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
+| 2. Bridge | BertInterface, LayaInterface, RerankInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
-| 4. Model | BertModel, LayaModel, LlamaModelLoader | Inference logic, batch processing; shared model loading | C++ | Direct llama.cpp integration |
+| 4. Model | BertModel, LayaModel, RerankModel, LlamaModelLoader | Inference logic, batch processing; shared model loading | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
 **Data Flow Through Layers:**
@@ -382,6 +396,10 @@ graph TB
 
 **Responsibility:** The Laya counterpart of `GGMLBert` / `BertInterface`: the same job and queue composition and file streaming, over the `createLayaInstance` binding. Sends the request as JSON (`runJob({ type: 'text', input })`) and parses the response JSON in `mapLayaEvent`, which recognizes the output event by its `LayaDecisionResult` type name.
 
+#### **Reranker / RerankInterface (rerank.js)**
+
+**Responsibility:** The rerank counterpart of `GGMLBert` / `BertInterface`, over the `createRerankInstance` binding. Checks the request shape, sends the query then the documents as one `sequences` input (`runJob({ type: 'sequences', input: [query, ...documents] })`), and turns the scores' `Float32Array` into numbers in `mapRerankEvent`, which recognizes the output event by its `RerankScores` type name.
+
 ### C++ Components
 
 #### **BertModel (model-interface/BertModel.cpp)**
@@ -398,6 +416,7 @@ graph TB
 - `encodeHostF32(string)`: Single text embedding
 - `encodeHostF32Sequences(vector<string>)`: Batch embedding generation
 - `process(Input)`: Unified processing via std::visit
+- `configureParams`: rejects RANK pooling (`UnsupportedEmbeddings`) before the weights load, from `pooling: "rank"` or, with pooling unset, a GGUF that defaults to it: RANK yields `n_cls_out` classifier scores per sequence, not an `n_embd` vector. `onLoaded` rejects a RANK context as a backstop. Rerankers load through `RerankModel`
 
 #### **LlamaModelLoader (model-interface/LlamaModelLoader.cpp)**
 
@@ -413,6 +432,15 @@ Each model owns a loader (composition, no base class) and customizes the load th
 - `configureParams`: rejects a non-`laya` architecture from metadata, then sets the single-pass context of `llama-laya`: RANK pooling, `n_ctx = n_ubatch = n_batch`, up to `min(256, n_batch)` sequences in a unified KV cache, no generic warmup
 - `onLoaded`: `common_laya_init` (tokenizer and decision config), the abort callback, `common_laya_warmup`
 - `process(std::string)`: `common_laya_predict` on the request JSON; returns `LayaDecisionResult{json}`. Invalid JSON and `invalid_argument` map to `InvalidRequest`, `runtime_error` to `DecodeFailed`, a cancelled pass to `Job cancelled`. Job errors reach JS through addon-cpp's error event as a message only, so `InvalidRequest` and `DecodeFailed` appear in the message, not as an error `code`; load errors keep theirs
+
+#### **RerankModel (model-interface/RerankModel.cpp)**
+
+**Responsibility:** Relevance scores from reranker (cross-encoder) GGUFs, as llama-server's `/rerank`.
+
+- `checkConfig` (constructor): accepts only the rerank load options, with thread counts checked as for Laya
+- `configureParams`: before the weights load, rejects a GGUF whose `<arch>.pooling_type` is anything but RANK (an embedding model; many converted rerankers omit the key), and one without a classifier head (`cls.weight` or `cls.output.weight`, read from the GGUF headers with fabric's `gguf` API; a streamed model is not checked). Then sets RANK pooling and a single-pass context: `n_ctx = n_ubatch = n_batch`, up to `min(256, n_batch)` sequences in a unified KV cache
+- `onLoaded`: allocates the batch and sets the abort callback
+- `process(vector<string>)`: the query, then the documents. Each pair is tokenized as llama-server's `format_prompt_rerank` does: the model's `rerank` chat template when it has one, filled in one pass and tokenized with special tokens parsed (in the query and document too, as llama-server does), `[BOS]query[EOS][SEP]document[EOS]` otherwise. Whole pairs are packed into passes of up to `batch_size` tokens and the sequence limit; a pair longer than either `batch_size` (`InputTokensExceedBatchSize`) or the trained context (`ContextOverflow`) is rejected before any pass. The score is the first of the pair's `n_cls_out` outputs, unnormalized; returns `RerankScores{scores}`
 
 #### **AddonCpp / AddonJs (addon/src/addon/AddonCpp.hpp, addon/src/addon/AddonJs.hpp)**
 
@@ -873,6 +901,43 @@ Laya checkpoints are encoders read out through RANK pooling: packed sequences, o
 
 ---
 
+## Decision 9: Reranking in the Addon, Not in Fabric
+
+<details>
+<summary>⚡ TL;DR</summary>
+
+**Chose:** A `RerankModel` / `Reranker` pair in this package that pairs the query with each document itself, over fabric's public llama API
+**Why:** Fabric already scores pairs (RANK pooling and the classifier heads are in the library); only llama-server's pair formatting is missing from it, and it is about 30 lines
+**Cost:** A second copy of `format_prompt_rerank` to keep in step with llama-server
+
+</details>
+
+### Context
+
+`pooling: "rank"` reached `BertModel`, which read `n_embd` floats from each sequence's `n_cls_out`-float output: a heap over-read that returned different garbage on every run and could crash. RANK pooling yields classifier scores, so the fix for embeddings is to reject it, and rerankers need their own path: a query paired with each document, raw scores, and a scores result.
+
+In fabric, the scoring is part of the library (`llama_get_embeddings_seq` returns `n_cls_out` floats per sequence under RANK pooling), but the pairing lives in llama-server (`format_prompt_rerank`) and the `llama-embedding` example, which the addon does not link.
+
+### Decision
+
+- **Pairing in the addon:** `RerankModel::tokenizePair` follows `format_prompt_rerank`, text only, with `llama_model_chat_template(model, "rerank")` and the vocab's BOS, EOS and SEP tokens.
+- **No fabric change:** reranking is a feature upstream llama.cpp already has, so moving the helper into fabric's `common` would add divergence from upstream for no capability upstream lacks. If several packages need it, the place for a shared helper is upstream llama.cpp's `common`.
+- **Separate class:** `GGMLBert` stays embeddings-only and rejects RANK pooling; `Reranker` takes `{ query, documents }` and resolves to scores.
+
+### Rationale
+
+- Works on the fabric runtime already pinned, with no fabric release or consumer bump.
+- The scores match fabric's `llama-embedding --pooling rank` for the same model (measured with jina-reranker-v1-tiny-en).
+
+### Trade-offs
+- ✅ Reranking ships with the addon, without waiting on a fabric release
+- ✅ `BertModel` and `RerankModel` share the load path
+- ❌ A change to llama-server's pair formatting has to be mirrored by hand
+- ❌ A streamed model is not checked for a classifier head, since its tensor table is not on disk
+- ❌ Special-token text in a query or document is parsed as special tokens in a templated pair, as in llama-server
+
+---
+
 # Technical Debt
 
 ### 1. Limited Error Context
@@ -886,4 +951,4 @@ Laya checkpoints are encoders read out through RANK pooling: packed sequences, o
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-10-06
+**Last Updated:** 2026-10-12
