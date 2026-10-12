@@ -258,11 +258,12 @@ test(
       { role: 'user', type: 'media', content: imageBytes },
       { role: 'user', content: 'What animal is in this image? Answer in one word.' }
     ]
-    // About 1,800 tokens: far more than the window.
+    // About 1,500 tokens: far more than the window. Numbers only, so no noun in
+    // the filler competes with the answer.
     const longMessage = (label) =>
       Array.from(
         { length: 120 },
-        (_, i) => `Log ${label}${i}: the keeper checked the harbor lamp at dawn.`
+        (_, i) => `Reading ${label}${i}: ${(i * 7) % 100}.${i % 10} units.`
       ).join(' ') + ` ${question}`
 
     async function editBehindTheWindow(cacheCheckpoints) {
@@ -334,6 +335,10 @@ test(
     t.ok(
       cold.promptTokens >= cold.promptLength - 1,
       `test setup: without checkpoints the edit reprocesses everything (${cold.promptTokens} of ${cold.promptLength})`
+    )
+    t.ok(
+      /elephant/i.test(cold.output),
+      `test setup: a cold run of the edit sees the image: "${cold.output.slice(0, 100)}"`
     )
   }
 )
