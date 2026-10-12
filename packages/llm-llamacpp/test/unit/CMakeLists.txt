@@ -45,6 +45,7 @@ add_executable(
   test_continuous_batch_finalize.cpp
   test_batch_entry_guard.cpp
   test_media_load_order.cpp
+  test_image_token_budget.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
