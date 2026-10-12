@@ -2,16 +2,23 @@
 name: "CPP Tests (nx)"
 
 on:
+  # push and schedule are this lane's cache warmer; the matrix job picks the
+  # packages. The non-package paths mirror SHARED_CACHE_INPUTS in
+  # .github/scripts/cpp-tests-warm-roster.mjs.
   push:
     branches: [main]
     paths:
-      - 'packages/asr-ggml/**'
-      - 'packages/tts-ggml/**'
-      - 'packages/bci-whispercpp/**'
+      - 'packages/**'
       - '.github/workflows/cpp-tests-nx.yml'
       - '.github/actions/vcpkg-*/**'
       - '.github/scripts/configure-cpp-build.mjs'
       - 'vcpkg-overlays/**'
+  schedule:
+    # Every 2 days for the same reason as on-merge-vcpkg-cache-embed.yml: the
+    # cache server prunes an entry after CACHE_CLEANUP_OLDER_THAN_DAYS=5 days
+    # without an upload or download, and this keeps the longest gap at 4 days even
+    # after one failed run. The hour follows the five legacy warmers' stagger.
+    - cron: "47 6 */2 * *"
   workflow_dispatch:
     inputs:
       overrides:
@@ -104,14 +111,35 @@ jobs:
       carveouts: ${{ steps.compute.outputs.carveouts }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      # The warm roster is every package whose PR legs build in the test-cpp
+      # matrix, read from project.json. A push warms the ones it touched, or all
+      # of them when it changed a shared cache input or its range cannot be
+      # fetched; the schedule warms all of them.
+      - name: Select packages to warm
+        id: warm
+        if: github.event_name == 'push' || github.event_name == 'schedule'
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          changed=""
+          if [ "$EVENT_NAME" = "push" ] && git fetch --no-tags --depth=1 origin "$BEFORE_SHA"; then
+            changed="$RUNNER_TEMP/pushed-paths.txt"
+            git diff --name-only "$BEFORE_SHA" "$HEAD_SHA" > "$changed"
+          fi
+          node .github/scripts/cpp-tests-warm-roster.mjs ${changed:+"$changed"} | tee -a "$GITHUB_OUTPUT"
       - id: compute
+        if: steps.warm.outputs.packages != '[]'
         uses: ./.github/actions/nx-project-matrix
         with:
           target: test:cpp
           overrides: ${{ inputs.overrides || '{}' }}
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
-          packages: ${{ github.event_name == 'push' && '["asr-ggml","tts-ggml","bci-whispercpp"]' || inputs.packages }}
+          packages: ${{ steps.warm.outputs.packages || inputs.packages }}
 
   test-cpp:
     name: cpp-tests-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.arch }}
@@ -223,7 +251,9 @@ jobs:
       # Own key namespace: the legacy per-package workflows spell the package
       # short-name (`embed`) where nx has the project name (`embed-llamacpp`),
       # and their key inputs differ per package, so the two cannot share entries.
-      # Speech pushes on main and trusted manual dispatches warm both layers.
+      # Pushes to main, the schedule and trusted manual dispatches warm both
+      # layers; embed-llamacpp and diffusion-cpp are dispatched by their own
+      # warmers instead.
       - name: Get vcpkg cache (restore)
         id: vcpkg-cache
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
