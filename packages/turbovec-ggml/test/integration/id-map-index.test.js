@@ -6,6 +6,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 
 const TARGET_ARCH = os.arch()
+const IS_MOBILE = os.platform() === 'ios' || os.platform() === 'android'
 const SUPPORTS_TURBOVEC = TARGET_ARCH === 's390x' || TARGET_ARCH.includes('64')
 
 const IdMapIndex = require('@qvac/turbovec-ggml/idMapIndex')
@@ -297,6 +298,33 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) 
   const defaulted = new IdMapIndex({ dim: DIM, bitWidth: undefined })
   t.is(defaulted.bitWidth, 8, 'undefined bitWidth uses default')
   defaulted.dispose()
+})
+
+// The class always resolves `bitWidth` to a storage name, so the native
+// boundary takes `{ dim, storage }` only. Desktop-only: the relative binding
+// path does not resolve after the mobile test app copies integration tests.
+test('IdMapIndex: native create takes dim and storage only', { skip: IS_MOBILE }, (t) => {
+  const binding = require('../../binding')
+  for (const [storage, bitWidth] of [
+    ['f32', 32],
+    ['q8', 8],
+    ['q4', 4]
+  ]) {
+    const handle = binding.idx_create({ dim: DIM, storage })
+    t.is(binding.idx_bit_width(handle), bitWidth, `${storage} creates a ${bitWidth}-bit index`)
+    binding.idx_dispose(handle)
+  }
+  expectThrows(t, () => binding.idx_create({ dim: DIM }), 'missing storage is rejected')
+  expectThrows(
+    t,
+    () => binding.idx_create({ dim: DIM, bitWidth: 32 }),
+    'bitWidth without storage is rejected'
+  )
+  expectThrows(
+    t,
+    () => binding.idx_create({ dim: DIM, storage: 'q16' }),
+    'unknown storage is rejected'
+  )
 })
 
 test('IdMapIndex: ESM wrappers expose named exports', async (t) => {

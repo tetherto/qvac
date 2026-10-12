@@ -4,11 +4,20 @@
 // typed methods + status-aware accessors over the ggml-base vector-index C API.
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include <ggml-vector-index.h>
 
 namespace turbovec_ggml {
+
+enum class VectorStorage : std::uint8_t { F32, Q8, Q4, TurboVecQ4, TurboVecQ2 };
+
+// Parses the JS storage name (`f32`, `q8`, `q4`, `turbovec-q4`,
+// `turbovec-q2`). Returns nullopt for anything else.
+std::optional<VectorStorage>
+parseVectorStorage(std::string_view storage) noexcept;
 
 class VectorIndexFilter {
 public:
@@ -31,9 +40,9 @@ private:
 
 class VectorIndex {
 public:
-  // Construct a fresh empty index. Throws std::invalid_argument on bad
-  // dims / storage mode.
-  VectorIndex(int dim, int bitWidth, const std::string& storage = {});
+  // Construct a fresh empty index. Throws std::invalid_argument when fabric
+  // rejects the dimension, or for TurboVec storage on a 32-bit target.
+  VectorIndex(int dim, VectorStorage storage);
 
   // Adopt an already-opened native handle (used by static load).
   explicit VectorIndex(ggml_vec_index_t* handle) noexcept;

@@ -10,8 +10,10 @@
 #include "VectorIndex.hpp"
 #include "VectorIndexErrors.hpp"
 
+using turbovec_ggml::parseVectorStorage;
 using turbovec_ggml::VectorIndex;
 using turbovec_ggml::VectorIndexFilter;
+using turbovec_ggml::VectorStorage;
 namespace verrors = turbovec_ggml::vector_index_errors;
 
 namespace {
@@ -30,49 +32,61 @@ std::string tmpPath(const std::string& name) {
 
 } // namespace
 
+TEST(VectorIndexTest, ParsesEveryStorageName) {
+  EXPECT_EQ(parseVectorStorage("f32"), VectorStorage::F32);
+  EXPECT_EQ(parseVectorStorage("q8"), VectorStorage::Q8);
+  EXPECT_EQ(parseVectorStorage("q4"), VectorStorage::Q4);
+  EXPECT_EQ(parseVectorStorage("turbovec-q4"), VectorStorage::TurboVecQ4);
+  EXPECT_EQ(parseVectorStorage("turbovec-q2"), VectorStorage::TurboVecQ2);
+  EXPECT_FALSE(parseVectorStorage("").has_value());
+  EXPECT_FALSE(parseVectorStorage("q16").has_value());
+  EXPECT_FALSE(parseVectorStorage("F32").has_value());
+}
+
 TEST(VectorIndexTest, CreatesEveryStorageModeWithItsBitWidth) {
   struct Case {
-    const char* storage;
+    VectorStorage storage;
     int bitWidth;
   };
   const std::vector<Case> cases = {
-      {"f32", 32},
-      {"q8", 8},
-      {"q4", 4},
-      {"turbovec-q4", 4},
-      {"turbovec-q2", 2}};
+      {VectorStorage::F32, 32},
+      {VectorStorage::Q8, 8},
+      {VectorStorage::Q4, 4},
+      {VectorStorage::TurboVecQ4, 4},
+      {VectorStorage::TurboVecQ2, 2}};
   for (const auto& c : cases) {
-    VectorIndex idx(128, c.bitWidth, c.storage);
-    EXPECT_TRUE(idx.valid()) << c.storage;
-    EXPECT_EQ(idx.bitWidth(), c.bitWidth) << c.storage;
-    EXPECT_EQ(idx.dim(), 128) << c.storage;
-    EXPECT_EQ(idx.len(), 0) << c.storage;
+    const VectorIndex idx(128, c.storage);
+    EXPECT_TRUE(idx.valid()) << c.bitWidth;
+    EXPECT_EQ(idx.bitWidth(), c.bitWidth);
+    EXPECT_EQ(idx.dim(), 128);
+    EXPECT_EQ(idx.len(), 0);
   }
 }
 
-TEST(VectorIndexTest, RejectsInvalidStorageAndMismatchedBitWidth) {
-  EXPECT_THROW(VectorIndex(DIM, 8, "q16"), std::invalid_argument);
-  EXPECT_THROW(VectorIndex(DIM, 8, "f32"), std::invalid_argument);
-  EXPECT_THROW(VectorIndex(DIM, 4, "turbovec-q2"), std::invalid_argument);
-  EXPECT_THROW(VectorIndex(0, 8), std::invalid_argument);
+TEST(VectorIndexTest, RejectsDimensionsFabricRefuses) {
+  EXPECT_THROW(VectorIndex(0, VectorStorage::F32), std::invalid_argument);
+  EXPECT_THROW(
+      VectorIndex(12, VectorStorage::TurboVecQ2), std::invalid_argument);
+  EXPECT_THROW(
+      VectorIndex(1032, VectorStorage::TurboVecQ4), std::invalid_argument);
 }
 
 TEST(VectorIndexTest, MoveTransfersOwnership) {
-  VectorIndex source(DIM, 32, "f32");
+  VectorIndex source(DIM, VectorStorage::F32);
   ggml_vec_index_t* raw = source.raw();
 
   VectorIndex moved(std::move(source));
   EXPECT_FALSE(source.valid()); // NOLINT(bugprone-use-after-move)
   EXPECT_EQ(moved.raw(), raw);
 
-  VectorIndex assigned(DIM, 8, "q8");
+  VectorIndex assigned(DIM, VectorStorage::Q8);
   assigned = std::move(moved);
   EXPECT_FALSE(moved.valid()); // NOLINT(bugprone-use-after-move)
   EXPECT_EQ(assigned.raw(), raw);
 }
 
 TEST(VectorIndexTest, AddSearchRemoveRoundTrip) {
-  VectorIndex idx(DIM, 32, "f32");
+  VectorIndex idx(DIM, VectorStorage::F32);
   std::vector<float> vectors;
   std::vector<uint64_t> ids;
   for (int i = 0; i < 4; i++) {
@@ -97,7 +111,7 @@ TEST(VectorIndexTest, AddSearchRemoveRoundTrip) {
 }
 
 TEST(VectorIndexTest, PreparedFilterRestrictsSearchAndGoesStaleOnMutation) {
-  VectorIndex idx(DIM, 32, "f32");
+  VectorIndex idx(DIM, VectorStorage::F32);
   std::vector<float> vectors;
   std::vector<uint64_t> ids = {1, 2};
   for (int i = 0; i < 2; i++) {
@@ -127,7 +141,7 @@ TEST(VectorIndexTest, PreparedFilterRestrictsSearchAndGoesStaleOnMutation) {
 TEST(VectorIndexTest, WriteAndLoadRestoresIndex) {
   const std::string path = tmpPath("turbovec-ggml-unit-roundtrip");
   {
-    VectorIndex idx(DIM, 8, "q8");
+    VectorIndex idx(DIM, VectorStorage::Q8);
     const auto v = unitVec(3);
     const uint64_t id = 7;
     ASSERT_EQ(idx.add(v.data(), 1, &id), GGML_VEC_INDEX_OK);

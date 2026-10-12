@@ -22,7 +22,7 @@ const STORAGE_BY_BIT_WIDTH = {
 type NativeHandle = object
 
 interface IdMapIndexBinding {
-  idx_create(options: Required<IdMapIndexOptions>): NativeHandle
+  idx_create(options: { dim: number; storage: IdMapIndexStorage }): NativeHandle
   idx_load(path: string): NativeHandle
   idx_load_mmap(path: string): NativeHandle
   idx_load_with_delta(snapshotPath: string, deltaPath: string): NativeHandle
@@ -151,13 +151,10 @@ function ensureHandle(index: IdMapIndex) {
   return handle
 }
 
-function normalizeStorageOptions(options: IdMapIndexOptions) {
-  const hasBitWidth = options.bitWidth !== undefined
-  const hasStorage = options.storage !== undefined
-  let bitWidth: IdMapIndexBitWidth = options.bitWidth ?? 8
-  let storage: IdMapIndexStorage | undefined = options.storage
+function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage {
+  const { bitWidth, storage } = options
 
-  if (hasStorage) {
+  if (storage !== undefined) {
     if (
       typeof storage !== 'string' ||
       !Object.prototype.hasOwnProperty.call(BIT_WIDTH_BY_STORAGE, storage)
@@ -166,21 +163,17 @@ function normalizeStorageOptions(options: IdMapIndexOptions) {
         "IdMapIndex: storage must be 'f32', 'q8', 'q4', 'turbovec-q4', or 'turbovec-q2'"
       )
     }
-    const expectedBitWidth = BIT_WIDTH_BY_STORAGE[storage]
-    if (!hasBitWidth) {
-      bitWidth = expectedBitWidth
-    } else if (bitWidth !== expectedBitWidth) {
+    if (bitWidth !== undefined && bitWidth !== BIT_WIDTH_BY_STORAGE[storage]) {
       throw new TypeError('IdMapIndex: bitWidth does not match storage')
     }
-  } else {
-    storage = STORAGE_BY_BIT_WIDTH[bitWidth]
+    return storage
   }
 
-  if (storage === undefined) {
+  const resolved: IdMapIndexStorage | undefined = STORAGE_BY_BIT_WIDTH[bitWidth ?? 8]
+  if (resolved === undefined) {
     throw new TypeError('IdMapIndex: bitWidth must be 2, 4, 8, or 32')
   }
-
-  return { bitWidth, storage }
+  return resolved
 }
 
 export class IdMapIndexFilter {
@@ -254,13 +247,13 @@ export default class IdMapIndex {
     if (!isPositiveInt32(dim)) {
       throw new TypeError('IdMapIndex: dim must be a positive int32')
     }
-    const { bitWidth, storage } = normalizeStorageOptions(options)
+    const storage = normalizeStorageOptions(options)
     if (storage.startsWith('turbovec-') && (dim > 1_024 || dim % 8 !== 0)) {
       throw new RangeError(
         'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 1024'
       )
     }
-    this[HANDLE] = loadBinding().idx_create({ dim, bitWidth, storage })
+    this[HANDLE] = loadBinding().idx_create({ dim, storage })
   }
 
   /**

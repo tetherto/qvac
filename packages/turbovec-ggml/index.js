@@ -63,30 +63,22 @@ function ensureHandle(index) {
     return handle;
 }
 function normalizeStorageOptions(options) {
-    const hasBitWidth = options.bitWidth !== undefined;
-    const hasStorage = options.storage !== undefined;
-    let bitWidth = options.bitWidth ?? 8;
-    let storage = options.storage;
-    if (hasStorage) {
+    const { bitWidth, storage } = options;
+    if (storage !== undefined) {
         if (typeof storage !== 'string' ||
             !Object.prototype.hasOwnProperty.call(BIT_WIDTH_BY_STORAGE, storage)) {
             throw new TypeError("IdMapIndex: storage must be 'f32', 'q8', 'q4', 'turbovec-q4', or 'turbovec-q2'");
         }
-        const expectedBitWidth = BIT_WIDTH_BY_STORAGE[storage];
-        if (!hasBitWidth) {
-            bitWidth = expectedBitWidth;
-        }
-        else if (bitWidth !== expectedBitWidth) {
+        if (bitWidth !== undefined && bitWidth !== BIT_WIDTH_BY_STORAGE[storage]) {
             throw new TypeError('IdMapIndex: bitWidth does not match storage');
         }
+        return storage;
     }
-    else {
-        storage = STORAGE_BY_BIT_WIDTH[bitWidth];
-    }
-    if (storage === undefined) {
+    const resolved = STORAGE_BY_BIT_WIDTH[bitWidth ?? 8];
+    if (resolved === undefined) {
         throw new TypeError('IdMapIndex: bitWidth must be 2, 4, 8, or 32');
     }
-    return { bitWidth, storage };
+    return resolved;
 }
 class IdMapIndexFilter {
     [FILTER_HANDLE] = null;
@@ -152,11 +144,11 @@ class IdMapIndex {
         if (!isPositiveInt32(dim)) {
             throw new TypeError('IdMapIndex: dim must be a positive int32');
         }
-        const { bitWidth, storage } = normalizeStorageOptions(options);
+        const storage = normalizeStorageOptions(options);
         if (storage.startsWith('turbovec-') && (dim > 1_024 || dim % 8 !== 0)) {
             throw new RangeError('IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 1024');
         }
-        this[HANDLE] = loadBinding().idx_create({ dim, bitWidth, storage });
+        this[HANDLE] = loadBinding().idx_create({ dim, storage });
     }
     /**
      * Load a v2/v3 snapshot or migrate legacy v1 storage. Legacy bit-width 8

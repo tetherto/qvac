@@ -1,65 +1,59 @@
 #include "VectorIndex.hpp"
 
-#include <optional>
+#include <cstddef>
 #include <stdexcept>
-#include <string_view>
 #include <utility>
 
 namespace turbovec_ggml {
 
 namespace {
 
-enum class StorageType { Default, Q4, Q8, F32, TurboVecQ2, TurboVecQ4 };
+constexpr int F32_BIT_WIDTH = 32;
+constexpr int Q8_BIT_WIDTH = 8;
+constexpr int Q4_BIT_WIDTH = 4;
 
-constexpr std::optional<StorageType>
-parseStorageType(std::string_view storage) noexcept {
-  if (storage.empty()) {
-    return StorageType::Default;
-  }
-  if (storage == "q4") {
-    return StorageType::Q4;
-  }
-  if (storage == "q8") {
-    return StorageType::Q8;
-  }
-  if (storage == "f32") {
-    return StorageType::F32;
-  }
-  if (storage == "turbovec-q2") {
-    return StorageType::TurboVecQ2;
-  }
-  if (storage == "turbovec-q4") {
-    return StorageType::TurboVecQ4;
-  }
-  return std::nullopt;
+constexpr bool isTurboVec(VectorStorage storage) noexcept {
+  return storage == VectorStorage::TurboVecQ4 ||
+         storage == VectorStorage::TurboVecQ2;
 }
 
-ggml_vec_index_t* createIndex(int dim, int bitWidth, std::string_view storage) {
-  const auto type = parseStorageType(storage);
-  if (!type.has_value()) {
-    return nullptr;
+ggml_vec_index_t* createIndex(int dim, VectorStorage storage) {
+  switch (storage) {
+  case VectorStorage::F32:
+    return ggml_vec_index_create(dim, F32_BIT_WIDTH);
+  case VectorStorage::Q8:
+    return ggml_vec_index_create(dim, Q8_BIT_WIDTH);
+  case VectorStorage::Q4:
+    return ggml_vec_index_create(dim, Q4_BIT_WIDTH);
+  case VectorStorage::TurboVecQ4:
+    return ggml_vec_index_create_turbovec_q4(dim);
+  case VectorStorage::TurboVecQ2:
+    return ggml_vec_index_create_turbovec_q2(dim);
   }
-
-  switch (*type) {
-  case StorageType::Default:
-    return bitWidth == 2 ? ggml_vec_index_create_turbovec_q2(dim)
-                         : ggml_vec_index_create(dim, bitWidth);
-  case StorageType::Q4:
-    return bitWidth == 4 ? ggml_vec_index_create(dim, 4) : nullptr;
-  case StorageType::Q8:
-    return bitWidth == 8 ? ggml_vec_index_create(dim, 8) : nullptr;
-  case StorageType::F32:
-    return bitWidth == 32 ? ggml_vec_index_create(dim, 32) : nullptr;
-  case StorageType::TurboVecQ2:
-    return bitWidth == 2 ? ggml_vec_index_create_turbovec_q2(dim) : nullptr;
-  case StorageType::TurboVecQ4:
-    return bitWidth == 4 ? ggml_vec_index_create_turbovec_q4(dim) : nullptr;
-  }
-
   return nullptr;
 }
 
 } // namespace
+
+std::optional<VectorStorage>
+parseVectorStorage(std::string_view storage) noexcept {
+  if (storage == "f32") {
+    return VectorStorage::F32;
+  }
+  if (storage == "q8") {
+    return VectorStorage::Q8;
+  }
+  if (storage == "q4") {
+    return VectorStorage::Q4;
+  }
+  if (storage == "turbovec-q4") {
+    return VectorStorage::TurboVecQ4;
+  }
+  if (storage == "turbovec-q2") {
+    return VectorStorage::TurboVecQ2;
+  }
+  return std::nullopt;
+}
 
 VectorIndexFilter::VectorIndexFilter(ggml_vec_index_filter_t* handle) noexcept
     : handle_(handle) {}
@@ -88,8 +82,13 @@ VectorIndexFilter::operator=(VectorIndexFilter&& other) noexcept {
   return *this;
 }
 
-VectorIndex::VectorIndex(int dim, int bitWidth, const std::string& storage)
-    : handle_(createIndex(dim, bitWidth, storage)) {
+VectorIndex::VectorIndex(int dim, VectorStorage storage) : handle_(nullptr) {
+  if constexpr (sizeof(size_t) < 8) {
+    if (isTurboVec(storage)) {
+      throw std::invalid_argument("TurboVec requires a 64-bit target");
+    }
+  }
+  handle_ = createIndex(dim, storage);
   if (handle_ == nullptr) {
     throw std::invalid_argument("ggml_vec_index_create rejected dim/storage");
   }

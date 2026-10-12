@@ -210,18 +210,6 @@ bool readIntProp(
   return true;
 }
 
-bool readIntValue(js_env_t* env, js_value_t* val, int32_t* out) {
-  double raw = 0.0;
-  if (js_get_value_double(env, val, &raw) != 0 || !std::isfinite(raw) ||
-      raw != std::trunc(raw) ||
-      raw < static_cast<double>(std::numeric_limits<int32_t>::min()) ||
-      raw > static_cast<double>(std::numeric_limits<int32_t>::max())) {
-    return false;
-  }
-  *out = static_cast<int32_t>(raw);
-  return true;
-}
-
 void throwStatus(js_env_t* env, int code) {
   const char* name =
       verrors::toString(static_cast<verrors::VecIndexError>(code));
@@ -270,23 +258,6 @@ bool getOptionalProperty(
     return false;
   }
   *hasValue = !isUndefined;
-  return true;
-}
-
-bool readOptionalIntProp(
-    js_env_t* env, js_value_t* obj, const char* name, int32_t* out,
-    bool* hasValue) {
-  js_value_t* val = nullptr;
-  if (!getOptionalProperty(env, obj, name, &val, hasValue)) {
-    return false;
-  }
-  if (!*hasValue) {
-    return true;
-  }
-  if (!readIntValue(env, val, out)) {
-    js_throw_type_error(env, "InvalidArgument", "invalid integer option");
-    return false;
-  }
   return true;
 }
 
@@ -598,7 +569,8 @@ js_value_t* finishSearchResult(
 // Bindings
 // ---------------------------------------------------------------------------
 
-// idxCreate({ dim, bitWidth }) -> external handle
+// idxCreate({ dim, storage }) -> external handle. The JS wrapper resolves
+// `bitWidth` to a storage name before calling in.
 js_value_t* idxCreate(js_env_t* env, js_callback_info_t* info) {
   size_t argc = 1;
   js_value_t* argv[1] = {nullptr};
@@ -606,59 +578,27 @@ js_value_t* idxCreate(js_env_t* env, js_callback_info_t* info) {
     return nullptr;
   }
   if (argc < 1) {
-    js_throw_type_error(env, "InvalidArgument", "expected { dim, bitWidth }");
+    js_throw_type_error(env, "InvalidArgument", "expected { dim, storage }");
     return nullptr;
   }
   int32_t dim = 0;
-  int32_t bitWidth = 8;
   if (!readIntProp(env, argv[0], "dim", &dim)) {
     js_throw_type_error(env, "InvalidArgument", "missing or invalid `dim`");
     return nullptr;
   }
-  bool hasBitWidth = false;
-  if (!readOptionalIntProp(
-          env, argv[0], "bit_width", &bitWidth, &hasBitWidth)) {
+  std::string storageName;
+  if (!readUtf8StringProp(env, argv[0], "storage", &storageName)) {
     return nullptr;
   }
-  std::string storage;
-  if (!readUtf8StringProp(env, argv[0], "storage", &storage)) {
-    return nullptr;
-  }
-
-  if (!storage.empty()) {
-    int32_t storageBitWidth = 0;
-    if (storage == "f32") {
-      storageBitWidth = 32;
-    } else if (storage == "q8") {
-      storageBitWidth = 8;
-    } else if (storage == "q4" || storage == "turbovec-q4") {
-      storageBitWidth = 4;
-    } else if (storage == "turbovec-q2") {
-      storageBitWidth = 2;
-    } else {
-      js_throw_type_error(env, "InvalidArgument", "invalid storage");
-      return nullptr;
-    }
-    if (!hasBitWidth) {
-      bitWidth = storageBitWidth;
-    } else if (bitWidth != storageBitWidth) {
-      js_throw_type_error(
-          env, "InvalidArgument", "bitWidth does not match storage");
-      return nullptr;
-    }
-  }
-
-  const bool usesTurbovec = storage == "turbovec-q4" ||
-                            storage == "turbovec-q2" ||
-                            (storage.empty() && bitWidth == 2);
-  if (usesTurbovec && sizeof(size_t) < 8) {
-    js_throw_error(env, "InvalidArgument", "TurboVec requires a 64-bit target");
+  const auto storage = turbovec_ggml::parseVectorStorage(storageName);
+  if (!storage.has_value()) {
+    js_throw_type_error(env, "InvalidArgument", "missing or invalid `storage`");
     return nullptr;
   }
 
   VectorIndex* idx = nullptr;
   try {
-    idx = new VectorIndex(dim, bitWidth, storage);
+    idx = new VectorIndex(dim, *storage);
   } catch (const std::invalid_argument& e) {
     js_throw_error(env, "InvalidArgument", e.what());
     return nullptr;
