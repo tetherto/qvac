@@ -153,6 +153,34 @@
       }
     }
   },
+  "ocr-main-gpu": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "OCR_LATIN"
+    },
+    "type": "ggml-ocr",
+    "config": {
+      "langList": [
+        "en"
+      ],
+      "detectorModelSrc": {
+        "$const": "OCR_CRAFT"
+      },
+      "backendDevice": "vulkan",
+      "mainGpu": 0
+    },
+    "configOn": {
+      "desktop-macos": {
+        "backendDevice": "metal"
+      },
+      "electron-macos": {
+        "backendDevice": "metal"
+      }
+    }
+  },
   "doctr": {
     "on": [
       "desktop",
@@ -587,7 +615,6 @@
   "diffusion": {
     "skipPreDownloadOn": [
       "electron",
-      "snap",
       "mobile"
     ],
     "constant": {
@@ -635,7 +662,6 @@
   "audiogen-turbo": {
     "skipPreDownloadOn": [
       "electron",
-      "snap",
       "mobile"
     ],
     "type": "audiogen-ggml",
