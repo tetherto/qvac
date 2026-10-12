@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-09
+
 ### Added
 
 - `assessFit({ engine: 'minimax', ... })` projects a MiniMax-Music3 model pair
@@ -35,9 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-10-07#1`, keeping the speech packages on
-  one engine stack. Nothing in the window touches the audiogen engine, so
-  published behavior is unchanged.
+- Raise the `speech-cpp` floor to `2026-10-07#2` and the `ggml-speech` floor to
+  `2026-10-07#1`, keeping the speech packages on one engine stack. The new
+  revisions add MOSS transcription memory fit and ggml memory queries that this
+  package does not use, so published behavior is unchanged.
 - Raise the `speech-cpp` floor to `2026-10-07` for the MiniMax-Music3 memory
   fit. Generation is unchanged.
 - Raise the `speech-cpp` and `ggml-speech` floors to `2026-10-06`. Same models,

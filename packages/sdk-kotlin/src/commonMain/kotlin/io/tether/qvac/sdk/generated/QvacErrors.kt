@@ -206,6 +206,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("VECTOR_INDEX_NOT_FOUND", reportedCode, message, payload)
     class ServerVectorIndexProviderUnavailable(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("VECTOR_INDEX_PROVIDER_UNAVAILABLE", reportedCode, message, payload)
+    class ClientAddonLinkFailed(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("ADDON_LINK_FAILED", reportedCode, message, payload)
     class ClientBareImportsMapNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("BARE_IMPORTS_MAP_NOT_FOUND", reportedCode, message, payload)
     class ClientBarePackError(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -387,6 +389,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "VECTOR_INDEX_INVALID_VECTORS" && (code == null || code == 52852) -> QvacKnownException.ServerVectorIndexInvalidVectors(message, payload, code)
     name == "VECTOR_INDEX_NOT_FOUND" && (code == null || code == 52851) -> QvacKnownException.ServerVectorIndexNotFound(message, payload, code)
     name == "VECTOR_INDEX_PROVIDER_UNAVAILABLE" && (code == null || code == 52850) -> QvacKnownException.ServerVectorIndexProviderUnavailable(message, payload, code)
+    name == "ADDON_LINK_FAILED" && (code == null || code == 50617) -> QvacKnownException.ClientAddonLinkFailed(message, payload, code)
     name == "BARE_IMPORTS_MAP_NOT_FOUND" && (code == null || code == 50613) -> QvacKnownException.ClientBareImportsMapNotFound(message, payload, code)
     name == "BARE_PACK_ERROR" && (code == null || code == 50611) -> QvacKnownException.ClientBarePackError(message, payload, code)
     name == "BARE_PACK_NOT_INSTALLED" && (code == null || code == 50610) -> QvacKnownException.ClientBarePackNotInstalled(message, payload, code)
