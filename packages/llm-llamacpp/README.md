@@ -180,6 +180,7 @@ const config = {
 | device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
 | gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
 | ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
+| chat_template_file | string                                     | —                            | Path to a jinja chat template that replaces the one in the GGUF |
 | lora              | string                                      | —                            | Path to LoRA adapter file                             |
 | temp              | 0.00 – 2.00                                 | 0.8                          | Sampling temperature                                  |
 | top_p             | 0 – 1                                       | 0.9                          | Top-p (nucleus) sampling                              |

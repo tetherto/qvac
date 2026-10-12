@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `chat_template_file` in the load config reads a jinja chat template from
+  that path and uses it instead of the template embedded in the GGUF, for
+  models whose own template does not render tools. A path that cannot be read
+  fails the load with `InvalidArgument`.
+
 ## [0.59.0] - 2026-10-11
 
 ### Added

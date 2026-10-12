@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cinttypes>
+#include <fstream>
 #include <initializer_list>
 #include <iterator>
 #include <mutex>
@@ -1931,6 +1932,28 @@ NormalizedLoad normalizeLoadForFit(
       if (list.empty() && !listString.empty()) {
         params.antiprompt.push_back(listString);
       }
+      configFilemap.erase(iter);
+    }
+  }
+
+  // --chat-template-file is not registered for LLAMA_EXAMPLE_COMMON, so the
+  // file is read here and becomes getChatTemplate()'s manual override
+  for (const std::string& key : {"chat-template-file", "chat_template_file"}) {
+    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
+      std::ifstream file(iter->second);
+      if (!file) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "%s: cannot read chat template file: %s\n",
+                K_LEGACY_PARSER_NAME.data(),
+                iter->second.c_str()));
+      }
+      params.chat_template.assign(
+          std::istreambuf_iterator<char>(file),
+          std::istreambuf_iterator<char>());
       configFilemap.erase(iter);
     }
   }

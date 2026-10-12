@@ -1,6 +1,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <stdexcept>
 #include <string>
@@ -595,6 +597,40 @@ TEST_F(LoadFitNormalizationTest, BackendOverrideWithDevicesIsRejected) {
   EXPECT_THROW(
       static_cast<void>(lfn::normalizeLoadForFit(
           "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, ChatTemplateFileBecomesTheManualTemplate) {
+  const std::string chatTemplate =
+      "{% for message in messages %}{{ message['content'] }}{% endfor %}";
+  const auto path =
+      std::filesystem::temp_directory_path() / "qvac-chat-template-test.jinja";
+  std::ofstream(path) << chatTemplate;
+  auto config = baseConfig();
+  config["chat_template_file"] = path.string();
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  std::filesystem::remove(path);
+
+  EXPECT_EQ(result.params.chat_template, chatTemplate);
+}
+
+TEST_F(LoadFitNormalizationTest, UnreadableChatTemplateFileIsRejected) {
+  auto config = baseConfig();
+  config["chat_template_file"] = "/nonexistent/chat-template.jinja";
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
       qvac_errors::StatusError);
 }
 

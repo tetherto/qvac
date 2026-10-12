@@ -1119,6 +1119,8 @@ namespace LlmLlamacpp {
     ctx_size?: NumericLike;
     system_prompt?: string;
     lora?: string;
+    /** Path to a jinja chat template that replaces the one embedded in the GGUF. */
+    chat_template_file?: string;
     temp?: NumericLike;
     top_p?: NumericLike;
     top_k?: NumericLike;
