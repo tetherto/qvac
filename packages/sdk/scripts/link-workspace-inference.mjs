@@ -51,4 +51,8 @@ const manifestPath = join(sdkDir, 'package.json')
 const pkg = JSON.parse(readFileSync(manifestPath, 'utf8'))
 pkg.dependencies['@qvac/inference'] = 'file:../inference'
 writeFileSync(manifestPath, `${JSON.stringify(pkg, null, 2)}\n`)
-npm(['install', '--ignore-scripts'], sdkDir)
+// --install-links copies the engine into node_modules instead of symlinking
+// it. Through a symlink the engine's addons resolve from
+// packages/inference/node_modules, where the mobile bundle steps never install
+// the per-platform prebuild packages they put beside the SDK's own addons.
+npm(['install', '--ignore-scripts', '--install-links'], sdkDir)

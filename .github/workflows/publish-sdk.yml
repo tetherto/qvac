@@ -186,7 +186,11 @@ jobs:
       # --ignore-scripts: the step above writes GITHUB_TOKEN into .npmrc, so a
       # dependency lifecycle script would run with that token in reach. See
       # .github/scripts/test/install-scripts-policy.test.mjs.
+      #
+      # The workspace step installs on its own, and a plain install after it
+      # would replace the copied engine with a symlink.
       - name: Install dependencies
+        if: ${{ startsWith(github.ref_name, 'release-sdk-') }}
         run: npm install --ignore-scripts
         working-directory: ${{ env.WORKDIR }}
 
