@@ -6,20 +6,7 @@ export const MAX_BATCH_INPUTS = 100
 /** Mirrors the SDK's NMT `translate()` arguments. */
 export const translateBody = z.strictObject({
   model: z.string().min(1),
-  text: z
-    .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
-    .superRefine((value, ctx) => {
-      // Keep the cap issue outside the union so it retains the too_many_inputs
-      // error code rather than becoming an invalid_union issue.
-      if (Array.isArray(value) && value.length > MAX_BATCH_INPUTS) {
-        ctx.addIssue({
-          code: 'too_big',
-          origin: 'array',
-          maximum: MAX_BATCH_INPUTS,
-          inclusive: true
-        })
-      }
-    }),
+  text: z.union([z.string().min(1), z.array(z.string().min(1)).min(1).max(MAX_BATCH_INPUTS)]),
   stream: z.boolean().optional()
 })
 

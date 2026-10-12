@@ -455,31 +455,6 @@ function titleNestedSchemas(root: JsonSchema, rootTitle: string, seenTitles: Set
   }
 }
 
-function normalizeWireSchema(value: unknown): void {
-  if (Array.isArray(value)) {
-    for (const item of value) normalizeWireSchema(item)
-    return
-  }
-  if (!isSchemaObject(value)) return
-  // Primitive-union compaction occurs after Zod's override callback in some
-  // versions, so normalize the completed export before emitting artifacts.
-  if (Array.isArray(value['type'])) {
-    value['anyOf'] = value['type'].map((type) => ({ type }))
-    delete value['type']
-  }
-  if (Array.isArray(value['prefixItems']) && value['items'] === false) {
-    const minItems = value['minItems']
-    const maxItems = value['maxItems']
-    delete value['items']
-    delete value['minItems']
-    delete value['maxItems']
-    value['items'] = false
-    value['minItems'] = minItems
-    value['maxItems'] = maxItems
-  }
-  for (const child of Object.values(value)) normalizeWireSchema(child)
-}
-
 export function toWireJsonSchema(
   schema: z.ZodType,
   io: 'input' | 'output',
@@ -488,22 +463,9 @@ export function toWireJsonSchema(
   const json = schema.toJSONSchema({
     target: 'draft-2020-12',
     io,
-    unrepresentable: 'any',
-    override: ({ zodSchema, jsonSchema }) => {
-      // Zod's output export omits tuple bounds. Keep the wire contract's
-      // positional arity so generated clients reject malformed OCR boxes.
-      const def = zodSchema._zod.def
-      if (def.type === 'tuple') {
-        jsonSchema.minItems = def.items.length
-        if (!def.rest) {
-          jsonSchema.maxItems = def.items.length
-          jsonSchema.items = false
-        }
-      }
-    }
+    unrepresentable: 'any'
   }) as JsonSchema
   delete json['$schema']
-  normalizeWireSchema(json)
   const flattened = flattenAllOfWithUnion(json, defName)
   const collapsed = collapseSingleMemberUnions(flattened) as JsonSchema
   assertNoRefs(collapsed, defName)

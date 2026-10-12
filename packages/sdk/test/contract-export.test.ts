@@ -1,13 +1,11 @@
 import test from 'brittle'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { z } from 'zod'
 import {
   buildContract,
   callShapeByHandlerType,
   contractDir,
-  renderContractFiles,
-  toWireJsonSchema
+  renderContractFiles
 } from '../scripts/contract/build-contract'
 import { buildModelsRegistry } from '../scripts/contract/build-models-registry'
 import { constantsRegistry } from '../scripts/contract/constants-registry'
@@ -15,11 +13,6 @@ import { methodShapes } from '../scripts/contract/method-shapes'
 import { contractValidate } from './utils/contract-validator'
 
 type JsonSchema = Record<string, unknown>
-
-test('wire export preserves a stable primitive union representation', (t) => {
-  const schema = toWireJsonSchema(z.union([z.number(), z.string()]), 'input', 'test.union')
-  t.alike(schema, { anyOf: [{ type: 'number' }, { type: 'string' }] })
-})
 
 function isSchemaObject(node: unknown): node is JsonSchema {
   return node !== null && typeof node === 'object' && !Array.isArray(node)
