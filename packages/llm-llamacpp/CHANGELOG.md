@@ -4,13 +4,6 @@
 
 ### Added
 
-- Chat messages accept past tool calls: `tool_calls` (`id`, `name`,
-  `arguments` as an object or JSON object text) on an assistant turn, and
-  `tool_call_id` / `name` on a tool turn. The chat template renders them in
-  the model's own format instead of the caller writing them into `content`.
-  `content` may be `null` or omitted on an assistant turn that carries
-  `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
-  `InvalidInputFormat`.
 - On hybrid and recurrent models (Qwen3.5 and later, Jamba, DeepSeek V4) the
   `cacheKey` file also keeps the conversation's newest end-of-history
   checkpoint. A conversation loaded from its file, including in a new
@@ -19,6 +12,18 @@
   forced because they rewrite the previous answer. Older checkpoints stay in
   memory only. Files written this way still load in earlier versions, which
   ignore the checkpoint.
+
+## [0.59.0] - 2026-10-11
+
+### Added
+
+- Chat messages accept past tool calls: `tool_calls` (`id`, `name`,
+  `arguments` as an object or JSON object text) on an assistant turn, and
+  `tool_call_id` / `name` on a tool turn. The chat template renders them in
+  the model's own format instead of the caller writing them into `content`.
+  `content` may be `null` or omitted on an assistant turn that carries
+  `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
+  `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
 
 ### Fixed
 
