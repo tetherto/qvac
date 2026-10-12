@@ -255,7 +255,8 @@ private suspend fun withWorkerSocket(
     val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
     val worker = Socket(InetAddress.getLoopbackAddress(), server.localPort)
     val host = withContext(Dispatchers.IO) { server.accept() }
-    val transport = JvmBareRpcTransport(host, rpcLimits = limits)
+    worker.writeFrame(STOW_CONTROL, "{\"type\":\"ready\"}".encodeToByteArray())
+    val transport = JvmBareRpcTransport.attach(host, rpcLimits = limits)
     try {
         block(transport, worker)
     } finally {
@@ -265,6 +266,10 @@ private suspend fun withWorkerSocket(
     }
 }
 
+private const val STOW_CONTROL = 0
+private const val STOW_USER = 1
+
+/** The next bare-rpc message the host sent, unwrapped from its bare-stow user frame. */
 private fun Socket.readMessage(): Message {
     val input = getInputStream()
     val prefix = input.readNBytes(4)
@@ -273,7 +278,22 @@ private fun Socket.readMessage(): Message {
         ((prefix[1].toInt() and 0xff) shl 8) or
         ((prefix[2].toInt() and 0xff) shl 16) or
         ((prefix[3].toInt() and 0xff) shl 24)
-    return Messages.decode(prefix + input.readNBytes(length)).message
+    val body = input.readNBytes(length)
+    assertEquals(STOW_USER, body[0].toInt())
+    return Messages.decode(body.copyOfRange(1, body.size)).message
+}
+
+private fun Socket.writeFrame(tag: Int, payload: ByteArray) {
+    val length = payload.size + 1
+    val header = byteArrayOf(
+        length.toByte(),
+        (length ushr 8).toByte(),
+        (length ushr 16).toByte(),
+        (length ushr 24).toByte(),
+        tag.toByte(),
+    )
+    getOutputStream().write(header + payload)
+    getOutputStream().flush()
 }
 
 private fun Socket.readRequestData(): ByteArray? {
@@ -282,10 +302,7 @@ private fun Socket.readRequestData(): ByteArray? {
     return chunk.data
 }
 
-private fun Socket.write(message: Message) {
-    getOutputStream().write(Messages.encode(message))
-    getOutputStream().flush()
-}
+private fun Socket.write(message: Message) = writeFrame(STOW_USER, Messages.encode(message))
 
 /** 20 lines of 2 KiB: well past the library's 16 KiB pause mark while the collector holds the first. */
 private const val LINES_PAST_THE_PAUSE_MARK = 20
