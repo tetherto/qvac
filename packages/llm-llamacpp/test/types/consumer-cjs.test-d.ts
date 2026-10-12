@@ -35,6 +35,10 @@ const logger = model.logger;
 void logger;
 const state: { configLoaded: boolean } = model.getState();
 void state;
+const saved: Promise<void> = model.saveCache("/abs/session.bin");
+void saved;
+const discarded: Promise<void> = model.discardCache("/abs/session.bin");
+void discarded;
 
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
@@ -81,7 +85,6 @@ const generationParams: LlmLlamacpp.GenerationParams = {
   json_schema: { type: "object" },
   tool_choice: "required",
   parallel_tool_calls: false,
-  remove_thinking_from_context: true,
 };
 void generationParams;
 
@@ -89,15 +92,25 @@ const runOptions: LlmLlamacpp.RunOptions = {
   prefill: false,
   generationParams,
   cacheKey: "k",
-  saveCacheToDisk: true,
+  ephemeral: false,
   rejectWhenBusy: true,
 };
 void runOptions;
+
+// @ts-expect-error - saveCacheToDisk was removed; use saveCache(cacheKey)
+const removedSave: LlmLlamacpp.RunOptions = { saveCacheToDisk: true };
+void removedSave;
 
 const messages: LlmLlamacpp.Message[] = [
   { role: "user", content: "hello" },
   { role: "user", type: "media", content: new Uint8Array([1, 2, 3]) },
   { type: "function", name: "get_weather", parameters: { type: "object" } },
+  {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_1", name: "get_weather", arguments: { city: "Paris" } }],
+  },
+  { role: "tool", content: "18C", tool_call_id: "call_1", name: "get_weather" },
 ];
 void messages;
 
@@ -161,7 +174,6 @@ const stats: LlmLlamacpp.RuntimeStats = {
   CacheTokens: 4,
   generatedTokens: 5,
   promptTokens: 6,
-  thinkingBlockDiscards: 0,
   toolDefinitionsDropped: 0,
   avgConcurrentSeq: 1,
   backendDevice: "gpu",

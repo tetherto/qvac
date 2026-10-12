@@ -6,6 +6,7 @@
 #include <any>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <future>
 #include <string>
 #include <thread>
@@ -225,6 +226,73 @@ TEST_F(BatchGroupCancelTest, CancelWithQueuedOverflowRejectsCancelled) {
   // Everything the group held is released once it settles.
   EXPECT_EQ(model->activeSlots(), 0u)
       << "slots must drain after the cancelled group settles";
+}
+
+/// The same cancel settles the group through the scheduler's group teardown.
+/// Its admitted slots are cancelled, not failed: each keeps its conversation,
+/// including turns its `cacheKey` file does not have yet, so `saveCache` can
+/// still write it.
+TEST_F(
+    BatchGroupCancelTest, CancelWithQueuedOverflowKeepsUnsavedConversations) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "32";
+  auto model = loadModel();
+
+  const auto tmp = std::filesystem::temp_directory_path();
+  const std::string id = std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count());
+  const std::vector<std::filesystem::path> keys{
+      tmp / ("group-cancel-keep-1-" + id + ".bin"),
+      tmp / ("group-cancel-keep-2-" + id + ".bin"),
+      tmp / ("group-cancel-keep-3-" + id + ".bin")};
+
+  std::vector<LlamaModel::Prompt> firstTurn;
+  for (size_t i = 0; i < 2; ++i) {
+    auto prompt = makePrompt("Name one planet.");
+    prompt.cacheKey = keys[i].string();
+    firstTurn.push_back(std::move(prompt));
+  }
+  (void)model->process(std::any(firstTurn), 101);
+  ASSERT_FALSE(std::filesystem::exists(keys[0]))
+      << "a request must not write its file";
+
+  constexpr JobId kGroupId = 102;
+  std::atomic<bool> groupTokenSeen = false;
+  std::vector<LlamaModel::Prompt> group;
+  for (const auto& key : keys) {
+    auto prompt = makePrompt(
+        "Write a long, detailed, multi-paragraph essay about the history of "
+        "astronomy.");
+    prompt.cacheKey = key.string();
+    prompt.outputCallback = [&groupTokenSeen](const std::string&) {
+      groupTokenSeen.store(true);
+    };
+    group.push_back(std::move(prompt));
+  }
+  auto future = std::async(std::launch::async, [&model, &group] {
+    return model->process(std::any(group), kGroupId);
+  });
+  const auto tokenDeadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!groupTokenSeen.load() &&
+         std::chrono::steady_clock::now() < tokenDeadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(groupTokenSeen.load())
+      << "test setup: group never emitted a token";
+  model->cancelById(kGroupId);
+  ASSERT_EQ(
+      future.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  EXPECT_THROW((void)future.get(), qvac_errors::StatusError)
+      << "the queued third prompt must surface as Cancelled";
+
+  for (size_t i = 0; i < 2; ++i) {
+    EXPECT_NO_THROW(model->saveCache(keys[i].string()))
+        << "the cancel dropped the unsaved conversation on key " << i;
+    EXPECT_TRUE(std::filesystem::exists(keys[i])) << "key " << i;
+    std::filesystem::remove(keys[i]);
+  }
 }
 
 /// Cancelling a group whose requests are ALL still queued — behind a *foreign*
@@ -498,4 +566,55 @@ TEST_F(
       << "the worker-thread cancel never returned from cancelById";
   EXPECT_THROW(queuedFuture.get(), qvac_errors::StatusError);
   EXPECT_NO_THROW(holderFuture.get());
+}
+
+/// Two prompts on one cacheKey run one after the other, so while the first
+/// decodes the second waits for its key even though slots are free. That
+/// waiting prompt is queued work for the cancel contract: a targeted cancel
+/// must reject the group with `Cancelled`, and nothing may stay behind.
+TEST_F(BatchGroupCancelTest, CancelOfAKeyDeferredPromptRejectsCancelled) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const std::string key = "group_cancel_same_key.bin";
+  std::filesystem::remove(key);
+
+  constexpr JobId kGroupId = 97;
+  std::atomic<bool> tokenSeen = false;
+  std::vector<LlamaModel::Prompt> group;
+  for (int i = 0; i < 2; ++i) {
+    auto prompt = makePrompt(
+        "Write a long, detailed, multi-paragraph essay about the history of "
+        "astronomy.");
+    prompt.cacheKey = key;
+    prompt.outputCallback = [&tokenSeen](const std::string&) {
+      tokenSeen.store(true);
+    };
+    group.push_back(std::move(prompt));
+  }
+
+  auto future = std::async(std::launch::async, [&model, &group] {
+    return model->process(std::any(group), kGroupId);
+  });
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!tokenSeen.load() && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(tokenSeen.load())
+      << "test setup: the first prompt never streamed";
+  EXPECT_EQ(model->activeSlots(), 2u)
+      << "the prompt waiting for its key must count as queued work";
+
+  model->cancelById(kGroupId);
+  ASSERT_EQ(
+      future.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  try {
+    (void)future.get();
+    FAIL() << "a group whose second prompt never ran completed as a success";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("Cancelled"), std::string::npos)
+        << "expected a Cancelled error code, got: " << e.codeString();
+  }
+  EXPECT_EQ(model->activeSlots(), 0u);
+  std::filesystem::remove(key);
 }

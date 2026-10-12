@@ -30,13 +30,13 @@ const isIos = platform === 'ios'
 // on the first f16+f16 row, so these smoke tests are disabled on Android.
 const isAndroid = platform === 'android'
 
-// linux x64 now enumerates CUDA ahead of Vulkan, and CUDA has no TurboQuant or
-// PolarQuant kernels, so the addon refuses those cache types there. Ask for
-// Vulkan explicitly on the tbq/pq rows only; the f16 baseline still runs on
-// whatever the host prefers, which is what makes the memory comparison below
-// meaningful on both backends.
+// linux and windows x64 enumerate CUDA ahead of Vulkan, and CUDA has no
+// TurboQuant or PolarQuant kernels, so the addon refuses those cache types
+// there. Ask for Vulkan explicitly on the tbq/pq rows only; the f16 baseline
+// still runs on whatever the host prefers, which is what makes the memory
+// comparison below meaningful on both backends.
 const isLinuxX64 = platform === 'linux' && os.arch() === 'x64'
-const pinTbqPqToVulkan = isLinuxX64
+const pinTbqPqToVulkan = (platform === 'linux' || platform === 'win32') && os.arch() === 'x64'
 
 // Which of the two same-runner legs are we on. The -vulkan leg hides the CUDA
 // devices, and CUDA_VISIBLE_DEVICES is the mechanism rather than a label, so it

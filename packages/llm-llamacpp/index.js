@@ -15,7 +15,7 @@ function normalizeRunOptions(runOptions) {
             prefill: false,
             generationParams: undefined,
             cacheKey: undefined,
-            saveCacheToDisk: false,
+            ephemeral: false,
             rejectWhenBusy: undefined,
         };
     }
@@ -35,8 +35,13 @@ function normalizeRunOptions(runOptions) {
     if (options.cacheKey !== undefined && typeof options.cacheKey !== "string") {
         throw new TypeError("cacheKey must be a string when provided");
     }
-    if (options.saveCacheToDisk !== undefined && typeof options.saveCacheToDisk !== "boolean") {
-        throw new TypeError("saveCacheToDisk must be a boolean when provided");
+    if (options.saveCacheToDisk !== undefined) {
+        throw new TypeError("saveCacheToDisk was removed: a cached conversation stays in memory and is written to " +
+            "its cacheKey file when it is set aside, evicted or the model unloads; call " +
+            "saveCache(cacheKey) to write it now, or set ephemeral: true to never write it");
+    }
+    if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
+        throw new TypeError("ephemeral must be a boolean when provided");
     }
     if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
         throw new TypeError("rejectWhenBusy must be a boolean when provided");
@@ -45,7 +50,7 @@ function normalizeRunOptions(runOptions) {
         prefill: options.prefill === true,
         generationParams: normalizeGenerationParams(options.generationParams),
         cacheKey: options.cacheKey,
-        saveCacheToDisk: options.saveCacheToDisk === true,
+        ephemeral: options.ephemeral === true,
         // Left undefined when unset so admission falls back to the instance default.
         rejectWhenBusy: options.rejectWhenBusy,
     };
@@ -54,7 +59,7 @@ function promptToAddonMessages(prompt, runOptions) {
     if (!Array.isArray(prompt)) {
         throw new TypeError("Prompt input must be Message[]");
     }
-    const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions);
+    const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
     const textMessages = [];
     const mediaItems = [];
     for (const message of prompt) {
@@ -77,7 +82,7 @@ function promptToAddonMessages(prompt, runOptions) {
         prefill,
         generationParams,
         cacheKey,
-        saveCacheToDisk,
+        ephemeral,
     });
     return promptMessages;
 }
@@ -99,7 +104,6 @@ const GENERATION_PARAM_KEYS = new Set([
     "tool_choice",
     "parallel_tool_calls",
     "reasoning_budget",
-    "remove_thinking_from_context",
 ]);
 // Normalizes the per-request `generationParams.json_schema` field. The
 // addon binding expects a string; callers commonly pass a plain object
@@ -138,10 +142,6 @@ function normalizeGenerationParams(generationParams) {
             params[key] = value;
     }
     const sanitized = params;
-    if (sanitized.remove_thinking_from_context !== undefined &&
-        typeof sanitized.remove_thinking_from_context !== "boolean") {
-        throw new TypeError("generationParams.remove_thinking_from_context must be a boolean when provided");
-    }
     if (sanitized.tool_choice !== undefined &&
         (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)) {
         throw new TypeError('generationParams.tool_choice must be "auto", "none", "required" or a declared function name');
@@ -785,6 +785,46 @@ const LlmLlamacpp = class LlmLlamacpp {
     /// Sourced from the native scheduler's activeJobs() — no JS-side counter.
     get _hasActiveResponse() {
         return (this.addon ? this.addon.activeJobs() : 0) > 0;
+    }
+    /**
+     * Write the conversation kept in memory for `cacheKey` to that file now:
+     * the active single-prompt conversation, a batch conversation kept in its
+     * slot, or one in the RAM tier. Resolves once the file is written. When a
+     * request on that key is running it waits for it to finish, so the file
+     * always holds a committed state. A request still queued is not waited
+     * for: `run()` resolves when the request is accepted, so read its response
+     * to the end before saving when the file must hold that turn. Resolves without writing when the file
+     * already holds the conversation. Rejects when nothing is cached under the
+     * key and no file exists, or when the write fails (the conversation then
+     * stays in memory, still unsaved, so the call can be retried). Writes
+     * ephemeral conversations too.
+     */
+    async saveCache(cacheKey) {
+        if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+            throw new TypeError("saveCache(cacheKey) requires a non-empty string");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        await this.addon.saveCache(cacheKey);
+    }
+    /**
+     * Drop the conversation kept in memory for `cacheKey` — the active
+     * single-prompt conversation, a batch conversation kept in its slot, its
+     * RAM-tier entry and its checkpoints — without writing it, so no later
+     * eviction or unload writes it. When a request on that key is running it
+     * waits for it to finish. The file, if one was written, is left alone:
+     * delete it as well to remove the conversation from disk. Resolves when
+     * nothing is kept for the key.
+     */
+    async discardCache(cacheKey) {
+        if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+            throw new TypeError("discardCache(cacheKey) requires a non-empty string");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        await this.addon.discardCache(cacheKey);
     }
     getState() {
         return this.state;

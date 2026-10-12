@@ -292,9 +292,8 @@ inline LlamaModel::Prompt parsePromptInputs(
     prompt.cacheKey =
         inputObj.getOptionalPropertyAs<js::String, std::string>(env, "cacheKey")
             .value_or("");
-    prompt.saveCacheToDisk =
-        inputObj
-            .getOptionalPropertyAs<js::Boolean, bool>(env, "saveCacheToDisk")
+    prompt.ephemeral =
+        inputObj.getOptionalPropertyAs<js::Boolean, bool>(env, "ephemeral")
             .value_or(false);
   };
 
@@ -913,6 +912,54 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
         if (llamaModel != nullptr) {
           llamaModel->discardFinetuneCancelSaveModes(liveJobs);
         }
+      });
+}
+JSCATCH
+
+/// Writes the conversation kept for a `cacheKey` to its file (see
+/// LlamaModel::saveCache). Off the JS thread: it waits for a request running
+/// on that key and for the batch worker to reach a step boundary.
+inline js_value_t* saveCache(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  std::string cacheKey =
+      js::String(env, args.get(1, "cacheKey")).as<std::string>(env);
+  // Keeps the model alive past a JS-side destroyInstance(), as cancel does.
+  auto addonCppRef = instance.addonCpp;
+  return js::JsAsyncTask::run(
+      env, [addonCppRef, cacheKey = std::move(cacheKey)]() {
+        LlamaModel* model = tryGetLlamaModel(*addonCppRef);
+        if (model == nullptr) {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "saveCache: the model is not loaded");
+        }
+        model->saveCache(cacheKey);
+      });
+}
+JSCATCH
+
+/// Drops the conversation kept for a `cacheKey` without writing it (see
+/// LlamaModel::discardCache). Off the JS thread, like saveCache.
+inline js_value_t* discardCache(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  std::string cacheKey =
+      js::String(env, args.get(1, "cacheKey")).as<std::string>(env);
+  auto addonCppRef = instance.addonCpp;
+  return js::JsAsyncTask::run(
+      env, [addonCppRef, cacheKey = std::move(cacheKey)]() {
+        LlamaModel* model = tryGetLlamaModel(*addonCppRef);
+        if (model == nullptr) {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "discardCache: the model is not loaded");
+        }
+        model->discardCache(cacheKey);
       });
 }
 JSCATCH

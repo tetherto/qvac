@@ -1120,7 +1120,10 @@ TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
 
   LlamaModel::Prompt cache_prompt;
   cache_prompt.input = R"([{"role": "user", "content": "Hello"}])";
-  cache_prompt.cacheKey = "test_session.bin";
+  // Ephemeral: the unload must not leave a file other tests could load.
+  cache_prompt.cacheKey = "test_llama_model_session.bin";
+  cache_prompt.ephemeral = true;
+  fs::remove(cache_prompt.cacheKey);
   EXPECT_NO_THROW({
     std::string output = model.processPrompt(cache_prompt);
     EXPECT_GE(output.length(), 0);

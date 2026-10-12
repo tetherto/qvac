@@ -17,19 +17,6 @@ struct llama_context;
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
-bool isQwen3Model(const ::llama_model* model);
-
-/**
- * @brief Returns true when `architecture` is exactly `qwen3`
- * (case-insensitive).
- *
- * Exact-match predicate that drives fixed-template selection in
- * `getChatTemplateForModel` (via `isQwen3Model`). Deliberately narrower than
- * `isQwen3ReasoningFamilyArchitecture`, which also matches `qwen35`/`qwen3moe`:
- * only exact `qwen3` gets the hardcoded Qwen3 chat template. Exposed for unit
- * testing without a real ::llama_model.
- */
-bool isQwen3Architecture(std::string_view architecture);
 bool isHarmonyModel(const ::llama_model* model);
 bool isGemma4Model(const ::llama_model* model);
 llama_token getHarmonyCallToken(::llama_context* lctx);
@@ -58,7 +45,7 @@ std::optional<ReasoningTags> selectReasoningTagsForArchitecture(
  * reasoning channel.
  *
  * Single source of truth for the "template-first, family-fallback" policy
- * used by `remove_thinking_from_context` detection / compaction. Pure
+ * used by reasoning-channel detection. Pure
  * function with no runtime dependencies, so it is unit-testable in
  * isolation.
  */
@@ -81,13 +68,12 @@ struct ReasoningBudgetTags {
  * template-first with a model-family fallback, while the reasoning *budget*
  * read the template's markers alone — so on a model whose family is in the
  * table but whose active chat template exposes no thinking tags, the detector
- * armed EOS-inside-reasoning substitution while the budget tokenized nothing.
+ * tracked the reasoning block while the budget tokenized nothing.
  * qvac-fabric then builds no reasoning-budget sampler at all
  * (`common/sampling.cpp`, which requires both marker lists non-empty), and
  * `grammar_should_apply` returns true unconditionally — so a lazy tool grammar
  * is armed *inside* the reasoning block, which is precisely what the budget
- * sampler exists to prevent, and the substituted close tag is fed to the
- * grammar sampler rather than skipped.
+ * sampler exists to prevent.
  *
  * The template branch keeps the full `templateEndTags` list, which the
  * single-marker fallback cannot express.
@@ -103,9 +89,8 @@ struct ReasoningBudgetTags {
  * sampler for these params.
  *
  * Mirrors qvac-fabric's own condition in `common/sampling.cpp`; there is no
- * public accessor for it, and callers that hand a token to the sampler on a
- * substitution path need to know, because `grammar_should_apply` returns true
- * when the budget sampler is absent.
+ * public accessor for it, and `grammar_should_apply` returns true when the
+ * budget sampler is absent.
  */
 [[nodiscard]] bool
 reasoningBudgetSamplerBuilt(const common_params_sampling& sampling);
@@ -114,27 +99,16 @@ reasoningBudgetSamplerBuilt(const common_params_sampling& sampling);
  * @brief Returns true when `architecture` is in the Qwen3 reasoning
  * family (`qwen3`, `qwen3moe`, `qwen35`, `qwen35moe`).
  *
- * Used to scope Qwen3-specific runtime behaviors (e.g. EOS-inside-
- * reasoning close-marker substitution) so they do not silently apply
- * to other families that also have a recognised reasoning channel
- * (e.g. Gemma 4). Empty / unknown architectures return false.
+ * Selects the family's `<think>` / `</think>` reasoning markers. Empty /
+ * unknown architectures return false.
  */
 bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture);
 
 /**
- * @brief Returns whether thinking-block compaction defaults on for an
- * architecture.
- *
- * Only the Qwen3 reasoning family defaults on. Other architectures,
- * including DeepSeek V4, require an explicit per-request override.
- */
-bool usesThinkingCompactionByDefault(std::string_view architecture);
-
-/**
  * @brief Returns true when `architecture` is DeepSeek V4 (`deepseek4`).
  *
- * DeepSeek V4 uses the same full-state checkpoint/replay lifecycle as hybrid
- * Qwen3.5 for cancellation and reasoning compaction.
+ * DeepSeek V4 requires the same full-state request rollback and cache
+ * checkpoint lifecycle as hybrid Qwen3.5.
  */
 bool isDeepSeekV4Architecture(std::string_view architecture);
 
@@ -149,40 +123,11 @@ bool isDeepSeekV4Architecture(std::string_view architecture);
 bool isMedPsyBasename(std::string_view basename);
 
 /**
- * @brief Returns true when the model's `general.basename` metadata identifies
- * it as a MedPsy model. MedPsy ships its own chat template embedded in the
- * GGUF, so callers should defer to it rather than substituting the hardcoded
- * Qwen3 templates.
- */
-bool isMedPsyModel(const ::llama_model* model);
-
-/**
  * @brief Returns true when `basename` (case-insensitive) contains a
  * Gemma 4 marker substring. Exposed for unit testing without requiring
  * a real ::llama_model.
  */
 bool isGemma4Basename(std::string_view basename);
-
-/**
- * @brief Gets the appropriate chat template for a model
- *
- * Resolution order:
- *   1. A non-empty `manualOverride` always wins.
- *   2. Models whose GGUF `general.basename` is "MedPsy" return an empty
- *      string so callers fall through to the embedded chat template, even
- *      when the architecture is reported as qwen3.
- *   3. Qwen3 models return the fixed Qwen3 template.
- *   4. All other models return an empty string.
- */
-std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride);
-
-/**
- * @brief Gets the chat template for a model, applying Qwen3 fixes if Jinja is
- * enabled
- */
-std::string
-getChatTemplate(const ::llama_model* model, const common_params& params);
 
 /**
  * @brief Everything a chat-template render produces besides the prompt text.
@@ -242,6 +187,22 @@ struct PromptRenderResult {
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs);
+
+/**
+ * @brief The reasoning markers an earlier assistant turn carries, for cutting
+ * its reasoning out of `content` before a render.
+ *
+ * Read the way llama-server reads them: from what the chat template reports
+ * (`thinking_start_tag` / `thinking_end_tags`, found by fabric's template
+ * handlers or its differential autoparser) on one probe render, trimmed of
+ * surrounding whitespace. Falls back to `selectReasoningTagsForModel` when the
+ * template reports none, the order the reasoning detector uses. A template
+ * that cannot render the probe falls back too. Harmony (gpt-oss) returns
+ * `std::nullopt`: its answers are channels, which this split cannot cut.
+ */
+std::optional<ReasoningTags> historyReasoningTags(
+    const struct common_chat_templates* tmpls, const ::llama_model* model,
+    bool useJinja);
 
 /// Tokenizes one string the way the sampler expects (`common_tokenize(lctx,
 /// text, false, true)`). Injected so the conversion below is testable
@@ -336,6 +297,17 @@ void requireToolChoiceHonoured(
 
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag);
+
+/**
+ * How many trailing tokens of @p promptTokens the template's
+ * @p generationPrompt occupies, or 0 when the prompt does not end in exactly
+ * those tokens (or there is no generation prompt). Everything before them is
+ * the chat history, which the next turn renders unchanged; that is where an
+ * end-of-history cache checkpoint goes.
+ */
+size_t generationPromptTailLength(
+    llama_context* lctx, const std::string& generationPrompt,
+    const std::vector<llama_token>& promptTokens);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

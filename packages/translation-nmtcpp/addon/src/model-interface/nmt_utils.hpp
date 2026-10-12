@@ -18,6 +18,10 @@ bool ggml_graph_compute_helper(
     bool sched_reset = true);
 // NOLINTEND(readability-identifier-naming)
 
+#ifdef QVAC_TRANSLATION_NMTCPP_TESTING
+void nmtSetThreadCountForTesting(int threadCount);
+#endif
+
 // Replace non-printable and non-ASCII bytes with '?' so driver-provided
 // strings are safe for logging and JS consumption.
 std::string sanitizePrintableAscii(const std::string& input);
