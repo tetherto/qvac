@@ -14930,11 +14930,28 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMossFitWorkload(GeneratedBaseModel):
-    prompt_rows: Annotated[int, Field(alias="promptRows", gt=0, le=2147483647)]
-    reference_samples: Annotated[
-        int, Field(alias="referenceSamples", ge=0, le=2147483647)
+    prompt_rows: Annotated[
+        int,
+        Field(
+            alias="promptRows",
+            description="Complete native prompt row count, including dialogue and reference rows.",
+            gt=0,
+            le=2147483647,
+        ),
     ]
-    streaming: bool
+    reference_samples: Annotated[
+        int,
+        Field(
+            alias="referenceSamples",
+            description="Total mono reference audio samples supplied to the codec encoder.",
+            ge=0,
+            le=2147483647,
+        ),
+    ]
+    streaming: Annotated[
+        bool,
+        Field(description="Whether the assessed workload uses native audio streaming."),
+    ]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enum):
@@ -15485,15 +15502,30 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMossSfxFitWorkload(GeneratedBaseModel):
-    prompt: Annotated[str, Field(min_length=1)]
-    seconds: Annotated[float, Field(gt=0.0, le=30.0)]
+    prompt: Annotated[
+        str,
+        Field(
+            description="Sound description used by the assessed workload.", min_length=1
+        ),
+    ]
+    seconds: Annotated[
+        float,
+        Field(
+            description="Requested sound-effect duration in seconds, up to 30.",
+            gt=0.0,
+            le=30.0,
+        ),
+    ]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["moss-sfx"], Field(alias="ttsEngine")] = "moss-sfx"
+    tts_engine: Annotated[
+        Literal["moss-sfx"],
+        Field(alias="ttsEngine", description="TTS engine: MOSS-SoundEffect-v2."),
+    ] = "moss-sfx"
     use_gpu: Annotated[
         bool | None,
         Field(
@@ -15534,11 +15566,43 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    seconds: Annotated[float | None, Field(gt=0.0, le=30.0)] = None
-    negative_prompt: Annotated[str | None, Field(alias="negativePrompt")] = None
-    steps: Annotated[int | None, Field(ge=1, le=1000)] = None
-    guidance: Annotated[float | None, Field(ge=1.0, le=50.0)] = None
-    shift: Annotated[float | None, Field(gt=0.0, le=100.0)] = None
+    seconds: Annotated[
+        float | None,
+        Field(
+            description="Sound-effect duration in seconds, up to 30.", gt=0.0, le=30.0
+        ),
+    ] = None
+    negative_prompt: Annotated[
+        str | None,
+        Field(
+            alias="negativePrompt",
+            description="Description of sounds to avoid in the generated effect.",
+        ),
+    ] = None
+    steps: Annotated[
+        int | None,
+        Field(
+            description="Diffusion denoising steps; the native default is 100.",
+            ge=1,
+            le=1000,
+        ),
+    ] = None
+    guidance: Annotated[
+        float | None,
+        Field(
+            description="Classifier-free guidance scale for sound-effect generation.",
+            ge=1.0,
+            le=50.0,
+        ),
+    ] = None
+    shift: Annotated[
+        float | None,
+        Field(
+            description="Diffusion timestep schedule shift for sound-effect generation.",
+            gt=0.0,
+            le=100.0,
+        ),
+    ] = None
     fit_workload: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigMossSfxFitWorkload | None,
         Field(
@@ -15661,9 +15725,10 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["moss-speech"], Field(alias="ttsEngine")] = (
-        "moss-speech"
-    )
+    tts_engine: Annotated[
+        Literal["moss-speech"],
+        Field(alias="ttsEngine", description="TTS engine: MOSS-Speech."),
+    ] = "moss-speech"
     use_gpu: Annotated[
         bool | None,
         Field(
@@ -20208,7 +20273,7 @@ class OcrStreamResponseBlocksItem(GeneratedBaseModel):
         extra="forbid",
     )
     text: str
-    bbox: list[Any] | None = None
+    bbox: tuple[float, float, float, float] | None = None
     confidence: float | None = None
 
 
@@ -20891,11 +20956,43 @@ class TextToSpeechRequest(GeneratedBaseModel):
             description="Parler voice-template audio-quality descriptor.", min_length=1
         ),
     ] = None
-    seconds: Annotated[float | None, Field(gt=0.0, le=30.0)] = None
-    negative_prompt: Annotated[str | None, Field(alias="negativePrompt")] = None
-    steps: Annotated[int | None, Field(ge=1, le=1000)] = None
-    guidance: Annotated[float | None, Field(ge=1.0, le=50.0)] = None
-    shift: Annotated[float | None, Field(gt=0.0, le=100.0)] = None
+    seconds: Annotated[
+        float | None,
+        Field(
+            description="Sound-effect duration in seconds, up to 30.", gt=0.0, le=30.0
+        ),
+    ] = None
+    negative_prompt: Annotated[
+        str | None,
+        Field(
+            alias="negativePrompt",
+            description="Description of sounds to avoid in the generated effect.",
+        ),
+    ] = None
+    steps: Annotated[
+        int | None,
+        Field(
+            description="Diffusion denoising steps; the native default is 100.",
+            ge=1,
+            le=1000,
+        ),
+    ] = None
+    guidance: Annotated[
+        float | None,
+        Field(
+            description="Classifier-free guidance scale for sound-effect generation.",
+            ge=1.0,
+            le=50.0,
+        ),
+    ] = None
+    shift: Annotated[
+        float | None,
+        Field(
+            description="Diffusion timestep schedule shift for sound-effect generation.",
+            gt=0.0,
+            le=100.0,
+        ),
+    ] = None
     audio: Annotated[list[AudioItem] | None, Field(min_length=1)] = None
     sample_rate: Annotated[
         int | None, Field(alias="sampleRate", ge=8000, le=192000)

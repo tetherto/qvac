@@ -739,9 +739,13 @@ const ttsMossRuntimeConfigShape = {
   ...ttsBackendDirFieldsShape,
   fitWorkload: z
     .object({
-      promptRows: ttsPositiveInt32Schema,
-      referenceSamples: ttsNonNegativeInt32Schema,
-      streaming: z.boolean()
+      promptRows: ttsPositiveInt32Schema.describe(
+        'Complete native prompt row count, including dialogue and reference rows.'
+      ),
+      referenceSamples: ttsNonNegativeInt32Schema.describe(
+        'Total mono reference audio samples supplied to the codec encoder.'
+      ),
+      streaming: z.boolean().describe('Whether the assessed workload uses native audio streaming.')
     })
     .optional()
     .describe(
@@ -758,11 +762,35 @@ const ttsSpeechPcmSchema = z.array(z.number().min(-1).max(1)).min(1)
 const ttsSpeechRateSchema = z.number().int().min(8000).max(192000)
 
 const ttsSoundEffectFieldsShape = {
-  seconds: z.number().positive().max(30).optional(),
-  negativePrompt: z.string().optional(),
-  steps: z.number().int().min(1).max(1000).optional(),
-  guidance: z.number().min(1).max(50).optional(),
-  shift: z.number().positive().max(100).optional()
+  seconds: z
+    .number()
+    .positive()
+    .max(30)
+    .optional()
+    .describe('Sound-effect duration in seconds, up to 30.'),
+  negativePrompt: z
+    .string()
+    .optional()
+    .describe('Description of sounds to avoid in the generated effect.'),
+  steps: z
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .optional()
+    .describe('Diffusion denoising steps; the native default is 100.'),
+  guidance: z
+    .number()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe('Classifier-free guidance scale for sound-effect generation.'),
+  shift: z
+    .number()
+    .positive()
+    .max(100)
+    .optional()
+    .describe('Diffusion timestep schedule shift for sound-effect generation.')
 }
 
 function refineSpeechAudio(
@@ -826,13 +854,17 @@ const ttsBatchBackendShape = {
 
 export const ttsMossSoundEffectRuntimeConfigSchema = z
   .object({
-    ttsEngine: z.literal('moss-sfx'),
+    ttsEngine: z.literal('moss-sfx').describe('TTS engine: MOSS-SoundEffect-v2.'),
     ...ttsBatchBackendShape,
     ...ttsSoundEffectFieldsShape,
     fitWorkload: z
       .object({
-        prompt: z.string().min(1),
-        seconds: z.number().positive().max(30)
+        prompt: z.string().min(1).describe('Sound description used by the assessed workload.'),
+        seconds: z
+          .number()
+          .positive()
+          .max(30)
+          .describe('Requested sound-effect duration in seconds, up to 30.')
       })
       .optional()
       .describe('Explicit sound-effect workload for metadata-only memory fit.')
@@ -841,7 +873,7 @@ export const ttsMossSoundEffectRuntimeConfigSchema = z
 
 export const ttsMossSpeechRuntimeConfigSchema = z
   .object({
-    ttsEngine: z.literal('moss-speech'),
+    ttsEngine: z.literal('moss-speech').describe('TTS engine: MOSS-Speech.'),
     ...ttsBatchBackendShape
   })
   .superRefine(refineGpuIntent)
