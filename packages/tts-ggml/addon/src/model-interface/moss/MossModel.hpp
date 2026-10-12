@@ -76,6 +76,7 @@ public:
   int sampleRate() const { return MOSS_NATIVE_SAMPLE_RATE; }
 
   static void validateConfig(const MossConfig& cfg);
+  static void validateFitConfig(const MossConfig& cfg);
   static tts_cpp::moss::EngineOptions toEngineOptions(const MossConfig& cfg);
   static int decodedFrames(int64_t samples);
 

@@ -179,9 +179,12 @@ The result is advisory: it does not block `loadModel`, reserve memory, or make a
 performance claim. `unknown` is a real answer meaning the evidence does not
 support a call either way — show it as "can't say", not as "no".
 
+The assessment holds back a reserve of its own, beyond the headroom the engine's
+fitter leaves, so a model the engine calls a fit can still come back
+`likely-too-large` on a host with little room.
+
 See [pre-download model fit assessment](./docs/assess-model-fit.md) for the
-budget arithmetic, why estimates are ranges, the supported engine and workload
-matrix, and the current calibration status.
+budget arithmetic, the reserve, and the supported engine and workload matrix.
 
 ## Streaming transcription statistics
 

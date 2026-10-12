@@ -47,6 +47,9 @@ const config: TranslationNmtcppConfig = {
   temperature: 0.7,
 };
 
+const fit = TranslationNmtcpp.assessFit({ files, config });
+void fit.report;
+
 const model = new TranslationNmtcpp({
   files,
   params: { mode, srcLang: from, dstLang: to },

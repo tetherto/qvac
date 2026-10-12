@@ -286,11 +286,6 @@ jobs:
       packages: ${{ format('["{0}"]', matrix.package) }}
     secrets: inherit
 
-  # Mobile is NOT consolidated into the matrix, because `uses:` cannot take an
-  # expression. decoder-audio's run blocked publish and is mobile-gate-decoder-audio
-  # below; asr-ggml, bci-whispercpp and tts-ggml ran theirs post-publish off
-  # post-build-gate, and those are the three static jobs at the end of this file.
-
   # Same `packages` bypass: build exactly this package, not nx-affected.
   prebuild:
     name: Prebuild (${{ matrix.package }})
@@ -331,30 +326,6 @@ jobs:
     with:
       workdir: ${{ matrix.workdir }}
 
-  # decoder-audio is the only package whose mobile run blocked publish on main.
-  # Static job because `uses:` cannot take an expression. asr-ggml,
-  # bci-whispercpp and tts-ggml ran theirs post-publish; those are the three
-  # mobile-post-publish-* jobs at the end of this file.
-  mobile-gate-decoder-audio:
-    name: Mobile gate (decoder-audio)
-    needs: detect
-    if: contains(fromJSON(needs.detect.outputs.matrix).*.package, 'decoder-audio')
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-      # The mobile workflow's build-and-test job requests actions: read for the
-      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
-      # reject this whole file at load time, before any job runs.
-      actions: read
-    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-      workdir: "packages/decoder-audio"
-
   publish-gpr:
     name: Publish GPR (${{ matrix.package }})
     needs:
@@ -363,20 +334,15 @@ jobs:
       - prebuild
       - pre-publish-integration
       - verify-generated
-      - mobile-gate-decoder-audio
     # Test gates are per-package in the steps below: needs.<job>.result is the
     # matrix-wide aggregate and `matrix` is unavailable in a job-level `if:`.
-    # verify-generated and mobile-gate-decoder-audio are enforced here, aggregate
-    # and all. verify-generated requires success, its only permitted absence being
-    # an empty row set; the mobile gate takes != failure because it is skipped for
-    # the twelve packages that are not decoder-audio.
+    # verify-generated requires success unless its row set is empty.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
       (needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
       (needs.verify-generated.result == 'success' || needs.detect.outputs.verify-generated-rows == '[]') &&
-      (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
       (always() && !cancelled() &&
-      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))))
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: release
@@ -469,17 +435,15 @@ jobs:
       - prebuild
       - pre-publish-integration
       - verify-generated
-      - mobile-gate-decoder-audio
     # Gates as in publish-gpr. merge-guard stays job-level: detect's identity
     # gate makes the aggregate equal the one package.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
       (needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
       (needs.verify-generated.result == 'success' || needs.detect.outputs.verify-generated-rows == '[]') &&
-      (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
       (always() && !cancelled() &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      needs.publish-logic.outputs.publish_release == 'true')))
+      needs.publish-logic.outputs.publish_release == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: npm
@@ -655,7 +619,7 @@ jobs:
       rows: ${{ steps.gate.outputs.rows }}
     steps:
       # Per package: #4175 keyed ocr-ggml and translation-nmtcpp on publish-npm
-      # alone; the other three open on either publish via postIntegrationOnGpr.
+      # alone; speech packages open on either publish via postIntegrationOnGpr.
       - id: gate
         shell: bash
         env:
@@ -723,10 +687,32 @@ jobs:
       repo_name: ${{ matrix.repoName }}
       published_version: ${{ needs.publish-npm.outputs.published_version }}
 
-  # Post-publish mobile, restored from the deleted on-merge-<pkg>.yml files. One
+  # Post-publish mobile integration. One
   # static job each because `uses:` cannot take an expression, gated on the
   # package being in the row set post-build-gate actually selected so a merge
   # touching only another package does not launch a Device Farm run.
+  mobile-post-publish-decoder-audio:
+    name: Post-publish mobile (decoder-audio)
+    needs: [post-build-gate]
+    if: >-
+      always() && !cancelled() &&
+      needs.post-build-gate.outputs.should_run_tests == 'true' &&
+      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'decoder-audio')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+      # The mobile workflow's build-and-test job requests actions: read for the
+      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
+      # reject this whole file at load time, before any job runs.
+      actions: read
+    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+
   mobile-post-publish-asr-ggml:
     name: Post-publish mobile (asr-ggml)
     needs: [post-build-gate]

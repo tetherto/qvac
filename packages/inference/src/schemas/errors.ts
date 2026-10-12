@@ -42,6 +42,7 @@ export const ERROR_CODES = {
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
   LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
   LEGACY_TTS_MODEL_DEPRECATED: 52211,
+  MODEL_FIT_REFUSED: 52212,
 
   // Model operations (52,400-52,799)
   RPC_SERVER_OPERATION_FAILED: 52423,
@@ -292,6 +293,13 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'LEGACY_TTS_MODEL_DEPRECATED',
     message: (legacyFields?: string) =>
       `Legacy ONNX TTS modelConfig fields are no longer supported (${legacyFields ?? 'unknown fields'}). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel({ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: { ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX } })). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual.`
+  },
+  [ERROR_CODES.MODEL_FIT_REFUSED]: {
+    name: 'MODEL_FIT_REFUSED',
+    message: (modelType: string, reason: string, detail?: string) =>
+      `${modelType}: the engine fitter projects this load will not fit (${reason})${
+        detail ? `: ${detail}` : ''
+      }`
   },
 
   // Model operations

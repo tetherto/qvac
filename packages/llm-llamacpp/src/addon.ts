@@ -29,7 +29,7 @@ export interface AddonMessage {
    */
   generationParams?: GenerationParams;
   cacheKey?: string;
-  saveCacheToDisk?: boolean;
+  ephemeral?: boolean;
 }
 
 export interface AddonMediaMessage {
@@ -108,6 +108,8 @@ export interface LlamaBinding {
   cancel(handle: unknown, savePauseCheckpoint: number): Promise<void> | void;
   cancelJob(handle: unknown, id: number): Promise<void> | void;
   finetune?(handle: unknown, params: FinetuneOptions): Promise<number | false> | number | false;
+  saveCache(handle: unknown, cacheKey: string): Promise<void>;
+  discardCache(handle: unknown, cacheKey: string): Promise<void>;
   runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
   runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
   destroyInstance(handle: unknown): void;
@@ -285,6 +287,24 @@ export class LlamaInterface {
       );
     }
     await this._binding.cancelJob(this._handle, id);
+  }
+
+  /**
+   * Write the conversation kept in memory for `cacheKey` to its file (see
+   * `LlmLlamacpp.saveCache`).
+   */
+  saveCache(cacheKey: string): Promise<void> {
+    if (!this._handle) return Promise.reject(new Error("Model is not loaded"));
+    return Promise.resolve(this._binding.saveCache(this._handle, cacheKey));
+  }
+
+  /**
+   * Drop the conversation kept in memory for `cacheKey` without writing it
+   * (see `LlmLlamacpp.discardCache`).
+   */
+  discardCache(cacheKey: string): Promise<void> {
+    if (!this._handle) return Promise.reject(new Error("Model is not loaded"));
+    return Promise.resolve(this._binding.discardCache(this._handle, cacheKey));
   }
 
   /**

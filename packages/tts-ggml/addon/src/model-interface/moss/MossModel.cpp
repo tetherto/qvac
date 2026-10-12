@@ -138,6 +138,10 @@ MossModel::~MossModel() noexcept = default;
 void MossModel::validateConfig(const MossConfig& cfg) {
   validateModelPaths(cfg);
   validateVoice(cfg);
+  validateFitConfig(cfg);
+}
+
+void MossModel::validateFitConfig(const MossConfig& cfg) {
   validateCounts(cfg);
   validateGpuIntent(cfg);
 }

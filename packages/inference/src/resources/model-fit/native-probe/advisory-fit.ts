@@ -34,10 +34,8 @@ const NATIVE_PROBE_ESTIMATOR_VERSION = 'native-probe-v2'
 const BYTES_PER_MIB = 1024 * 1024
 
 /**
- * `fit` and `does-not-fit` are projections of the load the SDK is about to run,
- * not admission decisions. The real loader neither consumes nor verifies the
- * fitted plan, so neither verdict is denial-grade and no verdict changes the
- * load.
+ * `fit` and `does-not-fit` are projections of the load the SDK is about to run.
+ * The real loader neither consumes nor verifies the fitted plan.
  *
  * The outcome is the wire shape: `loadModel` hands it to the model registry and
  * `getLoadedModelInfo` returns it, so no caller has to read a verdict out of a
@@ -62,7 +60,6 @@ export interface AdvisoryFitInput {
  */
 export interface AdvisoryFitOptions {
   signal?: AbortSignal
-  enabled?: boolean
   mobile?: boolean
   timeoutMs?: number
   runFit?: typeof runFitDefault
@@ -70,27 +67,18 @@ export interface AdvisoryFitOptions {
   availableSystemBytes?: () => Promise<number | undefined>
   countsDeviceRows?: () => Promise<boolean>
   residentModelBytes?: () => Promise<number>
+  /**
+   * Bytes to hold back beyond what is resident, for models the caller counts
+   * as loaded alongside this one but that this worker does not yet hold.
+   */
+  extraResidentBytes?: number
 }
-
-const DISABLED_VALUES = new Set(['0', 'false', 'off', 'no'])
 
 /**
- * On by default; `QVAC_ADVISORY_MODEL_FIT=0` (or `false`/`off`/`no`) is the
- * operator opt-out — the escape hatch for a load-heavy startup path or a
- * runtime whose operator would rather not pay for it. Any other value, including
- * unset, leaves the check on.
- *
- * The worker environment and the mobile runtime flag are imported lazily. Both
- * modules reach Bare-only bindings, and resolving them eagerly would make this
- * orchestration untestable outside a Bare runtime.
+ * The mobile runtime flag is imported lazily: that module reaches Bare-only
+ * bindings, and resolving it eagerly would make this orchestration untestable
+ * outside a Bare runtime.
  */
-async function resolveEnabled(explicit: boolean | undefined): Promise<boolean> {
-  if (explicit !== undefined) return explicit
-  const { getValidatedEnv } = await import('@/runtime/env')
-  const value = getValidatedEnv().QVAC_ADVISORY_MODEL_FIT
-  return value === undefined || !DISABLED_VALUES.has(value.toLowerCase())
-}
-
 async function resolveMobile(explicit: boolean | undefined): Promise<boolean> {
   if (explicit !== undefined) return explicit
   const { isMobile } = await import('@/runtime/state')
@@ -176,9 +164,7 @@ async function deviceBytesCountAgainstSystem(): Promise<boolean> {
     ]
   )
   const collector = getResourceCollector()
-  // Unknown counts them: admitting a load that cannot decode is the failure
-  // this check exists to stop, and refusing one that would have fitted is
-  // advisory only.
+  // Unknown counts them, which errs toward refusing.
   if (!collector) return true
   const resources = { capabilities: collector.getCapabilities(), sample: collector.sample() }
   return boundBySystemMemory(resources, detectPlatform())
@@ -243,7 +229,7 @@ function report(logger: Logger, input: AdvisoryFitInput, outcome: AdvisoryFitOut
   if (outcome.verdict === 'fit') {
     const plan = outcome.plan
     logger.info(
-      `${prefix} projected to fit (advisory only)${
+      `${prefix} projected to fit${
         plan === undefined
           ? footprint(outcome)
           : ` — nCtx ${plan.nCtx}, nGpuLayers ${plan.nGpuLayers} across ${plan.nGpuDevices} GPU device(s)`
@@ -254,9 +240,9 @@ function report(logger: Logger, input: AdvisoryFitInput, outcome: AdvisoryFitOut
 
   if (outcome.verdict === 'does-not-fit') {
     logger.warn(
-      `${prefix} projected not to fit (advisory only — the load continues unchanged)${footprint(
-        outcome
-      )}: ${outcome.reason}${outcome.message === undefined ? '' : ` (${outcome.message})`}`
+      `${prefix} projected not to fit${footprint(outcome)}: ${outcome.reason}${
+        outcome.message === undefined ? '' : ` (${outcome.message})`
+      }`
     )
     return
   }
@@ -292,12 +278,13 @@ export async function runAdvisoryFitCheck(
   let logger: Logger | undefined = options.logger
   try {
     logger ??= getEngineLogger()
-    if (!(await resolveEnabled(options.enabled))) return unknown('disabled')
 
     const mobile = await resolveMobile(options.mobile)
 
     const availableBytes = await (options.availableSystemBytes ?? defaultAvailableSystemBytes)()
-    const residentBytes = await (options.residentModelBytes ?? defaultResidentModelBytes)()
+    const residentBytes =
+      (await (options.residentModelBytes ?? defaultResidentModelBytes)()) +
+      (options.extraResidentBytes ?? 0)
     const residentReserveMiB = Math.ceil(residentBytes / BYTES_PER_MIB)
 
     // Always sent, even with a zero reserve: relying on the engine default for

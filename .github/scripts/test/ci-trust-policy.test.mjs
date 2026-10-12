@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const MILLISECONDS_PER_MINUTE = 60_000;
@@ -1333,7 +1333,7 @@ test("publish-cpp-test-status stamps its run URL into target_url", () => {
 
 test("merge guard changes filter: ALL_PACKAGES and producer-less workflow paths", async () => {
   const { CARVED_OUT_PRODUCERS, CPP_TEST_KEYS, PREBUILD_KEYS } = await import(
-    join(root, ".github/scripts/prebuild-status/lib.mjs")
+    pathToFileURL(join(root, ".github/scripts/prebuild-status/lib.mjs")).href
   );
   const changes = jobBlock(read(".github/workflows/pr-gate-merge.yml"), "changes");
   const filters = {};
@@ -2981,7 +2981,7 @@ function eachCppTestsCacheStep(opts = {}) {
     if (!/\/cpp-tests?-/.test(path)) continue;
     if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue;
     const code = withoutComments(read(path));
-    const steps = code.split(/\n      - /);
+    const steps = code.split(/\n {6}- /);
     steps.forEach((step, index) => {
       if (!patterns.every((p) => p.test(step))) return;
       found.push({ path, code, steps, step, index });

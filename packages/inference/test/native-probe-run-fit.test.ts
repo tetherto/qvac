@@ -6,7 +6,7 @@ import { runFit } from '@/resources/model-fit/native-probe/run-fit'
 
 const PROBE: FitProbeRequest = {
   engine: 'llm-llamacpp',
-  request: { modelPath: '/models/model.gguf', params: { 'ctx-size': '4096' } }
+  request: { modelPath: '/models/model.gguf', config: { 'ctx-size': '4096' } }
 }
 
 // Neither strategy reaches a fitter here, so the outcome is `unknown` either

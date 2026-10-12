@@ -59,6 +59,8 @@ interface TranslationNmtcpp {
  */
 interface TranslationNmtcppConstructor {
     new (args: TranslationNmtcppArgs): TranslationNmtcpp;
+    /** Assess a model before loading it, using current device memory. */
+    assessFit(request: TranslationNmtcpp.FitRequest): TranslationNmtcpp.FitResult;
     /**
      * Available model types for translation
      */
@@ -74,6 +76,22 @@ declare const TranslationNmtcpp: TranslationNmtcppConstructor;
  * `module.exports` remains the bare class.
  */
 declare namespace TranslationNmtcpp {
+    interface FitRequest {
+        files: TranslationNmtcppFiles;
+        config: TranslationNmtcppConfig;
+        /** Additional free memory to reserve, in bytes. */
+        marginBytes?: number;
+    }
+    interface FitResult {
+        status: "fits" | "does-not-fit" | "error";
+        reason: string;
+        /** CPU or selected GGML device name. */
+        backend: string;
+        modelBytes: number;
+        requiredBytes: number;
+        freeBytes: number;
+        report: string;
+    }
     interface TranslationNmtcppFiles {
         model: string;
         srcVocab?: string;

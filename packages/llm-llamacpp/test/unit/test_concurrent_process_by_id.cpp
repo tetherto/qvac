@@ -282,7 +282,6 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
         "CacheTokens",
         "generatedTokens",
         "promptTokens",
-        "thinkingBlockDiscards",
         "avgConcurrentSeq",
         "backendDevice"}) {
     const bool present =

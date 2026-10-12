@@ -78,6 +78,10 @@ MossSoundEffectModel::~MossSoundEffectModel() noexcept = default;
 
 void MossSoundEffectModel::validateConfig(const MossSoundEffectConfig& cfg) {
   requireModelFile(cfg.modelPath);
+  validateFitConfig(cfg);
+}
+
+void MossSoundEffectModel::validateFitConfig(const MossSoundEffectConfig& cfg) {
   validateThreads(cfg);
   validateGpuIntent(cfg);
 }
