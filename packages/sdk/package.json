@@ -180,7 +180,6 @@
     "bare-imports.json",
     "dist/**/*",
     "src/electron-forge/**/*",
-    "src/expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -215,9 +214,9 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/asr-ggml": "^0.7.0",
-    "@qvac/audiogen-ggml": "^0.5.0",
-    "@qvac/bci-whispercpp": "^0.10.0",
+    "@qvac/asr-ggml": "^0.8.0",
+    "@qvac/audiogen-ggml": "^0.6.0",
+    "@qvac/bci-whispercpp": "^0.11.0",
     "@qvac/classification-ggml": "^0.29.0",
     "@qvac/decoder-audio": "^0.8.0",
     "@qvac/diffusion-cpp": "^0.26.0",
@@ -230,7 +229,7 @@
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.27.1",
     "@qvac/translation-nmtcpp": "^0.19.0",
-    "@qvac/tts-ggml": "^0.10.0",
+    "@qvac/tts-ggml": "^0.11.0",
     "@qvac/vla-ggml": "^0.30.0",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",
@@ -239,6 +238,7 @@
     "bare-events": "2.9.1",
     "bare-fs": "^4.5.1",
     "bare-gpu-info": "0.1.1",
+    "bare-link": "^4.0.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
     "bare-pack": "^2.0.1",
@@ -288,7 +288,7 @@
     "pear-pipe": "^1.0.6",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
-    "react-native-bare-kit": "^0.15.5",
+    "react-native-bare-kit": "^0.16.0",
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
@@ -296,20 +296,16 @@
   },
   "peerDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
-    "bare-link": ">=3.0.0",
     "expo-build-properties": ">=0.12.0",
     "expo-device": ">=8.0.0",
     "expo-file-system": ">=19.0.0",
     "expo-modules-core": ">=3.0.0",
     "pear-pipe": ">=1.0.0",
-    "react-native-bare-kit": "*",
+    "react-native-bare-kit": ">=0.16.0",
     "tsx": "*"
   },
   "peerDependenciesMeta": {
     "@electron-forge/plugin-base": {
-      "optional": true
-    },
-    "bare-link": {
       "optional": true
     },
     "expo-build-properties": {
