@@ -19,9 +19,11 @@ namespace qvac_lib_inference_addon_llama::utils {
 // Sliding-window models (without `swa_full`) trim a KV tail only while the
 // window in front of the trim point is resident, so they also take
 // end-of-history checkpoints, holding the window cells. Rollback stays a trim.
-[[nodiscard]] inline bool
-takesSlidingWindowCheckpoints(int32_t nSwa, bool swaFull) noexcept {
-  return nSwa > 0 && !swaFull;
+// A sequence no longer than the window never drops a cell, so a trim always
+// serves it and a checkpoint would never be restored.
+[[nodiscard]] inline bool takesSlidingWindowCheckpoints(
+    int32_t nSwa, bool swaFull, uint32_t nCtxSeq) noexcept {
+  return nSwa > 0 && !swaFull && nCtxSeq > static_cast<uint32_t>(nSwa);
 }
 
 // Most cells a sliding-window checkpoint holds: a sequence snapshot skips the

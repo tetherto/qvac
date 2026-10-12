@@ -75,7 +75,9 @@ graph TB
 
 The decision is in `ModelMemoryPolicy.hpp`: `needsFullStateSnapshot`, by
 architecture (recurrent or hybrid per llama.cpp, or DeepSeek V4), and
-`takesSlidingWindowCheckpoints` (`n_swa > 0` without `swa_full`). All of them
+`takesSlidingWindowCheckpoints` (`n_swa > 0` without `swa_full`, and a
+per-sequence context longer than the window: a sequence that fits in the
+window never loses a cell, so a trim always serves it). All of them
 snapshot only what a tail trim cannot rebuild (`untrimmableSnapshotScope`),
 and all of them keep 1 checkpoint by default (`cache_checkpoints`).
 
@@ -209,8 +211,7 @@ Eviction checks the byte budget first, then the count. A budget that cannot
 hold `cache_checkpoints` checkpoints of the largest size the context allows is
 rejected at model load with `InvalidArgument`; the addon measures that size on
 the loaded model rather than estimating it. On a sliding-window model the
-largest size is that of a full window (`n_swa` positions, or the context when
-it is shorter).
+largest size is that of a full window (`n_swa` positions).
 
 ## When checkpoints are taken
 
@@ -391,39 +392,27 @@ The file is a standard llama.cpp sequence-state file
 | Part | Contents |
 |---|---|
 | llama.cpp header | magic, format version, number of tokens that follow |
-| ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, a fingerprint of the model that wrote it; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
+| ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
 
 The state is always written in full, unlike the partial snapshots and
 checkpoints, which are never written into the file. A load checks the ledger
 against the state it describes: a corrupt current-format file is an error
-(`UnableToLoadSessionFile`), and a file without a ledger is a cold miss. So
-is a file written by a model whose cache has the same shape but whose
-description, tensor size, parameter count, training context, shape, vocabulary
-size or RoPE scale differ (another quantization type, for example): its
-fingerprint of those does not match. The fingerprint does not see the weights
-themselves, so a fine-tune of the same base at the same quantization, a LoRA
-adapter or another multimodal projector is not told apart; give those their
-own `cacheKey`. A file written before the fingerprint existed carries 0 and is
-accepted.
+(`UnableToLoadSessionFile`), and a file without a ledger is a cold miss.
 
 ### How a write is done
 
-Every write, whichever path triggers it, does the same three steps:
+Every write, whichever path triggers it, does the same two steps:
 
 1. The state and the ledger are written to `<cacheKey>.tmp`. A write that
    fails, or leaves the file shorter than the state (a failed final flush),
    deletes the temporary file and raises `UnableToSaveSessionFile`.
-2. The temporary file is synced to disk (`F_FULLFSYNC` on macOS and iOS,
-   falling back to `fsync` where the filesystem refuses it; `fsync` elsewhere;
-   `FlushFileBuffers` on Windows); a failed sync deletes it and raises
-   `UnableToSaveSessionFile`. A filesystem that does not support syncing
-   skips this step.
-3. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
-   and macOS, followed by a sync of the directory, and `MoveFileExW` with
-   replace and write-through on Windows. Until that step succeeds the old
-   file is untouched, so a crash or a power loss never leaves a half-written
-   cache. A `cacheKey` that names a directory fails the write.
+2. The temporary file replaces `<cacheKey>` in one step: `rename` on Linux
+   and macOS, `MoveFileExW` with replace and write-through on Windows. Until
+   that step succeeds the old file is untouched, so a process crash never
+   leaves a half-written cache. The file is not synced to disk first, so a
+   power loss or an OS crash right after a write can still leave it short.
+   A `cacheKey` that names a directory fails the write.
 
 The RAM tier writes the same file format from its copy of the state, so a
 file written from RAM loads exactly like one written from a sequence.

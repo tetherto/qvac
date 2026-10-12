@@ -349,18 +349,16 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   const bool fullState = utils::needsFullStateSnapshot(
       llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
   const int32_t nSwa = llama_model_n_swa(mdl);
-  const bool slidingWindow =
-      !fullState && utils::takesSlidingWindowCheckpoints(nSwa, params.swa_full);
+  const uint32_t nCtxSeq = llama_n_ctx_seq(ctx);
+  const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
+                                               nSwa, params.swa_full, nCtxSeq);
   if (!fullState && !slidingWindow) {
     return;
   }
   // A sliding-window checkpoint grows per token only until the window is
   // full, so the extrapolation stops there.
-  uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
-  if (slidingWindow) {
-    perSeqTokens =
-        std::min(perSeqTokens, utils::slidingWindowCheckpointCells(nSwa));
-  }
+  const uint32_t perSeqTokens =
+      slidingWindow ? utils::slidingWindowCheckpointCells(nSwa) : nCtxSeq;
   const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
       ctx,
       llama_model_get_vocab(mdl),

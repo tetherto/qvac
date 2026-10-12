@@ -190,7 +190,9 @@ void MtmdLlmContext::initializeCommonState() {
   slidingWindowCheckpoints_ =
       (model != nullptr) && !needsFullStateSnapshot_ &&
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
-          llama_model_n_swa(model), params_.swa_full);
+          llama_model_n_swa(model),
+          params_.swa_full,
+          llama_n_ctx_seq(modelCtx_.lctx));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -2075,11 +2077,7 @@ bool MtmdLlmContext::onFailure(
 /// sequence-state file. Media entries retain both their logical position span
 /// and physical KV-cell usage, which diverge for M-RoPE models.
 std::vector<llama_token> MtmdLlmContext::cacheStateTokens() const {
-  return cache::serialize(
-      residentLedger_,
-      current_.pos,
-      current_.cacheTokens,
-      cache::modelFingerprint(llama_get_model(modelCtx_.lctx)));
+  return cache::serialize(residentLedger_, current_.pos, current_.cacheTokens);
 }
 
 void MtmdLlmContext::restoreCacheStateTokens(
@@ -2249,10 +2247,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   });
 
   stateTokens.resize(tokenCount);
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size()) ||
-      !cache::writtenByModel(
-          stateTokens,
-          cache::modelFingerprint(llama_get_model(modelCtx_.lctx)))) {
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
     clearCacheReconciliationState();
     return false;
   }

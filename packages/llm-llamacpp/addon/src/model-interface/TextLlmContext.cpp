@@ -115,7 +115,9 @@ void TextLlmContext::initializeCommonState() {
   slidingWindowCheckpoints_ =
       (model != nullptr) && !needsFullStateSnapshot_ &&
       qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
-          llama_model_n_swa(model), params_.swa_full);
+          llama_model_n_swa(model),
+          params_.swa_full,
+          llama_n_ctx_seq(modelCtx_.lctx));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -1158,11 +1160,7 @@ void TextLlmContext::resetToolDefinitionsDropped() {
 }
 
 std::vector<llama_token> TextLlmContext::cacheStateTokens() const {
-  return cache::serialize(
-      residentLedger_,
-      nPast_,
-      nPast_,
-      cache::modelFingerprint(llama_get_model(modelCtx_.lctx)));
+  return cache::serialize(residentLedger_, nPast_, nPast_);
 }
 
 void TextLlmContext::restoreCacheStateTokens(
@@ -1627,10 +1625,7 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   });
 
   stateTokens.resize(tokenCount);
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size()) ||
-      !cache::writtenByModel(
-          stateTokens,
-          cache::modelFingerprint(llama_get_model(modelCtx_.lctx)))) {
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
     clearCacheReconciliationState();
     return false;
   }
