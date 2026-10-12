@@ -49,7 +49,7 @@ jobs:
       promote: ${{ steps.validate.outputs.promote }}
     steps:
       - name: Checkout docs-production
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: docs-production
           # Full history so the fast-forward check can see the relationship
@@ -157,7 +157,7 @@ jobs:
           private-key: ${{ secrets.QVAC_DOCS_PROMOTE_APP_PRIVATE_KEY }}
 
       - name: Checkout docs-production
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: docs-production
           fetch-depth: 0
