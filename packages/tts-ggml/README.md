@@ -1081,23 +1081,35 @@ there is no new released version implied by this guide. Native desktop
 results also do not establish Android support or speech-quality signoff.
 
 On a desktop with those prerequisites, stage the TTS and TTSD backbones,
-codec decoder/encoder and reference WAVs, plus the Speech model/codec. Set
+codec decoder/encoder and the bundled `test/reference-audio/jfk.wav`, plus
+the Speech model/codec. Set
 `QVAC_TEST_MOSS_MODEL_DIR` and `QVAC_TEST_MOSS_SPEECH_MODEL_DIR` to their
 respective directories. Run each available backend in a fresh process:
 
 ```sh
-TTS_CPP_GPU_BACKEND=cuda npx --no-install brittle-bare test/integration/moss.test.js test/integration/moss-speech.test.js
-TTS_CPP_GPU_BACKEND=vulkan npx --no-install brittle-bare test/integration/moss.test.js test/integration/moss-speech.test.js
+QVAC_TEST_MOSS_FULL_GPU=true TTS_CPP_GPU_BACKEND=cuda npx --no-install brittle-bare test/integration/moss.test.js test/integration/moss-speech.test.js
+QVAC_TEST_MOSS_FULL_GPU=true TTS_CPP_GPU_BACKEND=vulkan npx --no-install brittle-bare test/integration/moss.test.js test/integration/moss-speech.test.js
 ```
 
 The tests check the exact pinned backend, `backendDevice` and
 `gpuUnsupported` for TTS batch/streaming/cloning, TTSD dialogue, and Speech
 text/audio replies. CPU control cases still require CPU even with a GPU pin.
-Without a pin the tests accept the engine's normal GPU cascade. Missing
-model directories skip integration tests; missing codec encoder or TTSD
-backbone omit cloning/dialogue coverage. Such a run is not full GPU
-validation. The small `npm run test:node` backend-gate regression uses no
-models. Do not load these multi-GB models on memory-constrained hosts.
+`QVAC_TEST_MOSS_FULL_GPU=true` fails before model loading unless both model
+directories, the TTS/TTSD/Speech backbones, all three codec GGUFs, and the
+reference WAV exist. It also requires an explicit backend pin (case-insensitive),
+rejects `NO_GPU=true` and mobile CPU-only cases, and checks that every required
+case completes. Run both files together without test filters: a successful full
+run has 12 passing tests, including the two completion checks, and no skips.
+Preflight only checks asset presence; actual model loading and inference must
+also pass. These commands cover TTS, TTSD and Speech, not MOSS-SoundEffect (SFX).
+No addon CUDA/Vulkan hardware run has been completed for this test change yet.
+
+Without strict mode, developer behavior is unchanged: an unpinned run accepts
+the normal GPU cascade, missing model directories skip tests, and missing
+encoder/TTSD assets omit cloning/dialogue cases. Such runs are not full GPU
+validation. `npm run test:node` covers backend selection and strict validation
+failures without loading models. Do not load these multi-GB models on
+memory-constrained hosts.
 
 ## MOSS-SoundEffect
 

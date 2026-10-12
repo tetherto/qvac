@@ -15,6 +15,7 @@ function assertMossBackend(t, label, stats, useGPU, pinnedBackend = '') {
     return
   }
   t.is(stats.gpuUnsupported, 0, `${label}: no GPU fallback`)
+  pinnedBackend = pinnedBackend.toLowerCase()
   if (pinnedBackend) {
     if (!Object.prototype.hasOwnProperty.call(GPU_BACKEND_IDS, pinnedBackend)) {
       t.fail(`${label}: unknown TTS_CPP_GPU_BACKEND=${pinnedBackend}`)

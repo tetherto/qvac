@@ -11,7 +11,11 @@ const cpu = { backendDevice: 0, backendId: 0, gpuUnsupported: 0 }
 for (const [backend, id] of [
   ['metal', 1],
   ['cuda', 2],
+  ['CUDA', 2],
+  ['CuDa', 2],
   ['vulkan', 3],
+  ['VULKAN', 3],
+  ['VuLkAn', 3],
   ['opencl', 4]
 ]) {
   test(`MOSS backend gate accepts ${backend} only when that backend ran`, () => {

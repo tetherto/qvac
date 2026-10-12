@@ -9,6 +9,8 @@ const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { readWavAsFloat32 } = require('../utils/wav-helper')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
 const { assertMossBackend } = require('../utils/mossBackend')
+const { createMossGpuValidation } = require('../utils/mossGpuValidation')
+const { GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const SPEECH_SAMPLE_RATE = 24000
 const TEST_TIMEOUT_MS = 1800000
@@ -21,6 +23,8 @@ const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 const modelDir = (proc.env && proc.env[MODEL_DIR_ENV]) || ''
 const skipWithoutModels = modelDir === ''
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const sourceAudio = resolveRefWavPath({})
+const validation = createMossGpuValidation(proc.env || {}, sourceAudio, GPU_ONLY_USE_GPU)
 
 function createSpeechModel(useGPU = false) {
   return new TTSGgml({
@@ -34,7 +38,7 @@ function createSpeechModel(useGPU = false) {
 }
 
 function spokenQuestion() {
-  const wav = readWavAsFloat32(resolveRefWavPath({}))
+  const wav = readWavAsFloat32(sourceAudio)
   return { audio: wav.samples, sampleRate: wav.sampleRate }
 }
 
@@ -79,6 +83,7 @@ test(
     } finally {
       await model.unload()
     }
+    validation.completed('CPU spoken reply')
   }
 )
 
@@ -108,5 +113,12 @@ test(
     } finally {
       await model.unload()
     }
+    validation.completed('GPU text/audio replies and reply cuts')
   }
 )
+
+if (validation.enabled) {
+  test('MOSS-Speech: full GPU validation completed every required case', (t) => {
+    validation.assertComplete(t, ['CPU spoken reply', 'GPU text/audio replies and reply cuts'])
+  })
+}
