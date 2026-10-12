@@ -10,6 +10,23 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('exposes GPU backend priorities for LLM, embeddings, and VLA', () => {
+    for (const addon of ['llm', 'embeddings', 'vla']) {
+      const schema = configSchemaForAddon(addon)
+      assert.ok(schema)
+      const backend = paramFields(schema).find((field) => field.name === 'backend')
+      assert.ok(backend, `${addon} backend is editable`)
+      assert.equal(backend.type, 'string')
+      assert.match(backend.description, /cuda,vulkan/)
+      assert.equal(validateParam(backend, 'cuda,vulkan'), true)
+      assert.equal(coerceParam('cuda,vulkan'), 'cuda,vulkan')
+      assert.notEqual(validateParam(backend, '["cuda"]'), true)
+      const parsed = schema.parse({ backend: 'cuda,vulkan' })
+      assert.ok(parsed && typeof parsed === 'object' && 'backend' in parsed)
+      assert.equal(parsed.backend, 'cuda,vulkan')
+    }
+  })
+
   it('exposes and validates World memory controls in the nested editor', () => {
     const schema = configSchemaForAddon('diffusion')
     assert.ok(schema)
