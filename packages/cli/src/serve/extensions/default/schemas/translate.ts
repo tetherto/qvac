@@ -3,10 +3,26 @@ import { z } from 'zod'
 /** NMT inference is ungated on its own model, so the batch size bounds native work. */
 export const MAX_BATCH_INPUTS = 100
 
+// The cap is checked outside the union: from zod 4.6.6 a failing union member is
+// reported as `invalid_union`, which would hide the `too_big` the error code keys off.
+const translateText = z
+  .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+  .superRefine((value, ctx) => {
+    if (Array.isArray(value) && value.length > MAX_BATCH_INPUTS) {
+      ctx.addIssue({
+        code: 'too_big',
+        origin: 'array',
+        maximum: MAX_BATCH_INPUTS,
+        inclusive: true,
+        input: value
+      })
+    }
+  })
+
 /** Mirrors the SDK's NMT `translate()` arguments. */
 export const translateBody = z.strictObject({
   model: z.string().min(1),
-  text: z.union([z.string().min(1), z.array(z.string().min(1)).min(1).max(MAX_BATCH_INPUTS)]),
+  text: translateText,
   stream: z.boolean().optional()
 })
 
