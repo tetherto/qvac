@@ -12,6 +12,7 @@ schemaType: HowTo
 Compared to text-only completion inference, the key differences are:
 - You must load a multimodal-capable LLM **and** its matching `projectionModelSrc` via [`loadModel()`](/sdk/reference/api#loadmodel).
 - Your `history` messages can include `attachments: [{ path: "/path/to/image.jpg" }]` (the file must exist on disk).
+- Images larger than 50 megapixels (width × height) are rejected before decoding. To accept larger images, raise the limit at load time with `modelConfig['image-max-megapixels']` (a positive integer, in millions of pixels).
 - Aside from attachments, you still call `completion({ modelId, history, stream })` the same way and consume the same streaming output.
 
 ## Functions
