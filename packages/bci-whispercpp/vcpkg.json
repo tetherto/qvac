@@ -12,12 +12,12 @@
     },
     {
       "name": "ggml-speech",
-      "version>=": "2026-10-02",
+      "version>=": "2026-10-07#1",
       "default-features": false
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-07#1",
+      "version>=": "2026-10-07#2",
       "default-features": false,
       "features": [
         "whisper",
@@ -28,7 +28,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-07#1",
+      "version>=": "2026-10-07#2",
       "default-features": false,
       "features": [
         "whisper",
@@ -38,7 +38,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-07#1",
+      "version>=": "2026-10-07#2",
       "default-features": false,
       "features": [
         "whisper",
@@ -54,7 +54,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-10-07#1",
+          "version>=": "2026-10-07#2",
           "default-features": false,
           "features": [
             "cuda"

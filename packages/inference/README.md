@@ -60,7 +60,7 @@ const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 Model operations require a registered model plugin. RPC discovery needs no model plugin or server provider; serving requires an explicitly registered server provider.
 
 The [Bare serving example](examples/rpc-server.ts)
-shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.1.0`.
+shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.2.0`.
 
 ## Capability to addon package
 

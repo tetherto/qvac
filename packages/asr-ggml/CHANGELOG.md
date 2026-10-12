@@ -14,7 +14,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
+  MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when
+  `moss-transcribe-diarize-encoder.mlmodelc` sits next to the GGUF; without
+  one nothing changes.
+
+## [0.8.0] - 2026-10-09
+
 ### Added
+
+- `assessFit` supports `engine: 'moss-transcribe'` with an explicit audio duration and the existing prompt, hotword and token options. It projects weights, encoder/decoder graphs, KV cache and host memory without loading model weights.
 
 - Whisper `assessFit` takes the registry's weightless descriptions of a
   whisper model and its Silero VAD model as `modelPath` and `vadModelPath`,
@@ -48,6 +59,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Fixed
 
+- MOSS transcription memory-fit estimates count shared compute-buffer metadata once.
 - Nemotron 3 Diarization streaming preserves first-chunk predictions with left
   context, applies the same peak gain as offline inference, and retains an
   explicitly requested 80 ms left context.

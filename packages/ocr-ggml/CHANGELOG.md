@@ -6,6 +6,8 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.27.2] - 2026-10-09
+
 ### Added
 
 - Add `assessFit` to estimate whether EasyOCR or DocTR detector and recognizer
