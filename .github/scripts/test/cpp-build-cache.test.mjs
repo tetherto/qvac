@@ -160,7 +160,8 @@ test('coverage jobs use persistent, toolchain-keyed dependency caches', () => {
     assert.doesNotMatch(save, /github\.event_name == 'pull_request/)
   }
   assert.match(WORKFLOW, /push:\n {4}branches: \[main\]/)
-  assert.ok(WORKFLOW.includes(`github.event_name == 'push' && '${JSON.stringify(SPEECH_PACKAGES)}'`))
+  assert.match(WORKFLOW, /schedule:\n(?: {4}#.*\n)* {4}- cron: /)
+  assert.ok(WORKFLOW.includes('packages: ${{ steps.warm.outputs.packages || inputs.packages }}'))
   assert.ok(WORKFLOW.includes("overrides: ${{ inputs.overrides || '{}' }}"))
 })
 
