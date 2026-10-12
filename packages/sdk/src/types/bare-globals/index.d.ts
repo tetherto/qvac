@@ -2,7 +2,8 @@ import type { Duplex } from 'bare-stream'
 
 interface BareGlobal {
   readonly argv: string[]
-  readonly IPC: Duplex
+  /** The host's pipe under bare-sidecar or a worklet; `null` under plain `bare`. */
+  readonly IPC: Duplex | null
   exit(code?: number): void
   on(event: 'beforeExit', listener: (code: number) => void): BareGlobal
   on(event: 'uncaughtException', listener: (err: Error) => void): BareGlobal
