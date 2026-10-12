@@ -49,8 +49,9 @@ validated on Apple/Metal.
   `config.useGPU: true` on GPU-capable hosts — including Android, where
   `tts-cpp` selects the GPU backend per its per-vendor allowlist (see
   [Backends & GPU acceleration](#backends--gpu-acceleration)).
-- **Apple Core ML sidecars** for the Supertonic vocoder and the Audio8 codec
-  on macOS / iOS, picked up when staged next to the model (see
+- **Apple Core ML sidecars** for the Supertonic vocoder, the Audio8 codec,
+  and one stage each of MOSS, MOSS-SoundEffect, and MOSS-Speech on macOS /
+  iOS, picked up when staged next to the model (see
   [Core ML sidecars on Apple](#core-ml-sidecars-on-apple)).
 - **Dynamic backend loading on Android** — per-arch CPU + Vulkan +
   OpenCL `.so` files ship under `prebuilds/<bare-target>/qvac__tts-ggml/`
@@ -240,13 +241,20 @@ moss-tts-delay-f16.gguf          (~17 GB)
 moss-ttsd-f16.gguf               (~17 GB; MOSS-TTSD dialogue backbone, optional)
 moss-codec-decoder-f16.gguf      (~1.8 GB)
 moss-codec-encoder-f16.gguf      (~1.8 GB; cloning and dialogue only)
+moss-codec-decoder.mlmodelc/     (optional, macOS / iOS: Apple Core ML sidecar for
+                                  the codec decoder while streaming; see Core ML
+                                  sidecars on Apple)
 
 # MOSS-SoundEffect (OpenMOSS MOSS-SoundEffect-v2; 48 kHz text-to-sound-effects)
 moss-sfx-v2-q8_0.gguf            (~3.5 GB; or moss-sfx-v2-f16.gguf, ~6.4 GB)
+moss-sfx-v2-dit.mlmodelc/        (optional, macOS / iOS: Apple Core ML sidecars for
+moss-sfx-v2-vae.mlmodelc/         the diffusion transformer and the VAE decoder)
 
 # MOSS-Speech (fnlp/MOSS-Speech; 24 kHz speech-to-speech)
 moss-speech-q8_0.gguf            (~9.7 GB; or moss-speech-bf16.gguf, ~18.2 GB)
 moss-speech-codec-f16.gguf       (~1.3 GB; carries the default reply voice)
+moss-speech-codec-tokenizer.mlmodelc/ (optional, macOS / iOS: Apple Core ML
+                                  sidecar for the speech tokenizer)
 ```
 
 Download the registry-published Chatterbox, Supertonic, and Parler models into
@@ -695,7 +703,8 @@ keeps the automatic preference above.
 ### Core ML sidecars on Apple
 
 The macOS / iOS prebuilds carry the Apple Core ML (Neural Engine) sidecars
-for the Supertonic vocoder and the Audio8 codec. They are presence-driven:
+for the Supertonic vocoder, the Audio8 codec, and the MOSS models' fixed-shape
+stages. They are presence-driven:
 each stage runs on a compiled `.mlmodelc` found next to its model file
 (`supertonic3-q8_0.gguf` -> `supertonic3-vocoder.mlmodelc`) and falls back to
 the ggml graph when it is absent, so a model directory without sidecars
@@ -707,13 +716,19 @@ published model set yet; supply your own to opt in.
 | --- | --- | --- | --- | --- |
 | Supertonic 1 / 2 / 3 | `<model>-vocoder.mlmodelc` | vocoder, in 64-latent-frame windows | GGUFs whose vocoder weights are stored below 8 bits (`q4_0`) | `SUPERTONIC_COREML_DISABLE=1` |
 | Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows synthesised while the language model is still generating, so only the last one is left after it; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
-| Chatterbox, Parler, CosyVoice3, MOSS, MOSS-SoundEffect, MOSS-Speech, LavaSR | none | — | always | — |
+| MOSS, MOSS-TTSD | `moss-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec decoder, 25 frames (2 s) per call, keeping its attention cache between calls (macOS 15 / iOS 18) | non-streaming synthesis and streams with `streamChunkTokens` above 25, which ggml decodes faster in one pass | `MOSS_COREML_DISABLE=1` |
+| MOSS-SoundEffect | `moss-sfx-v2-dit.mlmodelc` and `moss-sfx-v2-vae.mlmodelc` | diffusion transformer, one velocity per call; VAE decoder in 320-frame windows | a call that fails on the sidecar, which retires it | `MOSS_COREML_DISABLE=1` |
+| MOSS-Speech | `moss-speech-codec-tokenizer.mlmodelc`, beside the codec GGUF | speech tokenizer (Whisper-VQ encoder), one full 30 s segment per call | segments shorter than 30 s, which ggml encodes faster; so most spoken questions | `MOSS_COREML_DISABLE=1` |
+| Chatterbox, Parler, CosyVoice3, LavaSR | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
 Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
 while the sidecar is attached and `codecOnCoreml` is 1 when that synthesis
 ran its codec on it (see [Response shape](#response-shape)). The Supertonic
-vocoder path is not reported in the stats.
+vocoder path is not reported in the stats, and neither are the MOSS paths.
+The MOSS sidecars run on the GPU unless `MOSS_COREML_COMPUTE_UNITS` (`all`,
+`cpu_and_ane`, `cpu_only`) says otherwise: none of their stages ran faster on
+the Neural Engine, and the speech tokenizer loses code accuracy there.
 
 Worth it where the GPU is consumer-class: on an Apple M4 the Supertonic
 vocoder runs 1.6-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
@@ -722,14 +737,25 @@ so do not stage a sidecar there. `q4_0` models ignore the vocoder sidecar:
 it carries full-precision weights and would substitute a different vocoder
 rather than accelerate the quantized one.
 
+The MOSS sidecars, per stage against Metal with f16 models:
+
+| Stage | Apple M4 | Apple M3 Ultra |
+| --- | --- | --- |
+| MOSS-SoundEffect diffusion transformer | 1.23x | 1.06x |
+| MOSS-SoundEffect VAE decoder | 1.70x | 1.81x |
+| MOSS-Speech tokenizer, full 30 s segment | 1.24x | 1.08x |
+| MOSS codec, streamed in 25-frame chunks | 1.03x | 1.13x |
+
 Export the sidecars from the model GGUFs with
-`engines/tts/scripts/export-supertonic-coreml.py` and
-`engines/tts/scripts/export-audio8-codec-coreml.py` from the
+`engines/tts/scripts/export-supertonic-coreml.py`,
+`engines/tts/scripts/export-audio8-codec-coreml.py`, and
+`engines/tts/scripts/export-moss-{codec,sfx,speech-tokenizer}-coreml.py` from the
 [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
 tree at the ref `speech-cpp` pins. Its
-[Supertonic](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/supertonic.md#core-ml-vocoder-sidecar)
+[Supertonic](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/supertonic.md#core-ml-vocoder-sidecar),
+[Audio8](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar),
 and
-[Audio8](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
+[MOSS](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/moss.md#core-ml-codec-decoder)
 guides cover export, placement, and measurements.
 
 When the addon is built with `ENABLE_CUDA` — on in the published linux-x64

@@ -110,7 +110,9 @@ timestamped segments labelled with the speaker (`S01`, `S02`, ...).
 It is validated for Spanish (2.1-3.9 % WER) and Chinese (9.4-12.1 % CER) on
 2- to 30-minute files; English is not usable (the reference model itself
 skips whole spans). A GGUF sniffs as parakeet, so always pass
-`engine: 'moss-transcribe'`.
+`engine: 'moss-transcribe'`. On macOS and iOS its audio encoder can run on an
+optional Core ML sidecar; see
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
 
 ## Choosing a model
 
@@ -860,6 +862,7 @@ ggml.
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
 | Sortformer v1 | none | — | always |
 | Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
+| MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
 
 `getBackendInfo().encoderOnCoreml` (with `encoderBackend: 'coreml'`) and
 `RuntimeStats.encoderOnCoreml` report that a sidecar loaded at `load()`, not
@@ -879,6 +882,16 @@ tree at the ref `speech-cpp` pins; its
 has the per-model export commands. The
 [Core ML RTF lanes](#core-ml-apple-neural-engine-rtf-lanes) record what the
 TDT sidecar gains over Metal.
+
+MOSS-Transcribe-Diarize has its own switches: `MOSS_COREML_DISABLE=1` forces
+ggml, and `MOSS_COREML_COMPUTE_UNITS=cpu_and_gpu` keeps the encoder off the
+Neural Engine. The default placement runs the encoder 1.79x faster than Metal
+on an Apple M4, but on a large GPU the Neural Engine loses (0.57x on an M3
+Ultra, 1.11x with `cpu_and_gpu`); the decoder dominates a transcription, so a
+whole run gains about 5 % on the M4. Its placement is not reported in
+`getBackendInfo()` or `RuntimeStats`. Export it with
+`engines/parakeet/scripts/export-moss-transcribe-encoder-coreml.py`; see the
+[MOSS-Transcribe-Diarize guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/moss-transcribe.md#core-ml-encoder-sidecar).
 
 ## Staging Models
 

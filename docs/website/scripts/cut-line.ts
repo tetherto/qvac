@@ -202,6 +202,45 @@ export function relabelTitle(
   );
 }
 
+/**
+ * Empty the opened line's release notes, keeping the page.
+ *
+ * The API summary is left as the copy brought it, because the release that
+ * renders it is reviewed as a diff: against the previous line's summary, only
+ * the part of the surface that actually moved shows up. Release notes share
+ * nothing with the line before them, so carrying them over costs that review
+ * its signal — the diff becomes a wholesale replacement — and publishes the
+ * previous release's notes under this line's title until the release lands.
+ *
+ * The frontmatter stays. `meta.json` lists the page, so removing it would drop
+ * it from the sidebar, and the title it carries is the one the cut just
+ * relabelled. Only the description, which names a version that is not this
+ * line's, and the body are rewritten.
+ *
+ * Returns `null` when the source carries no frontmatter to keep.
+ */
+export function emptyReleaseNotes(
+  source: string,
+  opened: string,
+  pkg: string,
+): string | null {
+  const closing = source.indexOf("\n---\n", 3);
+  if (!source.startsWith("---\n") || closing === -1) return null;
+
+  const frontmatter = source.slice(0, closing + 5);
+  const description = `description: Release notes for ${pkg} ${opened}.`;
+  const body =
+    `${opened} has not been released yet. This page is written when the ` +
+    `release ships, from the changelog of each package it covers.\n`;
+
+  return (
+    (/^description:.*$/m.test(frontmatter)
+      ? frontmatter.replace(/^description:.*$/m, description)
+      : frontmatter.replace(/^(title:.*)$/m, `$1\n${description}`)) +
+    `\n${body}`
+  );
+}
+
 /** Every `.mdx` under `dir`, recursively. */
 async function pagesUnder(dir: string): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -233,6 +272,30 @@ async function relabelLine(
     touched.push(page);
   }
   return touched;
+}
+
+/**
+ * Empty the opened line's release notes, best-effort: only a collection whose
+ * release flow generates the page carries one, so a line without it is a valid
+ * line. Today that is the SDK; the CLI publishes no reference pages.
+ */
+async function emptyLineReleaseNotes(
+  dir: string,
+  opened: string,
+  pkg: string,
+): Promise<string[]> {
+  const page = path.join(dir, "reference", "release-notes.mdx");
+  if (!(await exists(page))) return [];
+
+  const emptied = emptyReleaseNotes(
+    await fs.readFile(page, "utf-8"),
+    opened,
+    pkg,
+  );
+  if (emptied === null) return [];
+
+  await fs.writeFile(page, emptied);
+  return [page];
 }
 
 /** Perform the cut. Every refusal happens before the first write. */
@@ -309,6 +372,16 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
     ...(await relabelLine(openedDir, current.version, opened)),
   ];
 
+  const emptied = await emptyLineReleaseNotes(
+    openedDir,
+    opened,
+    software.package,
+  );
+
+  const touched = [...relabelled, ...emptied].map((page) =>
+    path.relative(root, page),
+  );
+
   return {
     preserved: current.version,
     opened,
@@ -317,7 +390,7 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
       path.relative(root, openedDir),
       path.relative(root, manifestPath),
       path.relative(root, redirectsPath),
-      ...relabelled.map((page) => path.relative(root, page)),
+      ...new Set(touched),
     ],
   };
 }

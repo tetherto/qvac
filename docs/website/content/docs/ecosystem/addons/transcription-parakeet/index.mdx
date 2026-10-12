@@ -82,7 +82,7 @@ npm init -y
 Install dependencies:
 
 ```bash
-npm i @qvac/dl-filesystem @qvac/transcription-parakeet bare-path bare-process
+npm i @qvac/transcription-parakeet bare-path bare-process
 ```
 </Step>
 
@@ -170,26 +170,7 @@ bare index.js
 
 ## Usage
 
-### 1. Choose a Data Loader
-
-First, select and instantiate a data loader that provides access to model files:
-
-```javascript
-// Option A: Filesystem Data Loader - for local model files
-const FilesystemDL = require('@qvac/dl-filesystem')
-const fsDL = new FilesystemDL({
-  dirPath: './path/to/model/files'
-})
-
-// Option B: Hyperdrive Data Loader - for peer-to-peer distributed models
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
-const hdDL = new HyperDriveDL({
-  key: 'hd://<driveKey>',
-  store: corestore
-})
-```
-
-### 2. Configure Parakeet Parameters
+### 1. Configure Parakeet Parameters
 
 The addon accepts the following configuration:
 
@@ -201,7 +182,7 @@ The addon accepts the following configuration:
 | `useGPU` | boolean | Enable GPU acceleration |
 | `language` | string | Language code or `'auto'` (TDT only) |
 
-### 3. Configuration Example
+### 2. Configuration Example
 
 ```javascript
 // TDT (multilingual, recommended)
@@ -230,7 +211,7 @@ const sortformerConfig = {
 }
 ```
 
-### 4. Create Model Instance
+### 3. Create Model Instance
 
 ```javascript
 const binding = require('@qvac/transcription-parakeet/binding')
@@ -245,7 +226,7 @@ const outputCallback = (handle, event, data, error) => {
 const parakeet = new ParakeetInterface(binding, config, outputCallback)
 ```
 
-### 5. Load Model
+### 4. Load Model
 
 Load model weights and activate the inference engine:
 
@@ -258,7 +239,7 @@ try {
 }
 ```
 
-### 6. Run Transcription
+### 5. Run Transcription
 
 Pass audio data to the model for transcription:
 
@@ -282,7 +263,7 @@ try {
 - **`complete`** — job completed successfully
 - **`error`** — error occurred (`error` string)
 
-### 7. Release Resources
+### 6. Release Resources
 
 Always destroy the instance when finished to free memory and resources:
 
