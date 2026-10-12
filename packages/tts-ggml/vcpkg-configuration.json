@@ -7,6 +7,15 @@
   "registries": [
     {
       "kind": "git",
+      "baseline": "bff06d53d49e324c1d43c28c3854b1bf452679ba",
+      "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
+      "reference": "QVAC-25733/speech-cpp-cosyvoice-ci",
+      "packages": [
+        "speech-cpp"
+      ]
+    },
+    {
+      "kind": "git",
       "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
