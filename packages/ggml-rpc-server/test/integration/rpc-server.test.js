@@ -5,10 +5,6 @@ const net = require("bare-net");
 const { startRpcServer } = require("../../index");
 const { probeRpcServerProtocol } = require("../mobile/rpc-protocol.cjs");
 
-// Fabric builds its RPC backend with RDMA only for desktop Linux, and uses it
-// only where libibverbs is installed, as on every Linux leg that runs this test.
-const RDMA_EXPECTED = Bare.platform === "linux";
-
 async function rejection(promise) {
   let server;
   try {
@@ -146,14 +142,22 @@ test("rejects an invalid port or thread count", async (t) => {
   }
 });
 
-test("reports the installed backend's RDMA build", async (t) => {
+test("reports whether the server will try RDMA", async (t) => {
   const server = await startStopped(t, { device: "CPU" });
 
-  t.is(server.rdmaCapable, RDMA_EXPECTED);
+  t.is(typeof server.rdmaCapable, "boolean");
+  // Fabric builds its RPC backend with RDMA only for desktop Linux.
+  if (Bare.platform !== "linux") t.is(server.rdmaCapable, false);
 });
 
-test("expectRdma matches the backend's RDMA build", async (t) => {
-  if (RDMA_EXPECTED) {
+// On Linux, RDMA also needs libibverbs and an RDMA device on this host, so check
+// that expectRdma follows what the server reports rather than a fixed answer.
+test("expectRdma agrees with rdmaCapable", async (t) => {
+  const probe = await startStopped(t, { device: "CPU" });
+  const capable = probe.rdmaCapable;
+  await probe.stop();
+
+  if (capable) {
     const server = await startStopped(t, { device: "CPU", expectRdma: true });
     t.is(server.rdmaCapable, true);
     return;

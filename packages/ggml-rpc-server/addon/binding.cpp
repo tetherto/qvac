@@ -413,7 +413,8 @@ ServerHandleRef createServerOnWorker(StartTask& task) {
     throw StartError(
         "RpcServerRdmaUnavailableError",
         "RDMA is not available: the @qvac/fabric RPC backend lacks it, "
-        "libibverbs.so.1 could not be loaded, or GGML_RPC_NO_RDMA is set");
+        "libibverbs.so.1 could not be loaded, the host has no RDMA device, or "
+        "GGML_RPC_NO_RDMA is set");
   }
 
   std::vector<ggml_backend_dev_t> devices =

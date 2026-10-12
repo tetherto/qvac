@@ -56,8 +56,9 @@ export interface RpcServer {
     readonly device?: string;
     /**
      * Whether new connections will try RDMA: the Fabric RPC backend was built
-     * with it, loaded libibverbs, and `GGML_RPC_NO_RDMA` is unset. Each connection
-     * still falls back to TCP when the client or the link cannot use RDMA.
+     * with it, loaded libibverbs, found an RDMA device, and `GGML_RPC_NO_RDMA` is
+     * unset. Each connection still falls back to TCP when the client or the link
+     * cannot use RDMA.
      */
     readonly rdmaCapable: boolean;
     stop(): Promise<void>;

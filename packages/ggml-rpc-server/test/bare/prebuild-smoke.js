@@ -10,8 +10,8 @@ async function main() {
   const server = await startRpcServer({ device: "CPU" });
   try {
     // @qvac/fabric enables rpc-rdma for Linux only, and the backend tries RDMA
-    // only when it can load libibverbs. smoke-packaged.cjs checks the host for
-    // the library and passes the result.
+    // only when it can load libibverbs and the host has an RDMA device.
+    // smoke-packaged.cjs checks the host for both and passes the result.
     const expectRdma = Bare.argv.includes("--expect-rdma=true");
     if (server.rdmaCapable !== expectRdma) {
       throw new Error(

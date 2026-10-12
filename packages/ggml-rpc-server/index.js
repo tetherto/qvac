@@ -50,7 +50,7 @@ class RpcServerRdmaUnavailableError extends Error {
   constructor(cause) {
     super(
       "RDMA is not available: the @qvac/fabric RPC backend lacks it, libibverbs.so.1 " +
-        "could not be loaded, or GGML_RPC_NO_RDMA is set",
+        "could not be loaded, the host has no RDMA device, or GGML_RPC_NO_RDMA is set",
       { cause },
     );
     this.name = "RpcServerRdmaUnavailableError";

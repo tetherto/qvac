@@ -75,14 +75,17 @@ rethrown unchanged.
 
 The Linux RPC backend in `@qvac/fabric` is built with RDMA and loads
 `libibverbs.so.1` (`libibverbs1` on Debian/Ubuntu) at runtime. When the library
-is installed, the server tries RDMA with each client that also supports it and
-falls back to TCP otherwise. Without the library, the server runs over TCP
-only. RDMA also requires the provider package for the host's hardware.
+is installed and the host has an RDMA device, the server tries RDMA with each
+client that also supports it and falls back to TCP otherwise. Without the
+library or a device, the server runs over TCP only. RDMA also requires the
+provider package for the host's hardware.
 
-`rdmaCapable` reports whether the server will try RDMA: the library loaded and
-`GGML_RPC_NO_RDMA` is not set. `rdmaCapable: true` does not guarantee that a
-given connection uses RDMA, since the client and the link must support it too.
-Android, iOS, macOS and Windows always report `false`.
+`rdmaCapable` reports whether the server will try RDMA: the library loaded, it
+lists an RDMA device, and `GGML_RPC_NO_RDMA` is not set. A host with libibverbs
+but no RDMA device, common where MPI or UCX installs the library, reports
+`false`. `rdmaCapable: true` does not guarantee that a given connection uses
+RDMA, since the client and the link must support it too. Android, iOS, macOS
+and Windows always report `false`.
 
 To fail closed when RDMA is required, pass `expectRdma: true`. Startup rejects
 with `RpcServerRdmaUnavailableError` when the server would not try RDMA:

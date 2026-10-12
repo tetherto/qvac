@@ -6,6 +6,7 @@ const {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -73,18 +74,33 @@ function smokeEnvironment() {
   return env;
 }
 
-// Fabric's Linux RPC backend tries RDMA only when it can load libibverbs and
-// GGML_RPC_NO_RDMA is unset, so the rdmaCapable the smoke test expects depends
-// on this host.
-function rdmaExpected() {
-  if (process.platform !== "linux" || process.env.GGML_RPC_NO_RDMA) {
+// libibverbs lists RDMA devices from this sysfs class, one uverbs entry each.
+function rdmaDevicePresent() {
+  try {
+    return readdirSync("/sys/class/infiniband_verbs").some((name) =>
+      name.startsWith("uverbs"),
+    );
+  } catch {
     return false;
   }
+}
+
+function libibverbsInstalled() {
   for (const ldconfig of ["ldconfig", "/sbin/ldconfig"]) {
     const result = spawnSync(ldconfig, ["-p"], { encoding: "utf8" });
     if (result.status === 0) return /\blibibverbs\.so\.1\b/.test(result.stdout);
   }
   throw new Error("ldconfig is not available to look up libibverbs.so.1");
+}
+
+// Fabric's Linux RPC backend tries RDMA only when it can load libibverbs, the
+// host has an RDMA device, and GGML_RPC_NO_RDMA is unset, so the rdmaCapable the
+// smoke test expects depends on this host.
+function rdmaExpected() {
+  if (process.platform !== "linux" || process.env.GGML_RPC_NO_RDMA) {
+    return false;
+  }
+  return libibverbsInstalled() && rdmaDevicePresent();
 }
 
 function run(command, args, env, shell = false) {
