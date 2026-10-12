@@ -288,6 +288,19 @@ export class HostPrebuildsInstallFailedError extends QvacErrorBase {
   }
 }
 
+export class AddonLinkFailedError extends QvacErrorBase {
+  constructor(hosts: string[], cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.ADDON_LINK_FAILED,
+        [hosts.join(', '), reason],
+        cause
+      )
+    )
+  }
+}
+
 function formatDependencyPins(dependencies: Record<string, string>) {
   return Object.entries(dependencies)
     .map(([name, version]) => `    "${name}": "${version}"`)
