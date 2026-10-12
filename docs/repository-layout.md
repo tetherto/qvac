@@ -28,16 +28,12 @@ Legend:
 | translation-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | tts-ggml | Text-to-Speech (TTS) addon wrapping the Chatterbox and Supertonic engines on the GGML backend | Addon |
 | vla-ggml | Vision-Language-Action (VLA) inference addon on the GGML backend | Addon |
-| dl-base | Base class for QVAC dataloader libraries providing a common interface for loading data from various sources | Core |
-| dl-filesystem | Data loading library for model weights and resources from the local filesystem | Core |
-| dl-hyperdrive | Data loading library for model weights and resources from the Hyperdrive distributed file system | Core |
 | error | Standardized error-handling capabilities for all QVAC libraries | Core |
 | fabric | Shared Bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons | Core |
 | infer-base | Base class for inference addon clients defining the common lifecycle and generic model-interaction methods | Core |
 | inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building inference addons | Core |
 | logging | Logger wrapper that normalizes the logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
-| diagnostics | Diagnostic report generation library for QVAC | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 | qvac-ci | CI utilities for the QVAC monorepo | Tool |
 | registry-server | Distributed model registry server for downloading AI models and contributing new ones | Tool |
