@@ -40,7 +40,7 @@
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",
-    "react-native-bare-kit": "^0.15.5",
+    "react-native-bare-kit": "^0.16.0",
     "@qvac/ggml-rpc-server": "^0.2.0"
   },
   "devDependencies": {
