@@ -213,6 +213,12 @@ export async function* transcribe(
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
+  const hasMossOptions = params.hotwords !== undefined || params.maxNewTokens !== undefined
+  if (engineType !== ModelType.mossTranscribe && hasMossOptions) {
+    throw new TranscriptionFailedError(
+      'hotwords and maxNewTokens require a MOSS-Transcribe-Diarize model'
+    )
+  }
   assertMetadataSupported(modelId, engineType, metadata)
   const silenceMarker = SILENCE_MARKERS[engineType] ?? ''
   const audioFormat = getAudioFormat(modelId, engineType)
@@ -252,12 +258,6 @@ export async function* transcribe(
   const audioStream = await createAudioStream(params.audioChunk, audioFormat)
 
   const modelStart = nowMs()
-  const hasMossOptions = params.hotwords !== undefined || params.maxNewTokens !== undefined
-  if (engineType !== ModelType.mossTranscribe && hasMossOptions) {
-    throw new TranscriptionFailedError(
-      'hotwords and maxNewTokens require a MOSS-Transcribe-Diarize model'
-    )
-  }
   const runOptions =
     engineType === ModelType.mossTranscribe
       ? {

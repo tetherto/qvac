@@ -1,4 +1,8 @@
 import test from 'brittle'
+import fs from 'bare-fs'
+import os from 'bare-os'
+import path from 'bare-path'
+import { FFmpegDecoder } from '@qvac/decoder-audio'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { transcribe } from '@/plugins/ops/transcribe'
 import { mossTranscribePlugin } from '@/plugins/builtin/moss-transcribe/plugin'
@@ -56,3 +60,50 @@ test('MOSS batch op forwards hotwords per request without reloading', async (t) 
   await second.next()
   t.alike(options, [{ hotwords: ['QVAC'], maxNewTokens: 0 }, {}])
 })
+
+for (const modelType of [ModelType.whispercppTranscription, ModelType.parakeetTranscription]) {
+  for (const options of [{ hotwords: [] }, { maxNewTokens: 0 }]) {
+    test(`${modelType} rejects ${Object.keys(options)[0]} before prompting or decoding`, async (t) => {
+      let decoderLoads = 0
+      let promptReloads = 0
+      let modelRuns = 0
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'moss-option-rejection-'))
+      const audioPath = path.join(directory, 'corrupt.mp3')
+      fs.writeFileSync(audioPath, 'invalid compressed audio')
+      const originalLoad = FFmpegDecoder.prototype.load
+      const originalUnload = FFmpegDecoder.prototype.unload
+      FFmpegDecoder.prototype.load = async function () {
+        decoderLoads++
+        throw new Error('Rejected options started decoding')
+      }
+      FFmpegDecoder.prototype.unload = async function () {}
+      const modelId = `reject-moss-options-${modelType}`
+      const model = {
+        async reload() {
+          promptReloads++
+        },
+        async run() {
+          modelRuns++
+          throw new Error('Rejected options started inference')
+        }
+      } as unknown as AnyModel
+      registerModel(modelId, { model, path: '', config: {}, modelType })
+      t.teardown(() => {
+        unregisterModel(modelId)
+        FFmpegDecoder.prototype.load = originalLoad
+        FFmpegDecoder.prototype.unload = originalUnload
+        fs.rmSync(directory, { recursive: true, force: true })
+      })
+      const request = transcribe({
+        modelId,
+        audioChunk: { type: 'filePath', value: audioPath },
+        prompt: 'Names used in this recording',
+        ...options
+      })
+      await t.exception(request.next(), /require a MOSS-Transcribe-Diarize model/)
+      t.is(decoderLoads, 0, 'compressed audio decoder never starts')
+      t.is(promptReloads, 0, 'Whisper prompt configuration is untouched')
+      t.is(modelRuns, 0, 'inference never starts')
+    })
+  }
+}

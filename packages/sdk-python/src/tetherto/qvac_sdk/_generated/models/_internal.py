@@ -4175,6 +4175,7 @@ class PluginId(Enum):
     embedding = "@qvac/sdk/llamacpp-embedding/plugin"
     whisper = "@qvac/sdk/whispercpp-transcription/plugin"
     bci = "@qvac/sdk/bci-whispercpp-transcription/plugin"
+    moss_transcribe = "@qvac/sdk/moss-transcribe/plugin"
     nmt = "@qvac/sdk/nmtcpp-translation/plugin"
     tts = "@qvac/sdk/tts-ggml/plugin"
     ocr = "@qvac/sdk/ggml-ocr/plugin"

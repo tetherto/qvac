@@ -382,6 +382,8 @@ enum class PluginId {
     WHISPER,
     @SerialName("@qvac/sdk/bci-whispercpp-transcription/plugin")
     BCI,
+    @SerialName("@qvac/sdk/moss-transcribe/plugin")
+    MOSS_TRANSCRIBE,
     @SerialName("@qvac/sdk/nmtcpp-translation/plugin")
     NMT,
     @SerialName("@qvac/sdk/tts-ggml/plugin")

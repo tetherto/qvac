@@ -17069,6 +17069,7 @@ enum class PluginId {
     @SerialName("@qvac/sdk/llamacpp-embedding/plugin") `EMBEDDING`,
     @SerialName("@qvac/sdk/whispercpp-transcription/plugin") `WHISPER`,
     @SerialName("@qvac/sdk/bci-whispercpp-transcription/plugin") `BCI`,
+    @SerialName("@qvac/sdk/moss-transcribe/plugin") `MOSS_TRANSCRIBE`,
     @SerialName("@qvac/sdk/nmtcpp-translation/plugin") `NMT`,
     @SerialName("@qvac/sdk/tts-ggml/plugin") `TTS`,
     @SerialName("@qvac/sdk/ggml-ocr/plugin") `OCR`,
