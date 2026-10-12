@@ -70,16 +70,12 @@ MtmdLlmContext::MtmdLlmContext(
 void MtmdLlmContext::initializeCommonState() {
   if (modelCtx_.model == nullptr) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_errors::general_error::toString(UnableToLoadModel),
-        "Failed to initialize model.");
+        ADDON_ID, toString(UnableToLoadModel), "Failed to initialize model");
   }
 
   if (modelCtx_.lctx == nullptr) {
     throw qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_errors::general_error::toString(UnableToLoadModel),
-        "Failed to initialize context");
+        ADDON_ID, toString(UnableToLoadModel), "Failed to initialize context");
   }
 
   if (modelCtx_.vocab == nullptr) {
