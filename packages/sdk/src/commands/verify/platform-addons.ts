@@ -1,7 +1,7 @@
 /**
  * Resolves split-addon platform packages from the meta package's `#host-addon`
- * map, so verify and the missing-prebuild install name exactly the package the
- * addon imports.
+ * map, so verify and the missing-prebuild error name the package the addon
+ * actually imports.
  */
 export const HOST_ADDON_IMPORT = '#host-addon'
 
@@ -24,8 +24,8 @@ export function resolveAddonPlatformPackage(
 }
 
 /**
- * Package name a `#host-addon` map points at for `host`.
- * Android nests the package under its architecture; iOS maps to one package.
+ * First package name a `#host-addon` map points at for `host`.
+ * Android nests the package under its architecture; iOS is a flat list.
  * A platform-only `android` target uses arm64, matching the current mobile host.
  */
 export function resolvePlatformPackageName(hostAddon: unknown, host: string): string | null {
@@ -44,8 +44,9 @@ export function resolvePlatformPackageName(hostAddon: unknown, host: string): st
 }
 
 function packageName(candidate: unknown): string | null {
-  if (typeof candidate !== 'string' || candidate.startsWith('.')) return null
-  return candidate
+  const name = Array.isArray(candidate) ? candidate[0] : candidate
+  if (typeof name !== 'string' || name.startsWith('.')) return null
+  return name
 }
 
 function readBranch(value: unknown, key: string): unknown {

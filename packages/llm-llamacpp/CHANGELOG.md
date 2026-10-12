@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.59.0] - 2026-10-11
 
 ### Breaking
 
@@ -18,7 +18,7 @@
   the model's own format instead of the caller writing them into `content`.
   `content` may be `null` or omitted on an assistant turn that carries
   `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
-  `InvalidInputFormat`.
+  `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
 
 ### Fixed
 

@@ -46,7 +46,8 @@ export const SDK_CLIENT_ERROR_CODES = {
   BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
   HOST_PREBUILDS_INSTALL_REFUSED: 50615,
   HOST_PREBUILDS_INSTALL_FAILED: 50616,
-  HOST_PREBUILDS_MISSING: 50617,
+  ADDON_LINK_FAILED: 50617,
+  HOST_PREBUILDS_MISSING: 50618,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800
@@ -227,6 +228,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
       (dependencies
         ? `\n\n  Fix the error, or add them to the dependencies in package.json, pinned to these exact versions, and reinstall:\n${dependencies}`
         : '')
+  },
+  [SDK_CLIENT_ERROR_CODES.ADDON_LINK_FAILED]: {
+    name: 'ADDON_LINK_FAILED',
+    message: (hosts: string, reason: string) =>
+      `Linking the native addons failed\n\n  Hosts: ${hosts}\n  Reason: ${reason}`
   },
   [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_MISSING]: {
     name: 'HOST_PREBUILDS_MISSING',
