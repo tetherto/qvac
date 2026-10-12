@@ -40,7 +40,8 @@ inline std::filesystem::path modulePath() {
   for (;;) {
     const DWORD length = GetModuleFileNameW(
         module, buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (length == 0) return {};
+    if (length == 0)
+      return {};
     if (length < buffer.size()) {
       buffer.resize(length);
       return std::filesystem::path(buffer);
@@ -57,19 +58,22 @@ inline std::filesystem::path modulePath() {
 #endif
 }
 
-// Where this module's dynamically loaded ggml backends are: <module dir>/<module
-// name> as installed in prebuilds/<host>/, else the module's own directory,
-// where bare-link puts them in a mobile app. Asked of the loader because the
-// module is wherever the platform package, bare-link or the APK put it. Empty
-// when the loader cannot say, which leaves ggml's default search.
+// Where this module's dynamically loaded ggml backends are:
+// <module dir>/<module name> as installed in prebuilds/<host>/, else the
+// module's own directory, where bare-link puts them in a mobile app. Asked of
+// the loader because the module is wherever the platform package, bare-link or
+// the APK put it. Empty when the loader cannot say, which leaves ggml's default
+// search.
 inline std::filesystem::path defaultBackendsDir() {
   static const std::filesystem::path dir = [] {
     const std::filesystem::path self = modulePath();
-    if (self.empty()) return std::filesystem::path();
+    if (self.empty())
+      return std::filesystem::path();
     const std::filesystem::path parent = self.parent_path();
     std::error_code ec;
     const std::filesystem::path nested = parent / QVAC_ADDON_MODULE_NAME;
-    if (std::filesystem::is_directory(nested, ec)) return nested;
+    if (std::filesystem::is_directory(nested, ec))
+      return nested;
     return parent;
   }();
   return dir;
@@ -77,10 +81,11 @@ inline std::filesystem::path defaultBackendsDir() {
 
 // A configured directory is used as given; otherwise the module's own.
 inline std::filesystem::path resolveBackendsDir(const std::string& configured) {
-  if (!configured.empty()) return std::filesystem::path(configured);
+  if (!configured.empty())
+    return std::filesystem::path(configured);
   return defaultBackendsDir();
 }
 
-}  // namespace
+} // namespace
 
-}  // namespace qvac::ttsggml
+} // namespace qvac::ttsggml

@@ -325,15 +325,31 @@ test('links a source build as local platform packages for the built hosts', asyn
   assert.equal(readJson(pkg, 'package.json').addon, true)
   assert.equal(fs.readFileSync(path.join(pkg, 'index.js'), 'utf8'), PLATFORM_INDEX_SOURCE)
   assert.equal(
-    fs.readFileSync(path.join(pkg, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'), 'utf8'),
+    fs.readFileSync(
+      path.join(pkg, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'),
+      'utf8'
+    ),
     'binary-linux-x64'
   )
-  assert.ok(fs.existsSync(path.join(workdir, 'prebuilds', 'linux-x64')), 'the meta keeps its prebuilds')
-  assert.deepEqual(readJson(workdir, 'package.json'), META_MANIFEST, 'the meta manifest is untouched')
+  assert.ok(
+    fs.existsSync(path.join(workdir, 'prebuilds', 'linux-x64')),
+    'the meta keeps its prebuilds'
+  )
+  assert.deepEqual(
+    readJson(workdir, 'package.json'),
+    META_MANIFEST,
+    'the meta manifest is untouched'
+  )
 
-  fs.writeFileSync(path.join(workdir, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'), 'rebuilt')
+  fs.writeFileSync(
+    path.join(workdir, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'),
+    'rebuilt'
+  )
   assert.equal(
-    fs.readFileSync(path.join(pkg, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'), 'utf8'),
+    fs.readFileSync(
+      path.join(pkg, 'prebuilds', 'linux-x64', 'qvac__fake-ggml-linux-x64.bare'),
+      'utf8'
+    ),
     'rebuilt',
     'a rebuild is visible without re-linking'
   )
