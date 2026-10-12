@@ -253,6 +253,7 @@ graph TB
         BERTCLASS["GGMLBert<br/>(index.js)"]
         LAYACLASS["LayaDecisions<br/>(laya.js)"]
         RERANKCLASS["Reranker<br/>(rerank.js)"]
+        MODELRUNNER["ModelRunner<br/>(modelRunner.js)"]
         JOB["createJobHandler<br/>(@qvac/infer-base)"]
         QUEUE["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
@@ -263,6 +264,7 @@ graph TB
         BERTIF["BertInterface<br/>(addon.js)"]
         LAYAIF["LayaInterface<br/>(laya.js)"]
         RERANKIF["RerankInterface<br/>(rerank.js)"]
+        MODELIF["ModelInterface<br/>(modelRunner.js)"]
         BINDING["require.addon<br/>(binding.js)"]
     end
 
@@ -294,6 +296,13 @@ graph TB
     APP --> RERANKCLASS
     RERANKCLASS --> RERANKIF
     RERANKIF --> BINDING
+    LAYACLASS -. extends .-> MODELRUNNER
+    RERANKCLASS -. extends .-> MODELRUNNER
+    LAYAIF -. extends .-> MODELIF
+    RERANKIF -. extends .-> MODELIF
+    MODELRUNNER --> JOB
+    MODELRUNNER --> QUEUE
+    MODELRUNNER --> BAREFS
     BERTCLASS --> JOB
     BERTCLASS --> QUEUE
     BERTCLASS --> BERTIF
@@ -336,8 +345,8 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | GGMLBert, LayaDecisions and Reranker (standalone classes), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
-| 2. Bridge | BertInterface, LayaInterface, RerankInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
+| 1. JavaScript API | GGMLBert (standalone), LayaDecisions and Reranker (on ModelRunner), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
+| 2. Bridge | BertInterface, LayaInterface and RerankInterface (on ModelInterface), binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | BertModel, LayaModel, RerankModel, LlamaModelLoader | Inference logic, batch processing; shared model loading | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |

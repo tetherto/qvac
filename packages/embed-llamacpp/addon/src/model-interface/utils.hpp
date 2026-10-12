@@ -8,8 +8,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include <common/common.h>
 #include <llama.h>
+
+// llama's type, named by llama.
+// NOLINTNEXTLINE(readability-identifier-naming)
+struct common_params;
 
 std::vector<std::string>
 splitLines(const std::string& str, const std::string& separator = "\n");
@@ -62,5 +65,7 @@ void checkLoadOptions(
 void configureSinglePassRankContext(common_params& params);
 
 /// @brief Aborts a pass in llama_decode once @p flag is set. @p flag must
-/// outlive @p ctx.
+/// outlive @p ctx, so a temporary is rejected at compile time.
 void abortDecodeWhen(llama_context* ctx, const std::atomic<bool>& flag);
+void abortDecodeWhen(llama_context* ctx, const std::atomic<bool>&& flag) =
+    delete;

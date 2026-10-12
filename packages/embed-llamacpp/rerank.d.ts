@@ -1,7 +1,6 @@
-import QvacLogger = require("@qvac/logging");
 import type { QvacResponse } from "@qvac/infer-base";
 import type { AddonOutputCallback, NumericLike } from "./addon";
-import { ModelInterface, ModelRunner, type MappedModelEvent, type ModelBinding, type ModelConfigurationParams } from "./modelRunner";
+import { ModelInterface, ModelRunner, type MappedModelEvent, type ModelBinding, type ModelConfigurationParams, type ModelRunnerArgs } from "./modelRunner";
 /**
  * Load options for {@link Reranker}. Any other key is rejected at load:
  * pooling, context size, ubatch and parallelism are fixed by the scoring
@@ -44,17 +43,7 @@ export interface RerankRequest {
  * most rerankers), so compare scores within one model, not across models.
  */
 export type RerankScores = number[];
-export interface RerankerArgs {
-    files: {
-        model: string[];
-    };
-    /** Required, with at least `device`. */
-    config: RerankConfig;
-    logger?: QvacLogger | Console | null;
-    opts?: {
-        stats?: boolean;
-    };
-}
+export type RerankerArgs = ModelRunnerArgs<RerankConfig>;
 export interface RerankBinding extends ModelBinding {
     createRerankInstance(owner: RerankInterface, configurationParams: {
         path: string;
@@ -75,11 +64,7 @@ export type MappedRerankEvent = MappedModelEvent<RerankScores>;
 export declare function mapRerankEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedRerankEvent | null;
 /** An interface between the native rerank instance and the JS runtime. */
 export declare class RerankInterface extends ModelInterface<RerankConfig, RerankBinding> {
-    constructor(binding: unknown, configurationParams: {
-        path: string;
-        config: RerankConfig;
-        backendsDir?: string;
-    }, outputCb: AddonOutputCallback);
+    protected _createInstance(configurationParams: ModelConfigurationParams<RerankConfig>, outputCb: AddonOutputCallback): object;
     /** Resolves `true` if the job was accepted, `false` if busy. */
     runJob(query: string, documents: string[]): Promise<boolean>;
 }
@@ -95,7 +80,6 @@ export declare class RerankInterface extends ModelInterface<RerankConfig, Rerank
  */
 export declare class Reranker extends ModelRunner<RerankConfig, RerankRequest, RerankRequest, RerankScores, RerankInterface> {
     protected readonly _modelName = "Rerank";
-    constructor(args: RerankerArgs);
     /**
      * Scores each document against the query. `await()` on the response
      * resolves to `[scores]`, one score per document in the given order.

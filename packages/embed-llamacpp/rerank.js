@@ -29,8 +29,8 @@ function mapRerankEvent(rawEvent, rawData, rawError) {
 }
 /** An interface between the native rerank instance and the JS runtime. */
 class RerankInterface extends modelRunner_1.ModelInterface {
-    constructor(binding, configurationParams, outputCb) {
-        super(binding, configurationParams, outputCb, (b, owner, params, cb) => b.createRerankInstance(owner, params, cb));
+    _createInstance(configurationParams, outputCb) {
+        return this._binding.createRerankInstance(this, configurationParams, outputCb);
     }
     /** Resolves `true` if the job was accepted, `false` if busy. */
     async runJob(query, documents) {
@@ -66,9 +66,6 @@ function checkRequest(request) {
  */
 class Reranker extends modelRunner_1.ModelRunner {
     _modelName = "Rerank";
-    constructor(args) {
-        super(args);
-    }
     /**
      * Scores each document against the query. `await()` on the response
      * resolves to `[scores]`, one score per document in the given order.

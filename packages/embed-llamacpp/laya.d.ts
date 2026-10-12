@@ -1,7 +1,6 @@
-import QvacLogger = require("@qvac/logging");
 import type { QvacResponse } from "@qvac/infer-base";
 import type { AddonOutputCallback, NumericLike } from "./addon";
-import { ModelInterface, ModelRunner, type MappedModelEvent, type ModelBinding, type ModelConfigurationParams } from "./modelRunner";
+import { ModelInterface, ModelRunner, type MappedModelEvent, type ModelBinding, type ModelConfigurationParams, type ModelRunnerArgs } from "./modelRunner";
 /**
  * Load options for {@link LayaDecisions}. Any other key is rejected at load:
  * pooling, context size, ubatch and parallelism are fixed by Laya's
@@ -149,17 +148,7 @@ export interface LayaResult {
 }
 /** {@link LayaResult} for `state`, one per state for `states`. */
 export type LayaResponse = LayaResult | LayaResult[];
-export interface LayaDecisionsArgs {
-    files: {
-        model: string[];
-    };
-    /** Required, with at least `device`. */
-    config: LayaConfig;
-    logger?: QvacLogger | Console | null;
-    opts?: {
-        stats?: boolean;
-    };
-}
+export type LayaDecisionsArgs = ModelRunnerArgs<LayaConfig>;
 export interface LayaBinding extends ModelBinding {
     createLayaInstance(owner: LayaInterface, configurationParams: {
         path: string;
@@ -180,11 +169,7 @@ export type MappedLayaEvent = MappedModelEvent<LayaResponse>;
 export declare function mapLayaEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedLayaEvent | null;
 /** An interface between the native Laya instance and the JS runtime. */
 export declare class LayaInterface extends ModelInterface<LayaConfig, LayaBinding> {
-    constructor(binding: unknown, configurationParams: {
-        path: string;
-        config: LayaConfig;
-        backendsDir?: string;
-    }, outputCb: AddonOutputCallback);
+    protected _createInstance(configurationParams: ModelConfigurationParams<LayaConfig>, outputCb: AddonOutputCallback): object;
     /** Resolves `true` if the job was accepted, `false` if busy. */
     runJob(requestJson: string): Promise<boolean>;
 }
@@ -200,7 +185,6 @@ export declare class LayaInterface extends ModelInterface<LayaConfig, LayaBindin
  */
 export declare class LayaDecisions extends ModelRunner<LayaConfig, LayaRequest, string, LayaResponse, LayaInterface> {
     protected readonly _modelName = "Laya";
-    constructor(args: LayaDecisionsArgs);
     /**
      * Answers a request. `await()` on the response resolves to `[response]`:
      * one {@link LayaResult} for `state`, or one per state for `states`.

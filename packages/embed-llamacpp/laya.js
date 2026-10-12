@@ -29,8 +29,8 @@ function mapLayaEvent(rawEvent, rawData, rawError) {
 }
 /** An interface between the native Laya instance and the JS runtime. */
 class LayaInterface extends modelRunner_1.ModelInterface {
-    constructor(binding, configurationParams, outputCb) {
-        super(binding, configurationParams, outputCb, (b, owner, params, cb) => b.createLayaInstance(owner, params, cb));
+    _createInstance(configurationParams, outputCb) {
+        return this._binding.createLayaInstance(this, configurationParams, outputCb);
     }
     /** Resolves `true` if the job was accepted, `false` if busy. */
     async runJob(requestJson) {
@@ -50,9 +50,6 @@ exports.LayaInterface = LayaInterface;
  */
 class LayaDecisions extends modelRunner_1.ModelRunner {
     _modelName = "Laya";
-    constructor(args) {
-        super(args);
-    }
     async run(request) {
         return this._runRequest(request);
     }

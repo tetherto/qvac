@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export shape. */
-import QvacLogger = require("@qvac/logging");
-/* eslint-enable @typescript-eslint/no-require-imports */
 import type { QvacResponse } from "@qvac/infer-base";
 import type { AddonOutputCallback, NumericLike } from "./addon";
 import {
@@ -9,6 +6,7 @@ import {
   type MappedModelEvent,
   type ModelBinding,
   type ModelConfigurationParams,
+  type ModelRunnerArgs,
 } from "./modelRunner";
 
 /**
@@ -56,13 +54,7 @@ export interface RerankRequest {
  */
 export type RerankScores = number[];
 
-export interface RerankerArgs {
-  files: { model: string[] };
-  /** Required, with at least `device`. */
-  config: RerankConfig;
-  logger?: QvacLogger | Console | null;
-  opts?: { stats?: boolean };
-}
+export type RerankerArgs = ModelRunnerArgs<RerankConfig>;
 
 export interface RerankBinding extends ModelBinding {
   createRerankInstance(
@@ -105,14 +97,11 @@ export function mapRerankEvent(
 
 /** An interface between the native rerank instance and the JS runtime. */
 export class RerankInterface extends ModelInterface<RerankConfig, RerankBinding> {
-  constructor(
-    binding: unknown,
-    configurationParams: { path: string; config: RerankConfig; backendsDir?: string },
+  protected _createInstance(
+    configurationParams: ModelConfigurationParams<RerankConfig>,
     outputCb: AddonOutputCallback,
-  ) {
-    super(binding, configurationParams, outputCb, (b, owner, params, cb) =>
-      b.createRerankInstance(owner as RerankInterface, params, cb),
-    );
+  ): object {
+    return this._binding.createRerankInstance(this, configurationParams, outputCb);
   }
 
   /** Resolves `true` if the job was accepted, `false` if busy. */
@@ -156,10 +145,6 @@ export class Reranker extends ModelRunner<
   RerankInterface
 > {
   protected readonly _modelName = "Rerank";
-
-  constructor(args: RerankerArgs) {
-    super(args);
-  }
 
   /**
    * Scores each document against the query. `await()` on the response

@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export shape. */
-import QvacLogger = require("@qvac/logging");
-/* eslint-enable @typescript-eslint/no-require-imports */
 import type { QvacResponse } from "@qvac/infer-base";
 import type { AddonOutputCallback, NumericLike } from "./addon";
 import {
@@ -9,6 +6,7 @@ import {
   type MappedModelEvent,
   type ModelBinding,
   type ModelConfigurationParams,
+  type ModelRunnerArgs,
 } from "./modelRunner";
 
 /**
@@ -169,13 +167,7 @@ export interface LayaResult {
 /** {@link LayaResult} for `state`, one per state for `states`. */
 export type LayaResponse = LayaResult | LayaResult[];
 
-export interface LayaDecisionsArgs {
-  files: { model: string[] };
-  /** Required, with at least `device`. */
-  config: LayaConfig;
-  logger?: QvacLogger | Console | null;
-  opts?: { stats?: boolean };
-}
+export type LayaDecisionsArgs = ModelRunnerArgs<LayaConfig>;
 
 export interface LayaBinding extends ModelBinding {
   createLayaInstance(
@@ -218,14 +210,11 @@ export function mapLayaEvent(
 
 /** An interface between the native Laya instance and the JS runtime. */
 export class LayaInterface extends ModelInterface<LayaConfig, LayaBinding> {
-  constructor(
-    binding: unknown,
-    configurationParams: { path: string; config: LayaConfig; backendsDir?: string },
+  protected _createInstance(
+    configurationParams: ModelConfigurationParams<LayaConfig>,
     outputCb: AddonOutputCallback,
-  ) {
-    super(binding, configurationParams, outputCb, (b, owner, params, cb) =>
-      b.createLayaInstance(owner as LayaInterface, params, cb),
-    );
+  ): object {
+    return this._binding.createLayaInstance(this, configurationParams, outputCb);
   }
 
   /** Resolves `true` if the job was accepted, `false` if busy. */
@@ -252,10 +241,6 @@ export class LayaDecisions extends ModelRunner<
   LayaInterface
 > {
   protected readonly _modelName = "Laya";
-
-  constructor(args: LayaDecisionsArgs) {
-    super(args);
-  }
 
   /**
    * Answers a request. `await()` on the response resolves to `[response]`:

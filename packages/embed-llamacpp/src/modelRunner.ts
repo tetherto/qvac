@@ -43,22 +43,25 @@ export abstract class ModelInterface<Config, Binding extends ModelBinding> {
   protected readonly _binding: Binding;
   protected _handle: object | null;
 
-  protected constructor(
+  constructor(
     binding: unknown,
     configurationParams: ModelConfigurationParams<Config>,
     outputCb: AddonOutputCallback,
-    create: (
-      binding: Binding,
-      owner: unknown,
-      configurationParams: ModelConfigurationParams<Config>,
-      outputCb: AddonOutputCallback,
-    ) => object,
   ) {
     this._binding = binding as Binding;
     // The native create call reads the key unconditionally.
     configurationParams.backendsDir ??= "";
-    this._handle = create(this._binding, this, configurationParams, outputCb);
+    this._handle = this._createInstance(configurationParams, outputCb);
   }
+
+  /**
+   * Creates the native instance this interface owns, through `_binding`.
+   * Called from the constructor, so it must not use the subclass's fields.
+   */
+  protected abstract _createInstance(
+    configurationParams: ModelConfigurationParams<Config>,
+    outputCb: AddonOutputCallback,
+  ): object;
 
   async cancel(): Promise<void> {
     if (!this._handle) return;
@@ -83,6 +86,7 @@ export abstract class ModelInterface<Config, Binding extends ModelBinding> {
 
 export interface ModelRunnerArgs<Config> {
   files: { model: string[] };
+  /** Required, with at least `device`. */
   config: Config;
   logger?: QvacLogger | Console | null;
   opts?: { stats?: boolean };
@@ -154,6 +158,12 @@ export abstract class ModelRunner<
   /** Hands the input to the native instance: `true` if accepted. */
   protected abstract _startJob(addon: Addon, payload: Payload): Promise<boolean>;
 
+  /** The package's native binding, resolved lazily from its prebuilds. */
+  protected _loadBinding(): unknown {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+    return require("./binding") as unknown;
+  }
+
   /** Normalizes a native event; throws on malformed output. */
   protected abstract _mapEvent(
     event: unknown,
@@ -173,8 +183,7 @@ export abstract class ModelRunner<
     const configurationParams = { path: pickPrimaryGgufPath(this._files), config: this._config };
     this.logger.info(`Creating ${this._modelName} instance with configuration:`, configurationParams);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
-      const binding = require("./binding") as unknown;
+      const binding = this._loadBinding();
       this._addon = this._createAddon(binding, configurationParams, this._outputCallback.bind(this));
       if (this._files.length > 1) {
         await this._streamShards();

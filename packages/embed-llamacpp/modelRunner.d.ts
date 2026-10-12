@@ -34,7 +34,12 @@ export interface ModelBinding {
 export declare abstract class ModelInterface<Config, Binding extends ModelBinding> {
     protected readonly _binding: Binding;
     protected _handle: object | null;
-    protected constructor(binding: unknown, configurationParams: ModelConfigurationParams<Config>, outputCb: AddonOutputCallback, create: (binding: Binding, owner: unknown, configurationParams: ModelConfigurationParams<Config>, outputCb: AddonOutputCallback) => object);
+    constructor(binding: unknown, configurationParams: ModelConfigurationParams<Config>, outputCb: AddonOutputCallback);
+    /**
+     * Creates the native instance this interface owns, through `_binding`.
+     * Called from the constructor, so it must not use the subclass's fields.
+     */
+    protected abstract _createInstance(configurationParams: ModelConfigurationParams<Config>, outputCb: AddonOutputCallback): object;
     cancel(): Promise<void>;
     loadWeights(data: LoadWeightsData): Promise<void>;
     activate(): Promise<void>;
@@ -44,6 +49,7 @@ export interface ModelRunnerArgs<Config> {
     files: {
         model: string[];
     };
+    /** Required, with at least `device`. */
     config: Config;
     logger?: QvacLogger | Console | null;
     opts?: {
@@ -79,6 +85,8 @@ export declare abstract class ModelRunner<Config, Request, Payload, Output, Addo
     protected abstract _encodeRequest(request: Request): Payload;
     /** Hands the input to the native instance: `true` if accepted. */
     protected abstract _startJob(addon: Addon, payload: Payload): Promise<boolean>;
+    /** The package's native binding, resolved lazily from its prebuilds. */
+    protected _loadBinding(): unknown;
     /** Normalizes a native event; throws on malformed output. */
     protected abstract _mapEvent(event: unknown, data: unknown, error: unknown): MappedModelEvent<Output> | null;
     load(): Promise<void>;

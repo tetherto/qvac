@@ -15,11 +15,11 @@ const addon_1 = require("./addon");
 class ModelInterface {
     _binding;
     _handle;
-    constructor(binding, configurationParams, outputCb, create) {
+    constructor(binding, configurationParams, outputCb) {
         this._binding = binding;
         // The native create call reads the key unconditionally.
         configurationParams.backendsDir ??= "";
-        this._handle = create(this._binding, this, configurationParams, outputCb);
+        this._handle = this._createInstance(configurationParams, outputCb);
     }
     async cancel() {
         if (!this._handle)
@@ -80,6 +80,11 @@ class ModelRunner {
         this._hasActiveResponse = false;
         this.state = { configLoaded: false };
     }
+    /** The package's native binding, resolved lazily from its prebuilds. */
+    _loadBinding() {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+        return require("./binding");
+    }
     async load() {
         return this._run(async () => {
             if (this.state.configLoaded)
@@ -92,8 +97,7 @@ class ModelRunner {
         const configurationParams = { path: (0, addon_1.pickPrimaryGgufPath)(this._files), config: this._config };
         this.logger.info(`Creating ${this._modelName} instance with configuration:`, configurationParams);
         try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
-            const binding = require("./binding");
+            const binding = this._loadBinding();
             this._addon = this._createAddon(binding, configurationParams, this._outputCallback.bind(this));
             if (this._files.length > 1) {
                 await this._streamShards();
