@@ -11,7 +11,8 @@ on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 The C++ CI carve-out builds the native addon on the Ubuntu 22.04 CPU runner,
 reusing vcpkg and compiler caches with two build workers. Addon-level C++ tests
 remain a stub. Only trusted default-branch builds save shared caches; pushes
-affecting AudioGen or its cache configuration and manual dispatches warm them.
+affecting AudioGen or its cache configuration, a schedule every 2 days, and
+manual dispatches warm them.
 Non-PR runs build the triggering commit and reject inputs selecting another
 repository or revision. PR events retain caller-selected PR-head checkouts.
 See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet).
