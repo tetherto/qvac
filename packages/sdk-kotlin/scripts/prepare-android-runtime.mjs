@@ -110,16 +110,43 @@ const sdkPackage = JSON.parse(
   await fs.readFile(path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json'), 'utf8')
 )
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
-// bare-link 4 discovers native addons from the module graph. The generated
-// worker entry includes only this profile's plugins and resolves split addon
-// packages for the requested host.
+const packageFilter =
+  addons.length === 0
+    ? { name: 'qvac-kotlin-no-addons', version: '0.0.0', dependencies: {} }
+    : {
+        name: 'qvac-kotlin-addon-linker',
+        version: '0.0.0',
+        dependencies: Object.fromEntries(addons.map((name) => [name, '*']))
+      }
+
 const linkedResources = new Set()
-for await (const resource of link(bundle.entryPaths.worker, {
-  hosts: ['android-arm64'],
-  out: addonsDirectory
-})) {
+for await (const resource of link(
+  projectRoot,
+  {
+    hosts: ['android-arm64'],
+    out: addonsDirectory
+  },
+  packageFilter
+)) {
   linkedResources.add(path.resolve(String(resource)))
   console.log(`Linked ${resource}`)
+}
+
+// bare-link from the project root reaches only the meta packages. Split addons
+// keep their binaries in a per-platform package, so link each installed one
+// from its own `addon` directory or its .so never reaches the AAR.
+for (const platformAddon of platformAddonRoots(addons, 'android-arm64')) {
+  for await (const resource of link(
+    platformAddon.dir,
+    {
+      hosts: ['android-arm64'],
+      out: addonsDirectory
+    },
+    platformAddon.pkg
+  )) {
+    linkedResources.add(path.resolve(String(resource)))
+    console.log(`Linked ${resource}`)
+  }
 }
 
 async function sha256(filePath) {
@@ -181,6 +208,36 @@ async function pathExists(target) {
   } catch {
     return false
   }
+}
+
+/**
+ * The installed platform-package `addon` directories for the given metas, ready
+ * for a bare-link pass. Mirrors `resolvePlatformAddonRoots` in the Expo linker.
+ */
+function platformAddonRoots(addonNames, host) {
+  const roots = []
+  for (const name of addonNames) {
+    const metaPath = path.join(projectRoot, 'node_modules', ...name.split('/'), 'package.json')
+    let meta
+    try {
+      meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf8'))
+    } catch {
+      continue
+    }
+    const platformPackage = platformPackageForHost(meta, host)
+    if (platformPackage === null) continue
+    const addonDir = path.join(projectRoot, 'node_modules', ...platformPackage.split('/'), 'addon')
+    let addonManifest
+    try {
+      addonManifest = JSON.parse(fsSync.readFileSync(path.join(addonDir, 'package.json'), 'utf8'))
+    } catch {
+      continue
+    }
+    if (addonManifest.addon !== true) continue
+    if (!fsSync.existsSync(path.join(addonDir, 'prebuilds'))) continue
+    roots.push({ dir: addonDir, pkg: addonManifest })
+  }
+  return roots
 }
 
 async function readInstalledVersion(packageName) {
