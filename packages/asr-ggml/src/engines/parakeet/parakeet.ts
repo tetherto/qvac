@@ -28,6 +28,8 @@ export interface ParakeetConfigurationParams {
   modelPath?: string;
   maxThreads?: number;
   useGPU?: boolean;
+  /** MOSS native backend selector. */
+  backend?: string;
   sampleRate?: number;
   channels?: number;
   captionEnabled?: boolean;

@@ -8,6 +8,7 @@ const { binding, ASRGgml, setupJsLogger, getTestPaths } = require('./parakeet-he
 
 const { samplesDir } = getTestPaths()
 const modelPath = process.env.QVAC_TEST_MOSS_TRANSCRIBE_GGUF || ''
+const backend = process.env.QVAC_TEST_MOSS_TRANSCRIBE_BACKEND || 'auto'
 const samplePath = path.join(samplesDir, 'LastQuestion_long_ES.raw')
 const SAMPLE_RATE = 16000
 const AUDIO_SECONDS = 20
@@ -71,12 +72,22 @@ test(
       files: { model: modelPath },
       config: {
         engine: 'moss-transcribe',
-        mossTranscribeConfig: { maxThreads: 4, useGPU: process.env.NO_GPU !== 'true' }
+        mossTranscribeConfig: { maxThreads: 4, useGPU: process.env.NO_GPU !== 'true', backend }
       }
     })
 
     try {
       await model.load()
+      const info = model.getBackendInfo()
+      t.ok(info, 'backend info is available')
+      if (backend !== 'auto') {
+        const expectedId = { cpu: 0, cuda: 2, vulkan: 3 }[backend]
+        if (expectedId !== undefined) {
+          t.is(info.backendId, expectedId, 'requested backend is active')
+        } else {
+          t.is(info.backendName, backend, 'requested device is active')
+        }
+      }
       const plain = await collect(await model.run(audio, { maxNewTokens: MAX_NEW_TOKENS }))
       assertLabelledSegments(t, 'default prompt', plain.segments)
 
@@ -84,7 +95,6 @@ test(
         await model.run(audio, { hotwords: HOTWORDS, maxNewTokens: MAX_NEW_TOKENS })
       )
       assertLabelledSegments(t, 'hotword prompt', biased.segments)
-      t.ok(model.getBackendInfo(), 'backend info is available')
     } finally {
       await model.unload().catch(() => {})
       logger.releaseLogger()
