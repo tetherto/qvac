@@ -43,9 +43,23 @@ test("vlaConfigSchema: accepts backend 'cpu'", (t) => {
   t.is(result.success, true)
 })
 
-test('vlaConfigSchema: rejects unknown backend', (t) => {
-  const result = vlaConfigSchema.safeParse({ backend: 'vulkan' })
-  t.is(result.success, false)
+test('vlaConfigSchema: preserves GPU backend selectors for native validation', (t) => {
+  for (const backend of [
+    'cuda',
+    'vulkan',
+    'cuda,vulkan',
+    'hip,rocm,sycl',
+    ' CUDA , Vulkan ',
+    'unknown'
+  ]) {
+    t.is(vlaConfigSchema.parse({ backend }).backend, backend)
+  }
+})
+
+test('vlaConfigSchema: rejects blank and non-string backend selectors', (t) => {
+  for (const backend of ['', ' \t\n', 1, null, ['cuda']]) {
+    t.is(vlaConfigSchema.safeParse({ backend }).success, false)
+  }
 })
 
 test('vlaConfigSchema: accepts verbosity integer', (t) => {

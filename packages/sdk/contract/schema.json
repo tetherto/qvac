@@ -10903,6 +10903,10 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "backend": {
+                      "description": "Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+                      "type": "string"
+                    },
                     "ctx_size": {
                       "description": "Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
                       "type": "number"
@@ -12319,6 +12323,10 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "backend": {
+                      "description": "Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
+                      "type": "string"
+                    },
                     "gpuLayers": {
                       "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
                       "type": "integer",
@@ -18940,10 +18948,9 @@
                   "type": "object",
                   "properties": {
                     "backend": {
-                      "description": "Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
+                      "description": "Backend selector: `'auto'` (default), `'cpu'`, or a comma-separated GPU priority list such as `'cuda,vulkan'`. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. `'cpu'` forces CPU regardless of available accelerators.",
                       "type": "string",
-                      "enum": ["auto", "cpu"],
-                      "title": "LoadModelSrcRequestGgmlVlaModelConfigBackend"
+                      "minLength": 1
                     },
                     "verbosity": {
                       "description": "Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",

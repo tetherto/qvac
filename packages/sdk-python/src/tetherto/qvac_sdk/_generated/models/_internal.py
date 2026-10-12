@@ -9844,6 +9844,12 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices."
+        ),
+    ] = None
     ctx_size: Annotated[
         float | None,
         Field(
@@ -11606,6 +11612,12 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'."
+        ),
+    ] = None
     gpu_layers: Annotated[
         int | None,
         Field(
@@ -19779,11 +19791,6 @@ class LoadModelSrcRequestGgmlVlaModelFitPolicy(Enum):
     off = "off"
 
 
-class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
-    auto = "auto"
-    cpu = "cpu"
-
-
 class Embodiment(RootModel[str]):
     root: Annotated[
         str,
@@ -19833,10 +19840,10 @@ class LoadModelSrcRequestGgmlVlaModelConfigEmbodiment(GeneratedBaseModel):
 
 class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
     backend: Annotated[
-        LoadModelSrcRequestGgmlVlaModelConfigBackend | None,
+        str | None,
         Field(
-            description="Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
-            title="LoadModelSrcRequestGgmlVlaModelConfigBackend",
+            description="Backend selector: `'auto'` (default), `'cpu'`, or a comma-separated GPU priority list such as `'cuda,vulkan'`. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. `'cpu'` forces CPU regardless of available accelerators.",
+            min_length=1,
         ),
     ] = None
     verbosity: Annotated[

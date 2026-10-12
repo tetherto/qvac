@@ -100,11 +100,13 @@ export type VlaEmbodimentSelection =
 
 export const vlaConfigSchema = z.object({
   backend: z
-    .enum(['auto', 'cpu'])
+    .string()
+    .min(1)
+    .refine((value) => value.trim().length > 0, 'Backend selector cannot be blank')
     .optional()
     .describe(
-      'Backend selection passed to `VlaModel.load({ backend })`. ' +
-        "`'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. " +
+      "Backend selector: `'auto'` (default), `'cpu'`, or a comma-separated GPU priority list such as `'cuda,vulkan'`. " +
+        'Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. ' +
         "`'cpu'` forces CPU regardless of available accelerators."
     ),
   verbosity: z
@@ -217,7 +219,7 @@ export const vlaStatsSchema = z.object({
   backendDevice: z
     .number()
     .optional()
-    .describe('0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL).')
+    .describe('0 = CPU backend, 1 = GPU backend, including CUDA, ROCm, Vulkan, Metal, or OpenCL.')
 })
 
 export type VlaStats = z.infer<typeof vlaStatsSchema>

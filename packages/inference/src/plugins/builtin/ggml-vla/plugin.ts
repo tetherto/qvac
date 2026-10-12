@@ -21,7 +21,7 @@ import { vlaGetHparams } from '@/plugins/builtin/ggml-vla/ops/vla-hparams'
 import { vlaSetEmbodiment } from '@/plugins/builtin/ggml-vla/ops/vla-set-embodiment'
 
 interface VlaLoadOptions {
-  backend?: 'auto' | 'cpu'
+  backend?: VlaModel.VlaBackendSelector
 }
 
 interface VlaModelWrapper {

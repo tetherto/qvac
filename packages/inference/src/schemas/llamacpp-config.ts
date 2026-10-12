@@ -19,6 +19,12 @@ const verbositySchema = z.enum(VERBOSITY)
 
 // Base schema - validates types, all fields optional (for input validation)
 export const llmConfigBaseSchema = z.object({
+  backend: z
+    .string()
+    .optional()
+    .describe(
+      "Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices."
+    ),
   ctx_size: z
     .number()
     .optional()
@@ -348,6 +354,12 @@ export type LlmConfig = z.infer<typeof llmConfigSchema>
 
 // Base schema - validates types, all fields optional (for input validation)
 export const embedConfigBaseSchema = z.object({
+  backend: z
+    .string()
+    .optional()
+    .describe(
+      "Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'."
+    ),
   gpuLayers: z
     .number()
     .int()
