@@ -392,13 +392,17 @@ graph TB
 
 **Addon surface (addon-cpp ≥1.1.5#1):** Constructor `(binding, configurationParams, outputCb)` only (no transition callback). Single job per instance: `runJob({ type, input })` (no job ID returned), `cancel()` (waits until job stopped), `unload()` → `destroyInstance` to release resources. `addonLogging.js` exposes the package's native log bridge as a secondary export.
 
+#### **ModelRunner / ModelInterface (modelRunner.js)**
+
+**Responsibility:** The lifecycle `LayaDecisions` and `Reranker` share, as base classes: path checks, loading with shard streaming, one request at a time over `createJobHandler` and `exclusiveRunQueue`, output-event dispatch, cancel and unload, and the native handle's `activate` / `loadWeights` / `cancel` / `unload`. A subclass supplies how its native instance is created, how a request becomes the job's input and how its events map to outputs.
+
 #### **LayaDecisions / LayaInterface (laya.js)**
 
-**Responsibility:** The Laya counterpart of `GGMLBert` / `BertInterface`: the same job and queue composition and file streaming, over the `createLayaInstance` binding. Sends the request as JSON (`runJob({ type: 'text', input })`) and parses the response JSON in `mapLayaEvent`, which recognizes the output event by its `LayaDecisionResult` type name.
+**Responsibility:** The Laya counterpart of `GGMLBert` / `BertInterface`, on `ModelRunner` / `ModelInterface`, over the `createLayaInstance` binding. Sends the request as JSON (`runJob({ type: 'text', input })`) and parses the response JSON in `mapLayaEvent`, which recognizes the output event by its `LayaDecisionResult` type name.
 
 #### **Reranker / RerankInterface (rerank.js)**
 
-**Responsibility:** The rerank counterpart of `GGMLBert` / `BertInterface`, over the `createRerankInstance` binding. Checks the request shape, sends the query then the documents as one `sequences` input (`runJob({ type: 'sequences', input: [query, ...documents] })`), and turns the scores' `Float32Array` into numbers in `mapRerankEvent`, which recognizes the output event by its `RerankScores` type name.
+**Responsibility:** The rerank counterpart of `GGMLBert` / `BertInterface`, on `ModelRunner` / `ModelInterface`, over the `createRerankInstance` binding. Checks the request shape, sends the query then the documents as one `sequences` input (`runJob({ type: 'sequences', input: [query, ...documents] })`), and turns the scores' `Float32Array` into numbers in `mapRerankEvent`, which recognizes the output event by its `RerankScores` type name.
 
 ### C++ Components
 

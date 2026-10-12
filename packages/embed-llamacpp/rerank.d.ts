@@ -1,6 +1,7 @@
 import QvacLogger = require("@qvac/logging");
-import { type QvacResponse } from "@qvac/infer-base";
-import { type AddonOutputCallback, type LoadWeightsData, type NumericLike } from "./addon";
+import type { QvacResponse } from "@qvac/infer-base";
+import type { AddonOutputCallback, NumericLike } from "./addon";
+import { ModelInterface, ModelRunner, type MappedModelEvent, type ModelBinding, type ModelConfigurationParams } from "./modelRunner";
 /**
  * Load options for {@link Reranker}. Any other key is rejected at load:
  * pooling, context size, ubatch and parallelism are fixed by the scoring
@@ -54,34 +55,18 @@ export interface RerankerArgs {
         stats?: boolean;
     };
 }
-export interface RerankBinding {
+export interface RerankBinding extends ModelBinding {
     createRerankInstance(owner: RerankInterface, configurationParams: {
         path: string;
         config: RerankConfig;
         backendsDir?: string;
     }, outputCallback: AddonOutputCallback): object;
-    activate(handle: unknown): Promise<void> | void;
     runJob(handle: unknown, input: {
         type: "sequences";
         input: string[];
     }): Promise<boolean>;
-    loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
-    cancel(handle: unknown): Promise<void>;
-    destroyInstance(handle: unknown): void;
 }
-export type MappedRerankEvent = {
-    type: "JobEnded";
-    data: unknown;
-    error: null;
-} | {
-    type: "Error";
-    data: unknown;
-    error: unknown;
-} | {
-    type: "Output";
-    data: RerankScores;
-    error: null;
-};
+export type MappedRerankEvent = MappedModelEvent<RerankScores>;
 /**
  * Normalize a raw native event of a rerank instance. The scores arrive as a
  * Float32Array and are returned as numbers; `backendDevice` in the stats maps
@@ -89,20 +74,14 @@ export type MappedRerankEvent = {
  */
 export declare function mapRerankEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedRerankEvent | null;
 /** An interface between the native rerank instance and the JS runtime. */
-export declare class RerankInterface {
-    private readonly _binding;
-    private _handle;
+export declare class RerankInterface extends ModelInterface<RerankConfig, RerankBinding> {
     constructor(binding: unknown, configurationParams: {
         path: string;
         config: RerankConfig;
         backendsDir?: string;
     }, outputCb: AddonOutputCallback);
-    cancel(): Promise<void>;
     /** Resolves `true` if the job was accepted, `false` if busy. */
     runJob(query: string, documents: string[]): Promise<boolean>;
-    loadWeights(data: LoadWeightsData): Promise<void>;
-    activate(): Promise<void>;
-    unload(): Promise<void>;
 }
 /**
  * Scores documents by relevance to a query with a reranker (cross-encoder)
@@ -114,36 +93,16 @@ export declare class RerankInterface {
  * const [scores] = await (await reranker.run({ query, documents })).await()
  * ```
  */
-export declare class Reranker {
-    logger: QvacLogger;
-    opts: {
-        stats?: boolean;
-    };
-    state: {
-        configLoaded: boolean;
-    };
-    private _addon;
-    private readonly _files;
-    private readonly _config;
-    private readonly _job;
-    private readonly _run;
-    private _hasActiveResponse;
-    constructor({ files, config, logger, opts }: RerankerArgs);
-    load(): Promise<void>;
-    private _load;
-    private _streamShards;
+export declare class Reranker extends ModelRunner<RerankConfig, RerankRequest, RerankRequest, RerankScores, RerankInterface> {
+    protected readonly _modelName = "Rerank";
+    constructor(args: RerankerArgs);
     /**
      * Scores each document against the query. `await()` on the response
      * resolves to `[scores]`, one score per document in the given order.
      */
     run(request: RerankRequest): Promise<QvacResponse<RerankScores>>;
-    private _runInternal;
-    private _outputCallback;
-    /** Unload the model and clear resources. Fails any in-flight job. */
-    unload(): Promise<void>;
-    /** Cancel the current request. */
-    cancel(): Promise<void>;
-    getState(): {
-        configLoaded: boolean;
-    };
+    protected _createAddon(binding: unknown, configurationParams: ModelConfigurationParams<RerankConfig>, outputCb: AddonOutputCallback): RerankInterface;
+    protected _encodeRequest(request: RerankRequest): RerankRequest;
+    protected _startJob(addon: RerankInterface, request: RerankRequest): Promise<boolean>;
+    protected _mapEvent(event: unknown, data: unknown, error: unknown): MappedRerankEvent | null;
 }

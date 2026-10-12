@@ -1,20 +1,15 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import path = require("bare-path");
+/* eslint-disable @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export shape. */
 import QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
+import type { QvacResponse } from "@qvac/infer-base";
+import type { AddonOutputCallback, NumericLike } from "./addon";
 import {
-  createJobHandler,
-  exclusiveRunQueue,
-  type JobHandler,
-  type QvacResponse,
-} from "@qvac/infer-base";
-import {
-  pickPrimaryGgufPath,
-  type AddonOutputCallback,
-  type LoadWeightsData,
-  type NumericLike,
-} from "./addon";
+  ModelInterface,
+  ModelRunner,
+  type MappedModelEvent,
+  type ModelBinding,
+  type ModelConfigurationParams,
+} from "./modelRunner";
 
 /**
  * Load options for {@link Reranker}. Any other key is rejected at load:
@@ -69,23 +64,16 @@ export interface RerankerArgs {
   opts?: { stats?: boolean };
 }
 
-export interface RerankBinding {
+export interface RerankBinding extends ModelBinding {
   createRerankInstance(
     owner: RerankInterface,
     configurationParams: { path: string; config: RerankConfig; backendsDir?: string },
     outputCallback: AddonOutputCallback,
   ): object;
-  activate(handle: unknown): Promise<void> | void;
   runJob(handle: unknown, input: { type: "sequences"; input: string[] }): Promise<boolean>;
-  loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
-  cancel(handle: unknown): Promise<void>;
-  destroyInstance(handle: unknown): void;
 }
 
-export type MappedRerankEvent =
-  | { type: "JobEnded"; data: unknown; error: null }
-  | { type: "Error"; data: unknown; error: unknown }
-  | { type: "Output"; data: RerankScores; error: null };
+export type MappedRerankEvent = MappedModelEvent<RerankScores>;
 
 /**
  * Normalize a raw native event of a rerank instance. The scores arrive as a
@@ -116,49 +104,22 @@ export function mapRerankEvent(
 }
 
 /** An interface between the native rerank instance and the JS runtime. */
-export class RerankInterface {
-  private readonly _binding: RerankBinding;
-  private _handle: object | null;
-
+export class RerankInterface extends ModelInterface<RerankConfig, RerankBinding> {
   constructor(
     binding: unknown,
     configurationParams: { path: string; config: RerankConfig; backendsDir?: string },
     outputCb: AddonOutputCallback,
   ) {
-    this._binding = binding as RerankBinding;
-    // createRerankInstance reads the key unconditionally.
-    configurationParams.backendsDir ??= "";
-    this._handle = this._binding.createRerankInstance(this, configurationParams, outputCb);
-  }
-
-  async cancel(): Promise<void> {
-    if (!this._handle) return;
-    await this._binding.cancel(this._handle);
+    super(binding, configurationParams, outputCb, (b, owner, params, cb) =>
+      b.createRerankInstance(owner as RerankInterface, params, cb),
+    );
   }
 
   /** Resolves `true` if the job was accepted, `false` if busy. */
   async runJob(query: string, documents: string[]): Promise<boolean> {
     return this._binding.runJob(this._handle, { type: "sequences", input: [query, ...documents] });
   }
-
-  async loadWeights(data: LoadWeightsData): Promise<void> {
-    return this._binding.loadWeights(this._handle, data);
-  }
-
-  async activate(): Promise<void> {
-    return this._binding.activate(this._handle);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/require-await -- async so a synchronous destroyInstance throw surfaces as a rejected promise
-  async unload(): Promise<void> {
-    if (!this._handle) return;
-    this._binding.destroyInstance(this._handle);
-    this._handle = null;
-  }
 }
-
-type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
-const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
 
 function checkRequest(request: RerankRequest): void {
   if (request === null || typeof request !== "object") {
@@ -187,78 +148,17 @@ function checkRequest(request: RerankRequest): void {
  * const [scores] = await (await reranker.run({ query, documents })).await()
  * ```
  */
-export class Reranker {
-  logger: QvacLogger;
-  opts: { stats?: boolean };
-  state: { configLoaded: boolean };
+export class Reranker extends ModelRunner<
+  RerankConfig,
+  RerankRequest,
+  RerankRequest,
+  RerankScores,
+  RerankInterface
+> {
+  protected readonly _modelName = "Rerank";
 
-  private _addon: RerankInterface | null;
-  private readonly _files: string[];
-  private readonly _config: RerankConfig;
-  private readonly _job: JobHandler;
-  private readonly _run: RunExclusive;
-  private _hasActiveResponse: boolean;
-
-  constructor({ files, config = {} as RerankConfig, logger = null, opts = {} }: RerankerArgs) {
-    if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-      throw new TypeError("files.model must be a non-empty array of absolute paths");
-    }
-    for (const [i, entry] of files.model.entries()) {
-      if (typeof entry !== "string" || entry.length === 0) {
-        throw new TypeError(`files.model[${i}] must be an absolute path string`);
-      }
-      if (!path.isAbsolute(entry)) {
-        throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
-      }
-    }
-    this._files = files.model;
-    this._config = config;
-    this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
-    this.opts = opts;
-    this._job = createJobHandler({ cancel: () => this._addon?.cancel() });
-    this._run = exclusiveRunQueue() as RunExclusive;
-    this._addon = null;
-    this._hasActiveResponse = false;
-    this.state = { configLoaded: false };
-  }
-
-  async load(): Promise<void> {
-    return this._run(async () => {
-      if (this.state.configLoaded) return;
-      await this._load();
-      this.state.configLoaded = true;
-    });
-  }
-
-  private async _load(): Promise<void> {
-    const configurationParams = { path: pickPrimaryGgufPath(this._files), config: this._config };
-    this.logger.info("Creating rerank instance with configuration:", configurationParams);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
-      const binding = require("./binding") as RerankBinding;
-      this._addon = new RerankInterface(binding, configurationParams, this._outputCallback.bind(this));
-      if (this._files.length > 1) {
-        await this._streamShards();
-      }
-      await this._addon.activate();
-    } catch (loadError) {
-      try {
-        await this._addon?.unload();
-      } catch {}
-      this._addon = null;
-      throw loadError;
-    }
-    this.logger.info("Rerank model loaded");
-  }
-
-  private async _streamShards(): Promise<void> {
-    for (const filePath of this._files) {
-      const filename = path.basename(filePath);
-      for await (const chunk of fs.createReadStream(filePath)) {
-        await this._addon!.loadWeights({ filename, chunk, completed: false });
-      }
-      await this._addon!.loadWeights({ filename, chunk: null, completed: true });
-    }
+  constructor(args: RerankerArgs) {
+    super(args);
   }
 
   /**
@@ -267,87 +167,26 @@ export class Reranker {
    */
   async run(request: RerankRequest): Promise<QvacResponse<RerankScores>> {
     checkRequest(request);
-    return this._run(() => this._runInternal(request));
+    return this._runRequest(request);
   }
 
-  private async _runInternal(request: RerankRequest): Promise<QvacResponse<RerankScores>> {
-    if (!this._addon) {
-      throw new Error("Addon not initialized. Call load() first.");
-    }
-    if (this._hasActiveResponse) {
-      throw new Error(RUN_BUSY_ERROR_MESSAGE);
-    }
-    const response = this._job.start() as QvacResponse<RerankScores>;
-
-    let accepted: boolean;
-    try {
-      accepted = await this._addon.runJob(request.query, request.documents);
-    } catch (error) {
-      this._job.fail(error as Error);
-      throw error;
-    }
-    if (!accepted) {
-      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE));
-      throw new Error(RUN_BUSY_ERROR_MESSAGE);
-    }
-
-    this._hasActiveResponse = true;
-    const finalized = response.await().finally(() => {
-      this._hasActiveResponse = false;
-    });
-    finalized.catch((err: unknown) => {
-      this.logger?.warn?.("Rerank response rejected:", (err as { message?: unknown })?.message ?? err);
-    });
-    response.await = () => finalized;
-    return response;
+  protected _createAddon(
+    binding: unknown,
+    configurationParams: ModelConfigurationParams<RerankConfig>,
+    outputCb: AddonOutputCallback,
+  ): RerankInterface {
+    return new RerankInterface(binding, configurationParams, outputCb);
   }
 
-  private _outputCallback(_addon: unknown, event: unknown, data: unknown, error: unknown): void {
-    let mapped: MappedRerankEvent | null;
-    try {
-      mapped = mapRerankEvent(event, data, error);
-    } catch (mapError) {
-      this._job.fail(mapError as Error);
-      return;
-    }
-    if (mapped === null) {
-      this.logger.warn(`Unhandled addon event: ${String(event)} (data type: ${typeof data})`);
-      return;
-    }
-    if (mapped.type === "Error") {
-      this.logger.error("Job failed with error:", mapped.error);
-      this._job.fail(mapped.error as Error);
-      return;
-    }
-    if (mapped.type === "JobEnded") {
-      this._job.end(this.opts.stats ? mapped.data : null);
-      return;
-    }
-    this._job.output(mapped.data);
+  protected _encodeRequest(request: RerankRequest): RerankRequest {
+    return request;
   }
 
-  /** Unload the model and clear resources. Fails any in-flight job. */
-  async unload(): Promise<void> {
-    return this._run(async () => {
-      await this.cancel();
-      if (this._job.active) {
-        this._job.fail(new Error("Model was unloaded"));
-      }
-      this._hasActiveResponse = false;
-      if (this._addon) {
-        await this._addon.unload();
-        this._addon = null;
-      }
-      this.state.configLoaded = false;
-    });
+  protected _startJob(addon: RerankInterface, request: RerankRequest): Promise<boolean> {
+    return addon.runJob(request.query, request.documents);
   }
 
-  /** Cancel the current request. */
-  async cancel(): Promise<void> {
-    await this._addon?.cancel();
-  }
-
-  getState(): { configLoaded: boolean } {
-    return this.state;
+  protected _mapEvent(event: unknown, data: unknown, error: unknown): MappedRerankEvent | null {
+    return mapRerankEvent(event, data, error);
   }
 }

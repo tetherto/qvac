@@ -19,3 +19,4 @@ test/types/consumer-cjs.test.js
 fit.js
 laya.js
 rerank.js
+modelRunner.js
