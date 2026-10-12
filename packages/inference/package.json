@@ -166,7 +166,7 @@
     "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
   },
   "engines": {
-    "bare": ">=1.34.1"
+    "bare": ">=1.32.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
