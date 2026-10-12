@@ -31,6 +31,11 @@
   resolved `load()` instead of rejecting it, and the first request then
   crashed the process. It now rejects with `UnableToLoadModel`, as a
   text-only model does.
+- Gemma 4 vision models cap an image at 280 tokens again when
+  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
+  applied, so a large image took about four times the tokens and prefill: on
+  Android it ran the app out of memory or produced a wrong description.
+  Set `image_max_tokens` to raise the cap.
 
 ## [0.58.0] - 2026-10-09
 
