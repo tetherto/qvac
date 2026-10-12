@@ -394,7 +394,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "ADDON_LINK_FAILED" && (code == null || code == 50617) -> QvacKnownException.ClientAddonLinkFailed(message, payload, code)
     name == "BARE_IMPORTS_MAP_NOT_FOUND" && (code == null || code == 50613) -> QvacKnownException.ClientBareImportsMapNotFound(message, payload, code)
     name == "BARE_PACK_ERROR" && (code == null || code == 50611) -> QvacKnownException.ClientBarePackError(message, payload, code)
-    name == "BARE_PACK_NODE_UNSUPPORTED" && (code == null || code == 50617) -> QvacKnownException.ClientBarePackNodeUnsupported(message, payload, code)
+    name == "BARE_PACK_NODE_UNSUPPORTED" && (code == null || code == 50618) -> QvacKnownException.ClientBarePackNodeUnsupported(message, payload, code)
     name == "BARE_PACK_NOT_INSTALLED" && (code == null || code == 50610) -> QvacKnownException.ClientBarePackNotInstalled(message, payload, code)
     name == "BARE_RUNTIME_BINARY_NOT_FOUND" && (code == null || code == 50614) -> QvacKnownException.ClientBareRuntimeBinaryNotFound(message, payload, code)
     name == "BUNDLE_VERIFICATION_FAILED" && (code == null || code == 50609) -> QvacKnownException.ClientBundleVerificationFailed(message, payload, code)
