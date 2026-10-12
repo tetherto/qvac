@@ -64,8 +64,7 @@ async function main() {
     cwd: path.resolve(configDir, entry.cwd ?? '.'),
     env: entry.env,
     testDefinitions,
-    log: (msg) => console.log(msg),
-    resolveBareFrom: configDir
+    log: (msg) => console.log(msg)
   })
 
   // Start the client before registering: a client that cannot start should fail the run outright
