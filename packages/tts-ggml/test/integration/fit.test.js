@@ -141,14 +141,18 @@ test('a LavaSR stage is sized beside the projection', { timeout: TEST_TIMEOUT_MS
   t.ok(fit.lavasrFileBytes < fit.deviceBytes, 'reported beside the projection')
 })
 
-test('a voice with no fitter is an outcome, not a throw', (t) => {
+test('MOSS routes to its fitter when a model cannot be read', (t) => {
   const fit = TTSGgml.assessFit({
     engineType: 'moss',
-    mossBackbonePath: '/models/moss-tts-delay.gguf'
+    mossBackbonePath: '/models/moss-tts-delay.gguf',
+    mossCodecDecoderPath: '/models/moss-codec-decoder.gguf',
+    promptRows: 128,
+    referenceSamples: 0,
+    streaming: false
   })
 
   t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-engine')
+  t.is(fit.reason, 'model-unreadable')
   t.is(fit.modelVariant, 'moss')
 })
 

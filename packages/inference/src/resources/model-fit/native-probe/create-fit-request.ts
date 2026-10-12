@@ -38,22 +38,15 @@ export interface CreateFitRequestParams {
 export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan {
   const { modelType, modelPath, modelConfig, artifacts, marginBytes } = params
 
-  const loadKind = llamaLoadKindFor(modelType)
-  if (loadKind !== undefined) {
-    return createLlamaFitRequest({
-      loadKind,
-      modelPath,
-      modelConfig,
-      artifacts,
-      isShardedModel: params.isShardedModel,
-      marginBytes
-    })
-  }
-
-  // Every engine below reads whole files rather than a shard set, so a split
-  // model is not a shape any of them can be pointed at.
+  // Every engine reads whole files rather than a shard set, so a split model is
+  // not a shape any of them can be pointed at.
   if (params.isShardedModel) {
     return { supported: false, detail: 'sharded models are not representable' }
+  }
+
+  const loadKind = llamaLoadKindFor(modelType)
+  if (loadKind !== undefined) {
+    return createLlamaFitRequest({ loadKind, modelPath, modelConfig, artifacts, marginBytes })
   }
 
   const common = { modelPath, modelConfig, artifacts, marginBytes }

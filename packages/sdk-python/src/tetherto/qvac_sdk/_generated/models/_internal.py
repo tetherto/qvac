@@ -5182,6 +5182,37 @@ class NativeProbeFitPlan(GeneratedBaseModel):
     ]
 
 
+class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(description="Device name as the engine registered it.")]
+    total_bytes: Annotated[
+        float, Field(alias="totalBytes", description="Device memory installed.")
+    ]
+    free_bytes: Annotated[
+        float,
+        Field(alias="freeBytes", description="Device memory free when the probe ran."),
+    ]
+    weights_bytes: Annotated[
+        float,
+        Field(alias="weightsBytes", description="Model weights placed on this device."),
+    ]
+    context_bytes: Annotated[
+        float,
+        Field(
+            alias="contextBytes",
+            description="Context and KV cache placed on this device.",
+        ),
+    ]
+    compute_bytes: Annotated[
+        float,
+        Field(
+            alias="computeBytes", description="Compute buffers placed on this device."
+        ),
+    ]
+
+
 class NativeProbeFitProjection(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -5231,6 +5262,12 @@ class NativeProbeFitProjection(GeneratedBaseModel):
     device_total_bytes: Annotated[
         float | None,
         Field(alias="deviceTotalBytes", description="Device memory installed."),
+    ] = None
+    devices: Annotated[
+        list[NativeProbeFitProjectionDevicesItem] | None,
+        Field(
+            description="One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row."
+        ),
     ] = None
     report: Annotated[
         str | None,
@@ -5315,7 +5352,7 @@ class LoadedModelInfo(GeneratedBaseModel):
         NativeProbeFit | None,
         Field(
             alias="fitProbe",
-            description="Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+            description="Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`.",
             title="NativeProbeFit",
         ),
     ] = None
@@ -8871,6 +8908,12 @@ class HeartbeatResponse(GeneratedBaseModel):
     number: float
 
 
+class LoadModelSrcRequestLlamacppCompletionModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
+
+
 class Predict(RootModel[int]):
     root: Annotated[
         int,
@@ -9485,6 +9528,14 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestLlamacppCompletionModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -9503,6 +9554,12 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
             title="LoadModelSrcRequestLlamacppCompletionModelConfig",
         ),
     ]
+
+
+class LoadModelSrcRequestWhispercppTranscriptionModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
@@ -9989,6 +10046,14 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestWhispercppTranscriptionModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -10007,6 +10072,12 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
             title="LoadModelSrcRequestWhispercppTranscriptionModelConfig",
         ),
     ]
+
+
+class LoadModelSrcRequestBciWhispercppTranscriptionModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
@@ -10338,6 +10409,14 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestBciWhispercppTranscriptionModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestBciWhispercppTranscriptionModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -10356,6 +10435,12 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
             title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfig",
         ),
     ]
+
+
+class LoadModelSrcRequestParakeetTranscriptionModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
@@ -10602,6 +10687,14 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestParakeetTranscriptionModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestParakeetTranscriptionModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -10620,6 +10713,12 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
             title="LoadModelSrcRequestParakeetTranscriptionModelConfig",
         ),
     ] = None
+
+
+class LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
@@ -10794,6 +10893,14 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -10811,6 +10918,12 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
             alias="modelConfig", title="LoadModelSrcRequestLlamacppEmbeddingModelConfig"
         ),
     ]
+
+
+class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
@@ -11806,6 +11919,14 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestNmtcppTranslationModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -11822,6 +11943,12 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
         | LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans,
         Field(alias="modelConfig"),
     ]
+
+
+class LoadModelSrcRequestTtsGgmlModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage(Enum):
@@ -15375,6 +15502,14 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestTtsGgmlModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestTtsGgmlModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -15393,6 +15528,12 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         | LoadModelSrcRequestTtsGgmlModelConfigMoss,
         Field(alias="modelConfig"),
     ]
+
+
+class LoadModelSrcRequestGgmlOcrModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestGgmlOcrModelConfigPipelineType(Enum):
@@ -15662,6 +15803,14 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestGgmlOcrModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestGgmlOcrModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -15675,6 +15824,12 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
         LoadModelSrcRequestGgmlOcrModelConfig,
         Field(alias="modelConfig", title="LoadModelSrcRequestGgmlOcrModelConfig"),
     ]
+
+
+class LoadModelSrcRequestSdcppGenerationModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
@@ -17573,6 +17728,14 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestSdcppGenerationModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -17590,6 +17753,12 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
             alias="modelConfig", title="LoadModelSrcRequestSdcppGenerationModelConfig"
         ),
     ] = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum):
@@ -18419,6 +18588,14 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestAudiogenGgmlModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestAudiogenGgmlModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -18435,6 +18612,12 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
         | LoadModelSrcRequestAudiogenGgmlModelConfigMinimax,
         Field(alias="modelConfig"),
     ]
+
+
+class LoadModelSrcRequestGgmlVlaModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
@@ -18552,6 +18735,14 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestGgmlVlaModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestGgmlVlaModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -18565,6 +18756,12 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
         LoadModelSrcRequestGgmlVlaModelConfig | None,
         Field(alias="modelConfig", title="LoadModelSrcRequestGgmlVlaModelConfig"),
     ] = None
+
+
+class LoadModelSrcRequestGgmlClassificationModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelSrcRequestGgmlClassificationModelConfig(GeneratedBaseModel):
@@ -18629,6 +18826,14 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
         ),
     ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestGgmlClassificationModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestGgmlClassificationModelFitPolicy",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -18647,6 +18852,12 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
             title="LoadModelSrcRequestGgmlClassificationModelConfig",
         ),
     ] = None
+
+
+class LoadModelCustomPluginRequestModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
 
 
 class LoadModelCustomPluginRequestModelConfig(RootModel[dict[str, Any]]):
@@ -18686,6 +18897,14 @@ class LoadModelCustomPluginRequest(GeneratedBaseModel):
         Field(
             alias="requireSecureTransport",
             description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelCustomPluginRequestModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelCustomPluginRequestModelFitPolicy",
         ),
     ] = None
     request_id: Annotated[

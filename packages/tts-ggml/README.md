@@ -49,8 +49,9 @@ validated on Apple/Metal.
   `config.useGPU: true` on GPU-capable hosts — including Android, where
   `tts-cpp` selects the GPU backend per its per-vendor allowlist (see
   [Backends & GPU acceleration](#backends--gpu-acceleration)).
-- **Apple Core ML sidecars** for the Supertonic vocoder and the Audio8 codec
-  on macOS / iOS, picked up when staged next to the model (see
+- **Apple Core ML sidecars** for the Supertonic vocoder, the Audio8 codec,
+  and one stage each of MOSS, MOSS-SoundEffect, and MOSS-Speech on macOS /
+  iOS, picked up when staged next to the model (see
   [Core ML sidecars on Apple](#core-ml-sidecars-on-apple)).
 - **Dynamic backend loading on Android** — per-arch CPU + Vulkan +
   OpenCL `.so` files ship under `prebuilds/<bare-target>/qvac__tts-ggml/`
@@ -240,13 +241,20 @@ moss-tts-delay-f16.gguf          (~17 GB)
 moss-ttsd-f16.gguf               (~17 GB; MOSS-TTSD dialogue backbone, optional)
 moss-codec-decoder-f16.gguf      (~1.8 GB)
 moss-codec-encoder-f16.gguf      (~1.8 GB; cloning and dialogue only)
+moss-codec-decoder.mlmodelc/     (optional, macOS / iOS: Apple Core ML sidecar for
+                                  the codec decoder while streaming; see Core ML
+                                  sidecars on Apple)
 
 # MOSS-SoundEffect (OpenMOSS MOSS-SoundEffect-v2; 48 kHz text-to-sound-effects)
 moss-sfx-v2-q8_0.gguf            (~3.5 GB; or moss-sfx-v2-f16.gguf, ~6.4 GB)
+moss-sfx-v2-dit.mlmodelc/        (optional, macOS / iOS: Apple Core ML sidecars for
+moss-sfx-v2-vae.mlmodelc/         the diffusion transformer and the VAE decoder)
 
 # MOSS-Speech (fnlp/MOSS-Speech; 24 kHz speech-to-speech)
 moss-speech-q8_0.gguf            (~9.7 GB; or moss-speech-bf16.gguf, ~18.2 GB)
 moss-speech-codec-f16.gguf       (~1.3 GB; carries the default reply voice)
+moss-speech-codec-tokenizer.mlmodelc/ (optional, macOS / iOS: Apple Core ML
+                                  sidecar for the speech tokenizer)
 ```
 
 Download the registry-published Chatterbox, Supertonic, and Parler models into
@@ -695,7 +703,8 @@ keeps the automatic preference above.
 ### Core ML sidecars on Apple
 
 The macOS / iOS prebuilds carry the Apple Core ML (Neural Engine) sidecars
-for the Supertonic vocoder and the Audio8 codec. They are presence-driven:
+for the Supertonic vocoder, the Audio8 codec, and the MOSS models' fixed-shape
+stages. They are presence-driven:
 each stage runs on a compiled `.mlmodelc` found next to its model file
 (`supertonic3-q8_0.gguf` -> `supertonic3-vocoder.mlmodelc`) and falls back to
 the ggml graph when it is absent, so a model directory without sidecars
@@ -707,13 +716,19 @@ published model set yet; supply your own to opt in.
 | --- | --- | --- | --- | --- |
 | Supertonic 1 / 2 / 3 | `<model>-vocoder.mlmodelc` | vocoder, in 64-latent-frame windows | GGUFs whose vocoder weights are stored below 8 bits (`q4_0`) | `SUPERTONIC_COREML_DISABLE=1` |
 | Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows synthesised while the language model is still generating, so only the last one is left after it; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
-| Chatterbox, Parler, CosyVoice3, MOSS, MOSS-SoundEffect, MOSS-Speech, LavaSR | none | — | always | — |
+| MOSS, MOSS-TTSD | `moss-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec decoder, 25 frames (2 s) per call, keeping its attention cache between calls (macOS 15 / iOS 18) | non-streaming synthesis and streams with `streamChunkTokens` above 25, which ggml decodes faster in one pass | `MOSS_COREML_DISABLE=1` |
+| MOSS-SoundEffect | `moss-sfx-v2-dit.mlmodelc` and `moss-sfx-v2-vae.mlmodelc` | diffusion transformer, one velocity per call; VAE decoder in 320-frame windows | a call that fails on the sidecar, which retires it | `MOSS_COREML_DISABLE=1` |
+| MOSS-Speech | `moss-speech-codec-tokenizer.mlmodelc`, beside the codec GGUF | speech tokenizer (Whisper-VQ encoder), one full 30 s segment per call | segments shorter than 30 s, which ggml encodes faster; so most spoken questions | `MOSS_COREML_DISABLE=1` |
+| Chatterbox, Parler, CosyVoice3, LavaSR | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
 Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
 while the sidecar is attached and `codecOnCoreml` is 1 when that synthesis
 ran its codec on it (see [Response shape](#response-shape)). The Supertonic
-vocoder path is not reported in the stats.
+vocoder path is not reported in the stats, and neither are the MOSS paths.
+The MOSS sidecars run on the GPU unless `MOSS_COREML_COMPUTE_UNITS` (`all`,
+`cpu_and_ane`, `cpu_only`) says otherwise: none of their stages ran faster on
+the Neural Engine, and the speech tokenizer loses code accuracy there.
 
 Worth it where the GPU is consumer-class: on an Apple M4 the Supertonic
 vocoder runs 1.6-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
@@ -722,14 +737,25 @@ so do not stage a sidecar there. `q4_0` models ignore the vocoder sidecar:
 it carries full-precision weights and would substitute a different vocoder
 rather than accelerate the quantized one.
 
+The MOSS sidecars, per stage against Metal with f16 models:
+
+| Stage | Apple M4 | Apple M3 Ultra |
+| --- | --- | --- |
+| MOSS-SoundEffect diffusion transformer | 1.23x | 1.06x |
+| MOSS-SoundEffect VAE decoder | 1.70x | 1.81x |
+| MOSS-Speech tokenizer, full 30 s segment | 1.24x | 1.08x |
+| MOSS codec, streamed in 25-frame chunks | 1.03x | 1.13x |
+
 Export the sidecars from the model GGUFs with
-`engines/tts/scripts/export-supertonic-coreml.py` and
-`engines/tts/scripts/export-audio8-codec-coreml.py` from the
+`engines/tts/scripts/export-supertonic-coreml.py`,
+`engines/tts/scripts/export-audio8-codec-coreml.py`, and
+`engines/tts/scripts/export-moss-{codec,sfx,speech-tokenizer}-coreml.py` from the
 [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
 tree at the ref `speech-cpp` pins. Its
-[Supertonic](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/supertonic.md#core-ml-vocoder-sidecar)
+[Supertonic](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/supertonic.md#core-ml-vocoder-sidecar),
+[Audio8](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar),
 and
-[Audio8](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
+[MOSS](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/moss.md#core-ml-codec-decoder)
 guides cover export, placement, and measurements.
 
 When the addon is built with `ENABLE_CUDA` — on in the published linux-x64
@@ -1111,6 +1137,12 @@ await response.onUpdate((data) => {
 }).await()
 ```
 
+When `maxNewTokens` is omitted, MOSS-Speech uses the remaining model context
+after the prompt instead of an implicit 1000-token budget. The JavaScript API
+currently accepts explicit budgets from 1 to 4096; the native engine also
+checks that the requested budget fits the remaining context. `maxReplySeconds`
+is optional and defaults to no time cut.
+
 The user turn is either `audio` (with `sampleRate`) or the run `input` text,
 not both; each entry of `messages` carries exactly one of `text` or `audio`
 (with its `sampleRate`).  Every call is one exchange: pass the earlier turns in
@@ -1352,6 +1384,7 @@ fit.report
 | `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
 | `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
 | `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+| `moss` | `mossBackbonePath`, `mossCodecDecoderPath`, optional `mossCodecEncoderPath` | Required `promptRows`, `referenceSamples`, `streaming`; load controls `durationTokens`, `streamChunkTokens`, `threads` |
 | `moss-sfx` | Required `mossSoundEffectPath` | Required `prompt`, `seconds`; optional `negativePrompt`, `steps`, `guidance`, `shift`, `threads` |
 
 Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
@@ -1360,7 +1393,33 @@ Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the 
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
 
-A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS Delay has no SDK fit projection on this baseline. MOSS-SoundEffect is supported. A broken request, or a host with no native binding, throws.
+A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, throws.
+
+MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
+native prompt length, including special tokens, encoded speaker references and
+TTSD continuation rows. `referenceSamples` is the total mono reference sample
+count (0 without a reference); a positive count requires the encoder path.
+`streaming` explicitly selects native chunk streaming or batch synthesis.
+The fitter does not open reference recordings. Use the TTSD backbone to assess
+dialogue, supplying its complete prompt and total reference workload.
+
+```js
+const fit = TTSGgml.assessFit({
+  engineType: 'moss',
+  mossBackbonePath: './moss-tts-delay-f16.gguf',
+  mossCodecDecoderPath: './moss-codec-decoder-f16.gguf',
+  promptRows: 128,
+  referenceSamples: 0,
+  streaming: false,
+  useGPU: true
+})
+```
+
+The result includes LM weights and KV state, codec weights and compute, streaming
+caches when applicable, and host staging/audio memory. It sums component peaks
+as a conservative upper bound, including the reference encoder when requested;
+this may reject a workload whose actual peak is smaller. The fit follows the
+load's generation settings and does not change synthesis behavior.
 
 The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
 
@@ -1417,13 +1476,20 @@ Runnable demos under `examples/`:
 | `moss-speech.js` | MOSS-Speech speech-to-speech: answers a spoken question WAV with a 24 kHz spoken reply (optionally in the voice of a second WAV). Set `QVAC_TTS_MOSS_SPEECH_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SPEECH_TEXT=1` for a text-only answer. `bare examples/moss-speech.js test/reference-audio/jfk.wav` |
 | `moss-dialogue-tts.js` | MOSS-TTSD multi-speaker dialogue from one 24 kHz reference per speaker; the text opens with each reference's transcript. Set `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-dialogue-tts.js "[S1] What alice.wav says. [S2] What bob.wav says. [S1] Hi. [S2] Hello." alice.wav bob.wav` |
 
-The two streaming examples feed PCM into a single long-running
+The streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
-per-chunk spawn gaps — install one of them (`brew install sox` or
-`brew install ffmpeg` on macOS) to enable playback.  Absent a player
-the demos still run and write the concatenated wav.
+per-chunk spawn gaps. Playback needs one of those players (`brew install sox`
+or `brew install ffmpeg` on macOS) and `bare-subprocess`, a development
+dependency: run `npm install bare-subprocess` when you run the examples from
+an installed package. Without them the demos still run and write the
+concatenated wav.
 
 ## Testing
+
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. The deterministic C++ tier remains a
+required gate. See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
 
 ```bash
 npm run test:unit               # mocked binding; fast

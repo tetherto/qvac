@@ -23,6 +23,7 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/BertModel.hpp"
+#include "model-interface/LayaModel.hpp"
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
 
 namespace qvac_lib_inference_addon_embed {
@@ -76,7 +77,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  // `BertModel::init` takes both out of the map before parsing.
+  // `LlamaModelLoader::init` takes both out of the map before parsing.
   const auto takeConfig = [&configFilemap](const char* key) {
     std::string value;
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
@@ -146,8 +147,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     return errorResult("unsupported-config");
   }
 
-  // `BertModel::init` applies both to every embedding load: a non-causal model
-  // decodes one ubatch at a time, and a single sequence needs no split cache.
+  // `BertModel::configureParams` applies both to every embedding load: a
+  // non-causal model decodes one ubatch at a time, and a single sequence needs
+  // no split cache.
   loadParams.n_ubatch = loadParams.n_batch;
   if (loadParams.n_parallel == 1) {
     loadParams.kv_unified = true;
@@ -155,9 +157,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 
   // The fitter reduces the context only when it is 0, so an embedding load
   // left unset would be projected at a reduced context it never runs at.
-  // `BertModel::init` pins it to the trained context, or caps it there.
-  // A file the metadata reader rejects is reported by the fit below, which
-  // owns the unreadable-model verdict.
+  // `BertModel::configureParams` pins it to the trained context, or caps it
+  // there. A file the metadata reader rejects is reported by the fit below,
+  // which owns the unreadable-model verdict.
   try {
     ModelMetaData metadata;
     metadata.parse(
@@ -403,6 +405,44 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(
       make_shared<out_handl::Js2DArrayOutputHandler<BertEmbeddings, float>>());
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+
+  return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+/// Delivers laya's response JSON as a JS string; the JS side parses it.
+struct JsLayaDecisionOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          LayaDecisionResult> {
+  JsLayaDecisionOutputHandler()
+      : JsBaseOutputHandler<LayaDecisionResult>(
+            [this](const LayaDecisionResult& out) -> js_value_t* {
+              return qvac_lib_inference_addon_cpp::js::String::create(
+                  this->env_, out.json);
+            }) {}
+};
+
+inline js_value_t*
+createLayaInstance(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  auto model = make_unique<LayaModel>(
+      args.getMapEntry(1, "path"),
+      args.getSubmap(1, "config"),
+      args.getMapEntry(1, "backendsDir"));
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(make_shared<JsLayaDecisionOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),

@@ -332,6 +332,26 @@ jobs:
           output-map: ${{ runner.temp }}/embed-url-map.json
           mode: presign
 
+      # The Laya GGUF (laya.test.js) has no Hugging Face source, so it is not in
+      # the manifest above; presign its US-bucket object for the pre-stage steps
+      # below, as ocr-ggml presigns its S3-only models.
+      - name: Configure AWS credentials (us-west-2) for the Laya model
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Presign Laya model (US bucket)
+        working-directory: addon/packages/embed-llamacpp
+        env:
+          MODEL_S3_BUCKET: tether-ai-dev-us
+          AWS_REGION: us-west-2
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: |
+          chmod +x scripts/generate-laya-presigned-url.sh
+          ./scripts/generate-laya-presigned-url.sh
+
       # Generate the model pre-stage script. The Device Farm host has reliable
       # network; it downloads embed's models and pushes them to a platform-local
       # staging dir so the phone never fetches from huggingface.co
@@ -343,6 +363,7 @@ jobs:
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
+          PRESTAGE_S3_MODELS: ${{ runner.temp }}/laya-model-urls.json
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -358,6 +379,7 @@ jobs:
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
+          PRESTAGE_S3_MODELS: ${{ runner.temp }}/laya-model-urls.json
         run: |
           node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {

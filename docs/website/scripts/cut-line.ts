@@ -120,13 +120,15 @@ export function cutManifest(
 }
 
 /**
- * Add the preserved line's index pair to the redirects.
+ * Add the preserved line's rules to the redirects.
  *
- * Every line whose folder is plain needs it: the last segment carries a dot,
- * so the CDN reads the URL as a file request and never normalizes the trailing
- * slash. The pair goes at the head of its collection's existing pairs, keeping
- * the block ordered newest first, which is the order a reader of the diff
- * expects.
+ * Every line whose folder is plain needs them, because every URL of it carries
+ * a dot and the CDN never normalizes the trailing slash of a dotted path. The
+ * index pair serves the root, whose dot in the last segment also costs it the
+ * directory resolution. The splat serves each page below it addressed without
+ * the slash: on a bare dotted path, it is the only rule form the CDN matches.
+ * The rules go at the head of their collection's existing ones, keeping the
+ * block ordered newest first, which is the order a reader of the diff expects.
  */
 export function cutRedirects(source: string, slug: string, preserved: string): string {
   const rule = (from: string, to: string, status: string) =>
@@ -134,23 +136,25 @@ export function cutRedirects(source: string, slug: string, preserved: string): s
     to.padEnd(REDIRECT_COLUMNS.destination) +
     status;
 
-  const pair = [
-    rule(`/${slug}/${preserved}/`, `/${slug}/${preserved}/index.html`, "200"),
-    rule(`/${slug}/${preserved}`, `/${slug}/${preserved}/`, "301"),
+  const line = `/${slug}/${preserved}`;
+  const rules = [
+    rule(`${line}/`, `${line}/index.html`, "200"),
+    rule(line, `${line}/`, "301"),
+    rule(`${line}/*`, `${line}/:splat/index.html`, "200"),
   ];
 
   const lines = source.split("\n");
-  const isIndexRule = (line: string) =>
-    /^\/\w[\w-]*\/v[\d.]+\/?\s+\/\w[\w-]*\/v[\d.]+/.test(line);
+  const isLineRule = (text: string) =>
+    /^\/\w[\w-]*\/v[\d.]+(\/\*?)?\s+\/\w[\w-]*\/v[\d.]+/.test(text);
 
   let at = lines.findIndex(
-    (line) => line.startsWith(`/${slug}/v`) && isIndexRule(line),
+    (text) => text.startsWith(`/${slug}/v`) && isLineRule(text),
   );
   if (at === -1) {
     // First cut for this collection: sit below the block rather than inside
-    // another collection's run of pairs.
+    // another collection's run of rules.
     const last = lines.reduce(
-      (found, line, index) => (isIndexRule(line) ? index : found),
+      (found, text, index) => (isLineRule(text) ? index : found),
       -1,
     );
     if (last === -1) {
@@ -162,11 +166,11 @@ export function cutRedirects(source: string, slug: string, preserved: string): s
     at = last + 1;
   }
 
-  if (lines.some((line) => line.startsWith(`/${slug}/${preserved}/ `))) {
-    throw new Error(`\`public/_redirects\` already carries /${slug}/${preserved}.`);
+  if (lines.some((text) => text.startsWith(`${line}/ `))) {
+    throw new Error(`\`public/_redirects\` already carries ${line}.`);
   }
 
-  lines.splice(at, 0, ...pair);
+  lines.splice(at, 0, ...rules);
   return lines.join("\n");
 }
 
@@ -195,6 +199,45 @@ export function relabelTitle(
   return source.replace(
     marker,
     to === null ? `$1${series(from)}` : `$1${series(to)} (latest)`,
+  );
+}
+
+/**
+ * Empty the opened line's release notes, keeping the page.
+ *
+ * The API summary is left as the copy brought it, because the release that
+ * renders it is reviewed as a diff: against the previous line's summary, only
+ * the part of the surface that actually moved shows up. Release notes share
+ * nothing with the line before them, so carrying them over costs that review
+ * its signal — the diff becomes a wholesale replacement — and publishes the
+ * previous release's notes under this line's title until the release lands.
+ *
+ * The frontmatter stays. `meta.json` lists the page, so removing it would drop
+ * it from the sidebar, and the title it carries is the one the cut just
+ * relabelled. Only the description, which names a version that is not this
+ * line's, and the body are rewritten.
+ *
+ * Returns `null` when the source carries no frontmatter to keep.
+ */
+export function emptyReleaseNotes(
+  source: string,
+  opened: string,
+  pkg: string,
+): string | null {
+  const closing = source.indexOf("\n---\n", 3);
+  if (!source.startsWith("---\n") || closing === -1) return null;
+
+  const frontmatter = source.slice(0, closing + 5);
+  const description = `description: Release notes for ${pkg} ${opened}.`;
+  const body =
+    `${opened} has not been released yet. This page is written when the ` +
+    `release ships, from the changelog of each package it covers.\n`;
+
+  return (
+    (/^description:.*$/m.test(frontmatter)
+      ? frontmatter.replace(/^description:.*$/m, description)
+      : frontmatter.replace(/^(title:.*)$/m, `$1\n${description}`)) +
+    `\n${body}`
   );
 }
 
@@ -229,6 +272,30 @@ async function relabelLine(
     touched.push(page);
   }
   return touched;
+}
+
+/**
+ * Empty the opened line's release notes, best-effort: only a collection whose
+ * release flow generates the page carries one, so a line without it is a valid
+ * line. Today that is the SDK; the CLI publishes no reference pages.
+ */
+async function emptyLineReleaseNotes(
+  dir: string,
+  opened: string,
+  pkg: string,
+): Promise<string[]> {
+  const page = path.join(dir, "reference", "release-notes.mdx");
+  if (!(await exists(page))) return [];
+
+  const emptied = emptyReleaseNotes(
+    await fs.readFile(page, "utf-8"),
+    opened,
+    pkg,
+  );
+  if (emptied === null) return [];
+
+  await fs.writeFile(page, emptied);
+  return [page];
 }
 
 /** Perform the cut. Every refusal happens before the first write. */
@@ -305,6 +372,16 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
     ...(await relabelLine(openedDir, current.version, opened)),
   ];
 
+  const emptied = await emptyLineReleaseNotes(
+    openedDir,
+    opened,
+    software.package,
+  );
+
+  const touched = [...relabelled, ...emptied].map((page) =>
+    path.relative(root, page),
+  );
+
   return {
     preserved: current.version,
     opened,
@@ -313,7 +390,7 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
       path.relative(root, openedDir),
       path.relative(root, manifestPath),
       path.relative(root, redirectsPath),
-      ...relabelled.map((page) => path.relative(root, page)),
+      ...new Set(touched),
     ],
   };
 }

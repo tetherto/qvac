@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BertInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
+exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 exports.resolveBackendsDir = resolveBackendsDir;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const fs = require("bare-fs");
@@ -38,6 +39,15 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
         return { type: "Output", data: rawData, error: null };
     }
     return null;
+}
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+function pickPrimaryGgufPath(files) {
+    const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
+    return files.find((p) => SHARD_REGEX.test(p)) || files[0];
 }
 // The ggml compute backends ship next to the @qvac/fabric runtime
 // (<root>/<host>/qvac__fabric). We deliberately do not copy them into this

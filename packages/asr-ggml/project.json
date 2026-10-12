@@ -83,7 +83,8 @@
         "cwd": "packages/asr-ggml",
         "ci": {
           "mode": "coverage",
-          "continueOnError": true,
+          "continueOnError": false,
+          "cppBuildJobs": 2,
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" }
           ],

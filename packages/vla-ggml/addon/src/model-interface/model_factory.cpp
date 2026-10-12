@@ -74,7 +74,8 @@ std::string sniffGgufArchitecture(const std::string& ggufPath) {
 
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const VlaEmbodimentRequest& embodiment) {
+    const VlaEmbodimentRequest& embodiment,
+    const std::vector<std::string>& backendOverride) {
   const std::string arch = sniffGgufArchitecture(ggufPath);
 
   // Fail closed on an explicit selector the architecture cannot honour. Only
@@ -94,15 +95,16 @@ std::unique_ptr<IVlaModel> createVlaModelFromGguf(
 
   if (arch == "smolvla") {
     return std::make_unique<SmolvlaModelAdapter>(
-        ggufPath, forceCpu, backendsDir);
+        ggufPath, forceCpu, backendsDir, backendOverride);
   }
   if (arch == "pi05") {
-    return std::make_unique<Pi05Model>(ggufPath, forceCpu, backendsDir);
+    return std::make_unique<Pi05Model>(
+        ggufPath, forceCpu, backendsDir, backendOverride);
   }
   if (arch == "groot") {
     // `embodiment` selects the embodiment on multi-embodiment GGUFs.
     return std::make_unique<GrootModel>(
-        ggufPath, forceCpu, backendsDir, embodiment);
+        ggufPath, forceCpu, backendsDir, embodiment, backendOverride);
   }
 
   throw std::runtime_error(

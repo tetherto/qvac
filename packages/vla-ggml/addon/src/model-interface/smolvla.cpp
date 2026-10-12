@@ -849,14 +849,17 @@ static bool initCpuBackend(SmolvlaModel& model) {
 // so older Snapdragon devices fall through to CPU rather than crash on
 // `ggml_backend_dev_init`. `force_cpu=true` skips selection entirely so the
 // integration test can run the same hardware both ways.
-static void tryInitGpuBackend(SmolvlaModel& model, bool forceCpu) {
+static void tryInitGpuBackend(
+    SmolvlaModel& model, bool forceCpu,
+    const std::vector<std::string>& backendOverride) {
   if (forceCpu) {
     QLOG_IF(
         Priority::INFO,
         "smolvla_load_model: force_cpu=true — skipping GPU selection");
   }
   ggml_backend_dev_t gpu =
-      forceCpu ? nullptr : vla_backend_selection::pickBestGpuDevice();
+      forceCpu ? nullptr
+               : vla_backend_selection::pickBestGpuDevice(backendOverride);
   if (!gpu) {
     return;
   }
@@ -1509,7 +1512,8 @@ static bool loadWeightsAllocCopy(
 // `gguf_unique_ptr` for the duration of the load.
 bool smolvlaLoadModel(
     const char* path, SmolvlaModel& model, bool forceCpu,
-    const std::string& backendsDir) {
+    const std::string& backendsDir,
+    const std::vector<std::string>& backendOverride) {
   QLOG_IF(
       Priority::INFO,
       std::string("smolvla_load_model: loading model from '") + path +
@@ -1521,7 +1525,7 @@ bool smolvlaLoadModel(
     model.load_error = "failed to initialise the CPU backend";
     return false;
   }
-  tryInitGpuBackend(model, forceCpu);
+  tryInitGpuBackend(model, forceCpu, backendOverride);
   if (!model.has_gpu) {
     QLOG_IF(Priority::INFO, "smolvla_load_model: using CPU backend");
   }

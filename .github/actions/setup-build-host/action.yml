@@ -35,7 +35,7 @@ runs:
       name: Select Android NDK
       shell: bash
       env:
-        # Pinned, not ANDROID_NDK_LATEST_HOME: runner images move "latest" mid-rollout.
+        # Pin every NDK selector because runner images move "latest" mid-rollout.
         NDK_VERSION: 29.0.14206865
       run: |
         if [ -z "${ANDROID_HOME:-}" ]; then
@@ -65,6 +65,7 @@ runs:
         echo "ANDROID_NDK=$ndk" >> "$GITHUB_ENV"
         echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"
         echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"
+        echo "ANDROID_NDK_LATEST_HOME=$ndk" >> "$GITHUB_ENV"
 
     - if: ${{ runner.os == 'Linux' }}
       name: Maximize build space

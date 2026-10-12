@@ -67,16 +67,3 @@ test('getLoadedModelInfo: omits the fit outcome when no probe ran', function (t)
 
   t.is(info.fitProbe, undefined)
 })
-
-test('getLoadedModelInfo: omits the fit outcome when the check is disabled', function (t) {
-  const modelId = register(t, {
-    verdict: 'unknown',
-    basis: 'native-probe',
-    estimatorVersion: 'native-probe-v2',
-    reason: 'disabled'
-  })
-
-  const { info } = handleGetLoadedModelInfo({ type: 'getLoadedModelInfo', modelId })
-
-  t.is(info.fitProbe, undefined)
-})

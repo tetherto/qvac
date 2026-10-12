@@ -16,6 +16,8 @@ export interface GGMLConfig {
   embd_normalize?: NumericLike;
   flash_attn?: "on" | "off" | "auto";
   "main-gpu"?: NumericLike | "integrated" | "dedicated";
+  /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
+  backend?: string;
   /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
   "split-mode"?: "none" | "layer";
   "tensor-split"?: string;
@@ -129,6 +131,16 @@ export function mapAddonEvent(
   }
 
   return null;
+}
+
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+export function pickPrimaryGgufPath(files: string[]): string {
+  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
+  return files.find((p) => SHARD_REGEX.test(p)) || files[0];
 }
 
 // The ggml compute backends ship next to the @qvac/fabric runtime

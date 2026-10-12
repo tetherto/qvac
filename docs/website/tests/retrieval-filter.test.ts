@@ -73,7 +73,11 @@ describe('pageAttributes', () => {
 describe('allowedLines', () => {
   it('takes the reader’s own line where the reader is', () => {
     const allowed = allowedLines(`/sdk/${SDK_OLDER}/quickstart`);
-    expect(allowed).toContainEqual({ collection: 'SDK', line: SDK_OLDER });
+    expect(allowed).toContainEqual({
+      collection: 'SDK',
+      line: SDK_OLDER,
+      current: false,
+    });
   });
 
   it('takes the current line of every other versioned collection', () => {
@@ -81,13 +85,14 @@ describe('allowedLines', () => {
     expect(allowed).toContainEqual({
       collection: 'CLI',
       line: CLI_CURRENT,
+      current: true,
     });
   });
 
   it('takes every current line when the reader is outside them all', () => {
     expect(allowedLines('/ecosystem/addons')).toEqual([
-      { collection: 'SDK', line: SDK_CURRENT },
-      { collection: 'CLI', line: CLI_CURRENT },
+      { collection: 'SDK', line: SDK_CURRENT, current: true },
+      { collection: 'CLI', line: CLI_CURRENT, current: true },
     ]);
   });
 
@@ -121,14 +126,45 @@ describe('retrievalFilter', () => {
     });
   });
 
-  it('pairs a collection with a line, so a version alone matches nothing', () => {
-    const filter = retrievalFilter('/sdk/quickstart');
-    for (const clause of filter.attributes.$or) {
-      if (!('$and' in clause)) continue;
-      expect(clause.$and).toHaveLength(2);
-      expect(Object.keys(clause.$and[0])).toEqual(['collection']);
-      expect(Object.keys(clause.$and[1])).toEqual(['line']);
+  it('pairs a collection with a line, so a line alone matches nothing', () => {
+    for (const pathname of ['/sdk/quickstart', `/sdk/${SDK_OLDER}/quickstart`]) {
+      const filter = retrievalFilter(pathname);
+      for (const clause of filter.attributes.$or) {
+        if (!('$and' in clause)) continue;
+        expect(clause.$and).toHaveLength(2);
+        expect(Object.keys(clause.$and[0])).toEqual(['collection']);
+        expect(Object.keys(clause.$and[1])).toHaveLength(1);
+        expect(['line', 'current_line']).toContain(
+          Object.keys(clause.$and[1])[0],
+        );
+      }
     }
+  });
+
+  /**
+   * The failure this guards: a cut renames the outgoing line's folder and opens
+   * a new one, so the pages at the version-less paths change line without
+   * changing URL. A filter naming the new version asks the index for a line no
+   * record carries until the crawler returns, and retrieval — not ranking —
+   * then answers nothing for the whole collection.
+   */
+  it('names no version for a current line, so a cut cannot empty it', () => {
+    for (const pathname of ['/', '/ecosystem', '/sdk/quickstart', '/cli']) {
+      const clauses = JSON.stringify(retrievalFilter(pathname));
+      expect(clauses).toContain('current_line');
+      expect(clauses).not.toContain(SDK_CURRENT);
+      expect(clauses).not.toContain(CLI_CURRENT);
+    }
+  });
+
+  it('still matches a pinned older line by its version', () => {
+    const filter = retrievalFilter(`/sdk/${SDK_OLDER}/quickstart`);
+    expect(filter.attributes.$or).toContainEqual({
+      $and: [
+        { collection: { $in: ['SDK'] } },
+        { line: { $in: [SDK_OLDER] } },
+      ],
+    });
   });
 
   it('falls back to the current lines outside any line', () => {

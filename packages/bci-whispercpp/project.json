@@ -189,11 +189,12 @@
         "cwd": "packages/bci-whispercpp",
         "ci": {
           "mode": "coverage",
-          "continueOnError": true,
+          "continueOnError": false,
+          "cppBuildJobs": 2,
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" }
           ],
-          "hasCcache": false,
+          "hasCcache": true,
           "buildOutputDir": "build/addon/tests",
           "testEnvVars": []
         }

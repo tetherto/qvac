@@ -14,6 +14,7 @@
 #include <ggml-backend.h>
 
 #include "BCIConfig.hpp"
+#include "EmbedderFit.hpp"
 #include "addon/BCIErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -111,12 +112,8 @@ void BCIModel::loadEmbedderIfNeeded() {
     if (modelPathIt == cfg_.whisperContextCfg.end()) {
       return;
     }
-    const auto modelPath = std::get<std::string>(modelPathIt->second);
-
-    auto lastSep = modelPath.find_last_of("/\\");
-    auto dir =
-        (lastSep != std::string::npos) ? modelPath.substr(0, lastSep) : ".";
-    embedderPath = dir + "/bci-embedder.bin";
+    embedderPath =
+        colocatedEmbedderPath(std::get<std::string>(modelPathIt->second));
   }
 
   if (neuralProcessor_.loadEmbedderWeights(embedderPath)) {

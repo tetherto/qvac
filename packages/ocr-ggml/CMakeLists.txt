@@ -33,6 +33,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrBackendSelection.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrFit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Pipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/gguf_loader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/ops.cpp

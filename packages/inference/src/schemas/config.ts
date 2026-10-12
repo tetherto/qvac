@@ -7,6 +7,7 @@ import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
 import { runtimeContextSchema } from '@/schemas/runtime-context'
+import { modelFitPolicySchema } from '@/schemas/model-fit-policy'
 
 // Alias keys for user convenience (maps to canonical types)
 const AliasKeys = {
@@ -170,6 +171,16 @@ export const qvacConfigSchema = z.object({
    * Defaults to false.
    */
   requireSecureTransport: z.boolean().optional(),
+
+  /**
+   * What the engine fitter's verdict does to a load.
+   * - "log" (default): the outcome is logged and reported on
+   *   `getLoadedModelInfo`, and the load proceeds whatever the verdict.
+   * - "refuse": a load the fitter projects will not fit is rejected.
+   * - "off": the probe does not run.
+   * A load overrides this for itself with `modelFitPolicy`.
+   */
+  modelFitPolicy: modelFitPolicySchema.optional(),
 
   /**
    * Maximum number of retry attempts for registry (P2P) downloads on timeout.
