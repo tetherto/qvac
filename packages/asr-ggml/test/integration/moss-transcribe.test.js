@@ -17,13 +17,21 @@ const INT16_SCALE = 32768
 const TEST_TIMEOUT_MS = 900000
 const HOTWORDS = ['Multivac', 'Alexander Adell', 'Bertram Lupov']
 
+function missingFixture(t, message) {
+  if (backend !== 'auto') {
+    t.fail(`${message}; explicit backend validation requires all fixtures`)
+  } else {
+    t.pass(`${message} - skipping`)
+  }
+}
+
 function loadSpanishOrSkip(t) {
   if (!modelPath || !fs.existsSync(modelPath)) {
-    t.pass('QVAC_TEST_MOSS_TRANSCRIBE_GGUF is not available - skipping')
+    missingFixture(t, 'QVAC_TEST_MOSS_TRANSCRIBE_GGUF is not available')
     return null
   }
   if (!fs.existsSync(samplePath)) {
-    t.pass('LastQuestion_long_ES.raw is not available - skipping')
+    missingFixture(t, 'LastQuestion_long_ES.raw is not available')
     return null
   }
   const raw = fs.readFileSync(samplePath)

@@ -1063,7 +1063,10 @@ when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` and `QVAC_TEST_MOSS_TRANSCRIBE_AUDIO`
 (16 kHz s16le raw) are set. To check a specific backend with the JS integration
 test, also set `QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda` or `vulkan` (or an exact
 device name). It asserts the resolved backend before transcription; a missing
-requested backend fails instead of silently validating CPU. Run these model
+requested backend fails instead of silently validating CPU. An explicit selector
+also fails if the model or audio fixture is missing; only the default `auto`
+mode permits optional-fixture skips. Selectors are case-sensitive, matching
+native device names. Run these model
 tests on provisioned hardware with sufficient memory. Mocked JS forwarding
 tests and the C++ option-mapping tests do not establish GPU execution.
 
