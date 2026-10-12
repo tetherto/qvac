@@ -23,7 +23,8 @@ export const REACT_NATIVE_BARE_KIT_RUNTIMES: Record<string, BareKitRuntime> = {
   '0.15.3': { bareKit: '2.5.1', bare: '1.33.2' },
   '0.15.4': { bareKit: '2.5.3', bare: '1.33.3' },
   '0.15.5': { bareKit: '2.5.4', bare: '1.33.4' },
-  '0.15.6': { bareKit: '2.5.4', bare: '1.33.4' }
+  '0.15.6': { bareKit: '2.5.4', bare: '1.33.4' },
+  '0.16.0': { bareKit: '2.5.4', bare: '1.33.4' }
 }
 
 /** Bare version each bare-kit release is built against. */
