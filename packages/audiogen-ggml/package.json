@@ -147,6 +147,13 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
   },
+  "optionalDependencies": {
+    "@qvac/audiogen-ggml-linux-x64": "0.6.0",
+    "@qvac/audiogen-ggml-linux-arm64": "0.6.0",
+    "@qvac/audiogen-ggml-darwin-arm64": "0.6.0",
+    "@qvac/audiogen-ggml-darwin-x64": "0.6.0",
+    "@qvac/audiogen-ggml-win32-x64": "0.6.0"
+  },
   "overrides": {
     "bare-module-lexer": "1.6.3"
   },

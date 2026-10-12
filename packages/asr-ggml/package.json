@@ -193,6 +193,13 @@
     "bare-process": "^4.2.2",
     "bare-url": "^2.4.5"
   },
+  "optionalDependencies": {
+    "@qvac/asr-ggml-linux-x64": "0.8.0",
+    "@qvac/asr-ggml-linux-arm64": "0.8.0",
+    "@qvac/asr-ggml-darwin-arm64": "0.8.0",
+    "@qvac/asr-ggml-darwin-x64": "0.8.0",
+    "@qvac/asr-ggml-win32-x64": "0.8.0"
+  },
   "exports": {
     "./package": "./package.json",
     ".": {

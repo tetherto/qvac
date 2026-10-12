@@ -208,5 +208,12 @@
     "bare-stream": "^2.7.0",
     "bare-url": "^2.4.3"
   },
+  "optionalDependencies": {
+    "@qvac/tts-ggml-linux-x64": "0.11.0",
+    "@qvac/tts-ggml-linux-arm64": "0.11.0",
+    "@qvac/tts-ggml-darwin-arm64": "0.11.0",
+    "@qvac/tts-ggml-darwin-x64": "0.11.0",
+    "@qvac/tts-ggml-win32-x64": "0.11.0"
+  },
   "types": "index.d.ts"
 }

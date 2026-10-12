@@ -40,6 +40,25 @@ overrides:
   "@qvac/fabric-win32-x64": "-"
   "@qvac/fabric-android-arm64": "-"
   "@qvac/fabric-ios": "-"
+  # The speech addons declare their desktop platform packages so a standalone
+  # npm install of one (its sanity job) can resolve "#host-addon". In the
+  # workspace `npm run link:platform` stages the local build instead, which a
+  # copy from npm would replace.
+  "@qvac/asr-ggml-linux-x64": "-"
+  "@qvac/asr-ggml-linux-arm64": "-"
+  "@qvac/asr-ggml-darwin-arm64": "-"
+  "@qvac/asr-ggml-darwin-x64": "-"
+  "@qvac/asr-ggml-win32-x64": "-"
+  "@qvac/tts-ggml-linux-x64": "-"
+  "@qvac/tts-ggml-linux-arm64": "-"
+  "@qvac/tts-ggml-darwin-arm64": "-"
+  "@qvac/tts-ggml-darwin-x64": "-"
+  "@qvac/tts-ggml-win32-x64": "-"
+  "@qvac/audiogen-ggml-linux-x64": "-"
+  "@qvac/audiogen-ggml-linux-arm64": "-"
+  "@qvac/audiogen-ggml-darwin-arm64": "-"
+  "@qvac/audiogen-ggml-darwin-x64": "-"
+  "@qvac/audiogen-ggml-win32-x64": "-"
 
 blockExoticSubdeps: true
 

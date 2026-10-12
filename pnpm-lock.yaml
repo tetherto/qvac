@@ -14,6 +14,21 @@ overrides:
   '@qvac/fabric-win32-x64': '-'
   '@qvac/fabric-android-arm64': '-'
   '@qvac/fabric-ios': '-'
+  '@qvac/asr-ggml-linux-x64': '-'
+  '@qvac/asr-ggml-linux-arm64': '-'
+  '@qvac/asr-ggml-darwin-arm64': '-'
+  '@qvac/asr-ggml-darwin-x64': '-'
+  '@qvac/asr-ggml-win32-x64': '-'
+  '@qvac/tts-ggml-linux-x64': '-'
+  '@qvac/tts-ggml-linux-arm64': '-'
+  '@qvac/tts-ggml-darwin-arm64': '-'
+  '@qvac/tts-ggml-darwin-x64': '-'
+  '@qvac/tts-ggml-win32-x64': '-'
+  '@qvac/audiogen-ggml-linux-x64': '-'
+  '@qvac/audiogen-ggml-linux-arm64': '-'
+  '@qvac/audiogen-ggml-darwin-arm64': '-'
+  '@qvac/audiogen-ggml-darwin-x64': '-'
+  '@qvac/audiogen-ggml-win32-x64': '-'
 
 importers:
 
