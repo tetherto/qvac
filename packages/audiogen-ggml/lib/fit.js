@@ -8,9 +8,9 @@ const { resolveBackendsDir } = require('./backends')
  * answers the same as the stage itself, so this can run before anything is
  * downloaded.
  *
- * `engine` defaults to `acestep`, the one engine audiogen-cpp ships a fitter
- * for. Any other engine comes back as `status: "error"` with
- * `reason: "unsupported-engine"`.
+ * `engine` defaults to `acestep`; `minimax` projects a MiniMax-Music3 pair on
+ * desktop builds. An engine the build carries no fitter for comes back as
+ * `status: "error"` with `reason: "unsupported-engine"`.
  *
  * A model set the engine cannot read comes back as `status: "error"` with its
  * own reason; a broken request, or a host with no native binding, throws.

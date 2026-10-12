@@ -142,7 +142,6 @@ function resolveConfig(targets) {
       RUN_SNAP: '',
       RUN_ANDROID: '',
       RUN_IOS: '',
-      RUN_CALIBRATION: 'off',
     },
   })
 }
@@ -153,7 +152,7 @@ test('the embedded scripts are extracted, not silently empty', () => {
   assert.match(VERIFY_RERUN, /executed 0 tests/)
   assert.match(APPLY_PLAN, /desktop-platforms/)
   assert.match(LEG_FILTER, /RERUN_PLAN/)
-  assert.match(RESOLVE_CONFIG, /run-e2e=/)
+  assert.match(RESOLVE_CONFIG, /run-desktop=/)
 })
 
 test('a missing anchor or key throws instead of returning nothing', () => {
@@ -293,7 +292,7 @@ test('without a plan the run keeps every runner and the incoming filter', () => 
   assert.equal(leg.filter, 'completion-')
 })
 
-test('every reusable target still resolves, and keeps run-e2e true', () => {
+test('every reusable target still resolves', () => {
   const cases = [
     ['desktop + mobile', 'true,false,false,true,true'],
     ['all', 'true,false,false,true,true'],
@@ -313,8 +312,6 @@ test('every reusable target still resolves, and keeps run-e2e true', () => {
       result.outputs['run-android'], result.outputs['run-ios'],
     ].join(',')
     assert.equal(flags, expected, `"${targets}"`)
-    // prepare-inference / prepare-test-suite are gated on run-e2e.
-    assert.equal(result.outputs['run-e2e'], 'true', `"${targets}" run-e2e`)
   }
 })
 

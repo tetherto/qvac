@@ -3,8 +3,7 @@ import type {
   AssessModelFitResponse,
   ModelFitCandidate,
   ModelFitEstimateTarget,
-  ModelFitModelRef,
-  NativeProbeFit
+  ModelFitModelRef
 } from '@/schemas/assess-model-fit'
 import { isCanonicalModelType, normalizeModelType, ModelType } from '@/schemas/index'
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
@@ -13,8 +12,7 @@ import { projectFitFromLoad } from '@/resources/model-fit/fit-stub/project-fit-f
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
 import { getConfig } from '@/runtime/state'
-import { assessModelFitFromResources } from '@/resources/model-fit/assess'
-import { getPlatformCalibration } from '@/resources/model-fit/calibration/index'
+import { assessModelFitFromResources, type NativeCandidateFit } from '@/resources/model-fit/assess'
 import { detectPlatform } from '@/resources/model-fit/platform'
 
 /**
@@ -23,24 +21,21 @@ import { detectPlatform } from '@/resources/model-fit/platform'
  * This lives on the worker because that is where the three things it needs
  * already are: the resource collector for a fresh memory sample, the runtime's
  * own platform/arch pair, and the registry client. No weights are read and
- * nothing is loaded — a single candidate additionally has the registry's
- * weightless description fetched, tens of KB, so the engine's own fitter can
- * answer instead of the coefficients modelling it.
+ * nothing is loaded — each candidate additionally has the registry's weightless
+ * description fetched, tens of KB, so the engine's own fitter can answer.
  */
 export async function handleAssessModelFit(
   request: AssessModelFitRequest
 ): Promise<AssessModelFitResponse> {
   const platform = detectPlatform()
-  const native = await resolveNativeFit(request.models)
+  const nativeFits = await resolveNativeFits(request.models)
 
   const result = assessModelFitFromResources({
     models: request.models.map(estimateTargetFor),
     execution: request.execution,
     resources: readResources(),
     platform,
-    calibration: platform ? getPlatformCalibration(platform) : undefined,
-    nativeFit: native.fit,
-    nativeFitUnavailable: native.unavailable
+    nativeFits
   })
 
   return { type: 'assessModelFit', ...result }
@@ -224,19 +219,11 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
   }
 }
 
-/**
- * The engine fitter's verdict for a single candidate, resolved through that
- * load's own plugin. Only for a one-candidate request: the probe measures one
- * model against the whole machine, which cannot be aggregated across a set.
- */
+/** The engine fitter's verdict for one candidate, through that load's plugin. */
 async function resolveNativeFit(
-  candidates: readonly ModelFitCandidate[]
-): Promise<{ fit?: NativeProbeFit; unavailable?: string }> {
-  if (candidates.length !== 1) return {}
-
-  const candidate = candidates[0]
-  if (!candidate) return {}
-
+  candidate: ModelFitCandidate,
+  alreadyCounted: number
+): Promise<NativeCandidateFit> {
   const modelType = modelTypeOf(candidate)
   if (!isCanonicalModelType(modelType)) {
     return { unavailable: `no plugin handles model type ${modelType}` }
@@ -251,7 +238,10 @@ async function resolveNativeFit(
       ...(candidate.modelConfig !== undefined && { modelConfig: candidate.modelConfig })
     },
     estimateTargetFor(candidate).model.name,
-    budgetMs === undefined ? {} : { stub: { budgetMs } }
+    {
+      ...(budgetMs !== undefined && { stub: { budgetMs } }),
+      ...(alreadyCounted > 0 && { fit: { extraResidentBytes: alreadyCounted } })
+    }
   )
 
   if (outcome.status === 'projected') return { fit: outcome.fit }
@@ -263,6 +253,48 @@ async function resolveNativeFit(
         ? `no registry description (${outcome.reason})`
         : `no registry description (${outcome.reason}): ${outcome.message}`
   }
+}
+
+/** What a projection holds for the model's lifetime, the breakdown or the total. */
+function residentBytesOf(fit: NativeCandidateFit): number {
+  const projection = fit.fit?.projection
+  if (!projection) return 0
+
+  const { weightsBytes, contextBytes, deviceBytes, hostBytes } = projection
+  const resident =
+    weightsBytes === undefined || contextBytes === undefined
+      ? deviceBytes
+      : weightsBytes + contextBytes
+
+  return (resident ?? 0) + (hostBytes ?? 0)
+}
+
+/**
+ * One verdict per candidate, in request order. Each probe measures its own
+ * model against the whole machine, so the bytes compose where the verdicts do
+ * not, and `assess` combines them under one budget.
+ *
+ * Run one at a time, so a set never holds several fitters open at once.
+ *
+ * Each probe holds back what the earlier ones projected, since none of them is
+ * registered in this worker and the fitter would otherwise place every
+ * candidate in the same free memory. Every model is resident under either
+ * execution mode, so the holdback does not read it. The answer follows the
+ * order the caller listed the models in.
+ */
+async function resolveNativeFits(
+  candidates: readonly ModelFitCandidate[]
+): Promise<NativeCandidateFit[]> {
+  const fits: NativeCandidateFit[] = []
+  let alreadyCounted = 0
+
+  for (const candidate of candidates) {
+    const fit = await resolveNativeFit(candidate, alreadyCounted)
+    fits.push(fit)
+    alreadyCounted += residentBytesOf(fit)
+  }
+
+  return fits
 }
 
 function readResources(): SystemResources {

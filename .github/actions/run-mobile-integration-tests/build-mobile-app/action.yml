@@ -80,6 +80,20 @@ inputs:
     required: false
     default: ""
 
+  fabric-prebuild-run-id:
+    description: |
+      A run id whose `fabric-prebuilds` artifact replaces the published
+      @qvac/fabric-<platform> runtime in the app, so a fabric-stack change is
+      tested on the fabric it builds. Usually the PR's `On PR Trigger (Fabric)`
+      run. Empty (default) keeps the published runtime. Needs `actions: read`
+      on the calling job, carried by `github-token`.
+    required: false
+    default: ""
+  github-token:
+    description: "Token for downloading `fabric-prebuild-run-id`'s artifacts"
+    required: false
+    default: ""
+
 outputs:
   app-path:
     description: "Absolute path to the built APK or IPA"
@@ -171,6 +185,89 @@ runs:
           exit 1
         fi
         echo "Test app built successfully"
+
+    # PR fabric overlay. Runs before the platform-package overlay below, which
+    # then skips @qvac/fabric because it already has local prebuilds.
+    # A leftover tree from an earlier job on the same self-hosted runner must
+    # not stand in for the requested run.
+    - name: Clear PR fabric prebuilds dir
+      if: inputs.fabric-prebuild-run-id != ''
+      shell: bash
+      run: rm -rf "$RUNNER_TEMP/pr-fabric-prebuilds"
+
+    # The merged bundle, not the per-host legs: a run that reused earlier
+    # prebuilds publishes only the bundle.
+    - name: Download PR fabric prebuilds
+      if: inputs.fabric-prebuild-run-id != ''
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: fabric-prebuilds
+        run-id: ${{ inputs.fabric-prebuild-run-id }}
+        github-token: ${{ inputs.github-token }}
+        path: ${{ runner.temp }}/pr-fabric-prebuilds
+
+    # overlay-local-fabric checks <root>/node_modules/@qvac/fabric only, so
+    # pass the root of every installed copy, nested ones included.
+    - name: Find installed @qvac/fabric copies
+      id: fabric_roots
+      if: inputs.fabric-prebuild-run-id != ''
+      shell: bash
+      working-directory: ./test-framework
+      run: |
+        roots=""
+        while IFS= read -r manifest; do
+          [ -n "$manifest" ] || continue
+          roots="$roots $(cd "$(dirname "$manifest")/../../.." && pwd)"
+        done < <(find node_modules -path '*/@qvac/fabric/package.json')
+        if [ -z "$roots" ]; then
+          echo "::error::fabric-prebuild-run-id is set, but no @qvac/fabric is installed under test-framework/node_modules"
+          exit 1
+        fi
+        echo "@qvac/fabric roots:$roots"
+        echo "dirs=$roots" >> "$GITHUB_OUTPUT"
+
+    # One call per host, so a bundle missing any of them fails here.
+    - name: Overlay PR fabric (android-arm64)
+      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'Android'
+      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+      with:
+        workdir: ${{ github.workspace }}/test-framework
+        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
+        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
+        platform: android
+        arch: arm64
+
+    - name: Overlay PR fabric (ios-arm64)
+      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'iOS'
+      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+      with:
+        workdir: ${{ github.workspace }}/test-framework
+        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
+        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
+        platform: ios
+        arch: arm64
+
+    - name: Overlay PR fabric (ios-arm64-simulator)
+      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'iOS'
+      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+      with:
+        workdir: ${{ github.workspace }}/test-framework
+        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
+        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
+        platform: ios
+        arch: arm64
+        tags: -simulator
+
+    - name: Overlay PR fabric (ios-x64-simulator)
+      if: inputs.fabric-prebuild-run-id != '' && inputs.platform == 'iOS'
+      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+      with:
+        workdir: ${{ github.workspace }}/test-framework
+        prebuilds-root: ${{ runner.temp }}/pr-fabric-prebuilds
+        search-dirs: ${{ steps.fabric_roots.outputs.dirs }}
+        platform: ios
+        arch: x64
+        tags: -simulator
 
     # npm never selects a cross-built platform package, and bare-link reads
     # only a package's own prebuilds/, so a split addon the framework installed

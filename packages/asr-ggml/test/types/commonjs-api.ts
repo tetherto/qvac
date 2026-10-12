@@ -204,3 +204,19 @@ void [
   managerConfig,
   modelKey,
 ];
+
+const mossFit: ASRGgml.MossTranscribeFitRequest = {
+  engine: "moss-transcribe",
+  modelPath: "/models/moss-transcribe.gguf",
+  audioSeconds: 30,
+  hotwords: ["QVAC"],
+  maxNewTokens: 1024,
+  threads: 4,
+  gpuLayers: 1,
+  marginBytes: 0,
+};
+ASRGgml.assessFit(mossFit);
+// @ts-expect-error MOSS requires an explicit workload duration.
+ASRGgml.assessFit({ engine: "moss-transcribe", modelPath: "/models/moss.gguf" });
+// @ts-expect-error MOSS requires a model path.
+ASRGgml.assessFit({ engine: "moss-transcribe", audioSeconds: 30 });

@@ -6,8 +6,12 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "11018.0.0",
+      "version>=": "11018.1.0#1",
       "features": [
+        {
+          "name": "cuda-backend",
+          "platform": "linux | (windows & x64)"
+        },
         "hip-backend",
         {
           "name": "rpc-rdma",
@@ -22,6 +26,18 @@
     }
   ],
   "features": {
+    "cuda-jetson": {
+      "description": "Build the CUDA 12 Jetson backend module",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "platform": "linux & arm64",
+          "features": [
+            "cuda-jetson-backend"
+          ]
+        }
+      ]
+    },
     "vk-profiling": {
       "description": "Force vk performance logging in qvac-fabric",
       "dependencies": [

@@ -13,12 +13,14 @@ import {
 import {
   BertInterface,
   mapAddonEvent,
+  pickPrimaryGgufPath,
   type Addon,
   type AddonConfigurationParams,
   type BertBinding,
   type BertJobInput,
   type GGMLConfig,
 } from "./addon";
+import { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 import type ActualIdMapIndex from "./idMapIndex";
 import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
 
@@ -35,7 +37,28 @@ export type {
   IdMapIndexSearchResult,
   IdMapIndexStorage,
 } from "./idMapIndex";
-export { BertInterface } from "./addon";
+export { BertInterface, pickPrimaryGgufPath } from "./addon";
+export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
+export type {
+  LayaConfig,
+  LayaRequest,
+  LayaSingleRequest,
+  LayaBatchRequest,
+  LayaQuestion,
+  LayaChoiceQuestion,
+  LayaScoreQuestion,
+  LayaNoulQuestion,
+  LayaState,
+  LayaCriterion,
+  LayaResponse,
+  LayaResult,
+  LayaAnswer,
+  LayaChoiceAnswer,
+  LayaScoreAnswer,
+  LayaNoulAnswer,
+  LayaUsage,
+  LayaDecisionsArgs,
+} from "./laya";
 export { assessFit } from "./fit";
 export type {
   EmbedFitDevice,
@@ -64,15 +87,6 @@ export interface GGMLBertArgs {
   opts?: { stats?: boolean };
 }
 
-/**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
- */
-export function pickPrimaryGgufPath(files: string[]): string {
-  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-  return files.find((p) => SHARD_REGEX.test(p)) || files[0];
-}
 
 /** BERT client wrapping the native BertInterface for embedding generation. */
 export class GGMLBert {
@@ -287,6 +301,9 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
+  LayaDecisions?: typeof LayaDecisions;
+  LayaInterface?: typeof LayaInterface;
+  mapLayaEvent?: typeof mapLayaEvent;
   assessFit?: typeof assessFitImpl;
   readonly IdMapIndex?: typeof IdMapIndex;
   readonly IdMapIndexFilter?: typeof IdMapIndexFilter;
@@ -295,6 +312,9 @@ cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
+cjsExports.LayaDecisions = LayaDecisions;
+cjsExports.LayaInterface = LayaInterface;
+cjsExports.mapLayaEvent = mapLayaEvent;
 cjsExports.assessFit = assessFitImpl;
 Object.defineProperties(cjsExports, {
   IdMapIndex: {

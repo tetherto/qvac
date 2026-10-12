@@ -110,10 +110,22 @@ function llamaProjection(probe: LlamaProbe): NativeProbeProjection {
     (device) => device.name !== HOST_ROW && device.name !== CPU_DEVICE
   )
 
+  const devices = probe.result.devices
+    .filter((device) => device.name !== HOST_ROW)
+    .map((device) => ({
+      name: device.name,
+      totalBytes: device.totalBytes,
+      freeBytes: device.freeBytes,
+      weightsBytes: device.modelBytes,
+      contextBytes: device.contextBytes,
+      computeBytes: device.computeBytes
+    }))
+
   return {
     deviceBytes: probe.result.deviceBytes,
     hostBytes: probe.result.hostBytes,
     ...breakdownFor(probe),
+    ...(devices.length > 0 && { devices }),
     ...(first !== undefined && {
       deviceName: first.name,
       deviceFreeBytes: first.freeBytes,

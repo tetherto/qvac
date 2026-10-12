@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Audio generation (music) addon for qvac",
   "addon": true,
   "engines": {
@@ -123,7 +123,7 @@
   ],
   "devDependencies": {
     "@qvac/registry-client": "^0.6.1",
-    "bare-pack": "^1.4.7",
+    "bare-pack": "^2.2.3",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",

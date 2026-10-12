@@ -16,10 +16,10 @@ import { InvalidResponseError } from '@/errors/index'
  * the available evidence does not support a verdict either way, and callers
  * should treat it as "cannot say", not "no".
  *
- * For a single candidate it fetches the registry's weightless description of
- * the artifact — tens of KB, never the weights — and runs the engine's own
- * fitter against it, reported as `native-fit` evidence. Where that is
- * unavailable, and for a set of candidates, the calibrated estimate stands.
+ * For each candidate it fetches the registry's weightless description of the
+ * artifact — tens of KB, never the weights — and runs the engine's own fitter
+ * against it, reported as `native-fit` evidence. Where that is unavailable the
+ * computed floor stands, which can refuse a model but never confirm one.
  *
  * @param input - Candidates with their intended workloads, the declared
  *   execution mode, and the headroom policy.

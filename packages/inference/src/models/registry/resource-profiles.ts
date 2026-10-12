@@ -352,6 +352,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       contextLength: 262144
     }
   },
+  '0d3bf5ede840d7eb150492e14f417efb6304be27f973bb5848ce001c44f3bc79': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 6432916800
+  },
   '0db772702235b02d1f29abafb7a49ed77e54c60245b3a46e90716e74263aedd6': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -387,6 +392,31 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 4945796
+  },
+  '1270162611a0c7074cc2a376380ddaca825702c62bebf2433baf42269de246fe': {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 449919008,
+    ggufFacts: {
+      architecture: 'laya',
+      blockCount: 28,
+      headCount: 16,
+      headCountKv: 16,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 1024,
+      contextLength: 8192,
+      slidingWindow: 128,
+      assumptions: [
+        'head_count_kv absent — assumed equal to head_count (no GQA)',
+        'key_length/value_length absent — derived from embedding_length / head_count'
+      ]
+    }
+  },
+  '12cd8d2b3e5c5b2b71a59c02300257e7846cba5c1efe30e900e22c2c719d41dc': {
+    schemaVersion: 1,
+    engine: 'audiogen-ggml',
+    artifactBytes: 3493811520
   },
   '12f55292aaa411d81250234fb3ccc6cb5842a86f426e5cf2d08807bf2938f7cd': {
     schemaVersion: 1,
@@ -1025,6 +1055,26 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
       valueLength: 128,
       embeddingLength: 1024,
       contextLength: 40960
+    }
+  },
+  '33dac85dcf22281d56e3a4fcb78def3c8fa59131c208af45a2e5c57cbe268de4': {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 844548128,
+    ggufFacts: {
+      architecture: 'laya',
+      blockCount: 28,
+      headCount: 16,
+      headCountKv: 16,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 1024,
+      contextLength: 8192,
+      slidingWindow: 128,
+      assumptions: [
+        'head_count_kv absent — assumed equal to head_count (no GQA)',
+        'key_length/value_length absent — derived from embedding_length / head_count'
+      ]
     }
   },
   '352a63a3919aa1e714a7ea76065b0fb00f02f7979c8eef03cd53dbb7c1133160': {
@@ -1811,11 +1861,51 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 3421640
   },
+  '59a61f840e6f125c25037f7cc0363efafee1aeea3394b504d25551b4bda5a219': {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 348425664,
+    ggufFacts: {
+      architecture: 'laya',
+      blockCount: 22,
+      headCount: 12,
+      headCountKv: 12,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 768,
+      contextLength: 8192,
+      slidingWindow: 128,
+      assumptions: [
+        'head_count_kv absent — assumed equal to head_count (no GQA)',
+        'key_length/value_length absent — derived from embedding_length / head_count'
+      ]
+    }
+  },
   '59ae659f9bb63e4f81f474fe3c03d3f4499434b5f9e779fab7c12a45f31fd562': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 49603799,
     assumptions: ['artifactBytes sums 5 companion-set files']
+  },
+  '5a44e3f8060290ab40b390a83242961aeab7af62913853530a4342bc5ec9ebe8': {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 844548256,
+    ggufFacts: {
+      architecture: 'laya',
+      blockCount: 28,
+      headCount: 16,
+      headCountKv: 16,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 1024,
+      contextLength: 8192,
+      slidingWindow: 128,
+      assumptions: [
+        'head_count_kv absent — assumed equal to head_count (no GQA)',
+        'key_length/value_length absent — derived from embedding_length / head_count'
+      ]
+    }
   },
   '5a6b15da0f483b9e320a5b86b787ad1831953dfaa706e2c5d91de830ea70d784': {
     schemaVersion: 1,
@@ -2324,6 +2414,26 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'tts-ggml',
     artifactBytes: 398497088
   },
+  '72d5e753a4861f5532e0e3e065b9644ff6f6894efef82fa74af0898fa93ba899': {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 449919104,
+    ggufFacts: {
+      architecture: 'laya',
+      blockCount: 28,
+      headCount: 16,
+      headCountKv: 16,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 1024,
+      contextLength: 8192,
+      slidingWindow: 128,
+      assumptions: [
+        'head_count_kv absent — assumed equal to head_count (no GQA)',
+        'key_length/value_length absent — derived from embedding_length / head_count'
+      ]
+    }
+  },
   '735881c99ff303e55eb2e92a3b86762523d5dd1a4797b2574b851062051426ee': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2370,6 +2480,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 965095
+  },
+  '75605e251bdc3da9662c6cb01fb8fb8fff5fe82b76c39719af7f042406f8ab0c': {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 1333086144
   },
   '75e2a133676a82189b10fb1c55b5b32aedc6ede796dd6d8d7c1f901d20ebc7df': {
     schemaVersion: 1,
@@ -3515,6 +3630,22 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'parakeet-transcription',
     artifactBytes: 408
   },
+  a8d18fdfb5429fa25f062c9915938eae6a309509cd089e86857d4544d5dd3fbf: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 18198030464,
+    ggufFacts: {
+      architecture: 'moss-speech',
+      blockCount: 32,
+      headCount: 32,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 128,
+      embeddingLength: 4096,
+      contextLength: 40960,
+      assumptions: ['key_length/value_length absent — derived from embedding_length / head_count']
+    }
+  },
   a8fbce44032eda4fdf6d098f4c3602fca309859a129f4cdb33d2709b48ba7d32: {
     schemaVersion: 1,
     engine: 'parakeet-transcription',
@@ -3524,6 +3655,21 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 2228
+  },
+  a91cf9758fab31bdd545b8d0fb3e7c05d15a00ab4e6641ee4ea1664d352399c3: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 16716943744,
+    ggufFacts: {
+      architecture: 'moss-tts-delay',
+      blockCount: 36,
+      headCount: 32,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 128,
+      embeddingLength: 4096,
+      contextLength: 40960
+    }
   },
   a9a124b6a5c1306393d6e32c55324a8d9189734cb8b31ef29c8e3836ce7a76d4: {
     schemaVersion: 1,
@@ -4667,6 +4813,22 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 693697483
   },
+  dc1055984979d4a00d8d69fb70a5b79a75da3f8721d29abf3955f3d188426820: {
+    schemaVersion: 1,
+    engine: 'tts-ggml',
+    artifactBytes: 9671141504,
+    ggufFacts: {
+      architecture: 'moss-speech',
+      blockCount: 32,
+      headCount: 32,
+      headCountKv: 8,
+      keyLength: 128,
+      valueLength: 128,
+      embeddingLength: 4096,
+      contextLength: 40960,
+      assumptions: ['key_length/value_length absent — derived from embedding_length / head_count']
+    }
+  },
   dc235e4bfc4cdc25e0e1b36e07e29435b140861b4b94b8197bc715ddc7be912f: {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -4840,6 +5002,26 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 4489412
+  },
+  e658ac8a717089528a1f402caa6b91aec8a4059b76c9c35114a70ba32b2fb469: {
+    schemaVersion: 1,
+    engine: 'llamacpp-embedding',
+    artifactBytes: 649973184,
+    ggufFacts: {
+      architecture: 'laya',
+      blockCount: 22,
+      headCount: 12,
+      headCountKv: 12,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 768,
+      contextLength: 8192,
+      slidingWindow: 128,
+      assumptions: [
+        'head_count_kv absent — assumed equal to head_count (no GQA)',
+        'key_length/value_length absent — derived from embedding_length / head_count'
+      ]
+    }
   },
   e661dfdd88aa9ff9606f237a60c910d97c2e710960199589579f628c5d8aa899: {
     schemaVersion: 1,
