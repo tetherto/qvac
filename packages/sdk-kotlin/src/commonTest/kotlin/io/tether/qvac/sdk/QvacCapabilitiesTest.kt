@@ -5,7 +5,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,14 +24,53 @@ class QvacCapabilitiesTest {
         )
         val client = QvacClient(transport)
 
+        val modelConfig = buildJsonObject { put("ctx_size", 2048) }
         val result = client.models.load(
             source = "registry://qwen",
             modelType = "llamacpp-completion",
+            modelName = "Qwen",
+            modelConfig = modelConfig,
         )
 
-        assertEquals("loadModel", transport.lastPayload?.get("type")?.toString()?.trim('"'))
-        assertEquals("registry://qwen", transport.lastPayload?.get("modelSrc")?.toString()?.trim('"'))
+        val payload = transport.lastPayload
+        assertEquals("loadModel", payload?.get("type")?.jsonPrimitive?.content)
+        assertEquals("registry://qwen", payload?.get("modelSrc")?.jsonPrimitive?.content)
+        assertEquals("llamacpp-completion", payload?.get("modelType")?.jsonPrimitive?.content)
+        assertEquals("Qwen", payload?.get("modelName")?.jsonPrimitive?.content)
+        assertEquals(modelConfig, payload?.get("modelConfig"))
         assertEquals("qwen", result.modelId)
+    }
+
+    @Test
+    fun loadWithProgressRequestsProgressFrames() = runTest {
+        val transport = CapabilityRecordingTransport(
+            streamResponses = flowOf(
+                buildJsonObject {
+                    put("type", "modelProgress")
+                    put("downloaded", 5)
+                    put("total", 10)
+                    put("percentage", 50)
+                    put("downloadKey", "qwen")
+                },
+                buildJsonObject {
+                    put("type", "loadModel")
+                    put("success", true)
+                    put("modelId", "qwen")
+                },
+            ),
+        )
+        val client = QvacClient(transport)
+
+        val events = client.models.loadWithProgress(
+            source = "registry://qwen",
+            modelType = "custom-engine",
+        ).toList()
+
+        assertEquals("custom-engine", transport.lastPayload?.get("modelType")?.jsonPrimitive?.content)
+        assertEquals(true, transport.lastPayload?.get("withProgress")?.jsonPrimitive?.boolean)
+        assertEquals(null, transport.lastPayload?.get("modelConfig"))
+        assertEquals(2, events.size)
+        assertEquals("qwen", (events.last() as QvacProgressEvent.Result).value.modelId)
     }
 
     @Test

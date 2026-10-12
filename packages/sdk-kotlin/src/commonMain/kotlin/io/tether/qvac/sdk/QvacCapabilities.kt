@@ -147,6 +147,8 @@ class QvacModels internal constructor(
     }
 }
 
+// The custom-plugin arm takes any modelType string with an untyped modelConfig. Built-in engines
+// produce the same wire JSON through it; typed per-engine configs go through the LoadModelRequest overload.
 private fun sourceLoadRequest(
     source: String,
     modelType: String,

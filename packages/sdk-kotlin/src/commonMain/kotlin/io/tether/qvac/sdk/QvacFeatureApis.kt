@@ -6,9 +6,11 @@ import io.tether.qvac.sdk.generated.schema.BciTranscribeRequest
 import io.tether.qvac.sdk.generated.schema.BciTranscribeRequestNeuralData
 import io.tether.qvac.sdk.generated.schema.BciTranscribeRequestNeuralDataBase64
 import io.tether.qvac.sdk.generated.schema.BciTranscribeRequestNeuralDataFilePath
+import io.tether.qvac.sdk.generated.schema.BciTranscribeResponse
 import io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequest
 import io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequestStreamOpts
 import io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequestStreamOptsEmit
+import io.tether.qvac.sdk.generated.schema.BciTranscribeStreamResponse
 import io.tether.qvac.sdk.generated.schema.CancelRequest
 import io.tether.qvac.sdk.generated.schema.CancelRequestRequest
 import io.tether.qvac.sdk.generated.schema.ClassifyRequest
@@ -22,16 +24,19 @@ import io.tether.qvac.sdk.generated.schema.OcrStreamRequestImage
 import io.tether.qvac.sdk.generated.schema.OcrStreamRequestImageBase64
 import io.tether.qvac.sdk.generated.schema.OcrStreamRequestImageFilePath
 import io.tether.qvac.sdk.generated.schema.OcrStreamRequestOptions
+import io.tether.qvac.sdk.generated.schema.OcrStreamResponse
 import io.tether.qvac.sdk.generated.schema.OcrStreamResponseBlocksItem
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestEmotion
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestPace
+import io.tether.qvac.sdk.generated.schema.TextToSpeechResponse
 import io.tether.qvac.sdk.generated.schema.TextToSpeechStreamRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechStreamResponse
 import io.tether.qvac.sdk.generated.schema.TranscribeRequest
 import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunk
 import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunkBase64
 import io.tether.qvac.sdk.generated.schema.TranscribeRequestAudioChunkFilePath
+import io.tether.qvac.sdk.generated.schema.TranscribeResponse
 import io.tether.qvac.sdk.generated.schema.TranscribeStreamRequest
 import io.tether.qvac.sdk.generated.schema.TranscribeStreamResponse
 import io.tether.qvac.sdk.generated.schema.TranslateLlmRequest
@@ -40,6 +45,7 @@ import io.tether.qvac.sdk.generated.schema.TranslateNmtRequest
 import io.tether.qvac.sdk.generated.schema.TranslateNmtRequestModelType
 import io.tether.qvac.sdk.generated.schema.TranslateNmtRequestText
 import io.tether.qvac.sdk.generated.schema.TranslateRequest
+import io.tether.qvac.sdk.generated.schema.TranslateResponse
 import io.tether.qvac.sdk.generated.schema.UpscaleStreamRequest
 import io.tether.qvac.sdk.generated.schema.UpscaleStreamResponse
 import io.tether.qvac.sdk.generated.schema.VideoStreamRequest
@@ -60,8 +66,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 val QvacClient.speech: QvacSpeech get() = QvacSpeech(this)
@@ -134,7 +138,7 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
         val text = StringBuilder()
         val segments = mutableListOf<QvacTranscriptionSegment>()
         var stats: JsonObject? = null
-        client.transcribe(
+        client.streamWithRaw<TranscribeRequest, TranscribeResponse>(
             TranscribeRequest(
                 audioChunk = audio.toAudioChunk(),
                 metadata = metadata,
@@ -142,11 +146,11 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
                 prompt = prompt,
                 requestId = requestId,
             ),
-        ).collect { response ->
+        ).collect { (response, frame) ->
             response.error?.let { throw QvacFeatureException("Transcription failed: $it") }
             response.text?.let(text::append)
             response.segment?.let { segments += QvacTranscriptionSegment(it.text, it.startMs, it.endMs, it.append, it.id) }
-            response.stats?.let { stats = client.json.encodeToJsonElement(it).jsonObject }
+            frame.rawStats()?.let { stats = it }
         }
         return QvacTranscriptionResult(text.toString(), segments, stats)
     }
@@ -159,7 +163,7 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
         val samples = mutableListOf<Double>()
         val sentences = mutableListOf<String>()
         var stats: JsonObject? = null
-        client.textToSpeech(
+        client.streamWithRaw<TextToSpeechRequest, TextToSpeechResponse>(
             TextToSpeechRequest(
                 description = voice.description,
                 emotion = voice.emotion?.let { wireEnum<TextToSpeechRequestEmotion>("emotion", it) },
@@ -174,10 +178,10 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
                 text = text,
                 voice = voice.voice,
             ),
-        ).collect { response ->
+        ).collect { (response, frame) ->
             samples += response.buffer
             response.sentenceChunk?.let(sentences::add)
-            response.stats?.let { stats = client.json.encodeToJsonElement(it).jsonObject }
+            frame.rawStats()?.let { stats = it }
         }
         return QvacSpeechResult(samples, sentences, stats)
     }
@@ -214,18 +218,18 @@ class QvacBci internal constructor(private val client: QvacClient) {
         val text = StringBuilder()
         val segments = mutableListOf<QvacTranscriptionSegment>()
         var stats: JsonObject? = null
-        client.bciTranscribe(
+        client.streamWithRaw<BciTranscribeRequest, BciTranscribeResponse>(
             BciTranscribeRequest(
                 metadata = metadata,
                 modelId = modelId,
                 neuralData = neuralData.toNeuralData(),
                 requestId = requestId,
             ),
-        ).collect { response ->
+        ).collect { (response, frame) ->
             response.error?.let { throw QvacFeatureException("BCI transcription failed: $it") }
             response.text?.let(text::append)
             response.segment?.let { segments += QvacTranscriptionSegment(it.text, it.startMs, it.endMs, it.append, it.id) }
-            response.stats?.let { stats = client.json.encodeToJsonElement(it).jsonObject }
+            frame.rawStats()?.let { stats = it }
         }
         return QvacTranscriptionResult(text.toString(), segments, stats)
     }
@@ -240,7 +244,7 @@ class QvacBci internal constructor(private val client: QvacClient) {
         val text = StringBuilder()
         val segments = mutableListOf<QvacTranscriptionSegment>()
         var stats: JsonObject? = null
-        client.bciTranscribeStream(
+        client.duplexWithRaw<BciTranscribeStreamRequest, BciTranscribeStreamResponse>(
             BciTranscribeStreamRequest(
                 metadata = metadata,
                 modelId = modelId,
@@ -248,11 +252,11 @@ class QvacBci internal constructor(private val client: QvacClient) {
                 streamOpts = options.toWire(),
             ),
             neuralChunks,
-        ).collect { response ->
+        ).collect { (response, frame) ->
             response.error?.let { throw QvacFeatureException("BCI streaming transcription failed: $it") }
             response.text?.let(text::append)
             response.segment?.let { segments += QvacTranscriptionSegment(it.text, it.startMs, it.endMs, it.append, it.id) }
-            response.stats?.let { stats = client.json.encodeToJsonElement(it).jsonObject }
+            frame.rawStats()?.let { stats = it }
         }
         return QvacTranscriptionResult(text.toString(), segments, stats)
     }
@@ -283,16 +287,16 @@ class QvacVision internal constructor(private val client: QvacClient) {
     ): QvacOcrResult {
         val blocks = mutableListOf<QvacOcrBlock>()
         var stats: JsonObject? = null
-        client.ocrStream(
+        client.streamWithRaw<OcrStreamRequest, OcrStreamResponse>(
             OcrStreamRequest(
                 image = image.toOcrImage(),
                 modelId = modelId,
                 options = OcrStreamRequestOptions(paragraph = paragraph),
             ),
-        ).collect { response ->
+        ).collect { (response, frame) ->
             response.error?.let { throw QvacFeatureException("OCR failed: $it") }
             response.blocks.orEmpty().forEach { block -> blocks += block.toOcrBlock() }
-            response.stats?.let { stats = client.json.encodeToJsonElement(it).jsonObject }
+            frame.rawStats()?.let { stats = it }
         }
         return QvacOcrResult(blocks, stats = stats)
     }
@@ -360,11 +364,11 @@ class QvacTranslation internal constructor(private val client: QvacClient) {
             val fullText = StringBuilder()
             var stats: JsonObject? = null
             try {
-                client.translate(request).collect { response ->
+                client.streamWithRaw<TranslateRequest, TranslateResponse>(request).collect { (response, frame) ->
                     response.error?.let { throw QvacFeatureException("Translation failed: $it") }
                     fullText.append(response.token)
                     if (response.token.isNotEmpty()) tokens.send(response.token)
-                    response.stats?.let { stats = client.json.encodeToJsonElement(it).jsonObject }
+                    frame.rawStats()?.let { stats = it }
                 }
                 result.complete(QvacTranslationFinal(fullText.toString(), stats))
                 tokens.close()
@@ -477,8 +481,8 @@ class QvacMedia internal constructor(private val client: QvacClient) {
     )
 
     fun audio(request: AudioGenStreamRequest): QvacMediaRun<AudioGenStreamResponse> =
-        mediaRun(client.audioGenStream(request)) { event ->
-            MediaFrame(event.data, event.stats?.let { statsJson(it) }, event.stopReason?.let { client.json.wireName(it) })
+        mediaRun(client.streamWithRaw<AudioGenStreamRequest, AudioGenStreamResponse>(request)) { event ->
+            MediaFrame(event.data, event.stopReason?.let { client.json.wireName(it) })
         }
 
     fun diffusion(
@@ -500,8 +504,8 @@ class QvacMedia internal constructor(private val client: QvacClient) {
     )
 
     fun diffusion(request: DiffusionStreamRequest): QvacMediaRun<DiffusionStreamResponse> =
-        mediaRun(client.diffusionStream(request)) { event ->
-            MediaFrame(event.data, event.stats?.let { statsJson(it) }, null)
+        mediaRun(client.streamWithRaw<DiffusionStreamRequest, DiffusionStreamResponse>(request)) { event ->
+            MediaFrame(event.data)
         }
 
     /** [mode] is "txt2vid" or "img2vid". */
@@ -524,8 +528,8 @@ class QvacMedia internal constructor(private val client: QvacClient) {
     )
 
     fun video(request: VideoStreamRequest): QvacMediaRun<VideoStreamResponse> =
-        mediaRun(client.videoStream(request)) { event ->
-            MediaFrame(event.data, event.stats?.let { statsJson(it) }, null)
+        mediaRun(client.streamWithRaw<VideoStreamRequest, VideoStreamResponse>(request)) { event ->
+            MediaFrame(event.data)
         }
 
     fun upscale(modelId: String, imageBase64: String, repeats: Int? = null) = upscale(
@@ -537,8 +541,8 @@ class QvacMedia internal constructor(private val client: QvacClient) {
     )
 
     fun upscale(request: UpscaleStreamRequest): QvacMediaRun<UpscaleStreamResponse> =
-        mediaRun(client.upscaleStream(request)) { event ->
-            MediaFrame(event.data, event.stats?.let { statsJson(it) }, null)
+        mediaRun(client.streamWithRaw<UpscaleStreamRequest, UpscaleStreamResponse>(request)) { event ->
+            MediaFrame(event.data)
         }
 
     fun worldScene(
@@ -562,8 +566,8 @@ class QvacMedia internal constructor(private val client: QvacClient) {
     )
 
     fun worldScene(request: WorldSceneStreamRequest): QvacMediaRun<WorldSceneStreamResponse> =
-        mediaRun(client.worldSceneStream(request)) { event ->
-            MediaFrame(event.data, event.stats?.let { statsJson(it) }, null)
+        mediaRun(client.streamWithRaw<WorldSceneStreamRequest, WorldSceneStreamResponse>(request)) { event ->
+            MediaFrame(event.data)
         }
 
     /** [keys] are the held movement keys: W, A, S, D, I, J, K or L. */
@@ -580,15 +584,12 @@ class QvacMedia internal constructor(private val client: QvacClient) {
     )
 
     fun worldStep(request: WorldStepStreamRequest): QvacMediaRun<WorldStepStreamResponse> =
-        mediaRun(client.worldStepStream(request)) { event ->
-            MediaFrame(event.data, event.stats?.let { statsJson(it) }, null)
+        mediaRun(client.streamWithRaw<WorldStepStreamRequest, WorldStepStreamResponse>(request)) { event ->
+            MediaFrame(event.data)
         }
 
-    private inline fun <reified Stats> statsJson(stats: Stats): JsonObject =
-        client.json.encodeToJsonElement(stats).jsonObject
-
     private fun <Event> mediaRun(
-        source: Flow<Event>,
+        source: Flow<Pair<Event, JsonObject>>,
         frame: (Event) -> MediaFrame,
     ): QvacMediaRun<Event> {
         val events = Channel<Event>(Channel.UNLIMITED)
@@ -598,11 +599,11 @@ class QvacMedia internal constructor(private val client: QvacClient) {
             var stats: JsonObject? = null
             var stopReason: String? = null
             try {
-                source.collect { event ->
+                source.collect { (event, raw) ->
                     events.send(event)
                     val value = frame(event)
                     value.data?.let(data::add)
-                    value.stats?.let { stats = it }
+                    raw.rawStats()?.let { stats = it }
                     value.stopReason?.let { stopReason = it }
                 }
                 result.complete(QvacMediaResult(data, stats, stopReason))
@@ -620,9 +621,10 @@ open class QvacFeatureException(message: String, cause: Throwable? = null) : Exc
 
 private data class MediaFrame(
     val data: String?,
-    val stats: JsonObject?,
-    val stopReason: String?,
+    val stopReason: String? = null,
 )
+
+private fun JsonObject.rawStats(): JsonObject? = this["stats"] as? JsonObject
 
 private fun QvacDataInput.toAudioChunk(): TranscribeRequestAudioChunk = when (this) {
     is QvacDataInput.FilePath -> TranscribeRequestAudioChunk.FilePath(TranscribeRequestAudioChunkFilePath(value = path))

@@ -111,7 +111,9 @@ sealed interface QvacKvCache {
 }
 
 enum class QvacToolParameterType {
-    STRING, NUMBER, INTEGER, BOOLEAN, OBJECT, ARRAY,
+    STRING, NUMBER, INTEGER, BOOLEAN, OBJECT, ARRAY;
+
+    internal val wireName: String get() = name.lowercase()
 }
 
 data class QvacToolParameter(
@@ -431,14 +433,28 @@ private fun finishCompletion(
 
 private fun JsonObject.events(): List<JsonElement> = (get("events") as? JsonArray).orEmpty()
 
+private val knownCompletionEventTypes = setOf(
+    "contentDelta",
+    "rawDelta",
+    "thinkingDelta",
+    "toolCall",
+    "toolError",
+    "completionStats",
+    "completionDone",
+)
+
 // completionOrchestrate events use the completionStream event schema; the
 // contract types differ only in their generated names.
 private fun QvacClient.parseCompletionEvent(element: JsonElement): QvacCompletionEvent {
     val payload = element.jsonObject
+    val type = (payload["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    if (type !in knownCompletionEventTypes) {
+        return QvacCompletionEvent.Unknown(payload["seq"]?.jsonPrimitive?.longOrNull ?: 0L, payload)
+    }
     val event = try {
         json.decodeFromJsonElement<CompletionStreamResponseEventsItem>(payload)
-    } catch (_: SerializationException) {
-        return QvacCompletionEvent.Unknown(payload["seq"]?.jsonPrimitive?.longOrNull ?: 0L, payload)
+    } catch (error: SerializationException) {
+        throw QvacCompletionException("Worker sent a malformed '$type' event", error)
     }
     return when (event) {
         is CompletionStreamResponseEventsItem.ContentDelta ->
@@ -575,14 +591,10 @@ private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
     parameters = CompletionStreamRequestToolsItemParameters(
         properties = parameters.mapValues { (_, parameter) ->
             CompletionStreamRequestToolsItemParametersPropertiesValue(
-                type = when (parameter.type) {
-                    QvacToolParameterType.STRING -> CompletionStreamRequestToolsItemParametersPropertiesValueType.STRING
-                    QvacToolParameterType.NUMBER -> CompletionStreamRequestToolsItemParametersPropertiesValueType.NUMBER
-                    QvacToolParameterType.INTEGER -> CompletionStreamRequestToolsItemParametersPropertiesValueType.INTEGER
-                    QvacToolParameterType.BOOLEAN -> CompletionStreamRequestToolsItemParametersPropertiesValueType.BOOLEAN
-                    QvacToolParameterType.OBJECT -> CompletionStreamRequestToolsItemParametersPropertiesValueType.OBJECT
-                    QvacToolParameterType.ARRAY -> CompletionStreamRequestToolsItemParametersPropertiesValueType.ARRAY
-                },
+                type = wireEnum<CompletionStreamRequestToolsItemParametersPropertiesValueType>(
+                    "tool parameter type",
+                    parameter.type.wireName,
+                ),
                 description = parameter.description,
                 enum = parameter.enumValues,
             )
@@ -597,14 +609,10 @@ private fun QvacTool.toOrchestrateTool() = CompletionOrchestrateRequestToolsItem
     parameters = CompletionOrchestrateRequestToolsItemParameters(
         properties = parameters.mapValues { (_, parameter) ->
             CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
-                type = when (parameter.type) {
-                    QvacToolParameterType.STRING -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.STRING
-                    QvacToolParameterType.NUMBER -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.NUMBER
-                    QvacToolParameterType.INTEGER -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.INTEGER
-                    QvacToolParameterType.BOOLEAN -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.BOOLEAN
-                    QvacToolParameterType.OBJECT -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.OBJECT
-                    QvacToolParameterType.ARRAY -> CompletionOrchestrateRequestToolsItemParametersPropertiesValueType.ARRAY
-                },
+                type = wireEnum<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType>(
+                    "tool parameter type",
+                    parameter.type.wireName,
+                ),
                 description = parameter.description,
                 enum = parameter.enumValues,
             )

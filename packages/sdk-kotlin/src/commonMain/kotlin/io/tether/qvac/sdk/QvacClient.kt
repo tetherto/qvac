@@ -80,6 +80,18 @@ class QvacClient(
         input: Flow<ByteArray>,
     ): Flow<JsonObject> = duplex(json.encodeToJsonElement(request).jsonObject, input)
 
+    /** Typed frames paired with the raw frame, for open objects such as `stats` whose extra keys the types drop. */
+    internal inline fun <reified Request : Any, reified Response : Any> streamWithRaw(
+        request: Request,
+    ): Flow<Pair<Response, JsonObject>> =
+        streamEncoded(request).map { frame -> json.decodeFromJsonElement<Response>(frame) to frame }
+
+    internal inline fun <reified Request : Any, reified Response : Any> duplexWithRaw(
+        request: Request,
+        input: Flow<ByteArray>,
+    ): Flow<Pair<Response, JsonObject>> =
+        duplexEncoded(request, input).map { frame -> json.decodeFromJsonElement<Response>(frame) to frame }
+
     internal inline fun <
         reified Request : Any,
         reified Progress : Any,

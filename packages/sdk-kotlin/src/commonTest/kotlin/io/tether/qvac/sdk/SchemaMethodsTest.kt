@@ -15,7 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class TypedMethodsTest {
+class SchemaMethodsTest {
     @Test
     fun unaryMethodSerializesRequestAndResponse() = runTest {
         val transport = TypedRecordingTransport(

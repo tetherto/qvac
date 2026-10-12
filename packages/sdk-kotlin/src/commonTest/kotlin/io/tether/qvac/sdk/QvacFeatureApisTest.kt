@@ -75,6 +75,58 @@ class QvacFeatureApisTest {
     }
 
     @Test
+    fun classificationMapsLabelAndConfidence() = runTest {
+        val transport = FeatureTransport()
+        val client = QvacClient(transport)
+        transport.responses = flowOf(buildJsonObject {
+            put("type", "classify")
+            put("results", buildJsonArray {
+                add(buildJsonObject { put("label", "cat"); put("confidence", 0.9) })
+                add(buildJsonObject { put("label", "dog"); put("confidence", 0.1) })
+            })
+            put("done", true)
+        })
+        try {
+            val results = client.vision.classify("classifier", "AQID", topK = 2)
+            assertEquals(listOf(QvacClassification("cat", 0.9), QvacClassification("dog", 0.1)), results)
+            assertEquals(2, transport.lastPayload?.get("topK")?.jsonPrimitive?.content?.toInt())
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun statsKeepKeysOutsideTheContract() = runTest {
+        val transport = FeatureTransport()
+        val client = QvacClient(transport)
+        val stats = buildJsonObject {
+            put("tokensPerSecond", 40.0)
+            put("workerOnlyMetric", 7)
+        }
+        try {
+            transport.responses = flowOf(buildJsonObject {
+                put("type", "transcribe")
+                put("text", "hello")
+                put("stats", stats)
+                put("done", true)
+            })
+            assertEquals(stats, client.speech.transcribe("asr", QvacDataInput.FilePath("/audio.wav")).stats)
+
+            transport.responses = flowOf(buildJsonObject {
+                put("type", "diffusionStream")
+                put("data", "AQID")
+                put("stats", stats)
+                put("done", true)
+            })
+            val media = client.media.diffusion("sd", "a cat").final.await()
+            assertEquals(listOf("AQID"), media.data)
+            assertEquals(stats, media.stats)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
     fun translationPicksTheContractArmFromModelType() = runTest {
         val transport = FeatureTransport()
         val client = QvacClient(transport)

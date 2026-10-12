@@ -157,6 +157,99 @@ class QvacCompletionApiTest {
     }
 
     @Test
+    fun malformedKnownEventFailsTheRun() = runTest {
+        val client = QvacClient(
+            ApiTransport(
+                stream = flowOf(
+                    completionFrame(
+                        done = true,
+                        event("contentDelta", 0) { put("text", "partial") },
+                        event("completionDone", 1) { put("stopReason", "error") },
+                    ),
+                ),
+            ),
+        )
+        try {
+            val error = assertFailsWith<QvacCompletionException> {
+                client.completion.run("model", listOf(QvacMessage.user("hi"))).final.await()
+            }
+            assertEquals("Worker sent a malformed 'completionDone' event", error.message)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun completionErrorEventFailsTheRun() = runTest {
+        val client = QvacClient(
+            ApiTransport(
+                stream = flowOf(
+                    completionFrame(
+                        done = true,
+                        event("contentDelta", 0) { put("text", "partial") },
+                        event("completionDone", 1) {
+                            put("stopReason", "error")
+                            put("error", buildJsonObject { put("message", "context overflow") })
+                        },
+                    ),
+                ),
+            ),
+        )
+        try {
+            val error = assertFailsWith<QvacCompletionException> {
+                client.completion.run("model", listOf(QvacMessage.user("hi"))).final.await()
+            }
+            assertEquals("context overflow", error.message)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun orchestrateToolParametersUseContractTypes() = runTest {
+        val transport = ApiTransport(
+            duplexFactory = {
+                flowOf(
+                    buildJsonObject {
+                        put("type", "completionOrchestrate")
+                        put("turn", 0)
+                        put("events", buildJsonArray {
+                            add(event("contentDelta", 0) { put("text", "ok") })
+                            add(event("completionDone", 1) { put("stopReason", "eos") })
+                        })
+                    },
+                    buildJsonObject { put("type", "completionOrchestrate"); put("done", true) },
+                )
+            },
+        )
+        val client = QvacClient(transport)
+        try {
+            client.completion.orchestrate(
+                modelId = "model",
+                history = listOf(QvacMessage.user("hi")),
+                tools = listOf(
+                    QvacTool(
+                        name = "lookup",
+                        description = "Look up a value",
+                        parameters = QvacToolParameterType.entries.associate { type ->
+                            type.name.lowercase() to QvacToolParameter(type)
+                        },
+                        handler = { JsonPrimitive("ok") },
+                    ),
+                ),
+            ).final.await()
+        } finally {
+            client.close()
+        }
+        val properties = transport.lastPayload?.get("tools")?.jsonArray?.single()?.jsonObject
+            ?.get("parameters")?.jsonObject?.get("properties")?.jsonObject
+        assertEquals(
+            QvacToolParameterType.entries.associate { it.name.lowercase() to it.name.lowercase() },
+            properties?.mapValues { (_, value) -> value.jsonObject.getValue("type").jsonPrimitive.content },
+        )
+    }
+
+    @Test
     fun kvCacheAndToolDialectUseContractValues() = runTest {
         val transport = ApiTransport(
             stream = flowOf(
