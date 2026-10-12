@@ -205,6 +205,23 @@ export const lifecycleBlockedRegistry = createLifecycleTest('lifecycle-blocked-r
   { assert: { on: '$models', named: 'lengthAtLeast', with: { length: 1 } } }
 ])
 
+/**
+ * Closes with the model still loaded, so the worker frees it while stopping. On a
+ * phone the second load starts a new worklet in the same app process.
+ */
+export const lifecycleCloseRestart = createLifecycleTest(
+  'lifecycle-close-restart',
+  [
+    { useModel: { deps: ['llm'], as: 'model' } },
+    ...askAndExpectText('What is 2+2? Answer with only the number.', 'before'),
+    { call: { method: 'close' } },
+    { useModel: { deps: ['llm'], as: 'model' } },
+    ...askAndExpectText('What is 3+3? Answer with only the number.', 'after')
+  ],
+  'llm',
+  90000
+)
+
 export const lifecycleTests = [
   lifecycleSuspendResumeBasic,
   lifecycleSuspendIdempotent,
@@ -214,5 +231,6 @@ export const lifecycleTests = [
   lifecycleSuspendDuringInference,
   lifecycleStateTransitions,
   lifecycleBlockedCompletion,
-  lifecycleBlockedRegistry
+  lifecycleBlockedRegistry,
+  lifecycleCloseRestart
 ] as const
