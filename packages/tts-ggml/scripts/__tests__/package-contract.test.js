@@ -196,6 +196,7 @@ test('published commands include their runtime files', () => {
   assert.ok(files.has('examples/chatterbox-enhanced.js'))
   assert.ok(files.has('examples/supertonic-enhanced.js'))
   assert.ok(files.has('examples/parler-enhanced.js'))
+  assert.ok(files.has('test/utils/mossBackend.js'))
 })
 
 test('published runtime files declare their external imports', () => {

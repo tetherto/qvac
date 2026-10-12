@@ -8,6 +8,7 @@ const TTSGgml = require('@qvac/tts-ggml')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { readWavAsFloat32 } = require('../utils/wav-helper')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { assertMossBackend } = require('../utils/mossBackend')
 
 const SPEECH_SAMPLE_RATE = 24000
 const TEST_TIMEOUT_MS = 1800000
@@ -15,8 +16,7 @@ const MODEL_DIR_ENV = 'QVAC_TEST_MOSS_SPEECH_MODEL_DIR'
 const MAX_NEW_TOKENS = 120
 const CUT_SECONDS = 2
 const CUT_MARGIN_SECONDS = 0.5
-const CPU_DEVICE = 0
-const GPU_DEVICE = 1
+const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 
 const modelDir = (proc.env && proc.env[MODEL_DIR_ENV]) || ''
 const skipWithoutModels = modelDir === ''
@@ -75,7 +75,7 @@ test(
     try {
       const result = await respond(model, spokenQuestion())
       assertSpokenReply(t, 'cpu reply', result)
-      t.is(result.stats.backendDevice, CPU_DEVICE, 'the reply ran on the CPU')
+      assertMossBackend(t, 'cpu reply', result.stats, false, PINNED_GPU_BACKEND)
     } finally {
       await model.unload()
     }
@@ -92,6 +92,7 @@ test(
       const textReply = await respond(model, { ...spokenQuestion(), textReply: true })
       t.is(textReply.samples, 0, 'a text reply carries no audio')
       t.ok(textReply.text.trim().length > 0, 'a text reply carries the answer')
+      assertMossBackend(t, 'text reply', textReply.stats, true, PINNED_GPU_BACKEND)
 
       const cut = await respond(model, { ...spokenQuestion(), maxReplySeconds: CUT_SECONDS })
       assertSpokenReply(t, 'cut reply', cut)
@@ -99,10 +100,11 @@ test(
         cut.samples <= (CUT_SECONDS + CUT_MARGIN_SECONDS) * SPEECH_SAMPLE_RATE,
         'maxReplySeconds bounds the spoken reply'
       )
-      t.is(cut.stats.backendDevice, GPU_DEVICE, 'the replies ran on the GPU')
+      assertMossBackend(t, 'cut reply', cut.stats, true, PINNED_GPU_BACKEND)
 
       const typed = await respond(model, { input: 'What is the capital of France?' })
       assertSpokenReply(t, 'reply to a typed question', typed)
+      assertMossBackend(t, 'typed reply', typed.stats, true, PINNED_GPU_BACKEND)
     } finally {
       await model.unload()
     }

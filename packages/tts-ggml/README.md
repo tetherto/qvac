@@ -29,7 +29,8 @@ Xclipse/Mali → Vulkan). Parler supports Apple/Metal, linux CUDA, and the
 validated Android paths, including Vulkan on ARM Mali (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)). Audio8 supports
 CUDA/Vulkan offload on Linux and Vulkan on Windows. MOSS GPU offload is
-validated on Apple/Metal.
+validated on Apple/Metal; desktop CUDA/Vulkan validation requires the native
+and registry prerequisites described under [MOSS](#moss).
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/tts
 
@@ -1059,6 +1060,44 @@ MOSS runs on CPU by default.  `config.useGPU: true` (or a non-zero
 falls back to CPU and sets `response.stats.gpuUnsupported`.  `backendsDir`
 reaches MOSS like every other engine, so builds that load ggml backends at
 runtime find them.
+
+The same controls apply to MOSS-TTSD and MOSS-Speech. `nGpuLayers` is a
+boolean GPU request for these engines (zero = CPU, non-zero = GPU), not a
+partial layer count. The addon forwards these controls to the native engine;
+it does not choose a different backend or change the CPU default.
+`response.stats.backendId` identifies the language-model backend (2 = CUDA,
+3 = Vulkan); it is not a measurement of every codec operation.
+
+Desktop CUDA/Vulkan support depends on the native speech changes in
+[Vulkan #308](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/308)
+(`75b5d44de287d8debedb9c89276b1d9443fb0e07`) and its stacked
+[CUDA #321](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/321)
+(`f4d4c257dd1d6fafdf1bdec4f9bf4caa6ec5cf33`). These native revisions have
+GPU validation; they do not establish support in a published addon. Before
+validating an addon build, the shared `speech-cpp` registry pin must consume
+those changes and its compatible `ggml-speech` dependency, then the addon
+must be rebuilt. The current package manifest/pin is not advanced here;
+there is no new released version implied by this guide. Native desktop
+results also do not establish Android support or speech-quality signoff.
+
+On a desktop with those prerequisites, stage the TTS and TTSD backbones,
+codec decoder/encoder and reference WAVs, plus the Speech model/codec. Set
+`QVAC_TEST_MOSS_MODEL_DIR` and `QVAC_TEST_MOSS_SPEECH_MODEL_DIR` to their
+respective directories. Run each available backend in a fresh process:
+
+```sh
+TTS_CPP_GPU_BACKEND=cuda npx --no-install brittle-bare test/integration/moss.test.js test/integration/moss-speech.test.js
+TTS_CPP_GPU_BACKEND=vulkan npx --no-install brittle-bare test/integration/moss.test.js test/integration/moss-speech.test.js
+```
+
+The tests check the exact pinned backend, `backendDevice` and
+`gpuUnsupported` for TTS batch/streaming/cloning, TTSD dialogue, and Speech
+text/audio replies. CPU control cases still require CPU even with a GPU pin.
+Without a pin the tests accept the engine's normal GPU cascade. Missing
+model directories skip integration tests; missing codec encoder or TTSD
+backbone omit cloning/dialogue coverage. Such a run is not full GPU
+validation. The small `npm run test:node` backend-gate regression uses no
+models. Do not load these multi-GB models on memory-constrained hosts.
 
 ## MOSS-SoundEffect
 

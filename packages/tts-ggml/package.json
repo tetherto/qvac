@@ -126,6 +126,7 @@
     "test/pocket-worklet",
     "test/reference-audio",
     "test/utils/runTTS.js",
+    "test/utils/mossBackend.js",
     "test/utils/runChatterboxTTS.js",
     "test/utils/runSupertonicTTS.js",
     "test/utils/runParlerTTS.js",
