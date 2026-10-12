@@ -100,7 +100,8 @@ function rdmaExpected() {
   if (process.platform !== "linux" || process.env.GGML_RPC_NO_RDMA) {
     return false;
   }
-  return libibverbsInstalled() && rdmaDevicePresent();
+  // Check for a device first, so hosts without RDMA never need ldconfig.
+  return rdmaDevicePresent() && libibverbsInstalled();
 }
 
 function run(command, args, env, shell = false) {
