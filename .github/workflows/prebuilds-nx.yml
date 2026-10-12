@@ -4,6 +4,11 @@ name: "Prebuilds (nx)"
 on:
   workflow_dispatch:
     inputs:
+      cosyvoice_preflight:
+        description: "Build TTS prebuilds and run C++ and desktop integration tests without publishing"
+        required: false
+        type: boolean
+        default: false
       packages:
         description: "JSON array of explicit package short-names, bypassing nx-affected. Empty = normal nx-affected."
         required: false
@@ -74,7 +79,7 @@ jobs:
           target: build
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
-          packages: ${{ inputs.packages }}
+          packages: ${{ inputs.cosyvoice_preflight && '["tts-ggml"]' || inputs.packages }}
 
   prebuild:
     name: Prebuild (${{ matrix.package }})
@@ -123,3 +128,33 @@ jobs:
 
   # No merge job here on purpose: the reusable merges each package's legs into
   # prebuilds-<package>. A merge at this level would run per-call and race in on-merge.
+
+  preflight-cpp:
+    if: github.event_name == 'workflow_dispatch' && inputs.cosyvoice_preflight
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/cpp-tests-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      packages: '["tts-ggml"]'
+    secrets: inherit
+
+  preflight-desktop:
+    needs: prebuild
+    if: github.event_name == 'workflow_dispatch' && inputs.cosyvoice_preflight
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      packages: '["tts-ggml"]'
+      run_integration_tests: true
+      run_rtf_benchmarks: false
+    secrets: inherit
