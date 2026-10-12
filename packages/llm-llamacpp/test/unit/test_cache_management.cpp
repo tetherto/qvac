@@ -27,6 +27,7 @@
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
 #include "test_prompt_helpers.hpp"
+#include "utils/ModelMemoryPolicy.hpp"
 #include "utils/SequenceStateSnapshot.hpp"
 
 namespace fs = std::filesystem;
@@ -1362,8 +1363,8 @@ TEST_F(CacheManagementTest, SinglePromptCacheUsesSeqStateFormat) {
 namespace {
 
 std::unique_ptr<LlamaModel> loadSlidingWindowModel(
-    const test_common::TestModelPath& modelPath, const char* ctxSize = "4096") {
-  std::unordered_map<std::string, std::string> config;
+    const test_common::TestModelPath& modelPath, const char* ctxSize = "4096",
+    std::unordered_map<std::string, std::string> config = {}) {
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
   config["ctx_size"] = ctxSize;
@@ -1389,6 +1390,13 @@ std::string slidingWindowBrief(int editedFact) {
   }
   return R"([{"role":"user","content":")" + text +
          R"( What colour is the lamp?"}])";
+}
+
+bool mentions(std::string text, const std::string& word) {
+  std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return text.find(word) != std::string::npos;
 }
 
 } // namespace
@@ -1564,6 +1572,189 @@ TEST(CacheSlidingWindowTest, RollbackWithTheWindowIntactKeepsTheCache) {
   fs::remove(cacheFile);
 }
 
+// A sliding-window model takes an end-of-history checkpoint, holding the
+// window at that point. A regenerate after an answer longer than the window
+// diverges behind it: the checkpoint brings the window back instead of a cold
+// reprocess of the whole conversation.
+TEST(CacheSlidingWindowTest, RegenerateBehindTheWindowRestoresTheCheckpoint) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+
+  auto model = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(model->isLoaded());
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+  llama_context* lctx = text->getCtx();
+  const int32_t nSwa = llama_model_n_swa(llama_get_model(lctx));
+  ASSERT_GT(nSwa, 0);
+
+  // The answer outgrows the window, so the end of the history is no longer
+  // in it when the turn commits.
+  LlamaModel::Prompt first;
+  first.input = slidingWindowBrief(-1);
+  first.cacheKey = cacheFile.string();
+  first.generationParams.grammar = R"(root ::= "lighthouse " root)";
+  const int32_t generated = nSwa + 100;
+  first.generationParams.n_predict = generated;
+  ASSERT_FALSE(model->processPrompt(first).empty());
+  const llama_pos afterFirst = text->getNPast();
+  // Without this a plain tail trim would serve the regenerate.
+  const llama_pos promptEnd = afterFirst - generated;
+  ASSERT_GT(
+      llama_memory_seq_pos_min(llama_get_memory(lctx), text->getSeqId()),
+      promptEnd - nSwa)
+      << "test setup: the window in front of the prompt end is still resident";
+
+  LlamaModel::Prompt regenerate;
+  regenerate.input = first.input;
+  regenerate.cacheKey = cacheFile.string();
+  const std::string fromCheckpoint = model->processPrompt(regenerate);
+  ASSERT_FALSE(fromCheckpoint.empty());
+  EXPECT_GT(text->lastCacheReuseForTesting(), static_cast<size_t>(1024))
+      << "the regenerate reprocessed the conversation instead of restoring "
+         "the end-of-history checkpoint (first turn ended at "
+      << afterFirst << ")";
+
+  const llama_pos nPast = text->getNPast();
+  const llama_pos posMin =
+      llama_memory_seq_pos_min(llama_get_memory(lctx), text->getSeqId());
+  EXPECT_GE(posMin, 0);
+  EXPECT_LE(posMin, std::max<llama_pos>(0, nPast - nSwa))
+      << "the restored window does not cover the cursor at " << nPast;
+  // Not compared with a cold run: the restore splits the prefill into other
+  // batch shapes, and greedy output drifts on CUDA and Vulkan.
+  EXPECT_TRUE(
+      mentions(fromCheckpoint, "lamp") || mentions(fromCheckpoint, "colo"))
+      << "the turn served from the checkpoint lost the question: "
+      << fromCheckpoint;
+  model.reset();
+
+  fs::remove(cacheFile);
+}
+
+// The load-time budget check bounds a sliding-window checkpoint by the
+// window, not the context: the bound covers a real capture of a prompt longer
+// than the window, and a budget of exactly one bound loads at a context many
+// times the window.
+TEST(CacheSlidingWindowTest, CheckpointBudgetIsBoundedByTheWindow) {
+  namespace utils = qvac_lib_inference_addon_llama::utils;
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_budget_cache.bin";
+  fs::remove(cacheFile);
+
+  auto probe = loadSlidingWindowModel(modelPath, "32768");
+  ASSERT_TRUE(probe->isLoaded());
+  LlmContext* context = LlamaModelTestPeer::llmContext(*probe);
+  ASSERT_NE(context, nullptr);
+  llama_context* lctx = context->getCtx();
+  const llama_model* mdl = llama_get_model(lctx);
+  const uint32_t windowCells =
+      utils::slidingWindowCheckpointCells(llama_model_n_swa(mdl));
+  ASSERT_GT(windowCells, 0u);
+  ASSERT_LT(windowCells * 8, llama_n_ctx_seq(lctx))
+      << "test setup: the context must dwarf the window";
+  // Measured on the empty sequence, before the prompt below fills it.
+  const uint64_t bound = utils::estimateMaxSequenceStateBytes(
+      lctx,
+      llama_model_get_vocab(mdl),
+      windowCells,
+      utils::untrimmableSnapshotScope());
+  ASSERT_GT(bound, 0u);
+
+  LlamaModel::Prompt primer;
+  primer.input = slidingWindowBrief(-1);
+  primer.prefill = true;
+  primer.cacheKey = cacheFile.string();
+  EXPECT_TRUE(probe->processPrompt(primer).empty());
+  const llama_pos nPast = context->getNPast();
+  ASSERT_GT(nPast, static_cast<llama_pos>(windowCells))
+      << "test setup: the prompt must outgrow the window";
+  utils::SequenceStateSnapshot snap;
+  ASSERT_TRUE(
+      utils::snapshotSequenceState(
+          lctx,
+          context->getSeqId(),
+          nPast,
+          snap,
+          utils::SnapshotStorage::Memory,
+          utils::untrimmableSnapshotScope()));
+  EXPECT_LE(snap.bytes(), bound)
+      << "a real checkpoint must never exceed the load-time bound";
+  probe.reset();
+  fs::remove(cacheFile);
+
+  std::unordered_map<std::string, std::string> budget;
+  budget["cache_checkpoints"] = "1";
+  budget["cache_checkpoints_max_bytes"] = std::to_string(bound);
+  std::unique_ptr<LlamaModel> budgeted;
+  ASSERT_NO_THROW(
+      budgeted = loadSlidingWindowModel(modelPath, "32768", std::move(budget)))
+      << "a budget that holds one window checkpoint must load";
+  EXPECT_TRUE(budgeted->isLoaded());
+}
+
+// A context no longer than the window never drops a cell, so a trim always
+// serves a divergence and a checkpoint could never be restored: none is
+// taken, and a checkpoint budget is not checked.
+TEST(CacheSlidingWindowTest, ContextWithinTheWindowTakesNoCheckpoints) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_short_ctx_cache.bin";
+  const std::string input =
+      R"([{"role":"user","content":"Name one thing a harbor lamp needs."}])";
+
+  for (const auto& [ctxSize, expectCheckpoint] :
+       {std::pair{"4096", true}, std::pair{"512", false}}) {
+    SCOPED_TRACE(std::string("ctx_size ") + ctxSize);
+    fs::remove(cacheFile);
+    auto model = loadSlidingWindowModel(modelPath, ctxSize);
+    ASSERT_TRUE(model->isLoaded());
+    auto* text =
+        dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+    ASSERT_NE(text, nullptr);
+    const int32_t nSwa = llama_model_n_swa(llama_get_model(text->getCtx()));
+    ASSERT_EQ(nSwa, 512) << "test setup: the window is assumed to be 512";
+
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheFile.string();
+    ASSERT_FALSE(model->processPrompt(prompt).empty());
+    EXPECT_EQ(text->cacheCheckpointCountForTesting() > 0, expectCheckpoint);
+    model.reset();
+  }
+  fs::remove(cacheFile);
+
+  std::unordered_map<std::string, std::string> budget;
+  budget["cache_checkpoints_max_bytes"] = "1";
+  std::unique_ptr<LlamaModel> budgeted;
+  ASSERT_NO_THROW(
+      budgeted = loadSlidingWindowModel(modelPath, "512", std::move(budget)))
+      << "a model that takes no checkpoints must not check their budget";
+  EXPECT_TRUE(budgeted->isLoaded());
+}
+
 namespace {
 
 test_common::TestModelPath hybridModelPath() {
@@ -1611,13 +1802,6 @@ chatInput(const std::vector<std::pair<std::string, std::string>>& messages) {
     array.push_back({{"role", role}, {"content", content}});
   }
   return array.dump();
-}
-
-bool mentions(std::string text, const std::string& word) {
-  std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return text.find(word) != std::string::npos;
 }
 
 /// The last turn of a reused chat must still see the conversation: its
