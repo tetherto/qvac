@@ -429,20 +429,22 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+/// Creates the JS instance of a @p ModelT whose outputs @p OutputHandlerT
+/// delivers. Args: [jsHandle, { path, config, backendsDir }, outputCallback].
+template <typename ModelT, typename OutputHandlerT>
+js_value_t* createModelInstance(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
   JsArgsParser args(env, info);
 
-  auto model = make_unique<BertModel>(
+  auto model = make_unique<ModelT>(
       args.getMapEntry(1, "path"),
       args.getSubmap(1, "config"),
       args.getMapEntry(1, "backendsDir"));
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(
-      make_shared<out_handl::Js2DArrayOutputHandler<BertEmbeddings, float>>());
+  outHandlers.add(make_shared<OutputHandlerT>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -452,6 +454,13 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
+}
+
+inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+  return createModelInstance<
+      BertModel,
+      qvac_lib_inference_addon_cpp::out_handl::
+          Js2DArrayOutputHandler<BertEmbeddings, float>>(env, info);
 }
 JSCATCH
 
@@ -469,27 +478,7 @@ struct JsLayaDecisionOutputHandler
 
 inline js_value_t*
 createLayaInstance(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
-
-  JsArgsParser args(env, info);
-
-  auto model = make_unique<LayaModel>(
-      args.getMapEntry(1, "path"),
-      args.getSubmap(1, "config"),
-      args.getMapEntry(1, "backendsDir"));
-
-  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<JsLayaDecisionOutputHandler>());
-  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env,
-      args.get(0, "jsHandle"),
-      args.getFunction(2, "outputCallback"),
-      std::move(outHandlers));
-
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-
-  return JsInterface::createInstance(env, std::move(addon));
+  return createModelInstance<LayaModel, JsLayaDecisionOutputHandler>(env, info);
 }
 JSCATCH
 
@@ -508,27 +497,8 @@ struct JsRerankScoresOutputHandler
 
 inline js_value_t*
 createRerankInstance(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
-
-  JsArgsParser args(env, info);
-
-  auto model = make_unique<RerankModel>(
-      args.getMapEntry(1, "path"),
-      args.getSubmap(1, "config"),
-      args.getMapEntry(1, "backendsDir"));
-
-  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<JsRerankScoresOutputHandler>());
-  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env,
-      args.get(0, "jsHandle"),
-      args.getFunction(2, "outputCallback"),
-      std::move(outHandlers));
-
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-
-  return JsInterface::createInstance(env, std::move(addon));
+  return createModelInstance<RerankModel, JsRerankScoresOutputHandler>(
+      env, info);
 }
 JSCATCH
 

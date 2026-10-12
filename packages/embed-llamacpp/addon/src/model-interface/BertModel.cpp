@@ -416,15 +416,8 @@ void BertModel::onLoaded(llama_model* model, llama_context* ctx) {
   batch_ = llama_batch_init(loader_.params().n_batch, 0, 1);
   n_embd = llama_model_n_embd(model_);
 
-  // Set up abort callback for cancellation support during llama_decode
-  // The callback checks stopCancelled_ and returns true to abort if set
-  llama_set_abort_callback(
-      ctx_,
-      [](void* data) -> bool {
-        const auto* model = static_cast<const BertModel*>(data);
-        return model->stopCancelled_.load();
-      },
-      const_cast<BertModel*>(this));
+  // Abort a pass in llama_decode once cancel() is requested.
+  abortDecodeWhen(ctx_, stopCancelled_);
 
   if (llama_model_has_encoder(model_) && llama_model_has_decoder(model_)) {
     std::string msg = string_format(

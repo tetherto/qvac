@@ -1,6 +1,5 @@
 #include "RerankModel.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <optional>
 #include <stdexcept>
@@ -121,23 +120,14 @@ std::string RerankModel::fillTemplate(
 
 const std::unordered_map<std::string, std::string>& RerankModel::checkConfig(
     const std::unordered_map<std::string, std::string>& config) {
-  for (const auto& [key, value] : config) {
-    if (!allowedConfigKeys().contains(key)) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(InvalidConfiguration),
-          string_format(
-              "%s: '%s' is not a rerank load option; accepted: device, "
-              "gpu_layers, batch_size, verbosity, main-gpu, split-mode, "
-              "tensor-split, flash_attn, backend, threads, threads-batch, "
-              "poll, poll-batch, openclCacheDir",
-              __func__,
-              key.c_str()));
-    }
-    if (isThreadsKey(key)) {
-      checkThreads(key, value);
-    }
-  }
+  checkLoadOptions(
+      config,
+      allowedConfigKeys(),
+      __func__,
+      "rerank",
+      "device, gpu_layers, batch_size, verbosity, main-gpu, split-mode, "
+      "tensor-split, flash_attn, backend, threads, threads-batch, poll, "
+      "poll-batch, openclCacheDir");
   return config;
 }
 
@@ -201,29 +191,15 @@ void RerankModel::configureParams(
             __func__));
   }
 
-  // As llama-server's --reranking, with llama-laya's single-pass context: no
-  // KV cache is kept between passes, so the context only has to hold one
-  // batch, every pair must fit in one ubatch for RANK pooling, and a batch
-  // holds at most one pair per token.
-  params.embedding = true;
-  params.pooling_type = LLAMA_POOLING_TYPE_RANK;
-  params.n_ctx = params.n_batch;
-  params.n_ubatch = params.n_batch;
-  params.n_parallel = static_cast<int32_t>(std::min<int64_t>(
-      static_cast<int64_t>(llama_max_parallel_sequences()), params.n_batch));
-  params.kv_unified = true;
+  // As llama-server's --reranking, in llama-laya's single-pass context.
+  configureSinglePassRankContext(params);
 }
 
 void RerankModel::onLoaded(llama_model* /*model*/, llama_context* ctx) {
   batch_ = llama_batch_init(static_cast<int32_t>(llama_n_batch(ctx)), 0, 1);
 
   // Abort a pass in llama_decode once cancel() is requested.
-  llama_set_abort_callback(
-      ctx,
-      [](void* data) -> bool {
-        return static_cast<const RerankModel*>(data)->stopCancelled_.load();
-      },
-      this);
+  abortDecodeWhen(ctx, stopCancelled_);
 }
 
 std::any RerankModel::process(const std::any& input) {

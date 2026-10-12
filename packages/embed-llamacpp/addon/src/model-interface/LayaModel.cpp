@@ -1,6 +1,5 @@
 #include "LayaModel.hpp"
 
-#include <algorithm>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -39,24 +38,14 @@ const std::unordered_set<std::string>& allowedConfigKeys() {
 
 const std::unordered_map<std::string, std::string>& LayaModel::checkConfig(
     const std::unordered_map<std::string, std::string>& config) {
-  for (const auto& [key, value] : config) {
-    if (!allowedConfigKeys().contains(key)) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(InvalidConfiguration),
-          string_format(
-              "%s: '%s' is not a Laya load option; accepted: device, "
-              "gpu_layers, batch_size, verbosity, main-gpu, split-mode, "
-              "tensor-split, flash_attn, threads, threads-batch, poll, "
-              "poll-batch, "
-              "openclCacheDir",
-              __func__,
-              key.c_str()));
-    }
-    if (isThreadsKey(key)) {
-      checkThreads(key, value);
-    }
-  }
+  checkLoadOptions(
+      config,
+      allowedConfigKeys(),
+      __func__,
+      "Laya",
+      "device, gpu_layers, batch_size, verbosity, main-gpu, split-mode, "
+      "tensor-split, flash_attn, threads, threads-batch, poll, poll-batch, "
+      "openclCacheDir");
   return config;
 }
 
@@ -98,16 +87,8 @@ void LayaModel::configureParams(
             "%s: expected a laya model, got '%s'", __func__, arch->c_str()));
   }
 
-  // As common_laya_context_params: no KV cache is kept between passes, so the
-  // context only has to hold one batch, every sequence must fit in one ubatch
-  // for the decision head, and a batch holds at most one sequence per token.
-  params.embedding = true;
-  params.pooling_type = LLAMA_POOLING_TYPE_RANK;
-  params.n_ctx = params.n_batch;
-  params.n_ubatch = params.n_batch;
-  params.n_parallel = static_cast<int32_t>(std::min<int64_t>(
-      static_cast<int64_t>(llama_max_parallel_sequences()), params.n_batch));
-  params.kv_unified = true;
+  // As common_laya_context_params.
+  configureSinglePassRankContext(params);
   // The generic warmup batch is not a laya sequence; onLoaded warms up with
   // common_laya_warmup instead.
   params.warmup = false;
@@ -127,12 +108,7 @@ void LayaModel::onLoaded(llama_model* /*model*/, llama_context* ctx) {
   }
 
   // Abort a pass in llama_decode once cancel() is requested.
-  llama_set_abort_callback(
-      ctx,
-      [](void* data) -> bool {
-        return static_cast<const LayaModel*>(data)->stopCancelled_.load();
-      },
-      this);
+  abortDecodeWhen(ctx, stopCancelled_);
 
   try {
     common_laya_warmup(laya_.get());

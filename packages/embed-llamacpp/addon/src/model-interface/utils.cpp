@@ -223,3 +223,44 @@ void checkThreads(const std::string& key, const std::string& value) {
             cpus));
   }
 }
+
+void checkLoadOptions(
+    const std::unordered_map<std::string, std::string>& config,
+    const std::unordered_set<std::string>& allowed, const char* caller,
+    const char* model, const char* accepted) {
+  for (const auto& [key, value] : config) {
+    if (!allowed.contains(key)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(InvalidConfiguration),
+          string_format(
+              "%s: '%s' is not a %s load option; accepted: %s",
+              caller,
+              key.c_str(),
+              model,
+              accepted));
+    }
+    if (isThreadsKey(key)) {
+      checkThreads(key, value);
+    }
+  }
+}
+
+void configureSinglePassRankContext(common_params& params) {
+  params.embedding = true;
+  params.pooling_type = LLAMA_POOLING_TYPE_RANK;
+  params.n_ctx = params.n_batch;
+  params.n_ubatch = params.n_batch;
+  params.n_parallel = static_cast<int32_t>(std::min<int64_t>(
+      static_cast<int64_t>(llama_max_parallel_sequences()), params.n_batch));
+  params.kv_unified = true;
+}
+
+void abortDecodeWhen(llama_context* ctx, const std::atomic<bool>& flag) {
+  llama_set_abort_callback(
+      ctx,
+      [](void* data) -> bool {
+        return static_cast<const std::atomic<bool>*>(data)->load();
+      },
+      const_cast<std::atomic<bool>*>(&flag));
+}

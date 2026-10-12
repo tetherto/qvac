@@ -1,11 +1,14 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
+#include <common/common.h>
 #include <llama.h>
 
 std::vector<std::string>
@@ -42,3 +45,22 @@ bool isThreadsKey(const std::string& key);
 /// @brief Throws InvalidConfiguration unless @p value is a whole number of at
 /// most the device's CPU count; 0 or below means every CPU.
 void checkThreads(const std::string& key, const std::string& value);
+
+/// @brief Throws InvalidConfiguration for a key of @p config outside
+/// @p allowed, as "<caller>: '<key>' is not a <model> load option; accepted:
+/// <accepted>", and checks thread counts with checkThreads.
+void checkLoadOptions(
+    const std::unordered_map<std::string, std::string>& config,
+    const std::unordered_set<std::string>& allowed, const char* caller,
+    const char* model, const char* accepted);
+
+/// @brief A context that reads RANK pooling in one pass per batch, as
+/// llama-laya and llama-server's --reranking set it up: no KV cache is kept
+/// between passes, so the context only has to hold one batch, every sequence
+/// must fit in one ubatch for RANK pooling, and a batch holds at most one
+/// sequence per token.
+void configureSinglePassRankContext(common_params& params);
+
+/// @brief Aborts a pass in llama_decode once @p flag is set. @p flag must
+/// outlive @p ctx.
+void abortDecodeWhen(llama_context* ctx, const std::atomic<bool>& flag);
