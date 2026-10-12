@@ -372,6 +372,55 @@ safeTest(
   }
 )
 
+// A past call and its result passed as structured history (`tool_calls` on
+// the assistant turn, `tool_call_id` / `name` on the tool turn) render through
+// the chat template, and the model answers from the result instead of calling
+// again.
+safeTest(
+  '[tools] structured tool history is answered from the tool result',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      const prompt = [
+        { role: 'system', content: 'You are a helpful assistant. /no_think' },
+        {
+          type: 'function',
+          name: 'get_weather',
+          description: 'Get the current temperature for a city',
+          parameters: {
+            type: 'object',
+            properties: { city: { type: 'string', description: 'City' } },
+            required: ['city']
+          }
+        },
+        { role: 'user', content: 'What is the temperature in Paris right now?' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }]
+        },
+        {
+          role: 'tool',
+          content: '{"city":"Paris","temperature_c":18}',
+          tool_call_id: 'call_1',
+          name: 'get_weather'
+        }
+      ]
+      const run = await runPrompt(model, prompt)
+      t.ok(run.text.length > 0, 'generated text')
+      t.absent(
+        run.text.includes('<tool_call>'),
+        `answered in text, not with another call: ${run.text.slice(0, 200)}`
+      )
+      t.ok(run.text.includes('18'), `answer uses the tool result: ${run.text.slice(0, 200)}`)
+    } finally {
+      await release()
+    }
+  }
+)
+
 // generationParams.tool_choice: "required" forces a call, "none" turns the
 // tool grammar off (tools stay in the prompt), a function name restricts the
 // call to that function, and an undeclared name is rejected up front.

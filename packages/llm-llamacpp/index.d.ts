@@ -375,7 +375,22 @@ declare namespace LlmLlamacpp {
          */
         reasoning_content?: string;
         type?: undefined;
+        /**
+         * Tool calls this assistant turn made, rendered by the chat template in
+         * the model's own tool-call format. `arguments` is an object or the text
+         * of a JSON object. `content` may be empty on such a turn.
+         */
+        tool_calls?: ToolCallTurn[];
+        /** On a `tool` turn: the id of the call this result answers. */
+        tool_call_id?: string;
+        /** On a `tool` turn: the name of the tool that produced the result. */
+        name?: string;
         [key: string]: any;
+    }
+    interface ToolCallTurn {
+        id?: string;
+        name: string;
+        arguments?: string | Record<string, unknown>;
     }
     interface UserMediaMessage {
         role: "user";
