@@ -1,14 +1,38 @@
-// A real upstream Bare-RPC peer. No Kotlin codec is involved on this side.
+// A real upstream Bare-RPC peer. No Kotlin codec is involved on this side. It
+// connects back the way the SDK's TCP shim does and carries bare-rpc inside
+// bare-stow's framing, encoded by bare-stow itself.
 const net = require('node:net')
+const { Duplex } = require('bare-stream')
 const RPC = require('bare-rpc')
-const env = JSON.parse(process.argv.at(-1))
-const endpoint = new URL(env.QVAC_IPC_SOCKET_PATH)
-const socket = net.connect(Number(endpoint.port), endpoint.hostname, () => {
-  if (process.env.QVAC_IPC_AUTH_TOKEN) socket.write(process.env.QVAC_IPC_AUTH_TOKEN + '\n')
+const protocol = require('bare-stow/protocol')
+
+const socket = net.connect(Number(process.argv.at(-1)), '127.0.0.1', () => {
+  const token = process.env.QVAC_IPC_AUTH_TOKEN
+  if (token) socket.write(token + '\n')
+  ipc.send('ready')
 })
+
+const stream = new Duplex({
+  write(data, encoding, callback) {
+    socket.write(data, callback)
+  },
+  final(callback) {
+    socket.end()
+    callback(null)
+  }
+})
+socket.on('data', (chunk) => stream.push(chunk))
+socket.on('end', () => stream.push(null))
+
+const ipc = protocol.attach(stream)
+ipc.on('terminate', async () => {
+  await ipc.send('exit', { code: 0 })
+  stream.end()
+})
+
 let resolveInputClosed
 const inputClosed = new Promise(resolve => { resolveInputClosed = resolve })
-new RPC(socket, async request => {
+new RPC(ipc, async request => {
   if (!request.data) {
     const input = request.createRequestStream()
     const output = request.createResponseStream()
@@ -25,10 +49,7 @@ new RPC(socket, async request => {
     await inputClosed
     request.reply(Buffer.from('{"type":"inputClosed","closed":true}'))
   }
-  else if (payload.type === '__shutdown__') {
-    request.reply(Buffer.from('{"success":true}'))
-    setTimeout(() => socket.end(), 30)
-  } else if (payload.type === 'stream') {
+  else if (payload.type === 'stream') {
     const stream = request.createResponseStream()
     for (let i = 0; i < 200; i++) {
       await new Promise((resolve, reject) => stream.write(Buffer.from(JSON.stringify({ type: 'item', index: i }) + '\n'), error => error ? reject(error) : resolve()))

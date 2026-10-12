@@ -7,10 +7,13 @@ import java.io.EOFException
 import java.net.Socket
 
 class JvmBareRpcSession(
-    socket: Socket,
+    channel: BareRpcChannel,
     limits: BareRpcLimits = BareRpcLimits(),
 ) {
-    private val session = BareRpcSession(JvmSocketChannel(socket), limits)
+    constructor(socket: Socket, limits: BareRpcLimits = BareRpcLimits()) :
+        this(JvmSocketChannel(socket), limits)
+
+    private val session = BareRpcSession(channel, limits)
 
     suspend fun request(data: ByteArray, command: Long = 0) = session.request(data, command)
 
@@ -25,7 +28,7 @@ class JvmBareRpcSession(
     suspend fun close() = session.close()
 }
 
-private class JvmSocketChannel(
+internal class JvmSocketChannel(
     private val socket: Socket,
 ) : BareRpcChannel {
     override suspend fun readExactly(count: Int): ByteArray = withContext(Dispatchers.IO) {
