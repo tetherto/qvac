@@ -81,6 +81,7 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
 
   const common: TtsCommon = {
     nGpuLayers: gpuLayersFromCount(config.useGPU, config.nGpuLayers),
+    ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir }),
     ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes }),
     ...(lavasrEnhancerPath !== undefined && { lavasrEnhancerPath }),
     ...(lavasrDenoiserPath !== undefined && { lavasrDenoiserPath })
@@ -127,8 +128,50 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
     case 'cosyvoice3':
       return cosyvoiceRequest(params.modelPath, common)
 
-    case 'moss':
-      return unsupported('the moss engine takes no fit request')
+    case 'moss': {
+      const decoder = artifacts['mossCodecDecoderPath']
+      const encoder = artifacts['mossCodecEncoderPath']
+      if (!decoder) return unsupported('the moss codec decoder is not resolved')
+      if (!config.fitWorkload) {
+        return unsupported(
+          'MOSS fit requires fitWorkload with promptRows, referenceSamples and streaming'
+        )
+      }
+      if (config.fitWorkload.referenceSamples > 0 && !encoder) {
+        return unsupported('MOSS reference encoding requires the codec encoder')
+      }
+      return supported({
+        engineType: 'moss',
+        mossBackbonePath: params.modelPath,
+        mossCodecDecoderPath: decoder,
+        ...(encoder ? { mossCodecEncoderPath: encoder } : {}),
+        ...common,
+        ...config.fitWorkload,
+        ...(config.threads !== undefined ? { threads: config.threads } : {}),
+        ...(config.streamChunkTokens !== undefined
+          ? { streamChunkTokens: config.streamChunkTokens }
+          : {}),
+        ...(config.durationTokens !== undefined ? { durationTokens: config.durationTokens } : {})
+      })
+    }
+    case 'moss-sfx': {
+      if (!config.fitWorkload) {
+        return unsupported('MOSS-SoundEffect fit requires fitWorkload with prompt and seconds')
+      }
+      return supported({
+        engineType: 'moss-sfx',
+        mossSoundEffectPath: params.modelPath,
+        ...common,
+        ...config.fitWorkload,
+        ...(config.negativePrompt !== undefined ? { negativePrompt: config.negativePrompt } : {}),
+        ...(config.steps !== undefined ? { steps: config.steps } : {}),
+        ...(config.guidance !== undefined ? { guidance: config.guidance } : {}),
+        ...(config.shift !== undefined ? { shift: config.shift } : {}),
+        ...(config.threads !== undefined ? { threads: config.threads } : {})
+      })
+    }
+    case 'moss-speech':
+      return unsupported('the addon does not provide MOSS-Speech memory fit')
 
     default: {
       const s3genPath = artifacts['s3genPath']

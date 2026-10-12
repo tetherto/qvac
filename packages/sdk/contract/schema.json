@@ -2119,7 +2119,20 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": ["string", "number", "boolean", "null"]
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -3341,7 +3354,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -3988,7 +4014,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -4708,8 +4747,26 @@
     "constants.TtsEngine": {
       "title": "TtsEngine",
       "type": "string",
-      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8", "moss"],
-      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8", "MOSS"]
+      "enum": [
+        "chatterbox",
+        "supertonic",
+        "parler",
+        "cosyvoice3",
+        "audio8",
+        "moss",
+        "moss-sfx",
+        "moss-speech"
+      ],
+      "x-enum-varnames": [
+        "CHATTERBOX",
+        "SUPERTONIC",
+        "PARLER",
+        "COSYVOICE3",
+        "AUDIO8",
+        "MOSS",
+        "MOSS_SFX",
+        "MOSS_SPEECH"
+      ]
     },
     "constants.TtsPace": {
       "title": "TtsPace",
@@ -15031,6 +15088,27 @@
                           "type": "string",
                           "minLength": 1
                         },
+                        "fitWorkload": {
+                          "description": "Complete native prompt rows and total mono reference samples for memory fit; no estimates are inferred from text.",
+                          "type": "object",
+                          "properties": {
+                            "promptRows": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 2147483647
+                            },
+                            "referenceSamples": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            "streaming": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": ["promptRows", "referenceSamples", "streaming"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigMossFitWorkload"
+                        },
                         "mossCodecDecoderModelSrc": {
                           "anyOf": [
                             {
@@ -15420,6 +15498,219 @@
                       "required": ["ttsEngine", "mossCodecDecoderModelSrc"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigMoss"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "moss-sfx"
+                        },
+                        "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "seconds": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 30
+                        },
+                        "negativePrompt": {
+                          "type": "string"
+                        },
+                        "steps": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000
+                        },
+                        "guidance": {
+                          "type": "number",
+                          "minimum": 1,
+                          "maximum": 50
+                        },
+                        "shift": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 100
+                        },
+                        "fitWorkload": {
+                          "description": "Explicit sound-effect workload for metadata-only memory fit.",
+                          "type": "object",
+                          "properties": {
+                            "prompt": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "seconds": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "maximum": 30
+                            }
+                          },
+                          "required": ["prompt", "seconds"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSfxFitWorkload"
+                        }
+                      },
+                      "required": ["ttsEngine"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSfx"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "moss-speech"
+                        },
+                        "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "mossSpeechCodecModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc"
+                            }
+                          ],
+                          "description": "MOSS-Speech codec GGUF source; modelSrc is the language model."
+                        }
+                      },
+                      "required": ["ttsEngine", "mossSpeechCodecModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSpeech"
                     }
                   ]
                 }
@@ -15817,7 +16108,14 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "type": ["number", "string"]
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -17033,7 +17331,14 @@
                         },
                         "maxVram": {
                           "description": "VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
-                          "type": ["number", "string"]
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
                         },
                         "streamLayers": {
                           "description": "Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -19272,10 +19577,7 @@
                   {
                     "type": "number"
                   }
-                ],
-                "items": false,
-                "minItems": 4,
-                "maxItems": 4
+                ]
               },
               "confidence": {
                 "type": "number"
@@ -20392,12 +20694,130 @@
           "type": "string",
           "minLength": 1
         },
+        "seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 30
+        },
+        "negativePrompt": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "guidance": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "shift": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "audio": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          }
+        },
+        "sampleRate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 192000
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": ["system", "user", "assistant"],
+                "title": "TextToSpeechRequestMessagesItemRole"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "audio": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 1
+                }
+              },
+              "sampleRate": {
+                "type": "integer",
+                "minimum": 8000,
+                "maximum": 192000
+              }
+            },
+            "required": ["role"],
+            "title": "TextToSpeechRequestMessagesItem"
+          }
+        },
+        "systemPrompt": {
+          "type": "string"
+        },
+        "replyVoice": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          }
+        },
+        "replyVoiceSampleRate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 192000
+        },
+        "textReply": {
+          "type": "boolean"
+        },
+        "maxReplySeconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "maxNewTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "greedy": {
+          "type": "boolean"
+        },
+        "temperature": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10
+        },
+        "topP": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "topK": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
         "type": {
           "type": "string",
           "const": "textToSpeech"
         }
       },
-      "required": ["modelId", "text", "type"]
+      "required": ["modelId", "type"]
     },
     "textToSpeech.response": {
       "title": "TextToSpeechResponse",
@@ -20406,6 +20826,10 @@
         "type": {
           "type": "string",
           "const": "textToSpeech"
+        },
+        "text": {
+          "description": "MOSS-Speech reply text, including text-only replies.",
+          "type": "string"
         },
         "buffer": {
           "type": "array",

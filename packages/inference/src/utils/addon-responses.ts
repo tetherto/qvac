@@ -55,6 +55,7 @@ export interface TtsStats {
  * fields are populated on both paths.
  */
 export interface TtsOutputChunk {
+  text?: string
   outputArray: ArrayLike<number>
   /** Rate of `outputArray`; moves with `outputSampleRate` and the enhancer. */
   sampleRate?: number
