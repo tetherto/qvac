@@ -15,89 +15,52 @@ import bare_rpc
 import pytest
 
 from tetherto.qvac_sdk import bare_rpc_transport
-from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
+from tetherto.qvac_sdk.bare_rpc_transport import (
+    _CONTROL,
+    _DATA,
+    BareRpcTransport,
+    _frame,
+    _FrameReader,
+)
 
 pytestmark = [pytest.mark.asyncio]
 
 
-class _FakeProc:
-    def __init__(self) -> None:
-        self.returncode: int | None = None
-        self._exited = asyncio.Event()
-
-    def exit(self, code: int = 0) -> None:
-        self.returncode = code
-        self._exited.set()
-
-    def terminate(self) -> None:
-        self.exit()
-
-    kill = terminate
-
-    async def wait(self) -> int:
-        await self._exited.wait()
-        assert self.returncode is not None
-        return self.returncode
-
-
-class _Spawn:
-    def __init__(self) -> None:
-        self.argv: tuple = ()
-        self.env: dict = {}
-        self.proc: _FakeProc | None = None
-        self.ready = asyncio.Event()
-
-    @property
-    def port(self) -> int:
-        endpoint = json.loads(self.argv[-1])["QVAC_IPC_SOCKET_PATH"]
-        return int(endpoint.rsplit(":", 1)[1])
-
-    @property
-    def token(self) -> bytes:
-        return self.env["QVAC_IPC_AUTH_TOKEN"].encode("ascii")
-
-
-@pytest.fixture
-def spawn(monkeypatch) -> _Spawn:
-    captured = _Spawn()
-    monkeypatch.setattr(bare_rpc_transport, "_HANDSHAKE_TIMEOUT", 0.5)
-
-    async def fake_exec(*argv, env=None, **_kwargs):
-        captured.argv = argv
-        captured.env = env or {}
-        captured.proc = _FakeProc()
-        captured.ready.set()
-        return captured.proc
-
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
-    return captured
-
-
-async def _start(transport: BareRpcTransport, spawn: _Spawn, **kwargs) -> asyncio.Task:
+async def _start(transport: BareRpcTransport, spawn, **kwargs) -> asyncio.Task:
     task = asyncio.ensure_future(transport.connect(**kwargs))
     await asyncio.wait_for(spawn.ready.wait(), timeout=5)
     return task
 
 
-async def _fake_worker(spawn: _Spawn, reply: dict, token: bytes | None = None):
+async def _fake_worker(spawn, reply: dict, token: bytes | None = None):
+    """Behaves like the TCP shim: the token line, `ready`, then framed RPC."""
     reader, writer = await asyncio.open_connection("127.0.0.1", spawn.port)
     writer.write((token if token is not None else spawn.token) + b"\n")
+    writer.write(_frame(_CONTROL, b'{"type":"ready"}'))
 
     async def on_request(req) -> None:
         await req.reply(json.dumps(reply).encode("utf-8"))
 
-    rpc = bare_rpc.RPC(send=writer.write, on_request=on_request)
+    rpc = bare_rpc.RPC(
+        send=lambda data: writer.write(_frame(_DATA, data)), on_request=on_request
+    )
 
     async def pump() -> None:
+        frames = _FrameReader()
         while chunk := await reader.read(65536):
-            await rpc.receive(chunk)
+            for tag, payload in frames.feed(chunk):
+                if tag == _DATA:
+                    await rpc.receive(payload)
 
     return writer, asyncio.ensure_future(pump())
 
 
 def _forged_reply(request_id: int = 1) -> bytes:
-    return bare_rpc.encode_response(
-        request_id, data=json.dumps({"forged": True}).encode("utf-8")
+    return _frame(_CONTROL, b'{"type":"ready"}') + _frame(
+        _DATA,
+        bare_rpc.encode_response(
+            request_id, data=json.dumps({"forged": True}).encode("utf-8")
+        ),
     )
 
 

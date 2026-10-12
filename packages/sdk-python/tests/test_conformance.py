@@ -17,7 +17,7 @@ import os
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_COMMAND, WORKER_PATH
 
 import tetherto.qvac_sdk.models as models
 from tetherto.qvac_sdk import cancel, completion, load_model, translate, unload_model
@@ -61,7 +61,7 @@ pytestmark = [
 
 @pytest_asyncio.fixture
 async def transport():
-    async with BareRpcTransport([BARE_BIN, WORKER_PATH]) as t:
+    async with BareRpcTransport(WORKER_COMMAND) as t:
         yield t
 
 
