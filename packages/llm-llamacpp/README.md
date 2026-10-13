@@ -411,7 +411,7 @@ Cancelling a queued job resolves immediately, whether or not the slots it was wa
 ```js
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
 
-const fit = LlmLlamacpp.assessFit({
+const fit = await LlmLlamacpp.assessFit({
   modelPath: '/models/model.gguf',
   config: { device: 'gpu', 'ctx-size': '4096' }
 })
@@ -431,7 +431,9 @@ Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off 
 
 `minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
 
-A model the fitter cannot read is `status: "error"`; only a broken request throws.
+`assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
+
+A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
 
 ## Fine-tuning
 

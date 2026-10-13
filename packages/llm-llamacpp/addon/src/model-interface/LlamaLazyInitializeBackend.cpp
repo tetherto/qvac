@@ -20,7 +20,19 @@ int LlamaLazyInitializeBackend::g_refCount = 0;
 bool LlamaLazyInitializeBackend::initialize(
     const std::string& backendsDir, const std::string& openclCacheDir) {
   std::lock_guard<std::mutex> lock(g_initMutex);
+  return initializeLocked(backendsDir, openclCacheDir);
+}
 
+void LlamaLazyInitializeBackend::acquire(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  // Initialization and ownership must be atomic with the last model unloading.
+  const std::lock_guard<std::mutex> lock(g_initMutex);
+  initializeLocked(backendsDir, openclCacheDir);
+  ++g_refCount;
+}
+
+bool LlamaLazyInitializeBackend::initializeLocked(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
   if (g_initialized) {
     if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
         backendsDir != g_recordedBackendsDir) {
@@ -86,8 +98,7 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
 LlamaBackendsHandle::LlamaBackendsHandle(
     const std::string& backendsDir, const std::string& openclCacheDir)
     : ownsHandle_(true) {
-  LlamaLazyInitializeBackend::initialize(backendsDir, openclCacheDir);
-  LlamaLazyInitializeBackend::incrementRefCount();
+  LlamaLazyInitializeBackend::acquire(backendsDir, openclCacheDir);
 }
 
 LlamaBackendsHandle::~LlamaBackendsHandle() {

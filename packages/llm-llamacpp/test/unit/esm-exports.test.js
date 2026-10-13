@@ -49,6 +49,8 @@ test('ESM named bindings link and match the statics', async (t) => {
   t.is(typeof ns.QvacResponse, 'function', 'named QvacResponse binding links')
   t.is(ns.pickPrimaryGgufPath, ns.default.pickPrimaryGgufPath, 'named === static')
   t.is(ns.QvacResponse, ns.default.QvacResponse, 'named === static')
+  t.is(typeof ns.assessFit, 'function', 'named assessFit binding links')
+  t.is(ns.assessFit, ns.default.assessFit, 'named === static')
 })
 
 test('batchHandler ESM named bindings link', async (t) => {
