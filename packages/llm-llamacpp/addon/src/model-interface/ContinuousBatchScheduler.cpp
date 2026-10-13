@@ -19,6 +19,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "CacheCheckpointFile.hpp"
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "SpeculativeRuntime.hpp"
@@ -553,7 +554,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     }
   }
   if (!isCacheLoaded) {
-    isCacheLoaded = driver->loadCache(key);
+    // Checkpoints kept for the key replace the file's below, so the file's is
+    // not read at all.
+    isCacheLoaded = driver->loadCache(
+        key, /*adoptFileCheckpoints=*/!checkpointStore_.contains(key));
     activeCacheSavedToDisk = isCacheLoaded;
   }
   driver->setCacheReconciliationEnabled(!key.empty());
@@ -1897,7 +1901,11 @@ void ContinuousBatchScheduler::flushForUnload() {
         persistedCacheBackingStoreMissing(parked->cacheKey)) {
       continue;
     }
-    if (writeStateToFileLocked(seqId, parked->cacheKey, parked->ledgerWords)) {
+    if (writeStateToFileLocked(
+            seqId,
+            parked->cacheKey,
+            parked->ledgerWords,
+            parked->checkpoints)) {
       parked->dirty = false;
       parked->activeCacheSavedToDisk = true;
     }
@@ -2027,7 +2035,8 @@ void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
     // single-prompt path does when it switches keys, so nothing is lost. An
     // ephemeral conversation is dropped instead.
     if (!dropped && !inRam && parked.dirty && !parked.ephemeral) {
-      writeStateToFileLocked(seqId, parked.cacheKey, parked.ledgerWords);
+      writeStateToFileLocked(
+          seqId, parked.cacheKey, parked.ledgerWords, parked.checkpoints);
     }
     if (!dropped && !inRam && !parked.checkpoints.empty()) {
       storeCheckpointsLocked(parked.cacheKey, std::move(parked.checkpoints));
@@ -2041,7 +2050,8 @@ void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
 
 bool ContinuousBatchScheduler::writeStateToFileLocked(
     uint32_t seqId, const std::string& cacheKey,
-    const std::vector<llama_token>& ledgerWords) noexcept {
+    const std::vector<llama_token>& ledgerWords,
+    const cache::Checkpoints& checkpoints) noexcept {
   try {
     const std::string tmp = cacheKey + ".tmp";
     const size_t written = llama_state_seq_save_file(
@@ -2059,6 +2069,7 @@ bool ContinuousBatchScheduler::writeStateToFileLocked(
           cacheKey.c_str());
       return false;
     }
+    (void)cache::appendCheckpointSection(tmp, checkpoints);
     CacheManager::atomicPromoteFile(tmp, cacheKey);
     return true;
   } catch (const std::exception& e) {
@@ -2072,7 +2083,8 @@ bool ContinuousBatchScheduler::writeStateToFileLocked(
 
 void ContinuousBatchScheduler::writeStateToFileOrThrowLocked(
     uint32_t seqId, const std::string& cacheKey,
-    const std::vector<llama_token>& ledgerWords) {
+    const std::vector<llama_token>& ledgerWords,
+    const cache::Checkpoints& checkpoints) {
   const std::string tmp = cacheKey + ".tmp";
   const size_t written = llama_state_seq_save_file(
       shared_.lctx,
@@ -2089,6 +2101,7 @@ void ContinuousBatchScheduler::writeStateToFileOrThrowLocked(
             qvac_lib_inference_addon_llama::errors::UnableToSaveSessionFile),
         "failed to save session file to '" + cacheKey + "'");
   }
+  (void)cache::appendCheckpointSection(tmp, checkpoints);
   CacheManager::atomicPromoteFile(tmp, cacheKey);
 }
 
@@ -2174,7 +2187,10 @@ void ContinuousBatchScheduler::serviceSaveJobsLocked() noexcept {
           outcome = SlotStateCache::SaveOutcome::Current;
         } else {
           writeStateToFileOrThrowLocked(
-              seqId, parked->cacheKey, parked->ledgerWords);
+              seqId,
+              parked->cacheKey,
+              parked->ledgerWords,
+              parked->checkpoints);
           parked->dirty = false;
           parked->activeCacheSavedToDisk = true;
           outcome = SlotStateCache::SaveOutcome::Written;

@@ -83,6 +83,52 @@ export const chatMessage = z
   })
   .passthrough()
 
+// ─── History tool turns ───────────────────────────────────────────────
+
+export interface HistoryToolCall {
+  id?: string
+  name: string
+  arguments: Record<string, unknown>
+}
+
+export interface ToolTurnFields {
+  toolCalls?: HistoryToolCall[]
+  toolCallId?: string
+  toolName?: string
+}
+
+// OpenAI sends call arguments as JSON text; the SDK takes an object. Anything
+// that is not a JSON object becomes `{}`.
+export function parseToolCallArguments(raw: unknown): Record<string, unknown> {
+  let value = raw
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      return {}
+    }
+  }
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+// A tool result carries only its call id; fill in the tool's name from the
+// call it answers, for chat templates that print it.
+export function nameToolResults<T extends { role: string } & ToolTurnFields>(history: T[]): T[] {
+  const names = new Map<string, string>()
+  return history.map((msg) => {
+    for (const call of msg.toolCalls ?? []) {
+      if (call.id !== undefined) names.set(call.id, call.name)
+    }
+    if (msg.role !== 'tool' || msg.toolName !== undefined || msg.toolCallId === undefined) {
+      return msg
+    }
+    const name = names.get(msg.toolCallId)
+    return name === undefined ? msg : { ...msg, toolName: name }
+  })
+}
+
 // ─── SDK-side types ───────────────────────────────────────────────────
 
 export interface GenerationParams {
@@ -95,7 +141,6 @@ export interface GenerationParams {
   presence_penalty?: number
   repeat_penalty?: number
   reasoning_budget?: -1 | 0
-  remove_thinking_from_context?: boolean
   /** `auto` | `none` | `required` | a declared tool's name. */
   tool_choice?: string
 }
@@ -401,10 +446,6 @@ export function extractGenerationParams(
     params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
   } else if (body['reasoning_budget'] === -1 || body['reasoning_budget'] === 0) {
     params.reasoning_budget = body['reasoning_budget']
-  }
-
-  if (typeof body['remove_thinking_from_context'] === 'boolean') {
-    params.remove_thinking_from_context = body['remove_thinking_from_context']
   }
 
   return Object.keys(params).length > 0 ? params : undefined

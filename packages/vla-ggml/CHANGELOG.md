@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.31.1] - 2026-10-13
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+## [0.31.0] - 2026-10-09
+
+### Added
+
+- CUDA backend selection on Linux x64, Linux arm64 and Windows x64 NVIDIA
+  hosts ([#4917](https://github.com/tetherto/qvac/pull/4917)). The CUDA module
+  ships in `@qvac/fabric` 0.20.2+; Linux arm64 carries a CUDA 13 module for
+  DGX Spark and a CUDA 12 module for Jetson Orin. Windows needs a CUDA 13
+  install, whose runtime DLLs load from `%CUDA_PATH%\bin\x64`. If the module,
+  driver or runtime is missing, selection continues down the default order.
+- `load({ backend })` also takes a comma-separated GPU priority list, such as
+  `'cuda,vulkan'` or `'vulkan'` to force Vulkan on an NVIDIA machine. Accepted
+  names are `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm` and `sycl`. A
+  name whose device is absent is skipped; an unrecognised name fails with
+  `INVALID_CONFIG`. The Adreno 800+ OpenCL rules still apply.
+
+### Changed
+
+- The default order is now CUDA, then HIP/ROCm, then a discrete GPU before an
+  integrated one, so an NVIDIA host that ran on Vulkan before now runs on CUDA.
+  `CUDA_VISIBLE_DEVICES=-1` or `backend: 'vulkan'` restores Vulkan.
+
 ## [0.30.0] - 2026-10-06
 
 ### Changed

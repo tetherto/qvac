@@ -89,6 +89,7 @@ jobs:
           .github/scripts/test/ci-trust-policy.test.mjs
           .github/scripts/test/cpp-tests-baseline.test.mjs
           .github/scripts/test/cpp-build-cache.test.mjs
+          .github/scripts/test/cpp-tests-warm-roster.test.mjs
           .github/scripts/test/cpp-lint-selection.test.mjs
           .github/scripts/test/fabric-overlay-policy.test.mjs
           .github/scripts/test/install-scripts-policy.test.mjs
@@ -106,6 +107,7 @@ jobs:
           .github/scripts/test/download-artifact-retry.test.mjs
           .github/scripts/test/asr-integration-budget.test.mjs
           .github/scripts/test/integration-test-script.test.mjs
+          .github/scripts/test/release-train.test.mjs
 
       # Guards the model-cache seeding scheme: a seed writing a key no consumer
       # asks for is silent otherwise -- the seed saves, and its verify job

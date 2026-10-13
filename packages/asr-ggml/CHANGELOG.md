@@ -12,9 +12,38 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
-## [Unreleased]
+## [0.8.1] - 2026-10-13
 
 ### Added
+
+- `package.json` records the `ggml-speech` build the prebuilds ship as
+  `qvac["ggml-speech"]`. The speech addons ship their ggml backends under the
+  same file names, so an app that bundles several of them needs releases that
+  record the same build.
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
+
+- Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
+  MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when
+  `moss-transcribe-diarize-encoder.mlmodelc` sits next to the GGUF; without
+  one nothing changes.
+- Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
+  same versions as the other speech addons, instead of taking at least those
+  versions.
+
+## [0.8.0] - 2026-10-09
+
+### Added
+
+- `assessFit` supports `engine: 'moss-transcribe'` with an explicit audio duration and the existing prompt, hotword and token options. It projects weights, encoder/decoder graphs, KV cache and host memory without loading model weights.
 
 - Whisper `assessFit` takes the registry's weightless descriptions of a
   whisper model and its Silero VAD model as `modelPath` and `vadModelPath`,
@@ -48,6 +77,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Fixed
 
+- MOSS transcription memory-fit estimates count shared compute-buffer metadata once.
 - Nemotron 3 Diarization streaming preserves first-chunk predictions with left
   context, applies the same peak gain as offline inference, and retains an
   explicitly requested 80 ms left context.

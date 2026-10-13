@@ -65,10 +65,12 @@ function resolveTableAsset(kind: string, file: string): string {
 // -- see tests/shared/platform-policy.ts.
 const resources = new ResourceManager(policyFor('desktop'))
 
-// One table, shared with every other client, applied here.
+// One table, shared with every other client, applied here. The runner owns the label this leg
+// registers with and publishes it, so the table and the skip decisions cannot disagree. Without
+// it -- a framework older than the runner change -- both fall back to the bare family.
 applyResourceTable(
   RESOURCE_TABLE,
-  'desktop',
+  process.env['QVAC_TEST_PLATFORM'] ?? 'desktop',
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],

@@ -44,7 +44,7 @@ function makeCtx(overrides: Partial<CheckContext> = {}): CheckContext {
     projectRoot: process.cwd(),
     platform: 'linux',
     arch: 'x64',
-    nodeVersion: '20.11.0',
+    nodeVersion: '24.20.0',
     totalMemoryBytes: 8 * 1024 ** 3,
     availableMemoryBytes: 4 * 1024 ** 3,
     probe: () => ({ ok: false }),
@@ -101,30 +101,26 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boole
 }
 
 describe('checkNodeVersion', () => {
-  it('fails on Node < 18', () => {
-    const r = checkNodeVersion(makeCtx({ nodeVersion: '16.20.0' }))
-    assert.equal(r.status, 'fail')
-    assert.equal(r.severity, 'required')
+  it('fails below the bare-pack floor and names the required range', () => {
+    for (const nodeVersion of ['20.11.0', '22.20.0', '23.11.0', '24.8.0']) {
+      const r = checkNodeVersion(makeCtx({ nodeVersion }))
+      assert.equal(r.status, 'fail', nodeVersion)
+      assert.equal(r.severity, 'required')
+      assert.match(r.hint ?? '', /\^22\.21\.0 \|\| >=24\.9\.0/)
+      assert.match(r.hint ?? '', /bundling/)
+    }
   })
 
-  it('warns on Node 18 (EOL but supported)', () => {
-    const r = checkNodeVersion(makeCtx({ nodeVersion: '18.19.0' }))
-    assert.equal(r.status, 'warn')
-  })
-
-  it('warns on Node 19 (below recommended)', () => {
-    const r = checkNodeVersion(makeCtx({ nodeVersion: '19.9.0' }))
-    assert.equal(r.status, 'warn')
-  })
-
-  it('passes on Node 20+', () => {
-    const r = checkNodeVersion(makeCtx({ nodeVersion: '20.11.0' }))
-    assert.equal(r.status, 'pass')
+  it('passes on Node 22.21+ and 24.9+', () => {
+    for (const nodeVersion of ['22.21.0', '24.9.0', '26.0.0']) {
+      assert.equal(checkNodeVersion(makeCtx({ nodeVersion })).status, 'pass', nodeVersion)
+    }
   })
 
   it('handles v-prefixed versions', () => {
-    const r = checkNodeVersion(makeCtx({ nodeVersion: 'v22.1.0' }))
+    const r = checkNodeVersion(makeCtx({ nodeVersion: 'v24.20.0' }))
     assert.equal(r.status, 'pass')
+    assert.equal(r.value, 'v24.20.0')
   })
 
   it('warns when version cannot be parsed', () => {

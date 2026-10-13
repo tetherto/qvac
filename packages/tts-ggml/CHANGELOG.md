@@ -5,7 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.1] - 2026-10-13
+
+### Added
+
+- `package.json` records the `ggml-speech` build the prebuilds ship as
+  `qvac["ggml-speech"]`. The speech addons ship their ggml backends under the
+  same file names, so an app that bundles several of them needs releases that
+  record the same build.
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update the shared `speech-cpp` pin to `2026-10-12` for CosyVoice3 CUDA LM flash
+  attention and decode graph reuse, plus Vulkan flow attention with f16 K/V.
+  Unsupported attention operations retain the regular-attention fallback.
+
+- Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS, MOSS,
+  MOSS-TTSD, MOSS-SoundEffect and MOSS-Speech run one stage each on a Core ML
+  sidecar staged next to the GGUF (see the README's Core ML sidecars on
+  Apple); without one nothing changes. CosyVoice3 bf16 flow weights loaded on
+  an ARM CPU are expanded to f32, which avoids a slow scalar path at twice the
+  memory for those weights, and Audio8 with GPU offload on Adreno (OpenCL) no
+  longer fails its strided key-cache copies.
+- Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
+  same versions as the other speech addons, instead of taking at least those
+  versions.
+
+## [0.11.0] - 2026-10-09
 
 ### Added
 
@@ -36,9 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-10-07#1`, keeping the speech packages on
-  one engine stack. Nothing in the window touches the TTS engines, so published
-  behavior is unchanged.
+- Raise the `speech-cpp` floor to `2026-10-07#2` and the `ggml-speech` floor to
+  `2026-10-07#1`, keeping the speech packages on one engine stack. The new
+  revisions add MOSS transcription memory fit and ggml memory queries that this
+  package does not use, so published behavior is unchanged.
 - Raise the `speech-cpp` floor to `2026-10-07`. CosyVoice3 with GPU offload on
   Android (OpenCL on Adreno) no longer aborts in the language model's first
   step, which the `2026-10-06` `ggml-speech` floor would otherwise cause. Other

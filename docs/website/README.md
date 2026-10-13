@@ -110,6 +110,22 @@ claim. Today that is the SDK's two generated reference pages: `v0.17.x (latest)`
 becomes plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new
 one.
 
+Then empty the new line's `reference/release-notes.mdx`, keeping its
+frontmatter and replacing its body with a line stating the release has not
+shipped. The two generated pages are treated differently on purpose:
+
+- The **API summary** keeps the copy. The release that renders it is reviewed
+  as a diff, and against the previous line's summary only the part of the
+  surface that actually moved shows up.
+- The **release notes** share nothing with the line before them. Keeping them
+  would make that same diff a wholesale replacement, and would publish the
+  previous release's notes under the new line's title for as long as the line
+  goes unreleased.
+
+The page itself stays either way: `reference/meta.json` lists it, so removing
+it would drop it from the sidebar. Its `description` names a version too, so it
+is rewritten to the line being opened.
+
 Everything else follows: the sidebars come from the `meta.json` files the copy
 brought with it, and the switcher, canonicals, agent artifacts, `versions.json`,
 sitemap, and retrieval metadata are computed from the manifest. `custom-tree.ts`

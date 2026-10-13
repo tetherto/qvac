@@ -413,19 +413,27 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   if (mdl == nullptr || ctx == nullptr) {
     return;
   }
-  // Only models that cannot trim a KV tail keep checkpoints; a budget on a
-  // pure-attention model is inert and needs no validation.
+  // Only models that cannot trim a KV tail, and sliding-window models, keep
+  // checkpoints; a budget on any other model is inert and needs no
+  // validation.
   const std::optional<std::string> architecture =
       utils::getModelArchitecture(mdl);
   const bool isDeepSeekV4 = architecture.has_value() &&
                             utils::isDeepSeekV4Architecture(*architecture);
-  if (!utils::needsFullStateSnapshot(
-          llama_model_is_recurrent(mdl),
-          llama_model_is_hybrid(mdl),
-          isDeepSeekV4)) {
+  const auto& params = state.llmContext_->getParams();
+  const bool fullState = utils::needsFullStateSnapshot(
+      llama_model_is_recurrent(mdl), llama_model_is_hybrid(mdl), isDeepSeekV4);
+  const int32_t nSwa = llama_model_n_swa(mdl);
+  const uint32_t nCtxSeq = llama_n_ctx_seq(ctx);
+  const bool slidingWindow = !fullState && utils::takesSlidingWindowCheckpoints(
+                                               nSwa, params.swa_full, nCtxSeq);
+  if (!fullState && !slidingWindow) {
     return;
   }
-  const uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
+  // A sliding-window checkpoint grows per token only until the window is
+  // full, so the extrapolation stops there.
+  const uint32_t perSeqTokens =
+      slidingWindow ? utils::slidingWindowCheckpointCells(nSwa) : nCtxSeq;
   const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
       ctx,
       llama_model_get_vocab(mdl),
@@ -445,8 +453,8 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "[LlamaModel] cache_checkpoints_max_bytes=%llu cannot hold "
-            "cache_checkpoints=%zu checkpoints: one checkpoint of a "
-            "%u-token sequence takes up to %llu bytes, so %zu need %llu. "
+            "cache_checkpoints=%zu checkpoints: one checkpoint covering "
+            "%u tokens takes up to %llu bytes, so %zu need %llu. "
             "Lower cache_checkpoints to %llu or raise the budget.",
             static_cast<unsigned long long>(policy.maxBytes),
             policy.maxCount,
@@ -1760,6 +1768,92 @@ LlamaModel::singleRuntimeStatsLocked() const {
   return stats;
 }
 
+namespace {
+
+[[noreturn]] void throwInvalidToolTurn(const char* what) {
+  throw qvac_errors::StatusError(
+      ADDON_ID,
+      toString(InvalidInputFormat),
+      string_format("formatPrompt: %s\n", what));
+}
+
+std::string optionalString(
+    const picojson::object& obj, const char* key, const char* typeError) {
+  auto it = obj.find(key);
+  if (it == obj.end()) {
+    return "";
+  }
+  if (!it->second.is<std::string>()) {
+    throwInvalidToolTurn(typeError);
+  }
+  return it->second.get<std::string>();
+}
+
+// Past tool calls on an assistant turn, and the call a tool result answers, so
+// the chat template renders them in the model's own format instead of the
+// caller flattening them into `content`.
+void readToolTurnFields(const picojson::object& obj, common_chat_msg& msg) {
+  auto calls = obj.find("tool_calls");
+  if (calls != obj.end()) {
+    if (msg.role != "assistant") {
+      throwInvalidToolTurn("tool_calls is only valid on assistant messages");
+    }
+    if (!calls->second.is<picojson::array>()) {
+      throwInvalidToolTurn("tool_calls must be an array");
+    }
+    for (const picojson::value& entry : calls->second.get<picojson::array>()) {
+      if (!entry.is<picojson::object>()) {
+        throwInvalidToolTurn("each tool_calls entry must be an object");
+      }
+      const picojson::object& call = entry.get<picojson::object>();
+      common_chat_tool_call toolCall;
+      toolCall.name =
+          optionalString(call, "name", "tool_calls name must be a string");
+      if (toolCall.name.empty()) {
+        throwInvalidToolTurn("each tool_calls entry needs a name");
+      }
+      toolCall.id =
+          optionalString(call, "id", "tool_calls id must be a string");
+      auto args = call.find("arguments");
+      if (args == call.end()) {
+        toolCall.arguments = "{}";
+      } else if (args->second.is<std::string>()) {
+        // Must be a JSON object: a template that parses it would otherwise fall
+        // back to a render without tools. The iterator overload catches
+        // trailing text.
+        const std::string& text = args->second.get<std::string>();
+        picojson::value parsedArgs;
+        std::string parseErr;
+        const auto stop =
+            picojson::parse(parsedArgs, text.begin(), text.end(), &parseErr);
+        if (!parseErr.empty() || !parsedArgs.is<picojson::object>() ||
+            text.find_first_not_of(
+                " \t\n\r", static_cast<size_t>(stop - text.begin())) !=
+                std::string::npos) {
+          throwInvalidToolTurn(
+              "tool_calls arguments must be an object or a JSON object string");
+        }
+        toolCall.arguments = text;
+      } else if (args->second.is<picojson::object>()) {
+        toolCall.arguments = args->second.serialize();
+      } else {
+        throwInvalidToolTurn(
+            "tool_calls arguments must be an object or a JSON object string");
+      }
+      msg.tool_calls.push_back(std::move(toolCall));
+    }
+  }
+  if (msg.role == "tool") {
+    msg.tool_call_id =
+        optionalString(obj, "tool_call_id", "tool_call_id must be a string");
+    msg.tool_name = optionalString(obj, "name", "name must be a string");
+  } else if (obj.find("tool_call_id") != obj.end()) {
+    throwInvalidToolTurn("tool_call_id is only valid on tool messages");
+  }
+}
+
+} // namespace
+
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (input.empty()) {
@@ -1806,12 +1900,25 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
         }
         newMsg.role = jsonObj["role"].get<std::string>();
 
-        if (jsonObj.find("content") == jsonObj.end()) {
+        // OpenAI-shaped history leaves `content` null or absent on an
+        // assistant turn that only carries `tool_calls`.
+        const auto contentIt = jsonObj.find("content");
+        const bool contentMissing = contentIt == jsonObj.end() ||
+                                    contentIt->second.is<picojson::null>();
+        if (contentMissing && jsonObj.find("tool_calls") == jsonObj.end()) {
           const char* errorMsg = "content is required in the input\n";
           throw qvac_errors::StatusError(
               ADDON_ID, toString(NoContentProvided), errorMsg);
         }
-        auto content = jsonObj["content"].get<std::string>();
+        if (!contentMissing && !contentIt->second.is<std::string>()) {
+          std::string errorMsg =
+              string_format("%s: content must be a string\n", __func__);
+          throw qvac_errors::StatusError(
+              ADDON_ID, toString(InvalidInputFormat), errorMsg);
+        }
+        std::string content = contentMissing
+                                  ? std::string()
+                                  : contentIt->second.get<std::string>();
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "media") {
@@ -1854,6 +1961,12 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
               reasoning->second.is<std::string>()) {
             newMsg.reasoning_content = reasoning->second.get<std::string>();
           }
+        }
+        try {
+          readToolTurnFields(jsonObj, newMsg);
+        } catch (...) {
+          state_->llmContext_->resetMedia();
+          throw;
         }
         chatMsgs.push_back(newMsg);
       }

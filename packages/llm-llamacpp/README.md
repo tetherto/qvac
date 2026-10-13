@@ -14,6 +14,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [4. Create Model Instance](#4-create-model-instance)
   - [5. Load Model](#5-load-model)
   - [6. Run Inference](#6-run-inference)
+    - [Tool calling](#tool-calling)
+    - [Batch inference](#batch-inference)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
 - [Assessing fit](#assessing-fit)
@@ -196,8 +198,8 @@ const config = {
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
-| cache_checkpoints | 0 – 1024                                    | 1                            | Per-sequence cap on process-local checkpoints kept for cached requests on hybrid / recurrent models and DeepSeek V4, one per committed request at the end of its history. Each holds only the state a tail trim cannot rebuild (about 20 MB on Qwen3.5-0.8B). `1` serves the next turn and a regenerate; editing the user message k-th from the end (1 = the last) without reprocessing the whole conversation needs `k + 1`, so `2` for the last one; `0` disables them. Also accepted as `cache-checkpoints` ([details](./docs/cache-api.md), [how it works](./docs/cache-lifecycle.md)) |
-| cache_checkpoints_max_bytes | integer (bytes)                 | 0 (unlimited)                | Byte budget for those checkpoints, enforced before the count. The load fails with `InvalidArgument` when it cannot hold `cache_checkpoints` checkpoints of the largest size the context allows. Also accepted as `cache-checkpoints-max-bytes` |
+| cache_checkpoints | 0 – 1024                                    | 1                            | Per-sequence cap on process-local checkpoints kept for cached requests on hybrid / recurrent models, DeepSeek V4 and sliding-window models (Gemma 3/4, gpt-oss), one per committed request at the end of its history. Each holds only the state a tail trim cannot rebuild (about 20 MB on Qwen3.5-0.8B; on sliding-window models the window cells, which reach hundreds of MB on larger models). `1` serves the next turn and a regenerate; editing the user message k-th from the end (1 = the last) without reprocessing the whole conversation needs `k + 1`, so `2` for the last one; `0` disables them. The newest one is also saved in the `cacheKey` file, so a conversation loaded in a new process continues its next turn from it. Also accepted as `cache-checkpoints` ([details](./docs/cache-api.md), [how it works](./docs/cache-lifecycle.md)) |
+| cache_checkpoints_max_bytes | integer (bytes)                 | 0 (unlimited)                | Byte budget for those checkpoints, enforced before the count. The load fails with `InvalidArgument` when it cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window). Also accepted as `cache-checkpoints-max-bytes` |
 | cache_checkpoint_storage | `"memory"` or `"disk"`             | `"memory"`                   | Where checkpoints and the per-request rollback snapshot live. `"memory"` keeps them in host RAM so a cached chat never touches the disk; `"disk"` writes them to a private directory inside `cache_checkpoint_dir`, which it requires. Also accepted as `cache-checkpoint-storage` |
 | cache_checkpoint_dir | directory path                              | none                         | **Required with `cache_checkpoint_storage: "disk"`**, and refused without it: where checkpoint files go, inside a private directory the addon creates in it (mode 0700; on Windows, the directory itself). On mobile, pass the app's cache directory. The load fails with `InvalidArgument` when it is missing, empty, or unusable. Also accepted as `cache-checkpoint-dir` |
 | cache_ram_mib | 0 – 1048576 (MiB)                               | 0 (off)                      | Host-RAM budget for conversations that are not running. A `cacheKey` switch or a batch slot eviction moves the conversation there instead of writing its file, and the next request on that key restores it. A write-back cache: unsaved turns reach the file on `saveCache()`, when the budget pushes the entry out, or at unload; ephemeral entries are dropped instead. Also accepted as `cache-ram-mib` ([details](./docs/cache-api.md#keep-switched-away-conversations-in-ram)) |
@@ -314,6 +316,26 @@ try {
 ```
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
+#### Tool calling
+
+Load with `config.tools: 'true'` and declare tools as `{ type: 'function', ... }` entries in the message array. The model answers a tool request with a tool-call block in its own format (`<tool_call>` for Qwen). To continue the conversation, put the call on an assistant turn as `tool_calls` and the result on a `tool` turn; the chat template renders both natively, so neither needs to be written into `content`.
+
+```javascript
+const response = await model.run([
+  {
+    type: 'function',
+    name: 'get_weather',
+    description: 'Get the weather for a city',
+    parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  },
+  { role: 'user', content: 'Weather in Paris?' },
+  { role: 'assistant', content: '', tool_calls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }] },
+  { role: 'tool', content: '18C', tool_call_id: 'call_1', name: 'get_weather' }
+])
+```
+
+`arguments` is an object or the text of a JSON object, and `content` may be empty on the assistant turn. A malformed tool turn is rejected with `InvalidInputFormat`. [`examples/toolCalling.js`](./examples/toolCalling.js) shows a full round trip.
 
 #### Batch inference
 
