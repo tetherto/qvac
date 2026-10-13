@@ -6,6 +6,7 @@ on:
   pull_request_target:
     types: [opened, labeled, synchronize, ready_for_review, reopened, edited]
     branches: [main, master, release-*]
+  merge_group:
 
 permissions:
   contents: read

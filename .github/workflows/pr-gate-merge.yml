@@ -10,6 +10,7 @@ on:
       - ready_for_review
     branches:
       - main
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -58,7 +59,7 @@ jobs:
           github-token: ${{ github.token }}
 
   changes:
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request_target' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}
@@ -75,6 +76,8 @@ jobs:
         id: filter
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ github.event.merge_group.base_sha }}
+          ref: ${{ github.event.merge_group.head_sha }}
           filters: |
             pkg-any:
               - "packages/**"
@@ -229,13 +232,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
           # Freshness threshold: the moment this PR event fired. The run that
           # produced a trusted prebuild status must have been triggered at/after
           # this (run.created_at >= PR_UPDATED_AT), which rejects statuses from
           # runs of an earlier event (e.g. the pre-label opened/synchronize run).
-          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at || github.event.merge_group.head_commit.timestamp }}
         run: node .github/scripts/prebuild-status/verify.mjs
 
   # Verifies C++/fuzz suites without triggering them. Each C++-test-bearing
@@ -263,9 +266,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
-          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at || github.event.merge_group.head_commit.timestamp }}
           KIND: cpp-tests
         run: node .github/scripts/prebuild-status/verify.mjs
 
