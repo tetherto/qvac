@@ -357,12 +357,11 @@ describe('chat completions (tools / structured output)', () => {
     }
   })
 
-  // A follow-up turn replays a prior assistant tool call as history. The server
-  // re-renders it in the model's own dialect (resolved via getLoadedModelInfo);
-  // rendering it in a foreign dialect made the model emit a malformed tool frame
-  // that failed to parse and leaked raw `<tool_call>`/`<function=` markup into
-  // `content`. A structured `tool_calls` reply is the correct channel; raw markup
-  // in `content` is the regression this guards.
+  // A follow-up turn replays a prior assistant tool call as history, which the
+  // model's chat template renders in its own format. A call replayed in a foreign
+  // format made the model emit a malformed tool frame that failed to parse and
+  // leaked raw `<tool_call>`/`<function=` markup into `content`; that leak is the
+  // regression this guards.
   it('replays a prior tool call without leaking raw tool markup into content', async () => {
     const res = await post('/v1/chat/completions', {
       model: E2E.llm,
