@@ -875,7 +875,9 @@ export type {
   DiffusionFitRequest,
   DiffusionFitResult,
   DiffusionFitStatus,
-  DiffusionFitWorkload
+  DiffusionFitWorkload,
+  EsrganFitRequest,
+  WorldFitRequest
 } from './fit'
 
 export type VideoStableDiffusion = InstanceType<typeof VideoStableDiffusionConstructor>
