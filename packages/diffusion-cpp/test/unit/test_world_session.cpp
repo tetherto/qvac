@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 
@@ -314,6 +315,17 @@ TEST_F(WorldSessionHandlersTest, LayerStreamingUsesEngineAssignmentSyntax) {
   EXPECT_THROW(
       applyWorldSessionHandlers(config, {{"streamLayers", "yes"}}),
       StatusError);
+}
+
+TEST_F(WorldSessionHandlersTest, FitRejectsUnknownPlacementNames) {
+  ggml_backend_load_all();
+  EXPECT_TRUE(worldFitPlacementSupported("cpu", "diffusion=disk,vae=cpu", "4"));
+  EXPECT_TRUE(
+      worldFitPlacementSupported("diffusion=cpu,vae=cpu", "*=cpu", "cpu=4"));
+  EXPECT_FALSE(worldFitPlacementSupported("gpux", "", ""));
+  EXPECT_FALSE(worldFitPlacementSupported("cpu", "decoder=cpu", ""));
+  EXPECT_FALSE(worldFitPlacementSupported("cpu", "diffusion=gpux", ""));
+  EXPECT_FALSE(worldFitPlacementSupported("cpu", "", "gpux=4"));
 }
 
 TEST_F(WorldSessionHandlersTest, NumericBooleansParse) {

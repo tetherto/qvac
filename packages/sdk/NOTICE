@@ -863,6 +863,10 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-inspect
   bare-inspector@6.1.0
     https://github.com/holepunchto/bare-inspector
+  bare-lief@0.2.10
+    https://github.com/holepunchto/bare-lief
+  bare-link@4.0.1
+    https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
   bare-module@6.4.0

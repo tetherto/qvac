@@ -16,12 +16,13 @@ interface TurnResult {
 }
 
 /**
- * A named cache's saved-message boundary has to outlive the worker process.
+ * A named cache's prefix has to be reused by a fresh worker process, from the
+ * cache file alone.
  *
  * The restart is staged by unloading every model: off-Bare the last unload
  * closes the worker, and the next call spawns a new one. Both halves are
  * asserted against the process table rather than assumed, because if the
- * worker ever stopped closing, the boundary would still be in memory and the
+ * worker ever stopped closing, the cache would still be in memory and the
  * token comparison below would pass without testing anything.
  */
 export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCacheRestartTests> {
@@ -30,6 +31,22 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
   protected handlers = {
     'worker-restart-kv-cache-boundary': this.workerRestart.bind(this)
   } as never
+
+  /** `ensureLoaded`, retried while the client is still recovering from the restart. */
+  private async loadThroughRestart(timeoutMs = 60_000): Promise<string> {
+    const deadline = Date.now() + timeoutMs
+    for (;;) {
+      try {
+        return await this.resources.ensureLoaded('llm')
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const recovering =
+          /exited mid-request|ECONNRESET|not connected|connection (closed|reset)/i.test(message)
+        if (!recovering || Date.now() >= deadline) throw error
+        await new Promise<void>((resolve) => setTimeout(resolve, 250))
+      }
+    }
+  }
 
   async workerRestart(
     params: {
@@ -84,17 +101,32 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
       }
 
       await this.resources.evictAll()
-      const during = await waitForBareChildren(process.pid, (pids) => pids.length === 0)
-      if (during.length !== 0) {
+      // The claim is what survives a restart, not what ends the worker: anything else still
+      // attached keeps it alive. Ask first, insist after.
+      const gone = (pids: number[]) => !pids.includes(before[0]!)
+      let during = await waitForBareChildren(process.pid, gone, 15_000)
+      let ended = 'by unloading every model'
+      if (!gone(during)) {
+        try {
+          process.kill(before[0]!, 'SIGKILL')
+        } catch {
+          /* already gone */
+        }
+        during = await waitForBareChildren(process.pid, gone, 30_000)
+        ended = `by terminating ${before[0]}, which outlived its models`
+      }
+      if (!gone(during)) {
         return {
           passed: false,
           output:
-            `Unloading every model left the worker running (pid ${during.join(', ')}), so the ` +
-            `cache state was never lost and this test cannot prove the boundary was restored`
+            `Worker ${before[0]} survived both unloading every model and SIGKILL, so the cache ` +
+            `state was never lost and this test cannot prove the cache was restored`
         }
       }
 
-      modelId = await this.resources.ensureLoaded('llm')
+      // A load issued while the client is still tearing down the dead worker fails with that
+      // abort, not with anything about this test.
+      modelId = await this.loadThroughRestart()
       const after = await waitForBareChildren(process.pid, (pids) => pids.length === 1)
       if (after.length !== 1 || after[0] === before[0]) {
         return {
@@ -130,14 +162,16 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
           output: `promptTokens missing from stats (warm=${warm.promptTokens}, cold=${cold.promptTokens})`
         }
       }
-      const summary = `worker ${before[0]} -> ${after[0]}, promptTokens: cold=${cold.promptTokens}, warm=${warm.promptTokens}`
+      const summary =
+        `worker ${before[0]} -> ${after[0]} (${ended}), ` +
+        `promptTokens: cold=${cold.promptTokens}, warm=${warm.promptTokens}`
       if (warm.promptTokens * 2 >= cold.promptTokens) {
         return {
           passed: false,
-          output: `The saved-message boundary did not survive the restart: the next turn re-sent the history. ${summary}`
+          output: `The cached prefix was not reused after the restart: the next turn re-decoded the history. ${summary}`
         }
       }
-      return { passed: true, output: `Boundary restored on a fresh worker. ${summary}` }
+      return { passed: true, output: `Cached prefix reused on a fresh worker. ${summary}` }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `Worker-restart cache test failed: ${errorMsg}` }

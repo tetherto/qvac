@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <js.h>
+#include <uv.h>
 
 #ifndef NDEBUG
 #include <cassert>

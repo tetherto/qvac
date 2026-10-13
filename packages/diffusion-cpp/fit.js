@@ -7,14 +7,27 @@ const file_paths_1 = require("./file-paths");
 /**
  * Projects a load against the memory free right now, reading model metadata
  * and never weight data. A GGUF file set can be a weightless registry copy,
- * so the projection can run before anything is downloaded; a safetensors file
- * still needs its tensor data present.
+ * so the projection can run before anything is downloaded. Safetensors
+ * checkpoints can also contain only their tensor headers.
  *
  * A model the engine cannot read is `status: "error"`; only a broken request
  * throws.
  */
 function assessFit(request) {
-    (0, file_paths_1.assertFilePaths)(request.files);
+    if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {
+        throw new TypeError(`unsupported fit mode: ${String(request.mode)}`);
+    }
+    const standalone = request.mode === 'upscale';
+    if (standalone)
+        (0, file_paths_1.assertAbsolute)('esrgan', request.files.esrgan);
+    const files = standalone
+        ? { model: request.files.esrgan, esrgan: request.files.esrgan }
+        : request.files;
+    (0, file_paths_1.assertFilePaths)(files);
+    if (request.mode === 'world') {
+        (0, file_paths_1.assertAbsolute)('taehv', request.files.taehv);
+        (0, file_paths_1.assertAbsolute)('scene', request.files.scene);
+    }
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
     const binding = require('./binding.js');
     if (typeof binding.assessFit !== 'function') {
@@ -30,7 +43,12 @@ function assessFit(request) {
         .filter(([, value]) => value !== undefined)
         .map(([key, value]) => [key, String(value)]));
     return binding.assessFit({
-        ...(0, file_paths_1.toFilePaths)(request.files),
+        ...(0, file_paths_1.toFilePaths)(files),
+        ...(request.mode === 'world' && {
+            taehvPath: request.files.taehv,
+            scenePath: request.files.scene
+        }),
+        mode: request.mode ?? 'diffusion',
         config,
         request: request.workload ?? {}
     });

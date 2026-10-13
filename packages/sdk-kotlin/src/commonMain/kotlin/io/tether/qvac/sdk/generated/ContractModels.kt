@@ -30,12 +30,23 @@ data class AssessModelFitResponse(
 
 @Serializable
 data class AudioEditStreamRequest(
+    val augmentCaptionWithMetadata: Boolean? = null,
+    val bpm: Long? = null,
+    val dcwEnabled: Boolean? = null,
+    val dcwHighScaler: Double? = null,
+    val dcwScaler: Double? = null,
+    val inferenceSteps: Long? = null,
+    val keyscale: String? = null,
     val modelId: String,
     val operations: List<JsonElement>,
+    val referenceAudio: JsonElement? = null,
     val requestId: String? = null,
     val seed: Long? = null,
+    val shift: Double? = null,
     val sourceAudio: JsonElement,
+    val timesignature: String? = null,
     val type: String,
+    val vocalLanguage: String? = null,
 )
 
 @Serializable
@@ -83,6 +94,7 @@ data class AudioGenStreamRequest(
     val requestId: String? = null,
     val rewriteQuery: Boolean? = null,
     val seed: Long? = null,
+    val shift: Double? = null,
     val simpleMode: Boolean? = null,
     val sourceAudio: JsonElement? = null,
     val taskType: String? = null,
