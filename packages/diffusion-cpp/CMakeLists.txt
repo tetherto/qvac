@@ -44,7 +44,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 project(inference-addon-sd C CXX)
@@ -190,6 +190,14 @@ if(WIN32)
     target_link_options(${inference-addon-sd}_module PRIVATE
       "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:REF>"
       "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:ICF>")
+
+    # The package's Windows triplet also emits ThinLTO bitcode for ggml and
+    # stable-diffusion. Optimize across those static-library boundaries at the
+    # final lld-link step, while retaining the existing optimization level.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+      target_compile_options(${inference-addon-sd} PRIVATE
+        "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-flto=thin>")
+    endif()
   endif()
 endif()
 
