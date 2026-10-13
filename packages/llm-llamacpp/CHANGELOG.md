@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.59.1] - 2026-10-13
 
 ### Added
 
@@ -12,6 +12,15 @@
   forced because they rewrite the previous answer. Older checkpoints stay in
   memory only. Files written this way still load in earlier versions, which
   ignore the checkpoint.
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
 
 ## [0.59.0] - 2026-10-11
 
