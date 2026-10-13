@@ -11,16 +11,32 @@
   instead of reprocessing the whole conversation, which thinking templates
   forced because they rewrite the previous answer. Older checkpoints stay in
   memory only. Files written this way still load in earlier versions, which
-  ignore the checkpoint.
+  ignore the checkpoint ([#4969](https://github.com/tetherto/qvac/pull/4969)).
 
 ### Changed
 
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off
+  ([#4924](https://github.com/tetherto/qvac/pull/4924)).
 - `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
   ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
   `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
   marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
   use libuv types now that libjs no longer includes it from `<js.h>`.
   Compile-time only; no API or runtime behaviour change for this package.
+
+### Fixed
+
+- Gemma 4 vision models cap an image at 280 tokens again when
+  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
+  applied, so a large image took about four times the tokens and prefill: on
+  Android it ran the app out of memory or produced a wrong description.
+  Set `image_max_tokens` to raise the cap
+  ([#4989](https://github.com/tetherto/qvac/pull/4989)).
 
 ## [0.59.0] - 2026-10-11
 
@@ -34,26 +50,12 @@
   `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
   `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
 
-### Changed
-
-- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
-  end-of-history checkpoints holding the window cells. A turn that diverges
-  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
-  regenerate after a long answer) restores one instead of reprocessing the
-  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
-  of MB on larger models; `cache_checkpoints: 0` turns them off.
-
 ### Fixed
 
 - A multimodal model that failed to load, for example out of GPU memory,
   resolved `load()` instead of rejecting it, and the first request then
   crashed the process. It now rejects with `UnableToLoadModel`, as a
   text-only model does.
-- Gemma 4 vision models cap an image at 280 tokens again when
-  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
-  applied, so a large image took about four times the tokens and prefill: on
-  Android it ran the app out of memory or produced a wrong description.
-  Set `image_max_tokens` to raise the cap.
 
 ## [0.58.0] - 2026-10-09
 
