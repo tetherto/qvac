@@ -466,9 +466,7 @@ jobs:
                 run "stage train tarballs $src" node "$WS/.github/scripts/release-train.mjs" stage . "$TRAIN_TARBALLS"
               fi
 
-              # sdk-source:workspace installs the SDK itself. A second install
-              # extracts that engine again; bun fails with EISDIR once the
-              # engine is a copied directory rather than a tarball.
+              # sdk-source:workspace already installs the SDK.
               if [ "$PKG" = "sdk" ] && [ "$SRC" = "workspace" ]; then
                 :
               elif [ "$PKG" = "sdk" ]; then
