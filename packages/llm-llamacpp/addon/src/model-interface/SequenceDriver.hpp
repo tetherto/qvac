@@ -261,6 +261,25 @@ public:
     return {};
   }
 
+  /// Appends the driver's newest checkpoint to the cacheKey file being
+  /// written at `path`, after its sequence state
+  /// (`cache::appendCheckpointSection`), so a later process can restore it.
+  /// Best effort: a failure leaves the file with the state only. Drivers
+  /// without checkpoints write nothing.
+  virtual void appendCheckpointsToCacheFile(const std::string& path) const {
+    (void)path;
+  }
+
+  /// Adopts the checkpoint kept in the cacheKey file at `path`, whose
+  /// sequence state ends at `offset`, after that state was loaded and
+  /// accepted (`cache::readCheckpointSection`). Drivers without checkpoints
+  /// ignore them.
+  virtual void
+  adoptCheckpointsFromCacheFile(const std::string& path, uint64_t offset) {
+    (void)path;
+    (void)offset;
+  }
+
   /// The scheduler fed the plan up to `checkpointAtTextTokens` and decoded
   /// it; live memory for this sequence ends at `pos`. Drivers without
   /// checkpoints ignore it.
@@ -333,8 +352,12 @@ public:
   /// Try to populate this sequence's KV-cache from a previously
   /// persisted cache. Returns true when the cache was loaded
   /// successfully; the scheduler then skips the corresponding prefix
-  /// tokens at admit time.
-  [[nodiscard]] virtual bool loadCache(const std::string& cacheKey) = 0;
+  /// tokens at admit time. With `adoptFileCheckpoints` the checkpoint kept
+  /// in the file is adopted too (`adoptCheckpointsFromCacheFile`); the
+  /// scheduler passes false when it holds checkpoints for the key that would
+  /// replace it anyway.
+  [[nodiscard]] virtual bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) = 0;
 
   /// The sequence memory already holds a state whose ledger is `stateTokens`
   /// (a slot kept resident across requests, or one just restored from the
