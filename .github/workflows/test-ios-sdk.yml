@@ -103,15 +103,13 @@ on:
         type: string
         default: ""
     secrets:
-      # MQTT_*, NPM_TOKEN, and Apple signing secrets (TEST_APP_APPLE_*,
+      # MQTT_* and Apple signing secrets (TEST_APP_APPLE_*,
       # APPLE_P12_PASSWORD, APPLE_KEYCHAIN_PASSWORD) are typically provided
       # via the release environment (see jobs with `environment: release`).
       # They are declared required: false here so `secrets: inherit` from a
       # caller with no repo-level values does not fail at the workflow_call
       # boundary; the jobs that consume them have environment access.
       # AWS_OIDC_ROLE_ARN remains required:true because it is repo-level.
-      NPM_TOKEN:
-        required: false
       MQTT_HOST:
         required: false
       MQTT_USERNAME:
@@ -179,7 +177,6 @@ jobs:
     environment: release
     timeout-minutes: 60
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Not secrets: GitHub masks a short secret such as a port inside other
       # values and drops any job output that contains it.
@@ -320,14 +317,12 @@ jobs:
           const fs = require('fs');
           const path = require('path');
 
-          if (!process.env.NPM_TOKEN) { console.log('NPM_TOKEN is empty'); process.exit(1); }
           if (!process.env.GITHUB_TOKEN) { console.log('GITHUB_TOKEN is empty'); process.exit(1); }
 
           const lines = [
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
             `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
@@ -706,7 +701,6 @@ jobs:
     environment: release
     timeout-minutes: 120
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Not secrets: GitHub masks a short secret such as a port inside other
       # values and drops any job output that contains it.
@@ -751,7 +745,6 @@ jobs:
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
             `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');

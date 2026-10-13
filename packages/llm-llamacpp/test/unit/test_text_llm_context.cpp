@@ -114,7 +114,7 @@ TEST_F(TextLlmContextTest, LoadCacheReportsMissForEmptyKey) {
   common_params params;
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
-  EXPECT_FALSE(driver.loadCache(/*cacheKey=*/""))
+  EXPECT_FALSE(driver.loadCache(/*cacheKey=*/"", /*adoptFileCheckpoints=*/true))
       << "an empty cache key must not load a cache";
 }
 
@@ -155,7 +155,8 @@ TEST_F(TextLlmContextTest, LoadCacheClearsLegacyOneFieldMetadata) {
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
-  EXPECT_FALSE(driver.loadCache(cachePathString));
+  EXPECT_FALSE(
+      driver.loadCache(cachePathString, /*adoptFileCheckpoints=*/true));
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "legacy metadata load returned false but left KV rows resident";
@@ -211,7 +212,10 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
-      { (void)driver.loadCache(cachePathString); }, qvac_errors::StatusError);
+      {
+        (void)driver.loadCache(cachePathString, /*adoptFileCheckpoints=*/true);
+      },
+      qvac_errors::StatusError);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "failed sequence cache validation left loaded KV rows resident";
@@ -264,7 +268,10 @@ TEST_F(TextLlmContextTest, LoadCacheRejectsRestoredTokenCountMetadataMismatch) {
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
-      { (void)driver.loadCache(cachePathString); }, qvac_errors::StatusError);
+      {
+        (void)driver.loadCache(cachePathString, /*adoptFileCheckpoints=*/true);
+      },
+      qvac_errors::StatusError);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "failed cache-token validation left loaded KV rows resident";

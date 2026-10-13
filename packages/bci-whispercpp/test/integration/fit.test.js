@@ -6,21 +6,31 @@ const path = require('bare-path')
 const test = require('brittle')
 
 const { assessFit } = require('../../index.js')
-const { getModelPath } = require('./helpers.js')
+const { getMobileAssetPath, getMobileAssetsDir, getModelPath, isMobile } = require('./helpers.js')
+
+const MODEL_FILE = 'ggml-bci-windowed.bin'
+const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures')
+const SMALL_EMBEDDER_DIR = path.join(__dirname, '..', '..', 'addon', 'tests', 'fixtures')
+const SCRATCH_PREFIX = 'bci-fit-'
+
+function testAssetPath(directory, filename) {
+  return isMobile ? getMobileAssetPath(filename) : path.join(directory, filename)
+}
 
 const MODEL_PATH =
   (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
-  getModelPath('ggml-bci-windowed.bin')
+  (isMobile ? getMobileAssetPath(MODEL_FILE) : getModelPath(MODEL_FILE))
 
 const EMBEDDER_PATH = path.join(path.dirname(MODEL_PATH), 'bci-embedder.bin')
 
-const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures')
-const MODEL_DESCRIPTION_PATH = path.join(FIXTURES_DIR, 'ggml-bci-windowed.fit.gguf')
-const EMBEDDER_DESCRIPTION_PATH = path.join(FIXTURES_DIR, 'bci-embedder.fit.gguf')
+const MODEL_DESCRIPTION_PATH = testAssetPath(FIXTURES_DIR, 'ggml-bci-windowed.fit.gguf')
+const EMBEDDER_DESCRIPTION_PATH = testAssetPath(FIXTURES_DIR, 'bci-embedder.fit.gguf')
 
-const SMALL_EMBEDDER_DIR = path.join(__dirname, '..', '..', 'addon', 'tests', 'fixtures')
-const SMALL_EMBEDDER_PATH = path.join(SMALL_EMBEDDER_DIR, 'bci-embedder-small.bin')
-const SMALL_EMBEDDER_DESCRIPTION_PATH = path.join(SMALL_EMBEDDER_DIR, 'bci-embedder-small.fit.gguf')
+const SMALL_EMBEDDER_PATH = testAssetPath(SMALL_EMBEDDER_DIR, 'bci-embedder-small.bin')
+const SMALL_EMBEDDER_DESCRIPTION_PATH = testAssetPath(
+  SMALL_EMBEDDER_DIR,
+  'bci-embedder-small.fit.gguf'
+)
 const SMALL_EMBEDDER_HOST_BYTES = 332
 
 const PROJECTED_FIELDS = [
@@ -52,6 +62,19 @@ function skipWithoutModel(t) {
   if (hasModel) return false
   t.pass('no BCI model on this runner')
   return true
+}
+
+function scratchRoot() {
+  return isMobile ? getMobileAssetsDir() : os.tmpdir()
+}
+
+function copyIntoEmptyDirectory(t, filePath) {
+  const directory = fs.mkdtempSync(path.join(scratchRoot(), SCRATCH_PREFIX))
+  t.teardown(() => fs.rmSync(directory, { recursive: true, force: true }))
+
+  const copy = path.join(directory, path.basename(filePath))
+  fs.copyFileSync(filePath, copy)
+  return copy
 }
 
 test('a projection is internally consistent', (t) => {
@@ -108,7 +131,7 @@ test('with no embedder named, the one beside the model is measured', (t) => {
 })
 
 test('a model with no embedder beside it is an outcome, not a throw', (t) => {
-  const fit = assessFit({ modelPath: MODEL_DESCRIPTION_PATH })
+  const fit = assessFit({ modelPath: copyIntoEmptyDirectory(t, MODEL_DESCRIPTION_PATH) })
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'embedder-unreadable', 'a load would not find the embedder either')

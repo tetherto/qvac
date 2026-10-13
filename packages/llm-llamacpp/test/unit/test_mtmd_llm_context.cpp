@@ -864,7 +864,7 @@ TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
 
   bool threw = false;
   try {
-    (void)ctx->loadCache(cachePath.string());
+    (void)ctx->loadCache(cachePath.string(), /*adoptFileCheckpoints=*/true);
   } catch (const qvac_errors::StatusError&) {
     threw = true;
   }
@@ -960,7 +960,10 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   ASSERT_EQ(llama_memory_seq_token_count(mem, seqId), 0u);
 
   EXPECT_THROW(
-      { (void)ctx->loadCache(nPastMismatchPath.string()); },
+      {
+        (void)ctx->loadCache(
+            nPastMismatchPath.string(), /*adoptFileCheckpoints=*/true);
+      },
       qvac_errors::StatusError)
       << "loadCache must reject metadata nPast that differs from live KV";
   EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
@@ -969,7 +972,10 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   EXPECT_EQ(ctx->getCacheTokens(), 0);
 
   EXPECT_THROW(
-      { (void)ctx->loadCache(cacheTokensMismatchPath.string()); },
+      {
+        (void)ctx->loadCache(
+            cacheTokensMismatchPath.string(), /*adoptFileCheckpoints=*/true);
+      },
       qvac_errors::StatusError)
       << "loadCache must reject metadata cacheTokens that differs from live KV";
   EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
