@@ -122,7 +122,7 @@ Every `unknown` names its cause here — on the model when the cause is that mod
 
 `native-fit` evidence — and with it any `likely-fits` — exists wherever the engine's own fitter runs: every platform that ships that engine's addon, mobile included, for a source on disk or with a published registry description.
 
-The fitter covers `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`, `parakeet-transcription`, `bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml` and `sdcpp-generation`. Audiogen and diffusion report no byte breakdown, so a `fit` from them falls back to the floor while a refusal still stands.
+The fitter covers `llamacpp-completion`, `llamacpp-embedding`, `whispercpp-transcription`, `parakeet-transcription`, `bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml` and `sdcpp-generation`. Audiogen and diffusion report no byte breakdown, so a `fit` from them falls back to the floor while a refusal still stands. The BCI projection includes the embedder: the host RAM it keeps is counted in `hostBytes`, read from the `bci-embedder.bin` beside the model, or from the load's `embedderModelSrc` where it names one.
 
 Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers `nmtcpp-translation`, `onnx-tts`, `ggml-ocr`, `ggml-vla` and `ggml-classification`, sharded models, multimodal completion loads naming a projection model, and any source whose registry description cannot be fetched.
 
