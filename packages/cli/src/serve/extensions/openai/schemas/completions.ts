@@ -26,7 +26,8 @@ export const COMPLETIONS_UNSUPPORTED_PARAMS = [
   'suffix',
   'frequency_penalty',
   'presence_penalty',
-  'stop'
+  'stop',
+  'remove_thinking_from_context'
 ] as const
 
 export class InvalidPromptError extends Error {
