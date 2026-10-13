@@ -1,18 +1,22 @@
 name: PR Checks (SDK Pod)
 
 on:
-  # Plain `pull_request` (NOT pull_request_target): fork PRs run with a
-  # read-only token and no secrets, so it is safe to check out and execute PR
-  # code (install/lint/build/test). GITHUB_TOKEN (packages: read) resolves
-  # @tetherto/* GPR mono packages on same-repo PRs; fork PRs may still fail
-  # to install private GPR deps (acceptable — coordinated inference work is
-  # internal same-repo PRs).
+  # PRs into main run this workflow only through pr-gate-merge.yml
+  # (workflow_call), which feeds the result into the required
+  # `qvac-merge-guard / validate-pr` check. That caller is triggered by
+  # pull_request_target, so on main the PR code below runs with a base-repo
+  # GITHUB_TOKEN (contents/packages: read); fork PRs reach it only after the
+  # fork-approval gate in the caller.
   #
-  # No trigger-level `paths:` filter on purpose: this workflow publishes the
-  # required "SDK Pod Checks" status, which must report on EVERY PR or GitHub
-  # blocks unrelated PRs ("waiting for status to be reported"). The single job
-  # below detects SDK pod changes itself and is a fast no-op when nothing
-  # relevant changed.
+  # Merge Guard does not run on the other branches, so they keep this direct
+  # `pull_request` trigger: fork PRs get a read-only token and no secrets.
+  # Fork PRs may fail to install private @tetherto/* GPR deps (acceptable —
+  # coordinated inference work is internal same-repo PRs).
+  #
+  # No trigger-level `paths:` filter on purpose: the job must report on every
+  # PR, or a ruleset that requires it blocks unrelated PRs ("waiting for status
+  # to be reported"). The job detects SDK pod changes itself and is a fast
+  # no-op when nothing relevant changed.
   pull_request:
     types:
       - opened
@@ -20,7 +24,6 @@ on:
       - reopened
       - labeled
     branches:
-      - main
       - release-*
       - feature-*
       - tmp-*
@@ -54,12 +57,10 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Single required status check for SDK pod packages.
-  #
-  # Runs on every PR so the "SDK Pod Checks" context is always reported — a
-  # required check that is never reported blocks the PR forever. It is a fast
-  # no-op (detect step only) when no SDK pod files changed, so unrelated PRs are
-  # unaffected. Mark THIS job's name ("SDK Pod Checks") required in the ruleset.
+  # Single check for SDK pod packages. On main it reports as
+  # `sdk-pod-checks / SDK Pod Checks` inside Merge Guard; on the other branches
+  # as `SDK Pod Checks`. It is a fast no-op (detect step only) when no SDK pod
+  # files changed, so unrelated PRs are unaffected.
   #
   #   - no SDK pod files changed     -> pass (no checks run)
   #   - changed + checks pass        -> pass
