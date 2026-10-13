@@ -3,6 +3,9 @@
   "version": "0.8.0",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet + MOSS-Transcribe-Diarize) inference addon for qvac on the Bare runtime",
   "addon": true,
+  "qvac": {
+    "ggml-speech": "2026-10-07#1"
+  },
   "engines": {
     "bare": ">=1.20.0"
   },

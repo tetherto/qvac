@@ -30,6 +30,10 @@ If the user doesn't specify, ask which SDK pod package they want to generate a c
 
 Package slugs match git tags (`sdk`, `inference`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
 
+**On a release train** (`qv-release-train`), run this once per train package;
+the changelogs land on the one train branch. Step 7 differs
+there.
+
 **`sdk` and `inference` are lockstep on major.minor.** Two changelogs, two
 releases, engine first: `--package=inference` for `release-inference-<x.y.z>`,
 then `--package=sdk` for `release-sdk-<x.y.z>`. Both notes for the same `x.y.z`
@@ -309,6 +313,10 @@ and `tetherto-qvac-sdk` is generated from `@qvac/sdk` at the same version. An sd
 release sets both and regenerates the Python client (`SDK_VERSION` and the other
 `_generated/` outputs). Skip this step for any other `--package` value — an
 `--package=inference` release does not touch the SDK.
+
+**On a release train** `nx release version` has already written the
+`@qvac/inference` range; only regenerate the Python client (Step 3 of
+`qv-sdk-inference-version`).
 
 Read and follow `.agents/skills/qv-sdk-inference-version/SKILL.md` (Steps 1–4).
 Short form:
