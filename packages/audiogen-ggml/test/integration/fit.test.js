@@ -45,7 +45,7 @@ test('a projection is internally consistent', { timeout: TEST_TIMEOUT_MS }, asyn
   const dir = await stagedModels(t)
   if (dir === null) return
 
-  const fit = assessFit({ modelsDir: dir, durationSeconds: 10 })
+  const fit = await assessFit({ modelsDir: dir, durationSeconds: 10 })
 
   t.comment(`status=${fit.status} reason=${fit.reason} device=${fit.deviceName}`)
   t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
@@ -61,7 +61,7 @@ test('the stages account for the peak', { timeout: TEST_TIMEOUT_MS }, async (t) 
   const dir = await stagedModels(t)
   if (dir === null) return
 
-  const fit = assessFit({ modelsDir: dir, durationSeconds: 10 })
+  const fit = await assessFit({ modelsDir: dir, durationSeconds: 10 })
   if (fit.status === 'error') {
     t.pass('this runner could not project the model set')
     return
@@ -80,8 +80,8 @@ test('a longer generation costs no less', { timeout: TEST_TIMEOUT_MS }, async (t
   const dir = await stagedModels(t)
   if (dir === null) return
 
-  const short = assessFit({ modelsDir: dir, durationSeconds: 5 })
-  const long = assessFit({ modelsDir: dir, durationSeconds: 60 })
+  const short = await assessFit({ modelsDir: dir, durationSeconds: 5 })
+  const long = await assessFit({ modelsDir: dir, durationSeconds: 60 })
   if (short.status === 'error' || long.status === 'error') {
     t.pass('this runner could not project the model set')
     return
@@ -90,8 +90,58 @@ test('a longer generation costs no less', { timeout: TEST_TIMEOUT_MS }, async (t
   t.ok(long.deviceBytes + long.hostBytes >= short.deviceBytes + short.hostBytes)
 })
 
-test('an engine with no fitter is an outcome, not a throw', (t) => {
-  const fit = assessFit({ engine: 'stable-audio', modelsDir: '/models/stable-audio' })
+test('a fit keeps the event loop responsive', { timeout: TEST_TIMEOUT_MS }, async (t) => {
+  const dir = await stagedModels(t)
+  if (dir === null) return
+
+  let pending = true
+  let ticks = 0
+  const timer = setInterval(() => {
+    if (pending) ticks++
+  }, 1)
+  try {
+    const fit = await assessFit({ modelsDir: dir, durationSeconds: 60 })
+    pending = false
+    t.not(fit.status, 'error', 'a real native projection completed')
+    t.ok(ticks > 0, 'timers ran before the fit settled')
+    t.comment(`${ticks} timer ticks before completion`)
+  } finally {
+    pending = false
+    clearInterval(timer)
+  }
+})
+
+test(
+  'concurrent fits keep their own requests and all settle',
+  { timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    const dir = await stagedModels(t)
+    if (dir === null) return
+
+    const request = { modelsDir: dir, durationSeconds: 5 }
+    const first = assessFit(request)
+    request.durationSeconds = 60
+    const second = assessFit(request)
+    const missing = assessFit({ ditPath: '/nonexistent/dit.gguf' })
+    const [short, long, unreadable] = await Promise.all([first, second, missing])
+    if (short.status === 'error' || long.status === 'error') {
+      t.pass('this runner could not project the model set')
+      return
+    }
+
+    const alone = await assessFit({ modelsDir: dir, durationSeconds: 5 })
+    t.is(short.deviceBytes, alone.deviceBytes, 'the first call kept its original duration')
+    t.is(short.hostBytes, alone.hostBytes, 'the first call kept its original duration')
+    t.ok(
+      long.deviceBytes + long.hostBytes >= short.deviceBytes + short.hostBytes,
+      'the second call kept its own duration'
+    )
+    t.is(unreadable.status, 'error', 'an error outcome does not strand the queued calls')
+  }
+)
+
+test('an engine with no fitter is an outcome, not a throw', async (t) => {
+  const fit = await assessFit({ engine: 'stable-audio', modelsDir: '/models/stable-audio' })
 
   t.is(fit.status, 'error')
   t.is(fit.reason, 'unsupported-engine')
@@ -99,8 +149,8 @@ test('an engine with no fitter is an outcome, not a throw', (t) => {
   t.alike(fit.stages, [])
 })
 
-test('a MiniMax pair that cannot be read is an outcome, not a throw', (t) => {
-  const fit = assessFit({
+test('a MiniMax pair that cannot be read is an outcome, not a throw', async (t) => {
+  const fit = await assessFit({
     engine: 'minimax',
     lmPath: MISSING_MINIMAX_LM,
     synthPath: MISSING_MINIMAX_SYNTH
@@ -110,8 +160,8 @@ test('a MiniMax pair that cannot be read is an outcome, not a throw', (t) => {
   t.is(fit.reason, isMobile ? 'unsupported-engine' : 'model-unreadable')
 })
 
-test('MiniMax takes a duration or a frame cap, not both', { skip: isMobile }, (t) => {
-  t.exception(
+test('MiniMax takes a duration or a frame cap, not both', { skip: isMobile }, async (t) => {
+  await t.exception(
     () =>
       assessFit({
         engine: 'minimax',
@@ -123,15 +173,15 @@ test('MiniMax takes a duration or a frame cap, not both', { skip: isMobile }, (t
   )
 })
 
-test('a MiniMax frame cap that is not a whole count is refused', { skip: isMobile }, (t) => {
-  t.exception(
+test('a MiniMax frame cap that is not a whole count is refused', { skip: isMobile }, async (t) => {
+  await t.exception(
     () => assessFit({ engine: 'minimax', modelsDir: '/models/minimax', maxFrames: 2.5 }),
     /safe integer/
   )
 })
 
-test('a MiniMax duration too long to count in frames is refused', { skip: isMobile }, (t) => {
-  t.exception(
+test('a MiniMax duration too long to count in frames is refused', { skip: isMobile }, async (t) => {
+  await t.exception(
     () =>
       assessFit({
         engine: 'minimax',
@@ -145,8 +195,8 @@ test('a MiniMax duration too long to count in frames is refused', { skip: isMobi
 test(
   'a MiniMax projection covers its stages',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
-  (t) => {
-    const fit = minimaxFit({ maxFrames: 300 })
+  async (t) => {
+    const fit = await minimaxFit({ maxFrames: 300 })
 
     t.comment(`status=${fit.status} reason=${fit.reason} device=${fit.deviceName}`)
     t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
@@ -167,9 +217,9 @@ test(
 test(
   'a longer MiniMax generation costs more',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
-  (t) => {
-    const short = minimaxFit({ durationSeconds: 10 })
-    const long = minimaxFit({ durationSeconds: 120 })
+  async (t) => {
+    const short = await minimaxFit({ durationSeconds: 10 })
+    const long = await minimaxFit({ durationSeconds: 120 })
 
     t.ok(long.deviceBytes > short.deviceBytes, 'the LM cache grows with the frames')
     t.ok(long.hostBytes > short.hostBytes, 'the waveform grows with the frames')
@@ -179,9 +229,9 @@ test(
 test(
   'a MiniMax prompt override reaches the LM projection',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
-  (t) => {
-    const short = lmStage(minimaxFit({ promptTokens: MINIMAX_SHORT_PROMPT_TOKENS }))
-    const long = lmStage(minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS }))
+  async (t) => {
+    const short = lmStage(await minimaxFit({ promptTokens: MINIMAX_SHORT_PROMPT_TOKENS }))
+    const long = lmStage(await minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS }))
 
     t.ok(long.stateBytes > short.stateBytes, 'the LM cache grows with the prompt')
     t.ok(long.computeBytes > short.computeBytes, 'the prefill graph grows with the prompt')
@@ -191,8 +241,8 @@ test(
 test(
   'a MiniMax prompt over the checkpoint limit is too large',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
-  (t) => {
-    const fit = minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS + 1 })
+  async (t) => {
+    const fit = await minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS + 1 })
 
     t.is(fit.status, 'error')
     t.is(fit.reason, 'workload-too-large')
@@ -202,10 +252,13 @@ test(
 test(
   'a MiniMax prompt that leaves too little context for the frames is too large',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
-  (t) => {
+  async (t) => {
     const framesLeft = MINIMAX_CONTEXT_LENGTH - MINIMAX_MAX_PROMPT_TOKENS
-    const filled = minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS, maxFrames: framesLeft })
-    const overfilled = minimaxFit({
+    const filled = await minimaxFit({
+      promptTokens: MINIMAX_MAX_PROMPT_TOKENS,
+      maxFrames: framesLeft
+    })
+    const overfilled = await minimaxFit({
       promptTokens: MINIMAX_MAX_PROMPT_TOKENS,
       maxFrames: framesLeft + 1
     })
@@ -216,16 +269,25 @@ test(
   }
 )
 
-test('a model set that cannot be read is an outcome, not a throw', (t) => {
-  const fit = assessFit({ ditPath: '/nonexistent/dit.gguf' })
+test('a model set that cannot be read is an outcome, not a throw', async (t) => {
+  const fit = await assessFit({ ditPath: '/nonexistent/dit.gguf' })
 
   t.is(fit.status, 'error')
   t.ok(fit.reason.length > 0, 'the engine gave a reason')
 })
 
-test('a count that is not a count is refused', (t) => {
-  t.exception(
+test('a count that is not a count is refused', async (t) => {
+  await t.exception(
     () => assessFit({ modelsDir: '/models/ace-step', durationSeconds: -1 }),
     /non-negative count/
   )
+})
+
+test('a broken request rejects', async (t) => {
+  let promise
+  t.execution(() => {
+    promise = assessFit({ modelsDir: '/models/ace-step', durationSeconds: -1 })
+  }, 'the call itself returns')
+  t.ok(promise instanceof Promise)
+  await t.exception(promise, /non-negative count/)
 })
