@@ -1,11 +1,14 @@
 #include "SequenceStateSnapshot.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <istream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -125,6 +128,9 @@ makeUniqueSnapshotPath(llama_seq_id seqId, const std::string& directory) {
                                std::to_string(id) + ".bin";
   return (base / filename).string();
 }
+
+// Bounds the memory a checkpoint copy between files holds at once.
+constexpr size_t SNAPSHOT_COPY_CHUNK = size_t{1} << 20;
 
 std::atomic<uint64_t>& snapshotFilesWritten() noexcept {
   static std::atomic<uint64_t> count{0};
@@ -507,6 +513,112 @@ bool restoreSequenceState(
       /*n_token_capacity=*/0,
       &nTokenCount);
   return loadedBytes != 0;
+}
+
+bool streamPartialSnapshot(
+    const SequenceStateSnapshot& snapshot, const SnapshotChunkSink& sink) {
+  if (snapshot.empty() || snapshot.scope() != SnapshotScope::Partial) {
+    return false;
+  }
+  if (snapshot.hasBuffer()) {
+    sink(snapshot.buffer().data(), snapshot.buffer().size());
+    return true;
+  }
+  if (!snapshot.hasFile()) {
+    return false;
+  }
+  std::ifstream in(snapshot.filePath(), std::ios::binary);
+  if (!in) {
+    return false;
+  }
+  std::vector<uint8_t> chunk(SNAPSHOT_COPY_CHUNK);
+  uint64_t total = 0;
+  while (in) {
+    in.read(
+        reinterpret_cast<char*>(chunk.data()),
+        static_cast<std::streamsize>(chunk.size()));
+    const auto got = static_cast<size_t>(in.gcount());
+    if (got == 0) {
+      break;
+    }
+    total += got;
+    if (total > snapshot.bytes()) {
+      return false;
+    }
+    sink(chunk.data(), got);
+  }
+  return !in.bad() && total != 0 && total == snapshot.bytes();
+}
+
+bool partialSnapshotFromStream(
+    std::istream& in, uint64_t size, llama_pos nPastAt, SnapshotStorage storage,
+    const std::string& directory, const SnapshotChunkSink& observe,
+    SequenceStateSnapshot& out) {
+  out.clear();
+  if (size == 0 || nPastAt <= 0) {
+    return false;
+  }
+  if constexpr (sizeof(size_t) < sizeof(uint64_t)) {
+    if (size > std::numeric_limits<size_t>::max()) {
+      return false;
+    }
+  }
+  if (storage == SnapshotStorage::Memory) {
+    std::vector<uint8_t> buffer(static_cast<size_t>(size));
+    in.read(
+        reinterpret_cast<char*>(buffer.data()),
+        static_cast<std::streamsize>(buffer.size()));
+    if (!in) {
+      return false;
+    }
+    observe(buffer.data(), buffer.size());
+    out.adoptBuffer(std::move(buffer), nPastAt);
+    out.setScope(SnapshotScope::Partial);
+    return true;
+  }
+
+  // Disk: copied in bounded chunks, so the payload is never held whole.
+  std::vector<uint8_t> chunk(
+      static_cast<size_t>(std::min<uint64_t>(size, SNAPSHOT_COPY_CHUNK)));
+  std::string path;
+  try {
+    path = makeUniqueSnapshotPath(0, directory);
+  } catch (const std::exception&) {
+    return false;
+  }
+  bool copied = false;
+  try {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    uint64_t remaining = size;
+    while (file && remaining > 0) {
+      const auto length =
+          static_cast<size_t>(std::min<uint64_t>(remaining, chunk.size()));
+      in.read(
+          reinterpret_cast<char*>(chunk.data()),
+          static_cast<std::streamsize>(length));
+      if (!in) {
+        break;
+      }
+      observe(chunk.data(), length);
+      file.write(
+          reinterpret_cast<const char*>(chunk.data()),
+          static_cast<std::streamsize>(length));
+      remaining -= length;
+    }
+    file.close();
+    copied = remaining == 0 && static_cast<bool>(file);
+  } catch (...) {
+    removeFileQuiet(path);
+    throw;
+  }
+  if (!copied) {
+    removeFileQuiet(path);
+    return false;
+  }
+  out.adoptFile(std::move(path), nPastAt, size);
+  snapshotFilesWritten().fetch_add(1, std::memory_order_relaxed);
+  out.setScope(SnapshotScope::Partial);
+  return true;
 }
 
 } // namespace utils
