@@ -28,6 +28,7 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -205,7 +206,7 @@ class JvmBareRpcTransport internal constructor(
                 process = processBuilder.start()
                 diagnostics = WorkerDiagnostics(process.inputStream)
                 val socket = withContext(Dispatchers.IO) {
-                    if (authenticated) acceptAuthenticatedWorker(server, authToken, timeoutMs)
+                    if (authenticated) acceptAuthenticatedWorker(server, authToken, timeoutMs, process)
                     else server.accept()
                 }
                 // Authentication has a deadline; inference RPCs do not inherit it.
@@ -224,6 +225,9 @@ class JvmBareRpcTransport internal constructor(
                     requireSuccessfulWorkerControlResponse("configuration", response)
                 }
                 return connected
+            } catch (error: WorkerAuthenticationException) {
+                process?.destroyForcibly()
+                throw QvacWorkerStartException("${error.message} ${diagnostics?.text.orEmpty()}".trimEnd(), error)
             } catch (error: SocketTimeoutException) {
                 process?.destroyForcibly()
                 throw QvacWorkerStartException(
@@ -263,14 +267,16 @@ class JvmBareRpcTransport internal constructor(
          * Accepts until one connection presents [expectedToken]. Each handshake runs on
          * its own thread with its own deadline, so a peer that connects and stays silent
          * cannot hold the accept loop and burn the connect deadline before the child
-         * worker is served.
+         * worker is served. Gives up as soon as [worker] exits.
          */
         private fun acceptAuthenticatedWorker(
             server: ServerSocket,
             expectedToken: String,
             timeoutMs: Int,
+            worker: Process,
         ): Socket {
             val winner = CompletableFuture<Socket>()
+            val rejected = AtomicInteger()
             val pending = Collections.synchronizedSet(HashSet<Socket>())
             val handshakeTimeoutMs = minOf(HANDSHAKE_TIMEOUT_MS, timeoutMs)
             val acceptor = Thread({
@@ -284,6 +290,7 @@ class JvmBareRpcTransport internal constructor(
                                 constantTimeEquals(readAuthenticationLine(candidate, MAX_AUTH_TOKEN_BYTES), expectedToken)
                             }.getOrDefault(false)
                             pending -= candidate
+                            if (!authenticated) rejected.incrementAndGet()
                             if (!authenticated || !winner.complete(candidate)) runCatching { candidate.close() }
                         }, "qvac-worker-handshake").apply { isDaemon = true }.start()
                     }
@@ -294,11 +301,22 @@ class JvmBareRpcTransport internal constructor(
             server.soTimeout = timeoutMs
             acceptor.start()
             try {
-                return winner.get(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-            } catch (_: TimeoutException) {
+                try {
+                    CompletableFuture.anyOf(winner, worker.onExit()).get(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+                } catch (_: TimeoutException) {
+                    // Fall through: the winner check below decides.
+                }
                 // A handshake finishing after the deadline must not leak its socket.
-                if (!winner.cancel(false)) runCatching { winner.get().close() }
-                throw SocketTimeoutException("QVAC worker authentication timed out")
+                if (winner.cancel(false)) {
+                    val detail = rejected.get().let { count ->
+                        if (count == 0) "" else " ($count connection(s) rejected; a worker older than this " +
+                            "client does not send the IPC token)"
+                    }
+                    val cause = if (worker.isAlive) "did not authenticate within ${timeoutMs}ms"
+                    else "exited with code ${worker.exitValue()} before authenticating"
+                    throw WorkerAuthenticationException("QVAC worker $cause$detail.")
+                }
+                return winner.get()
             } finally {
                 runCatching { server.close() }
                 synchronized(pending) { pending.toList() }.forEach { runCatching { it.close() } }
@@ -338,3 +356,5 @@ class JvmBareRpcTransport internal constructor(
         private const val IPC_AUTH_TOKEN_ENV = "QVAC_IPC_AUTH_TOKEN"
     }
 }
+
+private class WorkerAuthenticationException(message: String) : IOException(message)

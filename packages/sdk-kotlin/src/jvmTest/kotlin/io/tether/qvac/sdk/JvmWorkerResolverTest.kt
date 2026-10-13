@@ -7,7 +7,6 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class JvmWorkerResolverTest {
@@ -76,7 +75,7 @@ class JvmWorkerResolverTest {
     }
 
     @Test
-    fun explicitWorkerPathNegotiatesAuthenticationFromEnclosingSdk() {
+    fun explicitWorkerPathRequiresTokenIpcFromEnclosingSdk() {
         val bare = Files.createTempDirectory("qvac-bare").resolve("bare")
         bare.writeText("bare")
         bare.toFile().setExecutable(true)
@@ -95,30 +94,32 @@ class JvmWorkerResolverTest {
         val currentWorker = current.resolve("dist/server/worker.js")
         currentWorker.parent.createDirectories()
         currentWorker.writeText("worker")
-        assertTrue(resolve(currentWorker).authenticated)
+        resolve(currentWorker)
 
         val tokenless = Files.createTempDirectory("qvac-explicit-tokenless")
         tokenless.resolve("package.json").writeText("""{"name":"@qvac/sdk","version":"0.0.0-older"}""")
         val tokenlessWorker = tokenless.resolve("dist/server/worker.js")
         tokenlessWorker.parent.createDirectories()
         tokenlessWorker.writeText("worker")
-        assertFalse(resolve(tokenlessWorker).authenticated)
+        val error = assertFailsWith<QvacWorkerStartException> { resolve(tokenlessWorker) }
+        assertTrue(error.message.orEmpty().contains("qvacIpcAuthentication"))
 
-        // No @qvac/sdk metadata anywhere above the worker: fail closed.
+        // No @qvac/sdk metadata anywhere above the worker: it must send the token.
         val bareWorker = Files.createTempDirectory("qvac-explicit-bare").resolve("worker.js")
         bareWorker.writeText("worker")
         assertTrue(resolve(bareWorker).authenticated)
     }
 
     @Test
-    fun negotiatesAuthenticationFromWorkerMetadata() {
+    fun rejectsWorkerMetadataWithoutTokenIpc() {
         val tokenless = Files.createTempDirectory("qvac-tokenless")
         tokenless.resolve("package.json").writeText("""{"version":"$SDK_VERSION"}""")
-        assertFalse(JvmWorkerResolver.requireCompatibleSdk(tokenless))
+        val error = assertFailsWith<QvacWorkerStartException> { JvmWorkerResolver.requireCompatibleSdk(tokenless) }
+        assertTrue(error.message.orEmpty().contains("token-v1"))
 
         val authenticated = Files.createTempDirectory("qvac-authenticated")
         authenticated.resolve("package.json")
             .writeText("""{"version":"$SDK_VERSION","qvacIpcAuthentication":"token-v1"}""")
-        assertTrue(JvmWorkerResolver.requireCompatibleSdk(authenticated))
+        JvmWorkerResolver.requireCompatibleSdk(authenticated)
     }
 }
