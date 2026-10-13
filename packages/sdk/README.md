@@ -490,8 +490,8 @@ const fit = await assessModelFit({
 
 Import `assessModelFit` from `@qvac/sdk`. Use the longest recording you intend
 to transcribe, with the same prompt/hotwords and token limit as the request.
-Without `transcriptionWorkload`, MOSS has no native fit evidence and the result
-can remain `unknown`. Assessment uses a registry description when available,
+Without `transcriptionWorkload`, MOSS has no native fit evidence, its recording
+window is omitted, and the result can remain `unknown`. Assessment uses a registry description when available,
 or a local model path; it downloads no full weights. MOSS CoreML requires an
 addon revision newer than the published 0.8.0 release.
 

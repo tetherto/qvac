@@ -58,11 +58,26 @@ test('MOSS batch op forwards hotwords per request without reloading', async (t) 
   const second = transcribe(request)
   await second.next()
   await second.next()
-  t.alike(options, [{ hotwords: ['QVAC'], maxNewTokens: 0 }, {}])
+  const third = transcribe({ ...request, prompt: 'Transcribe the recording.', hotwords: [] })
+  await third.next()
+  await third.next()
+  t.alike(options, [
+    { hotwords: ['QVAC'], maxNewTokens: 0 },
+    {},
+    { prompt: 'Transcribe the recording.', hotwords: [] }
+  ])
 })
 
-for (const modelType of [ModelType.whispercppTranscription, ModelType.parakeetTranscription]) {
-  for (const options of [{ hotwords: [] }, { maxNewTokens: 0 }]) {
+for (const modelType of [
+  ModelType.whispercppTranscription,
+  ModelType.parakeetTranscription,
+  ModelType.mossTranscribe
+]) {
+  const rejectedOptions =
+    modelType === ModelType.mossTranscribe
+      ? [{ hotwords: ['QVAC'] }]
+      : [{ hotwords: [] }, { maxNewTokens: 0 }]
+  for (const options of rejectedOptions) {
     test(`${modelType} rejects ${Object.keys(options)[0]} before prompting or decoding`, async (t) => {
       let decoderLoads = 0
       let promptReloads = 0
@@ -100,7 +115,12 @@ for (const modelType of [ModelType.whispercppTranscription, ModelType.parakeetTr
         prompt: 'Names used in this recording',
         ...options
       })
-      await t.exception(request.next(), /require a MOSS-Transcribe-Diarize model/)
+      await t.exception(
+        request.next(),
+        modelType === ModelType.mossTranscribe
+          ? /MOSS prompt cannot be combined with hotwords/
+          : /require a MOSS-Transcribe-Diarize model/
+      )
       t.is(decoderLoads, 0, 'compressed audio decoder never starts')
       t.is(promptReloads, 0, 'Whisper prompt configuration is untouched')
       t.is(modelRuns, 0, 'inference never starts')

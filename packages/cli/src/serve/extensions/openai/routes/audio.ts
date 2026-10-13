@@ -16,6 +16,7 @@ import { resolveAndCheckModel, ensureReady } from '@/serve/core/plugins/require-
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import {
   transcriptionsBody,
+  assertTranscriptionOptionsSupported,
   translationsBody,
   audioSpeechBody,
   voicesListResponse,
@@ -175,18 +176,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         'transcription'
       )
       assertTimedFormatSupported(responseFormat, entry.sdkType)
-      if (body.hotwords !== undefined || body.max_new_tokens !== undefined) {
-        if (entry.sdkType !== 'moss-transcribe') {
-          throw new HttpError(
-            400,
-            'unsupported_parameter',
-            'hotwords and max_new_tokens require MOSS transcription.'
-          )
-        }
-        if (body.hotwords !== undefined && body.prompt !== undefined) {
-          throw new HttpError(400, 'invalid_parameter', 'Use either prompt or hotwords, not both.')
-        }
-      }
+      assertTranscriptionOptionsSupported(body, entry.sdkType)
       const fileSizeKB = Math.round(file.length / 1024)
       app.qvac.logger.info(
         `  transcribe model=${alias} file=${fileMeta?.filename ?? ''} size=${fileSizeKB}KB ` +

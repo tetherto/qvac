@@ -219,6 +219,13 @@ export async function* transcribe(
       'hotwords and maxNewTokens require a MOSS-Transcribe-Diarize model'
     )
   }
+  if (
+    engineType === ModelType.mossTranscribe &&
+    params.prompt !== undefined &&
+    params.hotwords?.length
+  ) {
+    throw new TranscriptionFailedError('MOSS prompt cannot be combined with hotwords')
+  }
   assertMetadataSupported(modelId, engineType, metadata)
   const silenceMarker = SILENCE_MARKERS[engineType] ?? ''
   const audioFormat = getAudioFormat(modelId, engineType)

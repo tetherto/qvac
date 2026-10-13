@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HttpError } from '@/serve/lib/http-error'
 
 // OpenAI's built-in speech voices. QVAC has no fixed catalog — these only
 // document the names OpenAI clients send; routing still goes through aliases.
@@ -63,6 +64,24 @@ export const transcriptionsBody = z
     temperature: z.coerce.number().optional()
   })
   .passthrough()
+
+/** Validate model-specific options before creating temporary audio files. */
+export function assertTranscriptionOptionsSupported(
+  body: Pick<z.infer<typeof transcriptionsBody>, 'prompt' | 'hotwords' | 'max_new_tokens'>,
+  modelType: string
+): void {
+  if (body.hotwords === undefined && body.max_new_tokens === undefined) return
+  if (modelType !== 'moss-transcribe') {
+    throw new HttpError(
+      400,
+      'unsupported_parameter',
+      'hotwords and max_new_tokens require MOSS transcription.'
+    )
+  }
+  if (body.hotwords?.length && body.prompt !== undefined) {
+    throw new HttpError(400, 'invalid_parameter', 'Use either prompt or hotwords, not both.')
+  }
+}
 
 export const translationsBody = z
   .object({

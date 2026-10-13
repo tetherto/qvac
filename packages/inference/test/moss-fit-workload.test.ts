@@ -6,6 +6,10 @@ test('MOSS fit workload shares transcription constraints and requires a positive
     transcriptionFitWorkloadSchema.parse({ audioSeconds: 30, hotwords: [], maxNewTokens: 0 }),
     { audioSeconds: 30, hotwords: [], maxNewTokens: 0 }
   )
+  t.alike(
+    transcriptionFitWorkloadSchema.parse({ audioSeconds: 30, prompt: 'Transcribe.', hotwords: [] }),
+    { audioSeconds: 30, prompt: 'Transcribe.', hotwords: [] }
+  )
   for (const workload of [
     {},
     { audioSeconds: 0 },

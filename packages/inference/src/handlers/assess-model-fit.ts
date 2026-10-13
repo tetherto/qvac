@@ -196,6 +196,12 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
   const contextTokens = config['ctx_size']
   const artifacts = companionRefs(config)
   const device = resolvedDevice(modelType, config)
+  const windowMs =
+    modelType === ModelType.mossTranscribe
+      ? candidate.transcriptionWorkload === undefined
+        ? undefined
+        : candidate.transcriptionWorkload.audioSeconds * 1000
+      : audioWindowMs(config)
 
   return {
     model: {
@@ -211,10 +217,7 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
     workload: AUDIO_ENGINES.includes(modelType)
       ? {
           kind: 'audio',
-          windowMs:
-            modelType === ModelType.mossTranscribe
-              ? (candidate.transcriptionWorkload?.audioSeconds ?? 0) * 1000
-              : audioWindowMs(config),
+          ...(windowMs !== undefined && { windowMs }),
           streaming: config['streaming'] === true
         }
       : {

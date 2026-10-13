@@ -455,7 +455,7 @@ Transcribes audio in its source language using a transcription model.
   - `file` (required) — audio file
   - `model` (required) — a `serve.models` alias whose endpoint category is `transcription`
   - `prompt` (optional) — initial prompt where supported
-  - `hotwords` (optional, MOSS only) — JSON array of up to 64 nonempty terms, each at most 64 UTF-8 bytes; cannot be combined with `prompt`
+  - `hotwords` (optional, MOSS only) — JSON array of up to 64 nonempty terms, each at most 64 UTF-8 bytes; a nonempty array cannot be combined with `prompt` (an empty array is allowed)
   - `max_new_tokens` (optional, MOSS only) — integer decoding limit; `0` uses the model default
   - `response_format` (optional) — `json` (default), `text`, `srt`, `vtt`, or `verbose_json`
 - `json` and `text` work with Whisper, Parakeet, and MOSS. SRT and WebVTT require Whisper or MOSS segment metadata. Parakeet supports `verbose_json`, including Nemotron diarization. Requesting SRT or WebVTT from Parakeet returns `400 unsupported_response_format`.
