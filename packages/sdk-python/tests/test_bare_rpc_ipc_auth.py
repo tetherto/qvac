@@ -206,3 +206,18 @@ async def test_close_drops_a_silent_connection_without_waiting(
         assert await asyncio.wait_for(reader.read(), timeout=5) == b""
     finally:
         writer.close()
+
+
+async def test_reconnect_after_close_wires_the_new_worker(spawn) -> None:
+    transport = BareRpcTransport(["bare", "worker.js"])
+    for reply in ({"session": 1}, {"session": 2}):
+        spawn.ready.clear()
+        task = await _start(transport, spawn)
+        worker_writer, pump = await _fake_worker(spawn, reply)
+        try:
+            await asyncio.wait_for(task, timeout=5)
+            assert await transport.call({"type": "heartbeat"}) == reply
+        finally:
+            worker_writer.close()
+            pump.cancel()
+            await transport.close()

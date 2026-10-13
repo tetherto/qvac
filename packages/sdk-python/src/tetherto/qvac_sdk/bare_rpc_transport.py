@@ -152,11 +152,12 @@ class BareRpcTransport:
         connected: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         token = secrets.token_hex(32).encode("ascii")
         rejected = 0
+        wired = False
 
         async def on_client(
             reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         ) -> None:
-            nonlocal rejected
+            nonlocal rejected, wired
             handshake = asyncio.current_task()
             assert handshake is not None
             self._handshakes.add(handshake)
@@ -171,9 +172,10 @@ class BareRpcTransport:
                 rejected += 1
                 writer.close()
                 return
-            if self._writer is not None:
+            if wired:
                 writer.close()
                 return
+            wired = True
             self._writer = writer
             self._read_task = asyncio.current_task()
             assert self._server is not None
@@ -297,6 +299,8 @@ class BareRpcTransport:
                 self._proc.kill()
         if self._writer:
             self._writer.close()
+        self._writer = None
+        self._read_task = None
         if self._server:
             self._server.close()
             try:
