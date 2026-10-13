@@ -191,11 +191,20 @@ bun run scripts/cut-line.ts sdk v0.21
 ```
 
 It renames the outgoing folder group to its plain form, copies it to the new
-group, updates the manifest, adds the preserved line's index pair to
-`public/_redirects`, and moves the currency marker from the preserved line's
-titles to the opened one's. It refuses a collection that is not versioned, a
-version that is not above the current line, a destination already on disk, and
-a working tree that already carries changes.
+group, updates the manifest, adds the preserved line's rules to
+`public/_redirects`, moves the currency marker from the preserved line's titles
+to the opened one's, and empties the opened line's release-notes page. It
+refuses a collection that is not versioned, a version that is not above the
+current line, a destination already on disk, and a working tree that already
+carries changes.
+
+The opened line keeps the API summary it copied and starts with empty release
+notes, because the release PR that regenerates both is reviewed as a diff: a
+summary diffed against the previous line shows only the surface that moved,
+while notes diffed against the previous line's would be a wholesale
+replacement. The release-notes page is kept and blanked rather than deleted —
+`reference/meta.json` lists it — and its `description` is rewritten to the line
+being opened.
 
 It is a convenience, never a dependency. The same cut made by hand is the same
 cut — the procedure is in [`README.md`](README.md) — and the build is what

@@ -11,7 +11,8 @@ on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 The C++ CI carve-out builds the native addon on the Ubuntu 22.04 CPU runner,
 reusing vcpkg and compiler caches with two build workers. Addon-level C++ tests
 remain a stub. Only trusted default-branch builds save shared caches; pushes
-affecting AudioGen or its cache configuration and manual dispatches warm them.
+affecting AudioGen or its cache configuration, a schedule every 2 days, and
+manual dispatches warm them.
 Non-PR runs build the triggering commit and reject inputs selecting another
 repository or revision. PR events retain caller-selected PR-head checkouts.
 See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet).
@@ -823,6 +824,13 @@ dispatches to the corresponding `audiogen-cpp` engine.
 - `addon/src/model-interface/minimax/` — desktop-only `MinimaxModel`.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on the
   `speech-cpp[audiogen]` port.
+- `ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
+  versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
+  `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
+  `ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their
+  ggml backends under the same file names, so an app that bundles several of
+  them keeps one copy of each: use releases that record the same
+  `ggml-speech`.
 
 ## Benchmarking
 

@@ -1,5 +1,117 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- On hybrid and recurrent models (Qwen3.5 and later, Jamba, DeepSeek V4) the
+  `cacheKey` file also keeps the conversation's newest end-of-history
+  checkpoint. A conversation loaded from its file, including in a new
+  process, continues its next turn or a regenerate from that checkpoint
+  instead of reprocessing the whole conversation, which thinking templates
+  forced because they rewrite the previous answer. Older checkpoints stay in
+  memory only. Files written this way still load in earlier versions, which
+  ignore the checkpoint.
+
+## [0.59.0] - 2026-10-11
+
+### Added
+
+- Chat messages accept past tool calls: `tool_calls` (`id`, `name`,
+  `arguments` as an object or JSON object text) on an assistant turn, and
+  `tool_call_id` / `name` on a tool turn. The chat template renders them in
+  the model's own format instead of the caller writing them into `content`.
+  `content` may be `null` or omitted on an assistant turn that carries
+  `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
+  `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
+
+### Changed
+
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off.
+
+### Fixed
+
+- A multimodal model that failed to load, for example out of GPU memory,
+  resolved `load()` instead of rejecting it, and the first request then
+  crashed the process. It now rejects with `UnableToLoadModel`, as a
+  text-only model does.
+- Gemma 4 vision models cap an image at 280 tokens again when
+  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
+  applied, so a large image took about four times the tokens and prefill: on
+  Android it ran the app out of memory or produced a wrong description.
+  Set `image_max_tokens` to raise the cap.
+
+## [0.58.0] - 2026-10-09
+
+### Breaking
+
+- Requests with a `cacheKey` must send the complete message history and tool
+  list every time. The addon reuses the longest prefix that matches its cache
+  and processes the rest. Cache files written by earlier versions are cold
+  misses. SDK releases that still send only the new messages are incompatible
+  until the SDK migrates.
+- `runOptions.saveCacheToDisk` is removed and throws a `TypeError`. A cached
+  conversation stays in memory and is written to its `cacheKey` file when it
+  is set aside for another key, evicted, reloaded or unloaded, or on
+  `saveCache(cacheKey)`.
+- `generationParams.remove_thinking_from_context` is removed and rejected as
+  an unknown key. Earlier reasoning stays in the cache until the chat template
+  drops it. `RuntimeStats.thinkingBlockDiscards` is removed.
+
+### Added
+
+- `saveCache(cacheKey)` writes a cached conversation to its file;
+  `discardCache(cacheKey)` drops it without writing.
+- `runOptions.ephemeral`: the conversation is never written automatically;
+  `saveCache()` still writes it.
+- `cache_ram_mib`: host-RAM budget in MiB for idle conversations, so a key
+  switch or slot eviction moves them to RAM instead of disk. Default `0` (off).
+- `cache_checkpoints` (default `1`, max `1024`) and
+  `cache_checkpoints_max_bytes`: checkpoints per sequence on hybrid, recurrent
+  and DeepSeek V4 models, so a follow-up turn whose template drops the last
+  answer's reasoning does not reprocess the whole conversation.
+- `cache_checkpoint_storage` (`memory` by default, or `disk`) and
+  `cache_checkpoint_dir`, required with `disk`.
+- CUDA backend on NVIDIA GPUs (Linux x64 and arm64, Windows x64). It is
+  preferred over Vulkan, and without a CUDA module, driver or device the load
+  falls back to Vulkan, then CPU.
+- `backend` load-config field: comma-separated GPU backend priority list
+  (`cuda`, `vulkan`, `metal`, `opencl`, or `auto`), e.g. `'cuda,vulkan'`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.20.2`, the first release
+  that ships the CUDA module.
+- With `parallel >= 2`, a conversation stays in its scheduler slot between
+  requests, and requests on the same `cacheKey` run one at a time.
+- Cancelling after prefill keeps the prompt and the streamed tokens in the
+  cache; a cancel during prefill still rolls back.
+- Assistant messages may carry `reasoning_content`, and reasoning sent inline
+  in `content` is split out before rendering.
+- TurboQuant and PolarQuant KV-cache types are rejected on CUDA.
+- Split mode only spreads layers across GPUs of the selected backend.
+
+### Removed
+
+- The built-in Qwen3 chat template override: Qwen3 models use the template in
+  their GGUF.
+- The EOS-inside-reasoning recovery: that EOS now ends the response with
+  `stopReason: 'eos'`.
+
+### Fixed
+
+- A single-prompt cache load on a parallel model no longer truncates the
+  other sequences.
+- A `cacheKey` write that fails part-way (e.g. a full disk) no longer replaces
+  the last good file.
+- DeepSeek V4 vision models now roll back a failed or cancelled request
+  correctly.
+
 ## [0.57.0] - 2026-10-06
 
 ### Added

@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "common/chat.h"
+#include "model-interface/CacheLedger.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
@@ -113,7 +114,7 @@ TEST_F(TextLlmContextTest, LoadCacheReportsMissForEmptyKey) {
   common_params params;
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
-  EXPECT_FALSE(driver.loadCache(/*cacheKey=*/""))
+  EXPECT_FALSE(driver.loadCache(/*cacheKey=*/"", /*adoptFileCheckpoints=*/true))
       << "an empty cache key must not load a cache";
 }
 
@@ -154,7 +155,8 @@ TEST_F(TextLlmContextTest, LoadCacheClearsLegacyOneFieldMetadata) {
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
-  EXPECT_FALSE(driver.loadCache(cachePathString));
+  EXPECT_FALSE(
+      driver.loadCache(cachePathString, /*adoptFileCheckpoints=*/true));
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "legacy metadata load returned false but left KV rows resident";
@@ -182,11 +184,20 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
 
   const fs::path cachePath = uniqueTextCachePath("bad-npast-seq-cache");
   const std::string cachePathString = cachePath.string();
-  llama_token metadata[2] = {
-      static_cast<llama_token>(nPast + 1), static_cast<llama_token>(1)};
+  // A well-formed current ledger that claims one position more than the
+  // memory saved with it. (A pre-ledger file is a cold miss instead; see the
+  // test above.)
+  std::vector<llama_token> claimed(static_cast<size_t>(nPast) + 1, 1);
+  namespace cache = qvac_lib_inference_addon_llama::cache;
+  const std::vector<llama_token> metadata =
+      cache::serialize(cache::fromTokens(claimed), nPast + 1, nPast + 1);
   ASSERT_GT(
       llama_state_seq_save_file(
-          model->getContext(), cachePathString.c_str(), 0, metadata, 2),
+          model->getContext(),
+          cachePathString.c_str(),
+          0,
+          metadata.data(),
+          metadata.size()),
       0u);
 
   model->reset();
@@ -201,7 +212,10 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
-      { (void)driver.loadCache(cachePathString); }, qvac_errors::StatusError);
+      {
+        (void)driver.loadCache(cachePathString, /*adoptFileCheckpoints=*/true);
+      },
+      qvac_errors::StatusError);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "failed sequence cache validation left loaded KV rows resident";
@@ -229,18 +243,17 @@ TEST_F(TextLlmContextTest, LoadCacheRejectsRestoredTokenCountMetadataMismatch) {
 
   const fs::path cachePath = uniqueTextCachePath("bad-cachetokens-seq-cache");
   const std::string cachePathString = cachePath.string();
-  const llama_token metadata[SESSION_METADATA_FIELD_COUNT] = {
-      static_cast<llama_token>(nPast),
-      static_cast<llama_token>(1),
-      static_cast<llama_token>(nPast + 1),
-      static_cast<llama_token>(1)};
+  namespace cache = qvac_lib_inference_addon_llama::cache;
+  const std::vector<llama_token> fakePrompt(static_cast<size_t>(nPast + 1), 1);
+  const std::vector<llama_token> metadata =
+      cache::serialize(cache::fromTokens(fakePrompt), nPast + 1, nPast + 1);
   ASSERT_GT(
       llama_state_seq_save_file(
           model->getContext(),
           cachePathString.c_str(),
           0,
-          metadata,
-          SESSION_METADATA_FIELD_COUNT),
+          metadata.data(),
+          metadata.size()),
       0u);
 
   model->reset();
@@ -255,7 +268,10 @@ TEST_F(TextLlmContextTest, LoadCacheRejectsRestoredTokenCountMetadataMismatch) {
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
-      { (void)driver.loadCache(cachePathString); }, qvac_errors::StatusError);
+      {
+        (void)driver.loadCache(cachePathString, /*adoptFileCheckpoints=*/true);
+      },
+      qvac_errors::StatusError);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "failed cache-token validation left loaded KV rows resident";

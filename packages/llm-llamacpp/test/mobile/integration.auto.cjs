@@ -481,6 +481,11 @@ async function runImageMmprojGpuTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/image-mmproj-gpu.test.js', options)
 }
 
+async function runKvCacheExtendedTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKvCacheExtendedTest')) return __FILTERED
+  return runIntegrationModule('../integration/kv-cache-extended.test.js', options)
+}
+
 async function runKvCacheTypeDefaultsTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKvCacheTypeDefaultsTest')) return __FILTERED
   return runIntegrationModule('../integration/kv-cache-type-defaults.test.js', options)

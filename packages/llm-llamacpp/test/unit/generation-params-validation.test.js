@@ -141,7 +141,6 @@ test('every documented generationParams key is accepted', async (t) => {
       repeat_penalty: 1,
       json_schema: { type: 'object' },
       reasoning_budget: 0,
-      remove_thinking_from_context: true,
       parallel_tool_calls: false
     }
   })
@@ -152,6 +151,18 @@ test('every documented generationParams key is accepted', async (t) => {
     generationParams: { grammar: 'root ::= "a"' }
   })
   t.is(grammarModel.addon.runJob.callCount, 1, 'grammar must be admitted on its own')
+})
+
+test('remove_thinking_from_context is no longer an addon parameter', async (t) => {
+  const model = createModel()
+  await t.exception.all(
+    () =>
+      model.run([{ role: 'user', content: 'a' }], {
+        generationParams: { remove_thinking_from_context: true }
+      }),
+    /unknown key: remove_thinking_from_context/
+  )
+  t.is(model.addon.runJob.callCount, 0)
 })
 
 test('parallel_tool_calls must be a boolean', async (t) => {

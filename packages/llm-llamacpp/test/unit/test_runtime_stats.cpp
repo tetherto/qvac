@@ -130,10 +130,8 @@ TEST(RuntimeStatsRates, ResetClearsRates) {
 
 // Batch TTFT is sourced from `prefillTimeMs()`. It sums the prefill share
 // of every batch step: pure-prefill steps contribute fully, mixed steps
-// contribute the prefill-token fraction of their wall-clock. Compactor
-// replay decode is excluded because it fires in `onGenerationFinished`,
-// outside the scheduler's timed `recordDecodeStep` block — not by any
-// gating inside this function.
+// contribute the prefill-token fraction of their wall-clock. Terminal request
+// processing runs outside the scheduler's timed `recordDecodeStep` block.
 TEST(RuntimeStatsRates, PrefillTimeMsIncludesProportionalMixedStepShare) {
   RuntimeStatsSnapshot stats;
   EXPECT_DOUBLE_EQ(stats.prefillTimeMs(), 0.0);
@@ -156,69 +154,32 @@ TEST(RuntimeStatsRates, PrefillTimeMsIncludesProportionalMixedStepShare) {
   EXPECT_DOUBLE_EQ(stats.prefillTimeMs(), 0.0);
 }
 
-// Minimal `Request` constructed only with the fields `accumulateSlot`
-// reads (`generatedTokens.size()` and `prefillTokenCount` — both zero
-// here because we're isolating the `thinkingDiscards` aggregation).
+// Minimal `Request` constructed only with the fields `accumulateSlot` reads.
 Request makeStubRequest() {
   return Request(
       /*rid=*/0, /*toks=*/std::vector<llama_token>{}, /*maxTokens=*/0);
 }
 
-// `thinkingDiscards` is the per-slot count of compacted reasoning blocks
-// the scheduler aggregates across all slots in a batch — this is the
-// counter that surfaces as `RuntimeStats.thinkingBlockDiscards` to the JS
-// side. The two tests below pin the sum semantics independent of any
-// driver.
-TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
-  RuntimeStatsSnapshot stats;
-  Request reqA = makeStubRequest();
-  Request reqB = makeStubRequest();
-  Request reqC = makeStubRequest();
-
-  // (nPast, thinkingDiscards, toolsDropped, req)
-  stats.accumulateSlot(
-      /*nPast=*/0, /*thinkingDiscards=*/1, /*toolsDropped=*/0, reqA);
-  stats.accumulateSlot(
-      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
-  stats.accumulateSlot(
-      /*nPast=*/0, /*thinkingDiscards=*/2, /*toolsDropped=*/0, reqC);
-
-  EXPECT_EQ(stats.thinkingBlockDiscards, 3);
-}
-
-TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsThinkingDiscards) {
-  RuntimeStatsSnapshot stats;
-  Request req = makeStubRequest();
-  stats.accumulateSlot(0, 5, 0, req);
-  EXPECT_EQ(stats.thinkingBlockDiscards, 5);
-
-  stats.reset();
-  EXPECT_EQ(stats.thinkingBlockDiscards, 0);
-}
-
 // `toolsDropped` is the per-slot count of renders where the chat template did
 // not carry the tool definitions; the scheduler sums it across the batch into
-// `RuntimeStats.toolDefinitionsDropped`. Mirrors the thinkingDiscards pair
-// above, which is the sibling counter added the same way.
+// `RuntimeStats.toolDefinitionsDropped`.
 TEST(RuntimeStatsAccumulate, AccumulateSlotSumsToolDefinitionsDropped) {
   RuntimeStatsSnapshot stats;
   Request reqA = makeStubRequest();
   Request reqB = makeStubRequest();
   Request reqC = makeStubRequest();
 
-  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/1, reqA);
-  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
-  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/2, reqC);
+  stats.accumulateSlot(0, /*toolsDropped=*/1, reqA);
+  stats.accumulateSlot(0, /*toolsDropped=*/0, reqB);
+  stats.accumulateSlot(0, /*toolsDropped=*/2, reqC);
 
   EXPECT_EQ(stats.toolDefinitionsDropped, 3);
-  EXPECT_EQ(stats.thinkingBlockDiscards, 0)
-      << "the two counters must not alias each other";
 }
 
 TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsToolDefinitionsDropped) {
   RuntimeStatsSnapshot stats;
   Request req = makeStubRequest();
-  stats.accumulateSlot(0, 0, 5, req);
+  stats.accumulateSlot(0, 5, req);
   EXPECT_EQ(stats.toolDefinitionsDropped, 5);
 
   stats.reset();
@@ -245,7 +206,7 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   // Same call the cancel path makes via accumulateSlotRuntimeStats: nothing
   // was processed, so nPast and the generated vector are empty.
   stats.accumulateSlot(
-      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
+      /*nPast=*/0, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 0);
 }
@@ -266,7 +227,7 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
 
   RuntimeStatsSnapshot stats;
   stats.accumulateSlot(
-      /*nPast=*/42, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
+      /*nPast=*/42, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 42);
 }
@@ -334,24 +295,22 @@ TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
   EXPECT_EQ(agg.promptTokens, 35);
 }
 
-// The two per-slot counters sum like the token counts rather than averaging:
+// The per-slot tool counter sums like the token counts rather than averaging:
 // a group's caller asked one question, and "two of my renders dropped their
 // tools" is the honest answer to it. Summing is also what leaves a one-item
 // group — the concurrent single-prompt path — reporting its own figure
 // unchanged.
 TEST(ObservedRequestStats, GroupAggregateSumsPerSlotCounters) {
   const std::vector<ObservedRequestStats> group{
-      {.thinkingBlockDiscards = 2, .toolDefinitionsDropped = 1},
-      {.thinkingBlockDiscards = 3, .toolDefinitionsDropped = 0},
-      {.thinkingBlockDiscards = 0, .toolDefinitionsDropped = 1}};
+      {.toolDefinitionsDropped = 1},
+      {.toolDefinitionsDropped = 0},
+      {.toolDefinitionsDropped = 1}};
 
   const ObservedRequestStats agg = aggregateObservedStats(group);
-  EXPECT_EQ(agg.thinkingBlockDiscards, 5);
   EXPECT_EQ(agg.toolDefinitionsDropped, 2);
 
-  const ObservedRequestStats single = aggregateObservedStats(
-      {{.thinkingBlockDiscards = 4, .toolDefinitionsDropped = 1}});
-  EXPECT_EQ(single.thinkingBlockDiscards, 4);
+  const ObservedRequestStats single =
+      aggregateObservedStats({{.toolDefinitionsDropped = 1}});
   EXPECT_EQ(single.toolDefinitionsDropped, 1);
 }
 
