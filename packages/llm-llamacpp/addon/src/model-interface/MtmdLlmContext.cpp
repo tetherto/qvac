@@ -14,6 +14,7 @@
 
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
+#include "ImageTokenBudget.hpp"
 #include "MediaLoadOrder.hpp"
 #include "RequestRecoveryHelpers.hpp"
 #include "addon/LlmErrors.hpp"
@@ -183,6 +184,12 @@ void MtmdLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
+  slidingWindowCheckpoints_ =
+      (model != nullptr) && !needsFullStateSnapshot_ &&
+      qvac_lib_inference_addon_llama::utils::takesSlidingWindowCheckpoints(
+          llama_model_n_swa(model),
+          params_.swa_full,
+          llama_n_ctx_seq(modelCtx_.lctx));
   snapshotScope_ =
       qvac_lib_inference_addon_llama::utils::untrimmableSnapshotScope();
   requestRollback_.setScope(snapshotScope_);
@@ -212,56 +219,35 @@ void MtmdLlmContext::initVisionContext() {
   mparams.image_min_tokens = params_.image_min_tokens;
   mparams.image_max_tokens = params_.image_max_tokens;
 
-  // When the caller has not set an explicit cap, apply a sensible default for
-  // Qwen-VL encoders only. Qwen-VL allows up to 4096 image tokens, far more
-  // than the ~1024 it needs for grounding, so an uncapped high-resolution
-  // image pays O(n_patches^2) attention for tokens the model cannot use (and
-  // can even destabilize generation). 2048 stays well above the documented
-  // grounding floor while roughly halving the worst-case encode + image
-  // prefill. We gate on the mmproj projector type rather than applying a
-  // blanket value so that smaller-budget dynamic encoders (e.g. LightOnOCR /
-  // Pixtral at 1024, LFM2 at 256) are never *raised* above their native limit;
-  // fixed-grid encoders (SigLIP/SmolVLM) are unaffected regardless. Fully
-  // overridable via image_max_tokens config.
+  // When the caller has not set an explicit cap, apply the projector's default
+  // from defaultImageMaxTokens. Fully overridable via image_max_tokens config.
   if (mparams.image_max_tokens <= 0) {
-    static constexpr int kQwenVlDefaultImageMaxTokens = 2048;
-    // Respect an explicit image_min_tokens floor. mtmd converts both knobs into
-    // min/max pixel budgets and throws when max_pixels < min_pixels, so if the
-    // caller asked for at least as many tokens as our default cap, injecting
-    // the default max would make a min-only config fail to load. Leave the
-    // budget to the caller / model default in that case.
-    if (mparams.image_min_tokens < kQwenVlDefaultImageMaxTokens) {
-      gguf_init_params gp = {};
-      gp.no_alloc = true;
-      if (gguf_context* gc = gguf_init_from_file(clipPath, gp)) {
-        // Mirror mtmd's projector-type resolution: it reads clip.projector_type
-        // first and, for mixed vision+audio mmprojs, falls back to
-        // clip.vision.projector_type. Reading only the generic key would miss
-        // Qwen Omni vision encoders (e.g. Qwen3-Omni stores its vision merger
-        // under the vision key), silently leaving them on the uncapped path.
-        auto readProjType = [&](const char* key) -> std::string {
-          const int64_t id = gguf_find_key(gc, key);
-          if (id >= 0 && gguf_get_kv_type(gc, id) == GGUF_TYPE_STRING) {
-            return gguf_get_val_str(gc, id);
-          }
-          return {};
-        };
-        std::string projType = readProjType("clip.projector_type");
-        if (projType.empty()) {
-          projType = readProjType("clip.vision.projector_type");
+    gguf_init_params gp = {};
+    gp.no_alloc = true;
+    if (gguf_context* gc = gguf_init_from_file(clipPath, gp)) {
+      // Mirror mtmd's projector-type resolution: it reads clip.projector_type
+      // first and, for mixed vision+audio mmprojs, falls back to
+      // clip.vision.projector_type. Qwen Omni and Gemma 4 store their vision
+      // projector only under the vision key.
+      auto readProjType = [&](const char* key) -> std::string {
+        const int64_t id = gguf_find_key(gc, key);
+        if (id >= 0 && gguf_get_kv_type(gc, id) == GGUF_TYPE_STRING) {
+          return gguf_get_val_str(gc, id);
         }
-        // Qwen vision mergers: qwen2vl_merger / qwen2.5vl_merger /
-        // qwen3vl_merger. Plus qwen2.5o, the Qwen2.5-Omni combined projector,
-        // which mtmd resolves to the Qwen2.5-VL vision merger for the vision
-        // modality.
-        const bool isQwenVlMerger = projType.rfind("qwen", 0) == 0 &&
-                                    projType.find("vl") != std::string::npos;
-        const bool isQwenOmni = projType == "qwen2.5o";
-        if (isQwenVlMerger || isQwenOmni) {
-          mparams.image_max_tokens = kQwenVlDefaultImageMaxTokens;
-        }
-        gguf_free(gc);
+        return {};
+      };
+      std::string projType = readProjType("clip.projector_type");
+      if (projType.empty()) {
+        projType = readProjType("clip.vision.projector_type");
       }
+      const int defaultMax = defaultImageMaxTokens(projType);
+      // Respect an explicit image_min_tokens floor. mtmd converts both knobs
+      // into min/max pixel budgets and throws when max_pixels < min_pixels, so
+      // a min at or above the default cap leaves the budget to the caller.
+      if (defaultMax > 0 && mparams.image_min_tokens < defaultMax) {
+        mparams.image_max_tokens = defaultMax;
+      }
+      gguf_free(gc);
     }
   }
   ctxVision_.reset(mtmd_init_from_file(clipPath, modelCtx_.model, mparams));
@@ -491,7 +477,7 @@ void MtmdLlmContext::tokenizeChat(
   // TextLlmContext::tokenizeChat.
   generationPromptTokens_ = 0;
   const size_t nChunks = chunks.size();
-  if (needsFullStateSnapshot_ && cacheReconciliationEnabled_ &&
+  if (takesHistoryCheckpoints() && cacheReconciliationEnabled_ &&
       inputs.add_generation_prompt && nChunks > 0 &&
       mtmd_input_chunk_get_type(chunks[nChunks - 1]) ==
           MTMD_INPUT_CHUNK_TYPE_TEXT) {
@@ -1501,16 +1487,32 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
     // The rollback target moves to the divergence point (see the same branch
     // in TextLlmContext::reconcilePrompt); no snapshot is written.
     llama_pos reusePos = residentLedger_.positions(reuseTarget);
+    bool restored = false;
     if (!canTrimSequenceTo(modelCtx_.lctx, reusePos)) {
-      // Sliding-window cells before the divergence are gone (see
+      // Sliding-window cells before the divergence are gone; restore a
+      // checkpoint within the shared prefix, or go cold (see
       // TextLlmContext::reconcilePrompt).
+      const size_t sharedEntries = reuseTarget;
       reuseTarget = 0;
       reuse = 0;
       reusePos = 0;
       checkpoint = "cold";
+      for (CacheCheckpoint* candidate : cache::usableCheckpointsLongestFirst(
+               cacheCheckpoints_, fullLedger, sharedEntries)) {
+        if (restoreSequenceState(modelCtx_.lctx, seqId_, candidate->state)) {
+          residentLedger_ = candidate->ledger;
+          reuse = residentLedger_.entries.size();
+          reusePos = residentLedger_.positions();
+          checkpoint = std::to_string(reuse);
+          restored = true;
+          break;
+        }
+      }
     }
-    clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
-    residentLedger_.truncate(reuseTarget);
+    if (!restored) {
+      clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
+      residentLedger_.truncate(reuseTarget);
+    }
     current_.pos = reusePos;
     refreshCurrentCacheTokensFromMemory();
     preRequestLedger_ = residentLedger_;
@@ -1596,7 +1598,7 @@ void MtmdLlmContext::commitCacheRequest() {
 }
 
 void MtmdLlmContext::captureHistoryCheckpoint(llama_pos pos) {
-  if (!needsFullStateSnapshot_ || !cacheRequestActive_ ||
+  if (!takesHistoryCheckpoints() || !cacheRequestActive_ ||
       historyCheckpointEntries_ == 0) {
     return;
   }
