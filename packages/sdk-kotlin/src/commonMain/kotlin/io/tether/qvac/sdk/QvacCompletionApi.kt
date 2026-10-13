@@ -3,20 +3,8 @@ package io.tether.qvac.sdk
 import io.tether.qvac.sdk.generated.schema.CancelRequest
 import io.tether.qvac.sdk.generated.schema.CancelRequestRequest
 import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequest
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestGenerationParams
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestHistoryItem
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestHistoryItemAttachmentsItem
 import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestKvCache
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormat
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatJsonObject
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatJsonSchema
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestResponseFormatText
 import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolDialect
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItem
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParameters
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParametersPropertiesValue
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolsItemParametersPropertiesValueType
 import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponseToolCallback
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
@@ -294,19 +282,20 @@ fun QvacCompletion.orchestrate(
         tool.name to (tool.handler
             ?: throw IllegalArgumentException("Tool '${tool.name}' requires a handler"))
     }
+    val json = client.json
     val request = CompletionOrchestrateRequest(
         captureThinking = options.captureThinking,
         emitRawDeltas = options.emitRawDeltas,
-        generationParams = options.generation.toOrchestrateParams(),
-        history = history.map { it.toOrchestrateItem() },
+        generationParams = json.restate(options.generation.toStreamParams()),
+        history = history.map { json.restate(it.toStreamItem()) },
         kvCache = options.kvCache?.toWire(),
         maxToolTurns = maxToolTurns.toLong(),
         modelId = modelId,
         requestId = options.requestId,
-        responseFormat = options.responseFormat?.toOrchestrateFormat(),
+        responseFormat = options.responseFormat?.let { json.restate(it.toStreamFormat()) },
         stream = options.stream,
         toolDialect = options.toolDialect?.let { wireEnum<CompletionOrchestrateRequestToolDialect>("toolDialect", it) },
-        tools = tools.map { it.toOrchestrateTool() },
+        tools = tools.map { json.restate(it.toStreamTool()) },
     )
     val upstream = Channel<ByteArray>(Channel.UNLIMITED)
     return startRun(options.requestId, handlers) { emit ->
@@ -516,26 +505,7 @@ private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
         ?.map { CompletionStreamRequestHistoryItemAttachmentsItem(path = it.path) },
 )
 
-private fun QvacMessage.toOrchestrateItem() = CompletionOrchestrateRequestHistoryItem(
-    role = role,
-    content = content,
-    attachments = attachments.takeIf { it.isNotEmpty() }
-        ?.map { CompletionOrchestrateRequestHistoryItemAttachmentsItem(path = it.path) },
-)
-
 private fun QvacGenerationOptions.toStreamParams() = CompletionStreamRequestGenerationParams(
-    temp = temperature,
-    top_p = topP,
-    top_k = topK,
-    predict = predict?.toDouble(),
-    seed = seed?.toDouble(),
-    frequency_penalty = frequencyPenalty,
-    presence_penalty = presencePenalty,
-    repeat_penalty = repeatPenalty,
-    reasoning_budget = reasoningBudget,
-)
-
-private fun QvacGenerationOptions.toOrchestrateParams() = CompletionOrchestrateRequestGenerationParams(
     temp = temperature,
     top_p = topP,
     top_k = topK,
@@ -568,23 +538,6 @@ private fun QvacResponseFormat.toStreamFormat(): CompletionStreamRequestResponse
     )
 }
 
-private fun QvacResponseFormat.toOrchestrateFormat(): CompletionOrchestrateRequestResponseFormat = when (this) {
-    QvacResponseFormat.Text ->
-        CompletionOrchestrateRequestResponseFormat.Text(CompletionOrchestrateRequestResponseFormatText())
-    QvacResponseFormat.JsonValue ->
-        CompletionOrchestrateRequestResponseFormat.JsonObject(CompletionOrchestrateRequestResponseFormatJsonObject())
-    is QvacResponseFormat.JsonSchema -> CompletionOrchestrateRequestResponseFormat.JsonSchema(
-        CompletionOrchestrateRequestResponseFormatJsonSchema(
-            json_schema = CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema(
-                name = name,
-                description = description,
-                schema = schema,
-                strict = strict,
-            ),
-        ),
-    )
-}
-
 private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
     name = name,
     description = description,
@@ -603,23 +556,10 @@ private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
     ),
 )
 
-private fun QvacTool.toOrchestrateTool() = CompletionOrchestrateRequestToolsItem(
-    name = name,
-    description = description,
-    parameters = CompletionOrchestrateRequestToolsItemParameters(
-        properties = parameters.mapValues { (_, parameter) ->
-            CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
-                type = wireEnum<CompletionOrchestrateRequestToolsItemParametersPropertiesValueType>(
-                    "tool parameter type",
-                    parameter.type.wireName,
-                ),
-                description = parameter.description,
-                enum = parameter.enumValues,
-            )
-        },
-        required = required.takeIf { it.isNotEmpty() }?.toList(),
-    ),
-)
+// completionOrchestrate request fields use the completionStream schemas; the generated
+// types differ only in name, so orchestrate reuses the stream mappers and re-decodes.
+private inline fun <reified From, reified To> Json.restate(value: From): To =
+    decodeFromJsonElement(encodeToJsonElement(value))
 
 /** Maps a wire string onto a generated enum, rejecting values the contract does not list. */
 internal inline fun <reified T> wireEnum(field: String, value: String): T = try {

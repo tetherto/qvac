@@ -206,8 +206,15 @@ class QvacCompletionApiTest {
     }
 
     @Test
-    fun orchestrateToolParametersUseContractTypes() = runTest {
+    fun orchestrateRequestCarriesTheStreamRequestFields() = runTest {
         val transport = ApiTransport(
+            stream = flowOf(
+                completionFrame(
+                    done = true,
+                    event("contentDelta", 0) { put("text", "ok") },
+                    event("completionDone", 1) { put("stopReason", "eos") },
+                ),
+            ),
             duplexFactory = {
                 flowOf(
                     buildJsonObject {
@@ -222,30 +229,45 @@ class QvacCompletionApiTest {
                 )
             },
         )
+        val history = listOf(
+            QvacMessage.system("be brief"),
+            QvacMessage.user("what is this?", listOf(QvacAttachment("/image.png"))),
+        )
+        val tools = listOf(
+            QvacTool(
+                name = "lookup",
+                description = "Look up a value",
+                parameters = QvacToolParameterType.entries.associate { type ->
+                    type.name.lowercase() to QvacToolParameter(type, description = "a ${type.name.lowercase()}")
+                },
+                required = setOf("string"),
+                handler = { JsonPrimitive("ok") },
+            ),
+        )
+        val options = QvacCompletionOptions(
+            generation = QvacGenerationOptions(temperature = 0.2, predict = 64, seed = 7, reasoningBudget = 0),
+            kvCache = QvacKvCache.Enabled(true),
+            toolDialect = "hermes",
+            requestId = "request-1",
+        )
         val client = QvacClient(transport)
-        try {
-            client.completion.orchestrate(
-                modelId = "model",
-                history = listOf(QvacMessage.user("hi")),
-                tools = listOf(
-                    QvacTool(
-                        name = "lookup",
-                        description = "Look up a value",
-                        parameters = QvacToolParameterType.entries.associate { type ->
-                            type.name.lowercase() to QvacToolParameter(type)
-                        },
-                        handler = { JsonPrimitive("ok") },
-                    ),
-                ),
-            ).final.await()
+        val (streamed, orchestrated) = try {
+            client.completion.run("model", history, tools, options).final.await()
+            val streamed = transport.lastPayload!!
+            client.completion.orchestrate("model", history, tools, maxToolTurns = 3, options = options).final.await()
+            streamed to transport.lastPayload!!
         } finally {
             client.close()
         }
-        val properties = transport.lastPayload?.get("tools")?.jsonArray?.single()?.jsonObject
-            ?.get("parameters")?.jsonObject?.get("properties")?.jsonObject
+
+        assertEquals("completionOrchestrate", orchestrated.getValue("type").jsonPrimitive.content)
+        assertEquals(3, orchestrated.getValue("maxToolTurns").jsonPrimitive.content.toInt())
+        assertEquals(streamed - setOf("type"), orchestrated - setOf("type", "maxToolTurns"))
+        val properties = orchestrated.getValue("tools").jsonArray.single().jsonObject
+            .getValue("parameters").jsonObject.getValue("properties").jsonObject
         assertEquals(
             QvacToolParameterType.entries.associate { it.name.lowercase() to it.name.lowercase() },
-            properties?.mapValues { (_, value) -> value.jsonObject.getValue("type").jsonPrimitive.content },
+            properties.mapValues { (_, value) -> value.jsonObject.getValue("type").jsonPrimitive.content },
         )
     }
 
