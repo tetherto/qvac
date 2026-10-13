@@ -180,7 +180,7 @@ public:
 
   void adoptCheckpoints(
       qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
-    if (needsFullStateSnapshot_) {
+    if (takesHistoryCheckpoints()) {
       cacheCheckpoints_ = std::move(checkpoints);
     }
   }
@@ -188,6 +188,9 @@ public:
   releaseCheckpoints() override {
     return std::exchange(cacheCheckpoints_, {});
   }
+  void appendCheckpointsToCacheFile(const std::string& path) const override;
+  void adoptCheckpointsFromCacheFile(
+      const std::string& path, uint64_t offset) override;
   [[nodiscard]] std::optional<
       qvac_lib_inference_addon_llama::utils::ReasoningTags>
   historyReasoningTags() const override {
@@ -212,7 +215,8 @@ public:
   [[nodiscard]] bool onFailure(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
@@ -224,6 +228,10 @@ public:
   }
   [[nodiscard]] size_t cacheCheckpointCountForTesting() const noexcept {
     return cacheCheckpoints_.size();
+  }
+  /// How many times a load read the checkpoint section of its cacheKey file.
+  [[nodiscard]] size_t fileCheckpointReadsForTesting() const noexcept {
+    return fileCheckpointReads_;
   }
   /// True while the active cache request holds a pre-request full-state
   /// dump. Lets tests prove pure-attention append-only requests never write
@@ -412,6 +420,7 @@ private:
   // 0 when this request takes no end-of-history checkpoint.
   size_t historyCheckpointEntries_ = 0;
   size_t lastCacheReuse_ = 0;
+  size_t fileCheckpointReads_ = 0;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
 
@@ -421,6 +430,13 @@ private:
   // ModelMemoryPolicy.hpp (recurrent, hybrid, DeepSeek V4, ...); every
   // non-standard memory layout must be added there, not at call sites.
   bool needsFullStateSnapshot_ = false;
+  // A sliding-window model: it trims for rollback but takes end-of-history
+  // checkpoints (see `takesSlidingWindowCheckpoints`).
+  bool slidingWindowCheckpoints_ = false;
+
+  [[nodiscard]] bool takesHistoryCheckpoints() const noexcept {
+    return needsFullStateSnapshot_ || slidingWindowCheckpoints_;
+  }
 
   // Tracks whether the current request is prefill-only so the cache
   // transaction can commit immediately after successful prefill.

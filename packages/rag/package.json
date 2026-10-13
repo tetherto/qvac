@@ -74,10 +74,10 @@
   ],
   "devDependencies": {
     "@qvac/embed-llamacpp": "^0.46.0",
-    "@qvac/llm-llamacpp": "^0.57.0",
+    "@qvac/llm-llamacpp": "^0.58.0",
     "@qvac/registry-client": "^0.6.0",
     "@types/brittle": "^3.5.0",
-    "bare": "*",
+    "bare": "1.34.1 || >=1.35.1",
     "bare-abort-controller": "^1.1.2",
     "bare-console": "*",
     "bare-url": "^2.4.7",

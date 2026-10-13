@@ -14,6 +14,8 @@ on:
     branches:
       - main
       - release-*
+      # release-train-* branches publish from release-train.yml.
+      - "!release-train-*"
       - feature-*
       - tmp-*
     paths:
@@ -276,10 +278,11 @@ jobs:
       - name: Validate npm_tag input
         if: inputs.npm_tag != ''
         shell: bash
+        env:
+          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
         run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+          if ! echo "$NPM_TAG_INPUT" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$NPM_TAG_INPUT'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
             exit 1
           fi
 
@@ -467,10 +470,11 @@ jobs:
       - name: Validate npm_tag input
         if: inputs.npm_tag != ''
         shell: bash
+        env:
+          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
         run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+          if ! echo "$NPM_TAG_INPUT" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$NPM_TAG_INPUT'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
             exit 1
           fi
 

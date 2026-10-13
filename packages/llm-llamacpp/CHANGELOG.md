@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- On hybrid and recurrent models (Qwen3.5 and later, Jamba, DeepSeek V4) the
+  `cacheKey` file also keeps the conversation's newest end-of-history
+  checkpoint. A conversation loaded from its file, including in a new
+  process, continues its next turn or a regenerate from that checkpoint
+  instead of reprocessing the whole conversation, which thinking templates
+  forced because they rewrite the previous answer. Older checkpoints stay in
+  memory only. Files written this way still load in earlier versions, which
+  ignore the checkpoint.
+
 ## [0.59.0] - 2026-10-11
 
 ### Added
@@ -11,6 +24,15 @@
   `content` may be `null` or omitted on an assistant turn that carries
   `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
   `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
+
+### Changed
+
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off.
 
 ### Fixed
 

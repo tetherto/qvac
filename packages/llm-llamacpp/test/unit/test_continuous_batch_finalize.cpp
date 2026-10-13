@@ -62,7 +62,9 @@ public:
     return rollbackOk;
   }
   bool rollbackOk = true;
-  [[nodiscard]] bool loadCache(const std::string&) override { return false; }
+  [[nodiscard]] bool loadCache(const std::string&, bool) override {
+    return false;
+  }
   void saveCache(const std::string&) const override {}
 
   [[nodiscard]] bool fired(const std::string& hook) const {
