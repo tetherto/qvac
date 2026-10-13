@@ -337,10 +337,9 @@ export const llmPlugin = definePlugin({
       cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
-        const filteredHistory = request.history.map(({ role, content, attachments }) => ({
-          role,
-          content,
-          attachments: attachments ?? []
+        const filteredHistory = request.history.map((message) => ({
+          ...message,
+          attachments: message.attachments ?? []
         }))
 
         const modelCfg = getModelConfig(request.modelId)
