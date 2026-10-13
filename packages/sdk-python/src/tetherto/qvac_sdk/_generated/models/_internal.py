@@ -12781,12 +12781,6 @@ class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
     off = "off"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
-    log = "log"
-    refuse = "refuse"
-    off = "off"
-
-
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
     full = "full"
 
@@ -17473,7 +17467,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddo
     whispercpp_transcription = "whispercpp-transcription"
     bci_whispercpp_transcription = "bci-whispercpp-transcription"
     llamacpp_embedding = "llamacpp-embedding"
-    llamacpp_decisions = "llamacpp-decisions"
+    llamacpp_decision = "llamacpp-decision"
     nmtcpp_translation = "nmtcpp-translation"
     onnx_tts = "onnx-tts"
     tts_ggml = "tts-ggml"

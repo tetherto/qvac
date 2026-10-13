@@ -21,7 +21,7 @@ import { generateClientRequestId } from '@/client/api/client-request-id'
  * resolves to one result; a batch resolves to results in input order.
  * @throws {RequestValidationFailedError} If the request is invalid.
  * @throws {InferenceCancelledError} If the request is cancelled.
- * @throws {RequestRejectedByPolicyError} If this model has an active decision request.
+ * @throws {RequestRejectedByPolicyError} If this model's decision queue is full.
  * @throws {InvalidResponseError} If the worker returns a malformed result.
  */
 export function decide(

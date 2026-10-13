@@ -17785,7 +17785,7 @@
                                         "whispercpp-transcription",
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
-                                        "llamacpp-decisions",
+                                        "llamacpp-decision",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",

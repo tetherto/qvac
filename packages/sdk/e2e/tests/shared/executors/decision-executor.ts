@@ -28,6 +28,7 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
   pattern = /^decision-/
   protected handlers = {
     'decision-ticket': this.ticket.bind(this),
+    'decision-concurrent-queued': this.concurrent.bind(this),
     'decision-structured-batch': this.batch.bind(this),
     'decision-invalid-budget': this.invalidBudget.bind(this)
   }
@@ -35,6 +36,22 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
   async ticket(_params: object, expectation: Expectation): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('decision')
     return ValidationHelpers.validate(await decide({ modelId, state, questions }), expectation)
+  }
+
+  async concurrent(_params: object, expectation: Expectation): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('decision')
+    const results = await Promise.all([
+      decide({ modelId, state, questions }),
+      decide({ modelId, state: 'The app crashes on startup.', questions })
+    ])
+    return ValidationHelpers.validate(
+      results
+        .map((result) =>
+          result.answers['department']?.type === 'choice' ? result.answers['department'].choice : ''
+        )
+        .join(', '),
+      expectation
+    )
   }
 
   async batch(_params: object, expectation: Expectation): Promise<TestResult> {

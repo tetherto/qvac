@@ -212,30 +212,49 @@ The `args` obj contains the following properties:
 
 ### 4. Create `config`
 
-The following configuration applies to `GGMLBert`. For decisions, use [Laya configuration](#laya-configuration). All parameter values must be strings.
+All values in `args.config` must be strings. The following load options are
+shared by `GGMLBert` and `LayaDecisions`. Multi-word keys accept underscores or
+hyphens, such as `batch_size` and `batch-size`, except `openclCacheDir`, which
+keeps its spelling.
 
 ```js
-// an example of possible configuration
 const config = {
   device: 'gpu',
   gpu_layers: '99',
-  batch_size: '1024',
-  ctx_size: '512'
+  batch_size: '1024'
 }
 ```
 
 | Parameter         | Range / Type                                | Default                      | Description                                           |
 |-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
-| device            | `"gpu"` or `"cpu"`                          | `"gpu"`                      | Device to run inference on                            |
-| gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
+| device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
+| gpu_layers        | integer                                     | automatic                    | Number of layers to offload to GPU; unset fits available memory |
 | batch_size        | integer                                     | 2048                         | Tokens processed per batch                            |
-| ctx_size          | 0 – model-dependent                         | model default                | Runtime context window in tokens                      |
-| pooling           | `"none"`, `"mean"`, `"cls"`, `"last"`, or `"rank"` | model default        | Pooling type for embeddings                           |
+| threads           | integer                                     | one per physical core        | CPU threads; 0 uses every logical CPU                 |
+| threads-batch     | integer                                     | threads                      | CPU threads for batch processing                      |
+| flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention; defaults to off on OpenCL |
+| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| split-mode        | `"none"` or `"layer"`                       | `"none"`                     | Multi-GPU placement mode                              |
+| tensor-split      | comma-separated proportions, e.g. `"3,1"`   | —                            | GPU allocation proportions for multi-GPU placement    |
+| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0 initially                  | Process-wide native logging verbosity; unset keeps the current level |
+| openclCacheDir    | directory path                              | —                            | Writable OpenCL kernel cache directory; set on Android for faster GPU startup |
+
+The following additional options apply to `GGMLBert`. Laya rejects them at load.
+
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| ctx_size          | 0 – model-dependent                         | model default                | Runtime context window; capped to the model's trained context size |
+| pooling           | `"none"`, `"mean"`, `"cls"`, `"last"`, or `"rank"` | model default                | Pooling type for embeddings                           |
 | attention         | `"causal"` or `"non-causal"`                | model default                | Attention type for embeddings                         |
 | embd_normalize    | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
-| flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention                        |
-| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
+| backend           | comma-separated backend names               | automatic                    | GPU backend priority: cuda, vulkan, metal, opencl, or auto; cannot be combined with split-mode |
+
+The shared options have these additional constraints when `LayaDecisions` is used:
+
+| Parameter              | Laya behavior                                                                                         |
+|------------------------|-------------------------------------------------------------------------------------------------------|
+| batch_size             | Also sets context size. Every question over one state must fit in a forward pass; attention cost grows with the square of this value |
+| threads, threads-batch | Values must be whole numbers. Positive counts must not exceed the device's CPU count; 0 or below uses every logical CPU |
 
 #### IGPU/GPU  selection logic:
 
@@ -253,7 +272,7 @@ const config = {
 const model = new GGMLBert(args)
 ```
 
-For a Laya GGUF, use the decision class with the same `args` object and [Laya configuration](#laya-configuration):
+For a Laya GGUF, use the decision class with the same `args` object. See [Create `config`](#4-create-config) for its accepted load options:
 
 ```js
 const model = new LayaDecisions(args)

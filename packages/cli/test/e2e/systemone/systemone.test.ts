@@ -1,6 +1,6 @@
 import { describe, it, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import type { LayaResult } from '@qvac/sdk'
+import { RequestRejectedByPolicyError, type LayaResult } from '@qvac/sdk'
 import { buildServer } from '@/serve/index'
 import type { DecideFn } from '@/serve/extensions/systemone/state'
 import { writeConfigDir } from '../helpers/config.js'
@@ -160,6 +160,60 @@ describe('System One HTTP API', () => {
     })
     assert.equal(response.statusCode, 503)
     assert.equal(response.json().error.code, 'model_load_failed')
+  })
+
+  it('returns 429 for decision queue overflow without interrupting the active request', async (t) => {
+    let completeDecision: (value: LayaResult) => void = () => {}
+    let notifyStarted: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      notifyStarted = resolve
+    })
+    let active = false
+    const busy = new RequestRejectedByPolicyError(
+      'decision-busy',
+      'decision',
+      'sdk-laya-id',
+      'maxQueueDepthPerModel exceeded (depth=64, cap=64)'
+    )
+    const { app } = await server(t, {
+      decideOverride: () => {
+        if (active) {
+          return Object.assign(Promise.reject(busy), { requestId: 'decision-busy' })
+        }
+        active = true
+        return Object.assign(
+          new Promise<LayaResult>((resolve) => {
+            completeDecision = resolve
+            notifyStarted()
+          }).finally(() => {
+            active = false
+          }),
+          { requestId: 'decision-active' }
+        )
+      }
+    })
+    const request = {
+      method: 'POST' as const,
+      url: '/v1/systemone',
+      payload: { model: 'laya', state: 'a', questions }
+    }
+    const first = app.inject(request).then((response) => response)
+    await started
+    try {
+      const second = await app.inject(request)
+      assert.equal(second.statusCode, 429, second.body)
+      assert.deepEqual(second.json().error, {
+        message: busy.message,
+        type: 'rate_limit_error',
+        code: 'request_rejected_by_policy'
+      })
+      assert.equal(active, true)
+    } finally {
+      completeDecision(result)
+    }
+    const response = await first
+    assert.equal(response.statusCode, 200, response.body)
+    assert.deepEqual(response.json(), { ...result, model: 'laya' })
   })
 
   it('rejects malformed requests, batching, and streaming before loading a model', async (t) => {

@@ -82,6 +82,12 @@ Each answer retains its confidence and probability fields.
 The route returns the full result without a token stream. A client disconnect
 cancels the SDK request.
 
+Each loaded model runs one decision request at a time. Concurrent requests wait
+in a FIFO queue with up to 64 waiting requests per model. When the queue is full,
+additional requests return HTTP `429` with error type `rate_limit_error` and code
+`request_rejected_by_policy`. Active and queued requests keep running. A client
+disconnect cancels its queued request before it reaches the addon.
+
 ### Examples
 
 ```bash

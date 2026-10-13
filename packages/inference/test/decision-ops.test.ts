@@ -191,7 +191,138 @@ test('decisions reject malformed addon responses and release the model slot afte
   t.alike((await decide(request)).result, result)
 })
 
-test('decisions cancel the owning job, reject concurrent calls, and allow recovery', async (t) => {
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 5))
+}
+
+function gatedFixture(t: TestContext, id: string) {
+  const starts: unknown[] = []
+  let finish: () => void = () => {}
+  let cancelled = 0
+  fixture(
+    t,
+    id,
+    async (input) => {
+      starts.push(input)
+      return {
+        await: () =>
+          new Promise<LayaResult[]>((resolve) => {
+            finish = () => resolve([result])
+          })
+      }
+    },
+    async () => {
+      cancelled++
+      finish()
+    }
+  )
+  return { starts, finish: () => finish(), cancelled: () => cancelled }
+}
+
+test('decisions queue FIFO per model and let another model run independently', async (t) => {
+  const model = gatedFixture(t, 'decision-fifo')
+  fixture(t, 'decision-independent', async () => ({ await: async () => [result] }))
+  const request = { type: 'decide' as const, modelId: 'decision-fifo', questions }
+  const first = decide({ ...request, state: 'first' })
+  await settle()
+  const second = decide({ ...request, state: 'second' })
+  const third = decide({ ...request, state: 'third' })
+  await settle()
+  t.alike(model.starts, [{ state: 'first', questions }])
+  t.alike(
+    (await decide({ ...request, modelId: 'decision-independent', state: 'other' })).result,
+    result
+  )
+  model.finish()
+  await first
+  await settle()
+  t.alike(model.starts, [
+    { state: 'first', questions },
+    { state: 'second', questions }
+  ])
+  model.finish()
+  await second
+  await settle()
+  t.alike(model.starts, [
+    { state: 'first', questions },
+    { state: 'second', questions },
+    { state: 'third', questions }
+  ])
+  model.finish()
+  t.alike((await third).result, result)
+})
+
+test('cancelling a queued decision never starts or cancels native work', async (t) => {
+  const model = gatedFixture(t, 'decision-queued-cancel')
+  const request = {
+    type: 'decide' as const,
+    modelId: 'decision-queued-cancel',
+    state: 'Refund',
+    questions
+  }
+  const first = decide({ ...request, requestId: 'decision-queue-holder' })
+  await settle()
+  const queued = decide({ ...request, requestId: 'decision-queue-cancelled' })
+  const failure = t.exception(() => queued, InferenceCancelledError as unknown as new () => Error)
+  await settle()
+  t.is(getRequestRegistry().cancel({ requestId: 'decision-queue-cancelled' }), 1)
+  await failure
+  t.is(model.starts.length, 1)
+  t.is(model.cancelled(), 0)
+  t.absent(getRequestRegistry().get('decision-queue-cancelled'))
+  model.finish()
+  t.alike((await first).result, result)
+})
+
+test('decisions bound the waiting queue without interrupting admitted requests', async (t) => {
+  let starts = 0
+  let finish: () => void = () => {}
+  let cancelled = 0
+  fixture(
+    t,
+    'decision-overflow',
+    async () => {
+      starts++
+      return {
+        await: () =>
+          starts === 1
+            ? new Promise<LayaResult[]>((resolve) => {
+                finish = () => resolve([result])
+              })
+            : Promise.resolve([result])
+      }
+    },
+    async () => {
+      cancelled++
+    }
+  )
+  const request = {
+    type: 'decide' as const,
+    modelId: 'decision-overflow',
+    state: 'Refund',
+    questions
+  }
+  const first = decide(request)
+  await settle()
+  const queued = Array.from({ length: 64 }, () => decide(request))
+  await t.exception(
+    () => decide(request),
+    RequestRejectedByPolicyError as unknown as new () => Error
+  )
+  t.is(starts, 1)
+  t.is(cancelled, 0)
+  finish()
+  const responses = await Promise.all([first, ...queued])
+  t.is(responses.length, 65)
+  t.is(starts, 65)
+  t.alike(
+    responses.map((response) => response.result),
+    Array.from({ length: 65 }, () => result)
+  )
+  t.alike((await decide(request)).result, result)
+})
+
+test('decisions cancel the owning job, admit the next queued call, and allow recovery', async (t) => {
   let finish: (value: LayaResult[]) => void = () => {}
   let started: () => void = () => {}
   const running = new Promise<void>((resolve) => {
@@ -223,18 +354,85 @@ test('decisions cancel the owning job, reject concurrent calls, and allow recove
   const first = decide({ ...request, requestId: 'decide-cancel' })
   const failure = t.exception(() => first, InferenceCancelledError as unknown as new () => Error)
   await running
-  await t.exception(
-    () => decide({ ...request, requestId: 'decide-busy' }),
-    RequestRejectedByPolicyError as unknown as new () => Error
-  )
+  const queued = decide({ ...request, requestId: 'decide-next' })
+  await settle()
+  t.is(cancelled, 0)
   getRequestRegistry().cancel({ requestId: 'decide-cancel' })
   await failure
   t.is(cancelled, 1)
   t.absent(getRequestRegistry().get('decide-cancel'))
+  await settle()
+  finish([result])
+  t.alike((await queued).result, result)
   const recovered = decide(request)
   await new Promise<void>((resolve) => setTimeout(resolve, 0, undefined))
   finish([result])
   t.alike((await recovered).result, result)
+})
+
+test('decisions hold the model slot until pending native cancellation settles', async (t) => {
+  let finishOutput: (value: LayaResult[]) => void = () => {}
+  let rejectOutput: (error: Error) => void = () => {}
+  let finishCancel: () => void = () => {}
+  const cancellation = new Promise<void>((resolve) => {
+    finishCancel = resolve
+  })
+  let notifyFirst: () => void = () => {}
+  let notifyNext: () => void = () => {}
+  const firstStarted = new Promise<void>((resolve) => {
+    notifyFirst = resolve
+  })
+  const nextStarted = new Promise<void>((resolve) => {
+    notifyNext = resolve
+  })
+  let starts = 0
+  let cancelled = 0
+  fixture(
+    t,
+    'decision-pending-cancel',
+    async () => ({
+      await: () =>
+        new Promise<LayaResult[]>((resolve, reject) => {
+          finishOutput = resolve
+          rejectOutput = reject
+          starts++
+          if (starts === 1) notifyFirst()
+          else notifyNext()
+        })
+    }),
+    async () => {
+      cancelled++
+      await cancellation
+      // Native cancellation targets whichever job occupies the single model slot.
+      rejectOutput(new Error('Delayed cancellation reached the current job'))
+    }
+  )
+  const request = {
+    type: 'decide' as const,
+    modelId: 'decision-pending-cancel',
+    state: 'Refund',
+    questions
+  }
+  const first = decide({ ...request, requestId: 'decision-pending-cancel-first' })
+  const failure = t.exception(() => first, InferenceCancelledError as unknown as new () => Error)
+  await firstStarted
+  const queued = decide({ ...request, requestId: 'decision-pending-cancel-next' }).then(
+    (response) => ({ result: response.result }),
+    (error: unknown) => ({ error })
+  )
+  t.is(getRequestRegistry().cancel({ requestId: 'decision-pending-cancel-first' }), 1)
+  t.is(cancelled, 1)
+  // The first job finishes naturally while its cancellation is still pending.
+  finishOutput([result])
+  await settle()
+  t.is(starts, 1, 'the queued job cannot start while native cancellation is pending')
+  finishCancel()
+  await failure
+  await nextStarted
+  finishOutput([result])
+  t.alike(await queued, { result }, 'the delayed cancellation cannot abort the queued job')
+  t.absent(getRequestRegistry().get('decision-pending-cancel-first'))
+  t.absent(getRequestRegistry().get('decision-pending-cancel-next'))
 })
 
 test('cancel-before-begin never starts native work', async (t) => {
