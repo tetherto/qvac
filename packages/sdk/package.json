@@ -1,6 +1,7 @@
 {
   "name": "@qvac/sdk",
   "version": "0.21.0",
+  "qvacIpcAuthentication": "token-v1",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -195,7 +196,7 @@
     "format:fix": "prettier --write .",
     "lint": "lunte && npm run enforce-inference-versions",
     "lint:fix": "lunte --fix",
-    "enforce-inference-versions": "bun scripts/enforce-inference-versions.ts",
+    "enforce-inference-versions": "tsx scripts/enforce-inference-versions.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
@@ -225,7 +226,7 @@
     "@qvac/ggml-rpc-server": "^0.2.0",
     "@qvac/inference": "^0.21.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.57.0",
+    "@qvac/llm-llamacpp": "^0.59.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.27.1",
     "@qvac/translation-nmtcpp": "^0.19.0",
