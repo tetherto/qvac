@@ -125,6 +125,8 @@ jobs:
               - "packages/translation-nmtcpp/**"
             tts-ggml:
               - "packages/tts-ggml/**"
+            turbovec-ggml:
+              - "packages/turbovec-ggml/**"
             fabric:
               - "packages/fabric/**"
               - ".github/workflows/prebuilds-fabric.yml"
@@ -144,7 +146,7 @@ jobs:
           # Every package filter key above. Kept in step with that list.
           # One line: a folded scalar with a deeper indent keeps its newlines,
           # and $GITHUB_OUTPUT rejects a multiline value.
-          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]'
+          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","turbovec-ggml","fabric","vla"]'
         run: |
           CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
 
