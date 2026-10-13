@@ -56,10 +56,13 @@ export const modelFitTtsAudio8 = assessCase('tts-audio8', 'tts-audio8', 'native-
 export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertonic', 'native-fit')
 
 /**
- * Whisper and BCI ship as ggml `.bin`, which carries no separable header, so
- * the registry can hold no weightless description of them. Their assessment
- * rests on the computed floor, which can refuse a model but never confirm one.
- * The engine fitters still answer for them at load time — see the probe cases.
+ * Whisper and BCI ship as ggml `.bin`. Their fitters read the registry's
+ * weightless descriptions of those files, BCI's with the embedder description
+ * staged beside the model, but the registry records of these models carry no
+ * description yet. Until they do, the assessment rests on the computed floor,
+ * which can refuse a model but never confirm one, and each case becomes
+ * `native-fit` once its records are filled. The engine fitters already answer
+ * for them at load time — see the probe cases.
  */
 export const modelFitWhisper = assessCase('whisper', 'whisper', 'computed-only')
 export const modelFitBci = assessCase('bci', 'bci', 'computed-only')
