@@ -6,7 +6,6 @@
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
-#include <inference-addon-cpp/Logger.hpp>
 
 #include "BackendSelection.hpp"
 #include "ImageCodec.hpp"
