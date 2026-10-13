@@ -72,6 +72,9 @@ The distinction is targets-as-data, not graph membership: add a `project.json` w
 }
 ```
 
+Its `release` block holds the nx release groups the release trains publish. See
+`docs/ci/RELEASE-TRAIN.md`.
+
 The dependency graph is derived from workspace `package.json` deps. Two vendor dirs with no `package.json` (`inference-addon-cpp`, `lint-cpp`) are wired into the graph via `implicitDependencies` on the native packages that consume them.
 
 ### Using Nx locally

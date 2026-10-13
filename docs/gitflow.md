@@ -262,6 +262,14 @@ the existing range with no SDK release at all.
 `packages/sdk` `lint` fails when its own version and its `@qvac/inference` range
 differ in major or minor, so the two cannot drift unnoticed.
 
+### 6) Releasing the chain together: the release train
+
+The flow above is one release branch per package, each waiting for the one
+below it to reach NPM. A **release train** releases `@qvac/inference`,
+`@qvac/sdk`, `@qvac/cli`, `@qvac/ai-sdk-provider` and the two plugins from one
+`release-train-<train>-<x.y.z>` branch: one release PR, one backmerge, one npm
+approval. See `docs/ci/RELEASE-TRAIN.md`.
+
 ---
 
 ## Patch flow (x.y.z → x.y.(z+1))

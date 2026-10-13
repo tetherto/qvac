@@ -196,7 +196,7 @@
     "format:fix": "prettier --write .",
     "lint": "lunte && npm run enforce-inference-versions",
     "lint:fix": "lunte --fix",
-    "enforce-inference-versions": "bun scripts/enforce-inference-versions.ts",
+    "enforce-inference-versions": "tsx scripts/enforce-inference-versions.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
