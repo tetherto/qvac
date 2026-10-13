@@ -1802,8 +1802,9 @@ public:
   [[nodiscard]] bool onFailure(const OutputFn& outputCallback) override {
     return inner_->onFailure(outputCallback);
   }
-  [[nodiscard]] bool loadCache(const std::string& cacheKey) override {
-    return inner_->loadCache(cacheKey);
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override {
+    return inner_->loadCache(cacheKey, adoptFileCheckpoints);
   }
   [[nodiscard]] bool
   adoptResidentState(const std::vector<llama_token>& stateTokens) override {
