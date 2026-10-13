@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.31.0] - 2026-10-09
+
+### Added
+
+- CUDA backend selection on Linux x64, Linux arm64 and Windows x64 NVIDIA
+  hosts ([#4917](https://github.com/tetherto/qvac/pull/4917)). The CUDA module
+  ships in `@qvac/fabric` 0.20.2+; Linux arm64 carries a CUDA 13 module for
+  DGX Spark and a CUDA 12 module for Jetson Orin. Windows needs a CUDA 13
+  install, whose runtime DLLs load from `%CUDA_PATH%\bin\x64`. If the module,
+  driver or runtime is missing, selection continues down the default order.
+- `load({ backend })` also takes a comma-separated GPU priority list, such as
+  `'cuda,vulkan'` or `'vulkan'` to force Vulkan on an NVIDIA machine. Accepted
+  names are `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm` and `sycl`. A
+  name whose device is absent is skipped; an unrecognised name fails with
+  `INVALID_CONFIG`. The Adreno 800+ OpenCL rules still apply.
+
+### Changed
+
+- The default order is now CUDA, then HIP/ROCm, then a discrete GPU before an
+  integrated one, so an NVIDIA host that ran on Vulkan before now runs on CUDA.
+  `CUDA_VISIBLE_DEVICES=-1` or `backend: 'vulkan'` restores Vulkan.
+
+## [0.30.0] - 2026-10-06
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own. No API change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
 ## [0.29.1] - 2026-09-30
 
 ### Changed

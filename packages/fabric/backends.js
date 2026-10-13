@@ -18,7 +18,7 @@ const PLATFORM_ADDON_PREBUILDS = '/addon/prebuilds'
 const IOS_PLATFORM = 'ios'
 const BARE_EXTENSION = '.bare'
 
-function hostPlatformPackage (host) {
+function hostPlatformPackage(host) {
   const platform = host.split('-')[0]
   return PLATFORM_PACKAGE_PREFIX + (platform === IOS_PLATFORM ? IOS_PLATFORM : host)
 }
@@ -28,7 +28,7 @@ function hostPlatformPackage (host) {
 // precedence is binding.js's: a runtime Bare resolves for this package (source
 // build, CI overlay, the unsliced GPR tarball) wins over the platform package.
 // Returns null when neither is on disk, e.g. inside a packed mobile bundle.
-function resolveBackendsDirFrom (sources) {
+function resolveBackendsDirFrom(sources) {
   const localAddon = sources.resolveLocalAddon()
   if (localAddon !== null && localAddon.endsWith(BARE_EXTENSION)) {
     return dirname(dirname(localAddon))
@@ -39,7 +39,7 @@ function resolveBackendsDirFrom (sources) {
   return dirname(manifest) + PLATFORM_ADDON_PREBUILDS
 }
 
-function resolveBackendsDir () {
+function resolveBackendsDir() {
   return resolveBackendsDirFrom({
     host: currentHost(),
     resolveLocalAddon: safeResolveLocalAddon,
@@ -47,11 +47,11 @@ function resolveBackendsDir () {
   })
 }
 
-function currentHost () {
+function currentHost() {
   return require.addon ? require.addon.host : null
 }
 
-function safeResolveLocalAddon () {
+function safeResolveLocalAddon() {
   try {
     return require.addon.resolve('.')
   } catch {
@@ -59,7 +59,7 @@ function safeResolveLocalAddon () {
   }
 }
 
-function safeResolveManifest (specifier) {
+function safeResolveManifest(specifier) {
   try {
     return require.resolve(specifier)
   } catch {
@@ -67,7 +67,7 @@ function safeResolveManifest (specifier) {
   }
 }
 
-function dirname (file) {
+function dirname(file) {
   const index = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'))
   return index === -1 ? '.' : file.slice(0, index)
 }

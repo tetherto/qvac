@@ -95,7 +95,6 @@ export interface GenerationParams {
   presence_penalty?: number
   repeat_penalty?: number
   reasoning_budget?: -1 | 0
-  remove_thinking_from_context?: boolean
   /** `auto` | `none` | `required` | a declared tool's name. */
   tool_choice?: string
 }
@@ -130,27 +129,28 @@ interface OpenAITool {
   }
 }
 
-const VALID_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'object', 'array'])
+const VALID_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'object', 'array', 'null'])
 
+// Only the property's own `type` is checked; nested keywords pass through, and a
+// property without `type` (an `anyOf`/`oneOf` union) is left as declared.
 export function normalizeToolParameters(params: Record<string, unknown>): Record<string, unknown> {
   const props = params['properties'] as Record<string, Record<string, unknown>> | undefined
   if (!props) return params
 
   const normalized: Record<string, Record<string, unknown>> = {}
   for (const [key, prop] of Object.entries(props)) {
-    normalized[key] = { ...prop, type: normalizeType(prop['type']) }
+    normalized[key] =
+      prop['type'] === undefined ? prop : { ...prop, type: normalizeType(prop['type']) }
   }
 
   return { ...params, properties: normalized }
 }
 
-function normalizeType(type: unknown): string {
-  if (typeof type === 'string' && VALID_TYPES.has(type)) return type
+function normalizeType(type: unknown): string | string[] {
+  if (typeof type === 'string') return VALID_TYPES.has(type) ? type : 'string'
   if (Array.isArray(type)) {
-    const primary = type.find(
-      (t): t is string => typeof t === 'string' && t !== 'null' && VALID_TYPES.has(t)
-    )
-    return primary ?? 'string'
+    const valid = type.filter((t): t is string => typeof t === 'string' && VALID_TYPES.has(t))
+    return valid.length > 0 ? valid : 'string'
   }
   return 'string'
 }
@@ -400,10 +400,6 @@ export function extractGenerationParams(
     params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
   } else if (body['reasoning_budget'] === -1 || body['reasoning_budget'] === 0) {
     params.reasoning_budget = body['reasoning_budget']
-  }
-
-  if (typeof body['remove_thinking_from_context'] === 'boolean') {
-    params.remove_thinking_from_context = body['remove_thinking_from_context']
   }
 
   return Object.keys(params).length > 0 ? params : undefined

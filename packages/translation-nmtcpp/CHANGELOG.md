@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2026-10-09
+
+### Added
+
+- `TranslationNmtcpp.assessFit({ files, config, marginBytes })` estimates,
+  before a model is constructed, whether its weights load with the memory free
+  right now. It loads no weights and synchronously returns `fits`,
+  `does-not-fit` or `error` with the backend, the model, required and free
+  byte counts, and a readable `report`.
+
+### Changed
+
+- `bergamot-translator` dependency bumped `1.0.1` -> `1.0.2`. The new port
+  drops `/LTCG:incremental` from the static linker flags, which `llvm-lib`
+  rejects. Nothing in this build is compiled with `/GL`, so the flag had no
+  effect with `lib.exe` either. No API change.
+
+## [0.19.0] - 2026-10-06
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own. No API change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
 ## [0.18.1] - 2026-09-30
 
 ### Changed

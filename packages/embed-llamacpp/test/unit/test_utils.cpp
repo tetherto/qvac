@@ -1,3 +1,5 @@
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -211,4 +213,35 @@ TEST(ExtractVerbosityConfigTest, VerbosityWithTrailingText) {
   ASSERT_EQ(result.size(), 1);
   EXPECT_EQ(result["verbosity"], "2");
   EXPECT_EQ(config, "extra\nline1");
+}
+
+TEST(DeprecatedLoadFlagModeTest, MapsEachFlagAndPolarity) {
+  EXPECT_EQ(deprecatedLoadFlagMode("mmap", ""), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(deprecatedLoadFlagMode("mmap", "off"), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(deprecatedLoadFlagMode("no-mmap", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(deprecatedLoadFlagMode("no-mmap", "false"), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(
+      deprecatedLoadFlagMode("direct-io", "on"), LLAMA_LOAD_MODE_DIRECT_IO);
+  EXPECT_EQ(deprecatedLoadFlagMode("no-direct-io", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(deprecatedLoadFlagMode("mlock", "1"), LLAMA_LOAD_MODE_MLOCK);
+  EXPECT_EQ(deprecatedLoadFlagMode("load-mode", "mmap"), std::nullopt);
+}
+
+TEST(DeprecatedLoadFlagModeTest, RejectsValuesTheFlagDoesNotTake) {
+  EXPECT_THROW(
+      static_cast<void>(deprecatedLoadFlagMode("mmap", "maybe")),
+      std::invalid_argument);
+  // mlock is valueless in llama, so it cannot be turned off.
+  EXPECT_THROW(
+      static_cast<void>(deprecatedLoadFlagMode("mlock", "off")),
+      std::invalid_argument);
+}
+
+TEST(LoadModeNameTest, NamesMatchLoadModeValues) {
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_AUTO), "auto");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_NONE), "none");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MMAP), "mmap");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MLOCK), "mlock");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_MMAP_MLOCK), "mmap+mlock");
+  EXPECT_STREQ(loadModeName(LLAMA_LOAD_MODE_DIRECT_IO), "dio");
 }

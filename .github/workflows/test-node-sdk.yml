@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       consumer:
-        description: "Node-compatible consumer to run (desktop, electron, or snap)"
+        description: "Consumer to run (desktop, electron, snap, or python)"
         required: false
         type: string
         default: desktop
@@ -108,11 +108,7 @@ on:
       # here so `secrets: inherit` from a caller with no repo-level values
       # does not fail at the workflow_call boundary; the jobs that consume
       # them have environment access.
-      MQTT_PROTOCOL:
-        required: false
       MQTT_HOST:
-        required: false
-      MQTT_PORT:
         required: false
       MQTT_USERNAME:
         required: false
@@ -189,9 +185,11 @@ jobs:
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      # Not secrets: GitHub masks a short secret such as a port inside other
+      # values and drops any job output that contains it.
+      MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
+      MQTT_PORT: ${{ vars.MQTT_PORT }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
-      MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       QVAC_TEST_SNAP_BUILD_MODE: ${{ startsWith(matrix.os, 'ubuntu-') && 'destructive' || 'lxd' }}
@@ -212,9 +210,11 @@ jobs:
           sparse-checkout: |
             ${{ inputs.project-directory }}
             packages/inference
+            ${{ inputs.consumer == 'python' && 'packages/sdk-python' || '' }}
             .github/actions/sdk-e2e-fail-on-failures
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
+            .github/actions/sdk-python-venv
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -386,6 +386,12 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
+      # The Python client runs from source; the action carries the reason the
+      # runner's own Python is used rather than actions/setup-python.
+      - name: Set up the Python client
+        if: inputs.consumer == 'python'
+        uses: ./.github/actions/sdk-python-venv
+
       - name: Remove consumer package credentials
         if: inputs.consumer == 'snap'
         working-directory: ${{ inputs.working-directory }}
@@ -394,8 +400,11 @@ jobs:
           const fs = require('fs');
           fs.rmSync('.npmrc', { force: true });
 
+      # Python too: the external consumer's config points its client at this
+      # worker entry, so both legs drive the same binary and a difference in a
+      # result can only have come from the client.
       - name: Bundle SDK worker (custom plugins)
-        if: inputs.consumer == 'desktop'
+        if: inputs.consumer == 'desktop' || inputs.consumer == 'python'
         working-directory: ${{ inputs.working-directory }}
         run: npm run bundle:sdk
 
@@ -420,13 +429,16 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
+      # The Python leg resolves the same resource table against the same
+      # registry, so it bootstraps and caches as `desktop` rather than paying
+      # for a second copy of every model.
       - name: Bootstrap (download models)
         if: inputs.consumer != 'snap' && steps.models-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.working-directory }}
-        run: npx qvac-test run:bootstrap:${{ inputs.consumer }} --config=.
+        run: npx qvac-test run:bootstrap:${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }} --config=.
 
       # Save right after bootstrap. On parallel runners, first to finish reserves the key;
       # others get a non-fatal "unable to reserve" warning which is expected.
@@ -435,7 +447,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Build Electron package
@@ -638,16 +650,6 @@ jobs:
 
           const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
           const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
-          // Base36-encode the numeric job.id so the literal decimal digits
-          // no longer appear in the runId. GitHub's secret masker does a
-          // substring match against masked secret values; if a short numeric
-          // secret (e.g. `secrets.MQTT_PORT`) happens to appear as a
-          // substring of the decimal job.id, the masker will both redact
-          // the runId in logs and silently drop the job-level output with a
-          // "Skip output 'runId' since it may contain secret." warning,
-          // breaking every downstream `needs.build.outputs.runId` consumer.
-          // Encoding job.id as base36 keeps the value unique and stable
-          // while structurally eliminating numeric-substring collisions.
           const jobIdEncoded = BigInt(job.id).toString(36);
           const runId = `${platformShort}-${refPart}-${jobIdEncoded}`;
 
@@ -688,11 +690,21 @@ jobs:
             const excludeSuiteArgs = excludeSuite ? ['--exclude-suite=' + excludeSuite] : [];
             const consumerType = '${{ inputs.consumer }}';
 
-            const consumerArgs = [
-              'qvac-test', `run:consumer:${consumerType}`,
-              '--runId=${{ steps.runid.outputs.runId }}',
-              '--config=.'
-            ];
+            // A non-JS client is not its own consumer: the framework drives it
+            // over the stdin/stdout bridge, so the command is the external
+            // consumer and the client is named in the config.
+            const consumerArgs = consumerType === 'python'
+              ? [
+                  'qvac-test', 'run:consumer:external',
+                  '--runId=${{ steps.runid.outputs.runId }}',
+                  '--config=.',
+                  '--name=python'
+                ]
+              : [
+                  'qvac-test', `run:consumer:${consumerType}`,
+                  '--runId=${{ steps.runid.outputs.runId }}',
+                  '--config=.'
+                ];
             if (consumerType === 'electron') {
               consumerArgs.push('--skip-build');
             } else if (consumerType === 'snap') {

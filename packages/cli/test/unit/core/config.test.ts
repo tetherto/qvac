@@ -194,6 +194,31 @@ describe('parseServeConfig nested companions', () => {
     assert.equal(cfg.models.get('eager')!.preload, true)
   })
 
+  it('carries a per-alias modelFitPolicy on both entry shapes', () => {
+    const cfg = parseServeConfig(
+      {
+        serve: {
+          models: {
+            constant: { model: 'WHISPER_EN_TINY_Q8_0', modelFitPolicy: 'refuse' },
+            explicit: { src: 'placeholder', type: 'sdcpp-video', modelFitPolicy: 'off' },
+            unset: { model: 'WHISPER_EN_TINY_Q8_0' }
+          }
+        }
+      },
+      {}
+    )
+    assert.equal(cfg.models.get('constant')!.modelFitPolicy, 'refuse')
+    assert.equal(cfg.models.get('explicit')!.modelFitPolicy, 'off')
+    assert.equal('modelFitPolicy' in cfg.models.get('unset')!, false)
+  })
+
+  it('rejects a modelFitPolicy that is not one of the policies', () => {
+    assert.throws(
+      () => resolveModelConstant('a', { model: 'WHISPER_EN_TINY_Q8_0', modelFitPolicy: 'warn' }),
+      /serve\.models\.a\.modelFitPolicy: expected one of "log", "refuse", "off", got "warn"/
+    )
+  })
+
   it('leaves the ignored upscaler block unchanged for video entries', () => {
     const cfg = parseServeConfig(
       {

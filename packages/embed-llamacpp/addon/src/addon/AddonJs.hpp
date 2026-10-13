@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -22,148 +23,10 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/BertModel.hpp"
+#include "model-interface/LayaModel.hpp"
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
 
 namespace qvac_lib_inference_addon_embed {
-
-/// Options llama answers by writing to stdout and calling `exit(0)`, or by
-/// rewriting state shared with every later load in this process.
-inline bool isProcessScopedOption(const common_arg& option) {
-  static const std::unordered_set<std::string> excluded = {
-      "--usage",
-      "--help",
-      "--version",
-      "--completion-bash",
-      "--cache-list",
-      "--cache-rm",
-      "--list-devices",
-      "--rpc",
-      "--log-disable",
-      "--log-file",
-      "--log-colors",
-      "--log-prefix",
-      "--log-timestamps",
-      "--log-verbose",
-      "--verbose",
-      "--verbosity"};
-
-  for (const char* arg : option.args) {
-    if (excluded.contains(arg)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Applies a load's settings, in llama's own CLI spelling, by dispatching each
-/// through llama's argument table, so tensor splits, MoE placement and tensor
-/// buffer overrides are parsed exactly as the loader reads them.
-///
-/// Returns a reason when the load cannot be represented, empty on success.
-inline std::optional<std::string> applyLlamaLoadParams(
-    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object request,
-    common_params& params) {
-  namespace js = qvac_lib_inference_addon_cpp::js;
-
-  auto supplied = request.getOptionalProperty<js::Object>(env, "params");
-  if (!supplied.has_value()) {
-    return std::nullopt;
-  }
-
-  // The load parses with `LLAMA_EXAMPLE_EMBEDDING` (BertModel.cpp), which
-  // inherits every common option and adds the embedding-only ones.
-  auto parser = common_params_parser_init(
-      params, LLAMA_EXAMPLE_EMBEDDING, [](int, char**) {});
-
-  std::unordered_map<std::string, common_arg*> options;
-  std::unordered_map<std::string, bool> polarity;
-  for (common_arg& option : parser.options) {
-    // Options that print and terminate, or rewrite process-wide state, are no
-    // part of a load. llama implements the first group with `exit(0)`.
-    if (isProcessScopedOption(option)) {
-      continue;
-    }
-    for (const char* arg : option.args) {
-      options[arg] = &option;
-      polarity[arg] = true;
-    }
-    for (const char* arg : option.args_neg) {
-      options[arg] = &option;
-      polarity[arg] = false;
-    }
-  }
-
-  std::unordered_map<const common_arg*, bool> appliedBooleans;
-
-  js_value_t* names = nullptr;
-  JS(js_get_property_names(env, *supplied, &names));
-  auto keys = js::Array::fromValue(names);
-  const size_t count = keys.size(env);
-
-  for (size_t index = 0; index < count; ++index) {
-    const std::string key =
-        keys.get<js::String>(env, index).as<std::string>(env);
-    const std::string value =
-        supplied->getProperty<js::String>(env, key.c_str())
-            .as<std::string>(env);
-    const std::string arg = "--" + key;
-
-    const auto found = options.find(arg);
-    if (found == options.end()) {
-      return "unsupported-config";
-    }
-
-    common_arg& option = *found->second;
-    try {
-      if (option.handler_bool != nullptr) {
-        bool requested = true;
-        if (!value.empty()) {
-          if (common_arg_utils::is_truthy(value)) {
-            requested = true;
-          } else if (common_arg_utils::is_falsey(value)) {
-            requested = false;
-          } else {
-            return "unsupported-config";
-          }
-        }
-        const bool effective = polarity.at(arg) == requested;
-        // Two spellings of one option are distinct keys here, so a load that
-        // gives both is only representable when they agree.
-        const auto [applied, first] =
-            appliedBooleans.emplace(&option, effective);
-        if (!first && applied->second != effective) {
-          return "unsupported-config";
-        }
-        option.handler_bool(params, effective);
-      } else if (option.handler_void != nullptr) {
-        // A valueless flag can only assert itself, so a load asking for its
-        // opposite describes a placement this path cannot express.
-        if (!value.empty() && !common_arg_utils::is_truthy(value)) {
-          return "unsupported-config";
-        }
-        option.handler_void(params);
-      } else if (option.handler_int != nullptr) {
-        option.handler_int(params, std::stoi(value));
-      } else if (option.handler_string != nullptr) {
-        option.handler_string(params, value);
-      } else {
-        return "unsupported-config";
-      }
-    } catch (const std::exception&) {
-      return "unsupported-config";
-    }
-  }
-
-  // llama reads both lists to their terminator rather than by size.
-  if (!params.tensor_buft_overrides.empty()) {
-    params.tensor_buft_overrides.push_back({nullptr, nullptr});
-  }
-  if (!params.kv_overrides.empty()) {
-    params.kv_overrides.emplace_back();
-    params.kv_overrides.back().key[0] = '\0';
-  }
-  return std::nullopt;
-}
 
 // ── assessFit ────────────────────────────────────────────────────────────
 //
@@ -197,15 +60,40 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     return value->as<double>(env);
   };
 
+  // The config map `loadModel` takes, parsed below by the code that load itself
+  // runs.
+  std::unordered_map<std::string, std::string> configFilemap;
+  if (auto config = request.getOptionalProperty<js::Object>(env, "config");
+      config.has_value()) {
+    js_value_t* names = nullptr;
+    JS(js_get_property_names(env, *config, &names));
+    auto keys = js::Array::fromValue(names);
+    const size_t count = keys.size(env);
+    for (size_t index = 0; index < count; ++index) {
+      const std::string key =
+          keys.get<js::String>(env, index).as<std::string>(env);
+      configFilemap[key] = config->getProperty<js::String>(env, key.c_str())
+                               .as<std::string>(env);
+    }
+  }
+
+  // `LlamaModelLoader::init` takes both out of the map before parsing.
+  const auto takeConfig = [&configFilemap](const char* key) {
+    std::string value;
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      value = it->second;
+      configFilemap.erase(it);
+    }
+    return value;
+  };
+  const std::string backendsDir = takeConfig("backendsDir");
+  const std::string openclCacheDir = takeConfig("openclCacheDir");
+
   // `common_fit_params` reads ggml's global device registry and loads nothing
   // itself, so whatever is registered here is its whole view of the machine.
   // The handle holds the reference count for the call: a model unloading on
   // another thread would otherwise free the backend underneath it.
-  auto backendsDir =
-      request.getOptionalProperty<js::String>(env, "backendsDir");
-  LlamaBackendsHandle backendsHandle(
-      backendsDir.has_value() ? backendsDir->as<std::string>(env)
-                              : std::string());
+  LlamaBackendsHandle backendsHandle(backendsDir, openclCacheDir);
 
   auto errorResult = [&](const char* reason) {
     auto result = js::Object::create(env);
@@ -238,15 +126,30 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     return errorResult("model-unreadable");
   }
 
-  common_params loadParams;
-  loadParams.embedding = true;
-  if (auto applied = applyLlamaLoadParams(env, request, loadParams);
-      applied.has_value()) {
-    return errorResult(applied->c_str());
+  // The fitter measures device memory, and a cpu load's weights stay
+  // file-backed, so it would project `fits` for nearly any model.
+  if (auto device = configFilemap.find("device");
+      device != configFilemap.end() && device->second == "cpu") {
+    return errorResult("unsupported-config");
   }
 
-  // `BertModel::init` applies both to every embedding load: a non-causal model
-  // decodes one ubatch at a time, and a single sequence needs no split cache.
+  common_params loadParams;
+  try {
+    loadParams = setupParams(modelPath, std::move(configFilemap)).params;
+  } catch (const std::exception&) {
+    return errorResult("unsupported-config");
+  }
+  loadParams.embedding = true;
+
+  // A second resident file the projection does not count, so a load carrying
+  // one would come back understated.
+  if (!loadParams.lora_adapters.empty()) {
+    return errorResult("unsupported-config");
+  }
+
+  // `BertModel::configureParams` applies both to every embedding load: a
+  // non-causal model decodes one ubatch at a time, and a single sequence needs
+  // no split cache.
   loadParams.n_ubatch = loadParams.n_batch;
   if (loadParams.n_parallel == 1) {
     loadParams.kv_unified = true;
@@ -254,9 +157,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 
   // The fitter reduces the context only when it is 0, so an embedding load
   // left unset would be projected at a reduced context it never runs at.
-  // `BertModel::init` pins it to the trained context, or caps it there.
-  // A file the metadata reader rejects is reported by the fit below, which
-  // owns the unreadable-model verdict.
+  // `BertModel::configureParams` pins it to the trained context, or caps it
+  // there. A file the metadata reader rejects is reported by the fit below,
+  // which owns the unreadable-model verdict.
   try {
     ModelMetaData metadata;
     metadata.parse(
@@ -314,11 +217,15 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       buftOverrides.begin());
   // `fit_params_target` already holds one entry per device, and `fit-target`
   // fills it, so it carries both llama's default and the load's own override.
-  std::vector<size_t> margins =
-      requestedMargin.has_value()
-          ? std::vector<size_t>(
-                llama_max_devices(), static_cast<size_t>(*requestedMargin))
-          : loadParams.fit_params_target;
+  // A caller's margin answers a different question — what the models already
+  // resident need — so the stricter of the two binds.
+  std::vector<size_t> margins = loadParams.fit_params_target;
+  if (requestedMargin.has_value()) {
+    const auto requested = static_cast<size_t>(*requestedMargin);
+    for (size_t& margin : margins) {
+      margin = std::max(margin, requested);
+    }
+  }
 
   // Without the fitter the load places nothing, so there is no verdict.
   if (!loadParams.fit_params) {
@@ -336,6 +243,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         buftOverrides.data(),
         margins.data(),
         minCtx,
+        nullptr,
         false,
         GGML_LOG_LEVEL_INFO,
         // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
@@ -497,6 +405,44 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(
       make_shared<out_handl::Js2DArrayOutputHandler<BertEmbeddings, float>>());
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+
+  return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+/// Delivers laya's response JSON as a JS string; the JS side parses it.
+struct JsLayaDecisionOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          LayaDecisionResult> {
+  JsLayaDecisionOutputHandler()
+      : JsBaseOutputHandler<LayaDecisionResult>(
+            [this](const LayaDecisionResult& out) -> js_value_t* {
+              return qvac_lib_inference_addon_cpp::js::String::create(
+                  this->env_, out.json);
+            }) {}
+};
+
+inline js_value_t*
+createLayaInstance(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  auto model = make_unique<LayaModel>(
+      args.getMapEntry(1, "path"),
+      args.getSubmap(1, "config"),
+      args.getMapEntry(1, "backendsDir"));
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(make_shared<JsLayaDecisionOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),

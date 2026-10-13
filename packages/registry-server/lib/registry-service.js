@@ -911,7 +911,7 @@ class RegistryService extends ReadyResource {
 
       const { blobs, core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
       const pointer = await this._uploadFileToHyperblobs(blobs, localPath)
-      const fitBlob = await this._uploadFitBlob(blobs, localPath, outputDir)
+      const fitBlob = await this._uploadFitBlob(blobs, localPath, outputDir, modelEntry.engine)
 
       await this._mirrorBlobCore(core)
 
@@ -1340,8 +1340,8 @@ class RegistryService extends ReadyResource {
     return writeStream.id
   }
 
-  async _uploadFitBlob(blobs, localPath, outputDir) {
-    const fitBlob = await writeFitBlob(localPath, outputDir)
+  async _uploadFitBlob(blobs, localPath, outputDir, engine) {
+    const fitBlob = await writeFitBlob(localPath, outputDir, engine)
     if (!fitBlob) {
       return null
     }
@@ -1512,7 +1512,7 @@ class RegistryService extends ReadyResource {
     const models = await this.listModels()
     const candidates = models.filter((model) => {
       if (model.fitBlobBinding && !force) return false
-      if (!supportsFitBlob(model.path)) return false
+      if (!supportsFitBlob(model.path, model.engine)) return false
       if (filter && !model.path.includes(filter)) return false
       return true
     })
@@ -1545,7 +1545,7 @@ class RegistryService extends ReadyResource {
         const origin = await this._loadArtifactForFill(model, localPath)
         if (origin === 'source') report.downloaded++
 
-        const fitBlob = await writeFitBlob(localPath, outputDir)
+        const fitBlob = await writeFitBlob(localPath, outputDir, model.engine)
         if (!fitBlob) {
           report.skipped.push({ path: model.path, reason: 'no metadata region' })
           continue

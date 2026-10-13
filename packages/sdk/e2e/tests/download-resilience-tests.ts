@@ -60,3 +60,6 @@ export const downloadResilienceTests = [
   downloadResilienceHttpSuspend,
   downloadResilienceHttpSharded
 ]
+
+// The tests without steps drive network faults through local HTTP fixtures, so each client needs
+// its own body.

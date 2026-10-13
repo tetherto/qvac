@@ -242,24 +242,22 @@ export class ResourceManager {
   }
 
   /**
-   * The parameters `ensureLoaded` hands `loadModel` for this dep, with any
-   * async config resolved. `assessModelFit` takes the same parameters, so a
-   * caller can assess the load this manager would run without running it.
+   * What `loadModel` would be called with for this key, without calling it. `ensureLoaded`
+   * runs these parameters, `assessModelFit` takes the same shape, and a test that drives the
+   * load itself reads them through the `modelSource` step.
    */
   async loadParams(dep: string): Promise<LoadParams> {
     const def = this.definitions.get(dep)
     if (!def) throw new Error(`Unknown dependency: ${dep}`)
-
+    // The config is a resolver, because a client may resolve an asset inside it asynchronously.
+    // Handing the function itself to a test that drives `loadModel` would put a function on the
+    // wire where the contract wants an object.
     const config = await this.resolveConfig(dep, def)
-
     return {
-      ...(def.constant
-        ? { modelSrc: def.constant }
-        : def.modelSrc !== undefined
-          ? { modelSrc: def.modelSrc }
-          : {}),
+      ...(def.constant ? { modelSrc: def.constant } : {}),
+      ...(def.modelSrc !== undefined ? { modelSrc: def.modelSrc } : {}),
       modelType: def.type,
-      ...(config !== undefined && { modelConfig: config })
+      ...(config !== undefined ? { modelConfig: config } : {})
     }
   }
 

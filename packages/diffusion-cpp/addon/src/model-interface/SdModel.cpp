@@ -555,7 +555,8 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   const bool openClElsewhere =
       ctx.params.preferred_gpu_backend == SD_BACKEND_PREF_OPENCL &&
       !sd_backend_selection::openClPreferenceMatchesEnumeratedGpu();
-  if (pinnedBackend || pinnedParams || cpuPreferred || openClElsewhere) {
+  if (!workload.upscaleOnly &&
+      (pinnedBackend || pinnedParams || cpuPreferred || openClElsewhere)) {
     outcome.status = SD_FIT_ERROR;
     outcome.reason = "unsupported-config";
     return outcome;
@@ -577,9 +578,54 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
   request.vae_tiling_params.tile_size_y = workload.vaeTileSizeY;
   request.vae_tiling_params.target_overlap = workload.vaeTileOverlap;
 
+  sd_upscaler_fit_params_t upscaler;
+  sd_upscaler_fit_params_init(&upscaler);
+  upscaler.esrgan_path = config_.esrganPath.c_str();
+  upscaler.n_threads =
+      config_.upscalerThreads > 0 ? config_.upscalerThreads : config_.nThreads;
+  if (upscaler.n_threads <= 0) {
+    upscaler.n_threads = sd_get_num_physical_cores();
+  }
+  upscaler.tile_size = std::max(1, config_.upscalerTileSize);
+  upscaler.width = workload.width;
+  upscaler.height = workload.height;
+  upscaler.repeats = workload.upscaleRepeats;
+  upscaler.direct = config_.upscalerDirect;
+  upscaler.offload_params_to_cpu = config_.upscalerOffloadParamsToCpu;
+  upscaler.device =
+      config_.device == "cpu" ? SD_UPSCALER_DEVICE_CPU : SD_UPSCALER_DEVICE_GPU;
+  upscaler.gpu_backend_pref =
+      sd_backend_selection::preferredEsrganBackendForConfigDevice(
+          config_.device);
+
   sd_fit_result_t result{};
+  const bool useUpscaler =
+      workload.upscaleOnly ||
+      (!config_.esrganPath.empty() && workload.videoFrames <= 1 &&
+       !sd_model_supports_video(
+           config_.modelPath.empty() ? config_.diffusionModelPath.c_str()
+                                     : config_.modelPath.c_str()));
+  if (useUpscaler) {
+    const int scale = sd_upscaler_model_scale(config_.esrganPath.c_str());
+    if (scale > 0 && !qvac_lib_inference_addon_sd::esrganOutputFitsLimits(
+                         workload.width,
+                         workload.height,
+                         scale,
+                         workload.upscaleRepeats,
+                         config_.maxImagePixels)) {
+      outcome.reason = "unsupported-config";
+      return outcome;
+    }
+  }
   try {
-    outcome.status = sd_fit_params(&ctx.params, &request, &result);
+    if (workload.upscaleOnly) {
+      outcome.status = sd_upscaler_fit_params(&upscaler, &result);
+    } else if (useUpscaler) {
+      outcome.status = sd_fit_params_with_upscaler(
+          &ctx.params, &request, &upscaler, &result);
+    } else {
+      outcome.status = sd_fit_params(&ctx.params, &request, &result);
+    }
   } catch (const std::exception& error) {
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
@@ -1289,15 +1335,18 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
             "' (expected txt2vid or img2vid)");
 
   if (isMiniMaxH3) {
-    // H3 currently supports text-to-audio-video only. Keep this native check
-    // authoritative so renamed GGUFs and bindings that bypass video.ts cannot
-    // enter unsupported image/reference/control paths.
-    if (vid.mode != "txt2vid" || !job.initImageBytes.empty() ||
-        !job.initImagesBytes.empty())
+    // H3's public generate_video() consumes init_image as a first-frame
+    // keyframe. The generic mode/input checks below require it for img2vid.
+    if (!job.initImagesBytes.empty())
       throw StatusError(
           general_error::InvalidArgument,
-          "MiniMax-H3 supports text-to-audio-video only; image conditioning "
-          "(img2vid/init_image) is not supported");
+          "MiniMax-H3 does not accept init_images; use one init_image for "
+          "img2vid");
+    if (vid.mode == "img2vid" && config_.vaeDecodeOnly)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "MiniMax-H3 img2vid requires VAE encoder weights; "
+          "vae_decode_only must be false");
     if (!config_.highNoiseDiffusionModelPath.empty())
       throw StatusError(
           general_error::InvalidArgument,

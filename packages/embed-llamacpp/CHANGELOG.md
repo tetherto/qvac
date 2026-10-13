@@ -1,5 +1,101 @@
 # Changelog
 
+## [0.46.0] - 2026-10-09
+
+### Added
+
+- CUDA backend selection on Linux x64, Linux arm64 and Windows x64 NVIDIA
+  hosts ([#4917](https://github.com/tetherto/qvac/pull/4917)). The CUDA module
+  ships in `@qvac/fabric` 0.20.2+, and Windows needs a CUDA 13 install, whose
+  runtime DLLs load from `%CUDA_PATH%\bin\x64`. If the module, driver or
+  runtime is missing, selection falls through to Vulkan, then CPU.
+- `backend` load option: a comma-separated GPU priority list of `cuda`,
+  `vulkan`, `metal`, `opencl` or `auto`, for example `backend: 'vulkan'` to
+  force Vulkan on an NVIDIA machine. An unrecognised name fails the load; a
+  recognised name with no device present is skipped. `backend` cannot be
+  combined with `split-mode`.
+
+### Changed
+
+- The default GPU order now puts CUDA before Vulkan, so an NVIDIA host that
+  ran on Vulkan before now runs on CUDA. `CUDA_VISIBLE_DEVICES=-1` or
+  `backend: 'vulkan'` restores Vulkan.
+- An integer `main-gpu` indexes ggml's full device list, so the CUDA devices
+  shift the indices an existing config was written against.
+- A single-device load no longer auto-selects an RPC device; split loads still
+  use RPC.
+- In a split, one card registered by two backends is kept once.
+
+## [0.45.0] - 2026-10-08
+
+### Added
+
+- `LayaDecisions` runs Laya decision models (`laya`, `laya-multilingual`,
+  `laya-typed-decisions`): an encoder with a decision head that answers
+  `choice`, `score` and `noul` questions about a text, a structured state or a
+  conversation, one forward pass per question. Requests and responses are
+  Laya's own JSON, typed in TypeScript; `states` answers several states in one
+  call ([#4848](https://github.com/tetherto/qvac/pull/4848)).
+
+  ```js
+  const { LayaDecisions } = require('@qvac/embed-llamacpp')
+  const laya = new LayaDecisions({ files: { model: [path] }, config: { device: 'gpu' } })
+  await laya.load()
+  const [result] = await (await laya.run({ state, questions })).await()
+  ```
+
+- Laya load options are an allowlist: `device` is required, `threads` and
+  `threads-batch` may not exceed the CPU count, and any other key fails with
+  `InvalidConfiguration`.
+- New error codes `UnsupportedModel`, for a GGUF that is not a Laya checkpoint
+  (detected before its weights load), and `InvalidRequest`.
+- `LayaInterface`, `mapLayaEvent` and `pickPrimaryGgufPath` are exported.
+
+### Changed
+
+- The load path `GGMLBert` uses moved into a `LlamaModelLoader` shared with
+  Laya. Embeddings are unchanged; native log lines about the load
+  configuration now start with `[LlamaModelLoader]` instead of `[BertModel]`.
+
+## [0.44.0] - 2026-10-06
+
+### Breaking
+
+- `assessFit` takes `config`, the map `loadModel` takes, in place of `params`,
+  and resolves it with the load's own code. `config` names a device, as every
+  load does ([#4841](https://github.com/tetherto/qvac/pull/4841)).
+
+  ```js
+  // before
+  EmbedLlamacpp.assessFit({ modelPath, params: { 'ctx-size': '4096', 'gpu-layers': '0' } })
+  // after
+  EmbedLlamacpp.assessFit({ modelPath, config: { device: 'gpu', 'ctx-size': '4096', 'gpu-layers': '0' } })
+  ```
+
+- `assessFit` byte figures can differ: with `flash-attn` unset the resolver
+  settles on `on`, which is what the load runs.
+- `main-gpu: 'dedicated'`, `rpc-servers`, `flash-attn: 'auto'`,
+  `prefetch-weights` and `tensor-read-lazy` now produce verdicts where they
+  answered `unsupported-config`, and a LoRA adapter or a `cpu` device is
+  refused.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
+### Fixed
+
+- The deprecated load flags `mmap`, `no-mmap`, `direct-io`, `no-direct-io`
+  and `mlock` keep working with qvac-fabric 11018, which no longer accepts
+  them. The addon maps them to `load-mode` for both loads and `assessFit`.
+
 ## [0.43.1] - 2026-09-30
 
 ### Changed

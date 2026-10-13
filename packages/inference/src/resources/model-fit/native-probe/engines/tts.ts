@@ -34,6 +34,8 @@ function cosyvoiceCompanion(
 interface TtsCommon {
   nGpuLayers: number
   marginBytes?: number
+  lavasrEnhancerPath?: string
+  lavasrDenoiserPath?: string
 }
 
 function cosyvoiceRequest(modelPath: string, common: TtsCommon): FitRequestPlan {
@@ -74,9 +76,14 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
   const config = (params.modelConfig ?? {}) as TtsRuntimeConfig
   const artifacts = params.artifacts ?? {}
 
+  const lavasrEnhancerPath = artifacts['lavasrEnhancerPath']
+  const lavasrDenoiserPath = artifacts['lavasrDenoiserPath']
+
   const common: TtsCommon = {
     nGpuLayers: gpuLayersFromCount(config.useGPU, config.nGpuLayers),
-    ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes })
+    ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes }),
+    ...(lavasrEnhancerPath !== undefined && { lavasrEnhancerPath }),
+    ...(lavasrDenoiserPath !== undefined && { lavasrDenoiserPath })
   }
 
   const supported = (request: TtsFitRequest): FitRequestPlan => ({

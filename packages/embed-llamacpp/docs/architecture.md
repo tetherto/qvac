@@ -29,6 +29,7 @@
 - [Decision 5: Batch Processing as Primary Use Case](#decision-5-batch-processing-as-primary-use-case)
 - [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue)
 - [Decision 7: TypeScript Definitions](#decision-7-typescript-definitions)
+- [Decision 8: Laya Decisions as a Separate Model Class](#decision-8-laya-decisions-as-a-separate-model-class)
 
 ### Technical Debt
 - [Limited Error Context](#1-limited-error-context)
@@ -47,6 +48,8 @@
 - Batch processing for high-throughput use cases
 - Vector embeddings for semantic search and similarity
 
+The package also runs Laya decision models (`LayaDecisions`): a ModernBERT or mmBERT encoder with a decision head that answers typed questions about a text (`choice`, `score`, `noul`) in one forward pass per question. They share the embedding path's runtime, loading and llama.cpp setup, and differ only in how the context is configured and read.
+
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
@@ -57,6 +60,7 @@
 - **Quantized models**: GGUF format (Q2-Q8, 1-bit variants)
 - **Sharded loading**: Caller passes every shard + `.tensors.txt` companion; addon streams them in order
 - **Encoder-only models**: Optimized for embedding generation
+- **Laya decisions**: `choice` / `score` / `noul` answers as probabilities over the question's options, through fabric's `common_laya` request handling (see [Decision 8](#decision-8-laya-decisions-as-a-separate-model-class))
 
 ## Target Platforms
 
@@ -227,6 +231,10 @@ classDiagram
 
 ---
 
+### Second Class: LayaDecisions
+
+`LayaDecisions` (`laya.js`) has the same lifecycle as `GGMLBert` — `load()`, `run()`, `cancel()`, `unload()`, one request at a time — over its own native instance (`createLayaInstance`, wrapped by `LayaInterface`). `run(request)` takes laya's request JSON (`{ state | states, questions }`) and resolves to laya's response, typed as `LayaResult` for `state` and `LayaResult[]` for `states`. `config` is an allowlist of load options with `device` required; see the README's Laya section for the request, response and options.
+
 ## Internal Architecture
 
 ### Architectural Pattern
@@ -238,6 +246,7 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         BERTCLASS["GGMLBert<br/>(index.js)"]
+        LAYACLASS["LayaDecisions<br/>(laya.js)"]
         JOB["createJobHandler<br/>(@qvac/infer-base)"]
         QUEUE["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
@@ -246,6 +255,7 @@ graph TB
 
     subgraph "Layer 2: Bridge"
         BERTIF["BertInterface<br/>(addon.js)"]
+        LAYAIF["LayaInterface<br/>(laya.js)"]
         BINDING["require.addon<br/>(binding.js)"]
     end
 
@@ -258,6 +268,9 @@ graph TB
     subgraph "Layer 4: Model"
         BERTMODEL["BertModel<br/>(model-interface/BertModel.cpp)"]
         ENCODE["encodeHostF32<br/>encodeHostF32Sequences"]
+        LAYAMODEL["LayaModel<br/>(model-interface/LayaModel.cpp)"]
+        LOADER["LlamaModelLoader<br/>(model-interface/LlamaModelLoader.cpp)"]
+        COMMONLAYA["common_laya_predict<br/>(fabric common)"]
     end
 
     subgraph "Layer 5: Backend"
@@ -267,6 +280,9 @@ graph TB
     end
 
     APP --> BERTCLASS
+    APP --> LAYACLASS
+    LAYACLASS --> LAYAIF
+    LAYAIF --> BINDING
     BERTCLASS --> JOB
     BERTCLASS --> QUEUE
     BERTCLASS --> BERTIF
@@ -280,6 +296,12 @@ graph TB
     JSINTERFACE --> ADDON
     ADDON --> WEIGHTSLOAD
     ADDON --> BERTMODEL
+    ADDON --> LAYAMODEL
+    BERTMODEL --> LOADER
+    LAYAMODEL --> LOADER
+    LAYAMODEL --> COMMONLAYA
+    COMMONLAYA --> LLAMACPP
+    LOADER --> LLAMACPP
 
     BERTMODEL --> ENCODE
     ENCODE --> LLAMACPP
@@ -300,10 +322,10 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | GGMLBert (standalone class), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
-| 2. Bridge | BertInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
+| 1. JavaScript API | GGMLBert and LayaDecisions (standalone classes), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
+| 2. Bridge | BertInterface, LayaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
-| 4. Model | BertModel, encode methods | Inference logic, batch processing | C++ | Direct llama.cpp integration |
+| 4. Model | BertModel, LayaModel, LlamaModelLoader | Inference logic, batch processing; shared model loading | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
 **Data Flow Through Layers:**
@@ -356,6 +378,10 @@ graph TB
 
 **Addon surface (addon-cpp ≥1.1.5#1):** Constructor `(binding, configurationParams, outputCb)` only (no transition callback). Single job per instance: `runJob({ type, input })` (no job ID returned), `cancel()` (waits until job stopped), `unload()` → `destroyInstance` to release resources. `addonLogging.js` exposes the package's native log bridge as a secondary export.
 
+#### **LayaDecisions / LayaInterface (laya.js)**
+
+**Responsibility:** The Laya counterpart of `GGMLBert` / `BertInterface`: the same job and queue composition and file streaming, over the `createLayaInstance` binding. Sends the request as JSON (`runJob({ type: 'text', input })`) and parses the response JSON in `mapLayaEvent`, which recognizes the output event by its `LayaDecisionResult` type name.
+
 ### C++ Components
 
 #### **BertModel (model-interface/BertModel.cpp)**
@@ -372,6 +398,21 @@ graph TB
 - `encodeHostF32(string)`: Single text embedding
 - `encodeHostF32Sequences(vector<string>)`: Batch embedding generation
 - `process(Input)`: Unified processing via std::visit
+
+#### **LlamaModelLoader (model-interface/LlamaModelLoader.cpp)**
+
+**Responsibility:** Everything a load needs that does not depend on what the model is used for, shared by `BertModel` and `LayaModel`: config to `common_params` with backend and split-device selection, GGUF shards and metadata, streamed weights, `initFromConfig`, the backends handle and the deferred `InitLoader` initialization.
+
+Each model owns a loader (composition, no base class) and customizes the load through two hooks: `configureParams(params, metadata, ctxSizeConfigured)` before the model is created, and `onLoaded(model, ctx)` once it exists, which rejects a model by throwing. The loader is the model's last member, so the llama context it owns is freed before the members its hooks write.
+
+#### **LayaModel (model-interface/LayaModel.cpp)**
+
+**Responsibility:** Laya decisions over fabric's `common_laya` library.
+
+- `checkConfig` (constructor): accepts only the Laya load options, and thread counts that are whole numbers up to the CPU count
+- `configureParams`: rejects a non-`laya` architecture from metadata, then sets the single-pass context of `llama-laya`: RANK pooling, `n_ctx = n_ubatch = n_batch`, up to `min(256, n_batch)` sequences in a unified KV cache, no generic warmup
+- `onLoaded`: `common_laya_init` (tokenizer and decision config), the abort callback, `common_laya_warmup`
+- `process(std::string)`: `common_laya_predict` on the request JSON; returns `LayaDecisionResult{json}`. Invalid JSON and `invalid_argument` map to `InvalidRequest`, `runtime_error` to `DecodeFailed`, a cancelled pass to `Job cancelled`. Job errors reach JS through addon-cpp's error event as a message only, so `InvalidRequest` and `DecodeFailed` appear in the message, not as an error `code`; load errors keep theirs
 
 #### **AddonCpp / AddonJs (addon/src/addon/AddonCpp.hpp, addon/src/addon/AddonJs.hpp)**
 
@@ -794,6 +835,44 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 
 ---
 
+## Decision 8: Laya Decisions as a Separate Model Class
+
+<details>
+<summary>⚡ TL;DR</summary>
+
+**Chose:** A separate `LayaModel` / `LayaDecisions` pair in this package, running fabric's `common_laya_predict`, sharing `LlamaModelLoader` with `BertModel`
+**Why:** Laya runs the same encoder loop as embeddings; fabric's request handling is already checked against the PyTorch reference
+**Cost:** C++ types (`nlohmann::json`, exceptions) cross the fabric boundary; a second JS class and native entry point
+
+</details>
+
+### Context
+
+Laya checkpoints are encoders read out through RANK pooling: packed sequences, one `llama_decode` per pass, per-sequence outputs. That is this package's embedding loop, not the LLM addon's generation loop. Fabric (qvac-fabric-llm.cpp #323, in 10549.5.1) ships the request handling as `common/laya.h`: validation, tokenization, sequence layout, batching, calibration and answer decoding.
+
+### Decision
+
+- **Separate class and native entry:** `LayaDecisions` over `createLayaInstance`, as diffusion-cpp exposes separate models. `GGMLBert` stays embeddings-only.
+- **Fabric does the Laya work:** `LayaModel` calls `common_laya_init` / `common_laya_predict` / `common_laya_warmup` rather than reimplementing them.
+- **laya's JSON unchanged:** the request and response are laya's own format, typed in TypeScript, so they compare one to one with `llama-laya` and laya's documentation.
+- **Shared loader by composition:** `LlamaModelLoader` with `configureParams` / `onLoaded` hooks, following the repo's pattern of composed helpers rather than a model base class.
+- **Allowlisted config:** only options that leave the single-pass context intact are accepted.
+
+### Rationale
+
+- The answers are identical to `llama-laya` at the same fabric version (measured on CPU and Metal), because the addon runs the same code with the same context.
+- Fabric fixes to Laya reach the addon through a fabric bump, with no second copy to keep in sync.
+- Rejecting other options fails loudly instead of letting a setting such as `pooling` or `ctx_size` silently break the decision head.
+
+### Trade-offs
+- ✅ One implementation of Laya's request handling, already checked against the reference
+- ✅ `BertModel` and `LayaModel` share the load path instead of duplicating it
+- ❌ The addon must compile against fabric's own `nlohmann/json.hpp`: `common_laya_predict`'s signature carries its ABI tag, so a different version fails at link time
+- ❌ laya's Python-only features (`Router`, `predict_long`, `decide`, hooks) are not available
+- ❌ Laya needs a fabric runtime with Laya (10549.5.1 or later). On an older one a Laya model fails at load with `UnableToLoadModel`, because llama.cpp does not know the architecture; embeddings keep working (measured on macOS)
+
+---
+
 # Technical Debt
 
 ### 1. Limited Error Context
@@ -807,4 +886,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-05-07
+**Last Updated:** 2026-10-06

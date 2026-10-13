@@ -4,7 +4,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { evaluate } = require('./helpers')
 
-function loadBinding ({ addon, hostAddon }) {
+function loadBinding({ addon, hostAddon }) {
   const calls = { hostAddon: 0 }
   const { exports } = evaluate('binding.js', (module_) => {
     const fakeRequire = (specifier) => {
@@ -20,21 +20,21 @@ function loadBinding ({ addon, hostAddon }) {
   return { exports, calls }
 }
 
-function nativeRuntime (tag) {
+function nativeRuntime(tag) {
   return { tag }
 }
 
-function missingPrebuild () {
+function missingPrebuild() {
   throw new Error('no prebuild in this package')
 }
 
 // What require.addon() has been observed to return instead of the runtime: the
 // package's JavaScript entry, which here is binding.js itself mid-load.
-function packageEntry (module_) {
+function packageEntry(module_) {
   return module_.exports
 }
 
-function notCalled () {
+function notCalled() {
   throw new Error('should not have been reached')
 }
 
@@ -71,14 +71,15 @@ test('the platform package error wins, carrying the addon error as its cause', (
   const addonError = new Error('no prebuild in this package')
 
   assert.throws(
-    () => loadBinding({
-      addon: () => {
-        throw addonError
-      },
-      hostAddon: () => {
-        throw new Error('platform package is not installed')
-      }
-    }),
+    () =>
+      loadBinding({
+        addon: () => {
+          throw addonError
+        },
+        hostAddon: () => {
+          throw new Error('platform package is not installed')
+        }
+      }),
     (err) => {
       assert.match(err.message, /platform package is not installed/)
       assert.equal(err.cause, addonError)
@@ -89,12 +90,13 @@ test('the platform package error wins, carrying the addon error as its cause', (
 
 test('a self-referencing require.addon() still leaves a cause on the platform error', () => {
   assert.throws(
-    () => loadBinding({
-      addon: packageEntry,
-      hostAddon: () => {
-        throw new Error('platform package is not installed')
-      }
-    }),
+    () =>
+      loadBinding({
+        addon: packageEntry,
+        hostAddon: () => {
+          throw new Error('platform package is not installed')
+        }
+      }),
     (err) => {
       assert.match(err.message, /platform package is not installed/)
       assert.match(err.cause.message, /JavaScript entry/)
@@ -105,10 +107,11 @@ test('a self-referencing require.addon() still leaves a cause on the platform er
 
 test('a non-object from the platform package is reported, never exported', () => {
   assert.throws(
-    () => loadBinding({
-      addon: missingPrebuild,
-      hostAddon: () => function NotTheRuntime () {}
-    }),
+    () =>
+      loadBinding({
+        addon: missingPrebuild,
+        hostAddon: () => function NotTheRuntime() {}
+      }),
     (err) => {
       assert.match(err.message, /not the native runtime/)
       assert.match(err.cause.message, /no prebuild in this package/)

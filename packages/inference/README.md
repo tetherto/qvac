@@ -60,7 +60,7 @@ const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 Model operations require a registered model plugin. RPC discovery needs no model plugin or server provider; serving requires an explicitly registered server provider.
 
 The [Bare serving example](examples/rpc-server.ts)
-shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.1.0`.
+shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.2.0`.
 
 ## Capability to addon package
 
@@ -81,6 +81,8 @@ shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.1.0`.
 ## Configuration
 
 The engine resolves a `qvac.config.js` or `qvac.config.json` from the current working directory, or from the path in `QVAC_CONFIG_PATH`. The resolved config applies on the first API call.
+
+The `includeAudioDecoder` setting is read by the SDK bundler. Set it to `false` when packaging a worker that only receives raw PCM or streaming audio; `audiogen-ggml` can also use PCM or WAV output without FFmpeg. Compressed audio file decoding and compressed audiogen output formats require `bare-ffmpeg` to be bundled.
 
 ## System resource diagnostics
 

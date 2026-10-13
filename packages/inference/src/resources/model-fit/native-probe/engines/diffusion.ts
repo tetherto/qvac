@@ -12,16 +12,20 @@ export interface DiffusionFitRequestParams {
 /**
  * Modes whose load the projection would not describe.
  *
- * `upscale` is an ESRGAN checkpoint, which has no fitter. `video` and `world`
- * assemble file sets — the audio VAE, the embeddings connectors, the TAEHV
- * preview decoder, a seed scene — that the fit request has no place for, and
- * their peak is driven by a frame count the load config does not carry.
+ * `upscale` is an ESRGAN checkpoint, which has no fitter. `world` assembles a
+ * TAEHV preview decoder and a seed scene that the fit request has no place for.
  */
 const UNFITTABLE_MODES: Record<string, string> = {
   upscale: 'a standalone upscaler load has no fitter',
-  video: 'video loads are not representable',
   world: 'world loads are not representable'
 }
+
+/**
+ * Frames to project a video load at. The fitter reads one frame when nothing
+ * is passed, which projects image generation; `run` generates 33. The frame
+ * count is a generation parameter, and this assessment sees load config alone.
+ */
+const DEFAULT_VIDEO_FRAMES = 33
 
 export function createDiffusionFitRequest(params: DiffusionFitRequestParams): FitRequestPlan {
   const config = (params.modelConfig ?? {}) as SdcppConfig
@@ -48,6 +52,12 @@ export function createDiffusionFitRequest(params: DiffusionFitRequestParams): Fi
     }),
     ...(artifacts['clipVisionModelPath'] !== undefined && {
       clipVision: artifacts['clipVisionModelPath']
+    }),
+    ...(artifacts['audioVaeModelPath'] !== undefined && {
+      audioVae: artifacts['audioVaeModelPath']
+    }),
+    ...(artifacts['embeddingsConnectorsModelPath'] !== undefined && {
+      embeddingsConnectors: artifacts['embeddingsConnectorsModelPath']
     })
   }
 
@@ -63,7 +73,8 @@ export function createDiffusionFitRequest(params: DiffusionFitRequestParams): Fi
         files,
         config: engineConfig as SdConfig,
         workload: {
-          ...(config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling })
+          ...(config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling }),
+          ...(config.mode === 'video' && { videoFrames: DEFAULT_VIDEO_FRAMES })
         }
       }
     }

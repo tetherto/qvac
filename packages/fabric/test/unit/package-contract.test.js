@@ -12,7 +12,7 @@ const ADDON_UNAVAILABLE = './addon-unavailable.js'
 
 // Walk the conditional map the way Bare does: the first key that is `default`
 // or one of the host's platform/arch conditions wins, recursively.
-function importsTargetsForHost (host) {
+function importsTargetsForHost(host) {
   const conditions = host.split('-')
   let target = packageJson.imports['#host-addon']
   while (target && !Array.isArray(target) && typeof target === 'object') {
@@ -24,7 +24,7 @@ function importsTargetsForHost (host) {
   return Array.isArray(target) ? target : [target]
 }
 
-function loadUnavailable (host) {
+function loadUnavailable(host) {
   try {
     evaluate('addon-unavailable.js', () => {
       const fakeRequire = (specifier) => require('../../' + specifier.replace('./', ''))
@@ -46,7 +46,13 @@ test('the imports map routes every published host to its platform package', () =
 })
 
 test('the imports map routes unpublished hosts to the actionable error', () => {
-  for (const host of ['android-x64', 'android-arm', 'linux-riscv64', 'darwin-ppc64', 'freebsd-x64']) {
+  for (const host of [
+    'android-x64',
+    'android-arm',
+    'linux-riscv64',
+    'darwin-ppc64',
+    'freebsd-x64'
+  ]) {
     assert.deepEqual(importsTargetsForHost(host), [ADDON_UNAVAILABLE], host)
   }
 })
@@ -56,15 +62,10 @@ test('optionalDependencies are injected at publish, not declared in the source m
 })
 
 test('Linux prebuilds enable RDMA and install its build dependency', () => {
-  const fabric = vcpkgJson.dependencies.find(
-    (dependency) => dependency.name === 'qvac-fabric'
-  )
+  const fabric = vcpkgJson.dependencies.find((dependency) => dependency.name === 'qvac-fabric')
   assert.ok(fabric)
   assert.ok(
-    fabric.features.some(
-      (feature) =>
-        feature.name === 'rpc-rdma' && feature.platform === 'linux'
-    )
+    fabric.features.some((feature) => feature.name === 'rpc-rdma' && feature.platform === 'linux')
   )
   assert.match(
     projectJson.targets.build.options.ci.linuxExtraPackages,
@@ -93,7 +94,10 @@ test('a missing desktop slice names the package and the optional-dependency caus
 })
 
 test('a missing mobile slice asks for an exact-version direct dependency', () => {
-  for (const [host, expected] of [['android-arm64', 'android-arm64'], ['ios-arm64-simulator', 'ios']]) {
+  for (const [host, expected] of [
+    ['android-arm64', 'android-arm64'],
+    ['ios-arm64-simulator', 'ios']
+  ]) {
     const err = loadUnavailable(host)
     assert.match(err.message, new RegExp(`@qvac/fabric-${expected} is not installed`), host)
     assert.match(err.message, /direct dependency pinned to the exact/, host)

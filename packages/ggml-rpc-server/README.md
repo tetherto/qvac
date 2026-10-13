@@ -97,3 +97,16 @@ console.log(server.rdmaCapable)
 
 Without `expectRdma`, the server starts either way and reports the backend's
 capability in `rdmaCapable`.
+
+## Testing
+
+```bash
+npm run test:unit          # JS unit tests against a mocked binding
+npm run test:cpp           # C++ unit tests (GoogleTest)
+npm run test:integration   # desktop integration tests against prebuilds/
+```
+
+On a PR, `on-pr-nx.yml` runs the C++ tests with the `run-cpp-addon-tests` label
+and the desktop integration tests with the `run-desktop-addon-tests` label. Their
+platforms and runner setup live in the `test:cpp` and `test:integration`
+targets of `project.json`.

@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.29.0] - 2026-10-12
+
+### Added
+
+- Metadata-only `assessFit` support for standalone ESRGAN (`mode: 'upscale'`)
+  and ABot-World (`mode: 'world'`), without loading model weights.
+- ABot-World fit estimates for a stated session length using
+  `workload.walkSteps`, with a default of 100 walk steps, including retained
+  latent history and the configured placement and streaming budgets.
+
+### Changed
+
+- Include ESRGAN weights, tiled computation, full-image buffers, and repeated
+  upscale passes in standalone and post-generation memory estimates.
+- Use checkpoint metadata to validate ESRGAN's actual output scale against
+  image limits, and account for shared host/GPU memory on Apple Silicon.
+- Build against the published `stable-diffusion-cpp` registry port
+  `2026-08-11#5` without a temporary engine overlay.
+
+### Pull Requests
+
+- [#4939](https://github.com/tetherto/qvac/pull/4939) - QVAC-26761 feat[api]:
+  add ESRGAN and ABot memory fit.
+
+## [0.28.1] - 2026-10-09
+
+### Fixed
+
+- Rebuild the Android addon and Vulkan/OpenCL backends with NDK r29
+  (`29.0.14206865`) to match the application's C++ runtime. The 0.28.0 npm
+  binaries were built with NDK r30 before the shared NDK selection fixes merged.
+
+### Pull Requests
+
+- [#4915](https://github.com/tetherto/qvac/pull/4915) - Pin the shared Android
+  build host to NDK r29.
+- [#4916](https://github.com/tetherto/qvac/pull/4916) - Update Android build
+  callers to use the pinned build host.
+- [#4933](https://github.com/tetherto/qvac/pull/4933) - Align Bare's NDK selector
+  with the pinned NDK used by vcpkg.
+
+## [0.28.0] - 2026-10-07
+
+### Added
+
+- MiniMax-H3 FL2VA ConvRot text-to-video and image-to-video examples with
+  synchronized audio, model download script, and FLUX.2-generated I2V keyframes.
+
+### Changed
+
+- Route H3 image-to-video first-frame conditioning through the native video job
+  and require the video VAE encoder for that mode.
+
+### Pull Requests
+
+- [#4789](https://github.com/tetherto/qvac/pull/4789) - QVAC-24827 feat:
+  MiniMax H3 text-to-video and image-to-video.
+
 ## [0.27.0] - 2026-10-02
 
 ### Added

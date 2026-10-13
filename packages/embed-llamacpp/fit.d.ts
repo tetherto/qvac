@@ -1,22 +1,12 @@
 export interface EmbedFitRequest {
     /** Absolute path to the GGUF, or to the registry's weightless copy. */
     modelPath: string;
-    /**
-     * The load, in llama's own CLI spelling without the leading `--`, exactly as
-     * the loader takes it: `gpu-layers`, `tensor-split`, `batch-size` and the
-     * rest. Each is dispatched through llama's argument table, so a placement
-     * pinned here reaches the projection.
-     *
-     * A setting llama does not recognise, or a flag asked to be off that can only
-     * assert itself, is `status: "error"` with `unsupported-config`.
-     */
-    params?: Record<string, string>;
+    /** The load, as `loadModel` takes it, resolved by the same code that load runs. */
+    config?: Record<string, string>;
     /** Floor the fitter may not reduce the context below. */
     minCtxSize?: number;
-    /** Memory to leave free on every device. */
+    /** Memory to leave free on every device, held to against the load's own `fit-target`. */
     marginBytes?: number;
-    /** Where the dynamically-loaded ggml backends live. */
-    backendsDir?: string;
 }
 export type EmbedFitStatus = 'fits' | 'does-not-fit' | 'error';
 export type EmbedFitReason = 'fits' | 'does-not-fit' | 'model-unreadable' | 'no-backend-device' | 'unsupported-config';

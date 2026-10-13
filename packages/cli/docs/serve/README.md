@@ -60,6 +60,11 @@ it loads depends on `preload`:
 `false` for explicit `{ "src", "type" }` entries. To force a lazy model to warm
 at startup, pass `--model <alias>` on the command line.
 
+`modelFitPolicy` sets what the engine fitter's verdict does to one alias's load:
+`log`, `refuse`, or `off`. It overrides the engine-level `modelFitPolicy` for
+that alias only. Under `refuse`, a load the fitter projects will not fit fails
+with `MODEL_FIT_REFUSED`.
+
 Loading is transparent: a request may name any configured alias whether or not it is
 currently loaded. Unloading an alias frees its resources but keeps it configured, so the
 next request loads it again. There is no "load" endpoint — send a normal request, or set

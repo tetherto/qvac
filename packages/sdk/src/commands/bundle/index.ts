@@ -14,7 +14,7 @@ import {
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
-import { generateAddonsManifest } from '@/commands/bundle/manifest'
+import { AUDIO_DECODER_ADDON, generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import {
   installMissingHostPrebuilds,
@@ -118,6 +118,19 @@ interface CheckBundleEnginesOptions {
 }
 
 const ENGINES_ISSUE_CODES = new Set(['abi-mismatch', 'engines-mismatch'])
+const AUDIO_PLUGINS = new Set([
+  'whispercpp-transcription',
+  'bci-whispercpp-transcription',
+  'parakeet-transcription',
+  'audiogen-ggml'
+])
+
+function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
+  return pluginSpecifiers.filter((specifier) => {
+    const builtin = parseBuiltinSpecifier(specifier, sdkName)
+    return builtin !== null && AUDIO_PLUGINS.has(builtin.suffix)
+  })
+}
 
 async function checkBundleEngines(options: CheckBundleEnginesOptions) {
   const { projectRoot, bundlePath, hosts, configPath, network, logger } = options
@@ -205,7 +218,21 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
 
-  const deferModules = options.defer ?? []
+  const explicitDefer = options.defer ?? []
+  const includeAudioDecoder =
+    config.includeAudioDecoder !== false && !explicitDefer.includes(AUDIO_DECODER_ADDON)
+  const deferModules = includeAudioDecoder
+    ? explicitDefer
+    : [...new Set([...explicitDefer, AUDIO_DECODER_ADDON])]
+
+  if (!includeAudioDecoder) {
+    const affected = audioPluginsIn(pluginSpecifiers, sdkName)
+    if (affected.length > 0) {
+      logger.warn(
+        `${AUDIO_DECODER_ADDON} is not bundled: ${affected.join(', ')} cannot decode compressed audio files; compressed audiogen output formats also require FFmpeg.`
+      )
+    }
+  }
 
   await fsp.mkdir(outputDir, { recursive: true })
 
@@ -247,7 +274,9 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         const { installed } = await installMissingHostPrebuilds({
           projectRoot,
           hosts,
-          addons: await collectAddonsFromBundle({ bundlePath, projectRoot, hosts }),
+          addons: (await collectAddonsFromBundle({ bundlePath, projectRoot, hosts })).filter(
+            (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
+          ),
           quiet: options.quiet === true,
           logger
         })
@@ -279,7 +308,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     bundlePath,
     outputDir,
     projectRoot,
-    logger
+    logger,
+    includeAudioDecoder
   })
 
   if (options.checkEngines !== false) {

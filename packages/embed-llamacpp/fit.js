@@ -22,10 +22,9 @@ const addon_1 = require("./addon");
 function assessFit(request) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
     const binding = require('./binding.js');
-    return binding.assessFit({
-        ...request,
-        backendsDir: typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-            ? request.backendsDir
-            : (0, addon_1.resolveBackendsDir)()
-    });
+    const config = { ...request.config };
+    if (config['backendsDir'] === undefined || config['backendsDir'] === '') {
+        config['backendsDir'] = (0, addon_1.resolveBackendsDir)();
+    }
+    return binding.assessFit({ ...request, config });
 }

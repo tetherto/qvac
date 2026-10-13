@@ -1,4 +1,44 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/** One OCR run, checked the way the test asks for. */
+const ocrSteps = (
+  dependency: string,
+  wants: { wantsBlocks: boolean; checksStats: boolean; checksStructure: boolean }
+): Step[] => {
+  const fold = wants.wantsBlocks || wants.checksStructure ? 'blocks' : 'text'
+  const steps: Step[] = [
+    { useModel: { deps: [dependency], as: 'model' } },
+    { asset: { kind: 'image', file: '$params.imageFileName', form: 'path', as: 'image' } },
+    {
+      call: {
+        method: 'ocr',
+        collect: fold,
+        params: {
+          modelId: '$model',
+          image: '$image',
+          stream: '$params.streaming?',
+          options: '$params.ocrOptions?'
+        },
+        as: 'run'
+      }
+    },
+    { project: { from: '$run', path: fold, as: fold === 'blocks' ? 'blocks' : 'text' } }
+  ]
+
+  if (wants.checksStructure) {
+    steps.push({ assert: { on: '$blocks', named: 'textBlockShape' } })
+  }
+  steps.push({
+    assert: { on: fold === 'blocks' ? '$blocks' : '$text', use: 'expectation' }
+  })
+  if (wants.checksStats) {
+    steps.push({ project: { from: '$run', path: 'stats', as: 'stats' } })
+    steps.push({
+      assert: { on: '$stats', named: 'timingStatsPresent', with: { field: 'totalTime' } }
+    })
+  }
+  return steps
+}
 
 const createOcrTest = (
   testId: string,
@@ -9,13 +49,29 @@ const createOcrTest = (
   options?: { streaming?: boolean; paragraph?: boolean; resource?: string },
   estimatedDurationMs: number = 30000,
   suites?: string[]
-): TestDefinition => ({
-  testId,
-  params: { imageFileName, timeout: 300000, ...options },
-  expectation,
-  ...(suites && { suites }),
-  metadata: { category: 'ocr', dependency: options?.resource ?? 'ocr', estimatedDurationMs }
-})
+): TestDefinition => {
+  const dependency = options?.resource ?? 'ocr'
+  const wantsBlocks = expectation.validation === 'type'
+  const checksStats = testId.endsWith('-stats')
+  const checksStructure = testId.includes('block-structure')
+
+  return {
+    testId,
+    params: {
+      imageFileName,
+      timeout: 300000,
+      ...options,
+      // The executor turned `paragraph` into the SDK's options object; as data the object is the
+      // param, so the step passes it straight through and omits it entirely when the test does not
+      // ask for it.
+      ...(options?.paragraph ? { ocrOptions: { paragraph: true } } : {})
+    },
+    expectation,
+    ...(suites && { suites }),
+    steps: ocrSteps(dependency, { wantsBlocks, checksStats, checksStructure }),
+    metadata: { category: 'ocr', dependency, estimatedDurationMs }
+  }
+}
 
 export const ocrBasicPng = createOcrTest(
   'ocr-basic-png',
@@ -226,6 +282,20 @@ export const ocrDoctrBlockStructure = createOcrTest(
   60000
 )
 
+// mainGpu reaches the addon as `main-gpu`. Registry index 0 either selects a
+// GPU or falls back to CPU, so the OCR text is the same on every desktop host.
+// Mobile strips main-gpu, so the test is skipped there.
+export const ocrMainGpuIndex0 = createOcrTest(
+  'ocr-main-gpu-index-0',
+  'ocr-simple-test-png.png',
+  {
+    validation: 'contains-any',
+    contains: ['OCR', 'text', 'testing', 'implementation', 'recognize', 'Type', 'enter']
+  },
+  { resource: 'ocr-main-gpu' },
+  60000
+)
+
 export const ocrTests = [
   ocrBasicPng,
   ocrBasicJpg,
@@ -255,5 +325,6 @@ export const ocrTests = [
   ocrParagraphBlockStructure,
   ocrParagraphStreaming,
   ocrDoctrBasicPng,
-  ocrDoctrBlockStructure
+  ocrDoctrBlockStructure,
+  ocrMainGpuIndex0
 ]

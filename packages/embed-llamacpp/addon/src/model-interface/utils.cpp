@@ -1,13 +1,16 @@
 #include "utils.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <iterator>
 #include <stdexcept>
 #include <string_view>
 
+#include <common/arg.h>
 #include <common/common.h>
-#include <llama/common/common.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama/common/common.h>
 
 #include "addon/BertErrors.hpp"
 
@@ -93,4 +96,58 @@ extractVerbosityConfig(std::string& config) {
   }
 
   return configMap;
+}
+
+std::optional<llama_load_mode>
+deprecatedLoadFlagMode(const std::string& flag, const std::string& value) {
+  struct DeprecatedLoadFlag {
+    std::string_view key;
+    bool isPositive;
+    bool negatable;
+    llama_load_mode enabled;
+  };
+  static constexpr DeprecatedLoadFlag kDeprecatedLoadFlags[] = {
+      {"mmap", true, true, LLAMA_LOAD_MODE_MMAP},
+      {"no-mmap", false, true, LLAMA_LOAD_MODE_MMAP},
+      {"direct-io", true, true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no-direct-io", false, true, LLAMA_LOAD_MODE_DIRECT_IO},
+      // A valueless flag in llama, so it can only assert itself.
+      {"mlock", true, false, LLAMA_LOAD_MODE_MLOCK}};
+
+  const auto* const flagIt =
+      std::ranges::find(kDeprecatedLoadFlags, flag, &DeprecatedLoadFlag::key);
+  if (flagIt == std::end(kDeprecatedLoadFlags)) {
+    return std::nullopt;
+  }
+  bool requested = true;
+  if (!value.empty()) {
+    if (common_arg_utils::is_truthy(value)) {
+      requested = true;
+    } else if (flagIt->negatable && common_arg_utils::is_falsey(value)) {
+      requested = false;
+    } else {
+      throw std::invalid_argument(string_format(
+          "unknown value for --%s: '%s'", flag.c_str(), value.c_str()));
+    }
+  }
+  return flagIt->isPositive == requested ? flagIt->enabled
+                                         : LLAMA_LOAD_MODE_NONE;
+}
+
+const char* loadModeName(llama_load_mode mode) {
+  switch (mode) {
+  case LLAMA_LOAD_MODE_AUTO:
+    return "auto";
+  case LLAMA_LOAD_MODE_NONE:
+    return "none";
+  case LLAMA_LOAD_MODE_MMAP:
+    return "mmap";
+  case LLAMA_LOAD_MODE_MLOCK:
+    return "mlock";
+  case LLAMA_LOAD_MODE_MMAP_MLOCK:
+    return "mmap+mlock";
+  case LLAMA_LOAD_MODE_DIRECT_IO:
+    return "dio";
+  }
+  return "auto";
 }

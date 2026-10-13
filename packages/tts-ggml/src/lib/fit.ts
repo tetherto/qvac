@@ -77,8 +77,29 @@ export interface CosyvoiceFitRequest extends TtsFitCommon {
 export interface MossFitRequest extends TtsFitCommon {
   engineType: 'moss'
   mossBackbonePath: string
-  mossCodecDecoderPath?: string
+  mossCodecDecoderPath: string
   mossCodecEncoderPath?: string
+  /** Rows in the complete native prompt, including reference and dialogue rows. */
+  promptRows: number
+  /** Total mono reference samples; use 0 for a voice without a reference. */
+  referenceSamples: number
+  /** Project native chunk streaming when true, batch synthesis when false. */
+  streaming: boolean
+  threads?: number
+  streamChunkTokens?: number
+  durationTokens?: number
+}
+
+export interface MossSoundEffectFitRequest extends TtsFitCommon {
+  engineType: 'moss-sfx'
+  mossSoundEffectPath: string
+  prompt: string
+  seconds: number
+  negativePrompt?: string
+  steps?: number
+  guidance?: number
+  shift?: number
+  threads?: number
 }
 
 export type TtsFitRequest =
@@ -88,6 +109,7 @@ export type TtsFitRequest =
   | Audio8FitRequest
   | CosyvoiceFitRequest
   | MossFitRequest
+  | MossSoundEffectFitRequest
 
 /** The voice engines a fit can be asked for, read off the request union. */
 export type TtsFitEngine = TtsFitRequest['engineType']

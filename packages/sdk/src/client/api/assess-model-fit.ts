@@ -31,11 +31,11 @@ function withModelType(candidate: AssessModelFitInput['models'][number]) {
  * the available evidence does not support a verdict either way, and callers
  * should treat it as "cannot say", not "no".
  *
- * For a single candidate it fetches the registry's weightless description of
- * every source that load names — tens of KB each, never the weights — and runs
- * the engine's own fitter against them, reported as `native-fit` evidence.
- * Where that is unavailable, and for a set of candidates, the calibrated
- * estimate stands.
+ * For each candidate it fetches the registry's weightless description of every
+ * source that load names — tens of KB each, never the weights — and runs the
+ * engine's own fitter against them, reported as `native-fit` evidence. Where
+ * that is unavailable the computed floor stands, which can refuse a model but
+ * never confirm one.
  *
  * @param input - Loads to assess in `loadModel`'s own parameters, the declared
  *   execution mode, and the headroom policy.
@@ -64,7 +64,6 @@ export async function assessModelFit(input: AssessModelFitInput): Promise<Assess
     execution: response.execution,
     ...(response.evidence && { evidence: response.evidence }),
     ...(response.budget && { budget: response.budget }),
-    ...(response.estimate && { estimate: response.estimate }),
     ...(response.floorBytes !== undefined && { floorBytes: response.floorBytes }),
     models: response.models,
     reasons: response.reasons,

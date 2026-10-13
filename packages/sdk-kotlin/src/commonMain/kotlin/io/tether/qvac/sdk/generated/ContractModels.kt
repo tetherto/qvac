@@ -19,7 +19,6 @@ data class AssessModelFitResponse(
     val assumptions: List<String>,
     val basis: String,
     val budget: JsonObject? = null,
-    val estimate: JsonObject? = null,
     val evidence: String? = null,
     val execution: String,
     val floorBytes: Double? = null,
@@ -881,6 +880,7 @@ data class HeartbeatResponse(
 data class LoadModelRequest(
     val fallbackSrc: String? = null,
     val modelConfig: JsonObject? = null,
+    val modelFitPolicy: String? = null,
     val modelId: String? = null,
     val modelName: String? = null,
     val modelSrc: JsonElement? = null,

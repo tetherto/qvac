@@ -14,8 +14,23 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
+  MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when
+  `moss-transcribe-diarize-encoder.mlmodelc` sits next to the GGUF; without
+  one nothing changes.
+
+## [0.8.0] - 2026-10-09
+
 ### Added
 
+- `assessFit` supports `engine: 'moss-transcribe'` with an explicit audio duration and the existing prompt, hotword and token options. It projects weights, encoder/decoder graphs, KV cache and host memory without loading model weights.
+
+- Whisper `assessFit` takes the registry's weightless descriptions of a
+  whisper model and its Silero VAD model as `modelPath` and `vadModelPath`,
+  and projects them exactly as it projects the files, so a whisper load can be
+  assessed before it is downloaded.
 - MOSS-Transcribe-Diarize engine (`engine: 'moss-transcribe'`, OpenMOSS
   MOSS-Transcribe-Diarize): one pass over a whole recording returns
   timestamped segments with the speaker label (`speaker: 'S01'`) and a 0-based
@@ -28,13 +43,23 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
+  the ggml changes of the QVAC LLM stack, so both build from the same backend
+  code. Same models, same backends, no API change.
 - Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29#1, preserving the
   QVAC seed, BCI windowed-attention and streaming/VAD patches.
-- Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships
-  Nemotron 3 Diarization and MOSS-Transcribe-Diarize with hotwords.
+- Raise the `speech-cpp` floor to `2026-10-05`, the revision that ships
+  Nemotron 3 Diarization and MOSS-Transcribe-Diarize with hotwords. Nemotron 3
+  Diarization now runs on CUDA, Vulkan, Metal and OpenCL. Offline inputs longer
+  than 90 s keep stable speakers: a single pass mixed speakers up past about
+  two minutes and failed past 400 s. `assessFit` no longer crashes on
+  Nemotron 3 Diarization models. Same models, same API.
+- Raise the `speech-cpp` floor to `2026-10-07#1`, whose whisper fitter reads
+  the registry's weightless descriptions. Transcription is unchanged.
 
 ### Fixed
 
+- MOSS transcription memory-fit estimates count shared compute-buffer metadata once.
 - Nemotron 3 Diarization streaming preserves first-chunk predictions with left
   context, applies the same peak gain as offline inference, and retains an
   explicitly requested 80 ms left context.

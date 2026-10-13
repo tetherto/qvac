@@ -176,8 +176,17 @@ jobs:
           platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
           arch: ${{ matrix.arch || 'x64' }}
 
-      - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+      # Local install, not `npm install -g`. The global pin is bare-make
+      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
+      # is prepended so generate and the vcpkg toolchain's
+      # find_program(bare-make) both use the current package.
+      - name: Install current bare-make locally
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          npm install --no-save --ignore-scripts bare-make
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          ./node_modules/.bin/bare-make --version
 
       - name: Cache C++ test models
         id: model-cache
