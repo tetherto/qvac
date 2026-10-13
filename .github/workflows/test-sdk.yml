@@ -444,8 +444,6 @@ jobs:
     name: Resolve inference source
     needs: resolve
     runs-on: ubuntu-latest
-    # No secrets: GITHUB_TOKEN checks out this repository, and every package
-    # resolved or installed for @qvac/inference is public on npm.
     permissions:
       contents: read
     outputs:
@@ -507,8 +505,6 @@ jobs:
     name: Resolve test-suite source
     needs: resolve
     runs-on: ubuntu-latest
-    # No secrets: GITHUB_TOKEN checks out this repository, and every package
-    # resolved or installed for @qvac/test-suite is public on npm.
     permissions:
       contents: read
     outputs:
