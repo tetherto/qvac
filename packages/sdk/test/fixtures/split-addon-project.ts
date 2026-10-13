@@ -12,6 +12,9 @@ export const RUNTIME_ADDON = '@qvac/fake-runtime'
 export const RUNTIME_ADDON_VERSION = '0.4.0'
 export const RUNTIME_ADDON_ANDROID_PACKAGE = `${RUNTIME_ADDON}-android-arm64`
 export const RUNTIME_ADDON_IOS_PACKAGE = `${RUNTIME_ADDON}-ios`
+/** A split addon installed in the project that no plugin imports. */
+export const UNUSED_ADDON = '@qvac/fake-unused'
+export const UNUSED_ADDON_VERSION = '2.0.0'
 
 export interface SplitAddonProjectOptions {
   layout?: 'hoisted' | 'pnpm'
@@ -22,6 +25,8 @@ export interface SplitAddonProjectOptions {
    * addon's own node_modules.
    */
   withRuntime?: boolean
+  /** Also install `UNUSED_ADDON` at the project's top-level node_modules. */
+  withUnused?: boolean
 }
 
 function writeFile(filePath: string, content: string) {
@@ -51,7 +56,7 @@ function link(target: string, linkPath: string) {
  * restores the working directory and removes the project.
  */
 export function createSplitAddonProject(sdkDir: string, options: SplitAddonProjectOptions = {}) {
-  const { layout = 'hoisted', withRuntime = false } = options
+  const { layout = 'hoisted', withRuntime = false, withUnused = false } = options
   const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-split-addon-')))
   const originalCwd = process.cwd()
   process.chdir(projectRoot)
@@ -112,6 +117,15 @@ export function createSplitAddonProject(sdkDir: string, options: SplitAddonProje
       link(runtimeRoot, path.join(addonStoreDir, ...RUNTIME_ADDON.split('/')))
       link(runtimeRoot, path.join(store, 'node_modules', ...RUNTIME_ADDON.split('/')))
     }
+  }
+
+  if (withUnused) {
+    writeSplitAddon(
+      path.join(projectRoot, 'node_modules', ...UNUSED_ADDON.split('/')),
+      UNUSED_ADDON,
+      UNUSED_ADDON_VERSION,
+      null
+    )
   }
 
   if (layout === 'pnpm') {

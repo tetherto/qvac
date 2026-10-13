@@ -10,15 +10,22 @@ import {
 } from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
 import {
+  RUNTIME_ADDON_ANDROID_PACKAGE,
+  RUNTIME_ADDON_VERSION,
   SPLIT_ADDON,
   SPLIT_ADDON_ANDROID_PACKAGE,
   SPLIT_ADDON_VERSION,
+  UNUSED_ADDON,
   bundledModules,
-  createSplitAddonProject
+  createSplitAddonProject,
+  type SplitAddonProjectOptions
 } from './fixtures/split-addon-project'
 
-function splitAddonProject(t: { after: (fn: () => void) => void }) {
-  const project = createSplitAddonProject('external-sdk')
+function splitAddonProject(
+  t: { after: (fn: () => void) => void },
+  options: SplitAddonProjectOptions = {}
+) {
+  const project = createSplitAddonProject('external-sdk', options)
   t.after(project.cleanup)
   return project
 }
@@ -78,6 +85,54 @@ describe('bundleSdk installMissingPrebuilds', () => {
       }
     ])
   })
+
+  it('installs only what the bundle reaches', posixOnly, async (t) => {
+    const { projectRoot, sdkPath, configPath } = splitAddonProject(t, {
+      withRuntime: true,
+      withUnused: true
+    })
+    const pm = installFakePackageManager(projectRoot, 'pnpm')
+
+    const result = await withPath(pm.binDir, () =>
+      bundleSdk({
+        projectRoot,
+        sdkPath,
+        configPath,
+        hosts: ['android-arm64'],
+        quiet: true,
+        installMissingPrebuilds: true
+      })
+    )
+
+    assert.deepEqual(pm.calls(), [
+      {
+        cwd: projectRoot,
+        args: [
+          'add',
+          '--save-exact',
+          `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+          `${RUNTIME_ADDON_ANDROID_PACKAGE}@${RUNTIME_ADDON_VERSION}`
+        ]
+      }
+    ])
+    assert.ok(!result.installedPrebuilds.some((pkg) => pkg.addon === UNUSED_ADDON))
+  })
+
+  it(
+    'names only what the bundle reaches when platform packages are missing',
+    posixOnly,
+    async (t) => {
+      const { projectRoot, sdkPath, configPath } = splitAddonProject(t, { withUnused: true })
+
+      await assert.rejects(
+        bundleSdk({ projectRoot, sdkPath, configPath, hosts: ['android-arm64'], quiet: true }),
+        (error: unknown) =>
+          error instanceof HostPrebuildsMissingError &&
+          JSON.stringify(error.dependencies) ===
+            JSON.stringify({ [SPLIT_ADDON_ANDROID_PACKAGE]: SPLIT_ADDON_VERSION })
+      )
+    }
+  )
 
   it('installs nothing for a deferred addon', posixOnly, async (t) => {
     const { projectRoot, sdkPath, configPath } = splitAddonProject(t)
