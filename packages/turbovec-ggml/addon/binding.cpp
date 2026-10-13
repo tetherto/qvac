@@ -131,9 +131,18 @@ js_value_t* wrapFilter(js_env_t* env, VectorIndexFilter* filter) {
   return external;
 }
 
+// Bare's typed getters do no type checking and may crash on a value of the
+// wrong type, so every argument read checks the type first.
+template <int (*IsType)(js_env_t*, js_value_t*, bool*)>
+bool hasType(js_env_t* env, js_value_t* value) {
+  bool result = false;
+  return IsType(env, value, &result) == 0 && result;
+}
+
 VectorIndexExternal* unwrapExternal(js_env_t* env, js_value_t* handle) {
   void* data = nullptr;
-  if (js_get_value_external(env, handle, &data) != 0 || data == nullptr) {
+  if (!hasType<js_is_external>(env, handle) ||
+      js_get_value_external(env, handle, &data) != 0 || data == nullptr) {
     js_throw_error(env, "InvalidArgument", "expected IdMapIndex handle");
     return nullptr;
   }
@@ -162,7 +171,8 @@ VectorIndex* unwrap(js_env_t* env, js_value_t* handle) {
 VectorIndexFilterExternal*
 unwrapFilterExternal(js_env_t* env, js_value_t* handle) {
   void* data = nullptr;
-  if (js_get_value_external(env, handle, &data) != 0 || data == nullptr) {
+  if (!hasType<js_is_external>(env, handle) ||
+      js_get_value_external(env, handle, &data) != 0 || data == nullptr) {
     js_throw_error(env, "InvalidArgument", "expected IdMapIndexFilter handle");
     return nullptr;
   }
@@ -200,7 +210,8 @@ bool readIntProp(
     return false;
   }
   double raw = 0.0;
-  if (js_get_value_double(env, val, &raw) != 0 || !std::isfinite(raw) ||
+  if (!hasType<js_is_number>(env, val) ||
+      js_get_value_double(env, val, &raw) != 0 || !std::isfinite(raw) ||
       raw != std::trunc(raw) ||
       raw < static_cast<double>(std::numeric_limits<int32_t>::min()) ||
       raw > static_cast<double>(std::numeric_limits<int32_t>::max())) {
@@ -265,7 +276,8 @@ bool readUtf8String(
     js_env_t* env, js_value_t* value, const char* typeError,
     const char* readError, std::string* out) {
   size_t len = 0;
-  if (js_get_value_string_utf8(env, value, nullptr, 0, &len) != 0) {
+  if (!hasType<js_is_string>(env, value) ||
+      js_get_value_string_utf8(env, value, nullptr, 0, &len) != 0) {
     js_throw_type_error(env, "InvalidArgument", typeError);
     return false;
   }
@@ -291,45 +303,14 @@ bool readUtf8String(
   return true;
 }
 
-bool readUtf8StringProp(
-    js_env_t* env, js_value_t* obj, const char* name, std::string* out) {
-  js_value_t* val = nullptr;
-  bool hasValue = false;
-  if (!getOptionalProperty(env, obj, name, &val, &hasValue)) {
-    return false;
-  }
-  if (!hasValue) {
-    return true;
-  }
-  size_t len = 0;
-  if (js_get_value_string_utf8(env, val, nullptr, 0, &len) != 0 ||
-      len == std::numeric_limits<size_t>::max()) {
-    js_throw_type_error(env, "InvalidArgument", "invalid string option");
-    return false;
-  }
-  try {
-    std::vector<utf8_t> buffer(len + 1);
-    size_t copied = 0;
-    if (js_get_value_string_utf8(
-            env, val, buffer.data(), buffer.size(), &copied) != 0) {
-      js_throw_error(env, "InternalError", "failed to read string option");
-      return false;
-    }
-    out->assign(reinterpret_cast<const char*>(buffer.data()), copied);
-  } catch (const std::bad_alloc&) {
-    js_throw_error(env, "OutOfMemory", "allocation failure");
-    return false;
-  }
-  return true;
-}
-
 bool readFloat32Array(
     js_env_t* env, js_value_t* value, const char* name, const float** outData,
     size_t* outLen) {
   js_typedarray_type_t type{};
   void* data = nullptr;
   size_t len = 0;
-  if (js_get_typedarray_info(
+  if (!hasType<js_is_typedarray>(env, value) ||
+      js_get_typedarray_info(
           env, value, &type, &data, &len, nullptr, nullptr) != 0 ||
       type != js_float32array) {
     const std::string message = std::string(name) + " must be a Float32Array";
@@ -348,7 +329,8 @@ bool readBigUint64Array(
   js_typedarray_type_t type{};
   void* data = nullptr;
   size_t len = 0;
-  if (js_get_typedarray_info(
+  if (!hasType<js_is_typedarray>(env, value) ||
+      js_get_typedarray_info(
           env, value, &type, &data, &len, nullptr, nullptr) != 0 ||
       type != js_biguint64array) {
     const std::string message = std::string(name) + " must be a BigUint64Array";
@@ -364,7 +346,8 @@ bool readBigUint64Array(
 bool readPositiveInt32(
     js_env_t* env, js_value_t* value, const char* name, int32_t* out) {
   double raw = 0.0;
-  if (js_get_value_double(env, value, &raw) != 0 || !std::isfinite(raw) ||
+  if (!hasType<js_is_number>(env, value) ||
+      js_get_value_double(env, value, &raw) != 0 || !std::isfinite(raw) ||
       raw != std::trunc(raw) || raw <= 0.0 ||
       raw > static_cast<double>(std::numeric_limits<int32_t>::max())) {
     const std::string message = std::string(name) + " must be a positive int";
@@ -378,7 +361,8 @@ bool readPositiveInt32(
 bool readNonnegativeInt32(
     js_env_t* env, js_value_t* value, const char* name, int32_t* out) {
   double raw = 0.0;
-  if (js_get_value_double(env, value, &raw) != 0 || !std::isfinite(raw) ||
+  if (!hasType<js_is_number>(env, value) ||
+      js_get_value_double(env, value, &raw) != 0 || !std::isfinite(raw) ||
       raw != std::trunc(raw) || raw < 0.0 ||
       raw > static_cast<double>(std::numeric_limits<int32_t>::max())) {
     const std::string message =
@@ -387,6 +371,20 @@ bool readNonnegativeInt32(
     return false;
   }
   *out = static_cast<int32_t>(raw);
+  return true;
+}
+
+bool readId(js_env_t* env, js_value_t* value, uint64_t* out) {
+  bool lossless = false;
+  if (!hasType<js_is_bigint>(env, value) ||
+      js_get_value_bigint_uint64(env, value, out, &lossless) != 0 ||
+      !lossless) {
+    js_throw_type_error(
+        env,
+        "InvalidArgument",
+        "id must be an unsigned BigInt fitting in 64 bits");
+    return false;
+  }
   return true;
 }
 
@@ -577,7 +575,7 @@ js_value_t* idxCreate(js_env_t* env, js_callback_info_t* info) {
   if (js_get_callback_info(env, info, &argc, argv, nullptr, nullptr) != 0) {
     return nullptr;
   }
-  if (argc < 1) {
+  if (argc < 1 || !hasType<js_is_object>(env, argv[0])) {
     js_throw_type_error(env, "InvalidArgument", "expected { dim, storage }");
     return nullptr;
   }
@@ -586,13 +584,28 @@ js_value_t* idxCreate(js_env_t* env, js_callback_info_t* info) {
     js_throw_type_error(env, "InvalidArgument", "missing or invalid `dim`");
     return nullptr;
   }
+  js_value_t* storageValue = nullptr;
+  bool hasStorage = false;
+  if (!getOptionalProperty(
+          env, argv[0], "storage", &storageValue, &hasStorage)) {
+    return nullptr;
+  }
+  if (!hasStorage) {
+    js_throw_type_error(env, "InvalidArgument", "missing `storage`");
+    return nullptr;
+  }
   std::string storageName;
-  if (!readUtf8StringProp(env, argv[0], "storage", &storageName)) {
+  if (!readUtf8String(
+          env,
+          storageValue,
+          "storage must be a string",
+          "failed to read storage string",
+          &storageName)) {
     return nullptr;
   }
   const auto storage = turbovec_ggml::parseVectorStorage(storageName);
   if (!storage.has_value()) {
-    js_throw_type_error(env, "InvalidArgument", "missing or invalid `storage`");
+    js_throw_type_error(env, "InvalidArgument", "invalid `storage`");
     return nullptr;
   }
 
@@ -1100,13 +1113,7 @@ js_value_t* idxRemove(js_env_t* env, js_callback_info_t* info) {
   }
 
   uint64_t id = 0;
-  bool lossless = false;
-  if (js_get_value_bigint_uint64(env, argv[1], &id, &lossless) != 0 ||
-      !lossless) {
-    js_throw_type_error(
-        env,
-        "InvalidArgument",
-        "id must be an unsigned BigInt fitting in 64 bits");
+  if (!readId(env, argv[1], &id)) {
     return nullptr;
   }
 
@@ -1139,13 +1146,7 @@ js_value_t* idxRemoveLogged(js_env_t* env, js_callback_info_t* info) {
   }
 
   uint64_t id = 0;
-  bool lossless = false;
-  if (js_get_value_bigint_uint64(env, argv[1], &id, &lossless) != 0 ||
-      !lossless) {
-    js_throw_type_error(
-        env,
-        "InvalidArgument",
-        "id must be an unsigned BigInt fitting in 64 bits");
+  if (!readId(env, argv[1], &id)) {
     return nullptr;
   }
 
@@ -1207,13 +1208,7 @@ js_value_t* idxContains(js_env_t* env, js_callback_info_t* info) {
   }
 
   uint64_t id = 0;
-  bool lossless = false;
-  if (js_get_value_bigint_uint64(env, argv[1], &id, &lossless) != 0 ||
-      !lossless) {
-    js_throw_type_error(
-        env,
-        "InvalidArgument",
-        "id must be an unsigned BigInt fitting in 64 bits");
+  if (!readId(env, argv[1], &id)) {
     return nullptr;
   }
   return makeBoolean(env, idx->contains(id));

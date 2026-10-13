@@ -21,8 +21,7 @@
         "command": "pnpm run build",
         "cwd": "packages/turbovec-ggml",
         "ci": {
-          "artifactNamePrefix": "turbovec-ggml-",
-          "includeVulkanSdk": true
+          "artifactNamePrefix": "turbovec-ggml-"
         }
       },
       "inputs": [

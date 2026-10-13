@@ -260,6 +260,18 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) 
     () => new IdMapIndex({ dim: DIM, bitWidth: 16 }),
     'bitWidth 16 should be rejected'
   )
+  for (const bitWidth of ['8', 'constructor']) {
+    const error = expectThrows(
+      t,
+      () => new IdMapIndex({ dim: DIM, bitWidth }),
+      `non-numeric bitWidth ${JSON.stringify(bitWidth)} should be rejected`
+    )
+    t.is(
+      error && error.message,
+      'IdMapIndex: bitWidth must be 2, 4, 8, or 32',
+      `non-numeric bitWidth ${JSON.stringify(bitWidth)} gets the bitWidth error`
+    )
+  }
   expectThrows(
     t,
     () => new IdMapIndex({ dim: DIM, storage: 'turbovec-q2', bitWidth: 4 }),
@@ -325,6 +337,39 @@ test('IdMapIndex: native create takes dim and storage only', { skip: IS_MOBILE }
     () => binding.idx_create({ dim: DIM, storage: 'q16' }),
     'unknown storage is rejected'
   )
+  expectThrows(
+    t,
+    () => binding.idx_create({ dim: DIM, storage: 32 }),
+    'non-string storage is rejected'
+  )
+})
+
+// Bare's typed getters do no type checking and can crash on a value of the
+// wrong type, so each native entry point must throw instead. Desktop-only for
+// the same reason as the test above.
+test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }, (t) => {
+  const binding = require('../../binding')
+  const handle = binding.idx_create({ dim: DIM, storage: 'f32' })
+  const vector = new Float32Array(DIM)
+  const cases = {
+    'non-object create options': () => binding.idx_create(5),
+    'non-string load path': () => binding.idx_load(42),
+    'plain-array vectors': () => binding.idx_add(handle, [1, 2], new BigUint64Array(1)),
+    'number ids': () => binding.idx_add(handle, vector, 5),
+    'string k': () => binding.idx_search(handle, vector, 'x'),
+    'number id': () => binding.idx_remove(handle, 5),
+    'number handle': () => binding.idx_len(5),
+    'missing handle': () => binding.idx_compact(),
+    'object filter handle': () => binding.idx_search_prepared_filtered(handle, {}, vector, 1)
+  }
+  try {
+    for (const [name, fn] of Object.entries(cases)) {
+      const error = expectThrows(t, fn, `${name} is rejected`)
+      t.is(error && error.code, 'InvalidArgument', `${name} throws InvalidArgument`)
+    }
+  } finally {
+    binding.idx_dispose(handle)
+  }
 })
 
 test('IdMapIndex: ESM wrappers expose named exports', async (t) => {

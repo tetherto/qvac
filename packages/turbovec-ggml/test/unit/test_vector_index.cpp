@@ -1,7 +1,10 @@
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -26,9 +29,34 @@ std::vector<float> unitVec(int i) {
   return vector;
 }
 
-std::string tmpPath(const std::string& name) {
-  return (std::filesystem::temp_directory_path() / (name + ".tvim")).string();
-}
+// A unique path in the temp dir, removed on scope exit even when an ASSERT
+// returns early, so concurrent or failed runs never see each other's files.
+class TempFile {
+public:
+  explicit TempFile(const std::string& name) {
+    std::random_device device;
+    const auto stamp =
+        std::chrono::steady_clock::now().time_since_epoch().count();
+    path_ = (std::filesystem::temp_directory_path() /
+             (name + "-" + std::to_string(stamp) + "-" +
+              std::to_string(device()) + ".tvim"))
+                .string();
+  }
+  ~TempFile() {
+    std::error_code ignored;
+    std::filesystem::remove(path_, ignored);
+  }
+
+  TempFile(const TempFile&) = delete;
+  TempFile& operator=(const TempFile&) = delete;
+  TempFile(TempFile&&) = delete;
+  TempFile& operator=(TempFile&&) = delete;
+
+  [[nodiscard]] const std::string& path() const noexcept { return path_; }
+
+private:
+  std::string path_;
+};
 
 } // namespace
 
@@ -139,18 +167,17 @@ TEST(VectorIndexTest, PreparedFilterRestrictsSearchAndGoesStaleOnMutation) {
 }
 
 TEST(VectorIndexTest, WriteAndLoadRestoresIndex) {
-  const std::string path = tmpPath("turbovec-ggml-unit-roundtrip");
+  const TempFile file("turbovec-ggml-unit-roundtrip");
   {
     VectorIndex idx(DIM, VectorStorage::Q8);
     const auto v = unitVec(3);
     const uint64_t id = 7;
     ASSERT_EQ(idx.add(v.data(), 1, &id), GGML_VEC_INDEX_OK);
-    ASSERT_EQ(idx.write(path), GGML_VEC_INDEX_OK);
+    ASSERT_EQ(idx.write(file.path()), GGML_VEC_INDEX_OK);
   }
 
   int status = -1;
-  VectorIndex loaded = VectorIndex::load(path, &status);
-  std::filesystem::remove(path);
+  VectorIndex loaded = VectorIndex::load(file.path(), &status);
   ASSERT_EQ(status, GGML_VEC_INDEX_OK);
   ASSERT_TRUE(loaded.valid());
   EXPECT_EQ(loaded.dim(), DIM);
@@ -159,9 +186,9 @@ TEST(VectorIndexTest, WriteAndLoadRestoresIndex) {
 }
 
 TEST(VectorIndexTest, LoadFailureReportsStatusWithoutHandle) {
+  const TempFile missing("turbovec-ggml-unit-missing");
   int status = GGML_VEC_INDEX_OK;
-  VectorIndex loaded =
-      VectorIndex::load(tmpPath("turbovec-ggml-unit-missing"), &status);
+  VectorIndex loaded = VectorIndex::load(missing.path(), &status);
   EXPECT_EQ(status, GGML_VEC_INDEX_E_IO);
   EXPECT_FALSE(loaded.valid());
 }

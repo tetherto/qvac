@@ -74,11 +74,12 @@ function normalizeStorageOptions(options) {
         }
         return storage;
     }
-    const resolved = STORAGE_BY_BIT_WIDTH[bitWidth ?? 8];
-    if (resolved === undefined) {
+    const width = bitWidth ?? 8;
+    if (typeof width !== 'number' ||
+        !Object.prototype.hasOwnProperty.call(STORAGE_BY_BIT_WIDTH, width)) {
         throw new TypeError('IdMapIndex: bitWidth must be 2, 4, 8, or 32');
     }
-    return resolved;
+    return STORAGE_BY_BIT_WIDTH[width];
 }
 class IdMapIndexFilter {
     [FILTER_HANDLE] = null;
