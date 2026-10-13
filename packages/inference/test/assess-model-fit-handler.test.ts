@@ -167,6 +167,20 @@ test('handler: bci holds the GPU unless its config turns it off', (t) => {
   t.is(off.device, 'cpu')
 })
 
+// MiniMax names a device instead of switching the GPU on; `auto` is what the
+// switch means, and the fitter projects it on the GPU.
+test('handler: a minimax device is read in place of the switch', (t) => {
+  const devices = { gpu: 'gpu', auto: 'gpu', cpu: 'cpu' }
+
+  for (const [device, expected] of Object.entries(devices)) {
+    const target = estimateTargetFor({
+      modelType: ModelType.audiogenGgml,
+      modelConfig: { engine: 'minimax', device }
+    })
+    t.is(target.device, expected, device)
+  }
+})
+
 // `nGpuLayers` takes effect on its own and the config schema rejects it
 // disagreeing with `useGPU`, so it is read first.
 test('handler: tts reads its layer count ahead of its switch', (t) => {

@@ -8,6 +8,8 @@ import { registerPlugin, clearPlugins } from '@/plugins/registry'
 import { definePlugin, type ResolveContext } from '@/schemas/plugin'
 import { ModelType } from '@/schemas/index'
 import { resolveLoadFromStubs } from '@/resources/model-fit/fit-stub/resolve-load-from-stubs'
+import { createFitRequest } from '@/resources/model-fit/native-probe/create-fit-request'
+import { audioGenPlugin } from '@/plugins/builtin/audiogen-ggml/plugin'
 
 function scratchFile(name: string): string {
   const dir = path.join(os.tmpdir(), `fit-load-${Math.random().toString(36).slice(2)}`)
@@ -122,4 +124,57 @@ test('resolve load: a source with no registry coordinates resolves no stub', asy
   t.is(resolved.status, 'no-stub')
   if (resolved.status !== 'no-stub') return
   t.is(resolved.reason, 'unresolvable-ref')
+})
+
+// MiniMax-Music3 is not in the registry, so its pair is assessed from the files
+// on disk. The real plugin resolves them, and the fitter is asked for the load
+// the plugin would run.
+test('resolve load: a minimax pair on disk reaches the audiogen fitter', async (t) => {
+  clearPlugins()
+  registerPlugin(audioGenPlugin)
+  const lm = scratchFile('mm3-lm-q8.gguf')
+  const synth = scratchFile('mm3-synth-q8.gguf')
+
+  const resolved = await resolveLoadFromStubs({
+    modelType: ModelType.audiogenGgml,
+    modelConfig: { engine: 'minimax', lmModelSrc: lm, synthModelSrc: synth, device: 'gpu' }
+  })
+
+  t.is(resolved.status, 'resolved')
+  if (resolved.status !== 'resolved') return
+  t.alike(resolved.artifacts, { lmModelPath: lm, synthModelPath: synth })
+
+  const plan = createFitRequest({
+    modelType: ModelType.audiogenGgml,
+    modelPath: resolved.modelPath,
+    modelConfig: resolved.modelConfig,
+    artifacts: resolved.artifacts,
+    isShardedModel: false
+  })
+  t.ok(plan.supported)
+  if (plan.supported) {
+    t.alike(plan.probe, {
+      engine: 'audiogen-ggml',
+      request: { engine: 'minimax', lmPath: lm, synthPath: synth, device: 'gpu' }
+    })
+  }
+  await resolved.release()
+})
+
+test('resolve load: a minimax load naming both useGPU and device is not answered for', async (t) => {
+  clearPlugins()
+  registerPlugin(audioGenPlugin)
+
+  const resolved = await resolveLoadFromStubs({
+    modelType: ModelType.audiogenGgml,
+    modelConfig: {
+      engine: 'minimax',
+      lmModelSrc: scratchFile('mm3-lm-q8.gguf'),
+      synthModelSrc: scratchFile('mm3-synth-q8.gguf'),
+      useGPU: true,
+      device: 'gpu'
+    }
+  })
+
+  t.is(resolved.status, 'unsupported-load')
 })
