@@ -1,7 +1,9 @@
 declare const HANDLE: unique symbol;
 declare const FILTER_HANDLE: unique symbol;
 declare const FILTER_OWNER: unique symbol;
+declare const FILTER_REF: unique symbol;
 declare const FILTERS: unique symbol;
+declare const FILTERS_PRUNE_AT: unique symbol;
 declare const BIT_WIDTH_BY_STORAGE: {
     readonly f32: 32;
     readonly q8: 8;
@@ -41,12 +43,16 @@ export interface IdMapIndexSearchResult {
 export declare class IdMapIndexFilter {
     [FILTER_HANDLE]: NativeHandle | null;
     [FILTER_OWNER]: IdMapIndex | null;
+    [FILTER_REF]: WeakRef<IdMapIndexFilter> | null;
     private constructor();
     /** Search with this prepared allowlist. Mutating the owner invalidates the filter. */
     search(queries: Float32Array, k: number): IdMapIndexSearchResult;
     /** Release the prepared native filter. This operation is idempotent. */
     dispose(): void;
 }
+type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) => T) & {
+    prototype: T;
+};
 /**
  * CPU vector index with fixed dimensionality and stable uint64 external IDs.
  * Search uses exact or approximate dot products depending on storage. Callers
@@ -61,27 +67,38 @@ export default class IdMapIndex {
     static IdMapIndexFilter: typeof IdMapIndexFilter;
     [HANDLE]: NativeHandle | null;
     [FILTERS]: Set<WeakRef<IdMapIndexFilter>>;
+    [FILTERS_PRUNE_AT]: number;
     constructor(options: IdMapIndexOptions);
     /**
      * Load a v2/v3 snapshot or migrate legacy v1 storage. Legacy bit-width 8
      * snapshots migrate to q8; other v1 widths migrate to f32. Older TurboVec
      * snapshots above 1,024 dimensions can be loaded and rewritten, but cannot
      * add, search, or build IVF state. Synchronous and potentially blocking.
+     * Called on a subclass, returns an instance of that subclass; its
+     * constructor and field initializers do not run.
      */
+    static load<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T;
+    /** Detached call, e.g. `const { load } = IdMapIndex`. Returns an IdMapIndex. */
     static load(path: string): IdMapIndex;
     /**
      * Load a v2 snapshot with read-only mmap-backed vectors. Legacy v1 and
      * TurboVec v3 snapshots are rejected. Requires a little-endian host and,
      * on POSIX, a filesystem supporting flock(). Mutations are rejected.
+     * Returns a subclass instance when called on a subclass, as `load()` does.
      */
+    static loadMmap<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T;
+    /** Detached call, e.g. `const { loadMmap } = IdMapIndex`. Returns an IdMapIndex. */
     static loadMmap(path: string): IdMapIndex;
     /**
      * Load a snapshot and replay its append-only delta log. A missing log is
      * treated as empty. The returned handle is bound to `deltaPath`; use logged
      * mutations and `compactDelta()` rather than plain mutations or `write()`.
      * Delta logs require a local filesystem with reliable cooperative locking.
-     * TurboVec snapshots are rejected with `InvalidArgument`.
+     * TurboVec snapshots are rejected with `InvalidArgument`. Returns a
+     * subclass instance when called on a subclass, as `load()` does.
      */
+    static loadWithDelta<T extends IdMapIndex>(this: IdMapIndexClass<T>, snapshotPath: string, deltaPath: string): T;
+    /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Returns an IdMapIndex. */
     static loadWithDelta(snapshotPath: string, deltaPath: string): IdMapIndex;
     private static fromHandle;
     /**

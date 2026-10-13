@@ -4,8 +4,13 @@ exports.IdMapIndex = exports.IdMapIndexFilter = void 0;
 const HANDLE = Symbol('IdMapIndex.handle');
 const FILTER_HANDLE = Symbol('IdMapIndexFilter.handle');
 const FILTER_OWNER = Symbol('IdMapIndexFilter.owner');
+const FILTER_REF = Symbol('IdMapIndexFilter.ref');
 const FILTERS = Symbol('IdMapIndex.filters');
+const FILTERS_PRUNE_AT = Symbol('IdMapIndex.filtersPruneAt');
 const INT32_MAX = 0x7fffffff;
+// Dropped filters leave dead WeakRefs behind. Pruning once the set doubles
+// keeps prepareFilter amortized O(1) instead of rescanning on every call.
+const MIN_FILTERS_PRUNE_AT = 64;
 const BIT_WIDTH_BY_STORAGE = {
     f32: 32,
     q8: 8,
@@ -25,23 +30,10 @@ function loadBinding() {
     binding ??= require('./binding');
     return binding;
 }
-function finalizeFilterHandle(handle) {
-    try {
-        loadBinding().idx_filter_dispose(handle);
-    }
-    catch {
-        // Finalizers cannot report cleanup failures to user code.
-    }
-}
-const filterFinalizer = typeof FinalizationRegistry === 'undefined'
-    ? null
-    : new FinalizationRegistry(finalizeFilterHandle);
 function releaseFilter(owner, filter) {
-    for (const ref of owner[FILTERS]) {
-        const candidate = ref.deref();
-        if (candidate === undefined || candidate === filter) {
-            owner[FILTERS].delete(ref);
-        }
+    const ref = filter[FILTER_REF];
+    if (ref !== null) {
+        owner[FILTERS].delete(ref);
     }
 }
 function isPositiveInt32(value) {
@@ -84,6 +76,7 @@ function normalizeStorageOptions(options) {
 class IdMapIndexFilter {
     [FILTER_HANDLE] = null;
     [FILTER_OWNER] = null;
+    [FILTER_REF] = null;
     constructor() {
         throw new TypeError('IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()');
     }
@@ -110,20 +103,22 @@ class IdMapIndexFilter {
         }
         const owner = this[FILTER_OWNER];
         loadBinding().idx_filter_dispose(filterHandle);
-        filterFinalizer?.unregister(this);
         this[FILTER_HANDLE] = null;
         this[FILTER_OWNER] = null;
         if (owner !== null) {
             releaseFilter(owner, this);
         }
+        this[FILTER_REF] = null;
     }
 }
 exports.IdMapIndexFilter = IdMapIndexFilter;
+// A dropped filter needs no JS finalizer: its handle is a native external
+// whose own finalizer frees the native filter once the handle is collected.
 function createFilter(owner, handle) {
     const filter = Object.create(IdMapIndexFilter.prototype);
     filter[FILTER_OWNER] = owner;
     filter[FILTER_HANDLE] = handle;
-    filterFinalizer?.register(filter, handle, filter);
+    filter[FILTER_REF] = new WeakRef(filter);
     return filter;
 }
 /**
@@ -140,6 +135,7 @@ class IdMapIndex {
     static IdMapIndexFilter = IdMapIndexFilter;
     [HANDLE] = null;
     [FILTERS] = new Set();
+    [FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT;
     constructor(options) {
         const { dim } = options ?? {};
         if (!isPositiveInt32(dim)) {
@@ -151,41 +147,29 @@ class IdMapIndex {
         }
         this[HANDLE] = loadBinding().idx_create({ dim, storage });
     }
-    /**
-     * Load a v2/v3 snapshot or migrate legacy v1 storage. Legacy bit-width 8
-     * snapshots migrate to q8; other v1 widths migrate to f32. Older TurboVec
-     * snapshots above 1,024 dimensions can be loaded and rewritten, but cannot
-     * add, search, or build IVF state. Synchronous and potentially blocking.
-     */
     static load(path) {
         requireNonEmptyPath(path, 'IdMapIndex.load: path');
-        return IdMapIndex.fromHandle(loadBinding().idx_load(path));
+        return IdMapIndex.fromHandle(this, loadBinding().idx_load(path));
     }
-    /**
-     * Load a v2 snapshot with read-only mmap-backed vectors. Legacy v1 and
-     * TurboVec v3 snapshots are rejected. Requires a little-endian host and,
-     * on POSIX, a filesystem supporting flock(). Mutations are rejected.
-     */
     static loadMmap(path) {
         requireNonEmptyPath(path, 'IdMapIndex.loadMmap: path');
-        return IdMapIndex.fromHandle(loadBinding().idx_load_mmap(path));
+        return IdMapIndex.fromHandle(this, loadBinding().idx_load_mmap(path));
     }
-    /**
-     * Load a snapshot and replay its append-only delta log. A missing log is
-     * treated as empty. The returned handle is bound to `deltaPath`; use logged
-     * mutations and `compactDelta()` rather than plain mutations or `write()`.
-     * Delta logs require a local filesystem with reliable cooperative locking.
-     * TurboVec snapshots are rejected with `InvalidArgument`.
-     */
     static loadWithDelta(snapshotPath, deltaPath) {
         requireNonEmptyPath(snapshotPath, 'IdMapIndex.loadWithDelta: snapshotPath');
         requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDelta: deltaPath');
-        return IdMapIndex.fromHandle(loadBinding().idx_load_with_delta(snapshotPath, deltaPath));
+        return IdMapIndex.fromHandle(this, loadBinding().idx_load_with_delta(snapshotPath, deltaPath));
     }
-    static fromHandle(handle) {
-        const instance = Object.create(IdMapIndex.prototype);
+    // `ctor` is the class a loader was called on. A detached call such as
+    // `const { load } = IdMapIndex` has no class, so it falls back to IdMapIndex.
+    static fromHandle(ctor, handle) {
+        const candidate = typeof ctor === 'function' ? ctor.prototype : undefined;
+        const isIndexPrototype = candidate === IdMapIndex.prototype || candidate instanceof IdMapIndex;
+        const prototype = isIndexPrototype ? candidate : IdMapIndex.prototype;
+        const instance = Object.create(prototype);
         instance[HANDLE] = handle;
         instance[FILTERS] = new Set();
+        instance[FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT;
         return instance;
     }
     /**
@@ -252,8 +236,11 @@ class IdMapIndex {
             throw new TypeError('prepareFilter: allowedIds must be a BigUint64Array');
         }
         const filter = createFilter(this, loadBinding().idx_filter_create(ensureHandle(this), allowedIds));
-        this.pruneFilters();
-        this[FILTERS].add(new WeakRef(filter));
+        this[FILTERS].add(filter[FILTER_REF]);
+        if (this[FILTERS].size >= this[FILTERS_PRUNE_AT]) {
+            this.pruneFilters();
+            this[FILTERS_PRUNE_AT] = Math.max(MIN_FILTERS_PRUNE_AT, this[FILTERS].size * 2);
+        }
         return filter;
     }
     /**

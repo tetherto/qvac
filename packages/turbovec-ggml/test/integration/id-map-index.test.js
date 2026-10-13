@@ -408,6 +408,91 @@ test('IdMapIndex: root constructor preserves subclass semantics', (t) => {
   idx.dispose()
 })
 
+test('IdMapIndex: static loaders return the class they are called on', (t) => {
+  class ExtendedIdMapIndex extends IdMapIndex {
+    extendedMethod() {
+      return 'extended'
+    }
+  }
+
+  const snapshot = tmpPath('id-map-index-subclass-load')
+  const delta = tmpDeltaPath('id-map-index-subclass-load')
+  // One loaded index at a time: an open mmap may hold a file lock, and
+  // Windows enforces locks against other reads of the same snapshot.
+  let current = null
+  try {
+    const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
+    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+    idx.write(snapshot)
+    idx.dispose()
+
+    const loaders = {
+      load: () => ExtendedIdMapIndex.load(snapshot),
+      loadMmap: () => ExtendedIdMapIndex.loadMmap(snapshot),
+      loadWithDelta: () => ExtendedIdMapIndex.loadWithDelta(snapshot, delta)
+    }
+    for (const [name, load] of Object.entries(loaders)) {
+      current = load()
+      t.is(
+        Object.getPrototypeOf(current),
+        ExtendedIdMapIndex.prototype,
+        `${name} keeps the subclass`
+      )
+      t.is(current.extendedMethod(), 'extended', `${name} exposes subclass methods`)
+      t.is(current.search(new Float32Array([0, 1]), 1).ids[0], 22n, `${name} result is searchable`)
+      current.dispose()
+      current = null
+    }
+
+    current = IdMapIndex.load(snapshot)
+    t.is(Object.getPrototypeOf(current), IdMapIndex.prototype, 'base class load returns IdMapIndex')
+    current.dispose()
+    current = null
+
+    const { load } = IdMapIndex
+    current = load(snapshot)
+    t.is(
+      Object.getPrototypeOf(current),
+      IdMapIndex.prototype,
+      'detached load falls back to IdMapIndex'
+    )
+  } finally {
+    if (current !== null) current.dispose()
+    if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
+    removeDeltaArtifacts(delta)
+  }
+})
+
+test('IdMapIndex: dispose releases many prepared filters', (t) => {
+  // 300 crosses several filter-pruning thresholds.
+  const count = 300
+  const idx = new IdMapIndex({ dim: 2, bitWidth: 8 })
+  const filters = []
+  try {
+    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+    for (let i = 0; i < count; i++) {
+      filters.push(idx.prepareFilter(new BigUint64Array([22n])))
+    }
+    for (let i = 0; i < count; i += 2) {
+      filters[i].dispose()
+    }
+    t.is(filters[1].search(new Float32Array([0, 1]), 1).ids[0], 22n, 'live filter still searches')
+  } finally {
+    idx.dispose()
+  }
+
+  let disposed = 0
+  for (const filter of filters) {
+    try {
+      filter.search(new Float32Array([0, 1]), 1)
+    } catch (error) {
+      if (error.message === 'IdMapIndexFilter has been disposed') disposed += 1
+    }
+    filter.dispose()
+  }
+  t.is(disposed, count, 'index dispose releases every remaining filter')
+})
+
 test('IdMapIndex: CommonJS TypeScript default import works without interop', (t) => {
   const consumer = require('../types/consumer-cjs.test.js')
   const idMapModule = require('@qvac/turbovec-ggml/idMapIndex')

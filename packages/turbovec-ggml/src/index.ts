@@ -1,8 +1,13 @@
 const HANDLE = Symbol('IdMapIndex.handle')
 const FILTER_HANDLE = Symbol('IdMapIndexFilter.handle')
 const FILTER_OWNER = Symbol('IdMapIndexFilter.owner')
+const FILTER_REF = Symbol('IdMapIndexFilter.ref')
 const FILTERS = Symbol('IdMapIndex.filters')
+const FILTERS_PRUNE_AT = Symbol('IdMapIndex.filtersPruneAt')
 const INT32_MAX = 0x7fffffff
+// Dropped filters leave dead WeakRefs behind. Pruning once the set doubles
+// keeps prepareFilter amortized O(1) instead of rescanning on every call.
+const MIN_FILTERS_PRUNE_AT = 64
 
 const BIT_WIDTH_BY_STORAGE = {
   f32: 32,
@@ -76,25 +81,10 @@ function loadBinding() {
   return binding
 }
 
-function finalizeFilterHandle(handle: NativeHandle) {
-  try {
-    loadBinding().idx_filter_dispose(handle)
-  } catch {
-    // Finalizers cannot report cleanup failures to user code.
-  }
-}
-
-const filterFinalizer =
-  typeof FinalizationRegistry === 'undefined'
-    ? null
-    : new FinalizationRegistry<NativeHandle>(finalizeFilterHandle)
-
 function releaseFilter(owner: IdMapIndex, filter: IdMapIndexFilter) {
-  for (const ref of owner[FILTERS]) {
-    const candidate = ref.deref()
-    if (candidate === undefined || candidate === filter) {
-      owner[FILTERS].delete(ref)
-    }
+  const ref = filter[FILTER_REF]
+  if (ref !== null) {
+    owner[FILTERS].delete(ref)
   }
 }
 
@@ -181,7 +171,8 @@ function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage 
 
 export class IdMapIndexFilter {
   [FILTER_HANDLE]: NativeHandle | null = null;
-  [FILTER_OWNER]: IdMapIndex | null = null
+  [FILTER_OWNER]: IdMapIndex | null = null;
+  [FILTER_REF]: WeakRef<IdMapIndexFilter> | null = null
 
   private constructor() {
     throw new TypeError('IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()')
@@ -212,21 +203,27 @@ export class IdMapIndexFilter {
 
     const owner = this[FILTER_OWNER]
     loadBinding().idx_filter_dispose(filterHandle)
-    filterFinalizer?.unregister(this)
     this[FILTER_HANDLE] = null
     this[FILTER_OWNER] = null
     if (owner !== null) {
       releaseFilter(owner, this)
     }
+    this[FILTER_REF] = null
   }
 }
 
+// A dropped filter needs no JS finalizer: its handle is a native external
+// whose own finalizer frees the native filter once the handle is collected.
 function createFilter(owner: IdMapIndex, handle: NativeHandle) {
   const filter = Object.create(IdMapIndexFilter.prototype) as IdMapIndexFilter
   filter[FILTER_OWNER] = owner
   filter[FILTER_HANDLE] = handle
-  filterFinalizer?.register(filter, handle, filter)
+  filter[FILTER_REF] = new WeakRef(filter)
   return filter
+}
+
+type IdMapIndexClass<T extends IdMapIndex> = (abstract new (...args: never[]) => T) & {
+  prototype: T
 }
 
 /**
@@ -243,7 +240,8 @@ export default class IdMapIndex {
   static IdMapIndexFilter = IdMapIndexFilter;
 
   [HANDLE]: NativeHandle | null = null;
-  [FILTERS] = new Set<WeakRef<IdMapIndexFilter>>()
+  [FILTERS] = new Set<WeakRef<IdMapIndexFilter>>();
+  [FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT
 
   constructor(options: IdMapIndexOptions) {
     const { dim } = options ?? ({} as IdMapIndexOptions)
@@ -264,20 +262,29 @@ export default class IdMapIndex {
    * snapshots migrate to q8; other v1 widths migrate to f32. Older TurboVec
    * snapshots above 1,024 dimensions can be loaded and rewritten, but cannot
    * add, search, or build IVF state. Synchronous and potentially blocking.
+   * Called on a subclass, returns an instance of that subclass; its
+   * constructor and field initializers do not run.
    */
-  static load(path: string) {
+  static load<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T
+  /** Detached call, e.g. `const { load } = IdMapIndex`. Returns an IdMapIndex. */
+  static load(path: string): IdMapIndex
+  static load(this: unknown, path: string): IdMapIndex {
     requireNonEmptyPath(path, 'IdMapIndex.load: path')
-    return IdMapIndex.fromHandle(loadBinding().idx_load(path))
+    return IdMapIndex.fromHandle(this, loadBinding().idx_load(path))
   }
 
   /**
    * Load a v2 snapshot with read-only mmap-backed vectors. Legacy v1 and
    * TurboVec v3 snapshots are rejected. Requires a little-endian host and,
    * on POSIX, a filesystem supporting flock(). Mutations are rejected.
+   * Returns a subclass instance when called on a subclass, as `load()` does.
    */
-  static loadMmap(path: string) {
+  static loadMmap<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T
+  /** Detached call, e.g. `const { loadMmap } = IdMapIndex`. Returns an IdMapIndex. */
+  static loadMmap(path: string): IdMapIndex
+  static loadMmap(this: unknown, path: string): IdMapIndex {
     requireNonEmptyPath(path, 'IdMapIndex.loadMmap: path')
-    return IdMapIndex.fromHandle(loadBinding().idx_load_mmap(path))
+    return IdMapIndex.fromHandle(this, loadBinding().idx_load_mmap(path))
   }
 
   /**
@@ -285,18 +292,32 @@ export default class IdMapIndex {
    * treated as empty. The returned handle is bound to `deltaPath`; use logged
    * mutations and `compactDelta()` rather than plain mutations or `write()`.
    * Delta logs require a local filesystem with reliable cooperative locking.
-   * TurboVec snapshots are rejected with `InvalidArgument`.
+   * TurboVec snapshots are rejected with `InvalidArgument`. Returns a
+   * subclass instance when called on a subclass, as `load()` does.
    */
-  static loadWithDelta(snapshotPath: string, deltaPath: string) {
+  static loadWithDelta<T extends IdMapIndex>(
+    this: IdMapIndexClass<T>,
+    snapshotPath: string,
+    deltaPath: string
+  ): T
+  /** Detached call, e.g. `const { loadWithDelta } = IdMapIndex`. Returns an IdMapIndex. */
+  static loadWithDelta(snapshotPath: string, deltaPath: string): IdMapIndex
+  static loadWithDelta(this: unknown, snapshotPath: string, deltaPath: string): IdMapIndex {
     requireNonEmptyPath(snapshotPath, 'IdMapIndex.loadWithDelta: snapshotPath')
     requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDelta: deltaPath')
-    return IdMapIndex.fromHandle(loadBinding().idx_load_with_delta(snapshotPath, deltaPath))
+    return IdMapIndex.fromHandle(this, loadBinding().idx_load_with_delta(snapshotPath, deltaPath))
   }
 
-  private static fromHandle(handle: NativeHandle) {
-    const instance = Object.create(IdMapIndex.prototype) as IdMapIndex
+  // `ctor` is the class a loader was called on. A detached call such as
+  // `const { load } = IdMapIndex` has no class, so it falls back to IdMapIndex.
+  private static fromHandle(ctor: unknown, handle: NativeHandle) {
+    const candidate: unknown = typeof ctor === 'function' ? ctor.prototype : undefined
+    const isIndexPrototype = candidate === IdMapIndex.prototype || candidate instanceof IdMapIndex
+    const prototype = isIndexPrototype ? candidate : IdMapIndex.prototype
+    const instance = Object.create(prototype) as IdMapIndex
     instance[HANDLE] = handle
     instance[FILTERS] = new Set()
+    instance[FILTERS_PRUNE_AT] = MIN_FILTERS_PRUNE_AT
     return instance
   }
 
@@ -369,8 +390,11 @@ export default class IdMapIndex {
       this,
       loadBinding().idx_filter_create(ensureHandle(this), allowedIds)
     )
-    this.pruneFilters()
-    this[FILTERS].add(new WeakRef(filter))
+    this[FILTERS].add(filter[FILTER_REF] as WeakRef<IdMapIndexFilter>)
+    if (this[FILTERS].size >= this[FILTERS_PRUNE_AT]) {
+      this.pruneFilters()
+      this[FILTERS_PRUNE_AT] = Math.max(MIN_FILTERS_PRUNE_AT, this[FILTERS].size * 2)
+    }
     return filter
   }
 
