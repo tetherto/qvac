@@ -7,6 +7,13 @@ import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { bundleSdk } from '@/commands/bundle'
+import {
+  BARE_PACK_NODE_ENGINES,
+  isBarePackNodeSupported,
+  runBarePack
+} from '@/commands/bundle/bare-pack'
+import { BarePackNodeUnsupportedError } from '@/utils/errors-client'
+import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
@@ -338,6 +345,53 @@ function assertDecoderExcludedFromBundle(result: Awaited<ReturnType<typeof bundl
     )
   )
 }
+
+describe('isBarePackNodeSupported', () => {
+  it('accepts Node 22.21+ and 24.9+, rejects everything older and Node 23', () => {
+    for (const version of ['22.21.0', '22.30.1', '24.9.0', '24.20.0', '24.10.0-rc.1', '26.0.0']) {
+      assert.equal(isBarePackNodeSupported(version), true, version)
+    }
+    for (const version of ['20.11.0', '22.20.0', '23.11.0', '24.8.0', 'nightly']) {
+      assert.equal(isBarePackNodeSupported(version), false, version)
+    }
+  })
+
+  it('matches the engines.node of @qvac/cli, which qvac doctor reports', () => {
+    const cliManifest = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'cli', 'package.json'), 'utf8')
+    ) as { engines: { node: string } }
+    assert.equal(cliManifest.engines.node, BARE_PACK_NODE_ENGINES)
+  })
+})
+
+describe('runBarePack', () => {
+  it('throws BARE_PACK_NODE_UNSUPPORTED before spawning on an unsupported Node', async (t) => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bare-pack-node-'))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+    const entryPath = path.join(projectRoot, 'entry.mjs')
+    const outputPath = path.join(projectRoot, 'worker.bundle.js')
+    fs.writeFileSync(entryPath, 'export {}\n')
+
+    await assert.rejects(
+      runBarePack({
+        entryPath,
+        outputPath,
+        hosts: [`${process.platform}-${process.arch}`],
+        importsMapPath: path.join(projectRoot, 'bare-imports.json'),
+        deferModules: [],
+        quiet: true,
+        logger: getClientLogger({ enableConsole: false }),
+        nodeVersions: { node: '22.20.0' }
+      }),
+      (error: unknown) =>
+        error instanceof BarePackNodeUnsupportedError &&
+        error.code === SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED &&
+        /\^22\.21\.0 \|\| >=24\.9\.0/.test(error.message) &&
+        /v22\.20\.0/.test(error.message)
+    )
+    assert.ok(!fs.existsSync(outputPath))
+  })
+})
 
 describe('bundleSdk worker entries', () => {
   it('omits bare-ffmpeg from the addon manifest when audio decoding is disabled', async (t) => {
