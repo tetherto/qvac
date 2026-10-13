@@ -276,7 +276,7 @@
     "@qvac/tts-ggml": "^0.11.0",
     "@qvac/vla-ggml": "^0.30.0",
     "@types/brittle": "^3.5.0",
-    "bare": "*",
+    "bare": "1.34.1 || >=1.35.1",
     "bare-console": "*",
     "bare-events": "^2.9.1",
     "bare-stdio": "^1.0.3",
