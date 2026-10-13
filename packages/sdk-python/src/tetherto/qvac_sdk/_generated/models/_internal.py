@@ -9114,6 +9114,114 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc(
     ] = None
 
 
+class LoadModelSrcRequestLlamacppCompletionModelConfigChatTemplateSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestLlamacppCompletionModelConfigChatTemplateSrc(
+    GeneratedBaseModel
+):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigChatTemplateSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode(Enum):
     disabled = "disabled"
     batched = "batched"
@@ -9467,6 +9575,13 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         Field(
             alias="projectionModelSrc",
             description="Multimodal projection (mmproj / vision encoder) model source; multimodal models only.",
+        ),
+    ] = None
+    chat_template_src: Annotated[
+        str | LoadModelSrcRequestLlamacppCompletionModelConfigChatTemplateSrc | None,
+        Field(
+            alias="chatTemplateSrc",
+            description="Jinja chat template source, used instead of the template embedded in the GGUF.",
         ),
     ] = None
     image_tile_mode: Annotated[

@@ -303,6 +303,9 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Multimodal projection (mmproj / vision encoder) model source; multimodal models only.'
     ),
+  chatTemplateSrc: modelSrcInputSchema
+    .optional()
+    .describe('Jinja chat template source, used instead of the template embedded in the GGUF.'),
   image_tile_mode: z
     .enum(['disabled', 'batched', 'sequential'])
     .optional()

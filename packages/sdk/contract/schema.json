@@ -10676,6 +10676,101 @@
                         }
                       ]
                     },
+                    "chatTemplateSrc": {
+                      "description": "Jinja chat template source, used instead of the template embedded in the GGUF.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestLlamacppCompletionModelConfigChatTemplateSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestLlamacppCompletionModelConfigChatTemplateSrc"
+                        }
+                      ]
+                    },
                     "image_tile_mode": {
                       "description": "Qwen3.5-VL multi-tile image encoding mode (multimodal models only): `'sequential'` (default) encodes image tiles one at a time, `'batched'` encodes all tiles in a single batched pass, `'disabled'` does no multi-tile encoding (single tile). Ignored by text-only models.",
                       "type": "string",

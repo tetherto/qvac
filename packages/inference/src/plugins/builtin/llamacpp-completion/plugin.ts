@@ -120,7 +120,10 @@ export const llmPlugin = definePlugin({
   assessFit: LlmLlamacpp.assessFit,
 
   async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
-    const { projectionModelSrc, ...llmConfig } = cfg
+    const { projectionModelSrc, chatTemplateSrc, ...rest } = cfg
+    const llmConfig = chatTemplateSrc
+      ? { ...rest, chat_template_file: await ctx.resolveModelPath(chatTemplateSrc) }
+      : rest
 
     if (!projectionModelSrc) {
       return { config: llmConfig }
