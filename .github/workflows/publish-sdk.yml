@@ -78,7 +78,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-sdk-')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -94,6 +94,7 @@ jobs:
           package-slug: sdk
           package-json-path: packages/sdk/package.json
           changelog-path: packages/sdk/CHANGELOG.md
+          strict-slug: true
 
   build:
     needs:
@@ -674,7 +675,7 @@ jobs:
     if: >-
       needs.publish-logic.outputs.publish_release == 'true' &&
       needs.shared-runtime-libs.result == 'success' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      needs.release-merge-guard.result == 'success' &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
     environment: npm
@@ -688,10 +689,11 @@ jobs:
       - name: Validate npm_tag input
         if: inputs.npm_tag != ''
         shell: bash
+        env:
+          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
         run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+          if ! echo "$NPM_TAG_INPUT" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$NPM_TAG_INPUT'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
             exit 1
           fi
 
@@ -744,10 +746,10 @@ jobs:
       github.repository == 'tetherto/qvac' &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.build-sdk-python.result == 'success' &&
+      needs.release-merge-guard.result == 'success' &&
       (
         (
           needs.publish-logic.outputs.publish_release == 'true' &&
-          (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
           needs.publish-npm.result == 'success'
         )
         ||

@@ -38,6 +38,14 @@ allowBuilds:
   esbuild: true
   nx: true
   unrs-resolver: true
+  # From plugins/openclaw's `openclaw` dev dependency. Unlisted, an install with
+  # scripts fails with ERR_PNPM_IGNORED_BUILDS.
+  "@google/genai": false
+  koffi: false
+  msgpackr-extract: false
+  openclaw: false
+  protobufjs: false
+  tree-sitter-bash: false
 
 minimumReleaseAgeExclude:
   - '@qvac/asr-ggml-darwin-arm64@0.5.3'
