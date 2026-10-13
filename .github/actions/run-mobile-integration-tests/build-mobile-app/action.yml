@@ -227,6 +227,13 @@ runs:
         fi
         echo "Test app built successfully"
 
+    # The speech addons ship their ggml backends under the same file names, so
+    # the app keeps one copy of each for all of them.
+    - name: Check speech addons share one ggml-speech build
+      shell: bash
+      working-directory: ./test-framework
+      run: node "$GITHUB_ACTION_PATH/check-speech-ggml-builds.mjs"
+
     # Links the addons backend.cjs's module graph loads into the directories
     # react-native-bare-kit's native projects already include. Must run after
     # the last install of react-native-bare-kit (which clears them) and before

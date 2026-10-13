@@ -163,6 +163,13 @@ SDK code — see [Engine Selection](#engine-selection).
 - Bare runtime — see `engines.bare` in `package.json`
 - Linux requires Clang/LLVM 22 with libc++
 
+`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
+versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
+`@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
+`ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their ggml
+backends under the same file names, so an app that bundles several of them
+keeps one copy of each: use releases that record the same `ggml-speech`.
+
 ## Installation
 
 Make sure the Bare runtime is installed:

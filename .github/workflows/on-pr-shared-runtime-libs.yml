@@ -1,8 +1,9 @@
 name: On PR Trigger (Shared Runtime Libs)
 
 # Fails if @qvac/infer-base, @qvac/logging, @qvac/error, or @qvac/fabric
-# resolves to more than one version when installing @qvac/inference with all
-# of its optional peers, or @qvac/sdk with its addon dependencies.
+# resolves to more than one version, or the speech addons record different
+# ggml-speech builds, when installing @qvac/inference with all of its optional
+# peers, or @qvac/sdk with its addon dependencies.
 # publish-inference.yml and publish-sdk.yml run the same check before npm
 # publish.
 
@@ -16,6 +17,7 @@ on:
       - ".github/workflows/on-pr-shared-runtime-libs.yml"
       - ".github/scripts/check-shared-runtime-libs.mjs"
       - ".github/scripts/lib/shared-runtime-libs.mjs"
+      - ".github/scripts/lib/speech-ggml.mjs"
       - ".github/scripts/test/shared-runtime-libs.test.mjs"
   workflow_dispatch:
 

@@ -91,7 +91,7 @@ When you add a C++-test-bearing addon, add its key to `CPP_TEST_KEYS`, to the `c
 
 ### Gotcha: `sdk-pod-checks` reports under two check names
 
-`pr-checks-sdk-pod.yml` has both a `pull_request` trigger (covers `release-*`/`feature-*`/`tmp-*`, which Merge Guard doesn't) and `workflow_call` (how `pr-gate-merge.yml` pulls it in). On `main`, both fire: the direct trigger reports as `SDK Pod Checks`, the `workflow_call` one as `sdk-pod-checks / SDK Pod Checks`. Same logic, two check-context strings — not a ruleset requirement (only `Check Approvals` and `qvac-merge-guard / validate-pr` are actually required), just branch coverage. Match both strings if you're regex-matching this check by name.
+`pr-checks-sdk-pod.yml` has a `workflow_call` trigger (how `pr-gate-merge.yml` pulls it in for PRs into `main`) and a `pull_request` trigger limited to `release-*`/`feature-*`/`tmp-*`, which Merge Guard does not cover. A PR into `main` reports it as `sdk-pod-checks / SDK Pod Checks`; a PR into the other branches reports it as `SDK Pod Checks`. Match both strings if you're regex-matching this check by name.
 
 ---
 

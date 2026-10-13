@@ -1585,6 +1585,14 @@ The vcpkg port is hosted in
 [`vcpkg-configuration.json`](./vcpkg-configuration.json) for the
 baseline commit.
 
+`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the
+same versions in every speech addon (`@qvac/asr-ggml`,
+`@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and
+`package.json` records the `ggml-speech` build as `qvac["ggml-speech"]`.
+The speech addons ship their ggml backends under the same file names, so
+an app that bundles several of them keeps one copy of each: use releases
+that record the same `ggml-speech`.
+
 GPU backends are controlled by the `speech-cpp` port's vcpkg features:
 `metal` (default on osx/ios), `vulkan` (default on
 linux/windows/android), `opencl` (default on android), and `cuda`

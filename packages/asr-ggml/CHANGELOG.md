@@ -31,12 +31,22 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - A source build is loadable once `npm run link:platform` (part of
   `build:native`) stages it as the host's platform package in `node_modules/`.
 
+### Added
+
+- `package.json` records the `ggml-speech` build the prebuilds ship as
+  `qvac["ggml-speech"]`. The speech addons ship their ggml backends under the
+  same file names, so an app that bundles several of them needs releases that
+  record the same build.
+
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
   MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when
   `moss-transcribe-diarize-encoder.mlmodelc` sits next to the GGUF; without
   one nothing changes.
+- Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
+  same versions as the other speech addons, instead of taking at least those
+  versions.
 
 ## [0.8.0] - 2026-10-09
 
