@@ -157,7 +157,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
-      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers || '[]'), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
 
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
@@ -313,14 +313,14 @@ jobs:
 
       # After npm install, which would otherwise restore the released fabric.
       - name: Download fabric-prebuilds for overlay
-        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers), matrix.package) }}
+        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers || '[]'), matrix.package) }}
         uses: tetherto/qvac/.github/actions/download-artifact-retry@3cff82f19ea62235ddf2963124610bed239e49f8
         with:
           name: ${{ inputs.fabric-overlay-artifact }}
           path: ${{ runner.temp }}/fabric-prebuilds
 
       - name: Overlay PR @qvac/fabric prebuilds
-        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers), matrix.package) }}
+        if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers || '[]'), matrix.package) }}
         uses: ./.github/actions/overlay-local-fabric
         with:
           workdir: ${{ matrix.workdir }}

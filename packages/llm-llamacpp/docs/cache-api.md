@@ -101,35 +101,42 @@ message, so the next prompt holds only the answers. Without the split, a
 template that reads only `reasoning_content` (DeepSeek V4, Gemma 4) would print
 the reasoning as part of the answer.
 
-### Checkpoints on hybrid and recurrent models
+### Checkpoints on hybrid, recurrent and sliding-window models
 
 Pure-attention models restore a matching prefix by trimming the KV tail.
 Hybrid and recurrent models (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...)
-cannot, so the addon keeps process-local checkpoints per sequence. A cached
-request that commits keeps one: the state at the end of the chat history,
-just before the generation prompt (`<|im_start|>assistant\n<think>\n` on
-Qwen3.5). The prefill stops there for a moment to take it. The state from
-before the prompt was sent is also snapshotted, but only to roll the request
-back on a cancel or failure; it is dropped when the request commits.
+cannot, and sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`)
+cannot once the window in front of the prefix was evicted, so the addon keeps
+process-local checkpoints per sequence on all of them. A cached request that
+commits keeps one: the state at the end of the chat history, just before the
+generation prompt (`<|im_start|>assistant\n<think>\n` on Qwen3.5). The
+prefill stops there for a moment to take it. On hybrid and recurrent models
+the state from before the prompt was sent is also snapshotted, but only to
+roll the request back on a cancel or failure; it is dropped when the request
+commits. Sliding-window models roll back by trimming and take no such
+snapshot.
 
 Templates that drop a previous answer's reasoning change the prompt right
 after that answer's header, so the history before it is the longest part the
 next turn shares. The default single checkpoint serves an ordinary next turn
 and a regenerate; with `cache_checkpoints: 2` the one a turn older also serves
-an edit of the last user message. A diverging history restores the longest checkpoint
-that is still a prefix of the new prompt and re-prefills from there. See
-[When checkpoints are taken](./cache-lifecycle.md#when-checkpoints-are-taken)
-for the exact points in the pipeline. Checkpoints are pruned as soon as they stop
-matching and are lost when the process exits. With `parallel >= 2` the
+an edit of the last user message. A diverging history restores the longest
+checkpoint that is still a prefix of the new prompt and re-prefills from
+there. See [When checkpoints are taken](./cache-lifecycle.md#when-checkpoints-are-taken)
+for the exact points in the pipeline. Checkpoints are pruned as soon as they
+stop matching and are lost when the process exits. With `parallel >= 2` the
 scheduler keeps them per `cacheKey` between requests, since each request runs
 on a fresh slot.
 
 A checkpoint holds only the part of the memory a tail trim cannot rebuild,
 and a restore trims the rest back to its position: the recurrent state on
 recurrent and hybrid models, the sliding-window cells and compressor states
-on DeepSeek V4. Its size is therefore fixed by the model, not the context
-(about 20 MB on Qwen3.5-0.8B). Three load-config fields bound the footprint.
-None of them has any effect on pure-attention models.
+on DeepSeek V4, the window cells on sliding-window models. Its size therefore
+does not grow with the conversation: about 20 MB on Qwen3.5-0.8B. On a
+sliding-window model it is every window layer's K/V for the last `n_swa`
+positions, which on larger models reaches hundreds of MB per sequence. Three
+load-config fields bound the footprint. None of them has any effect on other
+pure-attention models.
 
 - `cache_checkpoints`: how many to keep per sequence (default 1, maximum
   1024). Each committed request adds one, at the end of its history, before
@@ -161,8 +168,11 @@ None of them has any effect on pure-attention models.
   before the count: the oldest checkpoints are dropped until the total fits.
   `0` (default) is unlimited. When set, the load fails with `InvalidArgument`
   if the budget cannot hold `cache_checkpoints` checkpoints of the largest size
-  the context allows. The addon measures that size on the loaded model, so
-  the error names the exact numbers and the count that would fit.
+  the context allows (on a sliding-window model, a full window). The
+  addon measures that size on the loaded model, so the error names the exact
+  numbers and the count that would fit. The checkpoint a running request has
+  just taken is held next to the kept ones until the request commits and is
+  not counted, so a sequence briefly holds one more than the budget allows.
 - `cache_checkpoint_storage`: `memory` (default) keeps checkpoints and the
   per-request rollback snapshot in host RAM, so a cached chat never touches
   the disk; each live snapshot costs its size in RAM (about 20 MB on
@@ -467,21 +477,24 @@ cancelled after prefill had completed. Such a cancel keeps the prompt and every
 streamed token, so the next full-history turn resumes from there. A cancel
 during prefill, a decode error and a context overflow roll the request back:
 everything the request added is dropped, and the on-disk file is left
-untouched. On pure-attention models the rollback lands on
-the longest prefix the cache shares with the request's prompt, which is what a
-retry reuses. On hybrid and recurrent models the state from before the prompt
-is restored from a snapshot, unless the request diverged and restored a
-checkpoint: that restore already replaced the KV cache past the checkpoint, so
-the rollback lands on the checkpoint, the state the KV cache, the recurrent
-state and the ledger still agree on. Prefill-only requests commit as soon as
-prefill completes.
+untouched. On pure-attention models the rollback lands on the longest prefix
+the cache shares with the request's prompt, which is what a retry reuses. On
+hybrid and recurrent models the state from before the prompt is restored from
+a snapshot, unless the request diverged and restored a checkpoint: that
+restore already replaced the KV cache past the checkpoint, so the rollback
+lands on the checkpoint, the state the KV cache, the recurrent state and the
+ledger still agree on. Sliding-window models roll back like pure-attention
+models, or to the checkpoint the request restored; a request that decoded more
+than the window past that point has evicted the cells in front of it, so the
+cache restarts cold. Prefill-only requests commit as soon as prefill
+completes.
 
 A chat on a pure-attention model with one `cacheKey` therefore never touches
 the disk until it is saved, switched away from or unloaded: the conversation
 lives in the KV cache, and no snapshot or checkpoint is ever written for these
-models. On hybrid and
-recurrent models the same holds by default; `cache_checkpoint_storage:
-'disk'` moves their snapshots and checkpoints to temp files.
+models. On hybrid, recurrent and sliding-window models the same holds by
+default; `cache_checkpoint_storage: 'disk'` moves their snapshots and
+checkpoints to temp files.
 
 The same rule applies to requests without `cacheKey`. Nothing reuses their
 state, so the only visible difference is `CacheTokens`, which reports the

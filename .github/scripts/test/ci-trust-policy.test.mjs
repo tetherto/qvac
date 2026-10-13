@@ -3004,7 +3004,7 @@ function eachCppTestsCacheStep(opts = {}) {
   const found = [];
   const patterns = [opts.match].flat();
   for (const path of workflowPaths()) {
-    if (!/\/cpp-tests?-/.test(path)) continue;
+    if (!/\/(reusable-)?cpp-tests?-/.test(path)) continue;
     if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue;
     const code = withoutComments(read(path));
     const steps = code.split(/\n {6}- /);

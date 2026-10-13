@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.assertAbsolute = assertAbsolute;
 exports.assertFilePaths = assertFilePaths;
 exports.toFilePaths = toFilePaths;
 /* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */

@@ -5,7 +5,8 @@
 //   1. Runs scripts/download-models.js to fetch model files (from the QVAC
 //      model registry) + fixture binaries (from the public release tarball).
 //   2. Copies model files (models/*.bin) into test/mobile/testAssets/.
-//   3. Copies fixtures (test/fixtures/manifest.json + *.bin) into the same.
+//   3. Copies fixtures (test/fixtures/manifest.json, *.bin and *.fit.gguf,
+//      plus the small embedder ones in addon/tests/fixtures) into the same.
 //   4. Regenerates test/mobile/integration.auto.cjs from
 //      test/integration/*.test.js so each integration file gets a
 //      mobile-friendly wrapper function.
@@ -25,6 +26,9 @@ const path = require('path')
 const PACKAGE_DIR = path.resolve(__dirname, '..')
 const MODELS_DIR = path.join(PACKAGE_DIR, 'models')
 const FIXTURES_DIR = path.join(PACKAGE_DIR, 'test', 'fixtures')
+const FIT_DESCRIPTION_SUFFIX = '.fit.gguf'
+const ADDON_FIXTURES_DIR = path.join(PACKAGE_DIR, 'addon', 'tests', 'fixtures')
+const ADDON_FIXTURES = ['bci-embedder-small.bin', 'bci-embedder-small.fit.gguf']
 const INTEGRATION_DIR = path.join(PACKAGE_DIR, 'test', 'integration')
 const MOBILE_DIR = path.join(PACKAGE_DIR, 'test', 'mobile')
 const TEST_ASSETS_DIR = path.join(MOBILE_DIR, 'testAssets')
@@ -74,6 +78,17 @@ function runDownloadScript () {
   }
 }
 
+function isFixture (name) {
+  return name.endsWith('.bin') || name.endsWith(FIT_DESCRIPTION_SUFFIX) || name === 'manifest.json'
+}
+
+function copyFixtures (sourceDir, files) {
+  for (const file of files) {
+    fs.copyFileSync(path.join(sourceDir, file), path.join(TEST_ASSETS_DIR, file))
+    console.log(`[generate-mobile-tests] copied fixture: ${file}`)
+  }
+}
+
 function copyAssets () {
   ensureDir(TEST_ASSETS_DIR)
 
@@ -93,19 +108,14 @@ function copyAssets () {
     throw new Error(`Fixtures directory not found: ${FIXTURES_DIR}. Run download-models.js first.`)
   }
 
-  const fixtureEntries = fs.readdirSync(FIXTURES_DIR)
-    .filter(name => name.endsWith('.bin') || name === 'manifest.json')
+  const fixtureEntries = fs.readdirSync(FIXTURES_DIR).filter(isFixture)
 
   if (fixtureEntries.length === 0) {
     throw new Error(`No fixture files found in ${FIXTURES_DIR}.`)
   }
 
-  for (const file of fixtureEntries) {
-    const src = path.join(FIXTURES_DIR, file)
-    const dest = path.join(TEST_ASSETS_DIR, file)
-    fs.copyFileSync(src, dest)
-    console.log(`[generate-mobile-tests] copied fixture: ${file}`)
-  }
+  copyFixtures(FIXTURES_DIR, fixtureEntries)
+  copyFixtures(ADDON_FIXTURES_DIR, ADDON_FIXTURES)
 }
 
 function getIntegrationFiles () {
