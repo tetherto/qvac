@@ -290,7 +290,7 @@ Lifecycle methods in call order:
 | Method | When | What it does |
 |--------|------|--------------|
 | `loadCache` | At admission | Loads KV cache from disk if `cacheKey` is set |
-| `adoptCheckpoints` | At admission, after `loadCache` | Takes the process-local checkpoints the previous request on the same `cacheKey` left in the scheduler (full-state models only) |
+| `adoptCheckpoints` | At admission, after `loadCache` | Takes the process-local checkpoints the previous request on the same `cacheKey` left in the scheduler (full-state and sliding-window models only) |
 | `preparePrefill` | At admission | Renders and tokenizes the full history, reconciles it with the resident ledger, and returns the plan: the tokens to feed, media barriers, and the end-of-history checkpoint stop |
 | `captureHistoryCheckpoint` | At the checkpoint stop | Snapshots the state at the end of the history; kept as a checkpoint if the request commits |
 | `onPrefillComplete` | When prefill finishes | Records `nPast` and adopts the prompt ledger; a prefill-only request commits here |
@@ -417,7 +417,7 @@ At admission the driver takes the state from the first source that has it: the p
 - A direct call to the model's single-prompt context (`LlamaModel::processPrompt()`, used by C++ callers and tests; `run()` on a parallel model always goes through the scheduler) first calls `evictParked(0)`, since that context is fixed to sequence 0.
 - `clear()` drops parked and RAM-tier state without writing it.
 
-On hybrid and recurrent models the checkpoints go with the parked state; a key with no resident or RAM-tier state keeps them in `checkpointStore_` for the next load of its file. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` whose state was evicted to its file therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
+On hybrid, recurrent and sliding-window models the checkpoints go with the parked state; a key with no resident or RAM-tier state keeps them in `checkpointStore_` for the next load of its file. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` whose state was evicted to its file therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
 
 ---
 

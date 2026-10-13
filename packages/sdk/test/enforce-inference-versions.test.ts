@@ -220,9 +220,9 @@ describe('Bare runtime compatibility', () => {
     const sdkPkg = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8')
     ) as Manifest
-    assert.equal(inferencePkg.engines?.['bare'], '>=1.30.3')
-    assert.equal(inferencePkg.dependencies?.['bare-runtime'], '^1.30.3')
-    assert.equal(sdkPkg.dependencies?.['bare-runtime'], '^1.30.3')
+    assert.equal(inferencePkg.engines?.['bare'], '>=1.32.0')
+    assert.equal(inferencePkg.dependencies?.['bare-runtime'], '^1.34.1')
+    assert.equal(sdkPkg.dependencies?.['bare-runtime'], '^1.34.1')
     assert.deepEqual(collectVersionFailures(inferencePkg, sdkPkg), [])
   })
 })
