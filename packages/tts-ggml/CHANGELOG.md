@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Update the shared `speech-cpp` pin to `2026-10-12` for CosyVoice3 CUDA LM flash
+  attention and decode graph reuse, plus Vulkan flow attention with f16 K/V.
+  Unsupported attention operations retain the regular-attention fallback.
+
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS, MOSS,
   MOSS-TTSD, MOSS-SoundEffect and MOSS-Speech run one stage each on a Core ML
   sidecar staged next to the GGUF (see the README's Core ML sidecars on
