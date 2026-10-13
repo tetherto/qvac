@@ -25,6 +25,15 @@
   `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
   `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
 
+### Changed
+
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off.
+
 ### Fixed
 
 - A multimodal model that failed to load, for example out of GPU memory,
