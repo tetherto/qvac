@@ -23,6 +23,10 @@ function cudaSpeechDependency() {
   return namedDependencies(vcpkgManifest.features[CUDA_FEATURE].dependencies, SPEECH_PORT)[0]
 }
 
+function overridesOf(port) {
+  return namedDependencies(vcpkgManifest.overrides ?? [], port)
+}
+
 test('the CUDA build remains opt-in', () => {
   assert.match(cmakeSource, new RegExp(`option\\(${CUDA_OPTION} "[^"]+" OFF\\)`))
   assert.match(
@@ -42,16 +46,19 @@ test('the CUDA feature targets supported desktop platforms', () => {
   assert.equal(dependency.platform, DESKTOP_PLATFORM)
 })
 
-test('the hybrid backend dependency floors stay in lockstep', () => {
+test('the hybrid backend dependencies take the versions the overrides pin', () => {
   const ggmlDependency = namedDependencies(vcpkgManifest.dependencies, GGML_PORT)[0]
-  const speechDependencies = namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT)
-  const speechFloor = speechDependencies[0]['version>=']
+  const pinnedDependencies = [
+    ggmlDependency,
+    ...namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT),
+    cudaSpeechDependency()
+  ]
 
   assert.equal(ggmlDependency['default-features'], false)
-  assert.ok(speechFloor)
-  assert.equal(cudaSpeechDependency()['version>='], speechFloor)
+  assert.equal(overridesOf(GGML_PORT).length, 1)
+  assert.equal(overridesOf(SPEECH_PORT).length, 1)
   assert.equal(
-    speechDependencies.every((dependency) => dependency['version>='] === speechFloor),
+    pinnedDependencies.every((dependency) => dependency['version>='] === undefined),
     true
   )
 })
