@@ -191,7 +191,7 @@ if(WIN32)
       "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:REF>"
       "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:ICF>")
 
-    # The package's overlay ports enable upstream LTO for ggml and
+    # The registry ports enable upstream LTO for ggml and
     # stable-diffusion. Optimize across those static-library boundaries at the
     # final lld-link step, while retaining the existing optimization level.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
