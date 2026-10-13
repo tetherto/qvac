@@ -733,10 +733,63 @@
           "description": "Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only."
         },
         "seed": {
-          "description": "Seeds the first operation; each following operation uses seed + its index.",
+          "description": "Seeds the first operation; each following operation uses seed + its index. Omit for a random one, reported in `stats.metadata.seed`.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
+        },
+        "vocalLanguage": {
+          "description": "Vocal language hint for the edit prompts; the engine defaults to 'unknown'.",
+          "type": "string",
+          "minLength": 1
+        },
+        "bpm": {
+          "description": "Beats per minute for the edit prompts; `0` or unset leaves it unset.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "keyscale": {
+          "description": "Key and scale for the edit prompts, e.g. 'C minor'.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timesignature": {
+          "description": "Time signature for the edit prompts, e.g. '4/4'.",
+          "type": "string",
+          "minLength": 1
+        },
+        "augmentCaptionWithMetadata": {
+          "description": "Append BPM, time signature and key to each operation's conditioning caption (default: false).",
+          "type": "boolean"
+        },
+        "dcwEnabled": {
+          "description": "Repaint only: apply the Haar DCW sampler correction (default: true).",
+          "type": "boolean"
+        },
+        "dcwScaler": {
+          "description": "Repaint only: DCW low-frequency correction strength (default: 0.05).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
+        },
+        "dcwHighScaler": {
+          "description": "Repaint only: DCW high-frequency correction strength (default: 0.02).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
+        },
+        "inferenceSteps": {
+          "description": "DiT steps for every operation, 0..1000; omit to keep the load-time `inferenceSteps`.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "shift": {
+          "description": "DiT timestep shift for every operation; omit to keep the load-time `shift`.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "sourceAudio": {
           "oneOf": [
@@ -770,6 +823,39 @@
             }
           ],
           "description": "Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1]."
+        },
+        "referenceAudio": {
+          "description": "Optional timbre reference for every operation: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestReferenceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestReferenceAudioFilePath"
+            }
+          ]
         },
         "type": {
           "type": "string",
@@ -859,6 +945,78 @@
             "backendId": {
               "type": "number"
             },
+            "emittedFrames": {
+              "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
+              "type": "number"
+            },
+            "arMs": {
+              "description": "MiniMax only: engine time in the autoregressive semantic stage, in ms.",
+              "type": "number"
+            },
+            "conditionMs": {
+              "description": "MiniMax only: engine time building the flow conditioning, in ms.",
+              "type": "number"
+            },
+            "flowMs": {
+              "description": "MiniMax only: engine time in the flow-matching DiT, in ms.",
+              "type": "number"
+            },
+            "vocoderMs": {
+              "description": "MiniMax only: engine time in the vocoder, in ms.",
+              "type": "number"
+            },
+            "metadata": {
+              "description": "What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string",
+                  "description": "The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
+                },
+                "lyrics": {
+                  "type": "string",
+                  "description": "The lyrics the run used (LM-written under Simple Mode)."
+                },
+                "bpm": {
+                  "type": "number",
+                  "description": "Beats per minute; 0 when unresolved."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "beatsPerBar": {
+                  "type": "number",
+                  "description": "Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved."
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
+                },
+                "codeFrames": {
+                  "type": "number",
+                  "description": "5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits)."
+                },
+                "qualityReport": {
+                  "description": "Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "caption",
+                "lyrics",
+                "bpm",
+                "keyscale",
+                "beatsPerBar",
+                "vocalLanguage",
+                "seed",
+                "codeFrames"
+              ],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseStatsMetadata"
+            },
             "lyricsScore": {
               "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
               "type": "number"
@@ -903,6 +1061,10 @@
                     "maximum": 2147483647
                   },
                   "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
                 }
               },
               "required": [
@@ -912,7 +1074,8 @@
                 "keyscale",
                 "timesignature",
                 "vocalLanguage",
-                "audioCodes"
+                "audioCodes",
+                "seed"
               ],
               "additionalProperties": false,
               "title": "AudioEditStreamResponseStatsUnderstand"
@@ -1037,6 +1200,7 @@
           "type": "string"
         },
         "seed": {
+          "description": "RNG seed; omit for a random one. An ACE-Step run reports the seed it used in `stats.metadata.seed`, so an unseeded take can be replayed.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -1046,9 +1210,10 @@
           "minLength": 1
         },
         "bpm": {
+          "description": "Beats per minute; `0` or unset lets the LM infer it. ACE-Step only.",
           "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "minimum": 0,
+          "maximum": 2147483647
         },
         "keyscale": {
           "type": "string",
@@ -1118,10 +1283,16 @@
           "maximum": 9007199254740991
         },
         "inferenceSteps": {
-          "description": "MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.",
+          "description": "Diffusion steps for this generation, 0..1000; omit to keep the load-time `inferenceSteps`. 0 is the engine default: MiniMax 20 flow steps, ACE-Step 8 on turbo DiTs and 50 on base/sft.",
           "type": "integer",
           "minimum": 0,
           "maximum": 1000
+        },
+        "shift": {
+          "description": "DiT timestep shift for this generation; omit to keep the load-time `shift`. 0 is the engine default: 3.0 on turbo DiTs, 1.0 on base/sft. ACE-Step only; rejected by MiniMax.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "cfgScale": {
           "description": "MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.",
@@ -1162,12 +1333,14 @@
         "dcwScaler": {
           "description": "DCW low-frequency correction strength (official default: 0.05).",
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "dcwHighScaler": {
           "description": "DCW high-frequency correction strength (official default: 0.02).",
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "taskType": {
           "description": "Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).",
@@ -1352,6 +1525,78 @@
             "backendId": {
               "type": "number"
             },
+            "emittedFrames": {
+              "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
+              "type": "number"
+            },
+            "arMs": {
+              "description": "MiniMax only: engine time in the autoregressive semantic stage, in ms.",
+              "type": "number"
+            },
+            "conditionMs": {
+              "description": "MiniMax only: engine time building the flow conditioning, in ms.",
+              "type": "number"
+            },
+            "flowMs": {
+              "description": "MiniMax only: engine time in the flow-matching DiT, in ms.",
+              "type": "number"
+            },
+            "vocoderMs": {
+              "description": "MiniMax only: engine time in the vocoder, in ms.",
+              "type": "number"
+            },
+            "metadata": {
+              "description": "What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string",
+                  "description": "The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
+                },
+                "lyrics": {
+                  "type": "string",
+                  "description": "The lyrics the run used (LM-written under Simple Mode)."
+                },
+                "bpm": {
+                  "type": "number",
+                  "description": "Beats per minute; 0 when unresolved."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "beatsPerBar": {
+                  "type": "number",
+                  "description": "Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved."
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
+                },
+                "codeFrames": {
+                  "type": "number",
+                  "description": "5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits)."
+                },
+                "qualityReport": {
+                  "description": "Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "caption",
+                "lyrics",
+                "bpm",
+                "keyscale",
+                "beatsPerBar",
+                "vocalLanguage",
+                "seed",
+                "codeFrames"
+              ],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseStatsMetadata"
+            },
             "lyricsScore": {
               "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
               "type": "number"
@@ -1396,6 +1641,10 @@
                     "maximum": 2147483647
                   },
                   "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
                 }
               },
               "required": [
@@ -1405,7 +1654,8 @@
                 "keyscale",
                 "timesignature",
                 "vocalLanguage",
-                "audioCodes"
+                "audioCodes",
+                "seed"
               ],
               "additionalProperties": false,
               "title": "AudioGenStreamResponseStatsUnderstand"
@@ -1656,6 +1906,10 @@
                 "maximum": 2147483647
               },
               "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+            },
+            "seed": {
+              "type": "number",
+              "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
             }
           },
           "required": [
@@ -1665,7 +1919,8 @@
             "keyscale",
             "timesignature",
             "vocalLanguage",
-            "audioCodes"
+            "audioCodes",
+            "seed"
           ],
           "additionalProperties": false,
           "title": "AudioUnderstandResponseUnderstand"
@@ -1696,6 +1951,78 @@
             },
             "backendId": {
               "type": "number"
+            },
+            "emittedFrames": {
+              "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
+              "type": "number"
+            },
+            "arMs": {
+              "description": "MiniMax only: engine time in the autoregressive semantic stage, in ms.",
+              "type": "number"
+            },
+            "conditionMs": {
+              "description": "MiniMax only: engine time building the flow conditioning, in ms.",
+              "type": "number"
+            },
+            "flowMs": {
+              "description": "MiniMax only: engine time in the flow-matching DiT, in ms.",
+              "type": "number"
+            },
+            "vocoderMs": {
+              "description": "MiniMax only: engine time in the vocoder, in ms.",
+              "type": "number"
+            },
+            "metadata": {
+              "description": "What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string",
+                  "description": "The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
+                },
+                "lyrics": {
+                  "type": "string",
+                  "description": "The lyrics the run used (LM-written under Simple Mode)."
+                },
+                "bpm": {
+                  "type": "number",
+                  "description": "Beats per minute; 0 when unresolved."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "beatsPerBar": {
+                  "type": "number",
+                  "description": "Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved."
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
+                },
+                "codeFrames": {
+                  "type": "number",
+                  "description": "5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits)."
+                },
+                "qualityReport": {
+                  "description": "Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "caption",
+                "lyrics",
+                "bpm",
+                "keyscale",
+                "beatsPerBar",
+                "vocalLanguage",
+                "seed",
+                "codeFrames"
+              ],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseStatsMetadata"
             },
             "lyricsScore": {
               "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
@@ -1741,6 +2068,10 @@
                     "maximum": 2147483647
                   },
                   "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
                 }
               },
               "required": [
@@ -1750,7 +2081,8 @@
                 "keyscale",
                 "timesignature",
                 "vocalLanguage",
-                "audioCodes"
+                "audioCodes",
+                "seed"
               ],
               "additionalProperties": false,
               "title": "AudioUnderstandResponseStatsUnderstand"
@@ -17283,15 +17615,16 @@
                           "minLength": 1
                         },
                         "inferenceSteps": {
-                          "description": "DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).",
+                          "description": "DiT sampling steps, 0..1000; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / base and sft 50). A generation or edit can override it per run.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 1000
                         },
                         "shift": {
-                          "description": "Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
+                          "description": "Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / base and sft 1.0). A generation or edit can override it per run.",
                           "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "maximum": 3.4028234663852886e38
                         },
                         "nGpuLayers": {
                           "description": "ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
@@ -17706,6 +18039,12 @@
                           "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
                           "type": "string",
                           "minLength": 1
+                        },
+                        "device": {
+                          "description": "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`.",
+                          "type": "string",
+                          "enum": ["cpu", "gpu", "auto"],
+                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice"
                         },
                         "inferenceSteps": {
                           "description": "MiniMax flow sampling steps; `0` uses the engine default (20).",
