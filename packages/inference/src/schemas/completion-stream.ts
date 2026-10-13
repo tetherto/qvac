@@ -71,12 +71,6 @@ export const generationParamsSchema = z
       .describe(
         "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards."
       ),
-    remove_thinking_from_context: z
-      .boolean()
-      .optional()
-      .describe(
-        'When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.'
-      ),
     tool_choice: z
       .string()
       .min(1)
@@ -94,14 +88,6 @@ export const generationParamsSchema = z
   .strict()
 
 const TOOL_CHOICE_MODES = new Set(['auto', 'none', 'required'])
-
-/**
- * Whether a `tool_choice` demands a tool call (`required` or a named tool),
- * as opposed to `auto` / `none`, which only shape how the model may call one.
- */
-export function toolChoiceDemandsCall(toolChoice: string | undefined): boolean {
-  return toolChoice !== undefined && toolChoice !== 'auto' && toolChoice !== 'none'
-}
 
 type ToolChoiceTool = { type: 'function'; name: string; deferLoading?: boolean | undefined }
 
@@ -203,18 +189,75 @@ export const responseFormatSchema = z.discriminatedUnion('type', [
     .strict()
 ])
 
+const historyToolCallSchema = z.object({
+  id: z.string().optional().describe('Call id, echoed by the `tool` message that answers it.'),
+  name: z.string().min(1).describe('Name of the tool that was called.'),
+  arguments: z.record(z.string(), z.unknown()).describe('Arguments the tool was called with.')
+})
+
+export const historyMessageSchema = z
+  .object({
+    role: z
+      .string()
+      .describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
+    content: z
+      .string()
+      .nullish()
+      .describe(
+        'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.'
+      ),
+    attachments: z
+      .array(attachmentSchema)
+      .optional()
+      .describe('Optional file attachments for multimodal models.'),
+    toolCalls: z
+      .array(historyToolCallSchema)
+      .optional()
+      .describe(
+        "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty."
+      ),
+    toolCallId: z
+      .string()
+      .optional()
+      .describe('On a `tool` turn: the id of the call this result answers.'),
+    toolName: z
+      .string()
+      .optional()
+      .describe('On a `tool` turn: the name of the tool that produced the result.')
+  })
+  .superRefine((message, ctx) => {
+    const callsOnly = message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
+    if ((message.content === null || message.content === undefined) && !callsOnly) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`content` is required unless an assistant message carries `toolCalls`.',
+        path: ['content']
+      })
+    }
+    if (message.toolCalls !== undefined && message.role !== 'assistant') {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`toolCalls` is only valid on an assistant message.',
+        path: ['toolCalls']
+      })
+    }
+    for (const key of ['toolCallId', 'toolName'] as const) {
+      if (message[key] !== undefined && message.role !== 'tool') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `\`${key}\` is only valid on a tool message.`,
+          path: [key]
+        })
+      }
+    }
+  })
+  .transform((message) => ({ ...message, content: message.content ?? '' }))
+
+export type HistoryMessage = z.infer<typeof historyMessageSchema>
+
 export const completionParamsSchema = z.object({
   history: z
-    .array(
-      z.object({
-        role: z.string().describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
-        content: z.string().describe('Message content.'),
-        attachments: z
-          .array(attachmentSchema)
-          .optional()
-          .describe('Optional file attachments for multimodal models.')
-      })
-    )
+    .array(historyMessageSchema)
     .describe('Array of conversation messages sent to the model.'),
   modelId: z.string().describe('The identifier of the model to use for completion.'),
   kvCache: kvCacheSchema

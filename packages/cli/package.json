@@ -18,7 +18,7 @@
     "NOTICE"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": "^22.21.0 || >=24.9.0"
   },
   "keywords": [
     "tether",
@@ -66,12 +66,14 @@
     "fastify-plugin": "^6.0.0",
     "fastify-type-provider-zod": "^5.0.0",
     "js-yaml": "^4.1.0",
+    "semver": "^7.8.0",
     "tsx": "^4.21.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.3",
+    "@types/semver": "^7.7.1",
     "lunte": "^1.8.2",
     "openai": "^6.48.0",
     "prettier": "^3.9.4",

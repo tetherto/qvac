@@ -113,6 +113,13 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: ['kv-cache-warm-tool-choice-required'],
+    skip: {
+      reason: 'The forced tool call reasons past the Device Farm test timeout',
+      platforms: ['mobile']
+    }
+  },
+  {
     match: /^tools-(?!simple-function$|no-function-match$)/,
     skip: { reason: 'Tools test disabled on mobile', platforms: ['mobile'] }
   },

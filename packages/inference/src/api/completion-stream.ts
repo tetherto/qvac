@@ -217,7 +217,7 @@ export function completion(params: CompletionParams): CompletionRun {
       const request: CompletionStreamRequest = {
         type: 'completionStream',
         modelId: params.modelId,
-        history: params.history,
+        history: params.history.map((message) => ({ ...message, content: message.content ?? '' })),
         kvCache: params.kvCache,
         tools: allTools.length > 0 ? allTools : undefined,
         stream: params.stream ?? true,
