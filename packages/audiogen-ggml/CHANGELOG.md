@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
+
 - Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
   same versions as the other speech addons. `speech-cpp` moves from
   `2026-10-07#2`; its changes are in engines this package does not build, so

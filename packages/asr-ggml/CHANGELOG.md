@@ -23,6 +23,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
+
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
   MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when
   `moss-transcribe-diarize-encoder.mlmodelc` sits next to the GGUF; without
