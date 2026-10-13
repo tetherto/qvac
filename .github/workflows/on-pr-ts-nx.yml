@@ -119,6 +119,13 @@ jobs:
     with:
       workdir: packages/translation-nmtcpp
 
+  turbovec-ggml-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'turbovec-ggml')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/turbovec-ggml
+
   vla-pr-head-ts-checks:
     needs: matrix
     if: contains(fromJSON(needs.matrix.outputs.tspackages), 'vla-ggml')
