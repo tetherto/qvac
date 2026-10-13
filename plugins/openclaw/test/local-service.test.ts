@@ -313,7 +313,9 @@ test('a CLI without --ready-fd fails closed with an upgrade hint', { skip }, asy
     await withKeyFile(async (apiKeyFile) => {
       await assert.rejects(
         ensureQvacServe(serviceOptions({ qvacCommand: fake.command, apiKeyFile })),
-        new RegExp(`Install @qvac/cli ${MIN_CLI_VERSION_READY_FD.replace(/\./g, '\\.')}`)
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.includes(`Install @qvac/cli ${MIN_CLI_VERSION_READY_FD}`)
       )
     })
     assert.ok((JSON.parse(readFileSync(argvFile, 'utf8')) as string[]).includes('--ready-fd'))
