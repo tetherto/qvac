@@ -192,3 +192,98 @@ test('disabled retention settles before throwing terminal listeners', async (t) 
     t.is(jobs.active, null, 'the settled job was cleared despite the listener')
   }
 })
+
+test('default retention supports independent live and lagging iterators', async (t) => {
+  const response = new QvacResponse({ cancelHandler })
+  const first = response.iterate()
+  const second = response.iterate()
+  const waiting = first.next()
+  response.updateOutput('first')
+  t.alike(await waiting, { value: 'first', done: false }, 'the live iterator receives output')
+  response.updateOutput('second')
+  response.ended()
+
+  t.alike(await second.next(), { value: 'first', done: false }, 'a lagging iterator replays output')
+  t.alike(await first.next(), { value: 'second', done: false }, 'the live iterator drains history')
+  t.alike(
+    await second.next(),
+    { value: 'second', done: false },
+    'iterators have independent positions'
+  )
+  t.ok((await first.next()).done, 'the live iterator completes')
+  t.ok((await second.next()).done, 'the lagging iterator completes')
+  t.alike(await response.await(), ['first', 'second'], 'completion still returns all output')
+  t.alike(
+    ['output', 'end', 'error'].map((event) => response.listenerCount(event)),
+    [0, 0, 0],
+    'completed iterators remove their listeners'
+  )
+})
+
+test('disabled retention delivers ordered events without replay or copies', async (t) => {
+  const response = new QvacResponse({ cancelHandler, retainOutput: false })
+  response.updateOutput('before subscription')
+  const received = []
+  const other = []
+  let latestDuringUpdate = 'unset'
+  response.onUpdate((chunk) => {
+    received.push(chunk)
+    latestDuringUpdate = response.getLatest()
+  })
+  response.onUpdate((chunk) => other.push(chunk))
+  const chunks = ['text', { outputArray: new Uint8Array(8) }, { image: new Uint8Array(16) }]
+  for (const chunk of chunks) response.updateOutput(chunk)
+  response.ended()
+
+  t.alike(received, chunks, 'only events after subscription are delivered in order')
+  t.alike(other, chunks, 'multiple listeners receive all subscribed events')
+  t.is(received[1], chunks[1], 'media output is passed through without copying')
+  t.is(other[2], chunks[2], 'listeners receive the same output object')
+  t.is(latestDuringUpdate, null, 'callbacks cannot read saved history')
+  t.alike(await response.await(), [], 'completion does not replay earlier chunks')
+})
+
+test('disabled retention preserves output listener exceptions and settlement', async (t) => {
+  const jobs = createJobHandler({ cancel: cancelHandler })
+  const response = jobs.start({ retainOutput: false })
+  const error = new Error('output listener failed')
+  response.once('output', () => {
+    throw error
+  })
+
+  t.exception(() => jobs.output('first'), error, 'listener exceptions still reach the producer')
+  let received
+  response.onUpdate((chunk) => {
+    received = chunk
+  })
+  jobs.output('second')
+  jobs.end()
+  t.is(received, 'second', 'later output remains usable')
+  t.alike(await response.await(), [], 'throwing listeners do not create retained output')
+  t.is(jobs.active, null, 'the job can still settle normally')
+})
+
+test('retention settings remain isolated across repeated completed and failed jobs', async (t) => {
+  const jobs = createJobHandler({ cancel: cancelHandler })
+  let updates = 0
+  let retained = 0
+  for (let run = 0; run < 100; run++) {
+    const retainOutput = run % 2 === 0
+    const response = jobs.start({ retainOutput })
+    response.onUpdate(() => updates++)
+    for (let chunk = 0; chunk < 8; chunk++) jobs.output(new Uint8Array(1024))
+    const failure = new Error('job failed')
+    if (run % 3 === 0) jobs.fail(failure)
+    else jobs.end()
+    const result = await response.await().catch((error) => error)
+    if (run % 3 === 0 && result !== failure) t.fail('failure identity changed')
+    if (jobs.active !== null) t.fail('settled job remained active')
+    if (response.output.length !== (retainOutput ? 8 : 0)) {
+      t.fail('retention mode leaked between jobs')
+    }
+    retained += response.output.length
+  }
+  t.is(updates, 800, 'all jobs delivered every event')
+  t.is(retained, 400, 'only retaining jobs saved their output')
+  t.is(jobs.active, null, 'no job remains active')
+})
