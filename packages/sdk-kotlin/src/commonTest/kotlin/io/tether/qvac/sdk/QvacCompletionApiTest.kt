@@ -193,7 +193,7 @@ class QvacCompletionApiTest {
             modelId = "model",
             history = listOf(QvacMessage.user("weather?")),
             tools = listOf(
-                QvacTool("weather", "Get weather", handler = { JsonPrimitive("sunny") }),
+                QvacTool("weather", "Get weather") { JsonPrimitive("sunny") },
             ),
         ).final.await()
 

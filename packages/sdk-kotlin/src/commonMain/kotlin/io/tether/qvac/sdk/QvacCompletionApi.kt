@@ -129,8 +129,8 @@ data class QvacTool(
     val description: String,
     val parameters: Map<String, QvacToolParameter> = emptyMap(),
     val required: Set<String> = emptySet(),
-    val handler: QvacToolHandler? = null,
     val parametersSchema: JsonObject? = null,
+    val handler: QvacToolHandler? = null,
 ) {
     init {
         require(parametersSchema == null || (parameters.isEmpty() && required.isEmpty())) {
