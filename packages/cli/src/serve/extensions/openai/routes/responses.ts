@@ -16,11 +16,13 @@ import {
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
   toSdkResponsesArgs,
-  UnsupportedToolTypeError
+  UnsupportedToolTypeError,
+  type ResponsesHistoryItem
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   InvalidResponseFormatError,
   InvalidToolChoiceError,
+  nameToolResults,
   type GenerationParams,
   type ResponseFormat
 } from '@/serve/extensions/openai/schemas/common'
@@ -39,7 +41,7 @@ const VOLATILE_HEADER = 'X-QVAC-Stub'
 interface HandlerParams {
   sdkModelId: string
   modelAlias: string
-  history: Array<{ role: string; content: string }>
+  history: ResponsesHistoryItem[]
   tools: Tool[] | undefined
   generationParams: GenerationParams | undefined
   responseFormat: ResponseFormat | undefined
@@ -169,7 +171,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           )
         }
         const prefix = historyPrefixFromStoredResponse(prev, (id) => openai.responsesStore.get(id))
-        history = [...prefix, ...history]
+        // A result in this request can answer a call from the stored turns.
+        history = nameToolResults([...prefix, ...history])
       }
 
       const params: HandlerParams = {
