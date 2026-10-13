@@ -105,7 +105,7 @@ on:
         type: boolean
         default: true
     secrets:
-      # MQTT_* and NPM_TOKEN are typically provided via the release environment
+      # MQTT_* secrets are typically provided via the release environment
       # (see the `environment: release` job). They are declared required: false
       # here so `secrets: inherit` from a caller with no repo-level values
       # does not fail at the workflow_call boundary; the jobs that consume
@@ -121,8 +121,6 @@ on:
       MQTT_CLIENT_CERT:
         required: false
       MQTT_CLIENT_KEY:
-        required: false
-      NPM_TOKEN:
         required: false
 
 permissions:
@@ -194,7 +192,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     environment: release
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Not secrets: GitHub masks a short secret such as a port inside other
       # values and drops any job output that contains it.

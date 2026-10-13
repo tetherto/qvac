@@ -44,7 +44,8 @@ export const CHAT_UNSUPPORTED_PARAMS = [
   'top_logprobs',
   'frequency_penalty',
   'presence_penalty',
-  'stop'
+  'stop',
+  'remove_thinking_from_context'
 ] as const
 
 export interface OpenAIMessage {

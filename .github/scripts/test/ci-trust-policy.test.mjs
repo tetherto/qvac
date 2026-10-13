@@ -2863,7 +2863,13 @@ test("asr-ggml functional mobile workflow opts into dual flagship per engine sha
 // tag via create-release-tag.yml, keeping the Releases page SDK-focused. Adding
 // a caller here is a deliberate policy decision, not a drive-by edit.
 const GITHUB_RELEASE_REUSABLE = "./.github/workflows/create-github-release.yml";
-const ALLOWED_RELEASE_CALLERS = [".github/workflows/publish-sdk.yml"];
+// release-train.yml cuts the same sdk-v<version> release. It takes the package
+// from .github/release-trains.json, so release-train.test.mjs holds that
+// catalog to @qvac/sdk.
+const ALLOWED_RELEASE_CALLERS = [
+  ".github/workflows/publish-sdk.yml",
+  ".github/workflows/release-train.yml",
+];
 
 test("release policy: only the SDK workflow calls create-github-release.yml", () => {
   const callers = [
@@ -2899,6 +2905,26 @@ test("release policy: no workflow cuts a GitHub Release outside the SDK surface"
     }
     if (/gh release create\b/.test(code)) {
       offenders.push(`${path}: calls 'gh release create'`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+// Unfiltered, nx's publish also publishes every workspace package a train
+// depends on, through `^nx-release-publish`. .github/scripts/release-train.mjs
+// is the one caller, and it names the train's packages.
+test("release policy: no workflow or action calls nx's publish directly", () => {
+  const actionFiles = filesUnder(join(root, ".github/actions"))
+    .filter((path) => /\/action\.ya?ml$/.test(path))
+    .map((path) => path.slice(root.length + 1));
+  const offenders = [];
+  for (const path of [...workflowPaths(), ...actionFiles]) {
+    const code = withoutComments(read(path));
+    if (/nx-release-publish/.test(code)) {
+      offenders.push(`${path}: runs the nx-release-publish target`);
+    }
+    if (/\bnx\s+release\b(?!\s+(?:version|plan|changelog)\b)/.test(code)) {
+      offenders.push(`${path}: calls 'nx release' other than version, plan or changelog`);
     }
   }
   assert.deepEqual(offenders, []);

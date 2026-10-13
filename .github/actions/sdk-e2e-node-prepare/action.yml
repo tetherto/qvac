@@ -6,8 +6,9 @@ description: >-
   test-node-sdk.yml and test-snap-sdk.yml; anything one family alone needs
   stays in its own workflow.
 
-# Reads NPM_TOKEN and GITHUB_TOKEN from the job environment, as the calling
-# jobs already export them for every step.
+# Reads GITHUB_TOKEN from the job environment, as the calling jobs already
+# export it for every step. Every @qvac package installed here is public on
+# npm, so no npm token is needed.
 
 inputs:
   project-directory:
@@ -72,14 +73,12 @@ runs:
         const fs = require('fs');
         const path = require('path');
 
-        if (!process.env.NPM_TOKEN) { console.log('❌ NPM_TOKEN is empty'); process.exit(1); }
         if (!process.env.GITHUB_TOKEN) { console.log('❌ GITHUB_TOKEN is empty'); process.exit(1); }
 
         const lines = [
           'registry=https://registry.npmjs.org/',
           '@qvac:registry=https://registry.npmjs.org/',
           '@tetherto:registry=https://npm.pkg.github.com/',
-          `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
           `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
         ];
         const npmrc = lines.join('\n');
