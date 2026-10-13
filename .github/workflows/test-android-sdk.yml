@@ -113,15 +113,13 @@ on:
         type: string
         default: ""
     secrets:
-      # MQTT_* and NPM_TOKEN are typically provided via the release environment
+      # MQTT_* secrets are typically provided via the release environment
       # (see jobs with `environment: release`). They are declared required: false
       # here so `secrets: inherit` from a caller with no repo-level values does
       # not fail at the workflow_call boundary; the jobs that consume them have
       # environment access. AWS auth uses OIDC, so AWS_ACCESS_KEY_ID /
       # AWS_SECRET_ACCESS_KEY are not declared.
       # AWS_OIDC_ROLE_ARN remains required:true because it is repo-level.
-      NPM_TOKEN:
-        required: false
       MQTT_PROTOCOL:
         required: false
       MQTT_HOST:
@@ -178,7 +176,6 @@ jobs:
     outputs:
       runId: ${{ steps.runid.outputs.runId }}
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
@@ -296,14 +293,12 @@ jobs:
           const fs = require('fs');
           const path = require('path');
 
-          if (!process.env.NPM_TOKEN) { console.log('NPM_TOKEN is empty'); process.exit(1); }
           if (!process.env.GITHUB_TOKEN) { console.log('GITHUB_TOKEN is empty'); process.exit(1); }
 
           const lines = [
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
             `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
@@ -660,7 +655,6 @@ jobs:
     environment: release
     timeout-minutes: 120
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
@@ -699,7 +693,6 @@ jobs:
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
             `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
