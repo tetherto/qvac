@@ -13,10 +13,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { loadApiKey } from '../src/local-service.ts'
+import { loadApiKey, stopQvacServe } from '../src/local-service.ts'
 import type { OpenClawProvider, QvacProviderAuthResult } from '../src/provider-config.ts'
+import { fakeQvacSkip, makeFakeQvac, startSquatter } from './helpers/fake-qvac.ts'
 import {
   DEFAULT_OPTIONS,
+  UNVERIFIED_BASE_URL,
   applyQvacSetupConfig,
   createOpenClawModels,
   createOpenClawProvider,
@@ -44,6 +46,9 @@ interface RegisteredProvider {
   readonly label: string
   readonly docsPath: string
   readonly auth: RegisteredAuthMethod[]
+  prepareRuntimeAuth(context: {
+    readonly config?: unknown
+  }): Promise<{ readonly apiKey: string; readonly baseUrl: string }>
   resolveSyntheticAuth?(context: {
     readonly provider: string
     readonly providerConfig?: unknown
@@ -86,8 +91,7 @@ test('resolveOptions returns OpenClaw-safe defaults', () => {
   assert.equal(options.ctxSize, 32768)
   assert.equal(options.tools, true)
   assert.equal(options.qvacCommand, 'qvac')
-  assert.equal(options.serviceRuntime, process.execPath)
-  assert.match(options.serviceEntrypoint, /local-service\.js$/)
+  assert.equal(options.port, 0, 'the serve picks its own port by default')
 })
 
 test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () => {
@@ -118,23 +122,24 @@ test('createOpenClawModels advertises the configured context window', () => {
   assert.equal(model.contextWindow, 65536)
 })
 
-test('createOpenClawProvider builds a localService-backed OpenAI-compatible provider', () => {
+test('createOpenClawProvider declares no local service and no reachable endpoint', () => {
   const provider = createOpenClawProvider(
     resolveOptions({
       port: 11500,
       apiKey: TEST_KEY,
       apiKeyFile: TEST_KEY_FILE,
       qvacCommand: '/usr/local/bin/qvac',
-      serviceRuntime: '/usr/local/bin/node',
-      serviceEntrypoint: '/tmp/qvac-openclaw-local-service.js',
       cwd: '/tmp/project',
       ctxSize: 65536,
-      readyTimeoutMs: 123000,
-      idleStopMs: 45000
+      readyTimeoutMs: 123000
     })
   )
 
-  assert.equal(provider.baseUrl, 'http://127.0.0.1:11500/v1')
+  // OpenClaw's localService probes its health URL with the key before it
+  // spawns anything, so the provider must not declare one.
+  assert.equal(Object.hasOwn(provider, 'localService'), false)
+  assert.equal(provider.baseUrl, UNVERIFIED_BASE_URL)
+  assert.equal(new URL(provider.baseUrl).hostname.endsWith('.invalid'), true)
   assert.deepEqual(provider.apiKey, {
     source: 'file',
     provider: 'qvac_key_file',
@@ -142,32 +147,6 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
   })
   assert.equal(provider.api, 'openai-completions')
   assert.equal(provider.timeoutSeconds, 300)
-  assert.deepEqual(provider.localService, {
-    command: '/usr/local/bin/node',
-    args: [
-      '/tmp/qvac-openclaw-local-service.js',
-      '--qvac-command',
-      '/usr/local/bin/qvac',
-      '--api-key-file',
-      TEST_KEY_FILE,
-      '--model',
-      'qwen3.5-9b',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      '11500',
-      '--ctx-size',
-      '65536',
-      '--reasoning-budget',
-      '-1',
-      '--tools',
-      'true'
-    ],
-    cwd: '/tmp/project',
-    healthUrl: 'http://127.0.0.1:11500/v1/models',
-    readyTimeoutMs: 123000,
-    idleStopMs: 45000
-  })
   assert.equal(provider.models.length, openClawModels.length)
   assert.equal(provider.models.find((entry) => entry.id === 'qwen3.5-9b')?.contextWindow, 65536)
 })
@@ -333,13 +312,6 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
   const qvacSecretProvider = result.configPatch.secrets.providers[qvacProvider.apiKey.provider]
   assert.equal(qvacSecretProvider?.source, 'file')
   if (qvacSecretProvider?.source !== 'file') assert.fail('QVAC file secret provider is missing')
-  assert.deepEqual(
-    qvacProvider.localService.args.slice(
-      qvacProvider.localService.args.indexOf('--api-key-file'),
-      qvacProvider.localService.args.indexOf('--api-key-file') + 2
-    ),
-    ['--api-key-file', keyFile]
-  )
   assert.equal(qvacSecretProvider.path, keyFile)
   assert.equal(loadApiKey(qvacSecretProvider.path), generatedKey)
   assert.equal(JSON.stringify(qvacProvider).includes(generatedKey), false)
@@ -497,21 +469,8 @@ test('registerQvacProvider reads OpenClaw pluginConfig when present', async () =
 
   const catalog = await registered[0]?.catalog.run()
   assert.ok(catalog)
-  assert.equal(
-    (catalog.provider as ReturnType<typeof createOpenClawProvider>).baseUrl,
-    'http://127.0.0.1:11500/v1'
-  )
-  const args = (catalog.provider as ReturnType<typeof createOpenClawProvider>).localService.args
-  assert.deepEqual(args.slice(args.indexOf('--api-key-file'), args.indexOf('--api-key-file') + 2), [
-    '--api-key-file',
-    keyFile
-  ])
-  assert.equal(args.includes(TEST_KEY), false)
+  assert.equal(JSON.stringify(catalog.provider).includes(TEST_KEY), false)
   assert.equal(existsSync(keyFile), false)
-  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), [
-    '--model',
-    'qwen3.5-4b'
-  ])
   const setup = await registered[0]?.auth[0]?.run({ config: {} })
   assert.ok(setup)
   assert.equal(readFileSync(keyFile, 'utf8'), TEST_KEY)
@@ -536,51 +495,15 @@ test('registerQvacProvider derives the key path from the OpenClaw runtime state'
     }
   })
 
-  const catalog = await registered[0]?.catalog.run()
-  assert.ok(catalog)
-  const provider = catalog.provider as OpenClawProvider
-  const keyFileIndex = provider.localService.args.indexOf('--api-key-file')
-  assert.equal(provider.localService.args[keyFileIndex + 1], expectedKeyFile)
-  assert.equal(existsSync(expectedKeyFile), false)
+  const setup = await registered[0]?.auth[0]?.run({ config: {} })
+  assert.ok(setup)
+  assert.deepEqual(setup.configPatch.secrets.providers['qvac_key_file'], {
+    source: 'file',
+    path: expectedKeyFile,
+    mode: 'singleValue'
+  })
+  assert.equal(existsSync(expectedKeyFile), true)
   rmSync(stateDir, { recursive: true })
-})
-
-test('registerQvacProvider points localService at the install root, not the loaded copy', async () => {
-  const registered: RegisteredProvider[] = []
-  const rootDir = join(
-    tmpdir(),
-    'openclaw-npm-projects',
-    'node_modules',
-    '@qvac',
-    'openclaw-plugin'
-  )
-
-  registerQvacProvider({
-    rootDir,
-    registerProvider(provider: RegisteredProvider) {
-      registered.push(provider)
-    }
-  })
-
-  const catalog = await registered[0]?.catalog.run()
-  assert.ok(catalog)
-  const provider = catalog.provider as OpenClawProvider
-  assert.equal(provider.localService.args[0], join(rootDir, 'dist', 'local-service.js'))
-})
-
-test('registerQvacProvider falls back to the loaded module path without rootDir', async () => {
-  const registered: RegisteredProvider[] = []
-
-  registerQvacProvider({
-    registerProvider(provider: RegisteredProvider) {
-      registered.push(provider)
-    }
-  })
-
-  const catalog = await registered[0]?.catalog.run()
-  assert.ok(catalog)
-  const provider = catalog.provider as OpenClawProvider
-  assert.equal(provider.localService.args[0], DEFAULT_OPTIONS.serviceEntrypoint)
 })
 
 test('registerQvacProvider registers static model catalog rows for OpenClaw model listing', () => {
@@ -631,3 +554,75 @@ test('registerQvacProvider registers static model catalog rows for OpenClaw mode
     { kind: 'text', provider: 'qvac', model: 'gemma4-31b', label: 'Gemma4 31B', source: 'static' }
   ])
 })
+
+function registerForRuntimeAuth(rawOptions: Record<string, unknown>): RegisteredProvider {
+  const registered: RegisteredProvider[] = []
+  registerQvacProvider(
+    {
+      registerProvider(provider: RegisteredProvider) {
+        registered.push(provider)
+      }
+    },
+    rawOptions
+  )
+  const provider = registered[0]
+  assert.ok(provider)
+  return provider
+}
+
+test('prepareRuntimeAuth refuses an entry that still declares localService', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-state-test-'))
+  const keyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
+  try {
+    const provider = registerForRuntimeAuth({ apiKeyFile: keyFile })
+    const legacy = {
+      models: {
+        providers: {
+          qvac: {
+            baseUrl: 'http://127.0.0.1:11434/v1',
+            localService: { command: 'node', healthUrl: 'http://127.0.0.1:11434/v1/models' }
+          }
+        }
+      }
+    }
+    await assert.rejects(
+      provider.prepareRuntimeAuth({ config: legacy }),
+      /older plugin version[\s\S]*openclaw onboard --auth-choice provider-plugin:qvac/
+    )
+    assert.equal(existsSync(keyFile), false, 'nothing is started or written for a legacy entry')
+  } finally {
+    rmSync(stateDir, { recursive: true, force: true })
+  }
+})
+
+test(
+  'prepareRuntimeAuth sends the key only to the serve it started, never to a squatter',
+  { skip: fakeQvacSkip },
+  async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-state-test-'))
+    const keyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
+    const fake = makeFakeQvac()
+    // The port the plugin used to pin; some other account may hold it.
+    const squatter = await startSquatter(11434).catch(() => startSquatter())
+    try {
+      const provider = registerForRuntimeAuth({ apiKeyFile: keyFile, qvacCommand: fake.command })
+      const config = applyQvacSetupConfig({}, { apiKeyFile: keyFile })
+      const auth = await provider.prepareRuntimeAuth({ config })
+
+      assert.equal(auth.apiKey, loadApiKey(keyFile))
+      assert.notEqual(auth.baseUrl, `http://127.0.0.1:${squatter.port}/v1`)
+      const res = await fetch(`${auth.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${auth.apiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'qwen3.5-9b', messages: [] })
+      })
+      assert.equal(res.status, 200)
+      assert.deepEqual(squatter.requests, [])
+    } finally {
+      stopQvacServe()
+      await squatter.close()
+      fake.cleanup()
+      rmSync(stateDir, { recursive: true, force: true })
+    }
+  }
+)
