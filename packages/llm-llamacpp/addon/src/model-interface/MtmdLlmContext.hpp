@@ -158,6 +158,9 @@ public:
   releaseCheckpoints() override {
     return std::exchange(cacheCheckpoints_, {});
   }
+  void appendCheckpointsToCacheFile(const std::string& path) const override;
+  void adoptCheckpointsFromCacheFile(
+      const std::string& path, uint64_t offset) override;
   [[nodiscard]] std::optional<
       qvac_lib_inference_addon_llama::utils::ReasoningTags>
   historyReasoningTags() const override {
@@ -287,7 +290,8 @@ public:
 
   /// Disk prompt-cache for a multimodal batch slot, embedding the versioned
   /// token/media ledger in the sequence-state file.
-  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
