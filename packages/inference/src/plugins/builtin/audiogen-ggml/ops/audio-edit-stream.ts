@@ -7,7 +7,7 @@ import {
   type AudioEditStreamResponse,
   type AudioGenRepaintMode
 } from '@/schemas/audio-gen'
-import { resolveAudioGenPcm } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
+import { resolveAudioGenInputs } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { streamAudioGenRun } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-run'
 
 // The wire vocabulary is the addon's own enum values; the map keeps the
@@ -24,13 +24,16 @@ export function audioEditStream(
   return streamAudioGenRun({
     type: 'audioEditStream',
     request,
-    async start(model, ctx) {
-      // The source is decoded before the run is admitted so the model slot is
-      // never held by a request that fails on input decoding. Editing is the
-      // one path where the addon demands normalized samples, so the resolver
-      // settles `[-1, 1]` here for raw and decoded input alike.
-      const pcm = await resolveAudioGenPcm(request.sourceAudio, 'sourceAudio', {
-        requireNormalized: true
+    async start(model, ctx, logger) {
+      // The source and reference are decoded before the run is admitted so
+      // the model slot is never held by a request that fails on input
+      // decoding. Editing is the one path where the addon demands normalized
+      // source samples, so the resolver settles `[-1, 1]` here for raw and
+      // decoded input alike; the reference only has to be finite.
+      const { sourceAudio, referenceAudio } = await resolveAudioGenInputs(request, {
+        modelId: request.modelId,
+        logger,
+        normalizedSource: true
       })
       if (ctx.signal.aborted) return undefined
 
@@ -38,12 +41,27 @@ export function audioEditStream(
       // turbo DiT, repaint ranges inside the source, ...); those throws
       // surface as the request's error before any native work starts.
       const session = model.edit({
-        pcm,
+        pcm: sourceAudio,
         sampleRate: AUDIOGEN_INPUT_SAMPLE_RATE,
         channels: AUDIOGEN_INPUT_CHANNELS
       })
       for (const operation of request.operations) appendOperation(session, operation)
-      return session.run({ ...(request.seed !== undefined && { seed: request.seed }) })
+      return session.run({
+        ...(request.seed !== undefined && { seed: request.seed }),
+        ...(referenceAudio && { referenceAudio }),
+        ...(request.vocalLanguage !== undefined && { vocalLanguage: request.vocalLanguage }),
+        ...(request.bpm !== undefined && { bpm: request.bpm }),
+        ...(request.keyscale !== undefined && { keyscale: request.keyscale }),
+        ...(request.timesignature !== undefined && { timesignature: request.timesignature }),
+        ...(request.augmentCaptionWithMetadata !== undefined && {
+          augmentCaptionWithMetadata: request.augmentCaptionWithMetadata
+        }),
+        ...(request.dcwEnabled !== undefined && { dcwEnabled: request.dcwEnabled }),
+        ...(request.dcwScaler !== undefined && { dcwScaler: request.dcwScaler }),
+        ...(request.dcwHighScaler !== undefined && { dcwHighScaler: request.dcwHighScaler }),
+        ...(request.inferenceSteps !== undefined && { inferenceSteps: request.inferenceSteps }),
+        ...(request.shift !== undefined && { shift: request.shift })
+      })
     }
   })
 }
