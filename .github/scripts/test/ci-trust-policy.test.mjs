@@ -926,6 +926,35 @@ test("no GitHub Actions checkout/ref input resolves mutable PR head.ref", () => 
   assert.deepEqual(offenders, []);
 });
 
+// PAT_TOKEN was retired in favour of GITHUB_TOKEN (#3807, #3880), then came
+// back in two new SDK e2e jobs that kept working only until the secret was
+// revoked. A workflow or action that still reads it fails at runtime.
+test("no GitHub Actions workflow or action reads the retired PAT_TOKEN secret", () => {
+  const actionFiles = filesUnder(join(root, ".github")).filter((path) =>
+    /\.(?:ya?ml)$/.test(path),
+  );
+  const patSecret = /secrets\s*(?:\.\s*PAT_TOKEN\b|\[\s*['"]PAT_TOKEN['"]\s*\])/;
+  const offenders = actionFiles
+    .filter((path) => patSecret.test(readFileSync(path, "utf8")))
+    .map((path) => path.slice(root.length + 1));
+  assert.deepEqual(offenders, []);
+});
+
+// Every package the SDK e2e legs install from npmjs is public, so they run
+// without NPM_TOKEN; a leg that requires it fails once the secret is removed.
+test("SDK e2e workflows install from npm without NPM_TOKEN", () => {
+  const sdkE2eLegs = [
+    ".github/workflows/test-sdk.yml",
+    ".github/workflows/test-node-sdk.yml",
+    ".github/workflows/test-android-sdk.yml",
+    ".github/workflows/test-ios-sdk.yml",
+  ];
+  const offenders = sdkE2eLegs.filter((path) =>
+    /\bNPM_TOKEN\b/.test(read(path)),
+  );
+  assert.deepEqual(offenders, []);
+});
+
 test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
   const source = read(".github/workflows/cpp-lint.yaml");
   assert.match(
