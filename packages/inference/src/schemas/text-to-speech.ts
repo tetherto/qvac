@@ -736,21 +736,7 @@ const ttsMossRuntimeConfigShape = {
       'Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.'
     ),
   seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
-  ...ttsBackendDirFieldsShape,
-  fitWorkload: z
-    .object({
-      promptRows: ttsPositiveInt32Schema.describe(
-        'Complete native prompt row count, including dialogue and reference rows.'
-      ),
-      referenceSamples: ttsNonNegativeInt32Schema.describe(
-        'Total mono reference audio samples supplied to the codec encoder.'
-      ),
-      streaming: z.boolean().describe('Whether the assessed workload uses native audio streaming.')
-    })
-    .optional()
-    .describe(
-      'Complete native prompt rows and total mono reference samples for memory fit; no estimates are inferred from text.'
-    )
+  ...ttsBackendDirFieldsShape
 }
 
 export const ttsMossRuntimeConfigSchema = z
@@ -856,18 +842,7 @@ export const ttsMossSoundEffectRuntimeConfigSchema = z
   .object({
     ttsEngine: z.literal('moss-sfx').describe('TTS engine: MOSS-SoundEffect-v2.'),
     ...ttsBatchBackendShape,
-    ...ttsSoundEffectFieldsShape,
-    fitWorkload: z
-      .object({
-        prompt: z.string().min(1).describe('Sound description used by the assessed workload.'),
-        seconds: z
-          .number()
-          .positive()
-          .max(30)
-          .describe('Requested sound-effect duration in seconds, up to 30.')
-      })
-      .optional()
-      .describe('Explicit sound-effect workload for metadata-only memory fit.')
+    ...ttsSoundEffectFieldsShape
   })
   .superRefine(refineGpuIntent)
 

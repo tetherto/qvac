@@ -440,6 +440,54 @@
                 ],
                 "title": "AssessModelFitRequestModelsItemModelType"
               },
+              "ttsWorkload": {
+                "description": "Fit-only MOSS-TTS/TTSD or MOSS-SoundEffect workload; never passed to model loading.",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "promptRows": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 2147483647,
+                        "description": "Complete native prompt rows, including dialogue and references."
+                      },
+                      "referenceSamples": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 2147483647,
+                        "description": "Total mono reference audio samples."
+                      },
+                      "streaming": {
+                        "type": "boolean",
+                        "description": "Whether the MOSS workload uses native streaming."
+                      }
+                    },
+                    "required": ["promptRows", "referenceSamples", "streaming"],
+                    "additionalProperties": false,
+                    "title": "MossTtsFitWorkload"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "prompt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Sound-effect description."
+                      },
+                      "seconds": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 30,
+                        "description": "Sound-effect duration in seconds, up to 30."
+                      }
+                    },
+                    "required": ["prompt", "seconds"],
+                    "additionalProperties": false,
+                    "title": "MossSoundEffectFitWorkload"
+                  }
+                ]
+              },
               "modelConfig": {
                 "description": "The config `loadModel` would be given, including any companion model sources.",
                 "type": "object",
@@ -15480,30 +15528,6 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "fitWorkload": {
-                          "description": "Complete native prompt rows and total mono reference samples for memory fit; no estimates are inferred from text.",
-                          "type": "object",
-                          "properties": {
-                            "promptRows": {
-                              "type": "integer",
-                              "exclusiveMinimum": 0,
-                              "maximum": 2147483647,
-                              "description": "Complete native prompt row count, including dialogue and reference rows."
-                            },
-                            "referenceSamples": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "maximum": 2147483647,
-                              "description": "Total mono reference audio samples supplied to the codec encoder."
-                            },
-                            "streaming": {
-                              "type": "boolean",
-                              "description": "Whether the assessed workload uses native audio streaming."
-                            }
-                          },
-                          "required": ["promptRows", "referenceSamples", "streaming"],
-                          "title": "LoadModelSrcRequestTtsGgmlModelConfigMossFitWorkload"
-                        },
                         "mossCodecDecoderModelSrc": {
                           "anyOf": [
                             {
@@ -15956,25 +15980,6 @@
                           "type": "number",
                           "exclusiveMinimum": 0,
                           "maximum": 100
-                        },
-                        "fitWorkload": {
-                          "description": "Explicit sound-effect workload for metadata-only memory fit.",
-                          "type": "object",
-                          "properties": {
-                            "prompt": {
-                              "type": "string",
-                              "minLength": 1,
-                              "description": "Sound description used by the assessed workload."
-                            },
-                            "seconds": {
-                              "type": "number",
-                              "exclusiveMinimum": 0,
-                              "maximum": 30,
-                              "description": "Requested sound-effect duration in seconds, up to 30."
-                            }
-                          },
-                          "required": ["prompt", "seconds"],
-                          "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSfxFitWorkload"
                         }
                       },
                       "required": ["ttsEngine"],

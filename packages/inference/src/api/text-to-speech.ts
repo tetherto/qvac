@@ -147,28 +147,10 @@ function buildTtsRequest(params: TtsClientParamsInput, requestId: string): TtsRe
   return {
     ...params,
     type: 'textToSpeech',
-    modelId: params.modelId,
     requestId,
     inputType: params.inputType ?? 'text',
-    text: params.text,
     stream: params.stream ?? true,
-    sentenceStream: params.sentenceStream ?? false,
-    ...(params.sentenceStreamLocale !== undefined && {
-      sentenceStreamLocale: params.sentenceStreamLocale
-    }),
-    ...(params.sentenceStreamMaxChunkScalars !== undefined && {
-      sentenceStreamMaxChunkScalars: params.sentenceStreamMaxChunkScalars
-    }),
-    ...(params.description !== undefined && { description: params.description }),
-    ...(params.voiceDescription !== undefined && { voiceDescription: params.voiceDescription }),
-    ...(params.voice !== undefined && { voice: params.voice }),
-    ...(params.emotion !== undefined && { emotion: params.emotion }),
-    ...(params.pitch !== undefined && { pitch: params.pitch }),
-    ...(params.pace !== undefined && { pace: params.pace }),
-    ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
-    ...(params.noise !== undefined && { noise: params.noise }),
-    ...(params.reverb !== undefined && { reverb: params.reverb }),
-    ...(params.quality !== undefined && { quality: params.quality })
+    sentenceStream: params.sentenceStream ?? false
   }
 }
 

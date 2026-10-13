@@ -1,3 +1,4 @@
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import type { TtsFitRequest } from '@qvac/tts-ggml'
@@ -7,6 +8,7 @@ import type { FitRequestPlan } from '@/resources/model-fit/native-probe/create-f
 import { gpuLayersFromCount } from '@/resources/model-fit/native-probe/engines/gpu'
 
 export interface TtsFitRequestParams {
+  ttsWorkload?: TtsFitWorkload | undefined
   modelPath: string
   modelConfig: unknown
   artifacts?: Record<string, string> | undefined
@@ -132,12 +134,12 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
       const decoder = artifacts['mossCodecDecoderPath']
       const encoder = artifacts['mossCodecEncoderPath']
       if (!decoder) return unsupported('the moss codec decoder is not resolved')
-      if (!config.fitWorkload) {
+      if (!params.ttsWorkload || !('promptRows' in params.ttsWorkload)) {
         return unsupported(
-          'MOSS fit requires fitWorkload with promptRows, referenceSamples and streaming'
+          'MOSS fit requires ttsWorkload with promptRows, referenceSamples and streaming'
         )
       }
-      if (config.fitWorkload.referenceSamples > 0 && !encoder) {
+      if (params.ttsWorkload.referenceSamples > 0 && !encoder) {
         return unsupported('MOSS reference encoding requires the codec encoder')
       }
       return supported({
@@ -146,7 +148,7 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
         mossCodecDecoderPath: decoder,
         ...(encoder ? { mossCodecEncoderPath: encoder } : {}),
         ...common,
-        ...config.fitWorkload,
+        ...params.ttsWorkload,
         ...(config.threads !== undefined ? { threads: config.threads } : {}),
         ...(config.streamChunkTokens !== undefined
           ? { streamChunkTokens: config.streamChunkTokens }
@@ -155,14 +157,14 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
       })
     }
     case 'moss-sfx': {
-      if (!config.fitWorkload) {
-        return unsupported('MOSS-SoundEffect fit requires fitWorkload with prompt and seconds')
+      if (!params.ttsWorkload || !('prompt' in params.ttsWorkload)) {
+        return unsupported('MOSS-SoundEffect fit requires ttsWorkload with prompt and seconds')
       }
       return supported({
         engineType: 'moss-sfx',
         mossSoundEffectPath: params.modelPath,
         ...common,
-        ...config.fitWorkload,
+        ...params.ttsWorkload,
         ...(config.negativePrompt !== undefined ? { negativePrompt: config.negativePrompt } : {}),
         ...(config.steps !== undefined ? { steps: config.steps } : {}),
         ...(config.guidance !== undefined ? { guidance: config.guidance } : {}),

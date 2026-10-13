@@ -26,14 +26,13 @@ export function getMossJobOptions(model: unknown, request: TtsRequest) {
   const batch = engine === 'moss-sfx' || engine === 'moss-speech'
   if (
     batch &&
-    (request.stream ||
-      request.sentenceStream ||
+    (request.sentenceStream ||
       request.sentenceStreamLocale !== undefined ||
       request.sentenceStreamMaxChunkScalars !== undefined)
   ) {
     throw new PluginRequestValidationFailedError(
       'textToSpeech',
-      `${engine} is batch-only; use stream: false without sentence-stream controls`
+      `${engine} does not support sentence-stream controls`
     )
   }
   for (const key of soundEffectKeys) {
@@ -67,11 +66,6 @@ export function getMossJobOptions(model: unknown, request: TtsRequest) {
       : {}
   return {
     ...Object.fromEntries(Object.entries(soundEffect).filter(([, value]) => value !== undefined)),
-    ...(request.seconds !== undefined ? { seconds: request.seconds } : {}),
-    ...(request.negativePrompt !== undefined ? { negativePrompt: request.negativePrompt } : {}),
-    ...(request.steps !== undefined ? { steps: request.steps } : {}),
-    ...(request.guidance !== undefined ? { guidance: request.guidance } : {}),
-    ...(request.shift !== undefined ? { shift: request.shift } : {}),
     ...(request.audio !== undefined ? { audio: new Float32Array(request.audio) } : {}),
     ...(request.sampleRate !== undefined ? { sampleRate: request.sampleRate } : {}),
     ...(request.messages !== undefined

@@ -159,7 +159,9 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     return finish(modelStart, response, ctx.signal.aborted)
   }
 
-  const sentenceChunked = stream && !nativeStream
+  const engine = getTtsEngineType(model)
+  const batchEngine = engine === 'moss-sfx' || engine === 'moss-speech'
+  const sentenceChunked = stream && !nativeStream && !batchEngine
 
   const response = (await model.run({
     input: text,
@@ -182,7 +184,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     ...mossJobOptions
   })) as unknown as TtsResponse
 
-  if (!stream) {
+  if (!stream || batchEngine) {
     const completeBuffer: number[] = []
     let sampleRate: number | undefined
     let replyText: string | undefined

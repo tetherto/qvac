@@ -153,6 +153,46 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     classification = "classification"
 
 
+class MossTtsFitWorkload(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    prompt_rows: Annotated[
+        int,
+        Field(
+            alias="promptRows",
+            description="Complete native prompt rows, including dialogue and references.",
+            gt=0,
+            le=2147483647,
+        ),
+    ]
+    reference_samples: Annotated[
+        int,
+        Field(
+            alias="referenceSamples",
+            description="Total mono reference audio samples.",
+            ge=0,
+            le=2147483647,
+        ),
+    ]
+    streaming: Annotated[
+        bool, Field(description="Whether the MOSS workload uses native streaming.")
+    ]
+
+
+class MossSoundEffectFitWorkload(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    prompt: Annotated[str, Field(description="Sound-effect description.", min_length=1)]
+    seconds: Annotated[
+        float,
+        Field(
+            description="Sound-effect duration in seconds, up to 30.", gt=0.0, le=30.0
+        ),
+    ]
+
+
 class AssessModelFitRequestModelsItemModelConfig(RootModel[dict[str, Any]]):
     root: Annotated[
         dict[str, Any],
@@ -177,6 +217,13 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
             alias="modelType",
             description="Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.",
             title="AssessModelFitRequestModelsItemModelType",
+        ),
+    ] = None
+    tts_workload: Annotated[
+        MossTtsFitWorkload | MossSoundEffectFitWorkload | None,
+        Field(
+            alias="ttsWorkload",
+            description="Fit-only MOSS-TTS/TTSD or MOSS-SoundEffect workload; never passed to model loading.",
         ),
     ] = None
     model_config_: Annotated[
@@ -15493,31 +15540,6 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigMossFitWorkload(GeneratedBaseModel):
-    prompt_rows: Annotated[
-        int,
-        Field(
-            alias="promptRows",
-            description="Complete native prompt row count, including dialogue and reference rows.",
-            gt=0,
-            le=2147483647,
-        ),
-    ]
-    reference_samples: Annotated[
-        int,
-        Field(
-            alias="referenceSamples",
-            description="Total mono reference audio samples supplied to the codec encoder.",
-            ge=0,
-            le=2147483647,
-        ),
-    ]
-    streaming: Annotated[
-        bool,
-        Field(description="Whether the assessed workload uses native audio streaming."),
-    ]
-
-
 class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -16024,14 +16046,6 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    fit_workload: Annotated[
-        LoadModelSrcRequestTtsGgmlModelConfigMossFitWorkload | None,
-        Field(
-            alias="fitWorkload",
-            description="Complete native prompt rows and total mono reference samples for memory fit; no estimates are inferred from text.",
-            title="LoadModelSrcRequestTtsGgmlModelConfigMossFitWorkload",
-        ),
-    ] = None
     moss_codec_decoder_model_src: Annotated[
         str | LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc,
         Field(
@@ -16063,23 +16077,6 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-
-
-class LoadModelSrcRequestTtsGgmlModelConfigMossSfxFitWorkload(GeneratedBaseModel):
-    prompt: Annotated[
-        str,
-        Field(
-            description="Sound description used by the assessed workload.", min_length=1
-        ),
-    ]
-    seconds: Annotated[
-        float,
-        Field(
-            description="Requested sound-effect duration in seconds, up to 30.",
-            gt=0.0,
-            le=30.0,
-        ),
-    ]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
@@ -16165,14 +16162,6 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
             description="Diffusion timestep schedule shift for sound-effect generation.",
             gt=0.0,
             le=100.0,
-        ),
-    ] = None
-    fit_workload: Annotated[
-        LoadModelSrcRequestTtsGgmlModelConfigMossSfxFitWorkload | None,
-        Field(
-            alias="fitWorkload",
-            description="Explicit sound-effect workload for metadata-only memory fit.",
-            title="LoadModelSrcRequestTtsGgmlModelConfigMossSfxFitWorkload",
         ),
     ] = None
 

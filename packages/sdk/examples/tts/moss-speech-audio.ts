@@ -13,7 +13,7 @@ import {
 // Run from packages/sdk: node --import tsx examples/tts/moss-speech-audio.ts question.wav
 // Use a GPU with enough memory. Registry sources download automatically.
 // Optional local paths: QVAC_MOSS_SPEECH_MODEL and QVAC_MOSS_SPEECH_CODEC.
-// Both engines in this release are batch-only: stream must be false.
+// Both engines run a batch job; stream: false collects the complete reply.
 
 function saveWav(samples: number[], sampleRate: number, filename: string) {
   if (samples.length === 0 || samples.some((sample) => !Number.isFinite(sample))) {

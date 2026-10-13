@@ -3,6 +3,7 @@ import { ttsConfigSchema, ttsClientParamsSchema } from '@/schemas/text-to-speech
 import { createTtsFitRequest } from '@/resources/model-fit/native-probe/engines/tts'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
+import { modelFitCandidateSchema } from '@/schemas/assess-model-fit'
 import { getMossJobOptions } from '@/plugins/builtin/tts-ggml/ops/moss-options'
 
 const sfx = { ttsEngine: 'moss-sfx', steps: 20, guidance: 4, shift: 5 }
@@ -27,10 +28,10 @@ test('0.11 fits forward explicit batch, streaming and reference workloads', (t) 
     modelPath: '/models/backbone.gguf',
     modelConfig: {
       ttsEngine: 'moss',
-      fitWorkload: { promptRows: 200, referenceSamples: 24000, streaming: true },
       streamChunkTokens: 25,
       durationTokens: 50
     },
+    ttsWorkload: { promptRows: 200, referenceSamples: 24000, streaming: true },
     artifacts: {
       mossCodecDecoderPath: '/models/decoder.gguf',
       mossCodecEncoderPath: '/models/encoder.gguf'
@@ -53,11 +54,12 @@ test('0.11 fits forward explicit batch, streaming and reference workloads', (t) 
     })
   }
   t.absent(createTtsFitRequest({ ...params, artifacts: {} }).supported)
-  t.absent(createTtsFitRequest({ ...params, modelConfig: { ttsEngine: 'moss' } }).supported)
+  t.absent(createTtsFitRequest({ ...params, ttsWorkload: undefined }).supported)
   t.ok(
     createTtsFitRequest({
       ...params,
-      modelConfig: { ...sfx, fitWorkload: { prompt: 'Rain', seconds: 3 } }
+      modelConfig: sfx,
+      ttsWorkload: { prompt: 'Rain', seconds: 3 }
     }).supported
   )
   t.absent(createTtsFitRequest({ ...params, modelConfig: speech }).supported)
@@ -89,7 +91,7 @@ test('MOSS-Speech forwards PCM, conversation and token options and returns text-
       type: 'textToSpeech' as const,
       modelId,
       inputType: 'text',
-      stream: false,
+      stream: true,
       sentenceStream: false,
       audio: [0, 0.5],
       sampleRate: 16000,
@@ -104,7 +106,10 @@ test('MOSS-Speech forwards PCM, conversation and token options and returns text-
     t.ok(job?.['audio'] instanceof Float32Array)
     t.alike(job?.['messages'], request.messages)
     t.is(job?.['maxNewTokens'], undefined, 'omitted token budget stays omitted')
-    t.exception(() => getMossJobOptions(model, { ...request, stream: true }), /batch-only/)
+    t.exception(
+      () => getMossJobOptions(model, { ...request, sentenceStream: true }),
+      /sentence-stream/
+    )
     t.exception(() => getMossJobOptions(model, { ...request, seconds: 3 }), /requires moss-sfx/)
   } finally {
     unregisterModel(modelId)
@@ -138,7 +143,7 @@ test('MOSS-SoundEffect passes load defaults and per-call overrides without sente
       modelId,
       inputType: 'text',
       text: 'Rain.',
-      stream: false,
+      stream: true,
       sentenceStream: false,
       steps: 10
     }
@@ -154,8 +159,31 @@ test('MOSS-SoundEffect passes load defaults and per-call overrides without sente
       guidance: 4,
       shift: 5
     })
-    t.exception(() => getMossJobOptions(model, { ...request, sentenceStream: true }), /batch-only/)
+    t.exception(
+      () => getMossJobOptions(model, { ...request, sentenceStream: true }),
+      /sentence-stream/
+    )
   } finally {
     unregisterModel(modelId)
   }
+})
+
+test('MOSS fit workloads belong to the assessment candidate, not load configuration', (t) => {
+  const workload = { prompt: 'Rain', seconds: 2 }
+  t.ok(
+    modelFitCandidateSchema.safeParse({
+      modelType: 'tts-ggml',
+      modelConfig: sfx,
+      ttsWorkload: workload
+    }).success
+  )
+  t.absent(ttsConfigSchema.safeParse({ ...sfx, fitWorkload: workload }).success)
+  t.absent(modelFitCandidateSchema.safeParse({ ttsWorkload: { ...workload, seconds: 31 } }).success)
+  t.absent(
+    createTtsFitRequest({
+      modelPath: '/models/sfx.gguf',
+      modelConfig: sfx,
+      ttsWorkload: { promptRows: 1, referenceSamples: 0, streaming: false }
+    }).supported
+  )
 })

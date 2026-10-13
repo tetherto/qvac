@@ -13,7 +13,7 @@ import {
 // Run from packages/sdk: node --import tsx examples/tts/moss-speech.ts
 // Use a GPU with enough memory. Registry sources download automatically.
 // Optional local paths: QVAC_MOSS_SPEECH_MODEL and QVAC_MOSS_SPEECH_CODEC.
-// Both engines in this release are batch-only: stream must be false.
+// Both engines run a batch job; stream: false collects the complete reply.
 
 let lastPercentage = -1
 function progress(p: ModelProgressUpdate) {

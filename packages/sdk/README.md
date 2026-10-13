@@ -37,24 +37,24 @@ global `bare` executable does not change the SDK's worker dependency.
 Load MOSS-SoundEffect with `modelType: 'tts-ggml'` and
 `modelConfig: { ttsEngine: 'moss-sfx' }`; the primary source is its single
 GGUF. With an `AUDIOGEN_MOSS_SFX_V2_*` constant, pass its `.src` URL as
-`modelSrc`, because the full descriptor selects the audiogen plugin. Use
-`stream: false` and a text description, with optional `seconds`
+`modelSrc`, because the full descriptor selects the audiogen plugin. This also applies to fit assessment: use explicit `modelType` and `ttsEngine`, and a downloaded local file for metadata-only TTS fit. The bare `.src` URL lacks checksum/registry coordinates for a weightless stub; the audiogen descriptor/resource profile does not identify the TTS engine. Use
+a text description, with optional `seconds`
 (up to 30), `negativePrompt`, `steps`, `guidance` and `shift`. These controls
 can also be load defaults. The output is 48 kHz.
 
 Load MOSS-Speech with `modelConfig: { ttsEngine: 'moss-speech',
 mossSpeechCodecModelSrc: <codec source> }` and the language-model GGUF as
-`modelSrc`. Use `stream: false` with either `text`, or `audio` plus
+`modelSrc`. Use either `text`, or `audio` plus
 `sampleRate`. Audio is a JSON array of normalized mono samples in [-1, 1].
 Earlier turns go in `messages`; each turn has a `role` and either `text` or
 `audio` plus `sampleRate`. Per-call controls include `systemPrompt`,
 `replyVoice` plus `replyVoiceSampleRate`, `maxReplySeconds`, `maxNewTokens`,
-`textReply`, `greedy`, `temperature`, `topP` and `topK`. Consume the run's
-`buffer` or `bufferStream` and then await `result.text` for any reply text.
+`textReply`, `greedy`, `temperature`, `topP` and `topK`. Consume `bufferStream` in the default streaming mode, or await `buffer` with
+`stream: false`, then await `result.text` for any reply text.
 Spoken mode can return an audio-only reply; use `textReply: true` when text is required.
 Spoken replies are 24 kHz; `textReply: true` returns text with an empty audio
 buffer. Omitting `maxNewTokens` preserves the addon's remaining-context budget.
-Neither engine supports sentence streaming or duplex text input.
+Both engines run one native batch job. The default `stream: true` emits the completed audio as one chunk; `stream: false` collects it in `buffer`. Neither supports sentence streaming or duplex text input.
 
 Standalone examples: [basic sound effects](examples/tts/moss-sound-effect.ts),
 [sound-effect controls](examples/tts/moss-sound-effect-controls.ts),
@@ -64,14 +64,14 @@ Run them from this package with `node --import tsx examples/tts/<file>.ts`;
 the spoken-question example also takes a WAV file path. Each example downloads
 its model, returns text or writes a WAV reply, unloads the model, and closes the SDK worker.
 
-`assessModelFit` and load preflight now support metadata-only MOSS-TTS/TTSD
-and MOSS-SoundEffect projections. Add `fitWorkload` to `modelConfig`:
+`assessModelFit` supports metadata-only MOSS-TTS/TTSD and MOSS-SoundEffect
+projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
 `{ promptRows, referenceSamples, streaming }` for MOSS, or
 `{ prompt, seconds }` for sound effects. MOSS needs its backbone and codec
 decoder; reference encoding also needs the codec encoder. Prompt rows must
 cover the complete native prompt, including dialogue and reference rows.
 Missing workloads return an unknown assessment rather than guessing.
-MOSS-Speech has no native fitter in this release and remains unknown.
+MOSS-Speech has no native fitter in this release and remains unknown. Workloads are fit-only; loading a MOSS model does not accept them and its automatic fit preflight remains unknown.
 
 The CLI configuration picker includes both engines. Their conversation and
 sound-effect request controls are library-only because the OpenAI speech
