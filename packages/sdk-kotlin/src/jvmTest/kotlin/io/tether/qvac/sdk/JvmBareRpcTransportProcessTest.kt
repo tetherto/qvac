@@ -8,23 +8,20 @@ import java.net.Socket
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class JvmBareRpcTransportProcessTest {
-    private fun workerCommand(): List<String> {
+    private fun workerCommand(main: String = FakeJvmWorker::class.java.name): List<String> {
         val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
-        return listOf(
-            java,
-            "-cp",
-            System.getProperty("java.class.path"),
-            FakeJvmWorker::class.java.name,
-        )
+        return listOf(java, "-cp", System.getProperty("java.class.path"), main)
     }
 
     @Test
-    fun launchesAnUnauthenticatedWorkerAndSendsRuntimeContext() = runBlocking {
-        // Default connect: no auth token, and the worker must receive an
-        // __init_config carrying this client's runtime context.
+    fun authenticatesByDefaultAndSendsRuntimeContext() = runBlocking {
+        // The worker must receive an __init_config carrying this client's
+        // runtime context, after the token handshake.
         val transport = JvmBareRpcTransport.connect(command = workerCommand())
         val client = QvacClient(transport)
 
@@ -35,10 +32,10 @@ class JvmBareRpcTransportProcessTest {
     }
 
     @Test
-    fun authenticatesWhenRequested() = runBlocking {
+    fun connectsWithoutAuthenticationWhenOptedOut() = runBlocking {
         val transport = JvmBareRpcTransport.connect(
             command = workerCommand(),
-            authenticated = true,
+            authenticated = false,
             runtimeContext = null,
         )
         val client = QvacClient(transport)
@@ -47,6 +44,36 @@ class JvmBareRpcTransportProcessTest {
 
         assertEquals(9.0, heartbeat.number)
         client.close()
+    }
+
+    @Test
+    fun tokenlessWorkerFailsAsSoonAsItExits() = runBlocking {
+        val started = System.nanoTime()
+        val error = assertFailsWith<QvacWorkerStartException> {
+            JvmBareRpcTransport.connect(
+                command = workerCommand(TokenlessJvmWorker::class.java.name),
+                timeoutMs = 60_000,
+            )
+        }
+
+        val message = error.message.orEmpty()
+        assertTrue(message.contains("exited with code 1 before authenticating"), message)
+        assertTrue(message.contains("does not send the IPC token"), message)
+        assertTrue(System.nanoTime() - started < 30_000_000_000L, "waited for the connect deadline")
+    }
+}
+
+/** A worker from before token IPC: it dials without the token and exits once dropped. */
+private object TokenlessJvmWorker {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val endpoint = Regex("tcp://127\\.0\\.0\\.1:(\\d+)").find(args.last())!!.groupValues[1].toInt()
+        Socket("127.0.0.1", endpoint).use { socket ->
+            socket.shutdownOutput()
+            // Exit only once the client has dropped the connection, as a real worker does.
+            while (socket.getInputStream().read() >= 0) Unit
+        }
+        kotlin.system.exitProcess(1)
     }
 }
 
@@ -60,10 +87,8 @@ private object FakeJvmWorker {
             ?.get(1)
             ?.toInt()
             ?: error("worker endpoint missing")
-        val authToken = Regex("\\\"QVAC_IPC_AUTH_TOKEN\\\":\\\"([^\\\"]+)\\\"")
-            .find(environment)
-            ?.groupValues
-            ?.get(1)
+        check("QVAC_IPC_AUTH_TOKEN" !in environment) { "auth token leaked into argv" }
+        val authToken = System.getenv("QVAC_IPC_AUTH_TOKEN")
 
         val socket = if (authToken != null) {
             // A racing loopback connection without the inherited capability is rejected.
@@ -71,6 +96,10 @@ private object FakeJvmWorker {
                 unauthenticated.getOutputStream().write("wrong-token\n".encodeToByteArray())
                 unauthenticated.getOutputStream().flush()
             }
+            // A peer that connects first and never writes must not hold up the
+            // handshake of the real worker behind it.
+            val silent = Socket("127.0.0.1", endpoint)
+            Runtime.getRuntime().addShutdownHook(Thread { runCatching { silent.close() } })
             Socket("127.0.0.1", endpoint).also {
                 it.getOutputStream().write((authToken + "\n").encodeToByteArray())
                 it.getOutputStream().flush()

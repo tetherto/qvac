@@ -5,13 +5,14 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 data class JvmWorkerCommand(
     val bareExecutable: String,
     val workerPath: String,
-    val authenticated: Boolean = false,
+    val authenticated: Boolean = true,
 )
 
 /** Resolves a version-compatible desktop worker without requiring hard-coded paths. */
@@ -42,6 +43,7 @@ object JvmWorkerResolver {
         if (configuredWorker != null) {
             val worker = requireRegularFile(Path.of(configuredWorker), "QVAC worker")
             val bare = resolveBare(configuredBare, emptyList(), environment)
+            requireExplicitWorkerAuthenticates(worker)
             return JvmWorkerCommand(bare.toString(), worker.toString())
         }
 
@@ -73,9 +75,9 @@ object JvmWorkerResolver {
         environment: Map<String, String>,
     ): JvmWorkerCommand? {
         val worker = workerCandidates(root).firstOrNull(Files::isRegularFile) ?: return null
-        val authenticated = requireCompatibleSdk(root)
+        requireCompatibleSdk(root)
         val bare = resolveBare(configuredBare, bareCandidates(root), environment)
-        return JvmWorkerCommand(bare.toString(), worker.toString(), authenticated)
+        return JvmWorkerCommand(bare.toString(), worker.toString())
     }
 
     private fun discoverLocalSdkRoots(start: Path): List<Path> {
@@ -177,14 +179,9 @@ object JvmWorkerResolver {
             ?.normalize()
     }
 
-    /**
-     * Verifies the resolved worker's version matches this client and returns
-     * whether the worker declares token-v1 IPC. A worker that does not declare it
-     * runs over an unauthenticated loopback channel.
-     */
-    internal fun requireCompatibleSdk(root: Path): Boolean {
-        val packageJson = root.resolve("package.json")
-        val metadata = runCatching { Json.parseToJsonElement(Files.readString(packageJson)).jsonObject }.getOrNull()
+    /** Verifies the resolved worker's version matches this client and that it declares token-v1 IPC. */
+    internal fun requireCompatibleSdk(root: Path) {
+        val metadata = readPackageMetadata(root)
         val version = runCatching { metadata?.get("version")?.jsonPrimitive?.content }.getOrNull()
         if (version != SDK_VERSION) {
             throw QvacWorkerStartException(
@@ -192,7 +189,38 @@ object JvmWorkerResolver {
                     "client requires $SDK_VERSION.",
             )
         }
-        return metadata?.get("qvacIpcAuthentication")?.jsonPrimitive?.content == "token-v1"
+        requireTokenIpc(metadata, root)
+    }
+
+    /**
+     * An explicit worker path is not version-checked, but a worker inside an
+     * `@qvac/sdk` package must still declare token-v1 IPC. A worker with no such
+     * metadata is treated as current and must send the token.
+     */
+    internal fun requireExplicitWorkerAuthenticates(worker: Path) {
+        var directory = worker.toAbsolutePath().parent
+        while (directory != null) {
+            val metadata = readPackageMetadata(directory)
+            if (metadata?.get("name")?.jsonPrimitive?.content == "@qvac/sdk") {
+                requireTokenIpc(metadata, directory)
+                return
+            }
+            directory = directory.parent
+        }
+    }
+
+    private fun readPackageMetadata(root: Path): JsonObject? {
+        val packageJson = root.resolve("package.json")
+        return runCatching { Json.parseToJsonElement(Files.readString(packageJson)).jsonObject }.getOrNull()
+    }
+
+    private fun requireTokenIpc(metadata: JsonObject?, root: Path) {
+        if (metadata?.get("qvacIpcAuthentication")?.jsonPrimitive?.content == "token-v1") return
+        throw QvacWorkerStartException(
+            "The @qvac/sdk worker at $root does not declare \"qvacIpcAuthentication\": \"token-v1\", " +
+                "so it cannot authenticate its IPC connection. Install @qvac/sdk@$SDK_VERSION, or pass " +
+                "authenticated = false to JvmBareRpcTransport.connect to accept an unauthenticated worker.",
+        )
     }
 
     private fun requireRegularFile(path: Path, label: String): Path {
