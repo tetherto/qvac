@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "CacheCheckpointFile.hpp"
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "RequestRecoveryHelpers.hpp"
@@ -1587,7 +1588,8 @@ std::vector<llama_token> TextLlmContext::residentStateTokens() const {
   return cacheStateTokens();
 }
 
-bool TextLlmContext::loadCache(const std::string& cacheKey) {
+bool TextLlmContext::loadCache(
+    const std::string& cacheKey, bool adoptFileCheckpoints) {
   if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
     return false;
   }
@@ -1631,6 +1633,9 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   }
   acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
+  if (adoptFileCheckpoints) {
+    adoptCheckpointsFromCacheFile(cacheKey, loadedBytes);
+  }
   return true;
 }
 
@@ -1655,7 +1660,25 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
         toString(UnableToSaveSessionFile),
         "TextLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
   }
+  appendCheckpointsToCacheFile(tmpCacheKey);
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
+}
+
+// Whatever checkpoints the context keeps: none on a model that takes none,
+// so its file is unchanged.
+void TextLlmContext::appendCheckpointsToCacheFile(
+    const std::string& path) const {
+  (void)cache::appendCheckpointSection(path, cacheCheckpoints_);
+}
+
+// Through `adoptCheckpoints`, so the file's checkpoint is kept exactly when
+// the context would keep one it captured itself.
+void TextLlmContext::adoptCheckpointsFromCacheFile(
+    const std::string& path, uint64_t offset) {
+  ++fileCheckpointReads_;
+  adoptCheckpoints(
+      cache::readCheckpointSection(
+          path, offset, residentLedger_, cacheCheckpointPolicy_));
 }
 
 void TextLlmContext::snapshotPreRequestCursor() {
