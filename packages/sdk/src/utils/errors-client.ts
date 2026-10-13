@@ -220,6 +220,18 @@ export class BarePackError extends QvacErrorBase {
   }
 }
 
+export class BarePackNodeUnsupportedError extends QvacErrorBase {
+  constructor(nodeVersion: string, requiredRange: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED,
+        [nodeVersion, requiredRange],
+        cause
+      )
+    )
+  }
+}
+
 export class InvalidPluginSpecifierError extends QvacErrorBase {
   constructor(specifiers: string[], cause?: unknown) {
     const list = specifiers.map((s) => `  - ${s}`).join('\n')
