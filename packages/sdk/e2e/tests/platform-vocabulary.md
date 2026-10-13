@@ -19,6 +19,10 @@ is off on iOS for ONNX/CoreML OOM, parakeet streaming is off on Android as
 flaky. A vocabulary that could not say "iOS but not Android" would force those
 back into consumer code, which is exactly what this moves away from.
 
+Every client names its own label. The runner builds it as `<family>-<os>` and publishes it in
+`QVAC_TEST_PLATFORM`, which is also what a consumer applies its resource table against, so the
+`configOn` entries and the skip decisions always read the same string.
+
 ## Matching
 
 A leg registers with a label. A skip entry applies when it **equals** the

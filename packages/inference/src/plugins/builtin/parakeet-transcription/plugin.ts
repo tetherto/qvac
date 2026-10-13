@@ -186,7 +186,17 @@ export const parakeetPlugin = definePlugin({
           while (!result.done) {
             const value = result.value
             if (typeof value === 'object' && value !== null && 'type' in value) {
-              if (value.type === 'endOfTurn') {
+              if (value.type === 'vad') {
+                yield {
+                  type: 'transcribeStream' as const,
+                  vad: {
+                    speaking: value.speaking,
+                    probability: value.probability,
+                    ...(value.source && { source: value.source }),
+                    ...(value.speakerId !== undefined && { speakerId: value.speakerId })
+                  }
+                }
+              } else if (value.type === 'endOfTurn') {
                 yield {
                   type: 'transcribeStream' as const,
                   endOfTurn: { source: 'parakeet' as const }
