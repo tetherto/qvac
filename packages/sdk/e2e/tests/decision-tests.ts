@@ -3,6 +3,15 @@ import type { LayaResult } from '@qvac/sdk'
 
 export const decisionTests: TestDefinition[] = [
   {
+    testId: 'decision-concurrent-queued',
+    params: {},
+    expectation: {
+      validation: 'contains-all',
+      contains: ['billing, technical']
+    },
+    metadata: { category: 'decision', dependency: 'decision', estimatedDurationMs: 60000 }
+  },
+  {
     testId: 'decision-ticket',
     params: {},
     expectation: {

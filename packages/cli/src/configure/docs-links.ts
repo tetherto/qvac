@@ -20,7 +20,7 @@ const ADDON_DOCS: Record<string, AddonDocs> = {
   embeddings: { url: `${BASE}/addons/embed-llamacpp/`, configAnchor: '#4-create-config' },
   'llamacpp-decision': {
     url: `${BASE}/addons/embed-llamacpp/`,
-    configAnchor: '#laya-configuration'
+    configAnchor: '#4-create-config'
   },
   whisper: {
     url: `${BASE}/addons/transcription-whispercpp/`,

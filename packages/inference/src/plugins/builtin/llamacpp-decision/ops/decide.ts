@@ -25,15 +25,20 @@ export async function decide(request: DecideRequest) {
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
   if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const model = getModel(modelId) as unknown as LayaDecisions
+  let cancelPromise: Promise<void> | undefined
   const onAbort = () => {
-    model.cancel().catch((error: unknown) => {
+    cancelPromise ??= model.cancel().catch((error: unknown) => {
       requestLogger.warn(
         `Laya cancel failed: ${error instanceof Error ? error.message : String(error)}`
       )
     })
   }
   ctx.signal.addEventListener('abort', onAbort, { once: true })
-  ctx.scope.defer(() => ctx.signal.removeEventListener('abort', onAbort))
+  ctx.scope.defer(async () => {
+    ctx.signal.removeEventListener('abort', onAbort)
+    // A delayed native cancel must finish before the next job owns this model slot.
+    await cancelPromise
+  })
 
   const started = nowMs()
   try {

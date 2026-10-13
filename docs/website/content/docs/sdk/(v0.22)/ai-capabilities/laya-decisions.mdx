@@ -44,7 +44,7 @@ The load-time `batch_size` controls tokens per forward pass; each sequence must 
 
 The promise returned by [`decide()`](/sdk/reference/api#decide) exposes `requestId` before you await it. Pass that ID to [`cancel()`](/sdk/reference/api#cancel) to interrupt the request. Its promise rejects with `InferenceCancelledError` after the native response settles.
 
-Each loaded model accepts one decision request at a time. A concurrent call rejects with `RequestRejectedByPolicyError` and leaves the active request running. Use `states` to evaluate several states in one request. See [Cancellation](/sdk/runtime/cancellation) for broad cancellation by model ID.
+Each loaded model runs one decision request at a time. Concurrent calls wait in a FIFO queue with up to 64 waiting requests per model. When the queue is full, additional calls reject with `RequestRejectedByPolicyError` without affecting active or queued requests. Cancelling a queued call by `requestId` rejects it with `InferenceCancelledError` before native work starts and leaves the active request running. Use `states` to evaluate several states in one request. See [Cancellation](/sdk/runtime/cancellation) for broad cancellation by model ID.
 
 ## Example
 

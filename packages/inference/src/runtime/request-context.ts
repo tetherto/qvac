@@ -98,8 +98,14 @@ let registry: RequestRegistry | null = null
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 
 function installDefaultPolicies(r: RequestRegistry): void {
-  // Laya admits one job per model; refusal must not cancel the active job.
-  r.policy({ kind: 'decision', maxConcurrentPerModel: 1, onOverflow: 'reject' })
+  // Laya owns one active job per model. Wait in the registry so cancelling a
+  // queued request never reaches the addon or interrupts the active job.
+  r.policy({
+    kind: 'decision',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // Cap is the model's `parallel`, passed per request by the handlers; the value
   // here is only the fallback when a caller supplies none.
   r.policy({
