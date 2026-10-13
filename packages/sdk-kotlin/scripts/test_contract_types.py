@@ -45,6 +45,27 @@ class ContractTypesTest(unittest.TestCase):
         self.assertIn("sealed interface QvacProgressEvent", methods)
         self.assertNotIn('progressType = "loadModel:progress"', methods)
 
+    def test_same_field_under_two_methods_shares_one_type(self):
+        def request(title, method):
+            return {"title": title, "type": "object", "required": ["type", "history"], "properties": {
+                "type": {"type": "string", "const": method},
+                "history": {"type": "array", "items": {"title": title + "HistoryItem", "type": "object",
+                                                       "properties": {"role": {"type": "string"}}}},
+                "image": {"title": title + "Image", "type": "object", "properties": {"role": {"type": "string"}}},
+            }}
+        graph = TypeGraph({"$defs": {
+            "B": request("LongMethodRequest", "long"),
+            "A": request("ShortRequest", "short"),
+        }})
+        text = graph.render()
+        self.assertIn("class ShortRequestHistoryItem(", text)
+        self.assertNotIn("class LongMethodRequestHistoryItem(", text)
+        self.assertIn("val `history`: List<ShortRequestHistoryItem>", text.split("class LongMethodRequest(")[1])
+        # The same shape at another field path keeps its own type.
+        self.assertIn("class ShortRequestImage(", text)
+        self.assertIn("class LongMethodRequest(", text)
+        self.assertIn("class ShortRequest(", text)
+
     def test_forbidden_field_not_exposed(self):
         graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"forbidden": {"not": {}}, "ok": {"type": "string"}}}}})
         self.assertNotIn("val `forbidden`", graph.render())

@@ -19,6 +19,41 @@ def literal(value):
     return json.dumps(value, ensure_ascii=False).replace("$", "\\$")
 
 
+SUBSCHEMA_MAPS = ("properties", "patternProperties", "$defs")
+SUBSCHEMA_LISTS = ("oneOf", "anyOf", "allOf", "prefixItems")
+SUBSCHEMAS = ("items", "additionalProperties", "not", "contains", "propertyNames", "if", "then", "else")
+
+
+def untitled(schema):
+    """The schema without `title` keywords. Property names and data values such as
+    `const`, `enum` and `default` are kept, even when they are spelled "title"."""
+    if not isinstance(schema, dict):
+        return schema
+    result = {}
+    for key, value in schema.items():
+        if key == "title":
+            continue
+        if key in SUBSCHEMA_MAPS and isinstance(value, dict):
+            result[key] = {k: untitled(v) for k, v in value.items()}
+        elif key in SUBSCHEMA_LISTS and isinstance(value, list):
+            result[key] = [untitled(v) for v in value]
+        elif key in SUBSCHEMAS:
+            result[key] = [untitled(v) for v in value] if isinstance(value, list) else untitled(value)
+        else:
+            result[key] = value
+    return result
+
+
+def fingerprint(schema, path):
+    """Structural identity of an inline schema at `path`, its name below the owning
+    `$defs` entry. The contract exporter titles every inline schema after the
+    method it sits in, so the same field under two methods (completionStream and
+    completionOrchestrate history, tools, events) differs only in titles; those
+    share one Kotlin type. Matching shapes at different paths stay separate so a
+    type's name still says what it holds."""
+    return json.dumps({"path": path, "shape": untitled(schema)}, sort_keys=True)
+
+
 @dataclass
 class Definition:
     name: str
@@ -31,9 +66,24 @@ class Definition:
 class TypeGraph:
     def __init__(self, schema):
         self.defs = schema["$defs"]
+        self.def_ids = {id(value) for value in self.defs.values()}
         self.types = {}
         self.by_shape = {}
         self.roots = {}
+        self.candidates = {}
+        self.owners = []
+        # A shared shape takes the shortest name among the places it appears, so
+        # its name does not depend on which method the contract lists first. The
+        # survey pass visits every occurrence to collect those names.
+        self.surveying = True
+        self.visited = set()
+        self.preferred = {}
+        for key, value in self.defs.items():
+            self.resolve(value, value.get("title", key), root=True)
+        self.preferred = {shape: min(names, key=lambda n: (len(n), n))
+                          for shape, names in self.candidates.items()}
+        self.surveying = False
+        self.types, self.by_shape = {}, {}
         for key, value in self.defs.items():
             self.roots[key] = self.resolve(value, value.get("title", key), root=True)
 
@@ -51,7 +101,16 @@ class TypeGraph:
         return self.defs[key]
 
     def resolve(self, schema, hint, root=False):
-        schema = self.dereference(schema)
+        target = self.dereference(schema)
+        if not (isinstance(target, dict) and id(target) in self.def_ids):
+            return self.resolve_schema(target, hint, root)
+        self.owners.append(name(target.get("title", hint)))
+        try:
+            return self.resolve_schema(target, hint, root)
+        finally:
+            self.owners.pop()
+
+    def resolve_schema(self, schema, hint, root):
         if schema is True or schema is False or schema == {}:
             # `true`/`false`/`{}` accept-anything or accept-nothing schemas (the
             # latter appears as an array's `items: false` tuple bound) have no
@@ -91,19 +150,31 @@ class TypeGraph:
             if not schema or set(schema) <= {"description", "title"}:
                 return "JsonElement"
             raise ValueError(f"Unsupported shape at {hint}: {schema}")
-        fingerprint = json.dumps(schema, sort_keys=True)
-        if fingerprint in self.by_shape:
-            return self.by_shape[fingerprint]
-        typename = name(schema.get("title", hint))
-        if typename in self.types:
-            # Inline schemas can share a human title but differ in constraints.
-            # Stable structural suffixes avoid order-dependent name collisions.
-            if root:
-                raise ValueError(f"Duplicate root type name: {typename}")
-            typename += hashlib.sha256(fingerprint.encode()).hexdigest()[:8].upper()
-        definition = Definition(typename, schema, kind)
-        self.types[typename] = definition
-        self.by_shape[fingerprint] = typename
+        candidate = name(schema.get("title", hint))
+        # A `$defs` entry is identified by its own name, so each method's request
+        # and response stay distinct types.
+        owner = self.owners[-1] if self.owners else ""
+        path = candidate if id(schema) in self.def_ids else candidate.removeprefix(owner)
+        shape = fingerprint(schema, path)
+        self.candidates.setdefault(shape, set()).add(candidate)
+        if shape in self.by_shape:
+            if not self.surveying or (shape, candidate) in self.visited:
+                return self.by_shape[shape]
+            # Survey only: walk this occurrence's children under its own name.
+            self.visited.add((shape, candidate))
+            typename, definition = candidate, Definition(candidate, schema, kind)
+        else:
+            self.visited.add((shape, candidate))
+            typename = self.preferred.get(shape, candidate)
+            if typename in self.types:
+                # Inline schemas can share a human title but differ in constraints.
+                # Stable structural suffixes avoid order-dependent name collisions.
+                if root:
+                    raise ValueError(f"Duplicate root type name: {typename}")
+                typename += hashlib.sha256(shape.encode()).hexdigest()[:8].upper()
+            definition = Definition(typename, schema, kind)
+            self.types[typename] = definition
+            self.by_shape[shape] = typename
         if kind == "object":
             identifiers = set()
             for key, prop in schema.get("properties", {}).items():
@@ -124,7 +195,15 @@ class TypeGraph:
             used_variants = set()
             for index, arm in enumerate(arms):
                 armtype = self.resolve(arm, typename + f"Variant{index + 1}")
-                variant = armtype.removeprefix(typename) if armtype in self.types else f"Variant{index + 1}"
+                # A shared arm type can carry another union's name, so the arm's
+                # own title names the variant when it extends this union's name.
+                armschema = self.dereference(arm)
+                title = name(armschema.get("title", "")) if isinstance(armschema, dict) else ""
+                names = [n for n in (title, armtype if armtype in self.types else "") if n]
+                variant = next((n[len(prefix):] for n in names for prefix in (typename, candidate)
+                                if n.startswith(prefix) and n != prefix), None)
+                if variant is None:
+                    variant = armtype if armtype in self.types else f"Variant{index + 1}"
                 if not variant:
                     variant = "Value"
                 variant = name(variant)

@@ -3,13 +3,12 @@ package io.tether.qvac.sdk
 import io.tether.qvac.sdk.generated.schema.CancelRequest
 import io.tether.qvac.sdk.generated.schema.CancelRequestRequest
 import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequest
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestKvCache
-import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequestToolDialect
 import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponseToolCallback
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestKvCache
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormat
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonObject
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonSchema
@@ -282,20 +281,19 @@ fun QvacCompletion.orchestrate(
         tool.name to (tool.handler
             ?: throw IllegalArgumentException("Tool '${tool.name}' requires a handler"))
     }
-    val json = client.json
     val request = CompletionOrchestrateRequest(
         captureThinking = options.captureThinking,
         emitRawDeltas = options.emitRawDeltas,
-        generationParams = json.restate(options.generation.toStreamParams()),
-        history = history.map { json.restate(it.toStreamItem()) },
+        generationParams = options.generation.toStreamParams(),
+        history = history.map { it.toStreamItem() },
         kvCache = options.kvCache?.toWire(),
         maxToolTurns = maxToolTurns.toLong(),
         modelId = modelId,
         requestId = options.requestId,
-        responseFormat = options.responseFormat?.let { json.restate(it.toStreamFormat()) },
+        responseFormat = options.responseFormat?.toStreamFormat(),
         stream = options.stream,
-        toolDialect = options.toolDialect?.let { wireEnum<CompletionOrchestrateRequestToolDialect>("toolDialect", it) },
-        tools = tools.map { json.restate(it.toStreamTool()) },
+        toolDialect = options.toolDialect?.let { wireEnum<CompletionStreamRequestToolDialect>("toolDialect", it) },
+        tools = tools.map { it.toStreamTool() },
     )
     val upstream = Channel<ByteArray>(Channel.UNLIMITED)
     return startRun(options.requestId, handlers) { emit ->
@@ -432,8 +430,6 @@ private val knownCompletionEventTypes = setOf(
     "completionDone",
 )
 
-// completionOrchestrate events use the completionStream event schema; the
-// contract types differ only in their generated names.
 private fun QvacClient.parseCompletionEvent(element: JsonElement): QvacCompletionEvent {
     val payload = element.jsonObject
     val type = (payload["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -517,9 +513,9 @@ private fun QvacGenerationOptions.toStreamParams() = CompletionStreamRequestGene
     reasoning_budget = reasoningBudget,
 )
 
-private fun QvacKvCache.toWire(): CompletionOrchestrateRequestKvCache = when (this) {
-    is QvacKvCache.Enabled -> CompletionOrchestrateRequestKvCache.Variant1(enabled)
-    is QvacKvCache.Key -> CompletionOrchestrateRequestKvCache.Variant2(key)
+private fun QvacKvCache.toWire(): CompletionStreamRequestKvCache = when (this) {
+    is QvacKvCache.Enabled -> CompletionStreamRequestKvCache.Variant1(enabled)
+    is QvacKvCache.Key -> CompletionStreamRequestKvCache.Variant2(key)
 }
 
 private fun QvacResponseFormat.toStreamFormat(): CompletionStreamRequestResponseFormat = when (this) {
@@ -555,11 +551,6 @@ private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
         required = required.takeIf { it.isNotEmpty() }?.toList(),
     ),
 )
-
-// completionOrchestrate request fields use the completionStream schemas; the generated
-// types differ only in name, so orchestrate reuses the stream mappers and re-decodes.
-private inline fun <reified From, reified To> Json.restate(value: From): To =
-    decodeFromJsonElement(encodeToJsonElement(value))
 
 /** Maps a wire string onto a generated enum, rejecting values the contract does not list. */
 internal inline fun <reified T> wireEnum(field: String, value: String): T = try {
