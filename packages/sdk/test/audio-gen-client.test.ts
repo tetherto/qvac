@@ -1,6 +1,7 @@
 import test from 'brittle'
 import type {
   AudioEditStreamRequest,
+  AudioGenClientParams,
   AudioGenStreamRequest,
   AudioUnderstandRequest
 } from '@qvac/inference/surface'
@@ -197,6 +198,129 @@ test('audioGen client forwards caption augmentation and frozen codes as a plain 
   t.alike(capturedRequest?.audioCodes, [12095, 63487, 12741])
 })
 
+test('audioGen client forwards ACE-Step per-run steps and shift and resolves the run metadata', async (t) => {
+  let capturedRequest: AudioGenStreamRequest | undefined
+  const metadata = {
+    caption: 'a hopeful indie track with jangly guitars',
+    lyrics: '[Instrumental]',
+    bpm: 112,
+    keyscale: 'D major',
+    beatsPerBar: 4,
+    vocalLanguage: 'unknown',
+    seed: 1_234_567,
+    codeFrames: 150
+  }
+  const run = createAudioGenResult(
+    {
+      modelId: 'audio-model',
+      caption: 'a hopeful indie track',
+      bpm: 0,
+      inferenceSteps: 50,
+      shift: 1.5
+    },
+    function streamFactory(request) {
+      capturedRequest = request
+      return mockResponses([
+        {
+          type: 'audioGenStream',
+          data: 'AAE=',
+          sampleRate: 48000,
+          channels: 2,
+          bitsPerSample: 16
+        },
+        {
+          type: 'audioGenStream',
+          done: true,
+          stopReason: 'completed',
+          stats: { totalTimeMs: 9000, metadata }
+        }
+      ])
+    }
+  )
+
+  await run.audio
+  t.is(capturedRequest?.bpm, 0, 'bpm 0 lets the LM infer it')
+  t.is(capturedRequest?.inferenceSteps, 50)
+  t.is(capturedRequest?.shift, 1.5)
+  t.alike((await run.stats)?.metadata, metadata)
+})
+
+test('audioGen client rejects values the addon would refuse before opening the stream', (t) => {
+  const rejects = (params: Partial<AudioGenClientParams>, message: string) => {
+    let opened = false
+    t.exception(
+      () =>
+        createAudioGenResult(
+          { modelId: 'audio-model', caption: 'x', ...params },
+          function streamFactory() {
+            opened = true
+            return mockResponses([])
+          }
+        ),
+      RequestValidationFailedError,
+      message
+    )
+    t.absent(opened, `${message}: no stream is opened`)
+  }
+  rejects({ shift: 1e-50 }, 'a positive shift that rounds to a float32 zero')
+  rejects({ inferenceSteps: 1001 }, 'steps are capped at 1000')
+  rejects({ bpm: 2147483648 }, 'bpm is an int32')
+  rejects({ seed: 2 ** 53 }, 'seed is a safe integer')
+  rejects({ dcwScaler: 1e39 }, 'DCW scalers are within the float32 range')
+})
+
+test('audioEdit client forwards the edit-run controls and normalizes the reference', async (t) => {
+  let capturedRequest: AudioEditStreamRequest | undefined
+  const reference = new Float32Array([0.5, -0.5])
+  const run = createAudioEditResult(
+    {
+      modelId: 'audio-model',
+      sourceAudio: '/tmp/song.wav',
+      operations: [{ type: 'repaint', caption: 'analog synth solo', start: 10, end: 20 }],
+      referenceAudio: Buffer.from(reference.buffer, reference.byteOffset, reference.byteLength),
+      vocalLanguage: 'en',
+      bpm: 120,
+      keyscale: 'C minor',
+      timesignature: '4/4',
+      augmentCaptionWithMetadata: true,
+      dcwEnabled: false,
+      dcwScaler: 0.04,
+      dcwHighScaler: 0.01,
+      inferenceSteps: 16,
+      shift: 2
+    },
+    function streamFactory(request) {
+      capturedRequest = request
+      return mockResponses([
+        {
+          type: 'audioEditStream',
+          data: 'AAE=',
+          sampleRate: 48000,
+          channels: 2,
+          bitsPerSample: 16
+        },
+        { type: 'audioEditStream', done: true, stopReason: 'completed' }
+      ])
+    }
+  )
+
+  await run.audio
+  t.alike(capturedRequest?.referenceAudio, {
+    type: 'base64',
+    value: Buffer.from(reference.buffer).toString('base64')
+  })
+  t.is(capturedRequest?.vocalLanguage, 'en')
+  t.is(capturedRequest?.bpm, 120)
+  t.is(capturedRequest?.keyscale, 'C minor')
+  t.is(capturedRequest?.timesignature, '4/4')
+  t.is(capturedRequest?.augmentCaptionWithMetadata, true)
+  t.is(capturedRequest?.dcwEnabled, false)
+  t.is(capturedRequest?.dcwScaler, 0.04)
+  t.is(capturedRequest?.dcwHighScaler, 0.01)
+  t.is(capturedRequest?.inferenceSteps, 16)
+  t.is(capturedRequest?.shift, 2)
+})
+
 test('audioEdit client normalizes the source, forwards the pipeline, and collects the edit', async (t) => {
   let capturedRequest: AudioEditStreamRequest | undefined
   const source = new Float32Array([0.25, -0.25])
@@ -362,7 +486,8 @@ const description = {
   keyscale: 'F minor',
   timesignature: '4/4',
   vocalLanguage: 'en',
-  audioCodes: [7, -3, 2048]
+  audioCodes: [7, -3, 2048],
+  seed: 11
 }
 
 function createUnderstandRun(
@@ -412,6 +537,7 @@ test('audioUnderstand client collects progress, the description, stats and reque
 
   t.alike(progress, [{ stage: 'lm', step: 1, total: 2 }])
   t.alike(resolved, description)
+  t.is(resolved.seed, 11, 'the description reports the seed the LM decode used')
   t.alike(stats?.understand, description)
   t.alike(diagnostics, { selectedBackend: 'cpu', selectedDevice: 'cpu' })
 })

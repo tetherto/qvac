@@ -202,6 +202,7 @@ def understood(caption: str) -> dict[str, Any]:
         "timesignature": "4",
         "vocalLanguage": "en",
         "audioCodes": [],
+        "seed": 7,
     }
 
 
@@ -216,7 +217,73 @@ async def test_audio_understand_takes_the_last_description():
     run = streams.audio_understand(
         transport, model_id="m", source_audio="/tmp/clip.wav"
     )
-    assert (await run.result).model_dump()["caption"] == "b"
+    result = (await run.result).model_dump()
+    assert result["caption"] == "b"
+    assert result["seed"] == 7
+
+
+async def test_audio_gen_sends_per_run_sampling_and_reads_the_run_metadata():
+    metadata = {
+        "caption": "rain on a tin roof, slow piano",
+        "lyrics": "[Instrumental]",
+        "bpm": 70,
+        "keyscale": "A minor",
+        "beatsPerBar": 4,
+        "vocalLanguage": "unknown",
+        "seed": 1234567,
+        "codeFrames": 150,
+    }
+    transport = FakeTransport(
+        frames(
+            schemas.AudioGenStreamResponse,
+            {**AUDIO, "data": b64(b"ab")},
+            {
+                "type": "audioGenStream",
+                "done": True,
+                "stopReason": "completed",
+                "stats": {"totalTimeMs": 900, "metadata": metadata},
+            },
+        )
+    )
+    run = streams.audio_gen(
+        transport, model_id="m", caption="rain", inference_steps=50, shift=1.5
+    )
+    await run.result
+    sent = transport.sent[0]
+    assert sent["inferenceSteps"] == 50
+    assert sent["shift"] == 1.5
+    stats = (await run.stats).model_dump(by_alias=True, exclude_none=True)
+    assert stats["metadata"] == metadata
+
+
+async def test_audio_edit_sends_the_run_controls_and_the_reference():
+    transport = FakeTransport(
+        frames(
+            schemas.AudioEditStreamResponse,
+            {**AUDIO, "type": "audioEditStream", "data": b64(b"ab")},
+            {"type": "audioEditStream", "done": True, "stopReason": "completed"},
+        )
+    )
+    run = streams.audio_edit(
+        transport,
+        model_id="m",
+        operations=[{"type": "repaint", "caption": "drum fill", "start": 0}],
+        source_audio="/tmp/song.wav",
+        reference_audio="/tmp/reference.wav",
+        bpm=120,
+        keyscale="C minor",
+        dcw_enabled=False,
+        inference_steps=16,
+        shift=2.0,
+    )
+    await run.result
+    sent = transport.sent[0]
+    assert sent["referenceAudio"] == {"type": "filePath", "value": "/tmp/reference.wav"}
+    assert sent["bpm"] == 120
+    assert sent["keyscale"] == "C minor"
+    assert sent["dcwEnabled"] is False
+    assert sent["inferenceSteps"] == 16
+    assert sent["shift"] == 2.0
 
 
 async def test_world_scene_joins_the_pack():
