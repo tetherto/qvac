@@ -1,0 +1,3 @@
+EXPORTS
+  bare_get_module_name_v0
+  bare_register_module_v0

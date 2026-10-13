@@ -15,6 +15,17 @@ and this project adheres to
   root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
   the backends it ships, next to its runtime.
 
+## [0.29.1] - 2026-10-13
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
 ## [0.29.0] - 2026-10-06
 
 ### Changed

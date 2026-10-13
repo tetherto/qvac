@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A source build is loadable once `npm run link:platform` (part of
   `build:native`) stages it as the host's platform package in `node_modules/`.
 
+## [0.11.1] - 2026-10-13
+
 ### Added
 
 - `package.json` records the `ggml-speech` build the prebuilds ship as
@@ -32,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   record the same build.
 
 ### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update the shared `speech-cpp` pin to `2026-10-12` for CosyVoice3 CUDA LM flash
+  attention and decode graph reuse, plus Vulkan flow attention with f16 K/V.
+  Unsupported attention operations retain the regular-attention fallback.
 
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS, MOSS,
   MOSS-TTSD, MOSS-SoundEffect and MOSS-Speech run one stage each on a Core ML

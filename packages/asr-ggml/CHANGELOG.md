@@ -31,6 +31,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - A source build is loadable once `npm run link:platform` (part of
   `build:native`) stages it as the host's platform package in `node_modules/`.
 
+## [0.8.1] - 2026-10-13
+
 ### Added
 
 - `package.json` records the `ggml-speech` build the prebuilds ship as
@@ -39,6 +41,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   record the same build.
 
 ### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
 
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
   MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when

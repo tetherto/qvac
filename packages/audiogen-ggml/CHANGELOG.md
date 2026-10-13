@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A source build is loadable once `npm run link:platform` (part of
   `build:native`) stages it as the host's platform package in `node_modules/`.
 
+## [0.6.1] - 2026-10-13
+
 ### Added
 
 - `package.json` records the `ggml-speech` build the prebuilds ship as
@@ -32,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   record the same build.
 
 ### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
 
 - Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
   same versions as the other speech addons. `speech-cpp` moves from
