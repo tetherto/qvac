@@ -294,3 +294,20 @@ TEST(ModelMemoryPolicy, UntrimmableModelsSnapshotPartially) {
   EXPECT_FALSE(utils::needsFullStateSnapshot(false, false, false));
   EXPECT_EQ(utils::untrimmableSnapshotScope(), utils::SnapshotScope::Partial);
 }
+
+// Sliding-window models without `swa_full` take checkpoints once a sequence
+// can outgrow the window, and one holds at most the window's `n_swa` cells.
+TEST(ModelMemoryPolicy, SlidingWindowCheckpointsAreBoundedByTheWindow) {
+  namespace utils = qvac_lib_inference_addon_llama::utils;
+  EXPECT_TRUE(utils::takesSlidingWindowCheckpoints(512, false, 4096));
+  EXPECT_TRUE(utils::takesSlidingWindowCheckpoints(512, false, 513));
+  EXPECT_FALSE(utils::takesSlidingWindowCheckpoints(512, true, 4096));
+  EXPECT_FALSE(utils::takesSlidingWindowCheckpoints(0, false, 4096));
+  // Gemma 3 4B with ctx_size 4096 and parallel 4: 1024 per slot, the window.
+  EXPECT_FALSE(utils::takesSlidingWindowCheckpoints(1024, false, 1024));
+  EXPECT_FALSE(utils::takesSlidingWindowCheckpoints(512, false, 256));
+
+  EXPECT_EQ(utils::slidingWindowCheckpointCells(512), 512u);
+  EXPECT_EQ(utils::slidingWindowCheckpointCells(0), 0u);
+  EXPECT_EQ(utils::slidingWindowCheckpointCells(-1), 0u);
+}

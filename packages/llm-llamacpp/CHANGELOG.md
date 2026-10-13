@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.59.0] - 2026-10-11
 
 ### Added
 
@@ -10,7 +10,16 @@
   the model's own format instead of the caller writing them into `content`.
   `content` may be `null` or omitted on an assistant turn that carries
   `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
-  `InvalidInputFormat`.
+  `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
+
+### Changed
+
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off.
 
 ### Fixed
 
@@ -18,6 +27,11 @@
   resolved `load()` instead of rejecting it, and the first request then
   crashed the process. It now rejects with `UnableToLoadModel`, as a
   text-only model does.
+- Gemma 4 vision models cap an image at 280 tokens again when
+  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
+  applied, so a large image took about four times the tokens and prefill: on
+  Android it ran the app out of memory or produced a wrong description.
+  Set `image_max_tokens` to raise the cap.
 
 ## [0.58.0] - 2026-10-09
 

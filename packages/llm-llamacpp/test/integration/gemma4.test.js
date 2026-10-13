@@ -1,9 +1,10 @@
 'use strict'
 
 const test = require('brittle')
+const fs = require('bare-fs')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { cleanupIntegrationCacheFiles, ensureModel } = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModel, getMediaPath } = require('./utils')
 const os = require('bare-os')
 
 const platform = os.platform()
@@ -228,6 +229,117 @@ test(
     } finally {
       await addon.unload().catch(() => {})
     }
+  }
+)
+
+// Gemma 4 keeps only the last 512 positions in its sliding-window layers. An
+// edit of a user message longer than the window diverges behind it, so a tail
+// trim cannot serve the next turn: the end-of-history checkpoint after the
+// image turn brings the window back instead, with the image in front of it.
+// With `cache_checkpoints: 0` the same edit reprocesses everything, which
+// proves the divergence really is behind the window. The answer is not
+// compared with a cold run: the restore splits the prefill into other batch
+// shapes, and greedy output drifts on GPU backends.
+test(
+  'Gemma 4 restores a sliding-window checkpoint after an image turn',
+  {
+    timeout: 1_800_000,
+    skip: isDarwinX64
+  },
+  async (t) => {
+    const [modelName, dirPath] = await ensureModel(GEMMA4_MODEL.llmModel)
+    const [projModelName] = await ensureModel(GEMMA4_MODEL.projModel)
+    const modelPath = path.join(dirPath, modelName)
+    const projectionModelPath = path.join(dirPath, projModelName)
+    const imageBytes = new Uint8Array(fs.readFileSync(getMediaPath('elephant.jpg')))
+
+    const question = 'What animal was in the image? Answer in one word.'
+    const imageTurn = [
+      { role: 'user', type: 'media', content: imageBytes },
+      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
+    ]
+    // About 1,500 tokens: far more than the window. Numbers only, so no noun in
+    // the filler competes with the answer.
+    const longMessage = (label) =>
+      Array.from(
+        { length: 120 },
+        (_, i) => `Reading ${label}${i}: ${(i * 7) % 100}.${i % 10} units.`
+      ).join(' ') + ` ${question}`
+
+    async function editBehindTheWindow(cacheCheckpoints) {
+      const addon = new LlmLlamacpp({
+        files: { model: [modelPath], projectionModel: projectionModelPath },
+        config: {
+          device: useCpu ? 'cpu' : 'gpu',
+          gpu_layers: '999',
+          ctx_size: '4096',
+          n_predict: '32',
+          temp: '0',
+          seed: '42',
+          'reasoning-budget': '0',
+          // Keeps Gemma 4's Metal compute buffer under the iPhone Jetsam
+          // ceiling, as in _vlm-image-perf.js.
+          'ubatch-size': '320',
+          cache_checkpoints: String(cacheCheckpoints),
+          verbosity: '0'
+        },
+        logger: createLogger(),
+        opts: { stats: true }
+      })
+      const cacheKey = path.join(dirPath, `gemma4-swa-checkpoint-${cacheCheckpoints}.bin`)
+      cleanupIntegrationCacheFiles(cacheKey)
+      try {
+        await addon.load()
+        const first = await addon.run(imageTurn, { cacheKey })
+        const answer = await collectResponse(first)
+        const history = [...imageTurn, { role: 'assistant', content: answer }]
+
+        const turn = await addon.run([...history, { role: 'user', content: longMessage('A') }], {
+          cacheKey
+        })
+        await collectResponse(turn)
+
+        const edited = await addon.run([...history, { role: 'user', content: longMessage('B') }], {
+          cacheKey
+        })
+        const output = await collectResponse(edited)
+        const stats = edited.stats || {}
+        return {
+          firstPromptTokens: first.stats?.promptTokens ?? 0,
+          promptTokens: stats.promptTokens ?? 0,
+          promptLength: (stats.CacheTokens ?? 0) - (stats.generatedTokens ?? 0),
+          output
+        }
+      } finally {
+        await addon.unload().catch(() => {})
+        cleanupIntegrationCacheFiles(cacheKey)
+      }
+    }
+
+    const restored = await editBehindTheWindow(2)
+    t.comment(
+      `with checkpoints: decoded ${restored.promptTokens} of ${restored.promptLength} prompt tokens`
+    )
+    t.ok(restored.firstPromptTokens > 0, 'the image turn decoded its prompt')
+    t.ok(
+      restored.promptTokens < restored.promptLength - restored.firstPromptTokens / 2,
+      `the edit reused the image turn (decoded ${restored.promptTokens} of ${restored.promptLength}, image turn ${restored.firstPromptTokens})`
+    )
+    t.ok(
+      /elephant/i.test(restored.output),
+      `the turn served from the checkpoint still sees the image: "${restored.output.slice(0, 100)}"`
+    )
+
+    const cold = await editBehindTheWindow(0)
+    t.comment(`without checkpoints: decoded ${cold.promptTokens} of ${cold.promptLength}`)
+    t.ok(
+      cold.promptTokens >= cold.promptLength - 1,
+      `test setup: without checkpoints the edit reprocesses everything (${cold.promptTokens} of ${cold.promptLength})`
+    )
+    t.ok(
+      /elephant/i.test(cold.output),
+      `test setup: a cold run of the edit sees the image: "${cold.output.slice(0, 100)}"`
+    )
   }
 )
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.29.0] - 2026-10-12
+
+### Added
+
+- Metadata-only `assessFit` support for standalone ESRGAN (`mode: 'upscale'`)
+  and ABot-World (`mode: 'world'`), without loading model weights.
+- ABot-World fit estimates for a stated session length using
+  `workload.walkSteps`, with a default of 100 walk steps, including retained
+  latent history and the configured placement and streaming budgets.
+
+### Changed
+
+- Include ESRGAN weights, tiled computation, full-image buffers, and repeated
+  upscale passes in standalone and post-generation memory estimates.
+- Use checkpoint metadata to validate ESRGAN's actual output scale against
+  image limits, and account for shared host/GPU memory on Apple Silicon.
+- Build against the published `stable-diffusion-cpp` registry port
+  `2026-08-11#5` without a temporary engine overlay.
+
+### Pull Requests
+
+- [#4939](https://github.com/tetherto/qvac/pull/4939) - QVAC-26761 feat[api]:
+  add ESRGAN and ABot memory fit.
+
 ## [0.28.1] - 2026-10-09
 
 ### Fixed
