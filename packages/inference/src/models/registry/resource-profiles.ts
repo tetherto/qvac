@@ -250,6 +250,11 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'whispercpp-transcription',
     artifactBytes: 43537450
   },
+  '08456d9e22cd9a323c0364d98375f3746d6e68507ebb705cd46438c534c7a3a1': {
+    schemaVersion: 1,
+    engine: 'parakeet-transcription',
+    artifactBytes: 107012128
+  },
   '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae': {
     schemaVersion: 1,
     engine: 'llamacpp-completion',

@@ -274,6 +274,10 @@ test('models registry catalog exports every named model constant', (t) => {
   t.ok(names.length > 0, 'catalog is non-empty')
   t.ok(names.includes('QWEN3_600M_INST_Q4'), 'includes a known model constant')
   t.ok(names.includes('BCI_EMBEDDER'), 'includes the hand-derived BCI_EMBEDDER constant')
+  t.ok(
+    names.includes('PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0'),
+    'Nemotron diarization fixture resolves to a named model constant'
+  )
 
   for (const [legacyName, canonicalName] of [
     ['PARAKEET_0_6B_F16', 'PARAKEET_NEMOTRON_0_6B_F16'],

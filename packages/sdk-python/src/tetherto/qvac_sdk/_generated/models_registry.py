@@ -4727,6 +4727,24 @@ PARAKEET_NEMOTRON_0_6B_Q8_0 = ModelConstant(
     params="0.6B",
 )
 
+PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0 = ModelConstant(
+    name="PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/nemotron/2026-10-09/Nemotron-3-Diarization.q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/nemotron/2026-10-09/Nemotron-3-Diarization.q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1775765,
+    blob_block_length=1633,
+    blob_byte_offset=116370290938,
+    model_id="Nemotron-3-Diarization.q8_0.gguf",
+    expected_size=107012128,
+    sha256_checksum="08456d9e22cd9a323c0364d98375f3746d6e68507ebb705cd46438c534c7a3a1",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="99.2M",
+)
+
 PARAKEET_SORTFORMER_4SPK_V1_F16 = ModelConstant(
     name="PARAKEET_SORTFORMER_4SPK_V1_F16",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
@@ -8482,6 +8500,7 @@ __all__ = [
     "PARAKEET_NEMOTRON_0_6B_F16",
     "PARAKEET_NEMOTRON_0_6B_Q4_0",
     "PARAKEET_NEMOTRON_0_6B_Q8_0",
+    "PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0",
     "PARAKEET_SORTFORMER_4SPK_V1_F16",
     "PARAKEET_SORTFORMER_4SPK_V1_Q4_0",
     "PARAKEET_SORTFORMER_4SPK_V1_Q8_0",
