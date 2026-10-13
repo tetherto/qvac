@@ -521,16 +521,6 @@ class AudioEditStreamRequestSourceAudioFilePath(GeneratedBaseModel):
     value: str
 
 
-class AudioEditStreamRequestReferenceAudioBase64(GeneratedBaseModel):
-    type: Literal["base64"] = "base64"
-    value: str
-
-
-class AudioEditStreamRequestReferenceAudioFilePath(GeneratedBaseModel):
-    type: Literal["filePath"] = "filePath"
-    value: str
-
-
 class AudioEditStreamRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -549,87 +539,9 @@ class AudioEditStreamRequest(GeneratedBaseModel):
     seed: Annotated[
         int | None,
         Field(
-            description="Seeds the first operation; each following operation uses seed + its index. Omit for a random one, reported in `stats.metadata.seed`.",
+            description="Seeds the first operation; each following operation uses seed + its index.",
             ge=-9007199254740991,
             le=9007199254740991,
-        ),
-    ] = None
-    vocal_language: Annotated[
-        str | None,
-        Field(
-            alias="vocalLanguage",
-            description="Vocal language hint for the edit prompts; the engine defaults to 'unknown'.",
-            min_length=1,
-        ),
-    ] = None
-    bpm: Annotated[
-        int | None,
-        Field(
-            description="Beats per minute for the edit prompts; `0` or unset leaves it unset.",
-            ge=0,
-            le=2147483647,
-        ),
-    ] = None
-    keyscale: Annotated[
-        str | None,
-        Field(
-            description="Key and scale for the edit prompts, e.g. 'C minor'.",
-            min_length=1,
-        ),
-    ] = None
-    timesignature: Annotated[
-        str | None,
-        Field(
-            description="Time signature for the edit prompts, e.g. '4/4'.", min_length=1
-        ),
-    ] = None
-    augment_caption_with_metadata: Annotated[
-        bool | None,
-        Field(
-            alias="augmentCaptionWithMetadata",
-            description="Append BPM, time signature and key to each operation's conditioning caption (default: false).",
-        ),
-    ] = None
-    dcw_enabled: Annotated[
-        bool | None,
-        Field(
-            alias="dcwEnabled",
-            description="Repaint only: apply the Haar DCW sampler correction (default: true).",
-        ),
-    ] = None
-    dcw_scaler: Annotated[
-        float | None,
-        Field(
-            alias="dcwScaler",
-            description="Repaint only: DCW low-frequency correction strength (default: 0.05).",
-            ge=0.0,
-            le=3.4028234663852886e38,
-        ),
-    ] = None
-    dcw_high_scaler: Annotated[
-        float | None,
-        Field(
-            alias="dcwHighScaler",
-            description="Repaint only: DCW high-frequency correction strength (default: 0.02).",
-            ge=0.0,
-            le=3.4028234663852886e38,
-        ),
-    ] = None
-    inference_steps: Annotated[
-        int | None,
-        Field(
-            alias="inferenceSteps",
-            description="DiT steps for every operation, 0..1000; omit to keep the load-time `inferenceSteps`.",
-            ge=0,
-            le=1000,
-        ),
-    ] = None
-    shift: Annotated[
-        float | None,
-        Field(
-            description="DiT timestep shift for every operation; omit to keep the load-time `shift`.",
-            ge=0.0,
-            le=3.4028234663852886e38,
         ),
     ] = None
     source_audio: Annotated[
@@ -640,15 +552,6 @@ class AudioEditStreamRequest(GeneratedBaseModel):
             description="Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].",
         ),
     ]
-    reference_audio: Annotated[
-        AudioEditStreamRequestReferenceAudioBase64
-        | AudioEditStreamRequestReferenceAudioFilePath
-        | None,
-        Field(
-            alias="referenceAudio",
-            description="Optional timbre reference for every operation: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM.",
-        ),
-    ] = None
     type: Literal["audioEditStream"] = "audioEditStream"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
@@ -672,52 +575,6 @@ class AudioEditStreamResponseProgress(GeneratedBaseModel):
 class AudioEditStreamResponseStopReason(Enum):
     completed = "completed"
     cancelled = "cancelled"
-
-
-class AudioEditStreamResponseStatsMetadata(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    caption: Annotated[
-        str,
-        Field(
-            description="The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
-        ),
-    ]
-    lyrics: Annotated[
-        str,
-        Field(description="The lyrics the run used (LM-written under Simple Mode)."),
-    ]
-    bpm: Annotated[float, Field(description="Beats per minute; 0 when unresolved.")]
-    keyscale: str
-    beats_per_bar: Annotated[
-        float,
-        Field(
-            alias="beatsPerBar",
-            description="Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved.",
-        ),
-    ]
-    vocal_language: Annotated[str, Field(alias="vocalLanguage")]
-    seed: Annotated[
-        float,
-        Field(
-            description="The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
-        ),
-    ]
-    code_frames: Annotated[
-        float,
-        Field(
-            alias="codeFrames",
-            description="5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits).",
-        ),
-    ]
-    quality_report: Annotated[
-        str | None,
-        Field(
-            alias="qualityReport",
-            description="Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
-        ),
-    ] = None
 
 
 class AudioCode(RootModel[int]):
@@ -747,12 +604,6 @@ class AudioEditStreamResponseStatsUnderstand(GeneratedBaseModel):
             max_length=3000,
         ),
     ]
-    seed: Annotated[
-        float,
-        Field(
-            description="The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
-        ),
-    ]
 
 
 class AudioEditStreamResponseStats(GeneratedBaseModel):
@@ -764,48 +615,6 @@ class AudioEditStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
-    emitted_frames: Annotated[
-        float | None,
-        Field(
-            alias="emittedFrames",
-            description="MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
-        ),
-    ] = None
-    ar_ms: Annotated[
-        float | None,
-        Field(
-            alias="arMs",
-            description="MiniMax only: engine time in the autoregressive semantic stage, in ms.",
-        ),
-    ] = None
-    condition_ms: Annotated[
-        float | None,
-        Field(
-            alias="conditionMs",
-            description="MiniMax only: engine time building the flow conditioning, in ms.",
-        ),
-    ] = None
-    flow_ms: Annotated[
-        float | None,
-        Field(
-            alias="flowMs",
-            description="MiniMax only: engine time in the flow-matching DiT, in ms.",
-        ),
-    ] = None
-    vocoder_ms: Annotated[
-        float | None,
-        Field(
-            alias="vocoderMs",
-            description="MiniMax only: engine time in the vocoder, in ms.",
-        ),
-    ] = None
-    metadata: Annotated[
-        AudioEditStreamResponseStatsMetadata | None,
-        Field(
-            description="What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
-            title="AudioEditStreamResponseStatsMetadata",
-        ),
-    ] = None
     lyrics_score: Annotated[
         float | None,
         Field(
@@ -1023,25 +832,11 @@ class AudioGenStreamRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId", min_length=1)]
     caption: Annotated[str, Field(min_length=1)]
     lyrics: str | None = None
-    seed: Annotated[
-        int | None,
-        Field(
-            description="RNG seed; omit for a random one. An ACE-Step run reports the seed it used in `stats.metadata.seed`, so an unseeded take can be replayed.",
-            ge=-9007199254740991,
-            le=9007199254740991,
-        ),
-    ] = None
+    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
     vocal_language: Annotated[
         str | None, Field(alias="vocalLanguage", min_length=1)
     ] = None
-    bpm: Annotated[
-        int | None,
-        Field(
-            description="Beats per minute; `0` or unset lets the LM infer it. ACE-Step only.",
-            ge=0,
-            le=2147483647,
-        ),
-    ] = None
+    bpm: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
     keyscale: Annotated[str | None, Field(min_length=1)] = None
     timesignature: Annotated[str | None, Field(min_length=1)] = None
     augment_caption_with_metadata: Annotated[
@@ -1121,17 +916,9 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         int | None,
         Field(
             alias="inferenceSteps",
-            description="Diffusion steps for this generation, 0..1000; omit to keep the load-time `inferenceSteps`. 0 is the engine default: MiniMax 20 flow steps, ACE-Step 8 on turbo DiTs and 50 on base/sft.",
+            description="MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.",
             ge=0,
             le=1000,
-        ),
-    ] = None
-    shift: Annotated[
-        float | None,
-        Field(
-            description="DiT timestep shift for this generation; omit to keep the load-time `shift`. 0 is the engine default: 3.0 on turbo DiTs, 1.0 on base/sft. ACE-Step only; rejected by MiniMax.",
-            ge=0.0,
-            le=3.4028234663852886e38,
         ),
     ] = None
     cfg_scale: Annotated[
@@ -1197,7 +984,6 @@ class AudioGenStreamRequest(GeneratedBaseModel):
             alias="dcwScaler",
             description="DCW low-frequency correction strength (official default: 0.05).",
             ge=0.0,
-            le=3.4028234663852886e38,
         ),
     ] = None
     dcw_high_scaler: Annotated[
@@ -1206,7 +992,6 @@ class AudioGenStreamRequest(GeneratedBaseModel):
             alias="dcwHighScaler",
             description="DCW high-frequency correction strength (official default: 0.02).",
             ge=0.0,
-            le=3.4028234663852886e38,
         ),
     ] = None
     task_type: Annotated[
@@ -1287,52 +1072,6 @@ class AudioGenStreamResponseStopReason(Enum):
     cancelled = "cancelled"
 
 
-class AudioGenStreamResponseStatsMetadata(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    caption: Annotated[
-        str,
-        Field(
-            description="The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
-        ),
-    ]
-    lyrics: Annotated[
-        str,
-        Field(description="The lyrics the run used (LM-written under Simple Mode)."),
-    ]
-    bpm: Annotated[float, Field(description="Beats per minute; 0 when unresolved.")]
-    keyscale: str
-    beats_per_bar: Annotated[
-        float,
-        Field(
-            alias="beatsPerBar",
-            description="Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved.",
-        ),
-    ]
-    vocal_language: Annotated[str, Field(alias="vocalLanguage")]
-    seed: Annotated[
-        float,
-        Field(
-            description="The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
-        ),
-    ]
-    code_frames: Annotated[
-        float,
-        Field(
-            alias="codeFrames",
-            description="5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits).",
-        ),
-    ]
-    quality_report: Annotated[
-        str | None,
-        Field(
-            alias="qualityReport",
-            description="Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
-        ),
-    ] = None
-
-
 class AudioGenStreamResponseStatsUnderstand(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1356,12 +1095,6 @@ class AudioGenStreamResponseStatsUnderstand(GeneratedBaseModel):
             max_length=3000,
         ),
     ]
-    seed: Annotated[
-        float,
-        Field(
-            description="The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
-        ),
-    ]
 
 
 class AudioGenStreamResponseStats(GeneratedBaseModel):
@@ -1373,48 +1106,6 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
-    emitted_frames: Annotated[
-        float | None,
-        Field(
-            alias="emittedFrames",
-            description="MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
-        ),
-    ] = None
-    ar_ms: Annotated[
-        float | None,
-        Field(
-            alias="arMs",
-            description="MiniMax only: engine time in the autoregressive semantic stage, in ms.",
-        ),
-    ] = None
-    condition_ms: Annotated[
-        float | None,
-        Field(
-            alias="conditionMs",
-            description="MiniMax only: engine time building the flow conditioning, in ms.",
-        ),
-    ] = None
-    flow_ms: Annotated[
-        float | None,
-        Field(
-            alias="flowMs",
-            description="MiniMax only: engine time in the flow-matching DiT, in ms.",
-        ),
-    ] = None
-    vocoder_ms: Annotated[
-        float | None,
-        Field(
-            alias="vocoderMs",
-            description="MiniMax only: engine time in the vocoder, in ms.",
-        ),
-    ] = None
-    metadata: Annotated[
-        AudioGenStreamResponseStatsMetadata | None,
-        Field(
-            description="What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
-            title="AudioGenStreamResponseStatsMetadata",
-        ),
-    ] = None
     lyrics_score: Annotated[
         float | None,
         Field(
@@ -1692,63 +1383,11 @@ class AudioUnderstandResponseUnderstand(GeneratedBaseModel):
             max_length=3000,
         ),
     ]
-    seed: Annotated[
-        float,
-        Field(
-            description="The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
-        ),
-    ]
 
 
 class AudioUnderstandResponseStopReason(Enum):
     completed = "completed"
     cancelled = "cancelled"
-
-
-class AudioUnderstandResponseStatsMetadata(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    caption: Annotated[
-        str,
-        Field(
-            description="The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
-        ),
-    ]
-    lyrics: Annotated[
-        str,
-        Field(description="The lyrics the run used (LM-written under Simple Mode)."),
-    ]
-    bpm: Annotated[float, Field(description="Beats per minute; 0 when unresolved.")]
-    keyscale: str
-    beats_per_bar: Annotated[
-        float,
-        Field(
-            alias="beatsPerBar",
-            description="Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved.",
-        ),
-    ]
-    vocal_language: Annotated[str, Field(alias="vocalLanguage")]
-    seed: Annotated[
-        float,
-        Field(
-            description="The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
-        ),
-    ]
-    code_frames: Annotated[
-        float,
-        Field(
-            alias="codeFrames",
-            description="5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits).",
-        ),
-    ]
-    quality_report: Annotated[
-        str | None,
-        Field(
-            alias="qualityReport",
-            description="Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
-        ),
-    ] = None
 
 
 class AudioUnderstandResponseStatsUnderstand(GeneratedBaseModel):
@@ -1774,12 +1413,6 @@ class AudioUnderstandResponseStatsUnderstand(GeneratedBaseModel):
             max_length=3000,
         ),
     ]
-    seed: Annotated[
-        float,
-        Field(
-            description="The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
-        ),
-    ]
 
 
 class AudioUnderstandResponseStats(GeneratedBaseModel):
@@ -1791,48 +1424,6 @@ class AudioUnderstandResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
-    emitted_frames: Annotated[
-        float | None,
-        Field(
-            alias="emittedFrames",
-            description="MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
-        ),
-    ] = None
-    ar_ms: Annotated[
-        float | None,
-        Field(
-            alias="arMs",
-            description="MiniMax only: engine time in the autoregressive semantic stage, in ms.",
-        ),
-    ] = None
-    condition_ms: Annotated[
-        float | None,
-        Field(
-            alias="conditionMs",
-            description="MiniMax only: engine time building the flow conditioning, in ms.",
-        ),
-    ] = None
-    flow_ms: Annotated[
-        float | None,
-        Field(
-            alias="flowMs",
-            description="MiniMax only: engine time in the flow-matching DiT, in ms.",
-        ),
-    ] = None
-    vocoder_ms: Annotated[
-        float | None,
-        Field(
-            alias="vocoderMs",
-            description="MiniMax only: engine time in the vocoder, in ms.",
-        ),
-    ] = None
-    metadata: Annotated[
-        AudioUnderstandResponseStatsMetadata | None,
-        Field(
-            description="What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
-            title="AudioUnderstandResponseStatsMetadata",
-        ),
-    ] = None
     lyrics_score: Annotated[
         float | None,
         Field(
@@ -2006,74 +1597,15 @@ class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     ]
 
 
-class BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments(
-    RootModel[dict[str, Any]]
-):
-    root: Annotated[
-        dict[str, Any],
-        Field(
-            description="Arguments the tool was called with.",
-            title="BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
-class BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem(
-    GeneratedBaseModel
-):
-    id: Annotated[
-        str | None,
-        Field(description="Call id, echoed by the `tool` message that answers it."),
-    ] = None
-    name: Annotated[
-        str, Field(description="Name of the tool that was called.", min_length=1)
-    ]
-    arguments: Annotated[
-        BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments,
-        Field(
-            description="Arguments the tool was called with.",
-            title="BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
 class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
     role: Annotated[
         str,
-        Field(
-            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
-        ),
+        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
     ]
-    content: Annotated[
-        str | None,
-        Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
-        ),
-    ] = None
+    content: Annotated[str, Field(description="Message content.")]
     attachments: Annotated[
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
-    ] = None
-    tool_calls: Annotated[
-        list[BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem] | None,
-        Field(
-            alias="toolCalls",
-            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
-        ),
-    ] = None
-    tool_call_id: Annotated[
-        str | None,
-        Field(
-            alias="toolCallId",
-            description="On a `tool` turn: the id of the call this result answers.",
-        ),
-    ] = None
-    tool_name: Annotated[
-        str | None,
-        Field(
-            alias="toolName",
-            description="On a `tool` turn: the name of the tool that produced the result.",
-        ),
     ] = None
 
 
@@ -2116,6 +1648,12 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
             description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
             ge=-1,
             le=2147483647,
+        ),
+    ] = None
+    remove_thinking_from_context: Annotated[
+        bool | None,
+        Field(
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
     tool_choice: Annotated[
@@ -3339,72 +2877,15 @@ class CompletionOrchestrateRequestHistoryItemAttachmentsItem(GeneratedBaseModel)
     ]
 
 
-class CompletionOrchestrateRequestHistoryItemToolCallsItemArguments(
-    RootModel[dict[str, Any]]
-):
-    root: Annotated[
-        dict[str, Any],
-        Field(
-            description="Arguments the tool was called with.",
-            title="CompletionOrchestrateRequestHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
-class CompletionOrchestrateRequestHistoryItemToolCallsItem(GeneratedBaseModel):
-    id: Annotated[
-        str | None,
-        Field(description="Call id, echoed by the `tool` message that answers it."),
-    ] = None
-    name: Annotated[
-        str, Field(description="Name of the tool that was called.", min_length=1)
-    ]
-    arguments: Annotated[
-        CompletionOrchestrateRequestHistoryItemToolCallsItemArguments,
-        Field(
-            description="Arguments the tool was called with.",
-            title="CompletionOrchestrateRequestHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
 class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
     role: Annotated[
         str,
-        Field(
-            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
-        ),
+        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
     ]
-    content: Annotated[
-        str | None,
-        Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
-        ),
-    ] = None
+    content: Annotated[str, Field(description="Message content.")]
     attachments: Annotated[
         list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
-    ] = None
-    tool_calls: Annotated[
-        list[CompletionOrchestrateRequestHistoryItemToolCallsItem] | None,
-        Field(
-            alias="toolCalls",
-            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
-        ),
-    ] = None
-    tool_call_id: Annotated[
-        str | None,
-        Field(
-            alias="toolCallId",
-            description="On a `tool` turn: the id of the call this result answers.",
-        ),
-    ] = None
-    tool_name: Annotated[
-        str | None,
-        Field(
-            alias="toolName",
-            description="On a `tool` turn: the name of the tool that produced the result.",
-        ),
     ] = None
 
 
@@ -3542,6 +3023,12 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
             description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
             ge=-1,
             le=2147483647,
+        ),
+    ] = None
+    remove_thinking_from_context: Annotated[
+        bool | None,
+        Field(
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
     tool_choice: Annotated[
@@ -3993,72 +3480,15 @@ class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     ]
 
 
-class CompletionStreamRequestHistoryItemToolCallsItemArguments(
-    RootModel[dict[str, Any]]
-):
-    root: Annotated[
-        dict[str, Any],
-        Field(
-            description="Arguments the tool was called with.",
-            title="CompletionStreamRequestHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
-class CompletionStreamRequestHistoryItemToolCallsItem(GeneratedBaseModel):
-    id: Annotated[
-        str | None,
-        Field(description="Call id, echoed by the `tool` message that answers it."),
-    ] = None
-    name: Annotated[
-        str, Field(description="Name of the tool that was called.", min_length=1)
-    ]
-    arguments: Annotated[
-        CompletionStreamRequestHistoryItemToolCallsItemArguments,
-        Field(
-            description="Arguments the tool was called with.",
-            title="CompletionStreamRequestHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
 class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
     role: Annotated[
         str,
-        Field(
-            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
-        ),
+        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
     ]
-    content: Annotated[
-        str | None,
-        Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
-        ),
-    ] = None
+    content: Annotated[str, Field(description="Message content.")]
     attachments: Annotated[
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
-    ] = None
-    tool_calls: Annotated[
-        list[CompletionStreamRequestHistoryItemToolCallsItem] | None,
-        Field(
-            alias="toolCalls",
-            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
-        ),
-    ] = None
-    tool_call_id: Annotated[
-        str | None,
-        Field(
-            alias="toolCallId",
-            description="On a `tool` turn: the id of the call this result answers.",
-        ),
-    ] = None
-    tool_name: Annotated[
-        str | None,
-        Field(
-            alias="toolName",
-            description="On a `tool` turn: the name of the tool that produced the result.",
-        ),
     ] = None
 
 
@@ -4190,6 +3620,12 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
             description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
             ge=-1,
             le=2147483647,
+        ),
+    ] = None
+    remove_thinking_from_context: Annotated[
+        bool | None,
+        Field(
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
     tool_choice: Annotated[
@@ -18786,17 +18222,16 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
         int | None,
         Field(
             alias="inferenceSteps",
-            description="DiT sampling steps, 0..1000; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / base and sft 50). A generation or edit can override it per run.",
+            description="DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).",
             ge=0,
-            le=1000,
+            le=9007199254740991,
         ),
     ] = None
     shift: Annotated[
         float | None,
         Field(
-            description="Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / base and sft 1.0). A generation or edit can override it per run.",
+            description="Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
             ge=0.0,
-            le=3.4028234663852886e38,
         ),
     ] = None
     n_gpu_layers: Annotated[
@@ -18836,12 +18271,6 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
             description="VAE model source; decodes the latent into the output waveform.",
         ),
     ]
-
-
-class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice(Enum):
-    cpu = "cpu"
-    gpu = "gpu"
-    auto = "auto"
 
 
 class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
@@ -19087,13 +18516,6 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
             alias="backendsDir",
             description="Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
             min_length=1,
-        ),
-    ] = None
-    device: Annotated[
-        LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice | None,
-        Field(
-            description="Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`.",
-            title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice",
         ),
     ] = None
     inference_steps: Annotated[
