@@ -407,7 +407,12 @@ jobs:
                 run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
               fi
 
-              if [ "$PKG" = "sdk" ]; then
+              # sdk-source:workspace installs the SDK itself. A second install
+              # extracts that engine again; bun fails with EISDIR once the
+              # engine is a copied directory rather than a tarball.
+              if [ "$PKG" = "sdk" ] && [ "$SRC" = "workspace" ]; then
+                :
+              elif [ "$PKG" = "sdk" ]; then
                 run "install $src" bun install
               elif [ "$PM" = "npm" ]; then
                 # --ignore-scripts: this job writes GITHUB_TOKEN into the
