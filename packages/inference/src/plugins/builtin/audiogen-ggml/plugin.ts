@@ -119,6 +119,7 @@ function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
   if (config.engine === ENGINE_MINIMAX) {
     return {
       ...commonConfig,
+      ...(config.device !== undefined && { device: config.device }),
       ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
       ...(config.cfgScale !== undefined && { cfgScale: config.cfgScale })
     }

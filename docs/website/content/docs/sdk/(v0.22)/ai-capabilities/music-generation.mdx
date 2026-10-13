@@ -16,7 +16,7 @@ Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time si
 - `requestId` — a synchronous identifier for targeted cancellation.
 - `progressStream` — stage and step updates while generation runs.
 - `audio` — a promise resolving to interleaved PCM, its sample rate, channel count, and `bitsPerSample`.
-- `stats` — a promise resolving to timing statistics.
+- `stats` — a promise resolving to timing statistics, plus what the run rendered: see [What the run rendered](#what-the-run-rendered-ace-step-only).
 
 Both engines return through this same shape; only the inputs to `loadModel()` and `audioGen()` differ. `audioUnderstand()` runs the same pipeline backwards and so returns `description` where the other two return `audio`.
 
@@ -24,7 +24,9 @@ Both engines return through this same shape; only the inputs to `loadModel()` an
   **Platform support:** ACE-Step runs on desktop (Linux, macOS, Windows) and
   mobile (Android arm64, iOS arm64), with GPU acceleration via Metal (Apple) and
   Vulkan (Android). MiniMax-Music3 runs on desktop only and needs ~22 GB of
-  device memory for its f16 model pair when `useGPU: true`.
+  device memory for its f16 model pair on a GPU. [Check the memory
+  fit](#check-memory-before-loading) of ACE-Step before downloading it, and of
+  either engine before loading it.
 </Callout>
 
 ## Functions
@@ -101,7 +103,7 @@ const modelId = await loadModel({
 });
 ```
 
-Advanced load-time controls (`inferenceSteps`, `shift`, `nGpuLayers`, `threads`, `backendsDir`) are ACE-Step's to tune; omit `inferenceSteps` and `shift` unless you need to override the addon's per-variant defaults. `backendsDir` is needed on arm64, where the CPU backend ships as per-microarch modules.
+Advanced load-time controls (`inferenceSteps`, `shift`, `nGpuLayers`, `threads`, `backendsDir`) are ACE-Step's to tune; omit `inferenceSteps` and `shift` unless you need to override the addon's per-variant defaults. `inferenceSteps` is an integer from 0 to 1000 and `shift` is 0 or a positive float32 value; `0` keeps the per-variant default for both, and a generation or edit can override either for one run. `backendsDir` is needed on arm64, where the CPU backend ships as per-microarch modules.
 
 For more about model constants and sources, see [SDK — Models](/sdk#models).
 
@@ -122,6 +124,8 @@ const modelId = await loadModel({
   },
 });
 ```
+
+`useGPU: true` runs on a GPU when one is usable and falls back to the CPU otherwise. To fail the load instead of falling back, set `device: "gpu"` in place of `useGPU`. `device` takes `"gpu"`, `"auto"` (what `useGPU: true` means) or `"cpu"`, and the SDK rejects a config that sets both `device` and `useGPU`.
 
 ## Generate audio
 
@@ -202,21 +206,59 @@ const { lrc, lyricsScore, qualityScore } = (await run.stats) ?? {};
 
 Advanced per-run controls map 1:1 to the ACE-Step engine and are only needed for reproducible quality comparisons; omit them to keep the engine defaults:
 
-| Field           | Purpose                                                                                                                                                                                                         |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lmTemperature` | LM sampling temperature (default 0.85)                                                                                                                                                                          |
-| `lmTopP`        | LM nucleus-sampling probability (default 0.9)                                                                                                                                                                   |
-| `lmTopK`        | LM top-k cutoff; `0` disables top-k filtering                                                                                                                                                                   |
-| `lmCfgScale`    | Classifier-free guidance scale used by the LM                                                                                                                                                                   |
-| `lmPhase1`      | Let the LM infer missing metadata before semantic-code generation                                                                                                                                               |
-| `dcwEnabled`    | Apply the official Haar DCW correction during DiT sampling (default: true)                                                                                                                                      |
-| `dcwScaler`     | DCW low-frequency correction strength (default 0.05)                                                                                                                                                            |
-| `dcwHighScaler` | DCW high-frequency correction strength (default 0.02)                                                                                                                                                           |
-| `audioCodes`    | Frozen semantic codes (an `Int32Array` or `number[]`) to synthesize instead of running the LM — for example the codes of an earlier take. Up to `AUDIOGEN_MAX_AUDIO_CODES` (3000, ten minutes at the LM's 5 Hz) |
+| Field            | Purpose                                                                                                                                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lmTemperature`  | LM sampling temperature (default 0.85)                                                                                                                                                                          |
+| `lmTopP`         | LM nucleus-sampling probability (default 0.9)                                                                                                                                                                   |
+| `lmTopK`         | LM top-k cutoff; `0` disables top-k filtering                                                                                                                                                                   |
+| `lmCfgScale`     | Classifier-free guidance scale used by the LM                                                                                                                                                                   |
+| `lmPhase1`       | Let the LM infer missing metadata before semantic-code generation                                                                                                                                               |
+| `dcwEnabled`     | Apply the official Haar DCW correction during DiT sampling (default: true)                                                                                                                                      |
+| `dcwScaler`      | DCW low-frequency correction strength (default 0.05)                                                                                                                                                            |
+| `dcwHighScaler`  | DCW high-frequency correction strength (default 0.02)                                                                                                                                                           |
+| `audioCodes`     | Frozen semantic codes (an `Int32Array` or `number[]`) to synthesize instead of running the LM — for example the codes of an earlier take. Up to `AUDIOGEN_MAX_AUDIO_CODES` (3000, ten minutes at the LM's 5 Hz) |
+| `inferenceSteps` | DiT steps for this run (0 to 1000), overriding the load-time value; `0` is the per-variant default (8 on turbo, 50 on base and SFT)                                                                             |
+| `shift`          | DiT timestep shift for this run, overriding the load-time value; `0` is the per-variant default (3.0 on turbo, 1.0 on base and SFT)                                                                             |
+
+`bpm` is a non-negative integer (`0` lets the LM infer it), `seed` a safe integer, and the DCW scalers non-negative values within the float32 range. The SDK rejects anything else before the request reaches the engine.
+
+#### What the run rendered (ACE-Step only)
+
+Every ACE-Step generation reports what it rendered in `stats.metadata`, after the LM filled in whatever you left unset. That includes the caption and lyrics Simple Mode or Query Rewriting composed, and the seed the run used, so an unseeded take you like can be replayed:
+
+| Field               | Meaning                                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `caption`, `lyrics` | The caption and lyrics the run used. With `augmentCaptionWithMetadata` the caption is always your own, before the metadata hint. |
+| `bpm`, `keyscale`   | The tempo and key the run used; `bpm` is `0` when unresolved.                                                                    |
+| `beatsPerBar`       | The time-signature numerator (`4` for `4/4`); `0` when unresolved.                                                               |
+| `vocalLanguage`     | The vocal language the run used.                                                                                                 |
+| `seed`              | The seed the run used: the one the engine drew when you passed none.                                                             |
+| `codeFrames`        | The 5 Hz semantic code frames the DiT was conditioned on; `0` when the LM is skipped (`cover-nofsq`, `lego`, edits).             |
+| `qualityReport`     | The per-condition breakdown of `stats.qualityScore`, present only with `computeQualityScore`.                                    |
+
+```ts
+const take = audioGen({
+  modelId,
+  caption: "a rainy-day lo-fi loop",
+  simpleMode: true,
+});
+const rendered = (await take.stats)?.metadata;
+console.log(rendered?.caption, rendered?.lyrics);
+
+// Replay the same take.
+const replay = audioGen({
+  modelId,
+  caption: "a rainy-day lo-fi loop",
+  simpleMode: true,
+  seed: rendered?.seed,
+});
+```
+
+MiniMax-Music3 runs report no `metadata`.
 
 ### With MiniMax-Music3
 
-MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `augmentCaptionWithMetadata`), the ACE-Step-only LM and DCW knobs and `audioCodes` above, the LM-assisted and output controls (`simpleMode`, `rewriteQuery`, `generateLrc`, `computeQualityScore`, `normalizeLoudness`, `guidanceScale`), every reference/cover field, and both `audioEdit()` and `audioUnderstand()`. Pass the caption and, when useful, any of these MiniMax-only controls:
+MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `augmentCaptionWithMetadata`), the ACE-Step-only LM and DCW knobs, `audioCodes` and `shift` above, the LM-assisted and guidance controls (`rewriteQuery`, `generateLrc`, `computeQualityScore`, `guidanceScale`), every reference/cover field, and both `audioEdit()` and `audioUnderstand()`. It ignores `simpleMode` and `normalizeLoudness`. Pass the caption and, when useful, any of these MiniMax-only controls:
 
 | Field            | When to set it                                                                                                                                                        |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -243,6 +285,8 @@ const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all(
   [run.audio, run.stats],
 );
 ```
+
+Besides the timing statistics, a MiniMax run's `stats` split the engine time by stage — `arMs` (the autoregressive semantic stage), `conditionMs`, `flowMs` and `vocoderMs`, all in milliseconds — and report `emittedFrames`, the semantic frames the model emitted at 25 per second. `emittedFrames` comes in below the frame cap when the song ended on its own.
 
 ## Reference audio and covers
 
@@ -345,6 +389,17 @@ const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
 
 `sourceAudio` takes the same forms as the generation inputs above — a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM bytes — and every sample must lie in `[-1, 1]`. Prompt `lyrics` default to `"[Instrumental]"`. `seed` seeds the first operation; each following operation uses `seed + index`. The vocabularies are exported as `AUDIOGEN_EDIT_OPERATIONS` and `AUDIOGEN_REPAINT_MODES`.
 
+The rest of an edit's inputs apply to every operation in the pipeline, with the same ranges as on a generation:
+
+| Field                                                                             | Purpose                                                                                |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `referenceAudio`                                                                  | Timbre reference, in the same forms as `sourceAudio`. Its samples need only be finite. |
+| `vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `augmentCaptionWithMetadata` | Prompt metadata for the edit prompts, as on a generation.                              |
+| `dcwEnabled`, `dcwScaler`, `dcwHighScaler`                                        | Repaint only: the Haar DCW sampler correction (defaults `true`, `0.05` and `0.02`).    |
+| `inferenceSteps`, `shift`                                                         | DiT steps and timestep shift for every operation, overriding the load-time values.     |
+
+The edit's `stats.metadata` reports the base seed it used and the prompt metadata it was given, with an empty `caption` (each operation carries its own) and `codeFrames` `0`.
+
 ## Understand a recording
 
 `audioUnderstand()` is **ACE-Step only**. It runs the generation pipeline backwards: the engine encodes `sourceAudio`, recovers its FSQ semantic codes, and the LM reports a caption and the clip's musical metadata. Because the run produces a description rather than PCM, it returns `description` where `audioGen()` returns `audio`; `requestId`, `progressStream`, `stats`, and `diagnostics` are unchanged.
@@ -376,12 +431,13 @@ const {
 
 `description` resolves to:
 
-| Field                                               | Meaning                                                                |
-| --------------------------------------------------- | ---------------------------------------------------------------------- |
-| `caption`                                           | The LM's description of the clip.                                      |
-| `bpm`, `keyscale`, `timesignature`, `vocalLanguage` | The musical metadata the LM read off the recording.                    |
-| `duration`                                          | The LM's estimate in seconds. The recovered codes fix the true length. |
-| `audioCodes`                                        | The recovered FSQ semantic codes, as a plain integer array.            |
+| Field                                               | Meaning                                                                    |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| `caption`                                           | The LM's description of the clip.                                          |
+| `bpm`, `keyscale`, `timesignature`, `vocalLanguage` | The musical metadata the LM read off the recording.                        |
+| `duration`                                          | The LM's estimate in seconds. The recovered codes fix the true length.     |
+| `audioCodes`                                        | The recovered FSQ semantic codes, as a plain integer array.                |
+| `seed`                                              | The seed the LM decode used: the one the engine drew when you passed none. |
 
 `sourceAudio` takes the same forms as every other audio input — a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM bytes with every sample in `[-1, 1]` — and is capped at 600 s. `seed`, `vocalLanguage`, `lmTemperature`, `lmTopP`, and `lmTopK` are the only other inputs: `vocalLanguage` is forced into the result instead of the LM's guess, and the rest steer the LM decode exactly as they do on a generation.
 
@@ -396,6 +452,35 @@ const remake = audioGen({ modelId, caption, audioCodes });
 ```
 
 The same description is repeated on the terminal frame as `stats.understand`, so a caller that only wants stats does not need to read the stream.
+
+## Check memory before loading
+
+[`assessModelFit()`](/sdk/models/assess-model-fit) runs the engine's own fitter over a load described as `loadModel()` takes it, reading model metadata only — no weights are downloaded or loaded. Both engines are covered:
+
+- ACE-Step, on every platform, from the registry's weightless descriptions of the four model constants, so before anything is downloaded, or from the files already on disk.
+- MiniMax-Music3, on desktop, from the LM and synthesis files on disk, since it has no registry constants. It projects the default generation (300 semantic frames, 12 s) on the device the config selects: `device` as given, otherwise `useGPU`.
+
+The audiogen fitter reports a peak across the pipeline rather than a byte breakdown. When an audiogen load is the only model assessed, the fitter's verdict, fit or refusal, is the answer. Assessed together with other models, only a refusal (`likely-too-large`) carries over; a fit falls back to the computed floor.
+
+```ts
+import { assessModelFit } from "@qvac/sdk";
+
+const { verdict, models } = await assessModelFit({
+  models: [
+    {
+      modelType: "audiogen",
+      modelConfig: {
+        engine: "minimax",
+        lmModelSrc: "/path/to/mm3-lm-q8.gguf",
+        synthModelSrc: "/path/to/mm3-synth-q8.gguf",
+        device: "gpu",
+      },
+    },
+  ],
+});
+```
+
+`loadModel()` runs the same fitter against the resolved files before it loads; see [Assess model fit](/sdk/models/assess-model-fit) for the verdicts and how a refusal can stop a load.
 
 ## Cancellation
 
