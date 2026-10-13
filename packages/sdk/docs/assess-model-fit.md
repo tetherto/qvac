@@ -188,7 +188,10 @@ The fitter runs for `llamacpp-completion`, `llamacpp-embedding`,
 `sdcpp-generation`, on every platform the engine's addon is built for.
 
 Of those, llama.cpp, whisper, parakeet, BCI whisper and TTS report a byte
-breakdown, so their measurements compose into a combined verdict. Audiogen
+breakdown, so their measurements compose into a combined verdict. The BCI
+projection includes the embedder: the host RAM it keeps is counted in
+`hostBytes`, read from the `bci-embedder.bin` beside the model, or from the
+load's `embedderModelSrc` where it names one. Audiogen
 reports a peak across pipeline phases and diffusion a per-module table; neither
 divides into bytes that can be summed under one budget, so a `fit` from them
 falls back to the [computed floor](#two-kinds-of-evidence) while a refusal still
