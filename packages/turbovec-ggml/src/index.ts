@@ -153,7 +153,8 @@ function normalizeStorageOptions(options: IdMapIndexOptions): IdMapIndexStorage 
         "IdMapIndex: storage must be 'f32', 'q8', 'q4', 'turbovec-q4', or 'turbovec-q2'"
       )
     }
-    if (bitWidth !== undefined && bitWidth !== BIT_WIDTH_BY_STORAGE[storage]) {
+    // A null bitWidth counts as the default 8, as it did in embed-llamacpp.
+    if (bitWidth !== undefined && (bitWidth ?? 8) !== BIT_WIDTH_BY_STORAGE[storage]) {
       throw new TypeError('IdMapIndex: bitWidth does not match storage')
     }
     return storage

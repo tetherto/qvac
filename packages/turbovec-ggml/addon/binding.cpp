@@ -300,6 +300,13 @@ bool readUtf8String(
     js_throw_error(env, "OutOfMemory", "allocation failure");
     return false;
   }
+  // Strings reach the C API NUL-terminated, so an embedded NUL would
+  // silently cut a path short.
+  if (out->find('\0') != std::string::npos) {
+    js_throw_type_error(
+        env, "InvalidArgument", "string must not contain NUL characters");
+    return false;
+  }
   return true;
 }
 

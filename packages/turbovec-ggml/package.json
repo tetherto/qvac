@@ -87,7 +87,8 @@
       "types": "./index.d.ts",
       "import": "./index.mjs",
       "default": "./index.js"
-    }
+    },
+    "./idMapIndex.js": "./index.js"
   },
   "main": "index.js",
   "types": "index.d.ts"

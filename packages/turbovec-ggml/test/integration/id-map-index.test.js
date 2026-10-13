@@ -217,6 +217,11 @@ test('IdMapIndex: package root and ./idMapIndex subpath export the same class', 
   t.is(rootModule.IdMapIndex, IdMapIndex, 'root named class export matches')
   t.is(rootModule.default, IdMapIndex, 'root default export matches')
   t.is(rootModule.IdMapIndexFilter, IdMapIndex.IdMapIndexFilter, 'root filter export matches')
+  t.is(
+    require('@qvac/turbovec-ggml/idMapIndex.js'),
+    IdMapIndex,
+    './idMapIndex.js alias from embed-llamacpp resolves to the same class'
+  )
 
   const idx = new rootModule.IdMapIndex({ dim: DIM })
   t.is(idx.dim, DIM, 'instance built from the root export is usable')
@@ -312,6 +317,23 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) 
   defaulted.dispose()
 })
 
+test('IdMapIndex: a null bitWidth counts as the default 8, as in embed-llamacpp', (t) => {
+  const alone = new IdMapIndex({ dim: DIM, bitWidth: null })
+  t.is(alone.bitWidth, 8, 'null bitWidth alone selects q8')
+  alone.dispose()
+
+  const withQ8 = new IdMapIndex({ dim: DIM, storage: 'q8', bitWidth: null })
+  t.is(withQ8.bitWidth, 8, 'null bitWidth is accepted with q8 storage')
+  withQ8.dispose()
+
+  const error = expectThrows(
+    t,
+    () => new IdMapIndex({ dim: DIM, storage: 'q4', bitWidth: null }),
+    'null bitWidth with q4 storage is a mismatch'
+  )
+  t.is(error && error.message, 'IdMapIndex: bitWidth does not match storage', 'mismatch error')
+})
+
 // The class always resolves `bitWidth` to a storage name, so the native
 // boundary takes `{ dim, storage }` only. Desktop-only: the relative binding
 // path does not resolve after the mobile test app copies integration tests.
@@ -369,6 +391,35 @@ test('IdMapIndex: native calls reject wrong argument types', { skip: IS_MOBILE }
     }
   } finally {
     binding.idx_dispose(handle)
+  }
+})
+
+test('IdMapIndex: paths with a NUL character are rejected, not truncated', (t) => {
+  const file = tmpPath('id-map-index-nul-path')
+  const delta = tmpDeltaPath('id-map-index-nul-path')
+  const idx = new IdMapIndex({ dim: 2, bitWidth: 8 })
+  try {
+    idx.addWithIds(new Float32Array([1, 0]), new BigUint64Array([11n]))
+
+    let error = expectThrows(t, () => idx.write(`${file}\0.junk`), 'write rejects a NUL path')
+    t.is(error && error.code, 'InvalidArgument', 'write throws InvalidArgument')
+    t.absent(fs.existsSync(file), 'write did not create the truncated path')
+
+    idx.write(file)
+    const loaders = {
+      load: () => IdMapIndex.load(`${file}\0.junk`),
+      loadMmap: () => IdMapIndex.loadMmap(`${file}\0.junk`),
+      loadWithDelta: () => IdMapIndex.loadWithDelta(file, `${delta}\0.junk`)
+    }
+    for (const [name, load] of Object.entries(loaders)) {
+      error = expectThrows(t, load, `${name} rejects a NUL path`)
+      t.is(error && error.code, 'InvalidArgument', `${name} throws InvalidArgument`)
+    }
+    t.absent(fs.existsSync(delta), 'loadWithDelta did not bind the truncated delta path')
+  } finally {
+    idx.dispose()
+    if (fs.existsSync(file)) fs.unlinkSync(file)
+    removeDeltaArtifacts(delta)
   }
 })
 
