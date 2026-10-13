@@ -385,7 +385,9 @@ run.cancel()
 `CompletionRun` exposes normalized events, accumulated text, thinking text,
 tool calls, final statistics, stop reason, and cancellation. Tool definitions
 can carry suspend handlers; `client.completion.orchestrate(...)` executes the
-worker-owned multi-turn tool loop and returns the same run type.
+worker-owned multi-turn tool loop and returns the same run type. To replay a
+tool round yourself, send `QvacMessage.assistant(text, toolCalls = final.toolCalls)`
+and answer each call with `QvacMessage.tool(result, toolCallId = call.id, toolName = call.name)`.
 
 A tool describes flat parameters with `parameters` and `required`, or passes a
 complete JSON Schema object as `parametersSchema` for nested `properties`,

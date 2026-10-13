@@ -204,6 +204,39 @@ class QvacCompletionApiTest {
         client.close()
     }
 
+    @Test
+    fun toolTurnsReachTheWireStructured() {
+        val call = QvacToolCall("call_1", "weather", buildJsonObject { put("city", "Rome") })
+        val assistant = QvacMessage.assistant("", toolCalls = listOf(call)).toJson()
+        val tool = QvacMessage.tool("sunny", toolCallId = "call_1", toolName = "weather").toJson()
+
+        assertEquals(
+            buildJsonArray {
+                add(buildJsonObject {
+                    put("id", "call_1")
+                    put("name", "weather")
+                    put("arguments", buildJsonObject { put("city", "Rome") })
+                })
+            },
+            assistant["toolCalls"],
+        )
+        assertEquals("call_1", tool["toolCallId"]?.jsonPrimitive?.content)
+        assertEquals("weather", tool["toolName"]?.jsonPrimitive?.content)
+        assertFalse("toolCalls" in QvacMessage.assistant("hi").toJson())
+        assertFalse("toolCallId" in QvacMessage.tool("ok").toJson())
+    }
+
+    @Test
+    fun toolFieldsOnTheWrongRoleAreRejected() {
+        val call = QvacToolCall("call_1", "weather", buildJsonObject {})
+        assertFailsWith<IllegalArgumentException> {
+            QvacMessage("user", "hi", toolCalls = listOf(call))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            QvacMessage("assistant", "hi", toolCallId = "call_1")
+        }
+    }
+
     private fun completionFrame(done: Boolean, vararg events: JsonObject) = buildJsonObject {
         put("type", "completionStream")
         put("done", done)

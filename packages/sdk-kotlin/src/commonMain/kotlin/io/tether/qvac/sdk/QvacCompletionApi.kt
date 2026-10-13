@@ -30,25 +30,57 @@ data class QvacAttachment(val path: String) {
     internal fun toJson() = buildJsonObject { put("path", path) }
 }
 
+/**
+ * A history entry. An assistant turn can carry the [toolCalls] it made, and a tool
+ * turn the [toolCallId] / [toolName] it answers; the model's chat template renders
+ * them in its own tool-call format.
+ */
 data class QvacMessage(
     val role: String,
     val content: String,
     val attachments: List<QvacAttachment> = emptyList(),
+    val toolCalls: List<QvacToolCall> = emptyList(),
+    val toolCallId: String? = null,
+    val toolName: String? = null,
 ) {
+    init {
+        require(toolCalls.isEmpty() || role == "assistant") {
+            "toolCalls is only valid on an assistant message"
+        }
+        require((toolCallId == null && toolName == null) || role == "tool") {
+            "toolCallId and toolName are only valid on a tool message"
+        }
+    }
+
     internal fun toJson() = buildJsonObject {
         put("role", role)
         put("content", content)
         if (attachments.isNotEmpty()) {
             putJsonArray("attachments") { attachments.forEach { add(it.toJson()) } }
         }
+        if (toolCalls.isNotEmpty()) {
+            putJsonArray("toolCalls") {
+                toolCalls.forEach { call ->
+                    add(buildJsonObject {
+                        put("id", call.id)
+                        put("name", call.name)
+                        put("arguments", call.arguments)
+                    })
+                }
+            }
+        }
+        toolCallId?.let { put("toolCallId", it) }
+        toolName?.let { put("toolName", it) }
     }
 
     companion object {
         fun system(content: String) = QvacMessage("system", content)
         fun user(content: String, attachments: List<QvacAttachment> = emptyList()) =
             QvacMessage("user", content, attachments)
-        fun assistant(content: String) = QvacMessage("assistant", content)
-        fun tool(content: String) = QvacMessage("tool", content)
+        fun assistant(content: String, toolCalls: List<QvacToolCall> = emptyList()) =
+            QvacMessage("assistant", content, toolCalls = toolCalls)
+        fun tool(content: String, toolCallId: String? = null, toolName: String? = null) =
+            QvacMessage("tool", content, toolCallId = toolCallId, toolName = toolName)
     }
 }
 
