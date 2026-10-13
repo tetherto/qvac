@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 
 #include <uv.h>
 
@@ -15,6 +16,9 @@ struct js_env_t {};
 struct js_value_t {
   double numberValue{};
   bool isNumber{false};
+  std::string stringValue{};
+  std::string errorCode{};
+  std::string errorMessage{};
 };
 struct js_ref_t {};
 struct js_callback_info_t {};
@@ -24,6 +28,9 @@ struct js_deferred_t {
   // assert whether a given promise was ever settled. Atomic: settled on a
   // worker thread, read by the test thread.
   std::atomic<bool> settled{false};
+  // Written before `settled` is set, so a reader that saw `settled` sees them.
+  bool rejected{false};
+  js_value_t* settlement{nullptr};
 };
 struct js_deferred_teardown_t {
   // Set by the mocked js_finish_deferred_teardown_callback; in the real
@@ -200,6 +207,8 @@ inline int js_get_undefined(js_env_t* env, js_value_t** result) {
 
 inline int js_create_string_utf8(
     js_env_t* env, const utf8_t* data, size_t length, js_value_t** result) {
+  *result = new js_value_t{};
+  (*result)->stringValue.assign(data, length);
   return 0;
 }
 
@@ -465,12 +474,15 @@ inline int js_resolve_deferred(
   if (mock_js::failNextResolveDeferred.exchange(false)) {
     return -1;
   }
+  deferred->settlement = resolution;
   deferred->settled = true;
   return 0;
 }
 
 inline int js_reject_deferred(
     js_env_t* env, js_deferred_t* deferred, js_value_t* rejection) {
+  deferred->rejected = true;
+  deferred->settlement = rejection;
   deferred->settled = true;
   return 0;
 }
@@ -494,5 +506,11 @@ js_finish_deferred_teardown_callback(js_deferred_teardown_t* handle) {
 inline int js_create_error(
     js_env_t* env, js_value_t* code, js_value_t* message, js_value_t** result) {
   *result = new js_value_t{};
+  if (code != nullptr) {
+    (*result)->errorCode = code->stringValue;
+  }
+  if (message != nullptr) {
+    (*result)->errorMessage = message->stringValue;
+  }
   return 0;
 }
