@@ -1399,12 +1399,14 @@ const {
 
 `assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of each file answers the same as the file itself and the projection can run before anything is downloaded. It is a module export, not an instance method: nothing is loaded to call it.
 
+`assessFit` returns a Promise. Fits run one at a time within this addon.
+
 A request is a `createInstance` config plus the workload, so it carries the same keys the load takes and the engine's own config builder reads it.
 
 ```js
 const TTSGgml = require('@qvac/tts-ggml')
 
-const fit = TTSGgml.assessFit({
+const fit = await TTSGgml.assessFit({
   engineType: 'supertonic',
   supertonicModelPath: '/models/supertonic.gguf',
   useGPU: true,
@@ -1444,7 +1446,7 @@ Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the 
 
 `deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
 
-A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, throws.
+A model the engine cannot read resolves to `status: "error"`, as does a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, rejects.
 
 MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
 native prompt length, including special tokens, encoded speaker references and
@@ -1455,7 +1457,7 @@ The fitter does not open reference recordings. Use the TTSD backbone to assess
 dialogue, supplying its complete prompt and total reference workload.
 
 ```js
-const fit = TTSGgml.assessFit({
+const fit = await TTSGgml.assessFit({
   engineType: 'moss',
   mossBackbonePath: './moss-tts-delay-f16.gguf',
   mossCodecDecoderPath: './moss-codec-decoder-f16.gguf',
@@ -1477,7 +1479,7 @@ The supertonic fitter covers the fused graph path: a validated GPU, or a CPU wit
 ### MOSS-SoundEffect fit
 
 ```js
-const fit = TTSGgml.assessFit({
+const fit = await TTSGgml.assessFit({
   engineType: 'moss-sfx',
   mossSoundEffectPath: './moss-sfx-v2-q8_0.gguf',
   prompt: 'Rain falling on a tin roof.',
