@@ -33,9 +33,11 @@ const BUNDLER_SPEC = 'bare-pack@1.5.1'
 const LEXER_OVERRIDES = { [LEXER_PACKAGE]: '1.6.3' }
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
 // A require-family call whose first argument is not a plain string literal.
-// Template literals count as computed: the lexer does not follow them.
+// Template literals count as computed: the lexer does not follow them. The
+// lookahead also rejects whitespace, or `\s*` would backtrack to match
+// `require( 'x')`.
 const COMPUTED_REQUIRE_PATTERN =
-  /(?<![\w$.])require(?:\.addon)?(?:\.resolve)?\s*\(\s*(?!['")])/g
+  /(?<![\w$.])require(?:\.addon)?(?:\.resolve)?\s*\(\s*(?![\s'")])/g
 const COMMENT_PATTERN = /\/\*[\s\S]*?\*\/|(?<![:'"\\])\/\/[^\n]*/g
 // Directory names that never enter a mobile bundle. Generators under `scripts/`
 // and fixtures under `test/` embed require-looking strings in output text

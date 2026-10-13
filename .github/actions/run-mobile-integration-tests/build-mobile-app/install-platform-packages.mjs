@@ -140,15 +140,15 @@ function readManifest(packageRoot) {
 // The platform package each split addon needs per platform, and where it
 // comes from. Only the meta package's own platform packages are considered
 // (the map is registry-controlled, so it may confirm the slicer's naming, never
-// choose an unrelated package), and one already installed at the meta's
-// version is kept.
+// choose an unrelated package). One already installed at the meta's version is
+// kept unless local prebuilds would replace it: a registry copy at the same
+// version must not shadow a --prebuilds tree or the addon's fresh prebuilds.
 export function planPlatformPackages(packages, platforms, modulesDir) {
   const plan = new Map();
   for (const platform of platforms) {
     for (const pkg of packages) {
       const platformPackage = resolvePlatformPackageName(pkg.hostAddon, platform);
       if (platformPackage === null || !platformPackage.startsWith(`${pkg.name}-`)) continue;
-      if (readManifest(path.join(modulesDir, platformPackage))?.version === pkg.version) continue;
 
       const prebuildsRoot = pkg.prebuildsRoot ?? path.join(pkg.packageRoot, 'prebuilds');
       const localHosts = TARGET_HOSTS[platform].filter((host) =>
@@ -159,6 +159,12 @@ export function planPlatformPackages(packages, platforms, modulesDir) {
         throw new Error(
           `${pkg.prebuildsRoot} has no ${mangledAddonName(platformPackage)}.bare for ${missing.join(', ')}`,
         );
+      }
+      if (
+        localHosts.length === 0 &&
+        readManifest(path.join(modulesDir, platformPackage))?.version === pkg.version
+      ) {
+        continue;
       }
       const previous = plan.get(platformPackage);
       if (previous !== undefined) {

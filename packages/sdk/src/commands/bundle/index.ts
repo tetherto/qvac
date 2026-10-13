@@ -256,11 +256,12 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   // A split addon's `binding.js` is `require('#host-addon')`, which bare-pack
   // cannot resolve for a host whose platform package is missing, so the
-  // packages go in before the first bundle.
+  // packages go in before the first bundle. Deferred modules are not packed,
+  // so their platform packages are not needed.
   let installedPrebuilds: HostPrebuildPackage[] = []
   const projectAddons = async () =>
     (await resolveAddons(projectRoot, undefined, logger)).filter(
-      (addon) => includeAudioDecoder || addon.name !== AUDIO_DECODER_ADDON
+      (addon) => !deferModules.includes(addon.name)
     )
   if (options.installMissingPrebuilds === true) {
     const { installed } = await installMissingHostPrebuilds({

@@ -276,6 +276,29 @@ test('installPlatformPackages builds a dependency from a --prebuilds tree', (t) 
   assert.ok(fs.existsSync(path.join(slice, 'prebuilds/android-arm64/qvac__fabric-android-arm64/libqvac-ggml-cpu.so')));
 });
 
+test('installPlatformPackages replaces an installed package with a --prebuilds tree', (t) => {
+  const { addonDir, appDir } = workspace(t);
+  writeFabric(path.join(addonDir, 'node_modules'), '0.21.0');
+  writePackage(path.join(appDir, 'node_modules/@qvac/fabric-android-arm64'), {
+    name: '@qvac/fabric-android-arm64',
+    version: '0.21.0',
+  });
+  const run = tempDir(t);
+  writePackage(run, {}, unslicedPrebuilds('qvac__fabric-android-arm64', ['android-arm64']));
+  const { installs, install } = recordInstalls();
+
+  installPlatformPackages({
+    appDir,
+    addonDir,
+    prebuilds: { '@qvac/fabric': path.join(run, 'prebuilds') },
+    platforms: ['android'],
+    install,
+    log: () => {},
+  });
+
+  assert.deepEqual(installs[0].specs, ['file:.qvac-platform-packages/qvac__fabric-android-arm64']);
+});
+
 test('installPlatformPackages refuses a --prebuilds tree missing a host', (t) => {
   const { addonDir, appDir } = workspace(t);
   writeFabric(path.join(addonDir, 'node_modules'), '0.21.0');

@@ -79,6 +79,26 @@ describe('bundleSdk installMissingPrebuilds', () => {
     ])
   })
 
+  it('installs nothing for a deferred addon', posixOnly, async (t) => {
+    const { projectRoot, sdkPath, configPath } = splitAddonProject(t)
+    const pm = installFakePackageManager(projectRoot, 'pnpm')
+
+    const result = await withPath(pm.binDir, () =>
+      bundleSdk({
+        projectRoot,
+        sdkPath,
+        configPath,
+        hosts: ['android-arm64'],
+        defer: [SPLIT_ADDON],
+        quiet: true,
+        installMissingPrebuilds: true
+      })
+    )
+
+    assert.deepEqual(pm.calls(), [])
+    assert.deepEqual(result.installedPrebuilds, [])
+  })
+
   it('refuses the install before writing anything', async (t) => {
     const { projectRoot, sdkPath, configPath } = splitAddonProject(t)
     // A second lockfile beside the fixture's pnpm one: no package manager can be chosen.
