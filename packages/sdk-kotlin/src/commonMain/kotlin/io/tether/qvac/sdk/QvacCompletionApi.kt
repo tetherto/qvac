@@ -63,7 +63,6 @@ data class QvacGenerationOptions(
     val presencePenalty: Double? = null,
     val repeatPenalty: Double? = null,
     val reasoningBudget: Long? = null,
-    val removeThinkingFromContext: Boolean? = null,
 ) {
     internal fun toJson(): JsonObject = buildJsonObject {
         temperature?.let { put("temp", it) }
@@ -75,7 +74,6 @@ data class QvacGenerationOptions(
         presencePenalty?.let { put("presence_penalty", it) }
         repeatPenalty?.let { put("repeat_penalty", it) }
         reasoningBudget?.let { put("reasoning_budget", it) }
-        removeThinkingFromContext?.let { put("remove_thinking_from_context", it) }
     }
 }
 
