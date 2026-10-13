@@ -76,13 +76,24 @@ function contextUsesGpu(config: Record<string, unknown>): unknown {
 }
 
 /**
+ * MiniMax names its device instead of switching the GPU on, and the config
+ * schema refuses both at once. `auto` is what the switch means: the GPU when
+ * one is usable.
+ */
+function audiogenUsesGpu(config: Record<string, unknown>): boolean {
+  const device = config['device']
+  if (device !== undefined) return device === 'gpu' || device === 'auto'
+  return config['useGPU'] === true
+}
+
+/**
  * Engines that carry a GPU switch, each read at the key its own config spells
  * it under. These are the keys the fit builders read in `native-probe/engines`,
  * so a projection and a device never disagree. Only bci defaults to on.
  */
 const GPU_SWITCH: Record<string, (config: Record<string, unknown>) => boolean> = {
   [ModelType.ttsGgml]: (config) => config['useGPU'] === true,
-  [ModelType.audiogenGgml]: (config) => config['useGPU'] === true,
+  [ModelType.audiogenGgml]: audiogenUsesGpu,
   [ModelType.parakeetTranscription]: (config) => config['useGPU'] === true,
   [ModelType.whispercppTranscription]: (config) => contextUsesGpu(config) === true,
   [ModelType.bciWhispercppTranscription]: (config) => contextUsesGpu(config) !== false
