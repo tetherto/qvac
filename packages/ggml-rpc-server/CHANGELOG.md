@@ -14,11 +14,11 @@
   an RDMA device, and `GGML_RPC_NO_RDMA` unset. A host with the library but no
   RDMA device now reports `rdmaCapable: false`, so `expectRdma: true` fails
   closed there.
-- Linux hosts no longer need `libibverbs1` to start the server. Fabric loads
-  the library at runtime, and without it the server runs over TCP only.
-- Requires an `@qvac/fabric` whose RPC backend exports
-  `ggml_backend_rpc_server_get_port` and `ggml_backend_rpc_rdma_supported`;
-  older releases fail to start with `RpcServerStartError`.
+- Requires `@qvac/fabric` 0.22.0, whose RPC backend exports
+  `ggml_backend_rpc_server_get_port` and `ggml_backend_rpc_rdma_supported`.
+  A mobile app that still installs `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` 0.21 fails to start the server with
+  `RpcServerStartError`.
 
 ## [0.4.0] - 2026-10-14
 
