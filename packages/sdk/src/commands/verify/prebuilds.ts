@@ -60,7 +60,8 @@ const PREBUILDS_DIR = 'prebuilds'
  *
  * - `<packageRoot>/prebuilds/<host>` for an ordinary addon, including the
  *   per-platform packages themselves.
- * - `<platformRoot>/prebuilds/<host>` for a split addon, whose `#host-addon`
+ * - `<platformRoot>/prebuilds/<host>` (or `addon/prebuilds/<host>` in older
+ *   published ASR packages) for a split addon, whose `#host-addon`
  *   map names a platform package for this host. The meta's own `prebuilds/`
  *   does not count: its `binding.js` is `require('#host-addon')`, so the
  *   platform package is the only thing loaded. Empty when that package is not
@@ -92,6 +93,24 @@ export async function resolvePrebuildLocations(
     installedVersion !== addon.version
   ) {
     location.mismatchedVersion = installedVersion
+  }
+  // ASR 0.8 platform packages wrap the native addon under `addon/`.
+  // New split packages put prebuilds directly at the platform package root.
+  const nestedRoot = path.join(platformRoot, 'addon')
+  if (await isPackageDir(nestedRoot)) {
+    const nestedVersion = await readPackageVersion(nestedRoot)
+    const nested: PrebuildLocation = {
+      ...location,
+      hostDir: path.join(nestedRoot, PREBUILDS_DIR, host)
+    }
+    if (
+      addon.version !== undefined &&
+      nestedVersion !== undefined &&
+      nestedVersion !== addon.version
+    ) {
+      nested.mismatchedVersion = nestedVersion
+    }
+    return [location, nested]
   }
   return [location]
 }

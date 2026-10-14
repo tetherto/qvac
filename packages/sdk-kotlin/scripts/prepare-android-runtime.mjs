@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
 import link from 'bare-link'
+import { platformPackageForHost } from './platform-package.mjs'
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const sdkRoot = path.join(projectRoot, '..', 'sdk')
@@ -234,16 +235,6 @@ function platformPackageForInstalledMeta(metaName, host) {
   } catch {
     return null
   }
-}
-
-/** The platform prebuild package an addon's `#host-addon` map names for a host. */
-function platformPackageForHost(meta, host) {
-  const dash = host.indexOf('-')
-  const platform = host.slice(0, dash)
-  const arch = host.slice(dash + 1)
-  const hostMap = meta.imports?.['#host-addon']?.[platform]
-  const candidate = typeof hostMap === 'string' ? hostMap : hostMap?.[arch]
-  return typeof candidate === 'string' && candidate.startsWith(`${meta.name}-`) ? candidate : null
 }
 
 /**

@@ -310,6 +310,10 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       }
       throw error
     }
+    if (options.installMissingPrebuilds !== true) {
+      // Older ASR metas can bundle addon-unavailable instead of failing resolution.
+      await throwIfPlatformPackagesMissing(await addonsMissingPlatformPackages(), hosts, undefined)
+    }
   } finally {
     await fsp.rm(bundleEntryPath, { force: true })
   }

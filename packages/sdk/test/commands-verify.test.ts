@@ -978,6 +978,41 @@ function splitTtsManifest(): Record<string, unknown> {
 }
 
 describe('checkPrebuilds with per-platform prebuild packages', () => {
+  it('accepts ASR 0.8 platform packages with an addon/prebuilds layout', async () => {
+    await withTempDir(async (root) => {
+      const name = '@qvac/asr-ggml'
+      const version = '0.8.1'
+      const metaRoot = writePackageJson(root, 'node_modules/@qvac/asr-ggml', {
+        name,
+        version,
+        addon: true,
+        imports: {
+          '#host-addon': { linux: { x64: [`${name}-linux-x64`, './addon-unavailable.js'] } }
+        }
+      })
+      const platformRoot = writePackageJson(root, 'node_modules/@qvac/asr-ggml-linux-x64', {
+        name: `${name}-linux-x64`,
+        version,
+        main: 'index.js'
+      })
+      const nestedRoot = writePackageJson(platformRoot, 'addon', { name, version, addon: true })
+      writePrebuild(nestedRoot, 'linux-x64')
+      const addon = {
+        name,
+        version,
+        packageRoot: metaRoot,
+        packageJsonPath: path.join(metaRoot, 'package.json')
+      }
+      assert.deepEqual(await checkPrebuilds({ addon, hosts: ['linux-x64'] }), [])
+      writeJson(path.join(nestedRoot, 'package.json'), { name, version: '0.8.0', addon: true })
+      assert.equal(
+        (await checkPrebuilds({ addon, hosts: ['linux-x64'] })).length,
+        1,
+        'a nested binary at a different version does not satisfy the prebuild check'
+      )
+    })
+  })
+
   it('accepts a prebuild shipped by a platform package hoisted next to the meta package', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
