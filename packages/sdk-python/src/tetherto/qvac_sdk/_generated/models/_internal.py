@@ -9855,7 +9855,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     backend: Annotated[
         list[LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem] | None,
         Field(
-            description="Ordered GPU backend names, such as ['cuda', 'vulkan'].\nAccepted names: cuda, vulkan, metal, opencl, and auto for no preference.\nIf unset, uses the native default order.\nIf none of the specified names has a corresponding available device, selection falls back to the native default order.\nUse device: 'cpu' for CPU.\nA GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
             min_length=1,
         ),
     ] = None
@@ -11632,7 +11632,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
     backend: Annotated[
         list[LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem] | None,
         Field(
-            description="Ordered GPU backend names, such as ['cuda', 'vulkan'].\nAccepted names: cuda, vulkan, metal, opencl, and auto for no preference.\nIf unset, uses the native default order.\nIf none of the specified names has a corresponding available device, selection falls back to the native default order.\nUse device: 'cpu' for CPU.\nA GPU override cannot be combined with splitMode: 'layer'.",
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
             min_length=1,
         ),
     ] = None
@@ -19872,7 +19872,7 @@ class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
     backend: Annotated[
         list[LoadModelSrcRequestGgmlVlaModelConfigBackendItem] | None,
         Field(
-            description="Ordered backend names, such as ['cuda', 'vulkan'].\nOmitted or ['auto'] uses the native default order.\nSupported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl.\nNames are tried in order; if none has an accepted device, selection falls back to the native default order.\n['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
+            description="Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. Names are tried in order; if none has an accepted device, selection falls back to the native default order. ['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
             min_length=1,
         ),
     ] = None
