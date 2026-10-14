@@ -22,6 +22,8 @@ export interface ResourceEntry {
   /** Platforms that define this key. Absent means every platform. */
   on?: string[]
   constant?: ConstRef
+  /** Use the catalog source URL when the test explicitly selects another compatible engine. */
+  constantSourceOnly?: boolean
   modelSrc?: string
   type?: string
   config?: Record<string, unknown>
