@@ -22,8 +22,9 @@ registry` (`ModelType`, `Verbosity`, `PluginId`,
 
 - `model-type-maps.json` — canonical engine/category mappings, recognized legacy
   engine identifiers, and `legacyRegistryEngineRules` for shared legacy packages
-  that need discriminator tags. Registry submission validation consumes this
-  generated contract; it does not maintain a separate engine allowlist. These
+  that need discriminator tags. The same canonical definitions generate
+  `packages/registry-server/lib/generated/engine-manifest.json`, which ships
+  inside the registry package for submission validation. These
   rules describe legacy classification, not checkpoint compatibility with
   multiple plugins.
 
@@ -33,8 +34,10 @@ Do not edit these files by hand. Regenerate with:
 npm run contract:export
 ```
 
-`npm run contract:check` exits non-zero when the artifacts are stale;
-`test/unit/contract-export.test.ts` enforces the same in `test:unit`.
+`npm run contract:check` exits non-zero when the SDK artifacts or the registry
+engine manifest are stale; `test/contract-export.test.ts` enforces the same in
+`test:unit`. The registry validator consumes only its local manifest; it does not
+load files from the SDK at validation time.
 
 ## Naming nested/inline schemas
 

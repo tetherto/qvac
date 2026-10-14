@@ -24,8 +24,9 @@ Registry submissions, live queries, and the generated catalog must agree on the
 canonical engine. Use `resolveRegistryEngine` for registry metadata; it preserves
 recognized legacy package IDs and their discriminator tags. Canonical engine
 identity takes precedence over tags. A shared package ID without an unambiguous
-legacy rule stays unresolved. Submission validation reads these rules from the
-generated SDK engine contract, alongside the supported engines.
+legacy rule stays unresolved. Submission validation reads the supported engines
+and these rules from a manifest inside the registry package, generated from the
+same canonical definitions as the SDK contract.
 Sync corrected registry metadata before clients rely on registry-returned
 descriptors, and coordinate rollout with clients that recognize the engine.
 Regenerate the catalog and downstream clients from the corrected metadata; do not

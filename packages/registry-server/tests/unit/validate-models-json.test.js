@@ -1,12 +1,16 @@
 'use strict'
 
 const test = require('brittle')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { createModelSchema } = require('../../scripts/validate-models-json')
 const {
   engineToAddon,
   legacyEngineToCanonical,
   legacyRegistryEngineRules
-} = require('../../../sdk/contract/model-type-maps.json')
+} = require('../../lib/generated/engine-manifest.json')
 
 const schema = createModelSchema(new Set(['MIT']))
 const model = {
@@ -58,4 +62,52 @@ test('supported engines remain valid for every checked-in registry submission', 
     )
     t.alike(rejected, [], `${name}: all ${rows.length} engine classifications remain valid`)
   }
+})
+
+test('validation runs from the registry package without a sibling SDK directory', (t) => {
+  const isolated = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-registry-validation-'))
+  t.teardown(() => fs.rmSync(isolated, { recursive: true, force: true }))
+  const packageRoot = path.resolve(__dirname, '../..')
+  const registry = path.join(isolated, 'registry-server')
+  for (const file of [
+    'scripts/validate-models-json.js',
+    'lib/model-schema.js',
+    'lib/source-helpers.js',
+    'lib/generated/engine-manifest.json',
+    'data/licenses.json',
+    'data/hf-legacy-main-sources.json',
+    'data/s3-legacy-paths.json'
+  ]) {
+    const target = path.join(registry, file)
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.copyFileSync(path.join(packageRoot, file), target)
+  }
+  // Reuse declared registry dependencies, without providing a sibling SDK tree.
+  fs.symlinkSync(
+    path.join(packageRoot, 'node_modules'),
+    path.join(registry, 'node_modules'),
+    'junction'
+  )
+  const entries = [
+    { ...model, engine: 'llamacpp-completion' },
+    {
+      ...model,
+      source: model.source.replace('model.gguf', 'legacy.gguf'),
+      engine: '@qvac/embed-llamacpp'
+    },
+    {
+      ...model,
+      source: model.source.replace('model.gguf', 'shared.gguf'),
+      engine: '@qvac/asr-ggml',
+      tags: ['moss-transcribe']
+    }
+  ]
+  fs.writeFileSync(path.join(registry, 'data/models.prod.json'), JSON.stringify(entries))
+  t.absent(fs.existsSync(path.join(isolated, 'sdk')))
+  const result = spawnSync(process.execPath, ['scripts/validate-models-json.js'], {
+    cwd: registry,
+    encoding: 'utf8'
+  })
+  t.is(result.status, 0, result.stderr || result.stdout)
+  t.ok(result.stdout.includes('Valid: 3 model(s)'))
 })

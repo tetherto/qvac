@@ -7,12 +7,12 @@ const { z } = require('zod')
 const { parseCanonicalSource } = require('../lib/source-helpers')
 const { baseModelFields } = require('../lib/model-schema')
 
-// Use the generated engine contract rather than a second list of plugin ids.
+// Generated from the canonical engine definitions; shipped with this package.
 const {
   engineToAddon,
   legacyEngineToCanonical,
   legacyRegistryEngineRules
-} = require('../../sdk/contract/model-type-maps.json')
+} = require('../lib/generated/engine-manifest.json')
 
 function hasSupportedEngine(model) {
   if (Object.hasOwn(engineToAddon, model.engine)) return true

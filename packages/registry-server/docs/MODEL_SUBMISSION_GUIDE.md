@@ -26,10 +26,15 @@
 
 Use the canonical `engine-usecase` identifier of the plugin that loads the model,
 such as `llamacpp-completion`, `llamacpp-embedding`, or `moss-transcribe`.
-Supported identifiers come from the generated SDK engine contract
-(`packages/sdk/contract/model-type-maps.json`). Unknown identifiers are rejected,
-even if they have the right spelling format. Regenerate the contract when adding
-an engine.
+Supported identifiers come from the generated manifest at
+`lib/generated/engine-manifest.json`, which is included in the registry package.
+Validation does not require a sibling SDK directory. Unknown identifiers are
+rejected, even if they have the right spelling format.
+
+When adding an engine, run `npm run contract:export` in `packages/sdk` to regenerate
+both the SDK contract and the registry manifest from the same canonical definitions.
+`npm run contract:check` checks both artifacts for freshness. Do not edit the
+manifest by hand.
 
 An addon package can implement several plugins. Classify each model by the plugin
 that loads it, rather than inferring its capability from the shared package.
