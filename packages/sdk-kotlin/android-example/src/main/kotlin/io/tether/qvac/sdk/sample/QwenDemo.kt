@@ -70,8 +70,6 @@ class QwenDemo(
             modelName = QwenModel.NAME,
             modelConfig = buildJsonObject {
                 put("ctx_size", 2048)
-                put("device", "gpu")
-                put("gpu_layers", 99)
                 put("reasoning_budget", -1)
             },
         ).collect { event ->
