@@ -207,6 +207,8 @@ export interface DeferredToolsParams {
   userPrompt: string
   // Query of the tool_search call placed in the history.
   searchQuery?: string
+  // User turn sent after the first tool call on the same cache.
+  followUpPrompt?: string
   expectedToolCall: { name: string; argKeys?: string[] }
   resourceKey?: string
   toolDialect?: ToolDialect
@@ -293,6 +295,40 @@ export const deferredToolsLoadThenCallQwen35 = createDeferredToolsTest(
   { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' }
 )
 
+// Qwen 3.5 is hybrid, so the warm pass is not judged on a smaller prompt: the
+// call must survive a named cache and match the same history replayed cold.
+export const deferredToolsWarmVsColdQwen35 = createDeferredToolsTest(
+  'deferred-tools-warm-vs-cold-qwen35',
+  { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' },
+  { estimatedDurationMs: 60000 }
+)
+
+// A second turn on the same named cache, whose cached prefix holds the search
+// result, still calls the loaded tool.
+export const deferredToolsWarmFollowUpQwen35 = createDeferredToolsTest(
+  'deferred-tools-warm-follow-up-qwen35',
+  {
+    ...HOROSCOPE,
+    followUpPrompt: 'Now get the horoscope for Leo.',
+    resourceKey: 'tools-qwen35',
+    toolDialect: 'qwen35'
+  },
+  { estimatedDurationMs: 60000 }
+)
+
+// The model issues tool_search in the qwen35 XML syntax, then calls the tool it loaded.
+export const deferredToolsSearchThenCallQwen35 = createDeferredToolsTest(
+  'deferred-tools-search-then-call-qwen35',
+  {
+    userPrompt:
+      'Search for a tool that reads horoscopes, then use it to get the horoscope for Aquarius.',
+    expectedToolCall: HOROSCOPE.expectedToolCall,
+    resourceKey: 'tools-qwen35',
+    toolDialect: 'qwen35'
+  },
+  { estimatedDurationMs: 60000 }
+)
+
 export const deferredToolsTests = [
   deferredToolsPromptCost,
   deferredToolsLoadThenCall,
@@ -300,5 +336,8 @@ export const deferredToolsTests = [
   deferredToolsRepeatSearch,
   deferredToolsReopenedChat,
   deferredToolsKvCacheIsolation,
-  deferredToolsLoadThenCallQwen35
+  deferredToolsLoadThenCallQwen35,
+  deferredToolsWarmVsColdQwen35,
+  deferredToolsWarmFollowUpQwen35,
+  deferredToolsSearchThenCallQwen35
 ]
