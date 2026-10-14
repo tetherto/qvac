@@ -11,12 +11,20 @@ import {
 async function cancelHandler() {}
 
 const response = new QvacResponse<string>({ cancelHandler })
+const nonRetainingResponse = new QvacResponse<string>({ cancelHandler, retainOutput: false })
+const retainingResponse = new InferBase.QvacResponse<string>({ cancelHandler, retainOutput: true })
+// @ts-expect-error retainOutput accepts only a boolean
+new QvacResponse({ cancelHandler, retainOutput: 'false' })
 const bareSignal = new BareAbortController().signal
 const bareResponse = new QvacResponse<string>({ cancelHandler, signal: bareSignal })
 const responseConstructor: typeof QvacResponse = InferBase.QvacResponse
 const handler: JobHandler = createJobHandler({ cancel: cancelHandler })
 handler.start({ signal: bareSignal })
+handler.start({ signal: bareSignal, retainOutput: false })
+// @ts-expect-error retainOutput accepts only a boolean
+handler.start({ retainOutput: 'false' })
 const namespaceHandler: InferBase.JobHandler = handler
+namespaceHandler.start({ retainOutput: true })
 const queuedResult: Promise<number> = exclusiveRunQueue()(async function run() {
   return 1
 })
@@ -54,6 +62,8 @@ if (latest !== null) {
 
 void [
   response,
+  nonRetainingResponse,
+  retainingResponse,
   bareResponse,
   reasonlessResponse,
   responseConstructor,

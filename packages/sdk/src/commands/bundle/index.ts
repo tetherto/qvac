@@ -127,6 +127,7 @@ const AUDIO_PLUGINS = new Set([
   'whispercpp-transcription',
   'bci-whispercpp-transcription',
   'parakeet-transcription',
+  'moss-transcribe',
   'audiogen-ggml'
 ])
 
@@ -259,9 +260,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
-  // A split addon's `binding.js` is `require('#host-addon')`, which bare-pack
-  // cannot resolve for a host whose platform package is missing, so the
-  // packages go in before the first bundle.
+  // Missing mobile platform packages are installed, or reported, before bundling.
   let installedPrebuilds: HostPrebuildPackage[] = []
   const barePackOptions = {
     entryPath: bundleEntryPath,
@@ -290,25 +289,21 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   try {
     await fsp.writeFile(bundleEntryPath, bundleEntry, 'utf8')
+    const addons = await addonsMissingPlatformPackages()
     if (options.installMissingPrebuilds === true) {
       const { installed } = await installMissingHostPrebuilds({
         projectRoot,
         hosts,
-        addons: await addonsMissingPlatformPackages(),
+        addons,
         quiet: options.quiet === true,
         logger
       })
       installedPrebuilds = installed
+    } else {
+      await throwIfPlatformPackagesMissing(addons, hosts)
     }
 
-    try {
-      await runBarePack({ ...barePackOptions, outputPath: bundlePath, deferModules })
-    } catch (error: unknown) {
-      if (options.installMissingPrebuilds !== true) {
-        await throwIfPlatformPackagesMissing(await addonsMissingPlatformPackages(), hosts, error)
-      }
-      throw error
-    }
+    await runBarePack({ ...barePackOptions, outputPath: bundlePath, deferModules })
   } finally {
     await fsp.rm(bundleEntryPath, { force: true })
   }
@@ -421,15 +416,10 @@ function deferredSpecifiers(bundleText: string): Set<string> {
 }
 
 /**
- * Turns a failed bare-pack into `HostPrebuildsMissingError` when split addons
- * are missing mobile platform packages: their `#host-addon` import cannot
- * resolve without them.
+ * Throws `HostPrebuildsMissingError` when split addons are missing mobile
+ * platform packages, naming the exact pins.
  */
-async function throwIfPlatformPackagesMissing(
-  addons: NativeAddon[],
-  hosts: string[],
-  cause: unknown
-) {
+async function throwIfPlatformPackagesMissing(addons: NativeAddon[], hosts: string[]) {
   let missing: HostPrebuildPackage[]
   try {
     missing = await findMissingHostPrebuilds(addons, hosts)
@@ -438,7 +428,6 @@ async function throwIfPlatformPackagesMissing(
   }
   if (missing.length === 0) return
   throw new HostPrebuildsMissingError(
-    Object.fromEntries(missing.map((pkg) => [pkg.name, pkg.version])),
-    cause
+    Object.fromEntries(missing.map((pkg) => [pkg.name, pkg.version]))
   )
 }

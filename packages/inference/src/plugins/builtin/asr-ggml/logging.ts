@@ -2,7 +2,9 @@ import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import type { ModelType } from '@/schemas/index'
 
 type AsrModelType =
-  typeof ModelType.whispercppTranscription | typeof ModelType.parakeetTranscription
+  | typeof ModelType.whispercppTranscription
+  | typeof ModelType.parakeetTranscription
+  | typeof ModelType.mossTranscribe
 
 /**
  * ASRGgml's native logger is process-global and cannot identify its originating
