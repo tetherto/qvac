@@ -36,15 +36,30 @@ flowchart LR
     VP --> QMG
     VC --> QMG
     SDK[sdk-pod-checks<br/>self-detecting] --> QMG
+    SKC[sdk-kotlin-checks<br/>self-detecting] --> QMG
     QMG -->|uses| PP[public-pr.yml<br/>job: validate-pr]
     PP -->|check name| CHK["qvac-merge-guard / validate-pr"]
 ```
+
+The Kotlin SDK gate follows the `sdk-pod-checks` shape. `sdk-kotlin-checks` runs
+`pr-checks-sdk-kotlin.yml` via its `workflow_call` trigger, the same way
+`sdk-pod-checks` runs `pr-checks-sdk-pod.yml`. The called workflow detects
+Kotlin-relevant changes from the base commit (not the PR head, so a PR cannot
+edit the path list to exclude itself) and is a fast no-op when none changed. The
+gate passes no secrets to it, so checking out and building PR code is safe. The
+build runs against the in-repo `@qvac/sdk`: the job builds `packages/sdk` and
+sets an `overrides.@qvac/sdk=file:../sdk` entry so the Kotlin worker bundle and
+contract check use this commit's SDK rather than a published release — a
+release-sdk-* PR, whose `@qvac/sdk` is not yet on npm, would otherwise fail to
+install. A fork touching the worker or contract runs the same check on its own
+`pull_request` leg, so it is never blocked waiting for a status it cannot
+produce.
 
 The final job in `pr-gate-merge.yml`:
 
 ```yaml
 qvac-merge-guard:
-  needs: [authorize, fork-approval, changes, sanity-checks, verify-prebuilds, verify-cpp-tests, sdk-pod-checks]
+  needs: [authorize, fork-approval, changes, sanity-checks, verify-prebuilds, verify-cpp-tests, sdk-pod-checks, sdk-kotlin-checks]
   if: |
     always() && !cancelled() &&
     (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -55,11 +70,14 @@ qvac-merge-guard:
   with:
     sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
     build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
-    general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
+    general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.sdk-kotlin-checks.result == 'success' || needs.sdk-kotlin-checks.result == 'skipped') }}
     cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}
 ```
 
-A skipped gated job (`sanity-checks`, `verify-prebuilds`, `verify-cpp-tests`, `sdk-pod-checks`) counts as success **only when the PR was actually authorized**. Those jobs `if`-gate on `authorize.outputs.allowed == 'true'`, so an unapproved external fork (fork-approval failed, authorize skipped, or `allowed=false`) skips all of them — and a bare `skipped → success` mapping would green the required check. Each status input therefore requires the full chain (`fork-approval` success **and** `authorize` success **and** `allowed == 'true'`) before trusting a skip, so unauthorized PRs fail closed (`validate-pr` returns a failing required check).
+`sdk-kotlin-checks` folds into `general-checks-status` alongside `sdk-pod-checks`,
+the same `workflow_call` shape.
+
+A skipped gated job (`sanity-checks`, `verify-prebuilds`, `verify-cpp-tests`, `sdk-pod-checks`, `sdk-kotlin-checks`) counts as success **only when the PR was actually authorized**. Those jobs `if`-gate on `authorize.outputs.allowed == 'true'`, so an unapproved external fork (fork-approval failed, authorize skipped, or `allowed=false`) skips all of them — and a bare `skipped → success` mapping would green the required check. Each status input therefore requires the full chain (`fork-approval` success **and** `authorize` success **and** `allowed == 'true'`) before trusting a skip, so unauthorized PRs fail closed (`validate-pr` returns a failing required check).
 
 ### `verify-prebuilds`: Merge Guard checks prebuilds, it does not trigger them
 
