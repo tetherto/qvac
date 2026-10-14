@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`
+  ([#5064](https://github.com/tetherto/qvac/pull/5064)). A caret on a `0.x`
+  version locks the minor, so `^0.21.1` would not have resolved `0.22.0` on
+  its own. `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against
+  the 0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
 - `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
   ([#5073](https://github.com/tetherto/qvac/pull/5073)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
   optional `retainOutput: false` on `QvacResponse` and
