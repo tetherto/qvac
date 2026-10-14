@@ -17,10 +17,10 @@ From the package root (`packages/ai-sdk-provider/`):
 
 ```bash
 # Dry-run: compare what's in the live registry vs the committed constants.ts
-bun run check-models
+npm run check-models
 
 # Actually overwrite src/models/constants.ts + write a history file
-bun run update-models
+npm run update-models
 ```
 
 Both commands invoke `tsx ./models/update-models/index.ts` with the relevant flag. `check-models --non-blocking` is also wired for use in pre-commit hooks that should warn (not fail) when the catalog drifts.
@@ -38,7 +38,7 @@ Both commands invoke `tsx ./models/update-models/index.ts` with the relevant fla
 
 ## What gets generated
 
-`bun run update-models` overwrites `packages/ai-sdk-provider/src/models/constants.ts` with one entry per model that has an OpenAI-shaped endpoint category. Each entry is emitted as:
+`npm run update-models` overwrites `packages/ai-sdk-provider/src/models/constants.ts` with one entry per model that has an OpenAI-shaped endpoint category. Each entry is emitted as:
 
 - An item in the `allModels` array (full metadata, `as const` for literal types).
 - A named export typed `ModelConstant<TEndpoint>` where `TEndpoint` is narrowed to `'chat' | 'embedding' | 'transcription' | 'audio-translation' | 'translation' | 'speech' | 'ocr' | 'image'` (see [`src/models/types.ts`](../../src/models/types.ts)).
