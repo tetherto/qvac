@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { TtsMulticast } from '@/client/api/text-to-speech'
+import { TtsMulticast, createTtsSideChannel } from '@/client/api/text-to-speech'
 import type { TtsResponse } from '@qvac/sdk'
 
 // ---------------------------------------------------------------------------
@@ -238,4 +238,14 @@ test('TtsMulticast: late subscriber misses earlier items (verifies trim correctn
   for await (const v of subB) bReceived.push(v.buffer)
 
   t.alike(bReceived, [[3], []], 'subscriber B sees only frames pushed after it subscribed')
+})
+
+test('MOSS-Speech reply text survives the SDK result side channel', async (t) => {
+  const side = createTtsSideChannel()
+  side.observe({ type: 'textToSpeech', buffer: [], done: false, text: 'Hello.' })
+  side.settle()
+  t.is(await side.text, 'Hello.')
+  const empty = createTtsSideChannel()
+  empty.settle()
+  t.is(await empty.text, undefined)
 })
