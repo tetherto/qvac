@@ -202,7 +202,7 @@ export function isIOS(): boolean {
 }
 
 // ============================================
-// Model config resolution
+// Resolving the model config
 // ============================================
 
 export function resolveModelConfig<T>(
