@@ -9,6 +9,7 @@ struct MossTranscribeConfig {
   std::string modelPath;
   int maxThreads = 0;
   bool useGPU = false;
+  std::string backend = "auto";
   std::string backendsDir;
 };
 

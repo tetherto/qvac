@@ -35,6 +35,8 @@ export interface WhisperFitRequest extends AsrFitCommon {
 }
 export interface MossTranscribeFitRequest extends AsrFitCommon, MossTranscribeRunOptions {
     engine: 'moss-transcribe';
+    /** Same selector as mossTranscribeConfig.backend; overrides gpuLayers. */
+    backend?: string;
     audioSeconds: number;
     threads?: number;
 }

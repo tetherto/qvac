@@ -202,7 +202,10 @@ function functionalModelsByTest(manifest) {
     runSupertonicTest: supertonic,
     runSupertonic3QuantTest: supertonic3,
     // Model-free: compares the JS vocabulary tables with the native one.
-    runVoiceControlsTest: []
+    runVoiceControlsTest: [],
+    // Input validation and unreadable-model fit checks need no model downloads.
+    runMossFitTest: [],
+    runMossSfxFitTest: []
   }
 }
 

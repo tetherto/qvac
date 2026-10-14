@@ -149,7 +149,7 @@ Use `release-llm-llamacpp-0.53.1`, not the short `release-llm-0.53.1` some older
 branches used. Same for `vla-ggml`, `ocr-ggml`, `embed-llamacpp`, `diffusion-cpp`,
 `classification-ggml` and `translation-nmtcpp`.
 
-The 13 native addons publish from one workflow rather than one file each, so the
+The 14 native addons publish from one workflow rather than one file each, so the
 branch name is what selects which package reaches NPM. `on-merge-nx.yml` checks it
 twice, both against the directory name: `packages/<package>/project.json` must
 exist, and the package the run selected must be exactly that one. A name it cannot
