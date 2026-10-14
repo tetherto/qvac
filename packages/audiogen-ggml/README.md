@@ -709,10 +709,12 @@ answers the same as the file itself and the projection can run before anything
 is downloaded. It is a module export, not an instance method — nothing is
 loaded to call it.
 
+`assessFit` returns a Promise. Fits run one at a time within the addon.
+
 ```js
 const { assessFit } = require('@qvac/audiogen-ggml')
 
-const fit = assessFit({
+const fit = await assessFit({
   modelsDir: '/models/ace-step',
   durationSeconds: 30,
   textTokens: 256,
@@ -760,7 +762,7 @@ peak of repeated generations, and the `stages` rows are `lm`, `depth`, `cond`,
 `dit` and `vocoder`.
 
 ```js
-const fit = assessFit({
+const fit = await assessFit({
   engine: 'minimax',
   modelsDir: '/models/minimax-music3',
   device: 'gpu',
@@ -780,7 +782,7 @@ On Android and iOS, where MiniMax-Music3 is unavailable, `engine: 'minimax'`
 comes back as `status: "error"` with `reason: "unsupported-engine"`.
 
 A model the engine cannot read is `status: "error"`; a broken request, or a
-host with no native binding, throws.
+host with no native binding, rejects.
 
 ## Lifecycle
 
