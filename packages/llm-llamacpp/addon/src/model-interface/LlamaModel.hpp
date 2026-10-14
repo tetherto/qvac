@@ -20,6 +20,7 @@
 #include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
+#include "ImagePixelLimit.hpp"
 #include "LlamaFinetuner.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
@@ -423,7 +424,7 @@ private:
   /// `cache_checkpoints` checkpoints of the largest size this context allows.
   static void validateCheckpointBudget(ReloadableState& state);
 
-  static std::unique_ptr<batching::ContinuousBatchScheduler>
+  std::unique_ptr<batching::ContinuousBatchScheduler>
   initBatchScheduler(ReloadableState& state);
 
   struct ResolvedPrompt {
@@ -459,6 +460,7 @@ private:
   const std::string loadingContext_;
   ModelMetaData metadata_;
   ConstructionArgs constructionArgs_;
+  uint64_t maxImagePixels_ = image_pixel_limit::DEFAULT_MAX_PIXELS;
 
   /// Shared lock for all methods that read/use state_ members; exclusive lock
   /// only in reload()
