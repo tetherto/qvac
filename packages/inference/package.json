@@ -203,7 +203,7 @@
     "semver": "^7.8.5",
     "tar-stream": "^3.2.0",
     "which-runtime": "^1.2.1",
-    "zod": "^4.4.3"
+    "zod": "4.6.5"
   },
   "peerDependencies": {
     "@qvac/asr-ggml": "^0.8.0",
@@ -211,7 +211,7 @@
     "@qvac/bci-whispercpp": "^0.11.0",
     "@qvac/classification-ggml": "^0.29.0",
     "@qvac/decoder-audio": "^0.8.0",
-    "@qvac/diffusion-cpp": "^0.26.0",
+    "@qvac/diffusion-cpp": "^0.28.0",
     "@qvac/embed-llamacpp": "^0.46.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.59.0",
@@ -271,7 +271,7 @@
     "@qvac/bci-whispercpp": "^0.11.0",
     "@qvac/classification-ggml": "^0.29.0",
     "@qvac/decoder-audio": "^0.8.0",
-    "@qvac/diffusion-cpp": "^0.26.0",
+    "@qvac/diffusion-cpp": "^0.28.0",
     "@qvac/embed-llamacpp": "^0.46.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.59.0",

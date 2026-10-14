@@ -87,8 +87,9 @@ export const sdcppConfigSchema = z.object({
         'The video layout is selected from the auxiliary sources: supplying ' +
         '`embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder ' +
         'via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for ' +
-        'synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + ' +
-        '`audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise ' +
+        'synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` ' +
+        'selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` ' +
+        'for synchronized audio); otherwise ' +
         'the Wan layout is used (UMT5 text encoder ' +
         'via `t5XxlModelSrc` + VAE). ' +
         'On React Native, loading the video model on-device will likely fail ' +
@@ -292,14 +293,15 @@ export const sdcppConfigSchema = z.object({
     .describe(
       'OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for ' +
         'Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. ' +
-        'Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).'
+        'Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no ' +
+        'CLIP-vision projection).'
     ),
   audioVaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. ' +
+      'Audio VAE decoder model — optional for MiniMax-H3 and LTX-2. ' +
         'Enables synchronized audio muxed into the output AVI. ' +
-        'Omit for silent LTX-2 video; unsupported by Wan.'
+        'Omit for silent video; unsupported by Wan.'
     ),
   embeddingsConnectorsModelSrc: modelSrcInputSchema
     .optional()
@@ -1151,7 +1153,6 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
     })
   }
   for (const [field, value] of [
-    ['mode', 'txt2vid'],
     ['fps', 24],
     ['cfg_scale', 1],
     ['scheduler', 'discrete']
@@ -1164,7 +1165,7 @@ export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) =
       })
     }
   }
-  for (const field of ['init_image', 'control_frames', 'vace_strength', 'strength'] as const) {
+  for (const field of ['control_frames', 'vace_strength', 'strength'] as const) {
     if (data[field] !== undefined) {
       ctx.addIssue({
         code: 'custom',

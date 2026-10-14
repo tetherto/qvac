@@ -65,7 +65,7 @@ export interface DiffusionFitResult {
 }
 
 interface FitBinding {
-  assessFit(request: Record<string, unknown>): DiffusionFitResult
+  assessFit(request: Record<string, unknown>): Promise<DiffusionFitResult>
 }
 
 /**
@@ -74,12 +74,14 @@ interface FitBinding {
  * so the projection can run before anything is downloaded. Safetensors
  * checkpoints can also contain only their tensor headers.
  *
- * A model the engine cannot read is `status: "error"`; only a broken request
- * throws.
+ * Concurrent calls run one at a time within this addon.
+ *
+ * A model the engine cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  */
-export function assessFit(
+export async function assessFit(
   request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest
-): DiffusionFitResult {
+): Promise<DiffusionFitResult> {
   if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {
     throw new TypeError(`unsupported fit mode: ${String(request.mode)}`)
   }
@@ -112,7 +114,7 @@ export function assessFit(
       .map(([key, value]) => [key, String(value)])
   )
 
-  return binding.assessFit({
+  return await binding.assessFit({
     ...toFilePaths(files),
     ...(request.mode === 'world' && {
       taehvPath: request.files.taehv,

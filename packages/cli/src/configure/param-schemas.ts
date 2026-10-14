@@ -245,29 +245,35 @@ export function configParamModel(schema: z.ZodType): ConfigParamModel | null {
 // enum hints render, e.g. 'causal'), else the bare string.
 type ParsedParam = { value: unknown } | { error: string }
 
-function parseParam(raw: string): ParsedParam {
+function parseParam(raw: string, field?: ParamField): ParsedParam {
   const t = raw.trim()
   if (t === '') return { value: undefined }
-  if (t.startsWith('{') || t.startsWith('[')) {
-    try {
-      return { value: JSON.parse(t) }
-    } catch {
+  let value: unknown
+  try {
+    value = JSON.parse(t)
+  } catch {
+    if (t.startsWith('{') || t.startsWith('[')) {
       return { error: 'Invalid JSON — use double quotes, e.g. {"src": "/path/to/file"}' }
     }
-  }
-  try {
-    return { value: JSON.parse(t) }
-  } catch {
     const singleQuoted = t.match(/^'(.*)'$/)
-    return { value: singleQuoted ? singleQuoted[1] : t }
+    value = singleQuoted ? singleQuoted[1] : t
   }
+
+  // String arrays also accept comma-separated input.
+  if (typeof value === 'string' && field) {
+    const node = z.toJSONSchema(field.schema, { unrepresentable: 'any' }) as JsonNode
+    if (node.type === 'array' && (node.items as JsonNode | undefined)?.type === 'string') {
+      value = value.split(',').map((item) => item.trim())
+    }
+  }
+  return { value }
 }
 
 // So `causal`, `'causal'`, and `"causal"` all coerce to the same value; blank
 // and unparseable object input coerce to undefined (the latter is blocked by
 // validateParam before it reaches here).
-export function coerceParam(raw: string): unknown {
-  const parsed = parseParam(raw)
+export function coerceParam(raw: string, field?: ParamField): unknown {
+  const parsed = parseParam(raw, field)
   return 'value' in parsed ? parsed.value : undefined
 }
 
@@ -290,7 +296,7 @@ export function validateValue(field: ParamField, value: unknown): true | string 
 // field schema. Returns true or a message for @inquirer's validate.
 export function validateParam(field: ParamField, raw: string): true | string {
   if (raw.trim() === '') return true
-  const parsed = parseParam(raw)
+  const parsed = parseParam(raw, field)
   if ('error' in parsed) return `${parsed.error} (expected ${field.type})`
   return validateValue(field, parsed.value)
 }
