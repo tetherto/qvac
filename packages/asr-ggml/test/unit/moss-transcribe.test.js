@@ -92,6 +92,37 @@ test('MOSS-Transcribe: the explicit engine builds the moss driver and native con
   await model.destroy()
 })
 
+test('MOSS-Transcribe: backend defaults preserve CPU and GPU auto selection', async (t) => {
+  for (const useGPU of [false, true]) {
+    const { model, binding } = createMossModel({ mossTranscribeConfig: { useGPU } })
+    await model.load()
+    t.is(binding.configurationParams.backend, 'auto')
+    t.is(binding.configurationParams.useGPU, useGPU)
+    await model.destroy()
+  }
+})
+
+test('MOSS-Transcribe: explicit backend reaches the binding with either GPU flag', async (t) => {
+  for (const backend of ['cpu', 'cuda', 'vulkan', 'CUDA1', 'Vulkan0']) {
+    for (const useGPU of [false, true]) {
+      const { model, binding } = createMossModel({ mossTranscribeConfig: { backend, useGPU } })
+      await model.load()
+      t.is(binding.configurationParams.backend, backend)
+      t.is(binding.configurationParams.useGPU, useGPU)
+      await model.destroy()
+    }
+  }
+})
+
+test('MOSS-Transcribe: invalid backend types are rejected before native creation', (t) => {
+  for (const backend of [null, true, 1, {}, []]) {
+    t.exception(
+      () => createMossModel({ mossTranscribeConfig: { backend } }),
+      /backend must be a string/
+    )
+  }
+})
+
 test('MOSS-Transcribe: the engine alias and config.engine both select it', (t) => {
   const aliased = new ASRGgml({ files: { model: MODEL_PATH }, engine: 'moss-transcribe' })
   t.is(getDriver(aliased).engineType, 'moss-transcribe')
