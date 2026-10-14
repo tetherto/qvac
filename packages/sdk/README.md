@@ -503,9 +503,9 @@ For a runnable example with download progress and resource cleanup, see
 From `packages/sdk`, run:
 
 ```bash
-bun run examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
+npx tsx examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
 # Use local weights and per-request hotwords:
-bun run examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
+npx tsx examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
 ```
 
 Segments retain `speaker` labels such as `S01`, zero-based `speakerId`, and
@@ -563,5 +563,5 @@ preserved. CLI `verbose_json` exposes offline turns as `speaker_segments` with
 See [the local Nemotron diarization example](examples/asr/nemotron-diarization-filesystem.ts):
 
 ```bash
-bun run examples/asr/nemotron-diarization-filesystem.ts ./nemotron-diarization.gguf meeting.wav
+npx tsx examples/asr/nemotron-diarization-filesystem.ts ./nemotron-diarization.gguf meeting.wav
 ```
