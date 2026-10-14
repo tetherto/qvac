@@ -10,6 +10,39 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('exposes GPU backend priorities for LLM, embeddings, and VLA', () => {
+    for (const addon of ['llm', 'embeddings', 'vla']) {
+      const schema = configSchemaForAddon(addon)
+      assert.ok(schema)
+      const backend = paramFields(schema).find((field) => field.name === 'backend')
+      assert.ok(backend, `${addon} backend is editable`)
+      assert.match(backend.type, /cuda.*vulkan.*\[\]$/)
+      assert.match(backend.description, /\['cuda', 'vulkan'\]/)
+      assert.equal(validateParam(backend, 'cuda,vulkan'), true)
+      assert.deepEqual(coerceParam('cuda,vulkan', backend), ['cuda', 'vulkan'])
+      assert.deepEqual(coerceParam(' cuda , vulkan ', backend), ['cuda', 'vulkan'])
+      assert.deepEqual(coerceParam('cuda', backend), ['cuda'])
+      assert.equal(validateParam(backend, '["cuda"]'), true)
+      assert.equal(validateParam(backend, ' cuda , vulkan '), true)
+      assert.equal(validateParam(backend, ''), true)
+      for (const invalid of [
+        'unknown',
+        'cuda,unknown',
+        'cuda,',
+        '[]',
+        '[1]',
+        '["unknown"]',
+        '["cuda"'
+      ]) {
+        assert.notEqual(validateParam(backend, invalid), true)
+      }
+      assert.equal(coerceParam('', backend), undefined)
+      const parsed = schema.parse({ backend: coerceParam('cuda,vulkan', backend) })
+      assert.ok(parsed && typeof parsed === 'object' && 'backend' in parsed)
+      assert.deepEqual(parsed.backend, ['cuda', 'vulkan'])
+    }
+  })
+
   it('exposes and validates World memory controls in the nested editor', () => {
     const schema = configSchemaForAddon('diffusion')
     assert.ok(schema)

@@ -26,7 +26,7 @@ for (const [name, content] of Object.entries(files)) {
 
 if (stale) {
   console.error(
-    "Contract artifacts are stale. Run 'bun run contract:export' and commit the result."
+    "Contract artifacts are stale. Run 'npm run contract:export' and commit the result."
   )
   process.exit(1)
 }

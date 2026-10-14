@@ -14,6 +14,10 @@ export function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
     batch_size: `${embedConfig.batchSize}` as `${number}`
   }
 
+  if (embedConfig.backend !== undefined) {
+    config.backend = embedConfig.backend.join(',')
+  }
+
   if (embedConfig.flashAttention) {
     config.flash_attn = embedConfig.flashAttention
   }

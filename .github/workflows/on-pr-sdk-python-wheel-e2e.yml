@@ -96,13 +96,10 @@ jobs:
           echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
           "$PYBIN" -m pip install --upgrade pip build
 
-      # node/bun build the worker (they find the pre-cached tool on these runners).
+      # node builds the worker (it finds the pre-cached tool on these runners).
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
 
       # Shared model cache, keyed like the SDK e2e so it invalidates in lockstep.
       - name: Restore models cache
