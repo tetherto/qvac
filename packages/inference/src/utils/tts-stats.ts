@@ -9,6 +9,7 @@ import type { TtsStats as AddonTtsStats, TtsOutputChunk } from '@/utils/addon-re
 export type TtsStreamChunk = TtsOutputChunk
 
 export type TtsOpYield = {
+  text?: string
   buffer: number[]
   sampleRate?: number
   chunkIndex?: number

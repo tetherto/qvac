@@ -75,7 +75,9 @@ export const TTS_ENGINES = [
   'parler',
   'cosyvoice3',
   'audio8',
-  'moss'
+  'moss',
+  'moss-sfx',
+  'moss-speech'
 ] as const
 
 // Mirror of the addon's `SentenceDelimiterPreset` (./text-stream-accumulator).
@@ -191,7 +193,7 @@ const TTS_MAX_FRAMES_DESC =
 // Same wording as the transcription and llama.cpp configs — these are the
 // generic ggml backend-loading knobs, not TTS-specific ones.
 const TTS_BACKENDS_DIR_DESC =
-  'Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.'
+  'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
 const TTS_OPENCL_CACHE_DIR_DESC =
   "Persistent directory for ggml-opencl's compiled-program cache (Android only)."
 
@@ -741,13 +743,132 @@ export const ttsMossRuntimeConfigSchema = z
   .object(ttsMossRuntimeConfigShape)
   .superRefine(refineGpuIntent)
 
+// JSON PCM keeps the client and wire portable; converted to Float32Array at the addon boundary.
+const ttsSpeechPcmSchema = z.array(z.number().min(-1).max(1)).min(1)
+const ttsSpeechRateSchema = z.number().int().min(8000).max(192000)
+
+const ttsSoundEffectFieldsShape = {
+  seconds: z
+    .number()
+    .positive()
+    .max(30)
+    .optional()
+    .describe('Sound-effect duration in seconds, up to 30.'),
+  negativePrompt: z
+    .string()
+    .optional()
+    .describe('Description of sounds to avoid in the generated effect.'),
+  steps: z
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .optional()
+    .describe('Diffusion denoising steps; the native default is 100.'),
+  guidance: z
+    .number()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe('Classifier-free guidance scale for sound-effect generation.'),
+  shift: z
+    .number()
+    .positive()
+    .max(100)
+    .optional()
+    .describe('Diffusion timestep schedule shift for sound-effect generation.')
+}
+
+function refineSpeechAudio(
+  value: {
+    audio?: number[] | undefined
+    sampleRate?: number | undefined
+    text?: string | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  if ((value.audio !== undefined) !== (value.sampleRate !== undefined)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['sampleRate'],
+      message: 'audio and sampleRate must be supplied together.'
+    })
+  }
+  if ((value.audio !== undefined) === Boolean(value.text?.trim())) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['text'],
+      message: 'Supply exactly one of text or audio.'
+    })
+  }
+}
+
+const ttsSpeechFieldsShape = {
+  audio: ttsSpeechPcmSchema.optional(),
+  sampleRate: ttsSpeechRateSchema.optional(),
+  messages: z
+    .array(
+      z
+        .object({
+          role: z.enum(['system', 'user', 'assistant']),
+          text: z.string().min(1).optional(),
+          audio: ttsSpeechPcmSchema.optional(),
+          sampleRate: ttsSpeechRateSchema.optional()
+        })
+        .superRefine(refineSpeechAudio)
+    )
+    .optional(),
+  systemPrompt: z.string().optional(),
+  replyVoice: ttsSpeechPcmSchema.optional(),
+  replyVoiceSampleRate: ttsSpeechRateSchema.optional(),
+  textReply: z.boolean().optional(),
+  maxReplySeconds: z.number().min(0).max(3600).optional(),
+  maxNewTokens: z.number().int().min(1).max(4096).optional(),
+  greedy: z.boolean().optional(),
+  temperature: z.number().positive().max(10).optional(),
+  topP: z.number().positive().max(1).optional(),
+  topK: ttsNonNegativeInt32Schema.optional()
+}
+
+const ttsBatchBackendShape = {
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+  nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+  seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
+  ...ttsBackendDirFieldsShape
+}
+
+export const ttsMossSoundEffectRuntimeConfigSchema = z
+  .object({
+    ttsEngine: z.literal('moss-sfx').describe('TTS engine: MOSS-SoundEffect-v2.'),
+    ...ttsBatchBackendShape,
+    ...ttsSoundEffectFieldsShape
+  })
+  .superRefine(refineGpuIntent)
+
+export const ttsMossSpeechRuntimeConfigSchema = z
+  .object({
+    ttsEngine: z.literal('moss-speech').describe('TTS engine: MOSS-Speech.'),
+    ...ttsBatchBackendShape
+  })
+  .superRefine(refineGpuIntent)
+
+export const ttsMossSoundEffectLoadConfigSchema = ttsMossSoundEffectRuntimeConfigSchema
+export const ttsMossSpeechLoadConfigSchema = ttsMossSpeechRuntimeConfigSchema.extend({
+  mossSpeechCodecModelSrc: modelSrcInputSchema.describe(
+    'MOSS-Speech codec GGUF source; modelSrc is the language model.'
+  )
+})
+
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
   ttsParlerRuntimeConfigSchema,
   ttsCosyvoice3RuntimeConfigSchema,
   ttsAudio8RuntimeConfigSchema,
-  ttsMossRuntimeConfigSchema
+  ttsMossRuntimeConfigSchema,
+  ttsMossSoundEffectRuntimeConfigSchema,
+  ttsMossSpeechRuntimeConfigSchema
 ])
 
 // Optional LavaSR post-processing model sources, shared across engines. Supply
@@ -1106,7 +1227,9 @@ export const ttsLoadConfigSchema = z
     ttsParlerLoadConfigSchema,
     ttsCosyvoice3LoadConfigSchema,
     ttsAudio8LoadConfigSchema,
-    ttsMossLoadConfigSchema
+    ttsMossLoadConfigSchema,
+    ttsMossSoundEffectLoadConfigSchema,
+    ttsMossSpeechLoadConfigSchema
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -1151,7 +1274,9 @@ export const ttsConfigSchema = z
     ttsParlerLoadConfigSchema.strict(),
     ttsCosyvoice3LoadConfigSchema.strict(),
     ttsAudio8LoadConfigSchema.strict(),
-    ttsMossLoadConfigSchema.strict()
+    ttsMossLoadConfigSchema.strict(),
+    ttsMossSoundEffectLoadConfigSchema.strict(),
+    ttsMossSpeechLoadConfigSchema.strict()
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -1168,28 +1293,43 @@ const ttsClientParamsShape = {
   modelId: z.string(),
   requestId: ttsRequestIdSchema,
   inputType: z.string().default('text'),
-  text: z.string().trim().min(1, 'text must not be empty or whitespace-only'),
+  text: z.string().trim().min(1, 'text must not be empty or whitespace-only').optional(),
   stream: z.boolean().default(true),
   sentenceStream: z.boolean().default(false),
   sentenceStreamLocale: z.string().optional(),
   sentenceStreamMaxChunkScalars: z.number().positive().optional(),
-  ...ttsParlerDescriptionFieldsShape
+  ...ttsParlerDescriptionFieldsShape,
+  ...ttsSoundEffectFieldsShape,
+  ...ttsSpeechFieldsShape
+}
+
+function refineTtsRequest(
+  value: z.infer<z.ZodObject<typeof ttsClientParamsShape>>,
+  ctx: z.RefinementCtx
+) {
+  refineParlerDescriptionFields(value, ctx)
+  refineSpeechAudio(value, ctx)
+  if ((value.replyVoice !== undefined) !== (value.replyVoiceSampleRate !== undefined)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['replyVoiceSampleRate'],
+      message: 'replyVoice and replyVoiceSampleRate must be supplied together.'
+    })
+  }
 }
 
 // Requests carry only an opaque modelId, so client-side validation cannot know
 // which TTS engine is loaded. Description conflicts are intentionally rejected
 // as malformed request shapes before the server performs engine compatibility
 // validation in assertParlerJobOptionsSupported.
-export const ttsClientParamsSchema = z
-  .object(ttsClientParamsShape)
-  .superRefine(refineParlerDescriptionFields)
+export const ttsClientParamsSchema = z.object(ttsClientParamsShape).superRefine(refineTtsRequest)
 
 export const ttsRequestSchema = z
   .object({
     ...ttsClientParamsShape,
     type: z.literal('textToSpeech')
   })
-  .superRefine(refineParlerDescriptionFields)
+  .superRefine(refineTtsRequest)
 
 // Mirrors @qvac/tts-ggml's `RuntimeStats`, using the same field names as the
 // transcription and audio-gen stats so a caller reads one vocabulary across
@@ -1248,6 +1388,7 @@ const ttsResponseSampleRateSchema = z
 
 export const ttsResponseSchema = z.object({
   type: z.literal('textToSpeech'),
+  text: z.string().optional().describe('MOSS-Speech reply text, including text-only replies.'),
   buffer: z.array(z.number()),
   done: z.boolean().default(false),
   sampleRate: ttsResponseSampleRateSchema,
@@ -1319,6 +1460,10 @@ export type TtsSupertonicLoadConfig = z.infer<typeof ttsSupertonicLoadConfigSche
 export type TtsParlerLoadConfig = z.infer<typeof ttsParlerLoadConfigSchema>
 export type TtsCosyvoice3LoadConfig = z.infer<typeof ttsCosyvoice3LoadConfigSchema>
 export type TtsAudio8LoadConfig = z.infer<typeof ttsAudio8LoadConfigSchema>
+export type TtsMossSoundEffectLoadConfig = z.infer<typeof ttsMossSoundEffectLoadConfigSchema>
+export type TtsMossSpeechLoadConfig = z.infer<typeof ttsMossSpeechLoadConfigSchema>
+export type TtsMossSoundEffectRuntimeConfig = z.infer<typeof ttsMossSoundEffectRuntimeConfigSchema>
+export type TtsMossSpeechRuntimeConfig = z.infer<typeof ttsMossSpeechRuntimeConfigSchema>
 export type TtsMossLoadConfig = z.infer<typeof ttsMossLoadConfigSchema>
 export type TtsLoadConfig = z.infer<typeof ttsLoadConfigSchema>
 /** @deprecated Use {@link TtsChatterboxLoadConfig} */
@@ -1355,6 +1500,8 @@ export type TextToSpeechStreamClientParams = z.output<
 >
 
 export interface TextToSpeechStreamResult {
+  /** MOSS-Speech reply text; resolved when the run finishes. */
+  text: Promise<string | undefined>
   bufferStream: AsyncGenerator<number>
   chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate>
   buffer: Promise<number[]>

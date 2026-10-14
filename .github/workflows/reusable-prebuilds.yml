@@ -155,6 +155,14 @@ on:
         type: boolean
         required: false
         default: false
+      verify-linux-x64-cuda-module:
+        description: >-
+          Fail the linux-x64 job unless the install tree contains exactly one
+          *ggml-cuda.so. Off by default because other include-cuda callers do
+          not all install that module name.
+        type: boolean
+        required: false
+        default: false
       cuda-arm64-jetson-cmake-option:
         description: >-
           CMake option enabled for the second Jetson module build. The default
@@ -555,6 +563,19 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: bare-make install
+
+      - if: ${{ inputs.verify-linux-x64-cuda-module && inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Verify Linux x64 CUDA module
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          shopt -s nullglob globstar
+          cuda_modules=(prebuilds/linux-x64/**/*ggml-cuda.so)
+          if [ "${#cuda_modules[@]}" -ne 1 ]; then
+            echo "::error::expected one Linux x64 CUDA module, found ${#cuda_modules[@]}"
+            exit 1
+          fi
+          ls -l "${cuda_modules[0]}"
 
       - if: ${{ inputs.include-cuda && inputs.include-cuda-win32 && matrix.platform == 'win32' && matrix.arch == 'x64' }}
         name: Verify Windows CUDA and Vulkan modules

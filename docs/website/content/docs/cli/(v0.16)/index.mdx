@@ -170,6 +170,8 @@ qvac configure --modality chat --modality image
 | `--force` | Re-add a model that is already configured (overwrites its existing entry in place). |
 | `-q, --quiet` | Suppress output. |
 
+The picker includes MOSS-SoundEffect and MOSS-Speech starters. MOSS-SoundEffect uses the model source URL with `ttsEngine: "moss-sfx"`; MOSS-Speech includes its codec source. Their conversation and sound-effect controls are available through the [SDK Text-to-Speech API](/sdk/ai-capabilities/text-to-speech); the OpenAI speech endpoint does not represent those controls.
+
 Single-artifact modalities (chat, embedding, transcription, image) are runnable as written. Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder — set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for non-TTY use `--yes` / `--modality`.
 
 See [HTTP server — Configuration](/cli/http-server#configuration) for the shape of the `serve.models` entries this command writes.

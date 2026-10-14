@@ -1,4 +1,3 @@
-import { resolveBackendsDir } from './addon'
 
 export interface EmbedFitRequest {
   /** Absolute path to the GGUF, or to the registry's weightless copy. */
@@ -70,10 +69,5 @@ export function assessFit(request: EmbedFitRequest): EmbedFitResult {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
   const binding = require('./binding.js') as FitBinding
 
-  const config = { ...request.config }
-  if (config['backendsDir'] === undefined || config['backendsDir'] === '') {
-    config['backendsDir'] = resolveBackendsDir()
-  }
-
-  return binding.assessFit({ ...request, config })
+  return binding.assessFit({ ...request, config: { ...request.config } })
 }

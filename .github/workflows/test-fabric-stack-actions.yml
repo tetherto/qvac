@@ -335,8 +335,17 @@ jobs:
               "binary",
             )
             fs.writeFileSync(
+              path.join(source, "linux-x64/qvac__fabric-linux-x64.bare"),
+              "runtime",
+            )
+            fs.writeFileSync(
               path.join(destination, "linux-x64/stale-library.so"),
               "stale",
+            )
+            // The installed meta the overlay links platform packages under.
+            fs.writeFileSync(
+              path.join(destination, "../package.json"),
+              JSON.stringify({ name: "@qvac/fabric", version: "0.21.0" }),
             )
           ' "$TEST_ROOT"
 
@@ -375,6 +384,16 @@ jobs:
               if (fs.existsSync(path.join(root, file))) {
                 throw new Error(`Unexpected stale file: ${file}`)
               }
+            }
+            // The overlaid host is exposed as the platform package the layout
+            // lookup resolves first from the meta, ahead of the released one.
+            const platform = path.join(root, "../node_modules/@qvac/fabric-linux-x64")
+            const manifest = JSON.parse(fs.readFileSync(path.join(platform, "package.json"), "utf8"))
+            if (manifest.name !== "@qvac/fabric-linux-x64" || manifest.addon !== true) {
+              throw new Error(`Unexpected platform package manifest: ${JSON.stringify(manifest)}`)
+            }
+            if (!fs.existsSync(path.join(platform, "prebuilds/linux-x64/qvac__fabric-linux-x64.bare"))) {
+              throw new Error("The platform package does not reach the overlaid runtime")
             }
           ' "$PREBUILDS"
 
@@ -525,6 +544,14 @@ jobs:
             fs.writeFileSync(
               path.join(installed, "linux-x64/qvac_fabric.so"),
               "published",
+            )
+            fs.writeFileSync(
+              path.join(prBuilt, "linux-x64/qvac__fabric-linux-x64.bare"),
+              "pr-built",
+            )
+            fs.writeFileSync(
+              path.join(installed, "../package.json"),
+              JSON.stringify({ name: "@qvac/fabric", version: "0.21.0" }),
             )
             fs.writeFileSync(
               path.join(prBuilt, "linux-x64/tetherto_fabric.so"),
