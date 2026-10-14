@@ -1,3 +1,5 @@
+#include <uv.h>
+
 #include "model-interface/LoadFitNormalization.hpp"
 
 #include <algorithm>
