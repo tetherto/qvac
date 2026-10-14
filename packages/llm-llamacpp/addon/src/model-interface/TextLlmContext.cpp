@@ -1,5 +1,3 @@
-#include <uv.h>
-
 #include "TextLlmContext.hpp"
 
 #include <algorithm>
@@ -11,6 +9,7 @@
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
+#include <uv.h>
 
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"

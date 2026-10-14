@@ -1,5 +1,3 @@
-#include <uv.h>
-
 #include "model-interface/LoadFitNormalization.hpp"
 
 #include <algorithm>
@@ -20,6 +18,7 @@
 #include <common/log.h>
 #include <ggml-backend.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <uv.h>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
 #endif
