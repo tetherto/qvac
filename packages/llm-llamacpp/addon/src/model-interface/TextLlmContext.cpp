@@ -1,3 +1,5 @@
+#include <uv.h>
+
 #include "TextLlmContext.hpp"
 
 #include <algorithm>
