@@ -2,6 +2,7 @@ import fs from 'fs'
 import { execSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
+import { isCoremlBundleComponent } from './companions.ts'
 import { generateModelsFileContent } from './codegen.ts'
 import {
   assignNames,
@@ -22,7 +23,11 @@ const OUTPUT_FILE = fileURLToPath(new URL('../../src/models/constants.ts', impor
 const HISTORY_DIR = fileURLToPath(new URL('../history', import.meta.url))
 
 function toOpenAIEndpointModels(models: ProcessedModel[]): ProcessedModel[] {
-  return models.filter((model) => getEndpointCategoryFromAddon(model.addon) !== null)
+  return models.filter(
+    (model) =>
+      getEndpointCategoryFromAddon(model.addon) !== null &&
+      !isCoremlBundleComponent(model.registryPath)
+  )
 }
 
 async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<void> {

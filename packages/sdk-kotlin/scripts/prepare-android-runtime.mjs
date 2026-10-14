@@ -53,9 +53,8 @@ const bundleSdkPath = ensureWorkspaceSdk(sdkRoot)
 const modulesRoot = bundleSdkPath ?? projectRoot
 const classificationWeightsSource = classificationWeightsPath(modulesRoot)
 
-// Split addons ship their native code in per-platform packages, and their
-// `binding.js` is just `require('#host-addon')`: bare-pack cannot resolve it
-// until the android-arm64 package is installed, at each meta's version.
+// Split addons ship their native code in per-platform packages, installed at
+// each meta's version before bundling.
 await ensureHostPrebuilds('android-arm64', modulesRoot)
 
 const bundle = await bundleSdk({
@@ -131,6 +130,21 @@ for await (const resource of link(
   console.log(`Linked ${resource}`)
 }
 
+// A platform package that wraps an inner `addon` package is linked from it.
+for (const innerAddon of innerPlatformAddons(addons, 'android-arm64', modulesRoot)) {
+  for await (const resource of link(
+    innerAddon.dir,
+    {
+      hosts: ['android-arm64'],
+      out: addonsDirectory
+    },
+    innerAddon.pkg
+  )) {
+    linkedResources.add(path.resolve(String(resource)))
+    console.log(`Linked ${resource}`)
+  }
+}
+
 async function sha256(filePath) {
   return createHash('sha256').update(await fs.readFile(filePath)).digest('hex')
 }
@@ -195,6 +209,32 @@ function ensureWorkspaceSdk(sdkDir) {
   return sdkDir
 }
 
+/** The inner `addon` packages of the given metas' platform packages for `host`. */
+function innerPlatformAddons(metaNames, host, modulesRoot) {
+  const found = []
+  for (const name of metaNames) {
+    let meta
+    try {
+      meta = JSON.parse(
+        fsSync.readFileSync(path.join(packageDir(modulesRoot, name), 'package.json'), 'utf8')
+      )
+    } catch {
+      continue
+    }
+    const platformPackage = platformPackageForHost(meta, host)
+    if (platformPackage === null) continue
+    const dir = path.join(packageDir(modulesRoot, platformPackage), 'addon')
+    let pkg
+    try {
+      pkg = JSON.parse(fsSync.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    } catch {
+      continue
+    }
+    if (pkg.addon === true) found.push({ dir, pkg })
+  }
+  return found
+}
+
 function packageDir(modulesRoot, name) {
   return path.join(modulesRoot, 'node_modules', ...name.split('/'))
 }
@@ -241,7 +281,8 @@ function platformPackageForHost(meta, host) {
   const platform = host.slice(0, dash)
   const arch = host.slice(dash + 1)
   const hostMap = meta.imports?.['#host-addon']?.[platform]
-  const candidate = typeof hostMap === 'string' ? hostMap : hostMap?.[arch]
+  const entry = typeof hostMap === 'string' || Array.isArray(hostMap) ? hostMap : hostMap?.[arch]
+  const candidate = Array.isArray(entry) ? entry[0] : entry
   return typeof candidate === 'string' && candidate.startsWith(`${meta.name}-`) ? candidate : null
 }
 

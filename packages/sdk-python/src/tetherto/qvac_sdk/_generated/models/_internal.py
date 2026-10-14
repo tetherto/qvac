@@ -16123,7 +16123,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None
@@ -16318,7 +16318,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None

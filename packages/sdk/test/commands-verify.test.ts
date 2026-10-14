@@ -1022,6 +1022,36 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
     })
   })
 
+  it('finds the prebuild in the inner addon of a platform package that is not an addon', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      const platformRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml-android-arm64', {
+        name: '@qvac/tts-ggml-android-arm64',
+        version: '0.9.0'
+      })
+      const innerAddonRoot = writePackageJson(platformRoot, 'addon', {
+        name: '@qvac/tts-ggml',
+        version: '0.9.0',
+        addon: true
+      })
+      writePrebuild(innerAddonRoot, 'android-arm64')
+
+      const locations = await resolvePrebuildLocations(metaAddon(packageRoot), 'android-arm64')
+      assert.deepEqual(locations, [
+        {
+          hostDir: path.join(innerAddonRoot, 'prebuilds', 'android-arm64'),
+          platformPackage: '@qvac/tts-ggml-android-arm64'
+        }
+      ])
+
+      const issues = await checkPrebuilds({
+        addon: metaAddon(packageRoot),
+        hosts: ['android-arm64']
+      })
+      assert.deepEqual(issues, [])
+    })
+  })
+
   it('still reports missing-prebuild for hosts no installed package covers', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
