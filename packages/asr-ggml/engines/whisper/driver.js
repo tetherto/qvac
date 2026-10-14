@@ -4,7 +4,6 @@ exports.WhisperDriver = void 0;
 const whisper_1 = require("./whisper");
 const configChecker_1 = require("./configChecker");
 const error_1 = require("../../lib/error");
-const backends_1 = require("../../lib/backends");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
 const driver_1 = require("../parakeet/driver");
@@ -301,9 +300,9 @@ class WhisperDriver {
             // is pinned. The user-facing `audio_format` config key only selects
             // how raw Uint8Array bytes are interpreted at the JS boundary.
             audio_format: WIRE_AUDIO_FORMAT,
-            backendsDir: typeof this.params.backendsDir === "string"
-                ? this.params.backendsDir
-                : (0, backends_1.resolveBackendsDir)(),
+            ...(typeof this.params.backendsDir === "string"
+                ? { backendsDir: this.params.backendsDir }
+                : {}),
         };
     }
     _buildWhisperConfig(overrideWhisperConfig) {

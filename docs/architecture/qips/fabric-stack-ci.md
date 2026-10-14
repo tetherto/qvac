@@ -32,7 +32,7 @@
 
 *1. Direct vcpkg* — packages declare `qvac-fabric` in `vcpkg.json` and compile locally (`llm-llamacpp`, `embed-llamacpp`, `ocr-ggml`, `translation-nmtcpp`, `vla-ggml`, and `packages/fabric` itself).
 
-*2. npm runtime* — migrated consumers depend on `@qvac/fabric`, which ships the shared `qvac__fabric.bare` prebuild plus headers/CMake config (`classification-ggml` today). All other fabric-consuming addons will follow this path; only `packages/fabric` keeps building `qvac-fabric` from vcpkg.
+*2. npm runtime* — migrated consumers depend on `@qvac/fabric`, which ships headers/CMake config plus the shared runtime (`qvac__fabric-<suffix>.bare` per host, in the platform package `@qvac/fabric-<suffix>` since 0.21) (`classification-ggml` today). All other fabric-consuming addons will follow this path; only `packages/fabric` keeps building `qvac-fabric` from vcpkg.
 
 *What works today*
 
@@ -132,8 +132,12 @@ overlay-local-fabric
        prebuilds/<platform>-<arch>/
        prebuilds/include/
        prebuilds/share/qvac-fabric/
-  4. consumer bare-make generate && build
-  5. consumer cpp-tests + integration-tests
+  4. link-local: nest @qvac/fabric-<suffix> under each overlaid meta's
+     node_modules (slice-platform-packages.mjs --link-local), so the
+     platform package #host-addon resolves to is the PR's runtime and not
+     the released one npm installed
+  5. consumer bare-make generate && build
+  6. consumer cpp-tests + integration-tests
 ```
 
 *Critical ordering* for combined PRs (consumer code + new fabric API):

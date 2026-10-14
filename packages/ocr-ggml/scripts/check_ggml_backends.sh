@@ -4,8 +4,8 @@
 # Unlike upstream EasyOcr-ggml (which builds ggml as a submodule and inspects
 # build/third_party/ggml/...), this package consumes ggml from the
 # `@qvac/fabric` npm runtime. The runtime artefacts live under
-# `prebuilds/<host>/qvac__fabric/` of `@qvac/fabric` itself (source builds) or
-# of its `@qvac/fabric-<host>/addon` platform package.
+# `prebuilds/<host>/qvac__fabric-<host>/` of the `@qvac/fabric-<host>` platform
+# package (iOS hosts share `@qvac/fabric-ios` and `qvac__fabric-ios`).
 #
 # Outputs four sections:
 #   1. Shipped backend libraries — which `libqvac-ggml-*.so` files were installed
@@ -37,22 +37,20 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # `host` is set by cmake-bare based on the runtime platform; on x64 Linux it
 # is `linux-x64`, on Apple Silicon `darwin-arm64`, etc.
 HOST_GUESS="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -E 's/^x86_64$/x64/;s/^aarch64$/arm64/')"
+FABRIC_MODULE="qvac__fabric-${HOST_GUESS}"
 
-# Follows @qvac/fabric/backends' order (@qvac/fabric itself, then the platform
-# package as a pnpm sibling, npm nested, or npm hoisted), but picks the first
-# candidate with a prebuilds/<host>/qvac__fabric directory, like cmake's
-# qvac_addon_fabric_layout, where backends.js checks for a resolvable .bare.
+# The platform package as a pnpm sibling of @qvac/fabric, npm nested, or npm
+# hoisted; the same order cmake's qvac_addon_fabric_layout resolves it in.
 default_backends_dir() {
     local fabric="${REPO_ROOT}/node_modules/@qvac/fabric" real candidate
     [[ -d "${fabric}" ]] || return 0
     real="$(cd "${fabric}" && pwd -P)"
     for candidate in \
-        "${real}/prebuilds" \
-        "$(dirname "${real}")/fabric-${HOST_GUESS}/addon/prebuilds" \
-        "${real}/node_modules/@qvac/fabric-${HOST_GUESS}/addon/prebuilds" \
-        "${REPO_ROOT}/node_modules/@qvac/fabric-${HOST_GUESS}/addon/prebuilds"; do
-        if [[ -d "${candidate}/${HOST_GUESS}/qvac__fabric" ]]; then
-            echo "${candidate}/${HOST_GUESS}/qvac__fabric"
+        "$(dirname "${real}")/fabric-${HOST_GUESS}" \
+        "${real}/node_modules/@qvac/fabric-${HOST_GUESS}" \
+        "${REPO_ROOT}/node_modules/@qvac/fabric-${HOST_GUESS}"; do
+        if [[ -d "${candidate}/prebuilds/${HOST_GUESS}/${FABRIC_MODULE}" ]]; then
+            echo "${candidate}/prebuilds/${HOST_GUESS}/${FABRIC_MODULE}"
             return 0
         fi
     done
@@ -70,7 +68,7 @@ if [[ -z "${BACKENDS_DIR}" || ! -d "${BACKENDS_DIR}" ]]; then
     echo "error: no @qvac/fabric backends directory for ${HOST_GUESS}: ${BACKENDS_DIR:-(none found)}" >&2
     echo "" >&2
     echo "Run 'npm install' to install @qvac/fabric and @qvac/fabric-${HOST_GUESS}," >&2
-    echo "or override BACKENDS_DIR=/abs/path/to/prebuilds/<host>/qvac__fabric" >&2
+    echo "or override BACKENDS_DIR=/abs/path/to/prebuilds/<host>/qvac__fabric-<host>" >&2
     exit 1
 fi
 
@@ -86,14 +84,14 @@ ls -lh "${BACKENDS_DIR}"/libqvac-ggml-*.so 2>/dev/null || \
 # Also show Fabric's shared bare runtime.
 echo
 echo "Fabric runtime:"
-ls -lh "${BACKENDS_DIR}"/../qvac__fabric.bare 2>/dev/null || \
-    echo "(no qvac__fabric.bare module — did 'npm install' run?)"
+ls -lh "${BACKENDS_DIR}/../${FABRIC_MODULE}.bare" 2>/dev/null || \
+    echo "(no ${FABRIC_MODULE}.bare module — did 'npm install' run?)"
 
 # ----------------------------------------------------------------------------
 # 2. Linked dependencies (ldd)
 # ----------------------------------------------------------------------------
 print_section "2. Linked dependencies (ldd)"
-for lib in "${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare; do
+for lib in "${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}/../${FABRIC_MODULE}.bare"; do
     [[ -e "${lib}" ]] || continue
     echo
     echo "--- ${lib##*/} ---"
@@ -124,7 +122,7 @@ check_symbol() {
     fi
 }
 
-ALL_LIBS=("${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare)
+ALL_LIBS=("${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}/../${FABRIC_MODULE}.bare")
 check_symbol "tinyBLAS (GGML_LLAMAFILE=ON)" "llamafile_sgemm"  "${ALL_LIBS[@]}"
 check_symbol "external BLAS (GGML_BLAS)"    "cblas_sgemm"      "${ALL_LIBS[@]}"
 check_symbol "Vulkan backend"               "vkCreateInstance" "${ALL_LIBS[@]}"

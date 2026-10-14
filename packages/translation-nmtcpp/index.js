@@ -1,9 +1,6 @@
 "use strict";
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-const fs = require("bare-fs");
-const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
-const fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const marian_1 = require("./marian");
@@ -19,22 +16,6 @@ const indic_processor_1 = require("./third-party/indic-processor");
 const BERGAMOT_TARGET_TOKEN_BY_PAIR = {
     "en:pt": ">>por<<",
 };
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds, where the mobile packaging stages the backends. The native side
-// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && fs.existsSync(fabricRoot))
-        return fabricRoot;
-    return path.join(__dirname, "prebuilds");
-}
 function isAbsoluteModelPath(modelPath) {
     return (modelPath.startsWith("/") ||
         /^[A-Za-z]:[\\/]/.test(modelPath) ||
@@ -133,10 +114,7 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         normalizeGpuAliases(config);
         return binding.assessFit({
             ...request,
-            config: {
-                ...config,
-                backendsDir: request.config.backendsDir ?? resolveBackendsDir(),
-            },
+            config,
         });
     }
     opts;
@@ -338,9 +316,6 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         // translate camelCase → snake_case here. snake_case takes precedence
         // when both are present (explicit user choice wins over alias).
         normalizeGpuAliases(otherConfig);
-        if (otherConfig.backendsDir === undefined) {
-            otherConfig.backendsDir = resolveBackendsDir();
-        }
         const configurationParams = {
             path: this._files.model,
             config: otherConfig,

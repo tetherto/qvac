@@ -21,6 +21,7 @@ export interface AddonPackageJson {
   name?: string
   version?: string
   addon?: boolean
+  imports?: Record<string, unknown>
   engines?: {
     bare?: string
   }
@@ -57,6 +58,18 @@ export interface ReadAddonPackageJsonResult {
   invalid?: InvalidPackageJsonRecord
   addon?: NativeAddon
   record?: PackageRecord
+  /**
+   * Set for a split addon's meta package, which is not itself an addon: its
+   * `binding.js` is `require('#host-addon')` and the platform packages that
+   * map names (`<name>-<platform>`) are the addons actually loaded.
+   */
+  splitAddon?: SplitAddon
+}
+
+export interface SplitAddon {
+  addon: NativeAddon
+  /** Every platform package the meta's `#host-addon` map names. */
+  platformPackages: string[]
 }
 
 export async function readAddonPackageJson(
@@ -93,9 +106,11 @@ export async function readAddonPackageJson(
   const pkg = parsed as AddonPackageJson
   const record = buildRecord(pkg, packageJsonPath, expectedName)
   if (pkg.addon !== true) {
-    return record === null
-      ? { found: true, isAddon: false }
-      : { found: true, isAddon: false, record }
+    const result: ReadAddonPackageJsonResult = { found: true, isAddon: false }
+    if (record !== null) result.record = record
+    const splitAddon = buildSplitAddon(pkg, packageJsonPath)
+    if (splitAddon !== null) result.splitAddon = splitAddon
+    return result
   }
 
   const name = pkg.name ?? expectedName
@@ -122,6 +137,30 @@ export async function readAddonPackageJson(
   return record === null
     ? { found: true, isAddon: true, addon }
     : { found: true, isAddon: true, addon, record }
+}
+
+function buildSplitAddon(pkg: AddonPackageJson, packageJsonPath: string): SplitAddon | null {
+  if (typeof pkg.name !== 'string') return null
+  const prefix = `${pkg.name}-`
+  const platformPackages = new Set<string>()
+  const visit = (value: unknown) => {
+    if (typeof value === 'string') {
+      if (value.startsWith(prefix)) platformPackages.add(value)
+    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      for (const child of Object.values(value)) visit(child)
+    }
+  }
+  visit(pkg.imports?.['#host-addon'])
+  if (platformPackages.size === 0) return null
+
+  const addon: NativeAddon = {
+    name: pkg.name,
+    packageJsonPath,
+    packageRoot: path.dirname(packageJsonPath)
+  }
+  if (typeof pkg.version === 'string') addon.version = pkg.version
+  if (typeof pkg.engines?.bare === 'string') addon.enginesBare = pkg.engines.bare
+  return { addon, platformPackages: [...platformPackages].sort() }
 }
 
 function stringRecord(value: unknown) {

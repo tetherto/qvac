@@ -17,6 +17,7 @@
 #include <ggml-backend.h>
 #include <ggml-rpc.h>
 #include <js.h>
+#include <qvac-fabric.h>
 #include <uv.h>
 
 #include "rpc-server-core.hpp"
@@ -379,11 +380,10 @@ bool readBoolean(
 }
 
 bool rpcBackendHasRdmaMarker(const std::string& backendsDir) {
-  // Same location ggml_backend_load_all_from_path() loads the module from.
-  std::filesystem::path moduleDir = backendsDir;
-#ifdef BACKENDS_SUBDIR
-  moduleDir /= BACKENDS_SUBDIR;
-#endif
+  // Same location the RPC backend module is loaded from.
+  const std::filesystem::path moduleDir =
+      backendsDir.empty() ? std::filesystem::path(qvac_fabric_backends_dir())
+                          : std::filesystem::path(backendsDir);
   return rpc_server::rpcBackendHasRdmaMarker(moduleDir);
 }
 
@@ -405,11 +405,11 @@ ServerHandleRef createServerOnWorker(const StartTask& task) {
   // GGML's backend registry is process-global. Preserve the old serialized
   // startup behavior when multiple callers start servers concurrently.
   std::scoped_lock lock(startMutex());
-  std::filesystem::path backendPath = task.backendsDir;
-#ifdef BACKENDS_SUBDIR
-  backendPath /= BACKENDS_SUBDIR;
-#endif
-  ggml_backend_load_all_from_path(backendPath.string().c_str());
+  if (task.backendsDir.empty()) {
+    qvac_fabric_load_backends();
+  } else {
+    ggml_backend_load_all_from_path(task.backendsDir.c_str());
+  }
   const RpcServerApi rpcApi = rpc_server::resolveRpcServerApi();
 
   std::vector<ggml_backend_dev_t> devices =
@@ -667,16 +667,15 @@ js_value_t* startServer(js_env_t* env, js_callback_info_t* info) try {
   bool cache = false;
   if (!readString(env, options, "endpoint", true, &endpoint) ||
       !readString(env, options, "device", false, &devicesValue) ||
-      !readString(env, options, "backendsDir", true, &backendsDir) ||
+      !readString(env, options, "backendsDir", false, &backendsDir) ||
       !readPositiveInt(env, options, "threads", &threads) ||
       !readBoolean(env, options, "cache", &cache)) {
     return nullptr;
   }
 
+  // Optional: by default @qvac/fabric loads the backends it ships.
   const std::filesystem::path backendPath = backendsDir;
-  // Mobile prebuilds are bundled under a virtual app path, not a filesystem
-  // directory. ggml loads Android backends by name when that path is absent.
-  if (!backendPath.is_absolute()) {
+  if (!backendsDir.empty() && !backendPath.is_absolute()) {
     js_throw_error(
         env, "RpcServerBackendError", "backendsDir must be an absolute path");
     return nullptr;
@@ -737,7 +736,7 @@ rpcBackendSupportsRdma(js_env_t* env, js_callback_info_t* info) try {
     return nullptr;
   }
   std::string backendsDir;
-  if (!readString(env, argv.front(), "backendsDir", true, &backendsDir)) {
+  if (!readString(env, argv.front(), "backendsDir", false, &backendsDir)) {
     return nullptr;
   }
   js_value_t* result = nullptr;
@@ -754,7 +753,7 @@ rpcBackendSupportsRdma(js_env_t* env, js_callback_info_t* info) try {
 }
 
 js_value_t* rpcServerExports(js_env_t* env, js_value_t* target) {
-  // Windows delay-loads qvac__fabric@0.bare and resolves it through Bare's
+  // Windows delay-loads qvac__fabric-<host>@0.bare and resolves it through Bare's
   // addon registry, which only answers while Bare is loading or initializing
   // an addon on the calling thread. The first fabric call otherwise happens on
   // the start worker thread and fails with 0xC06D007E, so resolve fabric here.

@@ -21,7 +21,8 @@ export type {
 } from '@/commands/verify/index'
 export {
   HostPrebuildsInstallFailedError,
-  HostPrebuildsInstallRefusedError
+  HostPrebuildsInstallRefusedError,
+  HostPrebuildsMissingError
 } from '@/utils/errors-client'
 export { formatRuntimeSource } from '@/commands/verify/abi'
 export type { BareRuntime, BareRuntimeResolution } from '@/commands/verify/abi'

@@ -10,7 +10,7 @@
 
 • *Fabric / addon pod lead* (`packages/fabric`, `qvac-fabric-llm.cpp`) — shared runtime contract, backend layout, SONAME stability
 • *DevOps / CI* — `on-merge-nx` slicing, `overlay-local-fabric`, prebuild artifact layout
-• *npm-runtime consumer owners* (`.github/fabric-consumers.json`) — `resolveBackendsDir()`, CMake template, the consumer range bump
+• *npm-runtime consumer owners* (`.github/fabric-consumers.json`) — platform package declarations, CMake template, the consumer range bump
 • *SDK / mobile owners* — Expo linker and `qvac verify` reading `#host-addon`, mobile apps pinning the cross-built slices
 • *Lead / Architect* — package boundary, install contract, CUDA/HIP as a second split axis
 
@@ -70,54 +70,73 @@ consumer addon
 
 ### Layout
 
-The meta keeps `binding.js`, `backends.js`, `prebuilds/include/` and
+The meta keeps `binding.js`, `prebuilds/include/` and
 `prebuilds/share/qvac-fabric/` (the slicer's `--keep-dirs`, fed from
-`prebuildExtraDirs`). Each platform package nests its host runtime one level down,
-under `addon/prebuilds/<host>/qvac__fabric.bare` with the DL backends in
-`qvac__fabric/`. The `addon/` directory carries an inner `package.json` named
-`@qvac/fabric`. `require.addon()` and cmake-bare's `include_bare_module()` both
-take the artifact basename from that manifest, so the file stays
-`qvac__fabric.bare`. The `DT_NEEDED qvac__fabric@0.bare` that every shipped
-consumer records keeps resolving.
+`prebuildExtraDirs`); it is not an addon. Each platform package is an ordinary
+one: `addon: true`, `index.js` is `module.exports = require.addon()`, and its
+runtime is built under the package's own mangled name,
+`prebuilds/<host>/qvac__fabric-<suffix>.bare`, with the DL backends in
+`prebuilds/<host>/qvac__fabric-<suffix>/`. Every iOS host shares the suffix
+`ios`. `require.addon()`, `bare-pack` and `bare-link` find it with no inner
+manifest posing as `@qvac/fabric`.
+
+The runtime's SONAME follows: consumers record
+`DT_NEEDED qvac__fabric-<suffix>@<major>.bare`, so the platform package names
+are part of the ABI. Shipped consumers that recorded `qvac__fabric@0.bare` need a
+rebuild against 0.21.
 
 ### Load contract
 
-`binding.js` tries `require.addon()` first and falls back to
-`require('#host-addon')`. `#host-addon` is a Bare `imports` map keyed on platform
-and arch, like [bare-collabora](https://github.com/holepunchto/bare-collabora).
-`bare-pack --host` resolves the map for the target host, which a runtime
-`process.platform` switch cannot do. Every arm is
-`[<platform package>, "./addon-unavailable.js"]`, so the specifier resolves even
-where the slice is not installed. That fallback throws an error naming the exact
-package. A `require.addon()` answer that is this package's own JS entry is treated
-as a miss, which is the defect #4485 fixed in the sibling addons.
+`binding.js` is one line, `module.exports = require('#host-addon')`, as in
+[bare-collabora](https://github.com/holepunchto/bare-collabora/blob/main/binding.js).
+The Bare module lexer, which `bare-pack` and `bare-link` walk the graph with,
+only follows string-literal specifiers. A `require()`, `require.resolve()`,
+`require.addon()` or `require.addon.resolve()` with a computed specifier is
+invisible to it and does not work bundled; `scripts/ci/check-bundler-requires.mjs`
+fails a package that has one.
 
-One precedence holds everywhere: a runtime in `@qvac/fabric/prebuilds/<host>`
-wins over the platform package. It applies in `binding.js`, in
-`backends.js#resolveBackendsDir()`, in CMake `qvac_addon_fabric_layout()`, and in
-the SDK's `qvac verify`. That tree exists for fabric 0.17 and earlier, source
-builds, linked workspaces and the unsliced GPR tarball. It is also where
-`overlay-local-fabric` writes the PR-built runtime, so the overlay and its pinned
-callers need no change.
+`#host-addon` is a Bare `imports` map keyed on platform and arch. `bare-pack
+--host` resolves it for the target host, which a runtime `process.platform`
+switch cannot do. Each supported host maps to its platform package alone, with
+no array fallback, so a missing install fails `bare-pack` (and fails at run time
+naming the package) instead of producing a bundle that only throws once
+launched. Hosts with no platform package map to `addon-unavailable.js`.
+
+There is no local-first precedence. A source build, a linked workspace and the
+CI overlay all become loadable the same way an install does: the slicer's
+`--link-local` mode (`npm run link:platform`) wraps `prebuilds/<host>/` as
+`node_modules/@qvac/fabric-<suffix>` inside the meta. `overlay-local-fabric`
+writes the PR-built runtime into the installed meta's `prebuilds/` and then runs
+it, so the PR runtime shadows the released platform package for that job.
+
+The native runtime finds its own backends: `qvac_fabric_backends_dir()` returns
+`$QVAC_FABRIC_BACKENDS_DIR`, else `<module dir>/qvac__fabric-<suffix>` when it
+exists (a platform package), else the module's directory (where `bare-link`
+flattens them in an app). No JavaScript resolves a backends path.
 
 CMake resolves the platform package from fabric's *real* path, as Node does from
-inside fabric. It is fabric's dependency, not the consumer's, so under pnpm or a
-nested npm install it is not in the consumer's `node_modules`.
+inside fabric, and also checks the meta's own `node_modules`, where
+`link:platform` stages it.
 
 ### Mobile
 
 npm matches `os`/`cpu` against the install host, never the cross-build target.
 `android-arm64` and `ios` slices therefore ship unfiltered and stay out of the
-meta's `optionalDependencies` (#4499). Mobile applications add them as direct
-dependencies pinned to the exact meta version. The SDK Expo plugin and
-`qvac verify prebuilds` already read `#host-addon` for split addons (#4522), and
-the bundle manifest lists `@qvac/fabric` as an addon, so fabric's slice is linked
-and a missing pin is reported by name.
+meta's `optionalDependencies` (#4499); the slicer declares them as optional
+`peerDependencies` instead. Mobile applications add them as direct dependencies
+pinned to the exact meta version. Because each platform package is an ordinary
+addon reached through declared dependencies, `bare-link` links it with no extra
+pass, and the SDK bundles the platform packages `bare-pack` resolves as the
+addons. A missing mobile pin fails `bare-pack`, which the SDK reports as
+`HostPrebuildsMissingError` with the exact pins (or installs them when asked to).
 
-Consumer addons need the same slices to *build* their Android and iOS prebuilds,
-and a CI runner installs only its own host's slice. Each consumer therefore adds
-both as exact-pinned `devDependencies`, not `dependencies`, which would ship
-about 150 MB of mobile runtime with every desktop install of the addon. The
+Consumer addons declare the platform packages too, since `bare-link` only
+rewrites a `DT_NEEDED` it can match to one of the package's own dependencies:
+the desktop ones as `optionalDependencies`, the mobile ones as optional
+`peerDependencies`. They need the mobile slices to *build* their Android and iOS
+prebuilds, and a CI runner installs only its own host's slice, so each consumer
+also adds both as exact-pinned `devDependencies`, not `dependencies`, which would
+ship about 150 MB of mobile runtime with every desktop install of the addon. The
 application still supplies the runtime at run time. Configure fails naming the
 missing package rather than failing later at link.
 
@@ -135,12 +154,14 @@ binaries from another commit. GPR `-mono` dev builds stay unsliced.
 
 ### Consumer migration
 
-Consumers pin `^0.17.x`, which cannot resolve 0.18, so this release changes
-nothing for them until they bump. The bump PR moves each consumer's hand-rolled
-`resolveBackendsDir()` to `require('@qvac/fabric/backends').resolveBackendsDir()`,
-falling back to its own `prebuilds/` on mobile. That subpath must land together
-with the range bump: `bare-pack` follows the literal `require()` at bundle time,
-and against a 0.17 install the subpath is unexported and fails the mobile bundle.
+Consumers pin a caret range below 0.21, which cannot resolve it, so this release
+changes nothing for them until they bump. The bump PR drops each consumer's
+`resolveBackendsDir()` (fabric no longer exports `./backends`; the runtime finds
+its backends), rebuilds against the `qvac__fabric-<suffix>` SONAME, and adds
+the platform package declarations above. The split speech addons (`tts-ggml`,
+`asr-ggml`, `audiogen-ggml`) follow the same contract for their own platform
+packages: one-line `binding.js`, modules named `qvac__<addon>-<suffix>`, and
+backends found natively next to the module.
 
 ---
 
@@ -150,11 +171,13 @@ and against a 0.17 install the subpath is unexported and fails the mobile bundle
   diverged from the three shipped splits, and SDK mobile tooling reads only
   `#host-addon`, so fabric's slice would have been silently left out of mobile
   bundles.
-- *Overlay into a synthetic platform package.* The overlay action would have
-  needed new code, and 11 `pull_request_target` callers would have had to drop
-  their SHA pin for it. Local-first precedence keeps the existing overlay valid.
-- *Platform package first, meta prebuilds second.* An installed release slice
-  would shadow the CI overlay, so PR jobs would silently test the released runtime.
+- *Local-first precedence with a `require.addon()` attempt before
+  `#host-addon`, and a JS `resolveBackendsDir()`* (the 0.18 to 0.20 design). The
+  fallback chain and the backends path were computed specifiers, invisible to the
+  module lexer, so `bare-pack` of an app requiring `@qvac/fabric` failed, and
+  mobile CI needed an overlay script to put the runtime where `bare-link` looks.
+- *Array fallbacks in `#host-addon`.* A bundle missing its platform package
+  would pack fine and throw only on device.
 - *JS `process.platform` switch.* `bare-pack` either takes the packer's host or
   follows every branch.
 - *Install-time download (postinstall / CDN).* Breaks `--ignore-scripts` and

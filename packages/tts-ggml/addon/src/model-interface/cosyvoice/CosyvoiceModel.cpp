@@ -80,17 +80,7 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   if (cfg.streamLeftContextTokens.has_value())
     opts.stream_left_context_tokens = *cfg.streamLeftContextTokens;
 
-  // Compose `cfg.backendsDir / BACKENDS_SUBDIR` before forwarding, mirroring
-  // SupertonicModel::toEngineOptions so a host that passes
-  // path.join(__dirname, 'prebuilds') gets the expected per-arch scan dir.
-  if (!cfg.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath = (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR))
-                          .lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Forwarded as-is; only consumed on Android's OpenCL/Adreno GPU path
   // (n_gpu_layers > 0). Empty leaves ggml's default cache location.
   opts.opencl_cache_dir = cfg.openclCacheDir;

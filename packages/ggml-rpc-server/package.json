@@ -45,11 +45,11 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-rpc-server#readme",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.20.0",
-    "@qvac/fabric-ios": "0.20.0",
+    "@qvac/fabric-android-arm64": "0.21.0",
+    "@qvac/fabric-ios": "0.21.0",
     "@types/node": "^24.2.1",
     "brittle": "^3.17.0",
-    "cmake-bare": "^1.7.5",
+    "cmake-bare": "^1.9.0",
     "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -62,9 +62,28 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.20.0",
+    "@qvac/fabric": "^0.21.0",
     "bare-net": "^2.3.2",
     "bare-path": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "^0.21.0",
+    "@qvac/fabric-linux-arm64": "^0.21.0",
+    "@qvac/fabric-darwin-arm64": "^0.21.0",
+    "@qvac/fabric-darwin-x64": "^0.21.0",
+    "@qvac/fabric-win32-x64": "^0.21.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.21.0",
+    "@qvac/fabric-ios": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   },
   "engines": {
     "bare": ">=1.24.0"
