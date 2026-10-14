@@ -7,6 +7,11 @@ const path = require('path')
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileAutoFile = path.join(repoRoot, 'test', 'mobile', 'integration.auto.cjs')
+// The mobile test app replaces these package-root files with shims that
+// require '<package>/<name>.js', and bare-pack resolves those requires even
+// in desktop-only tests, so each one a test imports must be exported.
+const shimmedRequirePattern =
+  /require\(\s*['"]\.\.\/\.\.\/(binding|addon|addonLogging)(?:\.js)?['"]\s*\)/g
 
 function getIntegrationTestFiles() {
   if (!fs.existsSync(integrationDir)) {
@@ -30,6 +35,23 @@ function getGeneratedIntegrationRefs(content) {
   }
 
   return references
+}
+
+function getUnexportedShimImports() {
+  const { exports = {} } = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'))
+  const missing = new Set()
+
+  for (const file of fs.readdirSync(integrationDir).filter((f) => f.endsWith('.js'))) {
+    const content = fs.readFileSync(path.join(integrationDir, file), 'utf8')
+    for (const match of content.matchAll(shimmedRequirePattern)) {
+      const subpath = `./${match[1]}.js`
+      if (!(subpath in exports)) {
+        missing.add(`${file} requires ../../${match[1]}: export "${subpath}"`)
+      }
+    }
+  }
+
+  return [...missing].sort()
 }
 
 function setDiff(left, right) {
@@ -65,6 +87,15 @@ try {
       printMismatchDetails('Stale references in integration.auto.cjs', staleInGenerated)
     }
     console.error('   Run: npm run test:mobile:generate')
+    process.exit(1)
+  }
+
+  const unexportedShimImports = getUnexportedShimImports()
+  if (unexportedShimImports.length > 0) {
+    console.error(
+      '❌ Mobile test bundle cannot resolve package files that integration tests import'
+    )
+    printMismatchDetails('Add to package.json "exports"', unexportedShimImports)
     process.exit(1)
   }
 

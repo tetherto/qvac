@@ -88,7 +88,8 @@
       "import": "./index.mjs",
       "default": "./index.js"
     },
-    "./idMapIndex.js": "./index.js"
+    "./idMapIndex.js": "./index.js",
+    "./binding.js": "./binding.js"
   },
   "main": "index.js",
   "types": "index.d.ts"
