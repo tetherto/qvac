@@ -56,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same versions as the other speech addons, instead of taking at least those
   versions.
 
+### Fixed
+
+- The linux-x64 prebuild ships the CUDA backend again, next to Vulkan and
+  the CPU variants; releases 0.10.0 to 0.11.0 left it out. Where the NVIDIA
+  driver and the CUDA 13 runtime libraries (cudart, cuBLAS) resolve, GPU
+  requests run on CUDA instead of Vulkan; other hosts keep Vulkan or CPU.
+
 ## [0.11.0] - 2026-10-09
 
 ### Added
