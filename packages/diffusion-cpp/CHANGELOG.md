@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.29.2] - 2026-10-13
+
+This patch reduces the size of the Windows native addon to address the npm
+package-size failure. It retains the existing model support and JavaScript API.
+
+## Bug Fixes
+
+Windows builds now export only Bare's registration entry points and optimize
+across the addon, ggml, and stable-diffusion libraries. The linker can discard
+unused code and shader data and combine identical sections, reducing the
+shipped binary without removing model or GPU features.
+
+The addon consumes the published ggml `2026-08-11#2` and stable-diffusion-cpp
+`2026-08-11#6` hotfixes while retaining the existing registry baseline. The
+logging include order also ensures libuv types are declared before the shared
+JavaScript logging headers are compiled.
+
+## Pull Requests
+
+- [#5007](https://github.com/tetherto/qvac/pull/5007) - Reduce diffusion Windows
+  binaries using registry hotfixes.
+
+## [0.29.1] - 2026-10-13
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
 ## [0.29.0] - 2026-10-12
 
 ### Added
