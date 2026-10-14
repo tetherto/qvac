@@ -6,7 +6,8 @@
 
 - The Fabric-owned GGML threadpools now default to `poll=0`, matching
   `llama-server` and avoiding continuous CPU busy-waiting during GPU-offloaded
-  inference. Explicit `poll` and `poll-batch` settings remain supported.
+  inference. Explicit `poll` and `poll-batch` settings remain supported
+  ([#5086](https://github.com/tetherto/qvac/pull/5086)).
 
 ## [0.55.1] - 2026-09-30
 
