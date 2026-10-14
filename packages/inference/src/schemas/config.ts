@@ -190,6 +190,15 @@ export const qvacConfigSchema = z.object({
   registryStreamTimeoutMs: z.number().int().positive().optional(),
 
   /**
+   * Budget in milliseconds for the registry fetch of a model's weightless
+   * description during `assessModelFit`. One budget covers the lookup and the
+   * whole companion set; past it the assessment falls back to the computed
+   * floor. Raise this on slow or high-latency connections.
+   * Defaults to 40000 (40 seconds).
+   */
+  fitStubBudgetMs: z.number().int().positive().optional(),
+
+  /**
    * Device-specific config defaults.
    * Use this to override model config defaults for specific devices.
    * User-defined patterns are checked before the built-in patterns.

@@ -45,17 +45,12 @@ test('getLoadedModelInfo: returns the advisory fit outcome recorded at load', fu
     reason: 'fits',
     plan: { nCtx: 4096, nGpuLayers: 33, nGpuDevices: 1 },
     projection: {
-      devices: [
-        {
-          name: 'Metal',
-          totalBytes: 25_769_803_776,
-          freeBytes: 21_474_836_480,
-          marginBytes: 1_073_741_824,
-          modelBytes: 4_294_967_296,
-          contextBytes: 1_073_741_824,
-          computeBytes: 0
-        }
-      ]
+      deviceName: 'Metal',
+      deviceBytes: 5_368_709_120,
+      hostBytes: 268_435_456,
+      weightsBytes: 4_294_967_296,
+      contextBytes: 1_073_741_824,
+      computeBytes: 0
     }
   }
   const modelId = register(t, fitProbe)

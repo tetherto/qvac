@@ -23,6 +23,15 @@ export interface FitStubRef {
   registrySource?: string | undefined
 }
 
+export interface FitStubSetMember extends FitStubRef {
+  targetName: string
+}
+
+export interface FitStubSet {
+  primary: FitStubSetMember
+  others: readonly FitStubSetMember[]
+}
+
 export type FitStubUnavailableReason =
   /** The ref carries no registry coordinates to look up. */
   | 'unresolvable-ref'
@@ -72,8 +81,13 @@ export interface FitStubOptions {
  * capped. Work still in flight at expiry is abandoned: the download is
  * aborted, and a lookup that cannot be cancelled settles on its own with
  * nothing waiting for it.
+ *
+ * One budget covers a whole companion set, so it holds the slowest case: every
+ * member of a multi-stage voice model staged over a mobile network. It sits
+ * above the client's per-attempt timeout rather than on it, so an attempt that
+ * is about to answer is not cut at the moment it would have.
  */
-export const FIT_STUB_BUDGET_MS = 10_000
+export const FIT_STUB_BUDGET_MS = 40_000
 
 async function defaultGetEntry(
   registryPath: string,
@@ -132,6 +146,27 @@ export async function fetchFitStub(
   ref: FitStubRef,
   options: FitStubOptions = {}
 ): Promise<FitStubOutcome> {
+  return withinBudget(ref.name, options, (signal) => fetchWithin(ref, options, signal))
+}
+
+/**
+ * Stages a companion set under its target names in one directory, the layout a
+ * downloaded set has, for engines that find their companions beside the
+ * checkpoint. The primary decides the outcome; a member the registry holds no
+ * description for is skipped.
+ */
+export async function fetchFitStubSet(
+  set: FitStubSet,
+  options: FitStubOptions = {}
+): Promise<FitStubOutcome> {
+  return withinBudget(set.primary.name, options, (signal) => fetchSetWithin(set, options, signal))
+}
+
+function withinBudget(
+  name: string,
+  options: FitStubOptions,
+  work: (signal: AbortSignal) => Promise<FitStubOutcome>
+): Promise<FitStubOutcome> {
   const budgetMs = options.budgetMs ?? FIT_STUB_BUDGET_MS
   const controller = new AbortController()
   const onAbort = () => controller.abort(new Error('fit stub fetch aborted by the caller'))
@@ -142,19 +177,82 @@ export async function fetchFitStub(
     timer = setTimeout(() => {
       controller.abort(new Error('fit stub budget expired'))
       resolve(
-        unavailable(
-          'timed-out',
-          `no fit stub for ${ref.name} from the registry within ${budgetMs}ms`
-        )
+        unavailable('timed-out', `no fit stub for ${name} from the registry within ${budgetMs}ms`)
       )
     }, budgetMs)
   })
 
-  try {
-    return await Promise.race([fetchWithin(ref, options, controller.signal), expiry])
-  } finally {
+  return Promise.race([work(controller.signal), expiry]).finally(() => {
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', onAbort)
+  })
+}
+
+// One directory per fetch, so two assessments of the same model never share a
+// file that one of them is about to remove.
+async function makeStagingDir(options: FitStubOptions): Promise<string> {
+  const root = options.cacheDir ?? getCacheDir('fit-stubs')
+  await fsPromises.mkdir(root, { recursive: true })
+  return fsPromises.mkdtemp(path.join(root, 'stub-'))
+}
+
+async function bindingFor(
+  ref: FitStubRef,
+  options: FitStubOptions
+): Promise<FitBlobBinding | FitStubUnavailableReason> {
+  const { registryPath, registrySource } = ref
+  if (!registryPath || !registrySource) return 'unresolvable-ref'
+
+  const getEntry = options.getEntry ?? defaultGetEntry
+  const entry = await getEntry(registryPath, registrySource)
+  if (entry === null || entry === undefined) return 'not-in-registry'
+
+  const binding = entry.fitBlobBinding
+  if (binding === undefined || binding === null) return 'no-fit-blob'
+  return binding
+}
+
+async function stageOne(
+  ref: FitStubRef,
+  binding: FitBlobBinding,
+  dest: string,
+  options: FitStubOptions,
+  signal: AbortSignal
+): Promise<{ status: 'staged'; bytes: number } | FitStubOutcome> {
+  const downloadBlob = options.downloadBlob ?? defaultDownloadBlob
+  let verified = false
+  try {
+    await downloadBlob(binding, dest, signal)
+
+    const bytes = fs.statSync(dest).size
+    if (bytes !== binding.byteLength) {
+      return unavailable(
+        'download-failed',
+        `fit stub for ${ref.name} is ${bytes} bytes, the record says ${binding.byteLength}`
+      )
+    }
+
+    // The record binds the description by digest; a stub that reads back
+    // differently is not the description the fitter should answer for.
+    const digest = await calculateFileChecksum(dest)
+    if (digest.toLowerCase() !== binding.sha256.toLowerCase()) {
+      return unavailable(
+        'download-failed',
+        `fit stub for ${ref.name} hashes to ${digest}, the record says ${binding.sha256}`
+      )
+    }
+
+    // Past the budget nobody is waiting for this result, so the stub must
+    // not be marked as kept.
+    if (signal.aborted) return unavailable('timed-out')
+
+    verified = true
+    return { status: 'staged', bytes }
+  } catch (error) {
+    return unavailable('download-failed', describe(error))
+  } finally {
+    // A short, corrupt, half-written or late stub must not outlive the call.
+    if (!verified) await fsPromises.rm(dest, { force: true }).catch(() => {})
   }
 }
 
@@ -166,61 +264,73 @@ async function fetchWithin(
   const logger = options.logger ?? getEngineLogger()
 
   try {
-    const { registryPath, registrySource } = ref
-    if (!registryPath || !registrySource) return unavailable('unresolvable-ref')
-
-    const getEntry = options.getEntry ?? defaultGetEntry
-    const entry = await getEntry(registryPath, registrySource)
-    if (entry === null || entry === undefined) return unavailable('not-in-registry')
-
-    const binding = entry.fitBlobBinding
-    if (binding === undefined || binding === null) return unavailable('no-fit-blob')
+    const binding = await bindingFor(ref, options)
+    if (typeof binding === 'string') return unavailable(binding)
     if (signal.aborted) return unavailable('timed-out')
 
-    // One directory per fetch, so two assessments of the same model never share
-    // a file that one of them is about to remove.
-    const root = options.cacheDir ?? getCacheDir('fit-stubs')
-    await fsPromises.mkdir(root, { recursive: true })
-    const dir = await fsPromises.mkdtemp(path.join(root, 'stub-'))
+    const dir = await makeStagingDir(options)
     const dest = path.join(dir, `${binding.sha256}.gguf`)
 
-    const downloadBlob = options.downloadBlob ?? defaultDownloadBlob
-    let verified = false
-    try {
-      await downloadBlob(binding, dest, signal)
-
-      const bytes = fs.statSync(dest).size
-      if (bytes !== binding.byteLength) {
-        return unavailable(
-          'download-failed',
-          `fit stub for ${ref.name} is ${bytes} bytes, the record says ${binding.byteLength}`
-        )
-      }
-
-      // The record binds the description by digest; a stub that reads back
-      // differently is not the description the fitter should answer for.
-      const digest = await calculateFileChecksum(dest)
-      if (digest.toLowerCase() !== binding.sha256.toLowerCase()) {
-        return unavailable(
-          'download-failed',
-          `fit stub for ${ref.name} hashes to ${digest}, the record says ${binding.sha256}`
-        )
-      }
-
-      // Past the budget nobody is waiting for this result, so the stub must
-      // not be marked as kept.
-      if (signal.aborted) return unavailable('timed-out')
-
-      verified = true
-      return { status: 'ready', path: dest, bytes }
-    } catch (error) {
-      return unavailable('download-failed', describe(error))
-    } finally {
-      // A short, corrupt, half-written or late stub must not outlive the call.
-      if (!verified) await removeStub(dest)
+    const staged = await stageOne(ref, binding, dest, options, signal)
+    if (staged.status !== 'staged') {
+      await removeStub(dest)
+      return staged
     }
+    return { status: 'ready', path: dest, bytes: staged.bytes }
   } catch (error) {
     logger.debug(`fit stub for ${ref.name} unavailable: ${describe(error)}`)
     return unavailable('download-failed', describe(error))
+  }
+}
+
+async function fetchSetWithin(
+  set: FitStubSet,
+  options: FitStubOptions,
+  signal: AbortSignal
+): Promise<FitStubOutcome> {
+  const logger = options.logger ?? getEngineLogger()
+  let dir: string | undefined
+  let ready = false
+
+  try {
+    const binding = await bindingFor(set.primary, options)
+    if (typeof binding === 'string') return unavailable(binding)
+    if (signal.aborted) return unavailable('timed-out')
+
+    dir = await makeStagingDir(options)
+    const dest = path.join(dir, set.primary.targetName)
+
+    const staged = await stageOne(set.primary, binding, dest, options, signal)
+    if (staged.status !== 'staged') return staged
+
+    for (const member of set.others) {
+      if (signal.aborted) break
+      const memberBinding = await bindingFor(member, options)
+      if (typeof memberBinding === 'string') {
+        logger.debug(`companion ${member.targetName} has no fit stub: ${memberBinding}`)
+        continue
+      }
+      const memberDest = path.join(dir, member.targetName)
+      const memberStaged = await stageOne(member, memberBinding, memberDest, options, signal)
+      if (memberStaged.status !== 'staged') {
+        logger.debug(`companion ${member.targetName} was not staged`)
+      }
+    }
+
+    // The budget races this work and has already answered the caller once it
+    // expires, so a set finished after that point is staged for nobody.
+    // The budget answers the caller on its own, so a set finished after it
+    // expired is staged for nobody.
+    if (signal.aborted) return unavailable('timed-out')
+
+    ready = true
+    return { status: 'ready', path: dest, bytes: staged.bytes }
+  } catch (error) {
+    logger.debug(`fit stub set for ${set.primary.name} unavailable: ${describe(error)}`)
+    return unavailable('download-failed', describe(error))
+  } finally {
+    if (!ready && dir !== undefined) {
+      await fsPromises.rm(dir, { recursive: true, force: true }).catch(() => {})
+    }
   }
 }

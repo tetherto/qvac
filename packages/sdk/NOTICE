@@ -71,6 +71,8 @@ Third-Party Model Licenses
     https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
   bci-embedder
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
+  coremldata
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
   cosyvoice3-campplus-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-flow-bf16
@@ -136,7 +138,7 @@ Third-Party Model Licenses
   LightOnOCR-2-1B-ocr-soup-GGUF
     https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF
   Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
-    https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
+    https://huggingface.co/mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
   MedPsy-1.7B-GGUF
     https://huggingface.co/qvac/MedPsy-1.7B-GGUF
   MedPsy-4B-GGUF
@@ -145,6 +147,14 @@ Third-Party Model Licenses
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   mmproj-unlimited-ocr-Q8_0
     https://huggingface.co/baidu/Unlimited-OCR
+  model
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+  moss-codec-decoder-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTS
+  moss-codec-encoder-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTS
+  moss-tts-delay-f16
+    https://huggingface.co/OpenMOSS-Team/MOSS-TTS
   nb-tiny-ggml-model
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parler-indic-f16
@@ -211,6 +221,8 @@ Third-Party Model Licenses
     https://huggingface.co/HuggingFaceVLA/smolvla_libero
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
+  Ternary-Bonsai-2-27B-gguf
+    https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
   TranslatePsy-AfriSLM-0.8B-Q4-GGUF
     https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF
   TranslatePsy-AfriSLM-0.8B-Q8-GGUF
@@ -251,6 +263,8 @@ Third-Party Model Licenses
     https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged
   Wan2.2-TI2V-5B-Turbo-GGUF
     https://huggingface.co/hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF
+  weight
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
@@ -277,30 +291,58 @@ Third-Party Model Licenses
 
   AfriqueGemma-4B-GGUF
     https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF
+  coremldata
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  coremldata
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  coremldata
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  coremldata
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  model
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  model
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  model
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  model
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  parakeet_realtime_eou_120m-v1.f16
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  parakeet_realtime_eou_120m-v1.q4_0
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
+  parakeet_realtime_eou_120m-v1.q8_0
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-ctc-0.6b.f16
     https://huggingface.co/nvidia/parakeet-ctc-0.6b
   parakeet-ctc-0.6b.q4_0
     https://huggingface.co/nvidia/parakeet-ctc-0.6b
   parakeet-ctc-0.6b.q8_0
     https://huggingface.co/nvidia/parakeet-ctc-0.6b
-  parakeet-eou-120m-v1.f16
-    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
-  parakeet-eou-120m-v1.q4_0
-    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
-  parakeet-eou-120m-v1.q8_0
-    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-tdt-0.6b-v3.f16
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   parakeet-tdt-0.6b-v3.q4_0
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   parakeet-tdt-0.6b-v3.q8_0
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  parakeet-tdt-1.1b.f16
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  parakeet-tdt-1.1b.q8_0
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
   sortformer-4spk-v1.f16
     https://huggingface.co/nvidia/diar_sortformer_4spk-v1
   sortformer-4spk-v1.q4_0
     https://huggingface.co/nvidia/diar_sortformer_4spk-v1
   sortformer-4spk-v1.q8_0
     https://huggingface.co/nvidia/diar_sortformer_4spk-v1
+  weight
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  weight
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  weight
+    https://huggingface.co/nvidia/parakeet-tdt-1.1b
+  weight
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
 
 --- gemma (Gemma Terms of Use) ---
 
@@ -362,6 +404,8 @@ Third-Party Model Licenses
     https://huggingface.co/ResembleAI/chatterbox
   chatterbox-t3-turbo
     https://huggingface.co/ResembleAI/chatterbox-turbo
+  coremldata
+    https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
   DeepSeek-V4-Flash-0731-GGUF
@@ -384,16 +428,18 @@ Third-Party Model Licenses
     https://huggingface.co/ChristianAzinn/gte-large-gguf
   gte-large-gguf
     https://huggingface.co/ChristianAzinn/gte-large-gguf
-  indic-conformer-ctc.f16
+  indic-conformer-600m-multilingual.f16
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
-  indic-conformer-ctc.q4_0
+  indic-conformer-600m-multilingual.q4_0
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
-  indic-conformer-ctc.q8_0
+  indic-conformer-600m-multilingual.q8_0
     https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   lavasr-denoiser-f16
     https://huggingface.co/spaces/YatharthS
   lavasr-enhancer-f16
     https://huggingface.co/spaces/YatharthS
+  model
+    https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   pt-tiny-ggml-model-f16
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
   taew2_2_f16
@@ -404,6 +450,8 @@ Third-Party Model Licenses
     https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
   vae-BF16
     https://huggingface.co/ACE-Step/Ace-Step1.5
+  weight
+    https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
   whisper-vad
     https://huggingface.co/ggml-org/whisper-vad
   whisper.cpp
@@ -618,6 +666,12 @@ Third-Party Model Licenses
 
 --- nvidia-open-model-license ---
 
+  coremldata
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+  coremldata
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  coremldata
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   diar_streaming_sortformer_4spk-v2.1.f16
     https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
   diar_streaming_sortformer_4spk-v2.1.q4_0
@@ -628,6 +682,12 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/GR00T-N1.7-LIBERO
   groot-q8_vf16
     https://huggingface.co/nvidia/GR00T-N1.7-3B
+  model
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+  model
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  model
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   nemotron-3.5-asr-streaming-0.6b.f16
     https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
   nemotron-3.5-asr-streaming-0.6b.q4_0
@@ -639,6 +699,12 @@ Third-Party Model Licenses
   parakeet-unified-en-0.6b.q4_0
     https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   parakeet-unified-en-0.6b.q8_0
+    https://huggingface.co/nvidia/parakeet-unified-en-0.6b
+  weight
+    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+  weight
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  weight
     https://huggingface.co/nvidia/parakeet-unified-en-0.6b
 
 --- openrail ---
@@ -682,7 +748,6 @@ the underlying models.
 
 Source URLs for original weights are recorded in each model's
 metadata entry within the registry.
-
 =========================================================================
 JavaScript Dependencies
 =========================================================================
@@ -721,8 +786,6 @@ JavaScript Dependencies
   @qvac/llm-llamacpp@0.53.2
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
-    https://github.com/tetherto/qvac
-  @qvac/model-fit@0.12.2
     https://github.com/tetherto/qvac
   @qvac/ocr-ggml@0.24.3
     https://github.com/tetherto/qvac

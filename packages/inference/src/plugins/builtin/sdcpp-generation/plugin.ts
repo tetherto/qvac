@@ -1,6 +1,7 @@
 import ImgStableDiffusion, {
   EsrganUpscaler,
   VideoStableDiffusion,
+  assessFit as diffusionAssessFit,
   type DiffusionFiles,
   type EsrganUpscalerConfig,
   type SdConfig,
@@ -107,6 +108,7 @@ export const diffusionPlugin = definePlugin({
   displayName: 'Image Generation & Upscaling (stable-diffusion.cpp)',
   addonPackage: ADDON_DIFFUSION,
   loadConfigSchema: sdcppConfigSchema,
+  assessFit: diffusionAssessFit,
 
   async resolveConfig(
     cfg: SdcppConfig,

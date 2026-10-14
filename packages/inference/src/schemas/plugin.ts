@@ -162,6 +162,12 @@ export interface QvacPlugin<
   addonPackage: string
   loadConfigSchema: z.ZodType
   createModel: (params: CreateModelParams) => PluginModelResult
+  /**
+   * The engine's own fitter. Carrying it here keeps every addon specifier
+   * inside the module graph of the plugin that owns it, so a bundler walking a
+   * host that ships one engine never resolves the others.
+   */
+  assessFit?: (request: never) => unknown
   handlers: Record<string, PluginHandlerDefinition>
   logging?: PluginLogging | undefined
   capabilities?: QvacPluginCapabilities | undefined

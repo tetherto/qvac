@@ -16,5 +16,6 @@
   ],
   "registryDownloadMaxRetries": 10,
   "registryStreamTimeoutMs": 600000,
-  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider"
+  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider",
+  "fitStubBudgetMs": 120000
 }

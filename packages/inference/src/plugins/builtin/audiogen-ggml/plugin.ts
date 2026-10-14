@@ -2,6 +2,7 @@ import {
   AudioGen,
   ENGINE_ACESTEP,
   ENGINE_MINIMAX,
+  assessFit as audiogenAssessFit,
   type AudioGenEngine,
   type AudioGenFiles
 } from '@qvac/audiogen-ggml'
@@ -33,6 +34,7 @@ export const audioGenPlugin = definePlugin({
   displayName: 'Audio Generation (GGML / ACE-Step and MiniMax)',
   addonPackage: ADDON_AUDIOGEN,
   loadConfigSchema: audioGenConfigSchema,
+  assessFit: audiogenAssessFit,
   // AudioGen's primary `modelSrc` is intentionally empty: all required
   // weights are config-owned artifacts (ACE-Step: four sources; MiniMax: LM + synth).
   skipPrimaryModelPathValidation: true,
