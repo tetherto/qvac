@@ -30,6 +30,10 @@ overrides:
   # pin it to the electron fork's published registry build so blockExoticSubdeps
   # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
   "@electron/rebuild>@electron/node-gyp": "10.2.0-electron.2"
+  # The workspace decoder-audio is 0.7.1, which was never published. Build the
+  # train against 0.7.0, the version consumers of ^0.7.0 install.
+  "@qvac/sdk>@qvac/decoder-audio": "0.7.0"
+  "@qvac/inference>@qvac/decoder-audio": "0.7.0"
 
 blockExoticSubdeps: true
 
