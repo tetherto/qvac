@@ -109,9 +109,9 @@ test('generated Parakeet names match the SDK and work in managed config', () => 
 })
 
 test('Parakeet Core ML components remain catalog records without standalone exports', () => {
-  const component = allModels.find(
-    (model) => model.addon === 'parakeet' && model.registryPath.includes('.mlmodelc/')
-  )
+  const component = allModels
+    .filter((model) => model.addon === 'parakeet')
+    .find((model) => model.registryPath.includes('.mlmodelc/'))
   assert.ok(component, 'catalog contains a compiled Parakeet bundle component')
   const [processed] = groupCompanionSets([{ ...component, modelName: '', tags: [] }])
   assert.equal(processed?.isCompanionOnly, true)
