@@ -20,8 +20,9 @@ class OcrLazyInitializeBackend {
 public:
   // Initialize GGML backends lazily. Called once per process regardless of how
   // many Pipeline objects exist.
-  // @param backendsDir  Prebuilds root passed by the JS caller; empty falls
-  //                     back to ggml_backend_load_all().
+  // @param backendsDir  Directory of ggml backend modules overriding the ones
+  //                     @qvac/fabric ships; empty loads fabric's
+  //                     (qvac_fabric_load_backends()).
   // @return true on first initialization, false if already initialized.
   static bool initialize(const std::string& backendsDir = "");
 

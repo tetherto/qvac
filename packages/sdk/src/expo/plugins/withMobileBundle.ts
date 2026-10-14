@@ -4,8 +4,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from '@/commands'
 import { createCommandLogger } from '@/commands/command-logger'
-import { installMissingHostPrebuilds } from '@/commands/host-prebuilds/index'
-import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
 import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
 import { getProjectRootFromMod } from '@/expo/plugins/get-project-root'
@@ -36,9 +34,10 @@ const MOBILE_HOSTS = [...MOBILE_HOSTS_BY_PLATFORM.android, ...MOBILE_HOSTS_BY_PL
 
 type MobileBundleOptions = {
   /**
-   * Install the addon platform packages the bundle needs for the current
-   * build target with the app's package manager, pinned in package.json.
-   * Off by default: `expo prebuild` then fails and names each package to add.
+   * Install the platform packages the app's split addons need for every
+   * mobile host the bundle covers (both platforms: the bundle is shared) with
+   * the app's package manager, pinned in package.json. Off by default:
+   * `expo prebuild` then fails and names each package to add.
    */
   installMissingPrebuilds?: boolean
 }
@@ -80,34 +79,15 @@ async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps
   // for every mobile host: a dual-platform `expo prebuild` runs this mod twice
   // and the second run would otherwise overwrite the first platform's bundle
   // with one that resolved the other platform's conditions.
-  const bundle = () =>
-    runBundler(projectRoot, sdkPackage.dir, configPath, deferredModules, MOBILE_HOSTS)
-  const entryPath = await bundle()
+  const entryPath = await runBundler(
+    projectRoot,
+    sdkPackage.dir,
+    configPath,
+    deferredModules,
+    MOBILE_HOSTS,
+    options.installMissingPrebuilds === true
+  )
   const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
-
-  if (options.installMissingPrebuilds === true) {
-    // Take the addons from the bundle graph, which records where each linked
-    // addon really is; looking their names up in the project would miss the
-    // SDK's addons under pnpm or bun's isolated layout.
-    const { installed } = await installMissingHostPrebuilds({
-      projectRoot,
-      hosts: platformHosts,
-      addons: await collectAddonsFromBundle({
-        bundlePath: generatedBundle,
-        projectRoot,
-        hosts: platformHosts
-      }),
-      quiet: false,
-      logger: createCommandLogger({})
-    })
-    if (installed.length > 0) {
-      const names = installed.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
-      console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
-      // bare-pack resolved `#host-addon` to the addon's fallback module for
-      // hosts whose platform package was missing.
-      await bundle()
-    }
-  }
 
   await runVerifier(projectRoot, generatedBundle, configPath, platformHosts)
 
@@ -172,7 +152,8 @@ async function runBundler(
   qvacSdkPath: string,
   configPath: string | null,
   deferredModules: string[],
-  hosts: string[]
+  hosts: string[],
+  installMissingPrebuilds: boolean
 ): Promise<string> {
   const result = await bundleSdk({
     projectRoot,
@@ -181,9 +162,14 @@ async function runBundler(
     hosts,
     defer: deferredModules,
     quiet: true,
+    installMissingPrebuilds,
     // runVerifier checks engines.bare right after, with progress output.
     checkEngines: false
   })
+  if (result.installedPrebuilds.length > 0) {
+    const names = result.installedPrebuilds.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
+    console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
+  }
 
   return result.entryPaths.worker
 }

@@ -12,12 +12,14 @@ import {
   buildMobileBundle,
   mobileHostsForPlatform
 } from '@/expo/plugins/withMobileBundle'
-import { BundleVerificationFailedError } from '@/utils/errors-client'
+import { HostPrebuildsMissingError } from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
 import {
   RUNTIME_ADDON_ANDROID_PACKAGE,
+  RUNTIME_ADDON_IOS_PACKAGE,
   RUNTIME_ADDON_VERSION,
   SPLIT_ADDON_ANDROID_PACKAGE,
+  SPLIT_ADDON_IOS_PACKAGE,
   SPLIT_ADDON_VERSION,
   createSplitAddonProject
 } from './fixtures/split-addon-project'
@@ -92,18 +94,21 @@ test(
       error = cause
     }
 
-    t.ok(error instanceof BundleVerificationFailedError, 'verification fails')
-    const details = String((error as Error | undefined)?.cause)
-    t.ok(
-      details.includes(`"${SPLIT_ADDON_ANDROID_PACKAGE}": "${SPLIT_ADDON_VERSION}"`),
-      'the failure names the exact pin to add'
+    t.ok(error instanceof HostPrebuildsMissingError, 'bundling fails')
+    t.alike(
+      (error as HostPrebuildsMissingError).dependencies,
+      {
+        [SPLIT_ADDON_ANDROID_PACKAGE]: SPLIT_ADDON_VERSION,
+        [SPLIT_ADDON_IOS_PACKAGE]: SPLIT_ADDON_VERSION
+      },
+      'the failure names the exact pins to add for every host the shared bundle covers'
     )
     t.alike(pm.calls(), [], 'nothing is installed without the option')
   }
 )
 
 test(
-  'buildMobileBundle: installMissingPrebuilds installs the current target package',
+  'buildMobileBundle: installMissingPrebuilds installs the packages of every mobile host',
   posixOnly,
   async (t) => {
     const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'))
@@ -119,10 +124,15 @@ test(
       [
         {
           cwd: project.projectRoot,
-          args: ['add', '--save-exact', `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`]
+          args: [
+            'add',
+            '--save-exact',
+            `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+            `${SPLIT_ADDON_IOS_PACKAGE}@${SPLIT_ADDON_VERSION}`
+          ]
         }
       ],
-      'installs only the Android package for an Android prebuild, with the app package manager'
+      'the bundle is shared by both platforms, so an Android prebuild installs both'
     )
     t.ok(
       existsSync(join(project.sdkPath, 'dist', 'worker.mobile.bundle.js')),
@@ -152,7 +162,12 @@ test(
     t.alike(pm.calls(), [
       {
         cwd: project.projectRoot,
-        args: ['add', '--save-exact', `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`]
+        args: [
+          'add',
+          '--save-exact',
+          `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+          `${SPLIT_ADDON_IOS_PACKAGE}@${SPLIT_ADDON_VERSION}`
+        ]
       }
     ])
   }
@@ -187,7 +202,9 @@ for (const layout of ['pnpm', 'hoisted'] as const) {
             'add',
             '--save-exact',
             `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
-            `${RUNTIME_ADDON_ANDROID_PACKAGE}@${RUNTIME_ADDON_VERSION}`
+            `${SPLIT_ADDON_IOS_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+            `${RUNTIME_ADDON_ANDROID_PACKAGE}@${RUNTIME_ADDON_VERSION}`,
+            `${RUNTIME_ADDON_IOS_PACKAGE}@${RUNTIME_ADDON_VERSION}`
           ]
         }
       ])
@@ -197,16 +214,10 @@ for (const layout of ['pnpm', 'hoisted'] as const) {
 
 function hostAddonMap(metaName: string) {
   return {
-    linux: {
-      x64: [`${metaName}-linux-x64`, './addon-unavailable.js'],
-      arm64: [`${metaName}-linux-arm64`, './addon-unavailable.js']
-    },
-    darwin: {
-      arm64: [`${metaName}-darwin-arm64`, './addon-unavailable.js'],
-      x64: [`${metaName}-darwin-x64`, './addon-unavailable.js']
-    },
-    android: { arm64: [`${metaName}-android-arm64`, './addon-unavailable.js'] },
-    ios: [`${metaName}-ios`, './addon-unavailable.js'],
+    linux: { x64: `${metaName}-linux-x64`, arm64: `${metaName}-linux-arm64` },
+    darwin: { arm64: `${metaName}-darwin-arm64`, x64: `${metaName}-darwin-x64` },
+    android: { arm64: `${metaName}-android-arm64` },
+    ios: `${metaName}-ios`,
     default: './addon-unavailable.js'
   }
 }

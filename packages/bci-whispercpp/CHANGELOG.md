@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `binding.js` is now `module.exports = require.addon()`. A host with no
+  prebuild throws `require.addon()`'s own error instead of a wrapped one.
+
 ## [0.11.1] - 2026-10-13
 
 ### Added

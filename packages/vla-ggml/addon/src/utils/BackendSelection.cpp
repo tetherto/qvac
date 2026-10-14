@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <filesystem>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -11,6 +10,7 @@
 
 #include <ggml-backend.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <qvac-fabric.h>
 
 #include "LoggingMacros.hpp"
 
@@ -115,14 +115,14 @@ void loadBackendsOnce(const std::string& backendsDir) {
   std::call_once(sFlag, [&backendsDir]() {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
     if (!backendsDir.empty()) {
-      std::filesystem::path p(backendsDir);
-#ifdef BACKENDS_SUBDIR
-      p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-      QLOG_IF(Priority::INFO, "Loading backends from: " + p.string());
-      ggml_backend_load_all_from_path(p.string().c_str());
+      QLOG_IF(Priority::INFO, "Loading backends from: " + backendsDir);
+      ggml_backend_load_all_from_path(backendsDir.c_str());
     } else {
-      ggml_backend_load_all();
+      QLOG_IF(
+          Priority::INFO,
+          std::string("Loading @qvac/fabric backends from: ") +
+              qvac_fabric_backends_dir());
+      qvac_fabric_load_backends();
     }
   });
 }

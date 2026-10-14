@@ -33,6 +33,35 @@ overrides:
   # pin it to the electron fork's published registry build so blockExoticSubdeps
   # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
   "@electron/rebuild>@electron/node-gyp": "10.2.0-electron.2"
+  # TEMPORARY (one-line-binding CI test branch): fabric 0.21's platform packages
+  # are not on npm yet, so drop them from workspace resolution. Remove once
+  # @qvac/fabric@0.21.0 is published and regenerate the lockfile.
+  "@qvac/fabric-linux-x64": "-"
+  "@qvac/fabric-linux-arm64": "-"
+  "@qvac/fabric-darwin-arm64": "-"
+  "@qvac/fabric-darwin-x64": "-"
+  "@qvac/fabric-win32-x64": "-"
+  "@qvac/fabric-android-arm64": "-"
+  "@qvac/fabric-ios": "-"
+  # The speech addons declare their desktop platform packages so a standalone
+  # npm install of one (its sanity job) can resolve "#host-addon". In the
+  # workspace `npm run link:platform` stages the local build instead, which a
+  # copy from npm would replace.
+  "@qvac/asr-ggml-linux-x64": "-"
+  "@qvac/asr-ggml-linux-arm64": "-"
+  "@qvac/asr-ggml-darwin-arm64": "-"
+  "@qvac/asr-ggml-darwin-x64": "-"
+  "@qvac/asr-ggml-win32-x64": "-"
+  "@qvac/tts-ggml-linux-x64": "-"
+  "@qvac/tts-ggml-linux-arm64": "-"
+  "@qvac/tts-ggml-darwin-arm64": "-"
+  "@qvac/tts-ggml-darwin-x64": "-"
+  "@qvac/tts-ggml-win32-x64": "-"
+  "@qvac/audiogen-ggml-linux-x64": "-"
+  "@qvac/audiogen-ggml-linux-arm64": "-"
+  "@qvac/audiogen-ggml-darwin-arm64": "-"
+  "@qvac/audiogen-ggml-darwin-x64": "-"
+  "@qvac/audiogen-ggml-win32-x64": "-"
 
 blockExoticSubdeps: true
 

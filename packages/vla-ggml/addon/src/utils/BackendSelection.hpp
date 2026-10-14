@@ -35,8 +35,8 @@ bool backendNameMatchesFamily(
 
 // Discover and register ggml backend plugins (Vulkan / Metal / OpenCL / …).
 // Thread-safe (std::call_once); safe to call from multiple model constructors.
-// `backendsDir` is the absolute path to the prebuilds folder; BACKENDS_SUBDIR
-// (set by CMake) is appended automatically on plugin-based targets.
+// `backendsDir` optionally names a directory holding the backend modules;
+// empty loads the ones @qvac/fabric ships (qvac_fabric_load_backends()).
 void loadBackendsOnce(const std::string& backendsDir);
 
 // Pick the best GPU device available, applying the Adreno gate:

@@ -79,13 +79,13 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.20.0",
-    "@qvac/fabric-ios": "^0.20.0",
+    "@qvac/fabric-android-arm64": "0.21.0",
+    "@qvac/fabric-ios": "0.21.0",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-subprocess": "^6.1.0",
     "brittle": "^3.4.0",
-    "cmake-bare": "^1.7.5",
+    "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -102,11 +102,30 @@
     "bare-url": "^2.1.6"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.20.0",
+    "@qvac/fabric": "^0.21.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "^0.21.0",
+    "@qvac/fabric-linux-arm64": "^0.21.0",
+    "@qvac/fabric-darwin-arm64": "^0.21.0",
+    "@qvac/fabric-darwin-x64": "^0.21.0",
+    "@qvac/fabric-win32-x64": "^0.21.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.21.0",
+    "@qvac/fabric-ios": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
   },
   "exports": {
     "./package": "./package.json",

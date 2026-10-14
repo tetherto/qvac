@@ -1,13 +1,13 @@
 #include "OcrLazyInitializeBackend.hpp"
 
 #include <cstring>
-#include <filesystem>
 #include <string>
 #include <vector>
 
 #include "ggml-backend.h"
 #include "ggml-cpu.h"
 #include "ggml.h"
+#include "qvac-fabric.h"
 
 #include "easyocr/pipeline/qlog.hpp"
 
@@ -165,14 +165,14 @@ bool OcrLazyInitializeBackend::initialize(const std::string& backendsDir) {
   ggml_set_abort_callback(&ocrGgmlAbortCallback);
 
   if (!backendsDir.empty()) {
-    std::filesystem::path p(backendsDir);
-#ifdef BACKENDS_SUBDIR
-    p = (p / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    QLOG(Priority::INFO, "ocr-ggml: loading backends from " + p.string());
-    ggml_backend_load_all_from_path(p.string().c_str());
+    QLOG(Priority::INFO, "ocr-ggml: loading backends from " + backendsDir);
+    ggml_backend_load_all_from_path(backendsDir.c_str());
   } else {
-    ggml_backend_load_all();
+    QLOG(
+        Priority::INFO,
+        std::string("ocr-ggml: loading @qvac/fabric backends from ") +
+            qvac_fabric_backends_dir());
+    qvac_fabric_load_backends();
   }
 
 #ifdef __ANDROID__
