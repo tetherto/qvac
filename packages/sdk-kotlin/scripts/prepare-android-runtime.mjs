@@ -241,7 +241,8 @@ function platformPackageForHost(meta, host) {
   const platform = host.slice(0, dash)
   const arch = host.slice(dash + 1)
   const hostMap = meta.imports?.['#host-addon']?.[platform]
-  const candidate = typeof hostMap === 'string' ? hostMap : hostMap?.[arch]
+  const entry = typeof hostMap === 'string' || Array.isArray(hostMap) ? hostMap : hostMap?.[arch]
+  const candidate = Array.isArray(entry) ? entry[0] : entry
   return typeof candidate === 'string' && candidate.startsWith(`${meta.name}-`) ? candidate : null
 }
 
