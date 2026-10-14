@@ -10586,7 +10586,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
         ),
     ] = None
     vad_params: Annotated[
@@ -11231,7 +11231,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
         ),
     ] = None
     opencl_cache_dir: Annotated[
@@ -13368,7 +13368,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None
@@ -13806,7 +13806,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None
@@ -14294,7 +14294,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None
@@ -15035,7 +15035,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None
@@ -15511,7 +15511,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None
@@ -16042,7 +16042,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
             min_length=1,
         ),
     ] = None
@@ -19081,7 +19081,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+            description="Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
             min_length=1,
         ),
     ] = None
@@ -19388,7 +19388,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+            description="Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
             min_length=1,
         ),
     ] = None
@@ -20244,7 +20244,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
         str | None,
         Field(
             alias="backendsDir",
-            description="Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+            description="Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
         ),
     ] = None
     vad_params: Annotated[

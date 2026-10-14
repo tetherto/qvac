@@ -30,7 +30,8 @@ def main():
             parser.error(f'missing model artifact: {bundle/name}')
     framework_dir = kit/'ios/BareKit.xcframework/ios-arm64_x86_64-simulator'
     required = [framework_dir/'BareKit.framework/BareKit', modules/'bare-pack/bin.js',
-                modules/'bare-link/index.js', source/'prebuilds/ios-arm64-simulator/qvac__tts-ggml.bare']
+                modules/'bare-link/index.js', source/'prebuilds/ios-arm64-simulator/qvac__tts-ggml-ios.bare',
+                source/'node_modules/@qvac/tts-ggml-ios/package.json']
     for path in required:
         if not path.is_file():
             parser.error(f'missing dependency: {path}')

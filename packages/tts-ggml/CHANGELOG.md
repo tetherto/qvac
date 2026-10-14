@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-10-14
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/tts-ggml`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__tts-ggml-<suffix>` (every iOS host shares
+  `ios`) and sits at `prebuilds/<host>/qvac__tts-ggml-<suffix>.bare`, with its
+  ggml backends in `prebuilds/<host>/qvac__tts-ggml-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module. An
+  explicit `backendsDir` is now scanned as given rather than as a prebuilds
+  root under which `<host>/<module>` is appended. `resolveBackendsDir()` and
+  `lib/backends.js` are removed.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`) stages it as the host's platform package in `node_modules/`.
+
 ## [0.11.1] - 2026-10-13
 
 ### Added
@@ -36,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
   same versions as the other speech addons, instead of taking at least those
   versions.
+
+### Fixed
+
+- The linux-x64 prebuild ships the CUDA backend again, next to Vulkan and
+  the CPU variants; releases 0.10.0 to 0.11.0 left it out. Where the NVIDIA
+  driver and the CUDA 13 runtime libraries (cudart, cuBLAS) resolve, GPU
+  requests run on CUDA instead of Vulkan; other hosts keep Vulkan or CPU.
 
 ## [0.11.0] - 2026-10-09
 

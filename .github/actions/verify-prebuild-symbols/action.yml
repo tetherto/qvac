@@ -43,19 +43,19 @@ runs:
         # When @qvac/fabric is installed, index its prebuilds as an external provider.
         # The script matches provider exports to each binary's DT_NEEDED by soname, so
         # mere presence of the package in node_modules cannot mask a genuine UND.
-        # Since 0.18 the runtime ships in @qvac/fabric-<host>/addon/prebuilds. Mirror
-        # qvac_addon_fabric_layout: fabric's own prebuilds, its dependencies (a
-        # sibling of its real path or nested under it), and a cross-built package
-        # installed as this addon's direct dependency, which pnpm keeps out of
-        # fabric's tree.
+        # The runtime ships in @qvac/fabric-<host>/prebuilds. Mirror
+        # qvac_addon_fabric_layout: fabric's dependencies (a sibling of its real
+        # path or nested under it, which is where `npm run link:platform` puts a
+        # source build), and a cross-built package installed as this addon's
+        # direct dependency, which pnpm keeps out of fabric's tree.
         FABRIC="node_modules/@qvac/fabric"
         if [ -d "$FABRIC" ]; then
           FABRIC_REAL="$(cd "$FABRIC" && pwd -P)"
           shopt -s nullglob
           # A newline-delimited list, not `declare -A`: macOS runners' /bin/bash is 3.2.
           SEEN=$'\n'
-          for dir in "$FABRIC_REAL/prebuilds" "$(dirname "$FABRIC_REAL")"/fabric-*/addon/prebuilds \
-            "$FABRIC_REAL"/node_modules/@qvac/fabric-*/addon/prebuilds node_modules/@qvac/fabric-*/addon/prebuilds; do
+          for dir in "$(dirname "$FABRIC_REAL")"/fabric-*/prebuilds \
+            "$FABRIC_REAL"/node_modules/@qvac/fabric-*/prebuilds node_modules/@qvac/fabric-*/prebuilds; do
             [ -d "$dir" ] || continue
             real="$(cd "$dir" && pwd -P)"
             case "$SEEN" in *$'\n'"$real"$'\n'*) continue ;; esac
@@ -79,19 +79,19 @@ runs:
         # When @qvac/fabric is installed, index its prebuilds as an external provider.
         # The script matches provider exports to each binary's DT_NEEDED by soname, so
         # mere presence of the package in node_modules cannot mask a genuine UND.
-        # Since 0.18 the runtime ships in @qvac/fabric-<host>/addon/prebuilds. Mirror
-        # qvac_addon_fabric_layout: fabric's own prebuilds, its dependencies (a
-        # sibling of its real path or nested under it), and a cross-built package
-        # installed as this addon's direct dependency, which pnpm keeps out of
-        # fabric's tree.
+        # The runtime ships in @qvac/fabric-<host>/prebuilds. Mirror
+        # qvac_addon_fabric_layout: fabric's dependencies (a sibling of its real
+        # path or nested under it, which is where `npm run link:platform` puts a
+        # source build), and a cross-built package installed as this addon's
+        # direct dependency, which pnpm keeps out of fabric's tree.
         FABRIC="node_modules/@qvac/fabric"
         if [ -d "$FABRIC" ]; then
           FABRIC_REAL="$(cd "$FABRIC" && pwd -P)"
           shopt -s nullglob
           # A newline-delimited list, not `declare -A`: macOS runners' /bin/bash is 3.2.
           SEEN=$'\n'
-          for dir in "$FABRIC_REAL/prebuilds" "$(dirname "$FABRIC_REAL")"/fabric-*/addon/prebuilds \
-            "$FABRIC_REAL"/node_modules/@qvac/fabric-*/addon/prebuilds node_modules/@qvac/fabric-*/addon/prebuilds; do
+          for dir in "$(dirname "$FABRIC_REAL")"/fabric-*/prebuilds \
+            "$FABRIC_REAL"/node_modules/@qvac/fabric-*/prebuilds node_modules/@qvac/fabric-*/prebuilds; do
             [ -d "$dir" ] || continue
             real="$(cd "$dir" && pwd -P)"
             case "$SEEN" in *$'\n'"$real"$'\n'*) continue ;; esac
