@@ -333,7 +333,7 @@ bare-pack --host <host> --linked index.js > /dev/null   # bundles without errors
 
 | # | Step | What to verify |
 |---|------|----------------|
-| 1 | `package.json` | `@qvac/fabric` `^0.21.0` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus exact-pinned `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` when building mobile prebuilds |
+| 1 | `package.json` | `@qvac/fabric` `^0.21.1` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus exact-pinned `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` when building mobile prebuilds |
 | 2 | `vcpkg.json` | `qvac-fabric` is **not** listed; `vk-profiling` feature removed; addon-specific deps remain |
 | 3 | `CMakeLists.txt` | `qvac_addon_use_fabric()`, or `find_package(qvac-fabric ...)` + `qvac_addon_fabric_layout()`; `qvac-fabric::headers`; no runtime or backend install |
 | 4 | `binding.js` | `require('@qvac/fabric')` **before** `require.addon()`, literal specifiers only; no backends path in JS |
