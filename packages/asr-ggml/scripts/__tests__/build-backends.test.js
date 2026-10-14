@@ -9,12 +9,14 @@ const packageRoot = path.resolve(__dirname, '..', '..')
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
 const vcpkgManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'vcpkg.json'), 'utf8'))
 const cmakeSource = fs.readFileSync(path.join(packageRoot, 'CMakeLists.txt'), 'utf8')
+const projectJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'project.json'), 'utf8'))
 const whisperModelSource = fs.readFileSync(
   path.join(packageRoot, 'addon/src/model-interface/whisper/WhisperModel.cpp'),
   'utf8'
 )
 
 const CUDA_CMAKE_OPTION = 'ASR_CUDA'
+const PUBLISHED_CUDA_HOST = 'linux-x64'
 const CUDA_MANIFEST_FEATURE = 'cuda'
 const SPEECH_PORT = 'speech-cpp'
 const DESKTOP_PLATFORM = '!(osx | ios | android)'
@@ -39,6 +41,17 @@ function cudaFeature() {
 
 function cudaSpeechDependency() {
   return speechDependencies(cudaFeature().dependencies)[0]
+}
+
+function publishBuildCi() {
+  return projectJson.targets.build.options.ci
+}
+
+function platformDefines(host) {
+  const entry = (publishBuildCi().platformCmakeDefines ?? '')
+    .split('\n')
+    .find((line) => line.trim().startsWith(`${host}:`))
+  return entry === undefined ? '' : entry.slice(entry.indexOf(':') + 1).trim()
 }
 
 function versionFloorOf(dependency) {
@@ -133,4 +146,9 @@ test('the GPU integration tests accept CUDA as a desktop backend', () => {
     const source = fs.readFileSync(path.join(packageRoot, file), 'utf8')
     assert.match(source, /id === 2 \|\| id === 3/, file)
   })
+})
+
+test('the published linux-x64 prebuild builds the CUDA backend', () => {
+  assert.equal(publishBuildCi().includeCuda, true)
+  assert.match(platformDefines(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_CMAKE_OPTION}=ON`))
 })

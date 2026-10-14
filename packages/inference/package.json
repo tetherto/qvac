@@ -141,6 +141,10 @@
     "./ggml-rpc-server/provider": {
       "types": "./dist/rpc/ggml-provider.d.ts",
       "import": "./dist/rpc/ggml-provider.js"
+    },
+    "./moss-transcribe/plugin": {
+      "types": "./dist/plugins/builtin/moss-transcribe/plugin.d.ts",
+      "import": "./dist/plugins/builtin/moss-transcribe/plugin.js"
     }
   },
   "files": [

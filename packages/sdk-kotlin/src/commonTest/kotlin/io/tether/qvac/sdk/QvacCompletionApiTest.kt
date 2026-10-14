@@ -15,7 +15,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -354,7 +357,7 @@ class QvacCompletionApiTest {
             modelId = "model",
             history = listOf(QvacMessage.user("weather?")),
             tools = listOf(
-                QvacTool("weather", "Get weather", handler = { JsonPrimitive("sunny") }),
+                QvacTool("weather", "Get weather") { JsonPrimitive("sunny") },
             ),
         ).final.await()
 
@@ -365,6 +368,93 @@ class QvacCompletionApiTest {
         assertTrue(callbackReply.contains("\"result\":\"sunny\""))
         assertFalse(callbackReply.contains("error"))
         client.close()
+    }
+
+    @Test
+    fun toolParametersSchemaIsSentAsWritten() = runTest {
+        val schema = buildJsonObject {
+            put("type", "object")
+            putJsonObject("properties") {
+                putJsonObject("stops") {
+                    put("type", "array")
+                    putJsonObject("items") {
+                        put("type", "object")
+                        putJsonObject("properties") { putJsonObject("name") { put("type", "string") } }
+                    }
+                }
+                putJsonObject("budget") {
+                    putJsonArray("anyOf") {
+                        add(buildJsonObject { put("type", "number") })
+                        add(buildJsonObject { put("type", "null") })
+                    }
+                }
+            }
+        }
+        val tool = QvacTool(name = "plan_trip", description = "Plan a trip", parametersSchema = schema)
+        val payload = sentPayload(listOf(QvacMessage.user("plan")), listOf(tool))
+        assertEquals(schema, payload["tools"]?.jsonArray?.single()?.jsonObject?.get("parameters"))
+    }
+
+    @Test
+    fun toolRejectsParametersSchemaAlongsideFlatParameters() {
+        assertFailsWith<IllegalArgumentException> {
+            QvacTool(
+                name = "plan_trip",
+                description = "Plan a trip",
+                parameters = mapOf("city" to QvacToolParameter(QvacToolParameterType.STRING)),
+                parametersSchema = buildJsonObject { put("type", "object") },
+            )
+        }
+    }
+
+    @Test
+    fun toolTurnsReachTheWireStructured() = runTest {
+        val call = QvacToolCall("call_1", "weather", buildJsonObject { put("city", "Rome") })
+        val history = sentPayload(
+            listOf(
+                QvacMessage.user("weather?"),
+                QvacMessage.assistant("", toolCalls = listOf(call)),
+                QvacMessage.tool("sunny", toolCallId = "call_1", toolName = "weather"),
+            ),
+        )["history"]!!.jsonArray.map { it.jsonObject }
+
+        assertFalse("toolCalls" in history[0])
+        assertEquals(
+            buildJsonArray {
+                add(buildJsonObject {
+                    put("id", "call_1")
+                    put("name", "weather")
+                    put("arguments", buildJsonObject { put("city", "Rome") })
+                })
+            },
+            history[1]["toolCalls"],
+        )
+        assertEquals("call_1", history[2]["toolCallId"]?.jsonPrimitive?.content)
+        assertEquals("weather", history[2]["toolName"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun toolFieldsOnTheWrongRoleAreRejected() {
+        val call = QvacToolCall("call_1", "weather", buildJsonObject {})
+        assertFailsWith<IllegalArgumentException> {
+            QvacMessage("user", "hi", toolCalls = listOf(call))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            QvacMessage("assistant", "hi", toolCallId = "call_1")
+        }
+    }
+
+    private suspend fun sentPayload(history: List<QvacMessage>, tools: List<QvacTool> = emptyList()): JsonObject {
+        val transport = ApiTransport(
+            stream = flowOf(completionFrame(done = true, event("completionDone", 0) { put("stopReason", "eos") })),
+        )
+        val client = QvacClient(transport)
+        try {
+            client.completion.run("model", history, tools).final.await()
+        } finally {
+            client.close()
+        }
+        return transport.lastPayload!!
     }
 
     private fun completionFrame(done: Boolean, vararg events: JsonObject) = buildJsonObject {

@@ -192,3 +192,41 @@ test('conversation session forwards the VAD detector source', async (t) => {
     'source reaches the event a caller iterates'
   )
 })
+
+test('Nemotron conversation events preserve dominant speaker ids including zero', async (t) => {
+  const session = await createTranscribeStreamSession(
+    {
+      modelId: 'nemotron-diarization',
+      parakeetStreamingConfig: {
+        emitSpeakerVad: true,
+        diarizationThreshold: 0.5,
+        diarizationMinSegmentMs: 200
+      }
+    },
+    undefined,
+    (line, onTerminal) => processLineConversation(line, false, onTerminal),
+    'TranscribeStreamConversationSession',
+    createDuplexFactory(
+      [0, 7]
+        .map((speakerId) =>
+          JSON.stringify({
+            type: 'transcribeStream',
+            vad: { speaking: true, probability: 0.9, source: 'sortformer', speakerId }
+          })
+        )
+        .concat(JSON.stringify({ type: 'transcribeStream', done: true }))
+    ) as never
+  )
+  const events = []
+  for await (const event of session) events.push(event)
+  t.alike(
+    events,
+    [0, 7].map((speakerId) => ({
+      type: 'vad',
+      speaking: true,
+      probability: 0.9,
+      source: 'sortformer',
+      speakerId
+    }))
+  )
+})

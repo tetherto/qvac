@@ -11,7 +11,7 @@ import {
 } from '@qvac/sdk'
 
 // Usage:
-//   bun examples/audiogen/generate-music.ts "lo-fi hip hop, mellow piano" output.wav
+//   npx tsx examples/audiogen/generate-music.ts "lo-fi hip hop, mellow piano" output.wav
 const caption =
   process.argv[2] ?? 'Lo-fi hip hop with mellow piano, soft drums, and a warm bass line'
 const outputPath = process.argv[3] ?? 'audiogen-output.wav'

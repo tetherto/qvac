@@ -242,3 +242,23 @@ test('handler: an engine with no placement reports none', (t) => {
 
   t.is(target.device, undefined)
 })
+
+test('handler: MOSS uses the whole recording and the load device', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.mossTranscribe,
+    modelConfig: { useGPU: true },
+    transcriptionWorkload: { audioSeconds: 90 }
+  })
+  t.alike(target.workload, { kind: 'audio', windowMs: 90_000, streaming: false })
+  t.is(target.device, 'gpu')
+})
+
+test('handler: MOSS omits the recording window when the workload is undeclared', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.mossTranscribe
+  })
+  t.alike(target.workload, { kind: 'audio', streaming: false })
+  t.absent('windowMs' in target.workload)
+})
