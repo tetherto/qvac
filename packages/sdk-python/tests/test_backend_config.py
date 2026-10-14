@@ -7,7 +7,7 @@ from tetherto.qvac_sdk._generated.models import (
     LoadModelSrcRequestLlamacppEmbeddingModelConfig,
 )
 
-CONFIG_TYPES = [
+CONFIG_TYPES: list[type[BaseModel]] = [
     LoadModelSrcRequestLlamacppCompletionModelConfig,
     LoadModelSrcRequestLlamacppEmbeddingModelConfig,
     LoadModelSrcRequestGgmlVlaModelConfig,
