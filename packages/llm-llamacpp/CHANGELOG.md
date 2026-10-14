@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.61.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = LlmLlamacpp.assessFit(request)` to `const fit = await LlmLlamacpp.assessFit(request)`.
+
+### Added
+
+- `image-max-megapixels` config key (alias `image_max_megapixels`, default
+  `50`): the maximum reported image pixel count, in millions, checked before
+  mtmd decodes an image ([#4777](https://github.com/tetherto/qvac/pull/4777)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`
+  ([#5064](https://github.com/tetherto/qvac/pull/5064)). A caret on a `0.x`
+  version locks the minor, so `^0.21.1` would not have resolved `0.22.0` on
+  its own. `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against
+  the 0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5071](https://github.com/tetherto/qvac/pull/5071)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+
+### Fixed
+
+- Oversized images are rejected before decoding instead of being decoded in
+  full: a crafted 16384 x 16384 PNG under 1 MB raised the inference worker's
+  RSS by about 1.6 GiB. Images whose dimensions cannot be read are rejected,
+  and only regular media files are accepted ([#4777](https://github.com/tetherto/qvac/pull/4777)).
+
 ## [0.60.0] - 2026-10-14
 
 ### Breaking
