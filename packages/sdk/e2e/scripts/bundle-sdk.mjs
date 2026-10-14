@@ -2,7 +2,8 @@ import { bundleSdk } from '@qvac/sdk/commands'
 
 try {
   const result = await bundleSdk({
-    configPath: 'fixtures/qvac.config.e2e.json'
+    configPath: 'fixtures/qvac.config.e2e.json',
+    hosts: [`${process.platform}-${process.arch}`]
   })
 
   console.log(`Bundled ${result.plugins.length} plugins:`)
