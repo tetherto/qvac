@@ -49,10 +49,21 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
-# Per-host/per-module subdir for dynamically-loadable ggml backends
-# (same shape tts-ggml / transcription-parakeet use).
+# The module is named after the platform package that ships it,
+# qvac__audiogen-ggml-<suffix> (every iOS host shares `ios`), so that package
+# is an ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__audiogen-ggml-<suffix>.bare there. The dynamically
+# loadable ggml backends install to <host>/<module name>, where the addon looks
+# next to itself (see ModuleBackendsDir.hpp); bare-link flattens them next to
+# the module in a mobile app instead. Keep the suffix in sync with
+# "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__audiogen-ggml-ios")
+else()
+  set(module_name "qvac__audiogen-ggml-${bare_target_value}")
+endif()
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 
 set(BACKEND_DL_LIBS "")
@@ -81,12 +92,12 @@ if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
   endif()
 endif()
 
-add_bare_module(audiogen-ggml EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(audiogen-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
 
 if(BACKEND_DL_LOOSE_SOS)
   install(
     FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${bare_target_value}/${module_name}
+    DESTINATION ${BACKENDS_SUBDIR_VALUE}
   )
 endif()
 
@@ -128,7 +139,7 @@ target_link_libraries(
 
 target_compile_definitions(${audiogen-ggml} PUBLIC JS_LOGGER)
 target_compile_definitions(${audiogen-ggml} PRIVATE
-  BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+  QVAC_ADDON_MODULE_NAME="${module_name}")
 
 if(ANDROID)
   target_link_options(

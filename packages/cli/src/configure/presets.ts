@@ -4,6 +4,7 @@
 // an LLM advisor) feeds.
 
 import type { TtsEngine } from '@qvac/sdk'
+import { AUDIOGEN_MOSS_SFX_V2_Q8_0 } from '@qvac/sdk/models'
 
 export type Modality = 'chat' | 'embedding' | 'transcription' | 'speech' | 'image'
 
@@ -129,6 +130,18 @@ export const TTS_ENGINE_TEMPLATES: Record<TtsEngine, TtsEngineTemplate> = {
       audio8CodecDecoderModelSrc: 'TTS_CODEC_DECODER_AUDIO8_Q8_0'
     }
   },
+  'moss-sfx': {
+    label: 'MOSS-SoundEffect (desktop sound effects)',
+    hint: 'Single GGUF; generation controls are available through the SDK.',
+    model: 'AUDIOGEN_MOSS_SFX_V2_Q8_0',
+    config: { ttsEngine: 'moss-sfx' }
+  },
+  'moss-speech': {
+    label: 'MOSS-Speech (desktop spoken replies)',
+    hint: 'Language model + codec; conversation controls are available through the SDK.',
+    model: 'TTS_MOSS_SPEECH_Q8_0',
+    config: { ttsEngine: 'moss-speech', mossSpeechCodecModelSrc: 'TTS_CODEC_MOSS_SPEECH_F16' }
+  },
   moss: {
     label: 'MOSS (multilingual, directable, 8B desktop)',
     hint: 'Delay backbone + codec decoder; add the encoder to clone a voice.',
@@ -148,7 +161,12 @@ function ttsTemplate(engine: TtsEngine): BuiltEntry {
   return {
     aliasBase: t.model,
     addon: 'tts',
-    entry: { type: 'tts', src: t.model, preload: false, config: { ...t.config } }
+    entry: {
+      type: 'tts',
+      src: engine === 'moss-sfx' ? AUDIOGEN_MOSS_SFX_V2_Q8_0.src : t.model,
+      preload: false,
+      config: { ...t.config }
+    }
   }
 }
 

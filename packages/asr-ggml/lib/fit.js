@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
-const backends_1 = require("./backends");
 const driver_1 = require("../engines/moss/driver");
 /**
  * Projects one model against the memory free right now, reading model metadata
@@ -22,7 +21,7 @@ const driver_1 = require("../engines/moss/driver");
  * engine's reason. Only a broken request throws.
  */
 function assessFit(request) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
     const binding = require('../binding.js');
     if (request.engine === 'moss-transcribe') {
         (0, driver_1.mossTranscribeJobFields)({
@@ -31,10 +30,5 @@ function assessFit(request) {
             maxNewTokens: request.maxNewTokens
         });
     }
-    return binding.assessFit({
-        ...request,
-        backendsDir: typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-            ? request.backendsDir
-            : (0, backends_1.resolveBackendsDir)()
-    });
+    return binding.assessFit(request);
 }

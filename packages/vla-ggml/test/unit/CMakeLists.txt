@@ -60,12 +60,6 @@ target_include_directories(
 
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
-# BackendSelection.cpp references BACKENDS_SUBDIR on its DL load path. The addon
-# target defines it, but addon-test compiles that TU separately. Tests preload
-# backends via backend_env.cpp from GGML_BACKEND_DIR, so the value is unused at
-# runtime — a placeholder just lets the TU compile.
-target_compile_definitions(addon-test PRIVATE BACKENDS_SUBDIR="qvac-lib-infer-vla")
-
 target_link_libraries(
   addon-test
   PRIVATE
@@ -76,13 +70,13 @@ target_link_libraries(
     GTest::gmock_main
 )
 
-# GGML_BACKEND_DL/DIR, copy qvac__fabric@0.bare + backends next to the binary,
+# GGML_BACKEND_DL/DIR, copy qvac__fabric-<host>@0.bare + backends next to the binary,
 # rpath, and the win32 delay-load helper. See qvac-addon.cmake for the details.
 qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 
 # AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
 # addon-test dynamically links the shared @qvac/fabric runtime
-# (qvac__fabric@0.bare), and the shipped fabric prebuild embeds its own libc++
+# (qvac__fabric-<host>@0.bare), and the shipped fabric prebuild embeds its own libc++
 # rather than being instrumented. See
 # packages/classification-ggml/test/unit/CMakeLists.txt for the full rationale.
 # scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI runs.

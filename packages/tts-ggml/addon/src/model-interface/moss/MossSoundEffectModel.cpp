@@ -92,8 +92,7 @@ MossSoundEffectModel::toEngineOptions(const MossSoundEffectConfig& cfg) {
   opts.model_path = cfg.modelPath;
   if (cfg.threads.value_or(0) > 0)
     opts.n_threads = *cfg.threads;
-  if (!cfg.backendsDir.empty())
-    opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   opts.use_gpu = wantsGpu(cfg);
   return opts;
 }

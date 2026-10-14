@@ -9,11 +9,11 @@
 #   qvac_addon_preproject()                 # BEFORE project()
 #   project(<name> LANGUAGES C CXX)
 #   qvac_addon_project_setup()              # AFTER project()
-#   qvac_addon_use_fabric()                 # sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE
+#   qvac_addon_use_fabric()                 # sets qvac_fabric_target
 #   add_bare_module(<name> EXPORTS)
 #   ...target_sources / target_include_directories...
 #   qvac_addon_link_fabric(${<name>} ${qvac_fabric_target})
-#   qvac_addon_finalize(${<name>} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+#   qvac_addon_finalize(${<name>})
 #
 # Unmigrated addons that cannot call qvac_addon_preproject() (it also sets
 # overlay triplets and Android STL) still reuse the fuzz helpers:
@@ -151,12 +151,12 @@ endmacro()
 # Consume the shared @qvac/fabric prebuilt ggml runtime. Sets, in the caller's
 # scope:
 #   qvac_fabric_target    — the fabric bare-module target (link its _module)
-#   BACKENDS_SUBDIR_VALUE  — "<host>/qvac__fabric": the subdir the addon appends
-#                            to the runtime-provided backendsDir before calling
-#                            ggml_backend_load_all_from_path().
 #
-# The ggml compute backends live next to the fabric runtime and are loaded once
-# per process; the addon neither collects nor installs them.
+# The runtime is the host's platform package, @qvac/fabric-<suffix>, whose
+# prebuilds/<host>/qvac__fabric-<suffix>.bare the module gets a DT_NEEDED on.
+# The ggml compute backends live next to it and are loaded once per process by
+# fabric itself: the addon calls qvac_fabric_load_backends() (qvac-fabric.h)
+# and neither locates, collects nor installs them.
 # ---------------------------------------------------------------------------
 macro(qvac_addon_use_fabric)
   set(qvac-fabric_DIR
@@ -168,71 +168,61 @@ macro(qvac_addon_use_fabric)
     _qvac_fabric_specifier _qvac_fabric_working_dir _qvac_fabric_prebuilds)
   include_bare_module("${_qvac_fabric_specifier}" qvac_fabric_target PREBUILD
     WORKING_DIRECTORY "${_qvac_fabric_working_dir}")
-
-  set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/qvac__fabric")
-  message(STATUS "qvac-addon: BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 endmacro()
 
 # ---------------------------------------------------------------------------
 # qvac_addon_fabric_layout(<host> <base_dir> <out_specifier> <out_working_dir>
 #                          <out_prebuilds>)
 #
-# Which installed bare module provides prebuilds/<host>/qvac__fabric.bare, as an
-# include_bare_module() specifier + WORKING_DIRECTORY, plus that module's
-# prebuilds/ dir. Same precedence as @qvac/fabric's binding.js, so the build
-# links the runtime the addon will load:
+# Which installed package provides the fabric runtime for <host>, as an
+# include_bare_module() specifier + WORKING_DIRECTORY, plus that package's
+# prebuilds/ dir. It is always the host's platform package (the target of
+# @qvac/fabric's "#host-addon"), so the build links the runtime the addon will
+# load. The package is resolved:
 #
-#   1. @qvac/fabric itself when it carries prebuilds/<host>: every fabric before
-#      the 0.18 platform split, a source build or linked workspace, and the CI
-#      overlay, which writes the PR-built runtime there.
-#   2. The host's platform package, @qvac/fabric-<host>/addon. It is fabric's
-#      dependency rather than the addon's, so it is resolved from fabric's real
-#      path, as Node would from inside fabric (pnpm and nested npm installs do
-#      not put it in the addon's node_modules). Its addon/ manifest is named
-#      @qvac/fabric, which keeps the artifact qvac__fabric.bare and every
-#      shipped consumer's DT_NEEDED on it valid.
+#   1. from fabric's real path, as Bare does from inside fabric's binding.js:
+#      the meta's optional (desktop) or optional peer (mobile) dependency, which
+#      pnpm and nested npm installs do not put in the addon's node_modules; a
+#      source-built fabric links its own build there (npm run link:platform);
+#   2. from the addon, for a cross-built target the addon lists in its own
+#      devDependencies while fabric itself is a linked workspace package.
 #
-# With neither, configure fails naming the package to install. Cross-built
-# targets (android, ios) are never selected by os/cpu filters, so an addon that
-# builds them needs the platform package as a devDependency with the same range
-# as @qvac/fabric, so both resolve to the same release: the app supplies the
-# runtime at run time through its own direct dependency.
+# With neither, configure fails naming the package to install.
 # ---------------------------------------------------------------------------
 function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir out_prebuilds)
   resolve_node_module("@qvac/fabric" _meta_dir WORKING_DIRECTORY "${base_dir}")
   if(_meta_dir MATCHES "-NOTFOUND$")
     message(FATAL_ERROR "qvac-addon: @qvac/fabric is not installed under ${base_dir}; run npm install first.")
   endif()
-
-  set(${out_specifier} "@qvac/fabric" PARENT_SCOPE)
-  set(${out_working_dir} "${base_dir}" PARENT_SCOPE)
-  set(${out_prebuilds} "${_meta_dir}/prebuilds" PARENT_SCOPE)
-  if(IS_DIRECTORY "${_meta_dir}/prebuilds/${host}")
-    return()
+  if(NOT COMMAND qvac_fabric_platform_package)
+    message(FATAL_ERROR
+      "qvac-addon: the installed @qvac/fabric predates per-host platform packages "
+      "(no qvac_fabric_platform_package in its CMake package); it needs @qvac/fabric >= 0.21.")
   endif()
 
-  if(host MATCHES "^ios-")
-    set(_platform_package "@qvac/fabric-ios")
-  else()
-    set(_platform_package "@qvac/fabric-${host}")
-  endif()
-
+  qvac_fabric_platform_package("${host}" _platform_package)
   file(REAL_PATH "${_meta_dir}" _meta_real)
-  resolve_node_module("${_platform_package}/addon" _platform_addon WORKING_DIRECTORY "${_meta_real}")
-  if(NOT _platform_addon MATCHES "-NOTFOUND$")
-    message(STATUS "qvac-addon: fabric runtime from ${_platform_package}")
-    set(${out_specifier} "${_platform_package}/addon" PARENT_SCOPE)
-    set(${out_working_dir} "${_meta_real}" PARENT_SCOPE)
-    set(${out_prebuilds} "${_platform_addon}/prebuilds" PARENT_SCOPE)
-    return()
-  endif()
+  foreach(_from IN ITEMS "${_meta_real}" "${base_dir}")
+    resolve_node_module("${_platform_package}" _platform_dir WORKING_DIRECTORY "${_from}")
+    if(NOT _platform_dir MATCHES "-NOTFOUND$")
+      message(STATUS "qvac-addon: fabric runtime from ${_platform_dir}")
+      set(${out_specifier} "${_platform_package}" PARENT_SCOPE)
+      set(${out_working_dir} "${_from}" PARENT_SCOPE)
+      set(${out_prebuilds} "${_platform_dir}/prebuilds" PARENT_SCOPE)
+      return()
+    endif()
+  endforeach()
 
   file(READ "${_meta_dir}/package.json" _meta_manifest)
   string(JSON _meta_version GET "${_meta_manifest}" version)
-  if(host MATCHES "^(android|ios)-")
+  if(IS_DIRECTORY "${_meta_dir}/prebuilds/${host}")
+    string(CONCAT _remedy
+      "@qvac/fabric has a source build for ${host}; run `npm run link:platform` in "
+      "${_meta_real} to expose it as ${_platform_package}.")
+  elseif(host MATCHES "^(android|ios)-")
     string(CONCAT _remedy
       "Cross-built targets are never selected by os/cpu filters; add "
-      "\"${_platform_package}\": \"^${_meta_version}\" to devDependencies.")
+      "\"${_platform_package}\": \"${_meta_version}\" to devDependencies.")
   else()
     string(CONCAT _remedy
       "It is an optional dependency of @qvac/fabric: reinstall without --omit=optional "
@@ -240,8 +230,7 @@ function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir ou
       "publishes no runtime for ${host}.")
   endif()
   message(FATAL_ERROR
-    "qvac-addon: no fabric runtime for ${host}: @qvac/fabric has no prebuilds/${host} "
-    "and ${_platform_package} is not installed. ${_remedy}")
+    "qvac-addon: no fabric runtime for ${host}: ${_platform_package} is not installed. ${_remedy}")
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -334,13 +323,13 @@ function(qvac_addon_link_fabric addon_target fabric_target)
 endfunction()
 
 # ---------------------------------------------------------------------------
-# qvac_addon_finalize(<addon_target> [SUBDIR <value>])
+# qvac_addon_finalize(<addon_target>)
 #
 # Apply the settings every addon module needs:
 #   * Linux symbol hygiene (--exclude-libs,ALL, plus a version script that
 #     narrows the module's exports to the bare C entry points),
 #   * the assertion that a fabric-linked module imports fabric's C++ runtime,
-#   * JS_LOGGER + BACKENDS_SUBDIR compile definitions,
+#   * the JS_LOGGER compile definition,
 #   * platform-derived GGML_BACKEND_DL (Linux/Android/Windows load ggml
 #     backends as modules; Apple platforms link them static into the runtime),
 #   * Android 16 KB page-size link flags,
@@ -351,7 +340,13 @@ endfunction()
 # platforms they don't target (guarded by ANDROID / APPLE).
 # ---------------------------------------------------------------------------
 function(qvac_addon_finalize addon_target)
-  cmake_parse_arguments(PARSE_ARGV 1 _QAF "" "SUBDIR" "")
+  cmake_parse_arguments(PARSE_ARGV 1 _QAF "" "" "")
+  if(_QAF_UNPARSED_ARGUMENTS)
+    # SUBDIR went with BACKENDS_SUBDIR: fabric locates its own backends now.
+    message(FATAL_ERROR
+      "qvac-addon: qvac_addon_finalize() takes no options (got ${_QAF_UNPARSED_ARGUMENTS}); "
+      "call qvac_fabric_load_backends() instead of passing a backends SUBDIR.")
+  endif()
 
   # The module's outward interface is the bare entry points and nothing else;
   # see addon-symbols.map. Hides definitions only, so the C++ runtime the module
@@ -412,10 +407,6 @@ function(qvac_addon_finalize addon_target)
   endif()
 
   target_compile_definitions(${addon_target} PRIVATE JS_LOGGER)
-  if(_QAF_SUBDIR)
-    target_compile_definitions(${addon_target} PRIVATE
-      BACKENDS_SUBDIR="${_QAF_SUBDIR}")
-  endif()
 
   if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
     target_compile_definitions(${addon_target} PRIVATE GGML_BACKEND_DL)
@@ -551,7 +542,8 @@ endfunction()
 # runtime (production .bare modules get this from add_bare_module()):
 #   * GGML_BACKEND_DL / GGML_BACKEND_DIR so backend_env.cpp preloads the ggml
 #     backend modules from the test binary dir,
-#   * copy qvac__fabric@0.bare next to the test binary,
+#   * copy the runtime next to the test binary under its SONAME
+#     (qvac__fabric-<suffix>@<major>.bare),
 #   * stage @qvac/fabric's dynamically loaded ggml backends alongside it,
 #   * $ORIGIN / @loader_path rpath so the copies resolve,
 #   * the Windows delay-load helper the imported module target doesn't carry,
@@ -572,17 +564,23 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
     target_link_libraries(${test_target} PRIVATE bare_delay_load)
   endif()
 
-  add_custom_command(TARGET ${test_target} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      $<TARGET_FILE:${fabric_target}_module>
-      ${CMAKE_CURRENT_BINARY_DIR}/qvac__fabric@0.bare
-    COMMENT "Copying qvac__fabric@0.bare to test directory")
-
   bare_target(_qvac_host)
   qvac_addon_fabric_layout("${_qvac_host}" "${CMAKE_SOURCE_DIR}"
     _qvac_fabric_test_specifier _qvac_fabric_test_working_dir _qvac_fabric_test_prebuilds)
+  qvac_fabric_module_name("${_qvac_host}" _qvac_fabric_module)
+  file(READ "${_qvac_fabric_test_prebuilds}/../package.json" _qvac_fabric_manifest)
+  string(JSON _qvac_fabric_version GET "${_qvac_fabric_manifest}" version)
+  string(REGEX MATCH "^[0-9]+" _qvac_fabric_major "${_qvac_fabric_version}")
+  set(_qvac_fabric_soname "${_qvac_fabric_module}@${_qvac_fabric_major}.bare")
+
+  add_custom_command(TARGET ${test_target} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_FILE:${fabric_target}_module>
+      ${CMAKE_CURRENT_BINARY_DIR}/${_qvac_fabric_soname}
+    COMMENT "Copying ${_qvac_fabric_soname} to test directory")
+
   file(GLOB _qvac_fabric_test_backends
-    "${_qvac_fabric_test_prebuilds}/${_qvac_host}/qvac__fabric/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    "${_qvac_fabric_test_prebuilds}/${_qvac_host}/${_qvac_fabric_module}/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
   if(_qvac_fabric_test_backends)
     get_property(_qvac_stage_target DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET)
     if(NOT _qvac_stage_target)

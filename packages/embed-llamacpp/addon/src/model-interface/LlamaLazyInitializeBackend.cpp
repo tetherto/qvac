@@ -4,6 +4,7 @@
 #include <string>
 
 #include <llama.h>
+#include <qvac-fabric.h>
 
 #include "logging.hpp"
 #include "utils.hpp"
@@ -47,19 +48,15 @@ bool LlamaLazyInitializeBackend::initialize(
 #endif
 
   if (!backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(backendsDir);
-#ifdef BACKENDS_SUBDIR
-    std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-    backendsDirPath = backendsDirPath / subdirPath;
-    backendsDirPath = backendsDirPath.lexically_normal();
-#endif
     QLOG_IF(
-        Priority::INFO,
-        "Loading backends from directory: " + backendsDirPath.string());
-    ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+        Priority::INFO, "Loading backends from directory: " + backendsDir);
+    ggml_backend_load_all_from_path(backendsDir.c_str());
   } else {
-    QLOG_IF(Priority::DEBUG, "Loading backends using default path");
-    ggml_backend_load_all();
+    QLOG_IF(
+        Priority::DEBUG,
+        std::string("Loading backends shipped with @qvac/fabric from: ") +
+            qvac_fabric_backends_dir());
+    qvac_fabric_load_backends();
   }
 
   llama_backend_init();
