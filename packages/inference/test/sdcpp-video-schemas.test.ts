@@ -93,8 +93,8 @@ test('H3 schema: accepts image keyframes only for img2vid', (t) => {
   const base = {
     modelId: 'h3',
     prompt: 'Animate the supplied first frame.',
-    width: 960,
-    height: 544,
+    width: 864,
+    height: 480,
     video_frames: 22,
     fps: 24,
     cfg_scale: 1
