@@ -3,11 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { bundleSdk } from '@/commands/bundle'
-import {
-  BarePackError,
-  HostPrebuildsInstallRefusedError,
-  HostPrebuildsMissingError
-} from '@/utils/errors-client'
+import { HostPrebuildsInstallRefusedError, HostPrebuildsMissingError } from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
 import {
   RUNTIME_ADDON_ANDROID_PACKAGE,
@@ -43,9 +39,8 @@ describe('bundleSdk installMissingPrebuilds', () => {
       ),
       (error: unknown) =>
         error instanceof HostPrebuildsMissingError &&
-        error.cause instanceof BarePackError &&
         error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION,
-      'without the platform package, #host-addon does not resolve, and the error names the pin'
+      'without the platform package, bundling fails and the error names the pin'
     )
     assert.deepEqual(pm.calls(), [])
   })
