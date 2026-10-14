@@ -420,7 +420,7 @@ describe('serve: MOSS transcription', () => {
     ]) {
       const fields = [
         { name: 'model', value: model! },
-        { name: 'hotwords', value: '[]' },
+        { name: 'hotwords', value: JSON.stringify(['QVAC']) },
         EMPTY_FILE
       ]
       if (prompt !== undefined) fields.push({ name: 'prompt', value: prompt })

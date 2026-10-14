@@ -26,6 +26,13 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
 
   groupOnnxCompanions(models, bySourcePath, companionKeys)
   groupBergamotCompanions(models, bySourcePath, companionKeys)
+  // Parakeet Core ML bundles are staged beside the GGUF. Their components
+  // remain registry records, but cannot be loaded as standalone ASR models.
+  for (const model of models) {
+    if (model.addon === 'parakeet' && /(?:^|\/)[^/]+\.mlmodelc\//.test(model.registryPath)) {
+      companionKeys.add(sourceKey(model.registrySource, model.registryPath))
+    }
+  }
 
   return models.map((model) => {
     const key = sourceKey(model.registrySource, model.registryPath)

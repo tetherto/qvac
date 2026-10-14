@@ -171,7 +171,7 @@ test('enhanced examples have package scripts', () => {
 test('WER helper uses asr-ggml as a development dependency', () => {
   assert.equal(packageJson.dependencies['@qvac/transcription-whispercpp'], undefined)
   assert.equal(packageJson.dependencies['@qvac/asr-ggml'], undefined)
-  assert.equal(packageJson.devDependencies['@qvac/asr-ggml'], '0.8.0')
+  assert.equal(packageJson.devDependencies['@qvac/asr-ggml'], '0.8.1')
   const source = fs.readFileSync(path.join(packageRoot, 'test/utils/runWhisper.js'), 'utf8')
   assert.match(source, /@qvac\/asr-ggml/)
   assert.doesNotMatch(source, /transcription-whispercpp/)
