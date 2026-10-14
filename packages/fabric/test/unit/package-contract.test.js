@@ -143,7 +143,9 @@ test('fabric exports its own C API on every platform', () => {
 })
 
 test('the Mach-O export list does not re-export host symbols', () => {
-  const patterns = read('exports.txt').split('\n').filter((line) => line && !line.startsWith('#'))
+  const patterns = read('exports.txt')
+    .split('\n')
+    .filter((line) => line && !line.startsWith('#'))
   for (const host of ['_js_', '_napi_']) {
     assert.ok(!patterns.some((pattern) => pattern.startsWith(host)), host)
   }
