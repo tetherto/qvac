@@ -142,12 +142,22 @@ test('fabric exports its own C API on every platform', () => {
   )
 })
 
-test('the Mach-O export list does not re-export host symbols', () => {
+test('the Mach-O export list matches none of the host functions fabric calls', () => {
+  const sources = fs
+    .readdirSync(path.join(packageRoot, 'addon'))
+    .filter((file) => file.endsWith('.cpp'))
+    .map((file) => read(path.join('addon', file)))
+    .join('\n')
+  const hostFunctions = [...new Set(sources.match(/\b(?:js|napi)_\w+(?=\()/g))]
+  assert.ok(hostFunctions.includes('js_create_string_utf8'))
   const patterns = read('exports.txt')
     .split('\n')
     .filter((line) => line && !line.startsWith('#'))
-  for (const host of ['_js_', '_napi_']) {
-    assert.ok(!patterns.some((pattern) => pattern.startsWith(host)), host)
+    .map(
+      (line) => new RegExp(`^${line.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`)
+    )
+  for (const name of hostFunctions) {
+    assert.ok(!patterns.some((pattern) => pattern.test(`_${name}`)), name)
   }
 })
 
