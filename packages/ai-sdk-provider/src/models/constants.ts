@@ -20094,10 +20094,6 @@ export const MMPROJ_QWEN3_8_27B_MULTIMODAL_F16: ModelConstant<'chat'> = allModel
 export const QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL: ModelConstant<'chat'> = allModels[160]
 export const QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL: ModelConstant<'chat'> = allModels[161]
 export const MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[162]
-export const QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD: ModelConstant<'chat'> =
-  allModels[163]
-export const QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD: ModelConstant<'chat'> =
-  allModels[164]
 export const MMPROJ_OCR_3B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[165]
 export const OCR_3B_MULTIMODAL_Q4_0: ModelConstant<'chat'> = allModels[166]
 export const BERGAMOT_AR_EN: ModelConstant<'translation'> = allModels[169]
