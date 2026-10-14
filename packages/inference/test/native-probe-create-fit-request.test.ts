@@ -816,6 +816,68 @@ test('ocr: a load without its detector is refused', (t) => {
   )
 })
 
+test('translation: an IndicTrans load carries its model and generation config', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.nmtcppTranslation,
+    modelPath: '/models/indictrans.bin',
+    modelConfig: { engine: 'IndicTrans', from: 'en', to: 'hi', beamsize: 4 },
+    isShardedModel: false,
+    marginBytes: 1024
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'translation-nmtcpp') return
+  t.alike(plan.probe.request.files, { model: '/models/indictrans.bin' })
+  t.is(plan.probe.request.config.modelType, 'IndicTrans')
+  t.is(plan.probe.request.config['beamsize'], 4)
+  t.is(plan.probe.request.marginBytes, 1024)
+})
+
+test('translation: a Bergamot load finds its vocabulary beside the model', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.nmtcppTranslation,
+    modelPath: '/models/enfr/model.enfr.intgemm.alphas.bin',
+    modelConfig: { engine: 'Bergamot', from: 'en', to: 'fr' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'translation-nmtcpp') return
+  t.alike(plan.probe.request.files, {
+    model: '/models/enfr/model.enfr.intgemm.alphas.bin',
+    srcVocab: '/models/enfr/vocab.enfr.spm',
+    dstVocab: '/models/enfr/vocab.enfr.spm'
+  })
+  t.is(plan.probe.request.config.modelType, 'Bergamot')
+})
+
+test('translation: a pivot load carries both models and their vocabularies', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.nmtcppTranslation,
+    modelPath: '/models/esen/model.esen.intgemm.alphas.bin',
+    modelConfig: { engine: 'Bergamot', from: 'es', to: 'it' },
+    artifacts: {
+      srcVocabPath: '/models/esen/vocab.esen.spm',
+      dstVocabPath: '/models/esen/vocab.esen.spm',
+      pivotModelPath: '/models/enit/model.enit.intgemm.alphas.bin',
+      pivotSrcVocabPath: '/models/enit/vocab.enit.spm',
+      pivotDstVocabPath: '/models/enit/vocab.enit.spm'
+    },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'translation-nmtcpp') return
+  t.alike(plan.probe.request.files, {
+    model: '/models/esen/model.esen.intgemm.alphas.bin',
+    srcVocab: '/models/esen/vocab.esen.spm',
+    dstVocab: '/models/esen/vocab.esen.spm',
+    pivotModel: '/models/enit/model.enit.intgemm.alphas.bin',
+    pivotSrcVocab: '/models/enit/vocab.enit.spm',
+    pivotDstVocab: '/models/enit/vocab.enit.spm'
+  })
+})
+
 test('a model type with no fitter is refused by name', (t) => {
   t.alike(
     createFitRequest({

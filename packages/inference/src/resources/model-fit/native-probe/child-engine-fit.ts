@@ -40,6 +40,10 @@ async function assessFitOf(probe: FitProbeRequest): Promise<unknown> {
       const { assessFit } = await import('@qvac/ocr-ggml')
       return assessFit(probe.request)
     }
+    case 'translation-nmtcpp': {
+      const { default: TranslationNmtcpp } = await import('@qvac/translation-nmtcpp')
+      return TranslationNmtcpp.assessFit(probe.request)
+    }
   }
 }
 

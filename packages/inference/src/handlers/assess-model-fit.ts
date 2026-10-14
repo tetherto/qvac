@@ -8,6 +8,7 @@ import type {
 import { isCanonicalModelType, normalizeModelType, ModelType } from '@/schemas/index'
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
 import { ModelTypeRequiredError } from '@/errors/index'
+import type { FitStubUnavailableReason } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
 import { projectFitFromLoad } from '@/resources/model-fit/fit-stub/project-fit-from-load'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
@@ -271,12 +272,17 @@ async function resolveNativeFit(
   if (outcome.status === 'projected') return { fit: outcome.fit }
   if (outcome.status === 'unsupported-load') return { unavailable: outcome.detail }
 
-  return {
-    unavailable:
-      outcome.message === undefined
-        ? `no registry description (${outcome.reason})`
-        : `no registry description (${outcome.reason}): ${outcome.message}`
+  return { unavailable: noStubDetail(outcome.reason, outcome.message) }
+}
+
+/** Why a load with no description staged for it has no engine verdict. */
+export function noStubDetail(reason: FitStubUnavailableReason, message?: string): string {
+  if (reason === 'files-only-engine') {
+    return 'the engine measures downloaded files only, and this model is not downloaded'
   }
+  return message === undefined
+    ? `no registry description (${reason})`
+    : `no registry description (${reason}): ${message}`
 }
 
 /** What a projection holds for the model's lifetime, the breakdown or the total. */

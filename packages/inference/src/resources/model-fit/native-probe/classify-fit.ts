@@ -139,10 +139,28 @@ function llamaProjection(probe: LlamaProbe): NativeProbeProjection {
   }
 }
 
+/**
+ * The translation fitter reports one allowance against the free memory of the
+ * device it ran on. Only the file bytes inside it are weights; the rest does
+ * not divide into context and compute.
+ */
+function nmtProjection(
+  result: Extract<FitProbeResult, { engine: 'translation-nmtcpp' }>['result']
+): NativeProbeProjection {
+  return {
+    deviceName: result.backend,
+    deviceBytes: result.requiredBytes,
+    deviceFreeBytes: result.freeBytes,
+    weightsBytes: result.modelBytes,
+    report: result.report
+  }
+}
+
 function projectionFor(probe: FitProbeResult): NativeProbeProjection {
   if (probe.engine === 'diffusion-cpp') {
     return { deviceName: probe.result.backend, report: probe.result.report }
   }
+  if (probe.engine === 'translation-nmtcpp') return nmtProjection(probe.result)
   if (isLlama(probe)) return llamaProjection(probe)
 
   const result = probe.result

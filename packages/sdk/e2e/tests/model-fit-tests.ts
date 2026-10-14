@@ -68,6 +68,12 @@ export const modelFitTtsSupertonic = assessCase('tts-supertonic', 'tts-supertoni
 export const modelFitWhisper = assessCase('whisper', 'whisper', 'computed-only')
 export const modelFitBci = assessCase('bci', 'bci', 'computed-only')
 
+/**
+ * The translation fitter reads files on disk and no registry description, so
+ * before download the assessment rests on the computed floor.
+ */
+export const modelFitTranslation = assessCase('translation', 'bergamot-en-fr', 'computed-only')
+
 export const modelFitProbeLlm = probeCase('llm', 'llm', 'llm-llamacpp')
 export const modelFitProbeEmbeddings = probeCase('embeddings', 'embeddings', 'embed-llamacpp')
 export const modelFitProbeParakeet = probeCase('parakeet', 'parakeet-tdt', 'asr-ggml')
@@ -77,6 +83,11 @@ export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', 't
 export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', 'audiogen-ggml')
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', 'diffusion-cpp')
 export const modelFitProbeOcr = probeCase('ocr', 'ocr', 'ocr-ggml')
+export const modelFitProbeTranslation = probeCase(
+  'translation',
+  'bergamot-en-fr',
+  'translation-nmtcpp'
+)
 
 export const modelFitAssessTests = [
   modelFitLlm,
@@ -91,7 +102,8 @@ export const modelFitAssessTests = [
   modelFitDiffusion,
   modelFitOcr,
   modelFitWhisper,
-  modelFitBci
+  modelFitBci,
+  modelFitTranslation
 ]
 
 export const modelFitProbeTests = [
@@ -103,7 +115,8 @@ export const modelFitProbeTests = [
   modelFitProbeTts,
   modelFitProbeAudiogen,
   modelFitProbeDiffusion,
-  modelFitProbeOcr
+  modelFitProbeOcr,
+  modelFitProbeTranslation
 ]
 
 export const modelFitTests = [...modelFitAssessTests, ...modelFitProbeTests]

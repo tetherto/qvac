@@ -1,6 +1,6 @@
 import test from 'brittle'
 
-import { estimateTargetFor } from '@/handlers/assess-model-fit'
+import { estimateTargetFor, noStubDetail } from '@/handlers/assess-model-fit'
 import { ModelType } from '@/schemas/index'
 
 const CONSTANT = {
@@ -277,4 +277,19 @@ test('handler: MOSS omits the recording window when the workload is undeclared',
   })
   t.alike(target.workload, { kind: 'audio', streaming: false })
   t.absent('windowMs' in target.workload)
+})
+
+test('handler: a files-only engine names the download as what is missing', (t) => {
+  t.is(
+    noStubDetail('files-only-engine'),
+    'the engine measures downloaded files only, and this model is not downloaded'
+  )
+})
+
+test('handler: a missing description names its reason and detail', (t) => {
+  t.is(noStubDetail('timed-out'), 'no registry description (timed-out)')
+  t.is(
+    noStubDetail('no-fit-blob', 'models/model.gguf'),
+    'no registry description (no-fit-blob): models/model.gguf'
+  )
 })
