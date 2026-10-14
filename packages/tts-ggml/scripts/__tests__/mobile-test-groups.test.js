@@ -33,7 +33,10 @@ const EXPECTED_ASSIGNMENTS = {
     'runMultipleRunsTest',
     'runGpuSmokeTest',
     'runOutputSampleRateTest',
-    'runVoiceControlsTest'
+    'runVoiceControlsTest',
+    // Fit validation runs without the desktop-only inference model fixtures.
+    'runMossFitTest',
+    'runMossSfxFitTest'
   ]
 }
 
