@@ -108,7 +108,8 @@ export const vlaConfigSchema = z.object({
     )
     .optional()
     .describe(
-      "Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. " +
+      "Ordered backend names, such as ['cuda', 'vulkan']. " +
+        "Omitted or ['auto'] uses the native default order. " +
         'Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. ' +
         'Names are tried in order; if none has an accepted device, selection falls back to the native default order. ' +
         "['cpu'] forces CPU regardless of available accelerators and must be used on its own."

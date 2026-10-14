@@ -24,7 +24,12 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices."
+      "Ordered GPU backend names, such as ['cuda', 'vulkan']. " +
+        'Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. ' +
+        'If unset, uses the native default order. ' +
+        'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
+        "Use device: 'cpu' for CPU. " +
+        "A GPU override cannot be combined with a split-mode other than 'none' or with devices."
     ),
   ctx_size: z
     .number()
@@ -360,7 +365,12 @@ export const embedConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'."
+      "Ordered GPU backend names, such as ['cuda', 'vulkan']. " +
+        'Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. ' +
+        'If unset, uses the native default order. ' +
+        'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
+        "Use device: 'cpu' for CPU. " +
+        "A GPU override cannot be combined with splitMode: 'layer'."
     ),
   gpuLayers: z
     .number()
