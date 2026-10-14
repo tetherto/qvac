@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { generateExportName } from '../models/update-models/naming.ts'
-import { allModels } from '../src/models/constants.ts'
 import * as modelConstants from '../src/models/constants.ts'
 import { groupCompanionSets } from '../models/update-models/companions.ts'
 import { generateModelsFileContent } from '../models/update-models/codegen.ts'
 import { synthesizeServeConfig } from '../src/managed/config-synthesizer.ts'
+
+const { allModels } = modelConstants
 
 const cases = [
   {
