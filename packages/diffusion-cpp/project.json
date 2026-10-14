@@ -26,7 +26,11 @@
         "cwd": "packages/diffusion-cpp",
         "ci": {
           "artifactNamePrefix": "sd-cpp-",
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeCuda": true,
+          "includeCudaArm64": true,
+          "platformCmakeDefines": "linux-x64: -D SD_CUDA=ON\nlinux-arm64: -D SD_CUDA=ON",
+          "postArtifactBuildCommand": "if [ \"$BUILD_PLATFORM\" = linux ]; then node scripts/verify-prebuild-linking.mjs prebuilds; fi"
         }
       },
       "inputs": [

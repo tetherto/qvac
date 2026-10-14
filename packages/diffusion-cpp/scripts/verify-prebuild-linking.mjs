@@ -6,12 +6,15 @@
 //     runtime (either breaks a CPU-only host at addon load, gh#3853), or
 //   - the dlopen'd Vulkan backend module is missing, or itself depends on an
 //     external C++ runtime (its dlopen would fail silently on stock distros).
+//   - the Linux CUDA backend module is missing or links an external
+//     C++ runtime. CUDA stays isolated in that module for CPU-only hosts.
 //
 // This is the blocking twin of test/integration/prebuild-dynamic-linking.
 // test.js: the integration legs are continue-on-error (a signal, not a
 // gate), so this script runs in the non-soft verify-prebuild-linking job of
-// on-pr-diffusion-cpp.yml, whose result feeds the qvac/prebuild-diffusion-cpp
-// commit status that Merge Guard requires. Plain Node, no dependencies.
+// on-pr-nx.yml, whose result feeds the prebuild status Merge Guard requires.
+// The prebuild workflow also runs it before merging release artifacts.
+// Plain Node, no dependencies.
 //
 // Usage: node verify-prebuild-linking.mjs <prebuilds-dir>
 
@@ -129,6 +132,22 @@ for (const target of TARGETS) {
   for (const lib of FORBIDDEN_RUNTIME) {
     if (moduleNeeded.some((n) => n.startsWith(lib))) {
       fail(`${target}: Vulkan module depends on ${lib}* (dlopen fails on stock distros)`)
+    }
+  }
+
+  const cudaPath = path.join(prebuildsDir, target, MODULE_NAME, 'libqvac-diffusion-ggml-cuda.so')
+  if (!fs.existsSync(cudaPath)) {
+    fail(`${target}: CUDA DL backend module missing at ${cudaPath}`)
+    continue
+  }
+  const cudaNeeded = elfNeeded(fs.readFileSync(cudaPath))
+  console.log(`${target}/libqvac-diffusion-ggml-cuda.so NEEDED: ${cudaNeeded.join(', ')}`)
+  if (!cudaNeeded.some((n) => n.startsWith('libcudart.'))) {
+    fail(`${target}: CUDA module does not link libcudart (broken module)`)
+  }
+  for (const lib of FORBIDDEN_RUNTIME) {
+    if (cudaNeeded.some((n) => n.startsWith(lib))) {
+      fail(`${target}: CUDA module depends on ${lib}* (dlopen fails on stock distros)`)
     }
   }
 }

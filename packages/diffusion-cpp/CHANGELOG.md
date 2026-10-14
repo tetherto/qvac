@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Linux ARM64 and x64 releases include a dynamically loaded CUDA backend
+  built with the pinned CUDA 13 toolkit, including SM121a support for DGX
+  Spark and SM120a support for RTX 5090.
+- A distilled FLUX.2 Klein 4B CUDA example and measured Spark/RTX 5090
+  latency and recipes in the README. The example selects the existing
+  im2col VAE convolution path.
+
+### Changed
+
+- Both Linux prebuilds require the CUDA module alongside Vulkan, in PR
+  validation and the release artifact build, while retaining the addon's
+  independence from GPU runtime libraries.
+
 ## [0.29.2] - 2026-10-13
 
 This patch reduces the size of the Windows native addon to address the npm
