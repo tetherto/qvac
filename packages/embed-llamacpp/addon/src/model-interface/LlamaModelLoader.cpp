@@ -207,8 +207,9 @@ LlamaModelSetup setupParams(
   if (const auto iter = configFilemap.find("poll-batch");
       iter != configFilemap.end()) {
     explicitBatchPoll = iter->second;
-  } else if (const auto iter = configFilemap.find("poll_batch");
-             iter != configFilemap.end()) {
+  } else if (
+      const auto iter = configFilemap.find("poll_batch");
+      iter != configFilemap.end()) {
     explicitBatchPoll = iter->second;
   }
 

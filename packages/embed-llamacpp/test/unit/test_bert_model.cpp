@@ -1391,16 +1391,15 @@ TEST_F(BertModelTest, BackendWithSplitModeRejected) {
 }
 
 TEST_F(BertModelTest, SetupParamsDefaultsCpuPollingToZero) {
-  const auto setup = setupParams(
-      getInvalidModelPath(), {{"device", "cpu"}});
+  const auto setup = setupParams(getInvalidModelPath(), {{"device", "cpu"}});
 
   EXPECT_EQ(setup.params.cpuparams.poll, 0U);
   EXPECT_EQ(setup.params.cpuparams_batch.poll, 0U);
 }
 
 TEST_F(BertModelTest, SetupParamsExplicitPollOverridesBothDefaults) {
-  const auto setup = setupParams(
-      getInvalidModelPath(), {{"device", "cpu"}, {"poll", "50"}});
+  const auto setup =
+      setupParams(getInvalidModelPath(), {{"device", "cpu"}, {"poll", "50"}});
 
   EXPECT_EQ(setup.params.cpuparams.poll, 50U);
   EXPECT_EQ(setup.params.cpuparams_batch.poll, 50U);
