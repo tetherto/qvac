@@ -85,8 +85,7 @@ export class CliUpgradeRequiredError extends QvacManagedModeError {
     super(
       'CLI_UPGRADE_REQUIRED',
       'This `@qvac/cli` cannot report the port it bound (`--ready-fd`), so managed mode ' +
-        'cannot verify the listener before sending it a key. Upgrade `@qvac/cli`, or point ' +
-        '`serveBinPath` at a build that supports it.'
+        'cannot verify the listener before sending it a key. Upgrade `@qvac/cli`.'
     )
     this.name = 'CliUpgradeRequiredError'
   }
