@@ -196,7 +196,8 @@ consumers.
 Each platform bundles the worker with the plugin included through its normal build path:
 
 - **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
-  (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes
+  for the machine's own host (equivalent to `npx qvac bundle sdk --host <host>`, without requiring
+  `@qvac/cli` as a dependency) and writes
   `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
 - **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
   `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
