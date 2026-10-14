@@ -40,7 +40,7 @@ function buildTranscribeRequest(
       typeof params.audioChunk === 'string'
         ? { type: 'filePath', value: params.audioChunk }
         : { type: 'base64', value: params.audioChunk.toString('base64') },
-    ...(params.prompt !== undefined && { prompt: params.prompt }),
+    ...(params.prompt !== undefined && params.prompt !== null && { prompt: params.prompt }),
     ...(params.hotwords !== undefined && { hotwords: params.hotwords }),
     ...(params.maxNewTokens !== undefined && { maxNewTokens: params.maxNewTokens }),
     ...(params.metadata === true && { metadata: true }),

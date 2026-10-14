@@ -1,6 +1,7 @@
 import test from 'brittle'
 import { createTranscribeCall } from '@/client/api/transcribe'
 import type { stream } from '@/client/rpc/rpc-client'
+import { transcribeRequestSchema, type TranscribeClientParams } from '@qvac/inference/surface'
 
 function responseStream(frames: object[]): typeof stream {
   return async function* () {
@@ -120,3 +121,34 @@ test('Nemotron batch client preserves overlapping turns for all eight speakers',
   )
   t.alike(result, [segment])
 })
+
+for (const prompt of [undefined, null, '', 'QVAC terminology']) {
+  test(`batch transcription normalizes prompt ${JSON.stringify(prompt)}`, async (t) => {
+    let request: unknown
+    const responses = async function* (value: unknown) {
+      request = value
+      transcribeRequestSchema.parse(value)
+      yield { type: 'transcribe', text: 'test' }
+      yield { type: 'transcribe', done: true }
+    } as typeof stream
+
+    const params = { modelId: 'whisper', audioChunk: 'audio.wav', prompt }
+    // Untyped callers and the desktop E2E fixture can supply null at runtime.
+    const result = await createTranscribeCall(
+      params as TranscribeClientParams,
+      undefined,
+      responses
+    )
+
+    t.is(result, 'test')
+    const wire = request as Record<string, unknown>
+    if (prompt === undefined || prompt === null) {
+      t.absent(
+        Object.hasOwn(wire, 'prompt'),
+        'absent and null prompts are omitted from the request'
+      )
+    } else {
+      t.is(wire.prompt, prompt, 'string prompts, including empty strings, are preserved')
+    }
+  })
+}
