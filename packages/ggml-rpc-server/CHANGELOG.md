@@ -1,12 +1,21 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-10-14
 
 ### Breaking
 
 - An explicit `backendsDir` is scanned as given. It is no longer a prebuilds
   root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
   the backends it ships, next to its runtime.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.21.0`, whose platform
+  packages are now ordinary addons. This package declares them itself: the
+  desktop ones as `optionalDependencies`, and `@qvac/fabric-android-arm64` and
+  `@qvac/fabric-ios` as optional `peerDependencies`.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.21.0` together.
 
 ## [0.2.0] - 2026-10-06
 
