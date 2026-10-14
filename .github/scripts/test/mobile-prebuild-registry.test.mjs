@@ -730,7 +730,7 @@ test('a slice carrying no binaries is rejected rather than silently empty', () =
   })
 
   assert.notEqual(run.status, 0)
-  assert.match(run.output, /contains no addon\/prebuilds/)
+  assert.match(run.output, /contains no prebuilds — nothing to install/)
 })
 
 // The pin and addon-identity checks run on the meta manifest BEFORE the slice is

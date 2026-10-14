@@ -12,6 +12,7 @@ on:
       - ".github/actions/cache-models/**"
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - ".github/actions/run-mobile-integration-tests/setup/**"
+      - ".github/actions/run-mobile-integration-tests/build-mobile-app/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
@@ -54,6 +55,11 @@ jobs:
       # manual run, or worse as a run that installed the wrong build.
       - name: Run mobile setup prebuild-run resolver unit tests
         run: node --test .github/actions/run-mobile-integration-tests/setup/test/*.test.mjs
+      # The installer copies the slicer's index source, name mangling, and
+      # cross-built hosts. scripts/ci/** is already a path above, so a slicer
+      # change runs this parity check too.
+      - name: Run mobile platform-package installer unit tests
+        run: node --test .github/actions/run-mobile-integration-tests/build-mobile-app/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without

@@ -19,7 +19,7 @@ target_link_libraries(
     GTest::gtest_main
 )
 
-# GGML_BACKEND_DL/DIR, copy qvac__fabric@0.bare + backends next to the binary,
+# GGML_BACKEND_DL/DIR, copy qvac__fabric-<host>@0.bare + backends next to the binary,
 # rpath, and the win32 delay-load helper. See qvac-addon.cmake for the details.
 qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 

@@ -12,7 +12,26 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
-## [Unreleased]
+## [0.9.0] - 2026-10-14
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/asr-ggml`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__asr-ggml-<suffix>` (every iOS host shares
+  `ios`) and sits at `prebuilds/<host>/qvac__asr-ggml-<suffix>.bare`, with its
+  ggml backends in `prebuilds/<host>/qvac__asr-ggml-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module, for
+  every engine and for `assessFit`. An explicit `backendsDir` is now scanned as
+  given rather than as a prebuilds root under which `<host>/<module>` is
+  appended. `resolveBackendsDir()` and `lib/backends.js` are removed.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`) stages it as the host's platform package in `node_modules/`.
+
+## [0.8.1] - 2026-10-13
 
 ### Added
 
@@ -23,6 +42,12 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
 - Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
 
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
@@ -32,6 +57,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
   same versions as the other speech addons, instead of taking at least those
   versions.
+
+### Fixed
+
+- The linux-x64 prebuild ships the CUDA backend again, next to Vulkan and
+  the CPU variants; releases 0.6.0 to 0.8.0 left it out. Where the NVIDIA
+  driver and the CUDA 13 runtime libraries (cudart, cuBLAS) resolve, GPU
+  requests run on CUDA instead of Vulkan; other hosts keep Vulkan or CPU.
 
 ## [0.8.0] - 2026-10-09
 

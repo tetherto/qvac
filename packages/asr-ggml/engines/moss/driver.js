@@ -1,13 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MossTranscribeDriver = exports.ENGINE_MOSS_TRANSCRIBE = void 0;
+exports.mossTranscribeBackend = mossTranscribeBackend;
 exports.mossTranscribeJobFields = mossTranscribeJobFields;
 const parakeet_1 = require("../parakeet/parakeet");
 const error_1 = require("../../lib/error");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
 exports.ENGINE_MOSS_TRANSCRIBE = "moss-transcribe";
-const MOSS_CONFIG_KEYS = ["maxThreads", "useGPU", "backendsDir"];
+const MOSS_CONFIG_KEYS = ["maxThreads", "useGPU", "backend", "backendsDir"];
 const MOSS_RUN_OPTION_KEYS = ["hotwords", "prompt", "maxNewTokens"];
 const MAX_HOTWORDS = 64;
 const MAX_HOTWORD_BYTES = 64;
@@ -21,6 +22,15 @@ function asError(error) {
 }
 function invalidRunOption(adds) {
     return new error_1.QvacErrorAddonASRGgml({ code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG, adds });
+}
+/** Preserve native selector names; availability is checked by the engine. */
+function mossTranscribeBackend(value) {
+    if (value === undefined)
+        return "auto";
+    if (typeof value !== "string") {
+        throw invalidRunOption("backend must be a string");
+    }
+    return value;
 }
 function utf8Bytes(codePoint) {
     if (codePoint < ONE_BYTE_LIMIT)
@@ -110,6 +120,7 @@ class MossTranscribeDriver {
         this.params = config.mossTranscribeConfig || {};
     }
     validateConfig() {
+        mossTranscribeBackend(this.params.backend);
         for (const key of Object.keys(this.params)) {
             if (!MOSS_CONFIG_KEYS.includes(key)) {
                 throw new error_1.QvacErrorAddonASRGgml({
@@ -185,6 +196,7 @@ class MossTranscribeDriver {
             modelPath: this._files.model || "",
             maxThreads: this.params.maxThreads ?? 0,
             useGPU: this.params.useGPU === true,
+            backend: mossTranscribeBackend(this.params.backend),
             backendsDir: this.params.backendsDir,
         };
     }

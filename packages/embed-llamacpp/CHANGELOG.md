@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.47.0] - 2026-10-14
+
+### Breaking
+
+- An explicit `backendsDir` is scanned as given. It is no longer a prebuilds
+  root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
+  the backends it ships, next to its runtime.
+- `resolveBackendsDir()` is removed.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.21.1`, whose platform
+  packages are now ordinary addons. This package declares them itself: the
+  desktop ones as `optionalDependencies`, and `@qvac/fabric-android-arm64` and
+  `@qvac/fabric-ios` as optional `peerDependencies`.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.21.1` together.
+
+## [0.46.1] - 2026-10-13
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
 ## [0.46.0] - 2026-10-09
 
 ### Added

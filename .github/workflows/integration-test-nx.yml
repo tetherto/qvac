@@ -362,6 +362,22 @@ jobs:
           Remove-Item -Recurse -Force package
           Remove-Item $TARBALL
 
+      # binding.js loads only `#host-addon`, the host's platform package. npm
+      # install resolves the optionalDependency pinned in git, which is the
+      # previously published platform package, so the prebuild staged above
+      # would never load. Packages that define `link:platform` wrap
+      # prebuilds/<host>/ as that package in node_modules. Same step as the
+      # asr-ggml and audiogen-ggml integration workflows.
+      - name: Stage the platform package
+        if: matrix.hasPrebuilds == true
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node -e 'const s=require("./package.json").scripts||{}; if(!s["link:platform"]) process.exit(1)'; then
+            npm run link:platform
+          fi
+
       # Windows Vulkan loader (options.ci.windowsVulkan) — set SDK env, optionally
       # add Bin to PATH and copy vulkan-1.dll next to the .bare so the loader resolves.
       - name: Stage Windows Vulkan loader

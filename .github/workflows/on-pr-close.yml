@@ -27,7 +27,7 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml vla"
+        default: "asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml turbovec-ggml vla"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
@@ -52,5 +52,5 @@ jobs:
       version: ${{ inputs.version }}
       pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages || 'asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml vla' }}
+      packages: ${{ inputs.packages || 'asr-ggml audiogen-ggml bci-whispercpp classification-ggml decoder-audio diffusion-cpp embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml tts-ggml turbovec-ggml vla' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
