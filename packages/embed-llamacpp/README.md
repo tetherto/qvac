@@ -52,7 +52,7 @@ are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
 
 **Dependencies:**
 - inference-addon-cpp (≥1.1.2): C++ addon framework
-- @qvac/fabric (^0.18.0): Shared llama.cpp/ggml inference engine. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as direct dependencies at the same exact version.
+- @qvac/fabric (^0.22.0): Shared llama.cpp/ggml inference engine. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as direct dependencies at the same exact version.
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 
@@ -400,7 +400,7 @@ A model the fitter cannot read resolves to `status: "error"`; only a broken requ
 ## Vector index
 
 The `IdMapIndex` vector index, including TurboVec storage, lives in
-[`@qvac/turbovec-ggml`](../turbovec-ggml/README.md). Pair it with `GGMLBert`
+[`@qvac/turbovec-ggml`](https://github.com/tetherto/qvac/tree/main/packages/turbovec-ggml). Pair it with `GGMLBert`
 embeddings for retrieval; see [RAG with TurboVec](./examples/ragWithTurboVec.js).
 
 ## Quickstart Example
@@ -427,8 +427,11 @@ npm run quickstart
 - [RAG with TurboVec](./examples/ragWithTurboVec.js) – Embeds document chunks, retrieves relevant context with `IdMapIndex` from `@qvac/turbovec-ggml`, and prepares it for an LLM.
 - [Laya Decisions](./examples/layaDecisions.js) – Answers `choice`, `score` and `noul` questions about a support ticket, then about several tickets in one call. Takes the path to a Laya GGUF: `bare examples/layaDecisions.js /path/to/laya-multilingual-Q8_0.gguf`.
 
-Run the TurboVec RAG retrieval example on a 64-bit desktop:
+Run the TurboVec RAG retrieval example on a 64-bit desktop. It imports
+`IdMapIndex` from `@qvac/turbovec-ggml`, a dev dependency here, so install it
+first when running the example outside this package's dev setup:
 ```bash
+npm install @qvac/turbovec-ggml
 bare examples/ragWithTurboVec.js
 ```
 
