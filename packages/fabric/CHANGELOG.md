@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.21.1] - 2026-10-14
+
+### Fixed
+
+- On macOS and iOS the runtime no longer re-exports the `js_*` functions its
+  JS binding imports from the host. 0.21.0 re-exported them with a flat
+  lookup, so a consumer linked against it bound them to the runtime, and dyld
+  failed to load that consumer (`re-export ordinal -2 ... out of range for
+  _js_create_function`). Consumers built against 0.21.0 must be rebuilt.
+
 ## [0.21.0] - 2026-10-14
 
 ### Breaking

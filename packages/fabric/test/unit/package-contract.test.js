@@ -20,6 +20,12 @@ function read(file) {
   return fs.readFileSync(path.join(packageRoot, file), 'utf8')
 }
 
+// ld64 `-exported_symbols_list` glob -> anchored RegExp (`*` and `?` only).
+function globToRegExp(glob) {
+  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  return new RegExp('^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
+}
+
 // Walk the conditional map the way Bare does: the first key that is `default`
 // or one of the host's platform/arch conditions wins, recursively.
 function importsTargetForHost(host) {
@@ -140,6 +146,24 @@ test('fabric exports its own C API on every platform', () => {
     read('CMakeLists.txt'),
     /install\(FILES include\/qvac-fabric\.h DESTINATION include\)/
   )
+})
+
+test('the Mach-O export list does not re-export host symbols', () => {
+  const imports = new Set()
+  for (const file of fs.readdirSync(path.join(packageRoot, 'addon'))) {
+    for (const [, name] of read(path.join('addon', file)).matchAll(/\b((?:js|napi)_\w+)\s*\(/g)) {
+      imports.add('_' + name)
+    }
+  }
+  assert.ok(imports.size > 0, 'no host imports found in addon/')
+  const patterns = read('exports.txt')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map(globToRegExp)
+  for (const name of imports) {
+    assert.ok(!patterns.some((pattern) => pattern.test(name)), name + ' matches an export pattern')
+  }
 })
 
 test('optionalDependencies are injected at publish, not declared in the source manifest', () => {
