@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`. A caret on a `0.x` version
+  locks the minor, so `^0.21.1` would not have resolved `0.22.0` on its own.
+  `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against the
+  0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
+
 ## [0.16.0] - 2026-10-14
 
 ### Breaking

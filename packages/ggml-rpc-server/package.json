@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ggml-rpc-server",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Managed ggml RPC server for QVAC LLM inference",
   "addon": true,
   "scripts": {
@@ -45,8 +45,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-rpc-server#readme",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.21.1",
-    "@qvac/fabric-ios": "0.21.1",
+    "@qvac/fabric-android-arm64": "0.22.0",
+    "@qvac/fabric-ios": "0.22.0",
     "@types/node": "^24.2.1",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.9.0",
@@ -62,20 +62,20 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.21.1",
+    "@qvac/fabric": "^0.22.0",
     "bare-net": "^2.3.2",
     "bare-path": "^3.0.0"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.21.1",
-    "@qvac/fabric-linux-arm64": "^0.21.1",
-    "@qvac/fabric-darwin-arm64": "^0.21.1",
-    "@qvac/fabric-darwin-x64": "^0.21.1",
-    "@qvac/fabric-win32-x64": "^0.21.1"
+    "@qvac/fabric-linux-x64": "^0.22.0",
+    "@qvac/fabric-linux-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-arm64": "^0.22.0",
+    "@qvac/fabric-darwin-x64": "^0.22.0",
+    "@qvac/fabric-win32-x64": "^0.22.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.21.1",
-    "@qvac/fabric-ios": "^0.21.1"
+    "@qvac/fabric-android-arm64": "^0.22.0",
+    "@qvac/fabric-ios": "^0.22.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {
