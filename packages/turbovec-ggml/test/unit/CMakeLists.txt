@@ -19,7 +19,7 @@ target_link_libraries(
     GTest::gtest_main
 )
 
-# Stage qvac__fabric@0.bare next to the binary, set the rpath, and link the
+# Stage qvac__fabric-<host>@0.bare next to the binary, set the rpath, and link the
 # win32 delay-load helper. See qvac-addon.cmake for the details.
 qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 
