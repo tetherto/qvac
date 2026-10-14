@@ -71,6 +71,7 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@qvac/asr-ggml@0.8.1'
+  - '@qvac/bci-whispercpp@0.11.2'
   - '@qvac/fabric-android-arm64@0.21.1'
   - '@qvac/fabric-ios@0.21.1'
   - '@qvac/fabric-darwin-arm64@0.21.1'
