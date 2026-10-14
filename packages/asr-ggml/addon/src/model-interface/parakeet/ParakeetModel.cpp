@@ -22,6 +22,7 @@
 #include "ggml.h"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
 
 namespace qvac::asrggml::parakeet {
 
@@ -295,17 +296,7 @@ pkt::EngineOptions ParakeetModel::buildEngineOptions(
   eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
   eopts.verbose = false;
   eopts.language = cfg.language;
-  // Compose the backends-scan dir from the host prebuilds root plus the
-  // cmake-bare per-target subdir (BACKENDS_SUBDIR). Empty -> ggml's default
-  // compile-time search path.
-  if (!cfg.backendsDir.empty()) {
-    fs::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath =
-        (backendsDirPath / fs::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    eopts.backends_dir = backendsDirPath.string();
-  }
+  eopts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Empty -> leave $GGML_OPENCL_CACHE_DIR alone (Android-only, read once).
   eopts.opencl_cache_dir = cfg.openclCacheDir;
   eopts.prewarm = cfg.prewarm;

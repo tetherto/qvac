@@ -349,13 +349,18 @@ addon — it installs a **prebuilt** one. Sources are tried in this order:
 on the phone", so setting **both is an error** — the run fails and tells you to
 clear one, rather than picking for you.
 
-Some addons publish their `@qvac` release as a JS-only meta package plus
-per-platform packages (`@qvac/<addon>-ios`, `@qvac/<addon>-android-arm64`). For
-those you will see the setup step resolve twice — the meta package, then the
-platform package its `#host-addon` map names, at the same version — and the second
-`Verified:` line names the package the binaries actually came from. Nothing
-changes about what you pass; the `@tetherto` dev builds are published unsliced
-and always resolve in one step.
+Split addons (`@qvac/fabric` and the speech addons) publish their `@qvac`
+release as a JS-only meta package plus per-platform packages (`@qvac/<addon>-ios`,
+`@qvac/<addon>-android-arm64`); the meta's `binding.js` is just
+`require('#host-addon')`. For those you will see the setup step resolve twice —
+the meta package, then the platform package its `#host-addon` map names, at the
+same version — and the second `Verified:` line names the package the binaries
+actually came from. Nothing changes about what you pass. The `@tetherto` dev
+builds are published unsliced and resolve in one step; the app build's "Install
+mobile platform packages" step then assembles the platform package from the
+meta's own `prebuilds/<host>/`, and npm-installs the ones the app's other
+dependencies (every fabric consumer needs `@qvac/fabric-<host>`) name at their
+meta's version.
 
 ### Testing unmerged / unpublished native code
 

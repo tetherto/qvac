@@ -137,7 +137,7 @@ graph TB
 | @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` helpers (composition, no base class) |
 | @qvac/logging | Framework | ^0.1.0 | `QvacLogger` wrapper and C++ log routing |
 | inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework |
-| @qvac/fabric | Native | ^0.18.0 | Shared llama.cpp/ggml inference engine + vector-index, dynamically linked as `qvac__fabric@0.bare` from the `@qvac/fabric-<host>` platform package |
+| @qvac/fabric | Native | ^0.18.0 | Shared llama.cpp/ggml inference engine + vector-index, dynamically linked as `qvac__fabric-<host>@0.bare` from the `@qvac/fabric-<host>` platform package |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution, `bare-fs`, `bare-path` |
 
 **Integration Points:**
