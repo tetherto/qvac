@@ -2,6 +2,11 @@ name: MOSS packaged addon GPU validation
 
 on:
   workflow_call:
+    secrets:
+      AWS_OIDC_ROLE_ARN:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
 
 permissions:
   contents: read
