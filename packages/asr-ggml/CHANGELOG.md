@@ -12,6 +12,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Changed
+
+- Align the shared native `speech-cpp` source pin to `2026-10-14` across
+  the speech addons so they use the same source revision.
+
 ## [0.9.0] - 2026-10-14
 
 ### Breaking

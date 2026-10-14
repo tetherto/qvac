@@ -14,7 +14,6 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-14",
       "default-features": false,
       "features": [
         "tts",
@@ -25,7 +24,6 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-14",
       "default-features": false,
       "features": [
         "tts",
@@ -36,7 +34,6 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-14",
       "default-features": false,
       "features": [
         "tts",
@@ -52,7 +49,6 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-10-14",
           "default-features": false,
           "features": [
             "cuda"
@@ -100,7 +96,6 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-10-14",
           "default-features": false,
           "features": [
             "vulkan"
