@@ -109,23 +109,14 @@ const sdkPackagePath = bundleSdkPath
   : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
 const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
-const packageFilter =
-  addons.length === 0
-    ? { name: 'qvac-kotlin-no-addons', version: '0.0.0', dependencies: {} }
-    : {
-        name: 'qvac-kotlin-addon-linker',
-        version: '0.0.0',
-        dependencies: Object.fromEntries(addons.map((name) => [name, '*']))
-      }
 
 const linkedResources = new Set()
 for await (const resource of link(
-  modulesRoot,
+  bundle.entryPaths.worker,
   {
     hosts: ['android-arm64'],
     out: addonsDirectory
-  },
-  packageFilter
+  }
 )) {
   linkedResources.add(path.resolve(String(resource)))
   console.log(`Linked ${resource}`)
