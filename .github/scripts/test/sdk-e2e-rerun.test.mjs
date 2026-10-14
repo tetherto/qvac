@@ -11,6 +11,7 @@ import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   actionScript,
+  actionStepRun,
   concurrencyGroup,
   evaluateExpression,
   extractBlockScalar,
@@ -33,7 +34,7 @@ const BASE_STATE = actionScript('sdk-e2e-base-state', 'Update base state')
 const RESOLVE_RERUN = actionScript('sdk-e2e-resolve-rerun', 'Resolve rerun plan')
 const VERIFY_RERUN = actionScript('sdk-e2e-verify-rerun', 'Verify planned tests actually ran')
 const APPLY_PLAN = workflowStepRun('test-sdk.yml', 'Apply rerun plan')
-const LEG_FILTER = workflowStepRun('test-node-sdk.yml', 'Resolve test filter for this platform')
+const LEG_FILTER = actionStepRun('sdk-e2e-node-leg', 'Resolve test filter for this platform')
 const RESOLVE_CONFIG = workflowStepRun('test-sdk.yml', 'Resolve configuration')
 
 const HEAD_SHA = 'cafe0000000000000000000000000000000000ba'
@@ -290,6 +291,8 @@ test('without a plan the run keeps every runner and the incoming filter', () => 
     plan: '', consumer: 'desktop', runner: 'qvac-macos26-arm64-gpu', baseFilter: 'completion-',
   })
   assert.equal(leg.filter, 'completion-')
+  // The platform key names the leg's artifacts (results-<family>-<platform>).
+  assert.equal(leg.platform, 'macos')
 })
 
 test('every reusable target still resolves', () => {
@@ -542,10 +545,13 @@ test('each kind of run gets its own concurrency group', () => {
 })
 
 test('every consumer family test-sdk.yml dispatches is handled by the report actions', () => {
+  // The shared node workflow takes its family from the caller; the Snap
+  // workflow spells its own.
   const consumers = [
     ...readRepoFile('.github/workflows/test-sdk.yml').matchAll(/^\s+consumer:\s*(\w+)\s*$/gm),
+    ...readRepoFile('.github/workflows/test-snap-sdk.yml').matchAll(/^\s+family:\s*(\w+)\s*$/gm),
   ].map((m) => m[1])
-  assert.ok(consumers.length >= 4, `expected consumer families, got ${consumers.join(', ')}`)
+  assert.ok(new Set(consumers).size >= 4, `expected consumer families, got ${consumers.join(', ')}`)
 
   // `report-finalize` resolves the artifact pattern from a case over the family.
   // A family it does not know exits 1, which reds the job and publishes no
