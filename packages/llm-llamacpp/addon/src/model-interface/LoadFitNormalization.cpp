@@ -1127,6 +1127,15 @@ NormalizedLoad normalizeLoadForFit(
   NormalizedLoad result;
   common_params& params = result.params;
 
+  // The native GGML threadpool busy-waits at Fabric's default polling level
+  // even when inference is GPU-offloaded. Default both pools to sleeping
+  // waits; callers can still opt back into polling with --poll and
+  // --poll-batch.
+  params.cpuparams.poll = 0;
+  params.cpuparams_batch.poll = 0;
+  const bool hasExplicitBatchPoll = configFilemap.contains("poll-batch") ||
+                                    configFilemap.contains("poll_batch");
+
   std::vector<std::string> configVector;
 
   // Check if tools are enabled and exclude it with jinja from the config file
@@ -1999,8 +2008,11 @@ NormalizedLoad normalizeLoadForFit(
         "ctx_size to the model's trained context unless set explicitly\n");
   }
 
+  const uint32_t parsedBatchPoll = params.cpuparams_batch.poll;
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
+  params.cpuparams_batch.poll =
+      hasExplicitBatchPoll ? parsedBatchPoll : params.cpuparams.poll;
 
   if (!params.kv_overrides.empty()) {
     params.kv_overrides.emplace_back();

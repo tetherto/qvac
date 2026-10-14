@@ -445,6 +445,47 @@ TEST_F(
   }
 }
 
+TEST_F(LoadFitNormalizationTest, DefaultsCpuPollingToZero) {
+  const auto result = lfn::normalizeLoadForFit(
+      "model.gguf",
+      baseConfig(),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.poll, 0U);
+  EXPECT_EQ(result.params.cpuparams_batch.poll, 0U);
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitPollOverridesBothPoolDefaults) {
+  auto config = baseConfig();
+  config["poll"] = "50";
+  const auto result = lfn::normalizeLoadForFit(
+      "model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.poll, 50U);
+  EXPECT_EQ(result.params.cpuparams_batch.poll, 50U);
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitBatchPollOverridesPrimaryPoll) {
+  auto config = baseConfig();
+  config["poll"] = "50";
+  config["poll-batch"] = "1";
+  const auto result = lfn::normalizeLoadForFit(
+      "model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.poll, 50U);
+  EXPECT_EQ(result.params.cpuparams_batch.poll, 1U);
+}
+
 TEST(CpuTensorBufferOverrideTest, RewritesOnlyTheParsedCpuBufferIdentity) {
   std::uint64_t parsedCpuMarker = 0;
   std::uint64_t otherMarker = 0;
