@@ -94,6 +94,8 @@ export const whisperPlugin = definePlugin({
                 modelId: request.modelId,
                 audioChunk: request.audioChunk,
                 prompt: request.prompt,
+                hotwords: request.hotwords,
+                maxNewTokens: request.maxNewTokens,
                 metadata: true
               },
               request.requestId
@@ -102,7 +104,9 @@ export const whisperPlugin = definePlugin({
               {
                 modelId: request.modelId,
                 audioChunk: request.audioChunk,
-                prompt: request.prompt
+                prompt: request.prompt,
+                hotwords: request.hotwords,
+                maxNewTokens: request.maxNewTokens
               },
               request.requestId
             )
