@@ -83,26 +83,26 @@ Add `@qvac/fabric` and its platform packages to the consumer's `package.json`:
 ```json
 {
   "dependencies": {
-    "@qvac/fabric": "^0.21.0"
+    "@qvac/fabric": "^0.21.1"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.21.0",
-    "@qvac/fabric-linux-arm64": "^0.21.0",
-    "@qvac/fabric-darwin-arm64": "^0.21.0",
-    "@qvac/fabric-darwin-x64": "^0.21.0",
-    "@qvac/fabric-win32-x64": "^0.21.0"
+    "@qvac/fabric-linux-x64": "^0.21.1",
+    "@qvac/fabric-linux-arm64": "^0.21.1",
+    "@qvac/fabric-darwin-arm64": "^0.21.1",
+    "@qvac/fabric-darwin-x64": "^0.21.1",
+    "@qvac/fabric-win32-x64": "^0.21.1"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.21.0",
-    "@qvac/fabric-ios": "^0.21.0"
+    "@qvac/fabric-android-arm64": "^0.21.1",
+    "@qvac/fabric-ios": "^0.21.1"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": { "optional": true },
     "@qvac/fabric-ios": { "optional": true }
   },
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.21.0",
-    "@qvac/fabric-ios": "0.21.0",
+    "@qvac/fabric-android-arm64": "0.21.1",
+    "@qvac/fabric-ios": "0.21.1",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0"
   }
