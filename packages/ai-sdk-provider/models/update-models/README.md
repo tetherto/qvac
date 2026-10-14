@@ -58,7 +58,7 @@ The companion file at `models/history/<short-sha>.txt` records what the regenera
 ### Models that get skipped
 
 - `addon: 'vad'` and `addon: 'other'` have no endpoint in the OpenAI HTTP surface, so the codegen filters them out (logged with `⏭️ Skipped …`). They still exist in the P2P registry and remain reachable via `@qvac/sdk` directly.
-- Models flagged as `isCompanionOnly` (e.g. ONNX `_data` files, Bergamot vocab / lex / metadata pairs) are emitted in `allModels` for completeness but don't get a top-level named export — the primary file in the companion set owns the export.
+- Models flagged as `isCompanionOnly` (e.g. ONNX `_data` files, Bergamot vocab / lex / metadata pairs, Parakeet Core ML bundle components) are emitted in `allModels` for completeness but don't get a top-level named export — the primary file in the companion set owns the export.
 
 ## How it relates to the SDK's codegen
 

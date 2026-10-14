@@ -163,6 +163,10 @@
     "./ggml-rpc-server/provider": {
       "types": "./dist/src/worker/ggml-rpc-server-provider.d.ts",
       "import": "./dist/src/worker/ggml-rpc-server-provider.js"
+    },
+    "./moss-transcribe/plugin": {
+      "types": "./dist/src/worker/plugins/moss-transcribe.d.ts",
+      "import": "./dist/src/worker/plugins/moss-transcribe.js"
     }
   },
   "imports": {
