@@ -145,3 +145,31 @@ describe('timed transcription response formatting', () => {
     })
   })
 })
+
+it('Nemotron verbose JSON preserves overlapping speaker turns and their duration', () => {
+  const speakerSegments = Array.from({ length: 8 }, (_, speakerId) => ({
+    speakerId,
+    startMs: 250,
+    endMs: 1750
+  }))
+  const result = formatTimedTranscription('verbose_json', [
+    { id: 0, text: 'Speaker activity', startMs: 0, endMs: 0, append: false, speakerSegments }
+  ])
+  assert.deepEqual(result.body, {
+    text: 'Speaker activity',
+    duration: 1.75,
+    segments: [
+      {
+        id: 0,
+        start: 0,
+        end: 0,
+        text: 'Speaker activity',
+        speaker_segments: speakerSegments.map((turn) => ({
+          speaker_id: turn.speakerId,
+          start: 0.25,
+          end: 1.75
+        }))
+      }
+    ]
+  })
+})
