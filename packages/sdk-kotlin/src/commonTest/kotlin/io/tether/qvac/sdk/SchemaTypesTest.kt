@@ -54,6 +54,16 @@ class SchemaTypesTest {
     }
 
     @Test
+    fun optionalConstFieldDecodesAsAbsentWhenOmitted() {
+        val done = json.decodeFromString<CompletionOrchestrateResponse>("""{"type":"completionOrchestrate","done":true}""")
+        assertNull(done.stopReason)
+        val limited = json.decodeFromString<CompletionOrchestrateResponse>(
+            """{"type":"completionOrchestrate","done":true,"stopReason":"maxToolTurns"}""",
+        )
+        assertEquals("maxToolTurns", limited.stopReason)
+    }
+
+    @Test
     fun fieldPresenceUnionRoundTrips() {
         val value = json.decodeFromString<DeleteCacheRequest>("""{"type":"deleteCache","all":true}""")
         assertEquals(true, json.encodeToJsonElement<DeleteCacheRequest>(value).jsonObject.getValue("all").jsonPrimitive.boolean)
