@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetRuntimeConfigSchema } from '@/schemas/transcription-config'
+import {
+  whisperConfigSchema,
+  parakeetRuntimeConfigSchema,
+  mossTranscribeConfigSchema
+} from '@/schemas/transcription-config'
 import { bciConfigSchema } from '@/schemas/bci-config'
 import { nmtConfigBaseSchema } from '@/schemas/translation-config'
 import { ttsLoadConfigSchema } from '@/schemas/text-to-speech'
@@ -31,6 +35,7 @@ export const MODEL_CONFIG_SCHEMA_BY_TYPE = {
   [ModelType.nmtcppTranslation]: nmtConfigBaseSchema,
   [ModelType.ttsGgml]: ttsLoadConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema,
+  [ModelType.mossTranscribe]: mossTranscribeConfigSchema,
   [ModelType.ggmlOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,
   [ModelType.audiogenGgml]: audioGenConfigSchema,

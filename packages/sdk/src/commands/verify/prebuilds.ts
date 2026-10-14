@@ -96,6 +96,17 @@ export async function resolvePrebuildLocations(
   ) {
     location.mismatchedVersion = installedVersion
   }
+  if (addonRoot !== platformRoot) {
+    const nestedVersion = (await readPackageManifest(addonRoot))?.version
+    if (
+      location.mismatchedVersion === undefined &&
+      addon.version !== undefined &&
+      nestedVersion !== undefined &&
+      nestedVersion !== addon.version
+    ) {
+      location.mismatchedVersion = nestedVersion
+    }
+  }
   return [location]
 }
 
