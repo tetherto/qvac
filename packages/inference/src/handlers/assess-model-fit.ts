@@ -245,6 +245,7 @@ async function resolveNativeFit(
   const outcome = await projectFitFromLoad(
     {
       modelType,
+      ...(candidate.ttsWorkload !== undefined && { ttsWorkload: candidate.ttsWorkload }),
       ...(candidate.modelSrc !== undefined && { modelSrc: candidate.modelSrc }),
       ...(candidate.modelConfig !== undefined && { modelConfig: candidate.modelConfig })
     },

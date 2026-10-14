@@ -15,20 +15,6 @@
 #include <thread>
 #include <utility>
 
-#if defined(__ANDROID__) || defined(__linux__)
-#include <dlfcn.h>
-#elif defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <array>
-
-#include <windows.h>
-#endif
-
 #include <ggml-backend.h>
 
 #include "WhisperConfig.hpp"
@@ -36,6 +22,7 @@
 #include "addon/AsrErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/ModuleBackendsDir.hpp"
 #include "model-interface/WhisperGpuSelection.hpp"
 #include "model-interface/WhisperTypes.hpp"
 
@@ -136,125 +123,30 @@ auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
 }
 
 #if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
-namespace {
-// Join a prebuilds root with the cmake-bare per-target module subdir
-// (BACKENDS_SUBDIR == "<bare_target>/<module_name>", set in CMakeLists) to get
-// the directory the ggml-speech port staged the runtime-loadable CPU/GPU
-// modules into.
-std::filesystem::path joinBackendsSubdir(const std::filesystem::path& root) {
-#ifdef BACKENDS_SUBDIR
-  return (root / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#else
-  return root;
-#endif
-}
-
-// Resolve the addon's own on-disk path from a symbol inside it: dladdr on
-// POSIX, GetModuleHandleEx(FROM_ADDRESS) on Windows. Both resolve to this
-// addon rather than the host because bare loads addons as their own modules
-// (RTLD_LOCAL on POSIX; mirrors inference-addon-cpp's Pin.hpp). Returns an
-// empty path when the addon can't be located.
-std::filesystem::path addonModulePath() {
-#if defined(_WIN32)
-  HMODULE module = nullptr;
-  // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
-  const auto* selfSymbol = reinterpret_cast<LPCSTR>(&addonModulePath);
-  // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
-  if (GetModuleHandleExA(
-          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-          selfSymbol,
-          &module) == 0 ||
-      module == nullptr) {
-    return {};
-  }
-  std::array<char, MAX_PATH> moduleFileName{};
-  const DWORD length = GetModuleFileNameA(
-      module, moduleFileName.data(), static_cast<DWORD>(moduleFileName.size()));
-  if (length == 0 || length >= moduleFileName.size()) {
-    return {};
-  }
-  return std::filesystem::path(std::string(moduleFileName.data(), length));
-#else
-  Dl_info info{};
-  // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
-  const void* selfSymbol = reinterpret_cast<const void*>(&addonModulePath);
-  // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
-  if (dladdr(selfSymbol, &info) == 0 || info.dli_fname == nullptr) {
-    return {};
-  }
-  return std::filesystem::path(info.dli_fname);
-#endif
-}
-
-// Resolve the prebuilds root from the addon's own on-disk location, so a caller
-// that omits configurationParams.backendsDir (e.g. a direct WhisperInterface
-// consumer) still finds the sibling backends. The addon binary lives at
-// <prebuilds>/<bare_target>/<module_name>.bare and the backends install under
-// <prebuilds>/BACKENDS_SUBDIR (== <bare_target>/<module_name>), so the
-// prebuilds root is the addon's grandparent directory. Returns an empty path
-// when the addon can't be located.
-std::filesystem::path prebuildsDirFromAddonLocation() {
-  const std::filesystem::path addonPath = addonModulePath();
-  if (addonPath.empty()) {
-    return {};
-  }
-  std::error_code ec;
-  const std::filesystem::path prebuildsDir =
-      addonPath.parent_path().parent_path();
-  if (prebuildsDir.empty() || !std::filesystem::exists(prebuildsDir, ec)) {
-    return {};
-  }
-  return prebuildsDir;
-}
-
-void loadBackendsFromRoot(const std::filesystem::path& root) {
-  const std::filesystem::path variantsDir = joinBackendsSubdir(root);
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-      std::string("loading ggml backends from: ") + variantsDir.string());
-  ggml_backend_load_all_from_path(variantsDir.string().c_str());
-}
-
-} // namespace
-
 // Android, desktop linux-arm64, and CUDA-enabled linux-x64 / win32-x64
 // builds ship ggml with `GGML_BACKEND_DL=ON`, so no backend is statically
 // registered. Load the per-arch CPU + GPU modules once per process before
 // whisper_init; otherwise it aborts on a NULL CPU device. On static builds
 // the scan finds no modules and the statically registered backends stay in
-// charge, so calling this unconditionally is safe. Prefer the
-// runtime-supplied backendsDir; when it is omitted, self-locate the addon's
-// own prebuilds dir before falling back to ggml_backend_load_all() (whose
-// default search path scans the host executable's dir, not the addon's, so
-// it misses the renamed `qvac-speech-ggml-*` modules).
-// Mirrors packages/{diffusion-cpp,llm-llamacpp,classification-ggml,…}.
+// charge, so calling this unconditionally is safe. A configured backendsDir
+// is scanned as given; otherwise the addon's own backends directory.
 void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
-    if (!backendsDir.empty()) {
-      loadBackendsFromRoot(std::filesystem::path(backendsDir));
-      return;
-    }
-    const std::filesystem::path selfLocatedRoot =
-        prebuildsDirFromAddonLocation();
-    std::error_code ec;
-    if (!selfLocatedRoot.empty() &&
-        std::filesystem::exists(joinBackendsSubdir(selfLocatedRoot), ec)) {
+    const std::filesystem::path dir = resolveBackendsDir(backendsDir);
+    if (dir.empty()) {
       QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "configurationParams.backendsDir not set; using addon-relative "
-          "prebuilds dir.");
-      loadBackendsFromRoot(selfLocatedRoot);
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "the addon could not locate itself; falling back to "
+          "ggml_backend_load_all() (default search path), which misses the "
+          "renamed qvac-speech-ggml-* modules.");
+      ggml_backend_load_all();
       return;
     }
     QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "configurationParams.backendsDir not set and the addon could not "
-        "locate its own prebuilds dir; falling back to "
-        "ggml_backend_load_all() (default search path). CPU/Vulkan/OpenCL "
-        "registration may fail inside an APK.");
-    ggml_backend_load_all();
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        std::string("loading ggml backends from: ") + dir.string());
+    ggml_backend_load_all_from_path(dir.string().c_str());
   });
 }
 #endif // __ANDROID__ || __linux__ || _WIN32
