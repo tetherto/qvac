@@ -1,6 +1,6 @@
 package io.tether.qvac.sdk
 
-import io.tether.qvac.sdk.generated.PluginInvokeRequest
+import io.tether.qvac.sdk.generated.schema.PluginInvokeRequest
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.floor
@@ -155,7 +155,6 @@ class QvacVla internal constructor(private val client: QvacClient) {
                 handler = handler,
                 modelId = modelId,
                 params = params,
-                type = "pluginInvoke",
             ),
         ).result
 }
