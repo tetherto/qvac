@@ -38,16 +38,15 @@ export interface EmbedFitResult {
  * and never weight data. The registry's weightless copy of a model answers the
  * same as the model itself, so this can run before anything is downloaded.
  *
- * A model the fitter cannot read comes back as `status: "error"`; only a broken
- * request throws.
+ * A model the fitter cannot read resolves to `status: "error"`; only a broken
+ * request rejects.
  *
- * Runs synchronously on the calling thread and builds the model twice without
- * allocating weights, so a caller that must stay responsive runs it off its
- * own loop.
+ * Builds the model twice without allocating weights. Concurrent calls run one
+ * at a time.
  *
  * The projection reads the model's vocabulary, and llama asserts on a
  * vocabulary it finds inconsistent. An assert aborts rather than throwing, so
  * a corrupt file ends the process instead of returning a status: take the
  * model from a source you trust, or call this behind a process boundary.
  */
-export declare function assessFit(request: EmbedFitRequest): EmbedFitResult;
+export declare function assessFit(request: EmbedFitRequest): Promise<EmbedFitResult>;

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "@qvac/sdk wire contract",
-  "description": "Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
+  "description": "Generated from the SDK Zod schemas by `npm run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
   "$defs": {
     "request": {
       "title": "AnyRequest",
@@ -2302,7 +2302,14 @@
                     },
                     "content": {
                       "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
-                      "type": ["string", "null"]
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "attachments": {
                       "description": "Optional file attachments for multimodal models.",
@@ -2566,7 +2573,20 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": ["string", "number", "boolean", "null"]
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -3742,7 +3762,14 @@
               },
               "content": {
                 "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
-                "type": ["string", "null"]
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -3895,7 +3922,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -4422,7 +4462,14 @@
               },
               "content": {
                 "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
-                "type": ["string", "null"]
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -4575,7 +4622,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -10903,6 +10963,16 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "backend": {
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem"
+                      }
+                    },
                     "ctx_size": {
                       "description": "Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
                       "type": "number"
@@ -12319,6 +12389,16 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "backend": {
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem"
+                      }
+                    },
                     "gpuLayers": {
                       "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
                       "type": "integer",
@@ -16633,7 +16713,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video", "world"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -16747,7 +16827,14 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "type": ["number", "string"]
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -17444,7 +17531,7 @@
                       ]
                     },
                     "clipVisionModelSrc": {
-                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no CLIP-vision projection).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -17540,7 +17627,7 @@
                       ]
                     },
                     "audioVaeModelSrc": {
-                      "description": "Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent LTX-2 video; unsupported by Wan.",
+                      "description": "Audio VAE decoder model — optional for MiniMax-H3 and LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent video; unsupported by Wan.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -17975,7 +18062,14 @@
                         },
                         "maxVram": {
                           "description": "VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
-                          "type": ["number", "string"]
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
                         },
                         "streamLayers": {
                           "description": "Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -18940,10 +19034,24 @@
                   "type": "object",
                   "properties": {
                     "backend": {
-                      "description": "Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
-                      "type": "string",
-                      "enum": ["auto", "cpu"],
-                      "title": "LoadModelSrcRequestGgmlVlaModelConfigBackend"
+                      "description": "Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. Names are tried in order; if none has an accepted device, selection falls back to the native default order. ['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "cpu",
+                          "cuda",
+                          "vulkan",
+                          "metal",
+                          "opencl",
+                          "hip",
+                          "rocm",
+                          "sycl"
+                        ],
+                        "title": "LoadModelSrcRequestGgmlVlaModelConfigBackendItem"
+                      }
                     },
                     "verbosity": {
                       "description": "Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",

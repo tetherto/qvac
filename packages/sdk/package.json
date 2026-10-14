@@ -195,7 +195,7 @@
     "docs/system-resources-support-matrix.md"
   ],
   "scripts": {
-    "test:unit": "bun run scripts/run-unit-tests.ts",
+    "test:unit": "tsx scripts/run-unit-tests.ts",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "lint": "lunte && npm run enforce-inference-versions",
@@ -204,14 +204,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
-    "build:pack": "bun run build && bun pm pack --destination dist/",
-    "sdk-source:workspace": "bun run ./scripts/link-workspace-inference.ts",
-    "watch": "nodemon --watch src --ext ts --exec 'bun run build'",
+    "build:pack": "npm run build && npm pack --ignore-scripts --pack-destination dist/",
+    "sdk-source:workspace": "node ./scripts/link-workspace-inference.mjs",
+    "watch": "nodemon --watch src --ext ts --exec 'npm run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds:asr": "cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-ia32 && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-arm && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-x64",
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
-    "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:asr && bun run bare:ensureprebuilds:embeddings",
-    "prepare:husky": "bun run husky",
+    "bare:ensureprebuilds": "npm run bare:ensureprebuilds:llamacpp && npm run bare:ensureprebuilds:asr && npm run bare:ensureprebuilds:embeddings",
+    "prepare:husky": "husky",
     "contract:export": "tsx ./scripts/export-contract.ts",
     "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
@@ -224,7 +224,7 @@
     "@qvac/bci-whispercpp": "^0.11.0",
     "@qvac/classification-ggml": "^0.29.0",
     "@qvac/decoder-audio": "^0.8.0",
-    "@qvac/diffusion-cpp": "^0.26.0",
+    "@qvac/diffusion-cpp": "^0.28.0",
     "@qvac/embed-llamacpp": "^0.46.0",
     "@qvac/error": "^0.1.1",
     "@qvac/ggml-rpc-server": "^0.2.0",
@@ -261,7 +261,7 @@
     "semver": "^7.8.0",
     "tar-stream": "^3.1.8",
     "which-runtime": "^1.3.2",
-    "zod": "^4.3.0",
+    "zod": "4.6.5",
     "bare-buffer": "^3.4.2"
   },
   "devDependencies": {
@@ -339,6 +339,5 @@
     "tar": "^7.5.22",
     "shell-quote": "^1.10.0",
     "@electron/rebuild": "^4.2.0"
-  },
-  "patchedDependencies": {}
+  }
 }

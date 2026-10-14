@@ -5,15 +5,15 @@
  * The server provides tools to search the web and get answers.
  *
  * Prerequisites:
- * - Install MCP SDK: bun add @modelcontextprotocol/sdk
+ * - Install MCP SDK: npm install @modelcontextprotocol/sdk
  *
- * Run with: bun run examples/mcp-websearch.ts
+ * Run with: npx tsx examples/mcp-websearch.ts
  */
 
 import { completion, loadModel, unloadModel, QWEN3_1_7B_INST_Q4 } from '@/index'
 
 // MCP SDK is a user-installed optional dependency
-// Install with: bun add @modelcontextprotocol/sdk
+// Install with: npm install @modelcontextprotocol/sdk
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 

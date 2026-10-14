@@ -8,6 +8,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <inference-addon-cpp/JsInterface.hpp>
@@ -106,8 +107,10 @@ struct JsTranscriptArrayOutputHandler
 // the file itself or the registry's weightless description of it; with no
 // embedder path the embedder is read beside the model, as a load reads it.
 //
-// Takes no instance and loads nothing. A model or embedder that cannot be
-// read is an "error" status carrying the reason, never a throw.
+// Takes no instance and loads nothing. Returns a Promise: the request is read
+// on the JS thread, the projection runs on a worker thread, and the result is
+// built back on the JS thread. A model or embedder that cannot be read
+// resolves to an "error" status carrying the reason.
 
 constexpr const char* K_FIT_STATUS_FITS = "fits";
 constexpr const char* K_FIT_STATUS_DOES_NOT_FIT = "does-not-fit";
@@ -171,6 +174,17 @@ struct BciFit {
   }
 };
 
+struct FitRequest {
+  std::string modelPath;
+  std::string embedderPath;
+  std::string backendsDir;
+  std::optional<double> gpuLayers;
+  std::optional<double> gpuDevice;
+  std::optional<double> decoders;
+  std::optional<double> audioSeconds;
+  std::optional<double> marginBytes;
+};
+
 inline std::optional<double>
 fitCount(js_env_t* env, js::Object request, const char* name) {
   auto value = request.getOptionalProperty<js::Number>(env, name);
@@ -187,31 +201,48 @@ fitCount(js_env_t* env, js::Object request, const char* name) {
   return raw;
 }
 
-inline void applyFitWorkload(
-    js_env_t* env, js::Object request, whisper_fit_options& options) {
-  if (auto layers = fitCount(env, request, "gpuLayers")) {
-    options.use_gpu = *layers > 0;
-  }
-  if (auto device = fitCount(env, request, "gpuDevice")) {
-    options.gpu_device = static_cast<int>(*device);
-  }
-  if (auto decoders = fitCount(env, request, "decoders")) {
-    options.n_decoders = static_cast<int>(*decoders);
-  }
-  if (auto seconds = fitCount(env, request, "audioSeconds")) {
-    options.audio_seconds = static_cast<float>(*seconds);
-  }
-  if (auto margin = fitCount(env, request, "marginBytes")) {
-    options.margin_bytes = static_cast<uint64_t>(*margin);
-  }
+inline std::string
+fitOptionalString(js_env_t* env, js::Object request, const char* name) {
+  auto value = request.getOptionalProperty<js::String>(env, name);
+  return value.has_value() ? value->as<std::string>(env) : std::string();
 }
 
-inline std::string fitEmbedderPath(
-    js_env_t* env, js::Object request, const std::string& modelPath) {
-  auto embedder = request.getOptionalProperty<js::String>(env, "embedderPath");
-  const std::string named =
-      embedder.has_value() ? embedder->as<std::string>(env) : std::string();
-  return named.empty() ? colocatedEmbedderPath(modelPath) : named;
+inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+
+  FitRequest parsed;
+  parsed.modelPath =
+      request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  parsed.embedderPath = fitOptionalString(env, request, "embedderPath");
+  parsed.backendsDir = fitOptionalString(env, request, "backendsDir");
+  parsed.gpuLayers = fitCount(env, request, "gpuLayers");
+  parsed.gpuDevice = fitCount(env, request, "gpuDevice");
+  parsed.decoders = fitCount(env, request, "decoders");
+  parsed.audioSeconds = fitCount(env, request, "audioSeconds");
+  parsed.marginBytes = fitCount(env, request, "marginBytes");
+  return parsed;
+}
+
+inline void
+applyFitWorkload(const FitRequest& request, whisper_fit_options& options) {
+  if (request.gpuLayers.has_value()) {
+    options.use_gpu = *request.gpuLayers > 0;
+  }
+  if (request.gpuDevice.has_value()) {
+    options.gpu_device = static_cast<int>(*request.gpuDevice);
+  }
+  if (request.decoders.has_value()) {
+    options.n_decoders = static_cast<int>(*request.decoders);
+  }
+  if (request.audioSeconds.has_value()) {
+    options.audio_seconds = static_cast<float>(*request.audioSeconds);
+  }
+  if (request.marginBytes.has_value()) {
+    options.margin_bytes = static_cast<uint64_t>(*request.marginBytes);
+  }
 }
 
 inline void measureFitEmbedder(const std::string& embedderPath, BciFit& fit) {
@@ -254,35 +285,40 @@ inline js_value_t* fitResultObject(js_env_t* env, const BciFit& fit) {
   return result;
 }
 
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  auto request = args.getJsObject(0, "request");
-
-  const std::string modelPath =
-      request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+// Runs on the fit worker thread, so it makes no js_* call. It reads only the
+// owned request and ggml's device registry, which lives for the whole process,
+// so no instance unload can free state underneath it. Fits run one at a time:
+// each initializes the resolved device's backends and ggml's global timer.
+inline BciFit runFit(const FitRequest& request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
 
   // whisper_fit_params reads ggml's global device registry and loads nothing
   // itself, so whatever is registered here is its whole view of the machine.
 #if defined(__ANDROID__) || defined(__linux__)
-  auto backendsDir =
-      request.getOptionalProperty<js::String>(env, "backendsDir");
-  ensureBackendsLoaded(
-      backendsDir.has_value() ? backendsDir->as<std::string>(env)
-                              : std::string());
+  ensureBackendsLoaded(request.backendsDir);
 #endif
 
   whisper_fit_options options = whisper_fit_default_options();
-  options.model_path = modelPath.c_str();
-  applyFitWorkload(env, request, options);
+  options.model_path = request.modelPath.c_str();
+  applyFitWorkload(request, options);
 
   BciFit fit;
   fit.marginBytes = options.margin_bytes;
   whisper_fit_params(&options, &fit.whisper);
-  measureFitEmbedder(fitEmbedderPath(env, request, modelPath), fit);
+  measureFitEmbedder(
+      request.embedderPath.empty() ? colocatedEmbedderPath(request.modelPath)
+                                   : request.embedderPath,
+      fit);
+  return fit;
+}
 
-  return fitResultObject(env, fit);
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  FitRequest request = parseFitRequest(env, info);
+  return js::JsAsyncTask::run(
+      env,
+      [request = std::move(request)]() { return runFit(request); },
+      fitResultObject);
 }
 JSCATCH
 

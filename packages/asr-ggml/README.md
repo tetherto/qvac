@@ -505,10 +505,12 @@ Engine-specific segment fields:
 
 `assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The registry publishes a weightless copy of each model, and passing it answers the same as passing the model itself, so the projection can run before the model is downloaded: for parakeet a GGUF without its data, for whisper and its Silero VAD model a GGUF description of the `.bin` (its settings, vocabulary sizes and tensor list, tens of KB). It is a module export, not an instance method — nothing is loaded to call it.
 
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read resolves with `status: 'error'`; only a broken request rejects.
+
 ```js
 const ASRGgml = require('@qvac/asr-ggml')
 
-const fit = ASRGgml.assessFit({
+const fit = await ASRGgml.assessFit({
   engine: 'whisper',
   modelPath: '/models/whisper.bin',
   vadModelPath: '/models/silero-vad.bin',
@@ -544,7 +546,7 @@ fit.report
 MOSS-Transcribe-Diarize uses an explicit duration and the same per-call options as `run`:
 
 ```js
-const fit = ASRGgml.assessFit({
+const fit = await ASRGgml.assessFit({
   engine: 'moss-transcribe',
   modelPath: '/models/moss-transcribe-diarize-q8_0.gguf',
   audioSeconds: 90,
