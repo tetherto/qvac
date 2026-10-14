@@ -26,8 +26,12 @@ permissions:
   contents: read
   packages: read
 
+# Literal prefix, not github.workflow: under workflow_call that resolves to the
+# caller's name, so every workflow Merge Guard calls would share one group and
+# cancel each other. event_name keeps the direct pull_request run and the Merge
+# Guard (pull_request_target) call in separate groups.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: pr-checks-sdk-kotlin-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
