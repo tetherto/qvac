@@ -141,6 +141,10 @@
     "./ggml-rpc-server/provider": {
       "types": "./dist/rpc/ggml-provider.d.ts",
       "import": "./dist/rpc/ggml-provider.js"
+    },
+    "./moss-transcribe/plugin": {
+      "types": "./dist/plugins/builtin/moss-transcribe/plugin.d.ts",
+      "import": "./dist/plugins/builtin/moss-transcribe/plugin.js"
     }
   },
   "files": [
@@ -214,7 +218,7 @@
     "@qvac/ocr-ggml": "^0.27.1",
     "@qvac/translation-nmtcpp": "^0.19.0",
     "@qvac/tts-ggml": "^0.11.0",
-    "@qvac/vla-ggml": "^0.30.0",
+    "@qvac/vla-ggml": "^0.31.0",
     "@qvac/ggml-rpc-server": "^0.2.0"
   },
   "peerDependenciesMeta": {
@@ -274,7 +278,7 @@
     "@qvac/ocr-ggml": "^0.27.1",
     "@qvac/translation-nmtcpp": "^0.19.0",
     "@qvac/tts-ggml": "^0.11.0",
-    "@qvac/vla-ggml": "^0.30.0",
+    "@qvac/vla-ggml": "^0.31.0",
     "@types/brittle": "^3.5.0",
     "bare": "1.34.1 || >=1.35.1",
     "bare-console": "*",

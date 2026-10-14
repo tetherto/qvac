@@ -1,6 +1,9 @@
 @PACKAGE_INIT@
 
 include("${CMAKE_CURRENT_LIST_DIR}/qvac-fabricTargets.cmake")
+# qvac_fabric_platform_suffix / _platform_package / _module_name: the host ->
+# platform package mapping, the same for every host, so it can live here.
+include("${CMAKE_CURRENT_LIST_DIR}/qvac-fabric-hosts.cmake")
 
 # Nothing platform-dependent belongs in this file. It installs to
 # share/qvac-fabric/cmake, which every prebuild leg writes and the artifact

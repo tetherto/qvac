@@ -1,6 +1,7 @@
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import fs from 'bare-fs'
 
-import type { ModelSrcInput } from '@/schemas/index'
+import type { ModelSrcInput, TranscriptionFitWorkload } from '@/schemas/index'
 import type { CanonicalModelType } from '@/schemas/index'
 import type { ResolveContext } from '@/schemas/plugin'
 import { getPlugin } from '@/plugins/registry'
@@ -18,6 +19,8 @@ import {
 } from '@/resources/model-fit/fit-stub/fetch-fit-stub'
 
 export interface LoadDescription {
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
+  ttsWorkload?: TtsFitWorkload | undefined
   /** Absent for the loads `loadModel` also takes without one. */
   modelSrc?: ModelSrcInput | undefined
   modelType: CanonicalModelType

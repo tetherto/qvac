@@ -7,6 +7,8 @@ export interface ParakeetConfigurationParams {
     modelPath?: string;
     maxThreads?: number;
     useGPU?: boolean;
+    /** MOSS native backend selector. */
+    backend?: string;
     sampleRate?: number;
     channels?: number;
     captionEnabled?: boolean;
@@ -124,7 +126,6 @@ export declare class ParakeetInterface {
     private _bufferedBytes;
     private _config;
     constructor(binding: ParakeetBinding, configurationParams: ParakeetConfigurationParams, outputCallback: ParakeetOutputCallback, stateCallback?: ParakeetStateCallback | null);
-    private _applyDefaults;
     private _setState;
     private _createNativeInstance;
     private _looksLikeVadEvent;

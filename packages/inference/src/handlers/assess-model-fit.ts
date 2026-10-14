@@ -58,6 +58,7 @@ function modelTypeOf(candidate: ModelFitCandidate): string {
 
 /** The audio engines, whose estimator sizes a load by its window rather than a context. */
 const AUDIO_ENGINES: readonly string[] = [
+  ModelType.mossTranscribe,
   'whispercpp-transcription',
   'parakeet-transcription',
   'bci-whispercpp-transcription'
@@ -92,6 +93,7 @@ function audiogenUsesGpu(config: Record<string, unknown>): boolean {
  * so a projection and a device never disagree. Only bci defaults to on.
  */
 const GPU_SWITCH: Record<string, (config: Record<string, unknown>) => boolean> = {
+  [ModelType.mossTranscribe]: (config) => config['useGPU'] === true,
   [ModelType.ttsGgml]: (config) => config['useGPU'] === true,
   [ModelType.audiogenGgml]: audiogenUsesGpu,
   [ModelType.parakeetTranscription]: (config) => config['useGPU'] === true,
@@ -205,6 +207,12 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
   const contextTokens = config['ctx_size']
   const artifacts = companionRefs(config)
   const device = resolvedDevice(modelType, config)
+  const windowMs =
+    modelType === ModelType.mossTranscribe
+      ? candidate.transcriptionWorkload === undefined
+        ? undefined
+        : candidate.transcriptionWorkload.audioSeconds * 1000
+      : audioWindowMs(config)
 
   return {
     model: {
@@ -220,7 +228,7 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
     workload: AUDIO_ENGINES.includes(modelType)
       ? {
           kind: 'audio',
-          windowMs: audioWindowMs(config),
+          ...(windowMs !== undefined && { windowMs }),
           streaming: config['streaming'] === true
         }
       : {
@@ -245,6 +253,10 @@ async function resolveNativeFit(
   const outcome = await projectFitFromLoad(
     {
       modelType,
+      ...(candidate.transcriptionWorkload !== undefined && {
+        transcriptionWorkload: candidate.transcriptionWorkload
+      }),
+      ...(candidate.ttsWorkload !== undefined && { ttsWorkload: candidate.ttsWorkload }),
       ...(candidate.modelSrc !== undefined && { modelSrc: candidate.modelSrc }),
       ...(candidate.modelConfig !== undefined && { modelConfig: candidate.modelConfig })
     },

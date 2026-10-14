@@ -1,8 +1,14 @@
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import type { AbortSignal } from 'bare-abort-controller'
 
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
-import type { CanonicalModelType, NativeProbeFit, NativeProbeVerdict } from '@/schemas/index'
+import type {
+  CanonicalModelType,
+  NativeProbeFit,
+  NativeProbeVerdict,
+  TranscriptionFitWorkload
+} from '@/schemas/index'
 import { classifyFit } from '@/resources/model-fit/native-probe/classify-fit'
 import { createFitRequest } from '@/resources/model-fit/native-probe/create-fit-request'
 import { runFit as runFitDefault } from '@/resources/model-fit/native-probe/run-fit'
@@ -46,6 +52,8 @@ export type AdvisoryFitVerdict = NativeProbeVerdict
 export type AdvisoryFitOutcome = NativeProbeFit
 
 export interface AdvisoryFitInput {
+  transcriptionWorkload?: TranscriptionFitWorkload | undefined
+  ttsWorkload?: TtsFitWorkload | undefined
   modelId: string
   modelType: CanonicalModelType
   modelPath: string
@@ -294,6 +302,8 @@ export async function runAdvisoryFitCheck(
       modelType: input.modelType,
       modelPath: input.modelPath,
       modelConfig: input.modelConfig,
+      transcriptionWorkload: input.transcriptionWorkload,
+      ttsWorkload: input.ttsWorkload,
       artifacts: input.artifacts,
       isShardedModel: input.isShardedModel,
       marginBytes: (ADVISORY_FIT_BASE_MARGIN_MIB + residentReserveMiB) * BYTES_PER_MIB

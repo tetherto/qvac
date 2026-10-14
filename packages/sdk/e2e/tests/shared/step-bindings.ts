@@ -458,7 +458,7 @@ const STREAMS: Record<string, Fold> = {
     if (collect === 'pcm') {
       // The fold has to follow the mode.
       const pcm = p.stream === false ? await run.buffer : await drain(run.bufferStream)
-      return { pcm, sampleRate: await run.sampleRate, done: await run.done }
+      return { pcm, sampleRate: await run.sampleRate, done: await run.done, text: await run.text }
     }
     if (collect === 'all') return { all: await drain(run.bufferStream) }
     if (collect === 'events') {
@@ -1849,6 +1849,28 @@ const ASSERTIONS: Record<
       return { passed: false, output: `expected at least ${floor} sample(s), got ${samples}` }
     }
     return { passed: true, output: `${samples} sample(s)` }
+  },
+
+  /** A text-only MOSS-Speech reply must not contain audio. */
+  emptyArray(value) {
+    const valid = Array.isArray(value) && value.length === 0
+    return { passed: valid, output: valid ? 'empty PCM' : 'expected empty PCM' }
+  },
+
+  /** A MOSS-SFX clip has the requested duration and usable, non-silent PCM. */
+  mossSoundEffect(value, args) {
+    const run = value as { pcm: number[]; sampleRate: number; done: boolean }
+    const expected = Number(args.seconds) * 48000
+    const valid =
+      run.done &&
+      run.sampleRate === 48000 &&
+      Math.abs(run.pcm.length - expected) <= 480 &&
+      run.pcm.every(Number.isFinite) &&
+      run.pcm.some((sample) => sample !== 0)
+    return {
+      passed: valid,
+      output: `${run.pcm.length} samples at ${run.sampleRate} Hz; expected ${expected}`
+    }
   },
 
   /** The value is exactly `true`. */

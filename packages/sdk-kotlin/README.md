@@ -329,15 +329,12 @@ client.stream(
 ## Typed and idiomatic Kotlin API
 
 The contract generator produces Kotlin serialization models and typed methods
-for every operation in `manifest.json`. The generated layer is available under
-`io.tether.qvac.sdk.generated` and includes request/response models, call-shape
-metadata, model constants, model-type maps, error codes, and `SDK_VERSION`.
-
-For new code, use request/response types from
+for every operation in `manifest.json`. Request/response types live in
 `io.tether.qvac.sdk.generated.schema`: discriminated unions are sealed classes,
 engine configurations are nested typed models, and serializers preserve the
-worker's JSON shape (no Kotlin wrapper fields on the wire). Existing flat models
-remain source-compatible. Import one model namespace, not both wildcards.
+worker's JSON shape (no Kotlin wrapper fields on the wire).
+`io.tether.qvac.sdk.generated` holds call-shape metadata, model constants,
+model-type maps, error codes, and `SDK_VERSION`.
 Worker numeric/range and addon-specific validation remains authoritative.
 
 ```kotlin
@@ -387,7 +384,13 @@ run.cancel()
 `CompletionRun` exposes normalized events, accumulated text, thinking text,
 tool calls, final statistics, stop reason, and cancellation. Tool definitions
 can carry suspend handlers; `client.completion.orchestrate(...)` executes the
-worker-owned multi-turn tool loop and returns the same run type.
+worker-owned multi-turn tool loop and returns the same run type. To replay a
+tool round yourself, send `QvacMessage.assistant(text, toolCalls = final.toolCalls)`
+and answer each call with `QvacMessage.tool(result, toolCallId = call.id, toolName = call.name)`.
+
+A tool describes flat parameters with `parameters` and `required`, or passes a
+complete JSON Schema object as `parametersSchema` for nested `properties`,
+`items`, `anyOf` or `$defs`; that object is sent as written.
 
 `run()` intentionally accumulates the complete result, including streams not
 collected by the caller. Its memory usage grows with output. Use the cold

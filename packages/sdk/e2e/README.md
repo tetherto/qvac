@@ -196,7 +196,8 @@ consumers.
 Each platform bundles the worker with the plugin included through its normal build path:
 
 - **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
-  (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes
+  for the machine's own host (equivalent to `npx qvac bundle sdk --host <host>`, without requiring
+  `@qvac/cli` as a dependency) and writes
   `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
 - **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
   `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
@@ -296,6 +297,27 @@ Non-obvious inputs:
 
 The remaining inputs (`filter`, `exclude-suite`, timeouts, device pools, and `cache-models`) are described
 in the form.
+
+### How the CI legs are laid out
+
+`test-sdk.yml` fans out one reusable workflow per family, and each family gets one job per runner:
+
+- `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
+- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
+  its own steps, so none of them show up as skipped steps on the other families' jobs.
+- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm.
+
+The runner-hosted families take their shared steps from the `sdk-e2e-node-*` composite actions in
+`.github/actions`: `leg` resolves the platform and rerun filter, `prepare` installs and builds, `run`
+drives the consumer and producer, and `results` uploads the `results-<family>-<platform>` artifacts. The
+report comments and failed-test reruns read those artifacts. Change a shared step in its action, and a
+family-specific step in that family's workflow. The jobs check these actions out from the commit the
+workflow was loaded from, not from `test-version`, so a PR branch or tag that predates them still runs.
+
+Desktop, Electron, and Python stay separate jobs on the same runner label. Merging them into one job per
+OS would run the three in sequence, end every other client's results when one fails, and change the
+`results-<family>-<platform>` contract that reports and reruns read. Electron would not share the desktop
+model cache either, because it bootstraps a different set of models.
 
 ## Developing new tests
 
