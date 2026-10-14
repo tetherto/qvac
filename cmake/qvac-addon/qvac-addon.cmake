@@ -547,6 +547,7 @@ endfunction()
 #   * stage @qvac/fabric's dynamically loaded ggml backends alongside it,
 #   * $ORIGIN / @loader_path rpath so the copies resolve,
 #   * the Windows delay-load helper the imported module target doesn't carry,
+#   * --allow-shlib-undefined on Linux for the runtime's host (js_*) imports,
 #   * fabric's C++ runtime on Linux, so the test binary exercises the same
 #     single-runtime link as the production module (a test that kept its own
 #     libc++ could not catch an exception fabric threw).
@@ -600,6 +601,14 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
     set_target_properties(${test_target} PROPERTIES BUILD_RPATH "@loader_path")
   elseif(NOT WIN32)
     set_target_properties(${test_target} PROPERTIES BUILD_RPATH "$ORIGIN")
+  endif()
+
+  # The runtime carries fabric's own binding, whose js_* imports only the Bare
+  # host provides. Tests never call it and glibc binds lazily, but lld rejects
+  # undefined shared-library references in executables by default. Bionic binds
+  # eagerly, so Android test binaries would still fail to load.
+  if(UNIX AND NOT APPLE AND NOT ANDROID)
+    target_link_options(${test_target} PRIVATE LINKER:--allow-shlib-undefined)
   endif()
 endfunction()
 
