@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.47.1] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed ([#5010](https://github.com/tetherto/qvac/pull/5010)).
+  The fit runs on a worker thread, so the JavaScript event loop keeps
+  running, and concurrent calls run one at a time. Callers must `await` it.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`. A caret on a `0.x` version
+  locks the minor, so `^0.21.1` would not have resolved `0.22.0` on its own.
+  `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against the
+  0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
+
 ## [0.47.0] - 2026-10-14
 
 ### Breaking
