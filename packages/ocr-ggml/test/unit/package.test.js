@@ -31,8 +31,7 @@ test('published entrypoints only require declared runtime dependencies', (t) => 
     'addonLogging.js',
     'fit.js',
     'binding.js',
-    'lib/error.js',
-    'lib/backends-dir.js'
+    'lib/error.js'
   ]
   const requireRe = /require\((["'])([^"']+)\1\)/g
 

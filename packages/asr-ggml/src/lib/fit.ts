@@ -1,4 +1,3 @@
-import { resolveBackendsDir } from './backends'
 import { mossTranscribeJobFields, type MossTranscribeRunOptions } from '../engines/moss/driver'
 
 interface AsrFitCommon {
@@ -107,7 +106,7 @@ interface FitBinding {
  * engine's reason. Only a broken request throws.
  */
 export function assessFit(request: AsrFitRequest): AsrFitResult {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
   const binding = require('../binding.js') as FitBinding
 
   if (request.engine === 'moss-transcribe') {
@@ -118,11 +117,5 @@ export function assessFit(request: AsrFitRequest): AsrFitResult {
     })
   }
 
-  return binding.assessFit({
-    ...request,
-    backendsDir:
-      typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-        ? request.backendsDir
-        : resolveBackendsDir()
-  })
+  return binding.assessFit(request)
 }

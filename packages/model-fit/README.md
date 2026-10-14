@@ -111,9 +111,9 @@ machine. Registering is the caller's job, exactly as in upstream's
 `tools/fit-params`, which relies on `llama_backend_init()`.
 
 This addon registers backends before every fit. Statically linked backends
-self-register, so `backendsDir` can be omitted; where backends ship as separate
-shared libraries, pass the directory (`BACKENDS_SUBDIR` is appended) or the
-fitter sees nothing. It must be absolute and must resolve to an existing
+self-register, and when `backendsDir` is omitted the shared-library backends
+`@qvac/fabric` ships are loaded. Pass `backendsDir` only to load a different
+set; it is used as given. It must be absolute and must resolve to an existing
 directory — every library found there is `dlopen`ed into the process, so it has
 to be an application-controlled location, never remote or user input.
 

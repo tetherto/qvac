@@ -1,3 +1,4 @@
+import { getMossJobOptions } from './moss-options'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
 import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas/index'
@@ -65,7 +66,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const request = ttsRequestSchema.parse(params)
   const {
     modelId,
-    text,
+    text = '',
     stream,
     sentenceStream,
     sentenceStreamLocale,
@@ -74,6 +75,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const parlerJobOptions = getParlerJobOptions(request)
 
   const model = getModel(modelId)
+  const mossJobOptions = getMossJobOptions(model, request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
 
   // MOSS streams natively: one job over the whole text, emitting a chunk every
@@ -157,7 +159,9 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     return finish(modelStart, response, ctx.signal.aborted)
   }
 
-  const sentenceChunked = stream && !nativeStream
+  const engine = getTtsEngineType(model)
+  const batchEngine = engine === 'moss-sfx' || engine === 'moss-speech'
+  const sentenceChunked = stream && !nativeStream && !batchEngine
 
   const response = (await model.run({
     input: text,
@@ -176,24 +180,31 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     ...(sentenceChunked && sentenceStreamMaxChunkScalars !== undefined
       ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
       : {}),
-    ...parlerJobOptions
+    ...parlerJobOptions,
+    ...mossJobOptions
   })) as unknown as TtsResponse
 
-  if (!stream) {
+  if (!stream || batchEngine) {
     const completeBuffer: number[] = []
     let sampleRate: number | undefined
+    let replyText: string | undefined
 
     try {
       for await (const data of response.iterate()) {
         if (await cancelIfAborted(model, ctx.signal)) continue
         sampleRate ??= data.sampleRate
+        if (data.text !== undefined) replyText = data.text
         appendPcm(completeBuffer, data.outputArray)
       }
     } catch (error) {
       rethrowUnlessCancelled(error, ctx.signal)
     }
     if (ctx.signal.aborted) return finish(modelStart, response, true)
-    yield { buffer: completeBuffer, ...(sampleRate !== undefined ? { sampleRate } : {}) }
+    yield {
+      buffer: completeBuffer,
+      ...(sampleRate !== undefined ? { sampleRate } : {}),
+      ...(replyText !== undefined ? { text: replyText } : {})
+    }
     return finish(modelStart, response, false)
   }
 

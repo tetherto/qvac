@@ -148,29 +148,9 @@ export class TtsMulticast {
 
 function buildTtsRequest(params: TtsClientParams, requestId: string): TtsRequest {
   return {
+    ...params,
     type: 'textToSpeech',
-    modelId: params.modelId,
-    requestId,
-    inputType: params.inputType,
-    text: params.text,
-    stream: params.stream,
-    sentenceStream: params.sentenceStream,
-    ...(params.sentenceStreamLocale !== undefined && {
-      sentenceStreamLocale: params.sentenceStreamLocale
-    }),
-    ...(params.sentenceStreamMaxChunkScalars !== undefined && {
-      sentenceStreamMaxChunkScalars: params.sentenceStreamMaxChunkScalars
-    }),
-    ...(params.description !== undefined && { description: params.description }),
-    ...(params.voiceDescription !== undefined && { voiceDescription: params.voiceDescription }),
-    ...(params.voice !== undefined && { voice: params.voice }),
-    ...(params.emotion !== undefined && { emotion: params.emotion }),
-    ...(params.pitch !== undefined && { pitch: params.pitch }),
-    ...(params.pace !== undefined && { pace: params.pace }),
-    ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
-    ...(params.noise !== undefined && { noise: params.noise }),
-    ...(params.reverb !== undefined && { reverb: params.reverb }),
-    ...(params.quality !== undefined && { quality: params.quality })
+    requestId
   }
 }
 
@@ -312,6 +292,7 @@ async function* ttsResponseSource(
  * so `await result.sampleRate` can never hang or reject on its own.
  */
 export type TtsSideChannel = {
+  text: Promise<string | undefined>
   sampleRate: Promise<number | undefined>
   stats: Promise<TtsStats | undefined>
   stopReason: Promise<'completed' | 'cancelled' | undefined>
@@ -321,6 +302,11 @@ export type TtsSideChannel = {
 
 /** Exported for test use; not part of the public SDK surface. */
 export function createTtsSideChannel(): TtsSideChannel {
+  let resolveText!: (value: string | undefined) => void
+  const text = new Promise<string | undefined>((resolve) => {
+    resolveText = resolve
+  })
+  let seenText: string | undefined
   let resolveSampleRate!: (value: number | undefined) => void
   let resolveStats!: (value: TtsStats | undefined) => void
   let resolveStopReason!: (value: 'completed' | 'cancelled' | undefined) => void
@@ -340,10 +326,12 @@ export function createTtsSideChannel(): TtsSideChannel {
   let settled = false
 
   return {
+    text,
     sampleRate,
     stats,
     stopReason,
     observe(response) {
+      if (response.text !== undefined) seenText = response.text
       // Resolve on the FIRST frame that carries a rate, not at end of stream:
       // a caller opening an audio device wants it before draining the audio.
       // Promise resolution is idempotent, so settle() can still resolve the
@@ -358,6 +346,7 @@ export function createTtsSideChannel(): TtsSideChannel {
     settle() {
       if (settled) return
       settled = true
+      resolveText(seenText)
       resolveSampleRate(seenSampleRate)
       resolveStats(latestStats)
       resolveStopReason(seenStopReason)
@@ -385,6 +374,7 @@ function sentenceStreamTts(
     buffer: Promise.resolve([]),
     done: multicast.done,
     requestId: request.requestId as string,
+    text: side.text,
     sampleRate: side.sampleRate,
     stats: side.stats,
     stopReason: side.stopReason
@@ -441,6 +431,7 @@ function plainStreamTts(
     buffer: Promise.resolve([]),
     done,
     requestId: request.requestId as string,
+    text: side.text,
     sampleRate: side.sampleRate,
     stats: side.stats,
     stopReason: side.stopReason
@@ -502,6 +493,7 @@ function collectTts(
     buffer: collectTtsBuffer(request, options, resolveDone, rejectDone, side),
     done,
     requestId: request.requestId as string,
+    text: side.text,
     sampleRate: side.sampleRate,
     stats: side.stats,
     stopReason: side.stopReason
@@ -527,6 +519,7 @@ async function collectTtsBuffer(
       buffer = buffer.concat(response.buffer)
       if (response.done) {
         resolveDone(true)
+        break
       }
     }
     return buffer

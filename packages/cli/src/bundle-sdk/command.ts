@@ -65,19 +65,11 @@ export function registerBundleCommand(program: Command): void {
               throw error
             }
             // The install is a convenience: report what to add by hand and
-            // still produce the bundle.
+            // bundle with what is installed. Without the packages, bundling
+            // fails with HostPrebuildsMissingError naming the same pins.
             console.warn(`\n⚠️  ${error.message}\n`)
-            if (error instanceof HostPrebuildsInstallRefusedError) {
-              // bundleSdk wrote the bundle and its manifest before refusing.
-              console.warn(
-                '   Bundled without installing them. Pass --no-install to skip this step.\n'
-              )
-              return
-            }
-            // A failed install can leave some packages in node_modules, so the
-            // first bundle may be out of date.
             console.warn(
-              '   Bundling again without installing them. Pass --no-install to skip this step.\n'
+              '   Bundling without installing them. Pass --no-install to skip this step.\n'
             )
             await bundleSdk(bundleOptions)
           }

@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ParakeetInterface = void 0;
 const error_1 = require("../../lib/error");
-const backends_1 = require("../../lib/backends");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
 const state = Object.freeze({
@@ -64,15 +63,8 @@ class ParakeetInterface {
         this._endStreamingInFlight = null;
         this._bufferedAudio = [];
         this._bufferedBytes = 0;
-        this._config = this._applyDefaults(configurationParams);
+        this._config = { ...configurationParams };
         this._createNativeInstance(this._config);
-    }
-    _applyDefaults(configurationParams) {
-        const out = { ...configurationParams };
-        if (!out.backendsDir) {
-            out.backendsDir = (0, backends_1.resolveBackendsDir)();
-        }
-        return out;
     }
     _setState(newState) {
         this._state = newState;

@@ -185,9 +185,8 @@ jobs:
         run: |
           npm pack "$PREBUILD_PACKAGE"
           tar -xzf *.tgz
-          # Fat layout (GPR mono / pre-split releases) ships prebuilds/ in the
-          # meta tarball; split releases ship them in the per-host platform
-          # package under addon/prebuilds/.
+          # Fat layout (GPR mono) ships prebuilds/ in the meta tarball; split
+          # releases ship them in the per-host platform package's prebuilds/.
           if [ -d ./package/prebuilds ]; then
             cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
           else
@@ -204,7 +203,7 @@ jobs:
             rm -rf ./package ./*.tgz
             npm pack "$HOST_SPEC"
             tar -xzf *.tgz
-            cp -r ./package/addon/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
+            cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/audiogen-ggml/prebuilds"
           fi
 
       - name: Rename prebuilds from tetherto_ to qvac_ prefix
@@ -218,6 +217,13 @@ jobs:
             newbase=$(echo "$base" | sed 's/^tetherto_/qvac_/')
             mv "$file" "$dir/$newbase"
           done
+
+      # binding.js loads only `#host-addon`, i.e. the host's platform package, so
+      # the staged prebuilds/<host>/ is wrapped as that package in node_modules.
+      - name: Stage the platform package
+        working-directory: ${{ github.workspace }}/packages/audiogen-ggml
+        shell: bash
+        run: npm run link:platform
 
       - name: Linux - install dependencies
         if: matrix.arch == 'arm64' && (matrix.platform == 'linux' || matrix.platform == 'android')

@@ -313,6 +313,21 @@ export class AddonLinkFailedError extends QvacErrorBase {
   }
 }
 
+export class HostPrebuildsMissingError extends QvacErrorBase {
+  public readonly dependencies: Record<string, string>
+
+  constructor(dependencies: Record<string, string>, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_MISSING,
+        [formatDependencyPins(dependencies)],
+        cause
+      )
+    )
+    this.dependencies = dependencies
+  }
+}
+
 function formatDependencyPins(dependencies: Record<string, string>) {
   return Object.entries(dependencies)
     .map(([name, version]) => `    "${name}": "${version}"`)

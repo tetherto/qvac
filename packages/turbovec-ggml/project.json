@@ -1,0 +1,70 @@
+{
+  "name": "@qvac/turbovec-ggml",
+  "root": "packages/turbovec-ggml",
+  "targets": {
+    "on-pr": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-pr-nx.yml'",
+        "cwd": "packages/turbovec-ggml",
+        "ci": {
+          "hasCppLint": true,
+          "hasTsChecks": true,
+          "tsChecksMode": "dts+lint",
+          "hasFabricLockstep": true
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/turbovec-ggml",
+        "ci": {
+          "artifactNamePrefix": "turbovec-ggml-"
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:integration",
+        "cwd": "packages/turbovec-ggml"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run lint",
+        "cwd": "packages/turbovec-ggml"
+      }
+    },
+    "test:cpp": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run test:cpp",
+        "cwd": "packages/turbovec-ggml"
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/turbovec-ggml",
+        "ci": {
+          "verifyGenerated": true,
+          "nameTransform": "none",
+          "repoName": "turbovec-ggml",
+          "testGateMode": "none"
+        }
+      }
+    }
+  }
+}

@@ -154,12 +154,13 @@ To add the packages yourself instead, use `"@qvac/sdk/expo-plugin"` without the 
 ```json title="package.json"
 {
   "dependencies": {
-    "@qvac/fabric-android-arm64": "x.y.z"
+    "@qvac/fabric-android-arm64": "x.y.z",
+    "@qvac/fabric-ios": "x.y.z"
   }
 }
 ```
 
-iOS uses `@qvac/fabric-ios` instead. For the version, run `npx expo prebuild` once without these dependencies: it stops and prints each missing package for the platform being prebuilt, with the exact line to add.
+Both are needed even when you prebuild only one platform, because the worker bundle is built once for Android and iOS. For the version, run `npx expo prebuild` once without these dependencies: it stops and prints each missing package, with the exact line to add.
 </Step>
 
 <Step>

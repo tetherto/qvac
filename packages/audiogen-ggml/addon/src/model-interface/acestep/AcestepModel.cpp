@@ -126,15 +126,10 @@ void AcestepModel::loadLocked() {
          vb[0] == 'Y');
   }
 
-  // Compose the backends-scan directory from the host-provided prebuilds root
-  // plus the cmake-bare per-target subdir (BACKENDS_SUBDIR, e.g.
-  // `android-arm64/qvac__audiogen-ggml`) so the engine dlopens the ggml backend
-  // modules staged next to the `.bare` -- required on arm64, where the CPU
-  // backend ships as per-microarch MODULE .so files (GGML_BACKEND_DL). Mirrors
-  // qvac/packages/tts-ggml's ChatterboxModel.cpp. Empty `backendsDir` -> leave
-  // `opts.backends_dir` empty so the engine relies on ggml's built-in search
-  // path (fine for static desktop / Apple builds).
-  opts.backends_dir = resolveBackendsDir(cfg_.backendsDir);
+  // The engine dlopens the ggml backend modules staged next to the `.bare` --
+  // required on arm64, where the CPU backend ships as per-microarch MODULE .so
+  // files (GGML_BACKEND_DL). A configured `backendsDir` is scanned as given.
+  opts.backends_dir = resolveBackendsDir(cfg_.backendsDir).string();
 
   engine_ = tts_cpp::acestep::Engine::create(opts);
   if (!engine_) {

@@ -11,7 +11,7 @@ const path = require('bare-path')
 // one table so a new entrypoint cannot be added without declaring its exports.
 const ENTRYPOINTS = [
   { file: 'index.js', named: ['pickPrimaryGgufPath', 'assessFit', 'QvacResponse'] },
-  { file: 'addon.js', named: ['LlamaInterface', 'mapAddonEvent', 'resolveBackendsDir'] },
+  { file: 'addon.js', named: ['LlamaInterface', 'mapAddonEvent'] },
   {
     file: 'batchHandler.js',
     named: ['RUN_BUSY_ERROR_MESSAGE', 'RUN_BUSY_ERROR_CODE', 'runBusyError']
