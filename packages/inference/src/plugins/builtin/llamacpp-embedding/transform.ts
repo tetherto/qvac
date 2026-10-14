@@ -15,7 +15,7 @@ export function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   }
 
   if (embedConfig.backend !== undefined) {
-    config.backend = embedConfig.backend
+    config.backend = embedConfig.backend.join(',')
   }
 
   if (embedConfig.flashAttention) {

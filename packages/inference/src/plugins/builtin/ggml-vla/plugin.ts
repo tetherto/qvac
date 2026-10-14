@@ -68,7 +68,7 @@ export const vlaPlugin = definePlugin({
       opts: { stats: true }
     })
 
-    const backend = config.backend ?? 'auto'
+    const backend = config.backend?.join(',') ?? 'auto'
     const model = wrapVlaModel(inner, { backend })
     return { model }
   },

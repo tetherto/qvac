@@ -10904,8 +10904,14 @@
                   "type": "object",
                   "properties": {
                     "backend": {
-                      "description": "Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
-                      "type": "string"
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem"
+                      }
                     },
                     "ctx_size": {
                       "description": "Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
@@ -12324,8 +12330,14 @@
                   "type": "object",
                   "properties": {
                     "backend": {
-                      "description": "Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
-                      "type": "string"
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem"
+                      }
                     },
                     "gpuLayers": {
                       "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
@@ -18948,9 +18960,24 @@
                   "type": "object",
                   "properties": {
                     "backend": {
-                      "description": "Backend selector: `'auto'` (default), `'cpu'`, or a comma-separated GPU priority list such as `'cuda,vulkan'`. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. `'cpu'` forces CPU regardless of available accelerators.",
-                      "type": "string",
-                      "minLength": 1
+                      "description": "Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. Names are tried in order; if none has an accepted device, selection falls back to the native default order. ['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "cpu",
+                          "cuda",
+                          "vulkan",
+                          "metal",
+                          "opencl",
+                          "hip",
+                          "rocm",
+                          "sycl"
+                        ],
+                        "title": "LoadModelSrcRequestGgmlVlaModelConfigBackendItem"
+                      }
                     },
                     "verbosity": {
                       "description": "Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",

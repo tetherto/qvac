@@ -9631,6 +9631,14 @@ class LoadModelSrcRequestLlamacppCompletionModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem(Enum):
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    auto = "auto"
+
+
 class Predict(RootModel[int]):
     root: Annotated[
         int,
@@ -9845,9 +9853,10 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     backend: Annotated[
-        str | None,
+        list[LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem] | None,
         Field(
-            description="Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices."
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+            min_length=1,
         ),
     ] = None
     ctx_size: Annotated[
@@ -11570,6 +11579,14 @@ class LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem(Enum):
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    auto = "auto"
+
+
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
     gpu = "gpu"
     cpu = "cpu"
@@ -11613,9 +11630,10 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
     backend: Annotated[
-        str | None,
+        list[LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem] | None,
         Field(
-            description="Comma-separated GPU backend priority list, such as 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. Unknown names fail the load, while known names with no available device fall back to the default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'."
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
+            min_length=1,
         ),
     ] = None
     gpu_layers: Annotated[
@@ -19791,6 +19809,18 @@ class LoadModelSrcRequestGgmlVlaModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestGgmlVlaModelConfigBackendItem(Enum):
+    auto = "auto"
+    cpu = "cpu"
+    cuda = "cuda"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
+    hip = "hip"
+    rocm = "rocm"
+    sycl = "sycl"
+
+
 class Embodiment(RootModel[str]):
     root: Annotated[
         str,
@@ -19840,9 +19870,9 @@ class LoadModelSrcRequestGgmlVlaModelConfigEmbodiment(GeneratedBaseModel):
 
 class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
     backend: Annotated[
-        str | None,
+        list[LoadModelSrcRequestGgmlVlaModelConfigBackendItem] | None,
         Field(
-            description="Backend selector: `'auto'` (default), `'cpu'`, or a comma-separated GPU priority list such as `'cuda,vulkan'`. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. `'cpu'` forces CPU regardless of available accelerators.",
+            description="Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. Names are tried in order; if none has an accepted device, selection falls back to the native default order. ['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
             min_length=1,
         ),
     ] = None

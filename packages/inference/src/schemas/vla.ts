@@ -100,14 +100,18 @@ export type VlaEmbodimentSelection =
 
 export const vlaConfigSchema = z.object({
   backend: z
-    .string()
+    .array(z.enum(['auto', 'cpu', 'cuda', 'vulkan', 'metal', 'opencl', 'hip', 'rocm', 'sycl']))
     .min(1)
-    .refine((value) => value.trim().length > 0, 'Backend selector cannot be blank')
+    .refine(
+      (value) => !value.includes('cpu') || value.length === 1,
+      'CPU must be selected on its own'
+    )
     .optional()
     .describe(
-      "Backend selector: `'auto'` (default), `'cpu'`, or a comma-separated GPU priority list such as `'cuda,vulkan'`. " +
+      "Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. " +
         'Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. ' +
-        "`'cpu'` forces CPU regardless of available accelerators."
+        'Names are tried in order; if none has an accepted device, selection falls back to the native default order. ' +
+        "['cpu'] forces CPU regardless of available accelerators and must be used on its own."
     ),
   verbosity: z
     .number()

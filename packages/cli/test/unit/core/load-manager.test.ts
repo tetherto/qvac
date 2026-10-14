@@ -58,7 +58,7 @@ describe('load-manager', () => {
         modelSrc: `/models/${sdkType}.gguf`,
         sdkType,
         endpointCategory: sdkType === 'llamacpp-embedding' ? 'embedding' : 'chat',
-        config: { backend: 'cuda,vulkan' }
+        config: { backend: ['cuda', 'vulkan'] }
       })
     }
     const seen: Parameters<LoadModelFn>[0][] = []
@@ -70,7 +70,7 @@ describe('load-manager', () => {
     for (const sdkType of modelTypes) await mgr.load(sdkType)
     assert.deepEqual(
       seen.map((opts) => ({ modelType: opts.modelType, modelConfig: opts.modelConfig })),
-      modelTypes.map((modelType) => ({ modelType, modelConfig: { backend: 'cuda,vulkan' } }))
+      modelTypes.map((modelType) => ({ modelType, modelConfig: { backend: ['cuda', 'vulkan'] } }))
     )
   })
 

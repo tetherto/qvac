@@ -9,66 +9,92 @@ import { vlaPlugin } from '@/plugins/builtin/ggml-vla/plugin'
 
 const modelTypes = [ModelType.llamacppCompletion, ModelType.llamacppEmbedding, ModelType.ggmlVla]
 
-test('backend selectors survive public options, wire requests, and device defaults', (t) => {
+test('backend arrays survive public options, wire requests, and device defaults', (t) => {
   for (const modelType of modelTypes) {
-    for (const backend of ['auto', 'vulkan', 'cuda,vulkan', ' CUDA , Vulkan ']) {
+    for (const backend of [['auto'], ['cuda'], ['vulkan', 'cuda'], ['metal', 'opencl']]) {
       const input = { modelType, modelSrc: 'model.gguf', modelConfig: { backend } }
       const options = loadModelOptionsToRequestSchema.parse(input)
-      t.is((options.modelConfig as { backend?: string }).backend, backend)
+      t.alike((options.modelConfig as { backend?: string[] }).backend, backend)
       const wire = loadModelSrcRequestSchema.parse({ ...input, type: 'loadModel' })
-      t.is((wire.modelConfig as { backend?: string }).backend, backend)
+      t.alike((wire.modelConfig as { backend?: string[] }).backend, backend)
       const defaults = deviceConfigDefaultsSchema.parse({ [modelType]: { backend } })
-      t.is(defaults[modelType]?.['backend'], backend)
+      t.alike(defaults[modelType]?.['backend'], backend)
     }
-    t.is(
-      loadModelOptionsToRequestSchema.safeParse({
-        modelType,
-        modelSrc: 'model.gguf',
-        modelConfig: { backend: ['cuda'] }
-      }).success,
-      false
-    )
+    for (const backend of [
+      'cuda',
+      'cuda,vulkan',
+      [],
+      ['unknown'],
+      ['cuda', 'unknown'],
+      ['CUDA'],
+      [''],
+      [1],
+      null
+    ]) {
+      const input = { modelType, modelSrc: 'model.gguf', modelConfig: { backend } }
+      t.is(loadModelOptionsToRequestSchema.safeParse(input).success, false)
+      t.is(loadModelSrcRequestSchema.safeParse({ ...input, type: 'loadModel' }).success, false)
+      t.is(deviceConfigDefaultsSchema.safeParse({ [modelType]: { backend } }).success, false)
+    }
   }
 })
 
-test('LLM and embedding transforms preserve native backend strings without adding defaults', (t) => {
-  for (const backend of ['auto', 'cuda,vulkan', ' CUDA , Vulkan ', '', 'unknown']) {
-    t.is(transformLlmConfig(llmConfigSchema.parse({ backend }))['backend'], backend)
-    t.is(transformEmbedConfig(embedConfigSchema.parse({ backend })).backend, backend)
+test('LLM and embedding backend names match their addon allow-list', (t) => {
+  for (const schema of [llmConfigSchema, embedConfigSchema]) {
+    for (const backend of ['cuda', 'vulkan', 'metal', 'opencl', 'auto']) {
+      t.alike(schema.parse({ backend: [backend] }).backend, [backend])
+    }
+    for (const backend of ['cpu', 'hip', 'rocm', 'sycl', 'unknown']) {
+      t.is(schema.safeParse({ backend: [backend] }).success, false)
+    }
+  }
+})
+
+test('LLM and embedding transforms join backend arrays without adding defaults', (t) => {
+  for (const backend of [['auto'], ['cuda'], ['vulkan', 'cuda'], ['metal', 'opencl']]) {
+    t.is(transformLlmConfig(llmConfigSchema.parse({ backend }))['backend'], backend.join(', '))
+    t.is(transformEmbedConfig(embedConfigSchema.parse({ backend })).backend, backend.join(','))
   }
   t.absent(transformLlmConfig(llmConfigSchema.parse({}))['backend'])
   t.absent(transformEmbedConfig(embedConfigSchema.parse({})).backend)
   t.is(
-    transformLlmConfig(llmConfigSchema.parse({ device: 'cpu', backend: 'cuda' }))['device'],
+    transformLlmConfig(llmConfigSchema.parse({ device: 'cpu', backend: ['cuda'] }))['device'],
     'cpu'
   )
   t.is(
-    transformEmbedConfig(embedConfigSchema.parse({ device: 'cpu', backend: 'cuda' })).device,
+    transformEmbedConfig(embedConfigSchema.parse({ device: 'cpu', backend: ['cuda'] })).device,
     'cpu'
   )
 })
 
-test('VLA plugin forwards priority lists, preserves auto, and propagates load failures', async (t) => {
+test('VLA plugin joins backend arrays, preserves auto, and propagates load failures', async (t) => {
   const originalLoad = VlaModel.prototype.load
   let received: unknown
   const failure = new Error('native backend selection failed')
   VlaModel.prototype.load = async function (options) {
     received = options
-    if (options?.backend === 'unknown') throw failure
+    if (options?.backend === 'sycl') throw failure
   }
   try {
-    for (const backend of [undefined, 'cpu', 'cuda,vulkan', 'unknown']) {
+    for (const backend of [
+      undefined,
+      ['auto'],
+      ['cpu'],
+      ['vulkan', 'cuda'],
+      ['hip', 'rocm'],
+      ['sycl']
+    ]) {
       const { model } = vlaPlugin.createModel({
         modelId: 'test-vla-backend',
         modelPath: '/tmp/model.gguf',
         modelConfig: backend === undefined ? {} : { backend }
       })
-      if (backend === 'unknown') {
+      if (backend?.[0] === 'sycl') {
         await t.exception(() => model.load(), /native backend selection failed/)
       } else {
         await model.load()
       }
-      t.alike(received, { backend: backend ?? 'auto' })
+      t.alike(received, { backend: backend?.join(',') ?? 'auto' })
     }
   } finally {
     VlaModel.prototype.load = originalLoad

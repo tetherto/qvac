@@ -16,14 +16,30 @@ describe('configure: param-schemas', () => {
       assert.ok(schema)
       const backend = paramFields(schema).find((field) => field.name === 'backend')
       assert.ok(backend, `${addon} backend is editable`)
-      assert.equal(backend.type, 'string')
-      assert.match(backend.description, /cuda,vulkan/)
+      assert.match(backend.type, /cuda.*vulkan.*\[\]$/)
+      assert.match(backend.description, /\['cuda', 'vulkan'\]/)
       assert.equal(validateParam(backend, 'cuda,vulkan'), true)
-      assert.equal(coerceParam('cuda,vulkan'), 'cuda,vulkan')
-      assert.notEqual(validateParam(backend, '["cuda"]'), true)
-      const parsed = schema.parse({ backend: 'cuda,vulkan' })
+      assert.deepEqual(coerceParam('cuda,vulkan', backend), ['cuda', 'vulkan'])
+      assert.deepEqual(coerceParam(' cuda , vulkan ', backend), ['cuda', 'vulkan'])
+      assert.deepEqual(coerceParam('cuda', backend), ['cuda'])
+      assert.equal(validateParam(backend, '["cuda"]'), true)
+      assert.equal(validateParam(backend, ' cuda , vulkan '), true)
+      assert.equal(validateParam(backend, ''), true)
+      for (const invalid of [
+        'unknown',
+        'cuda,unknown',
+        'cuda,',
+        '[]',
+        '[1]',
+        '["unknown"]',
+        '["cuda"'
+      ]) {
+        assert.notEqual(validateParam(backend, invalid), true)
+      }
+      assert.equal(coerceParam('', backend), undefined)
+      const parsed = schema.parse({ backend: coerceParam('cuda,vulkan', backend) })
       assert.ok(parsed && typeof parsed === 'object' && 'backend' in parsed)
-      assert.equal(parsed.backend, 'cuda,vulkan')
+      assert.deepEqual(parsed.backend, ['cuda', 'vulkan'])
     }
   })
 
