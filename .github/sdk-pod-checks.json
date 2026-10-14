@@ -6,7 +6,10 @@
     "tests_bare": true,
     "sdk_sources": ["workspace"],
     "sdk_sources_release": ["workspace", "published"],
-    "depends_on": ["packages/inference"]
+    "depends_on": [
+      "packages/inference",
+      "packages/registry-server/lib/generated"
+    ]
   },
   {
     "package": "inference",

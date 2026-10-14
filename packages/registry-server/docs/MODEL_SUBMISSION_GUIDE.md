@@ -33,8 +33,8 @@ rejected, even if they have the right spelling format.
 
 When adding an engine, run `npm run contract:export` in `packages/sdk` to regenerate
 both the SDK contract and the registry manifest from the same canonical definitions.
-`npm run contract:check` checks both artifacts for freshness. Do not edit the
-manifest by hand.
+`npm run contract:check` checks both artifacts for freshness. Manifest-only edits
+also trigger the required SDK checks in CI. Do not edit the manifest by hand.
 
 An addon package can implement several plugins. Classify each model by the plugin
 that loads it, rather than inferring its capability from the shared package.
