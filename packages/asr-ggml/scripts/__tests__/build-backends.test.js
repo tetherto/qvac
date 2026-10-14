@@ -97,6 +97,16 @@ test('the cuda feature takes the speech-cpp that the overrides pin', () => {
   assert.equal(versionFloorOf(desktopSpeechDependency()), undefined)
 })
 
+test('the speech override includes the explicit MOSS backend API', () => {
+  const [speech] = overridesOf(SPEECH_PORT)
+  assert.ok(speech, 'MOSS load/fit require an explicitly pinned speech port')
+  const version = speech.version
+  assert.ok(
+    version > '2026-10-12' || (version === '2026-10-12' && (speech['port-version'] ?? 0) >= 1),
+    'speech-cpp before 2026-10-12#1 lacks TranscribeOptions.backend'
+  )
+})
+
 test('no direct CUDA linkage - the hybrid MODULE backend carries its own', () => {
   assert.equal(
     /CUDA::/.test(cmakeSource),

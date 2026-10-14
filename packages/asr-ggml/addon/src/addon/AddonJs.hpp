@@ -537,6 +537,9 @@ inline js_value_t* mossTranscribeFit(
   config.maxThreads =
       static_cast<int>(readMossFitNumber(env, request, "threads", 0, true));
   config.useGPU = readMossFitNumber(env, request, "gpuLayers", 0, true) > 0;
+  if (auto backend = request.getOptionalProperty<js::String>(env, "backend")) {
+    config.backend = backend->as<std::string>(env);
+  }
   if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
     config.backendsDir = dir->as<std::string>(env);
   }
