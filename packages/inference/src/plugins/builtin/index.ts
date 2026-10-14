@@ -10,3 +10,5 @@ export { diffusionPlugin } from '@/plugins/builtin/sdcpp-generation/plugin'
 export { vlaPlugin } from '@/plugins/builtin/ggml-vla/plugin'
 export { classificationPlugin } from '@/plugins/builtin/ggml-classification/plugin'
 export { audioGenPlugin } from '@/plugins/builtin/audiogen-ggml/plugin'
+
+export { mossTranscribePlugin } from '@/plugins/builtin/moss-transcribe/plugin'

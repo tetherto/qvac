@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
 import link from 'bare-link'
+import { platformPackageForHost } from './platform-package.mjs'
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const sdkRoot = path.join(projectRoot, '..', 'sdk')
@@ -30,6 +31,7 @@ const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-embedding/plugin', ['EMBEDDINGS']],
   ['@qvac/sdk/whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/parakeet-transcription/plugin', ['TRANSCRIPTION']],
+  ['@qvac/sdk/moss-transcribe/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/bci-whispercpp-transcription/plugin', ['TRANSCRIPTION']],
   ['@qvac/sdk/nmtcpp-translation/plugin', ['TRANSLATION']],
   ['@qvac/sdk/tts-ggml/plugin', ['TTS']],
@@ -273,17 +275,6 @@ function platformPackageForInstalledMeta(metaName, host) {
   } catch {
     return null
   }
-}
-
-/** The platform prebuild package an addon's `#host-addon` map names for a host. */
-function platformPackageForHost(meta, host) {
-  const dash = host.indexOf('-')
-  const platform = host.slice(0, dash)
-  const arch = host.slice(dash + 1)
-  const hostMap = meta.imports?.['#host-addon']?.[platform]
-  const entry = typeof hostMap === 'string' || Array.isArray(hostMap) ? hostMap : hostMap?.[arch]
-  const candidate = Array.isArray(entry) ? entry[0] : entry
-  return typeof candidate === 'string' && candidate.startsWith(`${meta.name}-`) ? candidate : null
 }
 
 /**

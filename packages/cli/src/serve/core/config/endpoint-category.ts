@@ -9,6 +9,7 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   whisper: 'transcription',
   'whispercpp-transcription': 'transcription',
   'whispercpp-audio-translation': 'audio-translation',
+  'moss-transcribe': 'transcription',
   parakeet: 'transcription',
   'parakeet-transcription': 'transcription',
   nmt: 'translation',
