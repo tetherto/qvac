@@ -1,3 +1,4 @@
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import { ModelType, type CanonicalModelType, type TranscriptionFitWorkload } from '@/schemas/index'
 import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
 import {
@@ -18,6 +19,7 @@ export type FitRequestPlan =
   { supported: true; probe: FitProbeRequest } | { supported: false; detail: string }
 
 export interface CreateFitRequestParams {
+  ttsWorkload?: TtsFitWorkload | undefined
   modelType: CanonicalModelType
   modelPath: string
   modelConfig: unknown
@@ -73,7 +75,7 @@ export function createFitRequest(params: CreateFitRequestParams): FitRequestPlan
     case ModelType.bciWhispercppTranscription:
       return createBciFitRequest(common)
     case ModelType.ttsGgml:
-      return createTtsFitRequest(common)
+      return createTtsFitRequest({ ...common, ttsWorkload: params.ttsWorkload })
     case ModelType.audiogenGgml:
       return createAudiogenFitRequest(common)
     case ModelType.sdcppGeneration:

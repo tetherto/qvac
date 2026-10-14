@@ -256,6 +256,7 @@ async function resolveNativeFit(
       ...(candidate.transcriptionWorkload !== undefined && {
         transcriptionWorkload: candidate.transcriptionWorkload
       }),
+      ...(candidate.ttsWorkload !== undefined && { ttsWorkload: candidate.ttsWorkload }),
       ...(candidate.modelSrc !== undefined && { modelSrc: candidate.modelSrc }),
       ...(candidate.modelConfig !== undefined && { modelConfig: candidate.modelConfig })
     },

@@ -23,6 +23,7 @@ import { toolsTests } from './tools-tests.js'
 import { deferredToolsTests } from './deferred-tools-tests.js'
 import { ocrTests } from './ocr-tests.js'
 import { classificationTests } from './classification-tests.js'
+import { ttsMossTests } from './tts-moss-tests.js'
 import { ttsTests } from './tts-tests.js'
 import { configReloadTests } from './config-reload-tests.js'
 import { loggingTests } from './logging-tests.js'
@@ -522,6 +523,7 @@ const catalog: TestDefinition[] = [
 
   // TTS tests
   ...ttsTests,
+  ...ttsMossTests,
 
   // Config reload tests
   ...configReloadTests,

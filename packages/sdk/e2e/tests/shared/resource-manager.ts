@@ -18,6 +18,7 @@ interface ModelDefinition {
    * is then invoked without `modelSrc` and `skipPreDownload` is implied.
    */
   constant?: ModelConstant
+  constantSourceOnly?: boolean
   /** Raw `modelSrc` for custom plugin types with no registry constant. */
   modelSrc?: string
   type: string
@@ -254,7 +255,9 @@ export class ResourceManager {
     // wire where the contract wants an object.
     const config = await this.resolveConfig(dep, def)
     return {
-      ...(def.constant ? { modelSrc: def.constant } : {}),
+      ...(def.constant
+        ? { modelSrc: def.constantSourceOnly ? def.constant.src : def.constant }
+        : {}),
       ...(def.modelSrc !== undefined ? { modelSrc: def.modelSrc } : {}),
       modelType: def.type,
       ...(config !== undefined ? { modelConfig: config } : {})

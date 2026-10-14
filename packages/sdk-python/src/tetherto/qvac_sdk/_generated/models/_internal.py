@@ -190,6 +190,46 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     classification = "classification"
 
 
+class MossTtsFitWorkload(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    prompt_rows: Annotated[
+        int,
+        Field(
+            alias="promptRows",
+            description="Complete native prompt rows, including dialogue and references.",
+            gt=0,
+            le=2147483647,
+        ),
+    ]
+    reference_samples: Annotated[
+        int,
+        Field(
+            alias="referenceSamples",
+            description="Total mono reference audio samples.",
+            ge=0,
+            le=2147483647,
+        ),
+    ]
+    streaming: Annotated[
+        bool, Field(description="Whether the MOSS workload uses native streaming.")
+    ]
+
+
+class MossSoundEffectFitWorkload(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    prompt: Annotated[str, Field(description="Sound-effect description.", min_length=1)]
+    seconds: Annotated[
+        float,
+        Field(
+            description="Sound-effect duration in seconds, up to 30.", gt=0.0, le=30.0
+        ),
+    ]
+
+
 class AssessModelFitRequestModelsItemModelConfig(RootModel[dict[str, Any]]):
     root: Annotated[
         dict[str, Any],
@@ -222,6 +262,13 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
             alias="modelType",
             description="Engine that would run the load. Inferred from `modelSrc` when omitted, as `loadModel` infers it; required only where the source does not name one.",
             title="AssessModelFitRequestModelsItemModelType",
+        ),
+    ] = None
+    tts_workload: Annotated[
+        MossTtsFitWorkload | MossSoundEffectFitWorkload | None,
+        Field(
+            alias="ttsWorkload",
+            description="Fit-only MOSS-TTS/TTSD or MOSS-SoundEffect workload; never passed to model loading.",
         ),
     ] = None
     model_config_: Annotated[
@@ -4829,6 +4876,8 @@ class TtsEngine(Enum):
     cosyvoice3 = "cosyvoice3"
     audio8 = "audio8"
     moss = "moss"
+    moss_sfx = "moss-sfx"
+    moss_speech = "moss-speech"
 
 
 class TtsPace(Enum):
@@ -16287,6 +16336,259 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
     ] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[
+        Literal["moss-sfx"],
+        Field(alias="ttsEngine", description="TTS engine: MOSS-SoundEffect-v2."),
+    ] = "moss-sfx"
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; overrides the hardware default.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
+    n_gpu_layers: Annotated[
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            min_length=1,
+        ),
+    ] = None
+    seconds: Annotated[
+        float | None,
+        Field(
+            description="Sound-effect duration in seconds, up to 30.", gt=0.0, le=30.0
+        ),
+    ] = None
+    negative_prompt: Annotated[
+        str | None,
+        Field(
+            alias="negativePrompt",
+            description="Description of sounds to avoid in the generated effect.",
+        ),
+    ] = None
+    steps: Annotated[
+        int | None,
+        Field(
+            description="Diffusion denoising steps; the native default is 100.",
+            ge=1,
+            le=1000,
+        ),
+    ] = None
+    guidance: Annotated[
+        float | None,
+        Field(
+            description="Classifier-free guidance scale for sound-effect generation.",
+            ge=1.0,
+            le=50.0,
+        ),
+    ] = None
+    shift: Annotated[
+        float | None,
+        Field(
+            description="Diffusion timestep schedule shift for sound-effect generation.",
+            gt=0.0,
+            le=100.0,
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc(
+    GeneratedBaseModel
+):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[
+        Literal["moss-speech"],
+        Field(alias="ttsEngine", description="TTS engine: MOSS-Speech."),
+    ] = "moss-speech"
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; overrides the hardware default.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
+    n_gpu_layers: Annotated[
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+            min_length=1,
+        ),
+    ] = None
+    moss_speech_codec_model_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc,
+        Field(
+            alias="mossSpeechCodecModelSrc",
+            description="MOSS-Speech codec GGUF source; modelSrc is the language model.",
+        ),
+    ]
+
+
 class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -16346,7 +16648,9 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         | LoadModelSrcRequestTtsGgmlModelConfigParler
         | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3
         | LoadModelSrcRequestTtsGgmlModelConfigAudio8
-        | LoadModelSrcRequestTtsGgmlModelConfigMoss,
+        | LoadModelSrcRequestTtsGgmlModelConfigMoss
+        | LoadModelSrcRequestTtsGgmlModelConfigMossSfx
+        | LoadModelSrcRequestTtsGgmlModelConfigMossSpeech,
         Field(alias="modelConfig"),
     ]
 
@@ -21398,6 +21702,32 @@ class TextToSpeechRequestPace(Enum):
     fast = "fast"
 
 
+class AudioItem(RootModel[float]):
+    root: Annotated[float, Field(ge=-1.0, le=1.0)]
+
+
+class TextToSpeechRequestMessagesItemRole(Enum):
+    system = "system"
+    user = "user"
+    assistant = "assistant"
+
+
+class TextToSpeechRequestMessagesItem(GeneratedBaseModel):
+    role: Annotated[
+        TextToSpeechRequestMessagesItemRole,
+        Field(title="TextToSpeechRequestMessagesItemRole"),
+    ]
+    text: Annotated[str | None, Field(min_length=1)] = None
+    audio: Annotated[list[AudioItem] | None, Field(min_length=1)] = None
+    sample_rate: Annotated[
+        int | None, Field(alias="sampleRate", ge=8000, le=192000)
+    ] = None
+
+
+class ReplyVoiceItem(RootModel[float]):
+    root: Annotated[float, Field(ge=-1.0, le=1.0)]
+
+
 class TextToSpeechRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     request_id: Annotated[
@@ -21409,7 +21739,7 @@ class TextToSpeechRequest(GeneratedBaseModel):
         ),
     ] = None
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
-    text: Annotated[str, Field(min_length=1)]
+    text: Annotated[str | None, Field(min_length=1)] = None
     stream: bool | None = True
     sentence_stream: Annotated[bool | None, Field(alias="sentenceStream")] = False
     sentence_stream_locale: Annotated[
@@ -21481,6 +21811,66 @@ class TextToSpeechRequest(GeneratedBaseModel):
             description="Parler voice-template audio-quality descriptor.", min_length=1
         ),
     ] = None
+    seconds: Annotated[
+        float | None,
+        Field(
+            description="Sound-effect duration in seconds, up to 30.", gt=0.0, le=30.0
+        ),
+    ] = None
+    negative_prompt: Annotated[
+        str | None,
+        Field(
+            alias="negativePrompt",
+            description="Description of sounds to avoid in the generated effect.",
+        ),
+    ] = None
+    steps: Annotated[
+        int | None,
+        Field(
+            description="Diffusion denoising steps; the native default is 100.",
+            ge=1,
+            le=1000,
+        ),
+    ] = None
+    guidance: Annotated[
+        float | None,
+        Field(
+            description="Classifier-free guidance scale for sound-effect generation.",
+            ge=1.0,
+            le=50.0,
+        ),
+    ] = None
+    shift: Annotated[
+        float | None,
+        Field(
+            description="Diffusion timestep schedule shift for sound-effect generation.",
+            gt=0.0,
+            le=100.0,
+        ),
+    ] = None
+    audio: Annotated[list[AudioItem] | None, Field(min_length=1)] = None
+    sample_rate: Annotated[
+        int | None, Field(alias="sampleRate", ge=8000, le=192000)
+    ] = None
+    messages: list[TextToSpeechRequestMessagesItem] | None = None
+    system_prompt: Annotated[str | None, Field(alias="systemPrompt")] = None
+    reply_voice: Annotated[
+        list[ReplyVoiceItem] | None, Field(alias="replyVoice", min_length=1)
+    ] = None
+    reply_voice_sample_rate: Annotated[
+        int | None, Field(alias="replyVoiceSampleRate", ge=8000, le=192000)
+    ] = None
+    text_reply: Annotated[bool | None, Field(alias="textReply")] = None
+    max_reply_seconds: Annotated[
+        float | None, Field(alias="maxReplySeconds", ge=0.0, le=3600.0)
+    ] = None
+    max_new_tokens: Annotated[
+        int | None, Field(alias="maxNewTokens", ge=1, le=4096)
+    ] = None
+    greedy: bool | None = None
+    temperature: Annotated[float | None, Field(gt=0.0, le=10.0)] = None
+    top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
+    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
     type: Literal["textToSpeech"] = "textToSpeech"
 
 
@@ -21529,6 +21919,10 @@ class TextToSpeechResponse(GeneratedBaseModel):
         extra="forbid",
     )
     type: Literal["textToSpeech"] = "textToSpeech"
+    text: Annotated[
+        str | None,
+        Field(description="MOSS-Speech reply text, including text-only replies."),
+    ] = None
     buffer: list[float]
     done: bool
     sample_rate: Annotated[

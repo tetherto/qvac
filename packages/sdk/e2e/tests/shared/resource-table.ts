@@ -318,6 +318,25 @@ export const RESOURCE_TABLE: ResourceTable = {
     }
   },
 
+  'tts-moss-sfx': {
+    on: ['desktop', 'electron'],
+    constant: { $const: 'AUDIOGEN_MOSS_SFX_V2_Q8_0' },
+    constantSourceOnly: true,
+    type: 'tts-ggml',
+    config: { ttsEngine: 'moss-sfx', useGPU: true, seed: 42 }
+  },
+
+  'tts-moss-speech': {
+    on: ['desktop', 'electron'],
+    constant: { $const: 'TTS_MOSS_SPEECH_Q8_0' },
+    type: 'tts-ggml',
+    config: {
+      ttsEngine: 'moss-speech',
+      useGPU: true,
+      mossSpeechCodecModelSrc: { $const: 'TTS_CODEC_MOSS_SPEECH_F16' }
+    }
+  },
+
   'tts-audio8': {
     constant: { $const: 'TTS_LM_MULTILINGUAL_AUDIO8_Q8_0' },
     type: 'tts-ggml',

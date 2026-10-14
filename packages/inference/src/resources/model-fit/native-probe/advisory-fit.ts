@@ -1,3 +1,4 @@
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import type { AbortSignal } from 'bare-abort-controller'
 
 import { getEngineLogger } from '@/logging/index'
@@ -52,6 +53,7 @@ export type AdvisoryFitOutcome = NativeProbeFit
 
 export interface AdvisoryFitInput {
   transcriptionWorkload?: TranscriptionFitWorkload | undefined
+  ttsWorkload?: TtsFitWorkload | undefined
   modelId: string
   modelType: CanonicalModelType
   modelPath: string
@@ -301,6 +303,7 @@ export async function runAdvisoryFitCheck(
       modelPath: input.modelPath,
       modelConfig: input.modelConfig,
       transcriptionWorkload: input.transcriptionWorkload,
+      ttsWorkload: input.ttsWorkload,
       artifacts: input.artifacts,
       isShardedModel: input.isShardedModel,
       marginBytes: (ADVISORY_FIT_BASE_MARGIN_MIB + residentReserveMiB) * BYTES_PER_MIB

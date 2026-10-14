@@ -1,3 +1,4 @@
+import type { TtsFitWorkload } from '@/schemas/assess-model-fit'
 import fs from 'bare-fs'
 
 import type { ModelSrcInput, TranscriptionFitWorkload } from '@/schemas/index'
@@ -19,6 +20,7 @@ import {
 
 export interface LoadDescription {
   transcriptionWorkload?: TranscriptionFitWorkload | undefined
+  ttsWorkload?: TtsFitWorkload | undefined
   /** Absent for the loads `loadModel` also takes without one. */
   modelSrc?: ModelSrcInput | undefined
   modelType: CanonicalModelType
