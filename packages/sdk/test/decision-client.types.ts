@@ -1,5 +1,7 @@
 import {
   decide,
+  loadModel,
+  LAYA_MULTILINGUAL_322M_Q8_0,
   type LayaResult,
   type LayaResponse,
   type DecideParams,
@@ -33,7 +35,12 @@ const configLoad: LoadModelOptions = {
   modelType: 'llamacpp-decision',
   modelConfig: { threads: 0 }
 }
-void [single, batch, union, load, defaultLoad, configLoad]
+const constantLoad: Promise<string> & { requestId: string } = loadModel({
+  modelSrc: LAYA_MULTILINGUAL_322M_Q8_0,
+  modelType: 'llamacpp-decision',
+  modelConfig: { device: 'cpu' }
+})
+void [single, batch, union, load, defaultLoad, configLoad, constantLoad]
 
 // @ts-expect-error A state and a batch cannot be sent together.
 decide({ modelId: 'laya', state: 'Refund', states: ['Refund'], questions })
