@@ -238,6 +238,7 @@ export {
   type AudioGenProgress,
   type AudioGenAudio,
   type AudioGenStats,
+  type AudioGenGenerationMetadata,
   type AudioGenResult,
   type AudioGenStreamResponse,
   type AudioGenEditOperationType,

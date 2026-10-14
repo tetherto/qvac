@@ -41,22 +41,24 @@ allowBuilds:
   esbuild: true
   nx: true
   unrs-resolver: true
+  # From plugins/openclaw's `openclaw` dev dependency. Unlisted, an install with
+  # scripts fails with ERR_PNPM_IGNORED_BUILDS.
+  "@google/genai": false
+  koffi: false
+  msgpackr-extract: false
+  openclaw: false
+  protobufjs: false
+  tree-sitter-bash: false
 
 minimumReleaseAgeExclude:
-  - '@qvac/asr-ggml-darwin-arm64@0.5.3'
-  - '@qvac/asr-ggml-darwin-x64@0.5.3'
-  - '@qvac/asr-ggml-linux-arm64@0.5.3'
-  - '@qvac/asr-ggml-linux-x64@0.5.3'
-  - '@qvac/asr-ggml-win32-x64@0.5.3'
-  - '@qvac/asr-ggml@0.5.3'
-  - '@qvac/fabric-android-arm64@0.18.0'
-  - '@qvac/fabric-ios@0.18.0'
-  - '@qvac/fabric-android-arm64@0.18.1'
-  - '@qvac/fabric-ios@0.18.1'
-  - '@qvac/fabric-android-arm64@0.19.0'
-  - '@qvac/fabric-ios@0.19.0'
-  - '@qvac/fabric-android-arm64@0.20.0'
-  - '@qvac/fabric-ios@0.20.0'
+  - '@qvac/asr-ggml-darwin-arm64@0.5.3 || 0.8.1'
+  - '@qvac/asr-ggml-darwin-x64@0.5.3 || 0.8.1'
+  - '@qvac/asr-ggml-linux-arm64@0.5.3 || 0.8.1'
+  - '@qvac/asr-ggml-linux-x64@0.5.3 || 0.8.1'
+  - '@qvac/asr-ggml-win32-x64@0.5.3 || 0.8.1'
+  - '@qvac/asr-ggml@0.5.3 || 0.8.1'
+  - '@qvac/fabric-android-arm64@0.18.0 || 0.18.1 || 0.19.0 || 0.20.0'
+  - '@qvac/fabric-ios@0.18.0 || 0.18.1 || 0.19.0 || 0.20.0'
   - '@qvac/classification-ggml@0.29.0'
   - '@qvac/embed-llamacpp@0.45.0'
   - '@qvac/fabric-darwin-arm64@0.20.0'

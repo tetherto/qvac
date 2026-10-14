@@ -19,6 +19,7 @@ import {
   audioGenConfigSchema,
   audioGenProgressSchema,
   audioGenRuntimeConfigSchema,
+  audioGenStatsSchema,
   audioGenStreamRequestSchema,
   audioGenStreamResponseSchema,
   audioGenUnderstandResultSchema,
@@ -137,6 +138,50 @@ test('AudioGen runtime config rejects controls from the other engine', (t) => {
     false
   )
   t.is(audioGenConfigSchema.safeParse({ ...modelConfig, cfgScale: 1.8 }).success, false)
+})
+
+test('AudioGen ACE-Step load config holds the addon step and shift ranges', (t) => {
+  const accepts = (config: Record<string, unknown>) =>
+    audioGenRuntimeConfigSchema.safeParse(config).success &&
+    audioGenConfigSchema.safeParse({ ...modelConfig, ...config }).success
+
+  t.ok(accepts({ inferenceSteps: 0 }), '0 lets the engine pick')
+  t.ok(accepts({ inferenceSteps: 1000 }))
+  t.absent(accepts({ inferenceSteps: 1001 }), 'steps are capped at 1000')
+  t.absent(accepts({ inferenceSteps: 7.5 }), 'steps are an integer')
+  t.ok(accepts({ shift: 0 }), '0 lets the engine pick')
+  t.ok(accepts({ shift: 3 }))
+  t.absent(accepts({ shift: -1 }), 'shift is non-negative')
+  t.absent(accepts({ shift: 1e-50 }), 'a positive shift that rounds to a float32 zero')
+  t.absent(accepts({ shift: 1e39 }), 'shift is within the float32 range')
+})
+
+test('AudioGen MiniMax load config names a device instead of useGPU', (t) => {
+  const minimax = {
+    engine: 'minimax',
+    lmModelSrc: 'minimax-lm.gguf',
+    synthModelSrc: 'minimax-synth.gguf'
+  }
+  for (const device of ['cpu', 'gpu', 'auto']) {
+    t.ok(audioGenConfigSchema.safeParse({ ...minimax, device }).success, device)
+    t.ok(audioGenRuntimeConfigSchema.safeParse({ engine: 'minimax', device }).success, device)
+  }
+  t.absent(audioGenConfigSchema.safeParse({ ...minimax, device: 'metal' }).success)
+
+  const both = audioGenConfigSchema.safeParse({ ...minimax, useGPU: true, device: 'gpu' })
+  t.absent(both.success, 'the addon takes useGPU or device, not both')
+  t.alike(
+    both.error?.issues.map((issue) => issue.path),
+    [['device']]
+  )
+  t.absent(
+    audioGenRuntimeConfigSchema.safeParse({ engine: 'minimax', useGPU: false, device: 'cpu' })
+      .success
+  )
+  t.absent(
+    audioGenConfigSchema.safeParse({ ...modelConfig, device: 'gpu' }).success,
+    'ACE-Step takes useGPU and nGpuLayers, not device'
+  )
 })
 
 test('AudioGen load transform permits omitted primary modelSrc', (t) => {
@@ -321,6 +366,83 @@ test('audioGen client params accept caption augmentation and normalize frozen co
   )
 })
 
+test('audioGen takes ACE-Step steps and shift per run, within the addon ranges', (t) => {
+  const base = { modelId: 'model-1', caption: 'slow blues with warm electric guitar' }
+  const parsed = audioGenClientParamsSchema.parse({ ...base, inferenceSteps: 50, shift: 1.5 })
+  t.is(parsed.inferenceSteps, 50)
+  t.is(parsed.shift, 1.5)
+  t.ok(
+    audioGenStreamRequestSchema.safeParse({ type: 'audioGenStream', ...base, shift: 0 }).success,
+    'the wire form carries shift'
+  )
+
+  const rejects = (params: Record<string, unknown>, message: string) => {
+    t.absent(audioGenClientParamsSchema.safeParse({ ...base, ...params }).success, message)
+  }
+  rejects({ inferenceSteps: 1001 }, 'steps are capped at 1000')
+  rejects({ shift: -0.5 }, 'shift is non-negative')
+  rejects({ shift: 1e-50 }, 'a positive shift that rounds to a float32 zero')
+  rejects({ shift: 1e39 }, 'shift is within the float32 range')
+})
+
+test('audioGen shared ACE-Step controls follow the addon ranges', (t) => {
+  const base = { modelId: 'model-1', caption: 'energetic cumbia with brass stabs' }
+  const accepts = (params: Record<string, unknown>) =>
+    audioGenClientParamsSchema.safeParse({ ...base, ...params }).success
+
+  t.ok(accepts({ bpm: 0 }), 'bpm 0 lets the LM infer it')
+  t.ok(accepts({ bpm: 2147483647 }))
+  t.absent(accepts({ bpm: 2147483648 }), 'bpm is an int32')
+  t.absent(accepts({ bpm: -1 }), 'bpm is non-negative')
+  t.absent(accepts({ bpm: 98.5 }), 'bpm is an integer')
+  t.ok(accepts({ seed: Number.MAX_SAFE_INTEGER }))
+  t.ok(accepts({ seed: -Number.MAX_SAFE_INTEGER }))
+  t.absent(accepts({ seed: 2 ** 53 }), 'seed is a safe integer')
+  t.ok(accepts({ dcwScaler: 0.05, dcwHighScaler: 3.4e38 }))
+  t.absent(accepts({ dcwScaler: 1e39 }), 'DCW scalers are within the float32 range')
+  t.absent(accepts({ dcwHighScaler: 1e39 }), 'DCW scalers are within the float32 range')
+})
+
+test('audioGenStatsSchema carries ACE-Step metadata and the MiniMax stage timings', (t) => {
+  const metadata = {
+    caption: 'a hopeful indie track with jangly guitars',
+    lyrics: '[verse]\nopen roads',
+    bpm: 112,
+    keyscale: 'D major',
+    beatsPerBar: 4,
+    vocalLanguage: 'en',
+    seed: 4_294_967_296,
+    codeFrames: 150,
+    qualityReport: 'caption 0.71, lyrics 0.64'
+  }
+  const acestep = audioGenStatsSchema.parse({ totalTimeMs: 900, metadata })
+  t.alike(acestep.metadata, metadata)
+  const { qualityReport: _report, ...withoutReport } = metadata
+  t.alike(
+    audioGenStatsSchema.parse({ metadata: withoutReport }).metadata,
+    withoutReport,
+    'qualityReport is present only with computeQualityScore'
+  )
+
+  const minimax = audioGenStatsSchema.parse({
+    totalTimeMs: 74_000,
+    emittedFrames: 3000,
+    arMs: 41_000,
+    conditionMs: 120,
+    flowMs: 28_000,
+    vocoderMs: 4_000,
+    gpuFallbackReason: 0
+  })
+  t.alike(minimax, {
+    totalTimeMs: 74_000,
+    emittedFrames: 3000,
+    arMs: 41_000,
+    conditionMs: 120,
+    flowMs: 28_000,
+    vocoderMs: 4_000
+  })
+})
+
 test('audioEdit vocabularies match the addon enums', (t) => {
   t.alike([...AUDIOGEN_EDIT_OPERATIONS], Object.values(AudioEditOperationType))
   t.alike([...AUDIOGEN_REPAINT_MODES], Object.values(RepaintMode))
@@ -410,6 +532,61 @@ test('audioEdit client params normalize the source and validate the pipeline', (
     }).success,
     false,
     'sourceAudio is required'
+  )
+})
+
+test('audioEdit client params take the edit-run controls the addon reads', (t) => {
+  const base = {
+    modelId: 'model-1',
+    sourceAudio: '/tmp/song.wav',
+    operations: [{ type: 'repaint', caption: 'analog synth solo', start: 10, end: 20 }]
+  }
+  const parsed = audioEditClientParamsSchema.parse({
+    ...base,
+    referenceAudio: '/tmp/reference.mp3',
+    vocalLanguage: 'en',
+    bpm: 120,
+    keyscale: 'C minor',
+    timesignature: '4/4',
+    augmentCaptionWithMetadata: true,
+    dcwEnabled: false,
+    dcwScaler: 0.04,
+    dcwHighScaler: 0.01,
+    inferenceSteps: 16,
+    shift: 2
+  })
+  t.alike(parsed.referenceAudio, { type: 'filePath', value: '/tmp/reference.mp3' })
+  t.is(parsed.bpm, 120)
+  t.is(parsed.inferenceSteps, 16)
+  t.is(parsed.shift, 2)
+  t.is(
+    audioEditClientParamsSchema.parse({ ...base, referenceAudio: new Uint8Array(8) }).referenceAudio
+      ?.type,
+    'base64',
+    'raw PCM bytes become the wire base64 form'
+  )
+
+  const rejects = (params: Record<string, unknown>, message: string) => {
+    t.absent(audioEditClientParamsSchema.safeParse({ ...base, ...params }).success, message)
+  }
+  rejects({ bpm: -1 }, 'bpm is non-negative')
+  rejects({ bpm: 2147483648 }, 'bpm is an int32')
+  rejects({ seed: 2 ** 53 }, 'seed is a safe integer')
+  rejects({ dcwScaler: 1e39 }, 'DCW scalers are within the float32 range')
+  rejects({ inferenceSteps: 1001 }, 'steps are capped at 1000')
+  rejects({ shift: 1e-50 }, 'a positive shift that rounds to a float32 zero')
+  rejects({ keyscale: '' }, 'prompt metadata strings are not empty')
+  rejects({ referenceAudio: 42 }, 'a reference is a path or PCM bytes')
+
+  t.ok(
+    audioEditStreamRequestSchema.safeParse({
+      type: 'audioEditStream',
+      ...base,
+      sourceAudio: { type: 'filePath', value: '/tmp/song.wav' },
+      referenceAudio: { type: 'filePath', value: '/tmp/reference.mp3' },
+      timesignature: '3/4'
+    }).success,
+    'the wire form carries the reference and the prompt metadata'
   )
 })
 
@@ -808,7 +985,8 @@ const understandResult = {
   keyscale: 'F minor',
   timesignature: '4/4',
   vocalLanguage: 'en',
-  audioCodes: [7, -3, 2048]
+  audioCodes: [7, -3, 2048],
+  seed: 11
 }
 
 test('audioUnderstandClientParamsSchema normalizes the source audio and LM knobs', (t) => {
@@ -856,6 +1034,11 @@ test('audioUnderstandRequestSchema is a distinct wire type', (t) => {
 
 test('audioGenUnderstandResultSchema takes plain integer codes within the input bound', (t) => {
   t.alike(audioGenUnderstandResultSchema.parse(understandResult), understandResult)
+  const { seed: _seed, ...unseeded } = understandResult
+  t.absent(
+    audioGenUnderstandResultSchema.safeParse(unseeded).success,
+    'the description carries the seed the LM decode used'
+  )
   t.absent(
     audioGenUnderstandResultSchema.safeParse({
       ...understandResult,

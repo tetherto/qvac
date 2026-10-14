@@ -565,15 +565,79 @@ test('audiogen: an incomplete stage set is refused', (t) => {
   )
 })
 
-test('audiogen: the minimax pipeline has no fitter', (t) => {
+const MINIMAX_ARTIFACTS = {
+  lmModelPath: '/models/mm3-lm-q8.gguf',
+  synthModelPath: '/models/mm3-synth-q8.gguf'
+}
+
+test('audiogen: carries the minimax model pair', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.audiogenGgml,
+    modelPath: '',
+    modelConfig: { engine: 'minimax', useGPU: true, threads: 8, inferenceSteps: 12 },
+    artifacts: MINIMAX_ARTIFACTS,
+    isShardedModel: false,
+    marginBytes: 1024
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.is(plan.probe.engine, 'audiogen-ggml')
+  t.alike(plan.probe.request, {
+    engine: 'minimax',
+    lmPath: '/models/mm3-lm-q8.gguf',
+    synthPath: '/models/mm3-synth-q8.gguf',
+    gpuLayers: 1,
+    threads: 8,
+    marginBytes: 1024
+  })
+})
+
+// The fitter projects `auto` for a positive layer count and `cpu` otherwise,
+// the same reading the load gives `useGPU`; a named device goes through as-is.
+test('audiogen: the minimax device follows the load', (t) => {
+  const cases = [
+    { config: {}, expected: { gpuLayers: 0 } },
+    { config: { useGPU: false }, expected: { gpuLayers: 0 } },
+    { config: { useGPU: true }, expected: { gpuLayers: 1 } },
+    { config: { device: 'gpu' }, expected: { device: 'gpu' } },
+    { config: { device: 'auto' }, expected: { device: 'auto' } },
+    { config: { device: 'cpu' }, expected: { device: 'cpu' } }
+  ]
+
+  for (const { config, expected } of cases) {
+    const plan = createFitRequest({
+      modelType: ModelType.audiogenGgml,
+      modelPath: '',
+      modelConfig: { engine: 'minimax', ...config },
+      artifacts: MINIMAX_ARTIFACTS,
+      isShardedModel: false
+    })
+    t.ok(plan.supported, JSON.stringify(config))
+    if (!plan.supported || plan.probe.engine !== 'audiogen-ggml') continue
+    t.alike(
+      plan.probe.request,
+      {
+        engine: 'minimax',
+        lmPath: MINIMAX_ARTIFACTS.lmModelPath,
+        synthPath: MINIMAX_ARTIFACTS.synthModelPath,
+        ...expected
+      },
+      JSON.stringify(config)
+    )
+  }
+})
+
+test('audiogen: an incomplete minimax pair is refused', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.audiogenGgml,
-      modelPath: '/models/minimax.gguf',
+      modelPath: '',
       modelConfig: { engine: 'minimax' },
+      artifacts: { lmModelPath: MINIMAX_ARTIFACTS.lmModelPath },
       isShardedModel: false
     }),
-    { supported: false, detail: 'the minimax pipeline has no fitter' }
+    { supported: false, detail: 'the minimax model pair is not resolved' }
   )
 })
 

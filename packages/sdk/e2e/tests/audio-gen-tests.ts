@@ -69,6 +69,16 @@ const validationErrorSteps = (
   { assert: { on: '$message', use: 'expectation' } }
 ]
 
+/**
+ * The seed an ACE-Step run reports in `stats.metadata` (or, for a description,
+ * on the description itself) is the one it used: the requested one when the
+ * test sets it.
+ */
+const checkReportedSeed = (from: string, path: string, seed: number): Step[] => [
+  { project: { from, path, as: 'reportedSeed' } },
+  { assert: { on: '$reportedSeed', named: 'valueIn', with: { values: [seed] } } }
+]
+
 export const audioGenHappy: TestDefinition = {
   testId: 'audio-gen-happy',
   params: {
@@ -81,7 +91,7 @@ export const audioGenHappy: TestDefinition = {
     validation: 'contains-all',
     contains: ['generated', 'samples', 'progress', 'stats']
   },
-  steps: generationSteps(),
+  steps: [...generationSteps(), ...checkReportedSeed('$stats', 'metadata.seed', 42)],
   metadata: {
     category: 'audiogen',
     dependency: 'audiogen-turbo',
@@ -229,12 +239,15 @@ export const audioGenFrozenCodes: TestDefinition = {
 /**
  * Ordered edit pipeline over in-memory source PCM (a short synthesized stereo
  * tone): a Flow-Edit followed by a Repaint of the middle second. Covers the
- * `audioEdit()` path end to end, including the turbo-only Flow-Edit branch.
+ * `audioEdit()` path end to end, including the turbo-only Flow-Edit branch and
+ * the prompt metadata an edit run takes.
  */
 export const audioEditPipeline: TestDefinition = {
   testId: 'audio-edit-pipeline',
   params: {
     seed: 22883,
+    bpm: 120,
+    keyscale: 'C minor',
     sourceTone: '2s-220hz',
     operations: [
       {
@@ -268,12 +281,15 @@ export const audioEditPipeline: TestDefinition = {
           modelId: '$model',
           sourceAudio: '$source',
           operations: '$params.operations',
-          seed: '$params.seed?'
+          seed: '$params.seed?',
+          bpm: '$params.bpm?',
+          keyscale: '$params.keyscale?'
         },
         as: 'run'
       }
     },
-    ...checkProducedAudio
+    ...checkProducedAudio,
+    ...checkReportedSeed('$stats', 'metadata.seed', 22883)
   ],
   metadata: {
     category: 'audiogen',
@@ -311,7 +327,8 @@ export const audioUnderstandClip: TestDefinition = {
     { project: { from: '$run', path: 'text.caption', as: 'caption' } },
     { assert: { on: '$caption', named: 'nonEmptyText' } },
     { project: { from: '$run', path: 'text.audioCodes', as: 'codes' } },
-    { assert: { on: '$codes', named: 'lengthAtLeast', with: { length: 1 } } }
+    { assert: { on: '$codes', named: 'lengthAtLeast', with: { length: 1 } } },
+    ...checkReportedSeed('$run', 'text.seed', 11)
   ],
   metadata: {
     category: 'audiogen',
