@@ -10,20 +10,26 @@ import {
 } from '@/client/config-loader/resolve-config.node'
 import { createCommandLogger } from '@/commands/command-logger'
 import {
+  AddonLinkFailedError,
   BareImportsMapNotFoundError,
   BundleFailedError,
+  BundleVerificationFailedError,
   HostPrebuildsMissingError
 } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
-import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
-import { AUDIO_DECODER_ADDON, listBundledAddons } from '@/commands/bundle/addons'
-import { linkAddons } from '@/commands/bundle/link'
+import { createSdkImportResolver, sdkImportsMap } from '@/commands/bundle/resolve-sdk-import'
+import {
+  AUDIO_DECODER_ADDON,
+  listBundledAddonModules,
+  listBundledAddons
+} from '@/commands/bundle/addons'
+import { assertReactNativeBareKitSupported, linkAddons } from '@/commands/bundle/link'
 import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import { TARGETS, type BundleTarget } from '@/commands/bundle/targets'
 import {
-  findMissingHostPrebuilds,
+  findMissingPlatformPackages,
   installMissingHostPrebuilds,
   resolveAddons,
   type HostPrebuildPackage
@@ -31,12 +37,10 @@ import {
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
 import type { NativeAddon } from '@/commands/verify/addon-source'
 import { isMobileHost } from '@/commands/verify/prebuilds'
-import { verifyBundle } from '@/commands/verify/index'
+import { formatVerifyBundleResult, verifyBundle } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
 import type { Logger } from '@/logging/types'
-
-const require = createRequire(import.meta.url)
 
 export interface BundleSdkOptions {
   projectRoot?: string | undefined
@@ -56,20 +60,21 @@ export interface BundleSdkOptions {
    * Install the addon platform packages that the split addons the bundle
    * reaches need for its mobile hosts, with the project's package manager
    * (see `ensureHostPrebuilds`), before bundling. Off by default: without it,
-   * bundling never changes package.json or node_modules, and a mobile host
-   * whose platform package is missing fails with `HostPrebuildsMissingError`,
-   * naming the exact pins. A refused install throws
-   * `HostPrebuildsInstallRefusedError` before anything is written.
+   * bundling never changes package.json or node_modules. A host whose
+   * platform package is missing fails with `HostPrebuildsMissingError`,
+   * naming the exact pins; desktop packages are never installed. A refused
+   * install throws `HostPrebuildsInstallRefusedError` before anything is
+   * written.
    */
   installMissingPrebuilds?: boolean | undefined
   /**
-   * For the `react-native` target, check the bundled packages' engines.bare
-   * against the Bare runtime in react-native-bare-kit and warn on a mismatch.
-   * Defaults to true; callers that run `verifyBundle` on the result can turn
-   * it off.
+   * Run `verifyBundle` on the bundle and fail with
+   * `BundleVerificationFailedError` on its errors. An engines.bare mismatch
+   * against the Bare runtime in react-native-bare-kit only warns. Defaults to
+   * true; callers that run `verifyBundle` on the result can turn it off.
    */
-  checkEngines?: boolean | undefined
-  /** Allow network lookups during the engines check. Defaults to true. */
+  verify?: boolean | undefined
+  /** Allow network lookups during verification. Defaults to true. */
   network?: boolean | undefined
   /**
    * For the `react-native` target, link the native addons for the phone hosts
@@ -88,6 +93,7 @@ export interface BundleSdkResult {
   bundlePath: string
   plugins: string[]
   addons: string[]
+  addonModules: string[]
   /** Platform packages `installMissingPrebuilds` installed; empty when it is off. */
   installedPrebuilds: HostPrebuildPackage[]
   /** Paths the link step wrote. */
@@ -101,13 +107,17 @@ function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
       : path.join(projectRoot, explicitSdkPath)
   }
 
+  return (
+    findInAncestorNodeModules(projectRoot, DEFAULT_SDK_NAME) ??
+    path.join(projectRoot, 'node_modules', DEFAULT_SDK_NAME)
+  )
+}
+
+function isLink(file: string): boolean {
   try {
-    const pkgJsonPath = require.resolve('@qvac/sdk/package.json', {
-      paths: [projectRoot]
-    })
-    return path.dirname(pkgJsonPath)
+    return fs.lstatSync(file).isSymbolicLink()
   } catch {
-    return path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+    return false
   }
 }
 
@@ -145,7 +155,7 @@ function resolveImportsMapPath(sdkPath: string, sdkName: string): string {
   throw new BareImportsMapNotFoundError(sdkName, importsMapPath)
 }
 
-interface CheckBundleEnginesOptions {
+interface VerifyOutputOptions {
   projectRoot: string
   bundlePath: string
   hosts: string[]
@@ -169,10 +179,10 @@ function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
   })
 }
 
-async function checkBundleEngines(options: CheckBundleEnginesOptions) {
+async function verifyOutput(options: VerifyOutputOptions) {
   const { projectRoot, bundlePath, hosts, network, logger } = options
 
-  logger.info('\n🔎 Checking engines.bare against the Bare runtime in react-native-bare-kit...')
+  logger.info('\n🔎 Verifying the bundle...')
   const result = await verifyBundle({
     projectRoot,
     addonsSource: bundlePath,
@@ -180,6 +190,16 @@ async function checkBundleEngines(options: CheckBundleEnginesOptions) {
     ...(network !== undefined ? { network } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
   })
+
+  const blocking = result.issues.filter(
+    (issue) => issue.level === 'error' && !ENGINES_ISSUE_CODES.has(issue.code)
+  )
+  if (blocking.length > 0) {
+    throw new BundleVerificationFailedError(
+      bundlePath,
+      new Error(formatVerifyBundleResult({ ...result, issues: blocking }))
+    )
+  }
 
   const label = hosts.join(', ')
   if (result.runtime === null) return
@@ -212,6 +232,7 @@ function defaultHosts(target: BundleTarget): string[] {
 }
 
 interface StowBundleOptions {
+  projectRoot: string
   entryPath: string
   target: BundleTarget
   outputDir: string
@@ -222,9 +243,10 @@ interface StowBundleOptions {
 
 /** Writes the bundle, the harness and the files the bundle loads, and returns the bundle's path. */
 async function stowBundle(options: StowBundleOptions): Promise<string> {
-  const { entryPath, target, outputDir, hosts, imports, deferModules } = options
+  const { projectRoot, entryPath, target, outputDir, hosts, imports, deferModules } = options
   const spec = TARGETS[target]
   const harnessPath = path.join(outputDir, spec.harness)
+  const stowTarget = await spec.load(projectRoot)
 
   assertNodeCanBundle()
   await fsp.rm(outputDir, { recursive: true, force: true })
@@ -242,7 +264,7 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
   try {
     for await (const artifact of stow(
       pathToFileURL(entryPath).href,
-      await spec.load(),
+      stowTarget,
       pathToFileURL(harnessPath).href,
       stowOptions
     )) {
@@ -250,6 +272,21 @@ async function stowBundle(options: StowBundleOptions): Promise<string> {
     }
   } catch (error) {
     throw new BundleFailedError(entryPath, error)
+  }
+
+  const harnessRequire = createRequire(harnessPath)
+  for (const name of spec.harnessImports) {
+    try {
+      harnessRequire.resolve(name)
+    } catch (error) {
+      throw new BundleFailedError(
+        entryPath,
+        new Error(
+          `the harness imports ${name}, which does not resolve from ${outputDir}; add it to the app's dependencies`,
+          { cause: error }
+        )
+      )
+    }
   }
 
   const bundlePath = written.find(
@@ -301,10 +338,13 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   // imported by name; one linked in, as pnpm installs it, or outside the
   // project is imported by its real path, and so is its bare-stow, which the
   // generated shim imports.
-  const sdkByName = findInAncestorNodeModules(projectRoot, sdkName) === sdkPath
+  const installedSdk = findInAncestorNodeModules(projectRoot, sdkName)
+  const sdkByName =
+    installedSdk !== null && !isLink(installedSdk) && realpath(installedSdk) === sdkPath
   const resolveImport = sdkByName ? undefined : createSdkImportResolver(sdkPath, sdkName)
   if (!sdkByName) {
     const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
+    Object.assign(imports, sdkImportsMap(sdkPath, sdkName))
     imports['bare-stow/protocol'] = pathToFileURL(sdkRequire.resolve('bare-stow/protocol')).href
   }
 
@@ -333,6 +373,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
   }
 
+  if (target === 'react-native') await assertReactNativeBareKitSupported(projectRoot, sdkPath)
+
   await fsp.mkdir(qvacDir, { recursive: true })
 
   logger.info('\n📝 Generating worker entry...')
@@ -349,9 +391,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
-  const stowOptions = { entryPath, target, outputDir, hosts, imports, deferModules }
+  const stowOptions = { projectRoot, entryPath, target, outputDir, hosts, imports, deferModules }
 
-  // Missing mobile platform packages are installed, or reported, before bundling.
   const addonsMissingPlatformPackages = () =>
     reachedAddonsMissingPlatformPackages({
       addons: async () =>
@@ -386,6 +427,10 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       logger
     })
     installedPrebuilds = installed
+    await throwIfPlatformPackagesMissing(
+      missingPlatformAddons,
+      hosts.filter((host) => !isMobileHost(host))
+    )
   } else {
     await throwIfPlatformPackagesMissing(missingPlatformAddons, hosts)
   }
@@ -398,10 +443,16 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   logger.info(`   Size: ${sizeKB} KB`)
 
   const addons = await listBundledAddons({ bundlePath, projectRoot, logger, includeAudioDecoder })
+  const addonModules = await listBundledAddonModules({
+    bundlePath,
+    projectRoot,
+    logger,
+    includeAudioDecoder
+  })
   logger.info(`   Native addons (${addons.length}): ${addons.join(', ') || '(none)'}`)
 
-  if (target === 'react-native' && options.checkEngines !== false) {
-    await checkBundleEngines({
+  if (options.verify !== false) {
+    await verifyOutput({
       projectRoot,
       bundlePath,
       hosts,
@@ -412,8 +463,11 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   let linked: string[] = []
   if (target === 'react-native' && options.link !== false) {
+    if (findInAncestorNodeModules(projectRoot, 'react-native-bare-kit') === null) {
+      throw new AddonLinkFailedError(hosts, new Error('react-native-bare-kit is not installed'))
+    }
     logger.info('\n🔗 Linking native addons into react-native-bare-kit...')
-    linked = await linkAddons({ projectRoot, entryPath, hosts, logger })
+    linked = await linkAddons({ projectRoot, addonModules, hosts, logger })
     logger.info(`   Wrote ${linked.length} files`)
   }
 
@@ -433,6 +487,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     bundlePath,
     plugins: pluginSpecifiers,
     addons,
+    addonModules,
     installedPrebuilds,
     linked
   }
@@ -448,7 +503,7 @@ interface ReachedAddonsOptions {
 
 /**
  * The installed split addons that the bundle reaches and that are missing a
- * mobile platform package. Every installed addon is a candidate (`@qvac/sdk`
+ * platform package for one of the hosts. Every installed addon is a candidate (`@qvac/sdk`
  * depends on all of them), so a first bundling pass defers each missing
  * platform package: the bundle then records the reached ones as
  * `deferred:<package>` and never visits the rest. Empty when nothing is
@@ -460,7 +515,7 @@ async function reachedAddonsMissingPlatformPackages(
 ): Promise<NativeAddon[]> {
   const { hosts, scan, logger } = options
   const addons = await options.addons()
-  const missing = await findMissingHostPrebuilds(addons, hosts)
+  const missing = await findMissingPlatformPackages(addons, hosts)
   if (missing.length === 0) return []
 
   logger.debug(
@@ -493,13 +548,13 @@ function deferredSpecifiers(resolutions: unknown): Set<string> {
 }
 
 /**
- * Throws `HostPrebuildsMissingError` when split addons are missing mobile
- * platform packages, naming the exact pins.
+ * Throws `HostPrebuildsMissingError` when split addons are missing platform
+ * packages for `hosts`, naming the exact pins.
  */
 async function throwIfPlatformPackagesMissing(addons: NativeAddon[], hosts: string[]) {
   let missing: HostPrebuildPackage[]
   try {
-    missing = await findMissingHostPrebuilds(addons, hosts)
+    missing = await findMissingPlatformPackages(addons, hosts)
   } catch {
     return
   }

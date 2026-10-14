@@ -100,19 +100,8 @@ export class RPCConnectionFailedError extends QvacErrorBase {
 }
 
 export class WorkerCrashedError extends QvacErrorBase {
-  public readonly exitCode: number | null
-  public readonly exitSignal: NodeJS.Signals | null
-
-  constructor(exitCode: number | null, exitSignal: NodeJS.Signals | null, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.WORKER_CRASHED,
-        [String(exitCode), String(exitSignal)],
-        cause
-      )
-    )
-    this.exitCode = exitCode
-    this.exitSignal = exitSignal
+  constructor(cause?: unknown) {
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_CRASHED, undefined, cause))
   }
 }
 
@@ -172,6 +161,30 @@ export class BarePackNodeUnsupportedError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED,
         [nodeVersion, requiredRange],
+        cause
+      )
+    )
+  }
+}
+
+export class BundleTargetNotInstalledError extends QvacErrorBase {
+  constructor(target: string, packageName: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BUNDLE_TARGET_NOT_INSTALLED,
+        [target, packageName],
+        cause
+      )
+    )
+  }
+}
+
+export class ReactNativeBareKitUnsupportedError extends QvacErrorBase {
+  constructor(installedVersion: string, requiredRange: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.REACT_NATIVE_BARE_KIT_UNSUPPORTED,
+        [installedVersion, requiredRange],
         cause
       )
     )

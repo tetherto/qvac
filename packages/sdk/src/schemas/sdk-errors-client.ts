@@ -36,7 +36,6 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_VALIDATION_FAILED: 50605,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
   BUNDLE_VERIFICATION_FAILED: 50609,
-  BUNDLE_FAILED: 50611,
   INVALID_PLUGIN_SPECIFIER: 50612,
   BARE_IMPORTS_MAP_NOT_FOUND: 50613,
   HOST_PREBUILDS_INSTALL_REFUSED: 50615,
@@ -44,6 +43,9 @@ export const SDK_CLIENT_ERROR_CODES = {
   ADDON_LINK_FAILED: 50617,
   BARE_PACK_NODE_UNSUPPORTED: 50618,
   HOST_PREBUILDS_MISSING: 50619,
+  REACT_NATIVE_BARE_KIT_UNSUPPORTED: 50620,
+  BUNDLE_FAILED: 50621,
+  BUNDLE_TARGET_NOT_INSTALLED: 50622,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800
@@ -114,8 +116,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_CRASHED]: {
     name: 'WORKER_CRASHED',
-    message: (code: string, signal: string) =>
-      `Bare worker exited mid-request (code=${code}, signal=${signal}) — in-flight calls were aborted`
+    message: 'Bare worker stopped unexpectedly; in-flight calls were aborted'
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN]: {
     name: 'WORKER_SHUTDOWN',
@@ -164,7 +165,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: 'BUNDLE_VERIFICATION_FAILED',
     message: (bundlePath: string) =>
-      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`
+      `Native addon verification failed for ${bundlePath}. The cause lists the failing addons and hosts; resolve them before shipping.`
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_FAILED]: {
     name: 'BUNDLE_FAILED',
@@ -174,7 +175,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED]: {
     name: 'BARE_PACK_NODE_UNSUPPORTED',
     message: (nodeVersion: string, requiredRange: string) =>
-      `bare-pack needs Node ${requiredRange}; found Node v${nodeVersion}. Upgrade Node and run the bundle again.`
+      `Bundling needs Node ${requiredRange}; found Node v${nodeVersion}. Upgrade Node and run the bundle again.`
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER]: {
     name: 'INVALID_PLUGIN_SPECIFIER',
@@ -210,8 +211,19 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.HOST_PREBUILDS_MISSING]: {
     name: 'HOST_PREBUILDS_MISSING',
     message: (dependencies: string) =>
-      "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each mobile host's platform package installed." +
-      `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall (or bundle with installMissingPrebuilds):\n${dependencies}`
+      "Bundling failed: split addons resolve their native code through `#host-addon`, which needs each host's platform package installed." +
+      `\n\n  Add them to the dependencies in package.json, pinned to these exact versions, and reinstall. installMissingPrebuilds does this for phone hosts; npm installs another desktop host's package only with --force:\n${dependencies}`
+  },
+  [SDK_CLIENT_ERROR_CODES.REACT_NATIVE_BARE_KIT_UNSUPPORTED]: {
+    name: 'REACT_NATIVE_BARE_KIT_UNSUPPORTED',
+    message: (installedVersion: string, requiredRange: string) =>
+      `The react-native worker bundle needs react-native-bare-kit ${requiredRange}; found ${installedVersion}. ` +
+      'Upgrade react-native-bare-kit and run the bundle again.'
+  },
+  [SDK_CLIENT_ERROR_CODES.BUNDLE_TARGET_NOT_INSTALLED]: {
+    name: 'BUNDLE_TARGET_NOT_INSTALLED',
+    message: (target: string, packageName: string) =>
+      `The ${target} target needs ${packageName}, which the project does not have. Install it and run the bundle again.`
   },
 
   // Profiler Errors (50,800-50,899)
