@@ -98,8 +98,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@qvac/infer-base':
-        specifier: ^0.6.2
-        version: 0.6.2(bare-abort-controller@1.1.2)
+        specifier: ^0.8.0
+        version: link:../infer-base
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1

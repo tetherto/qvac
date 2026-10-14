@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Audio generation (music) addon for qvac",
   "qvac": {
     "ggml-speech": "2026-10-07#1"
@@ -142,7 +142,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
-    "@qvac/infer-base": "^0.6.2",
+    "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-ffmpeg": "^1.4.0",
     "bare-fs": "^4.5.6",
