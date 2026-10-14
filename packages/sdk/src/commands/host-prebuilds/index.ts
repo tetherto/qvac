@@ -64,9 +64,8 @@ export interface EnsureHostPrebuildsResult {
  * hosts and that the project does not have yet.
  *
  * A split addon names one platform package per host in the `#host-addon` map
- * of its package.json (`<addon>-ios` covers every iOS host), and its
- * `binding.js` is just `require('#host-addon')`, so bare-pack cannot resolve
- * it for a host whose package is missing. Desktop platform packages install as
+ * of its package.json (`<addon>-ios` covers every iOS host) and loads its
+ * native code from that package alone. Desktop platform packages install as
  * os/cpu-filtered optionalDependencies, but a build host never reports a
  * mobile os, so mobile ones have to be declared.
  * This declares the missing ones in package.json, pinned to each addon's

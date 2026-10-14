@@ -54,18 +54,17 @@ export interface PrebuildLocation {
 }
 
 const PREBUILDS_DIR = 'prebuilds'
+const INNER_ADDON_DIR = 'addon'
 
 /**
  * Where an addon's `<host>` prebuild may live:
  *
  * - `<packageRoot>/prebuilds/<host>` for an ordinary addon, including the
  *   per-platform packages themselves.
- * - `<platformRoot>/prebuilds/<host>` (or `addon/prebuilds/<host>` in older
- *   published ASR packages) for a split addon, whose `#host-addon`
- *   map names a platform package for this host. The meta's own `prebuilds/`
- *   does not count: its `binding.js` is `require('#host-addon')`, so the
- *   platform package is the only thing loaded. Empty when that package is not
- *   installed.
+ * - For a split addon, the platform package its `#host-addon` map names for
+ *   this host: `<platformRoot>/prebuilds/<host>` when that package is an
+ *   addon, `<platformRoot>/addon/prebuilds/<host>` when it wraps an inner
+ *   addon. Empty when the package is not installed.
  */
 export async function resolvePrebuildLocations(
   addon: NativeAddon,
@@ -82,11 +81,14 @@ export async function resolvePrebuildLocations(
   )
   if (platformRoot === null) return []
 
+  const manifest = await readPackageManifest(platformRoot)
+  const addonRoot =
+    manifest?.addon === true ? platformRoot : path.join(platformRoot, INNER_ADDON_DIR)
   const location: PrebuildLocation = {
-    hostDir: path.join(platformRoot, PREBUILDS_DIR, host),
+    hostDir: path.join(addonRoot, PREBUILDS_DIR, host),
     platformPackage
   }
-  const installedVersion = await readPackageVersion(platformRoot)
+  const installedVersion = manifest?.version
   if (
     addon.version !== undefined &&
     installedVersion !== undefined &&
@@ -94,23 +96,16 @@ export async function resolvePrebuildLocations(
   ) {
     location.mismatchedVersion = installedVersion
   }
-  // ASR 0.8 platform packages wrap the native addon under `addon/`.
-  // New split packages put prebuilds directly at the platform package root.
-  const nestedRoot = path.join(platformRoot, 'addon')
-  if (await isPackageDir(nestedRoot)) {
-    const nestedVersion = await readPackageVersion(nestedRoot)
-    const nested: PrebuildLocation = {
-      ...location,
-      hostDir: path.join(nestedRoot, PREBUILDS_DIR, host)
-    }
+  if (addonRoot !== platformRoot) {
+    const nestedVersion = (await readPackageManifest(addonRoot))?.version
     if (
+      location.mismatchedVersion === undefined &&
       addon.version !== undefined &&
       nestedVersion !== undefined &&
       nestedVersion !== addon.version
     ) {
-      nested.mismatchedVersion = nestedVersion
+      location.mismatchedVersion = nestedVersion
     }
-    return [location, nested]
   }
   return [location]
 }
@@ -221,14 +216,18 @@ async function platformPackageForHost(addon: NativeAddon, host: string): Promise
   return resolveAddonPlatformPackage(addon.name, await readHostAddonMap(addon), host)
 }
 
-async function readPackageVersion(packageRoot: string): Promise<string | undefined> {
+async function readPackageManifest(
+  packageRoot: string
+): Promise<{ version?: string; addon: boolean } | undefined> {
   try {
     const parsed: unknown = JSON.parse(
       await fsp.readFile(path.join(packageRoot, 'package.json'), 'utf8')
     )
     if (typeof parsed !== 'object' || parsed === null) return undefined
-    const version = (parsed as { version?: unknown }).version
-    return typeof version === 'string' ? version : undefined
+    const { version, addon } = parsed as { version?: unknown; addon?: unknown }
+    return typeof version === 'string'
+      ? { version, addon: addon === true }
+      : { addon: addon === true }
   } catch {
     return undefined
   }
