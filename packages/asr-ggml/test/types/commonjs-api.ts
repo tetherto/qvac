@@ -205,10 +205,14 @@ void [
   modelKey,
 ];
 
+const mossConfig: ASRGgml.MossTranscribeConfig = { backend: "cuda", useGPU: false };
+void mossConfig;
+
 const mossFit: ASRGgml.MossTranscribeFitRequest = {
   engine: "moss-transcribe",
   modelPath: "/models/moss-transcribe.gguf",
   audioSeconds: 30,
+  backend: "vulkan",
   hotwords: ["QVAC"],
   maxNewTokens: 1024,
   threads: 4,
