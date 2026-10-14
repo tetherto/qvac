@@ -12,7 +12,7 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
     JSON.stringify(llmConfig, (key: string, v: unknown) =>
       key === 'modelType' || key === 'system_prompt'
         ? undefined
-        : key === 'stop_sequences'
+        : key === 'stop_sequences' || key === 'backend'
           ? Array.isArray(v)
             ? v.join(', ')
             : v

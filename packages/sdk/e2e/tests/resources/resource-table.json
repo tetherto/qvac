@@ -201,7 +201,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "vla-pi05": {
@@ -213,7 +215,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "vla-groot": {
@@ -225,7 +229,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "vla-groot-multi": {
@@ -237,7 +243,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "classification": {

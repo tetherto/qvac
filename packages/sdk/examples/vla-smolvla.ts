@@ -31,7 +31,7 @@ try {
   const modelId = await loadModel({
     modelSrc,
     modelType: 'ggml-vla',
-    modelConfig: { backend: 'cpu' },
+    modelConfig: { backend: ['cpu'] },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`

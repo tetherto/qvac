@@ -236,7 +236,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -553,7 +553,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -693,7 +693,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1013,7 +1013,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1139,7 +1139,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       bare-fs:
         specifier: ^4.5.1
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1225,7 +1225,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1935,7 +1935,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -2121,7 +2121,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.21.1
-        version: link:../fabric
+        version: 0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -4576,6 +4576,18 @@ packages:
   '@qvac/fabric@0.20.3':
     resolution: {integrity: sha512-fky6Nda5HqMAe4Pp0lRCpBUU4WrSr2frkPPluzoefXjwqif2t7jQO2fyjNkwjqds00rlrQ86C9hfX7yWXuIAZQ==}
     engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric@0.21.1':
+    resolution: {integrity: sha512-OMYfrYux6UH+f511S9MIrQxoxmcHirTosIFRXxUFh0uCIFrvI4MNVHXhkHIakYWkQFwTmyW89HaoSx9HihIMJg==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': 0.21.1
+      '@qvac/fabric-ios': 0.21.1
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
 
   '@qvac/ggml-rpc-server@0.2.0':
     resolution: {integrity: sha512-ppI0wVLlkRWD0YGGzMTVsUZvIdx+8P5eN4H4gHvmJELx2+597nZacJMq5O1bNMWq+5Nwbs86I6pym4p874kjTA==}
@@ -14261,6 +14273,16 @@ snapshots:
       '@qvac/fabric-linux-arm64': 0.20.3
       '@qvac/fabric-linux-x64': 0.20.3
       '@qvac/fabric-win32-x64': 0.20.3
+
+  '@qvac/fabric@0.21.1(@qvac/fabric-android-arm64@0.21.1)(@qvac/fabric-ios@0.21.1)':
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.21.1
+      '@qvac/fabric-darwin-arm64': 0.21.1
+      '@qvac/fabric-darwin-x64': 0.21.1
+      '@qvac/fabric-ios': 0.21.1
+      '@qvac/fabric-linux-arm64': 0.21.1
+      '@qvac/fabric-linux-x64': 0.21.1
+      '@qvac/fabric-win32-x64': 0.21.1
 
   '@qvac/ggml-rpc-server@0.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
