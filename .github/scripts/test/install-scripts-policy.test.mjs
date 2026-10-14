@@ -43,7 +43,7 @@ const ALLOWED = [
   ...[
     ['.github/workflows/test-android-sdk.yml', 2],
     ['.github/workflows/test-ios-sdk.yml', 2],
-    ['.github/workflows/test-node-sdk.yml', 1],
+    ['.github/actions/sdk-e2e-node-prepare/action.yml', 1],
   ].map(([file, count]) => ({
     file,
     match: 'npm install --install-links',

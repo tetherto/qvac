@@ -16,6 +16,7 @@ import { resolveAndCheckModel, ensureReady } from '@/serve/core/plugins/require-
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import {
   transcriptionsBody,
+  assertTranscriptionOptionsSupported,
   translationsBody,
   audioSpeechBody,
   voicesListResponse,
@@ -48,17 +49,22 @@ const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text', 'srt', 'vtt', '
 
 const descriptions = {
   transcribe: `
-Speech-to-text via Whisper-cpp / Parakeet. Multipart body with required
+Speech-to-text via Whisper-cpp / Parakeet / MOSS. Multipart body with required
 \`file\` (audio bytes) and \`model\` (alias of a registered transcription
 model).
 
 **\`response_format\`** accepts \`json\` (default), \`text\`, \`srt\`, \`vtt\`,
-and \`verbose_json\`. \`json\` and \`text\` work with Whisper and Parakeet
-transcription aliases. Timed formats require Whisper segment metadata.
-\`verbose_json\` exposes only text, duration, and segment id/start/end/text.
-Its duration is the end of the last transcribed segment, not the submitted
+and \`verbose_json\`. \`json\` and \`text\` work with Whisper, Parakeet,
+and MOSS transcription aliases. SRT/VTT require Whisper or MOSS segment metadata.
+Parakeet also supports \`verbose_json\`, including offline diarization turns.
+\`verbose_json\` exposes text, duration, segment id/start/end/text, and available speaker/speaker_id labels.
+Its duration is the latest segment or speaker-turn end, not the submitted
 audio length.
 Unknown values return \`400 invalid_response_format\`.
+
+**MOSS options:** \`hotwords\` is a JSON array of up to 64 nonempty terms, each
+limited to 64 UTF-8 bytes. Use it instead of \`prompt\`. \`max_new_tokens\` sets
+the decoding limit (0 uses the model default).
 
 **\`language\`** is honored as a model-load-time config, not per request.
 Sending it logs a warning and uses whatever language the model was loaded
@@ -170,6 +176,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         'transcription'
       )
       assertTimedFormatSupported(responseFormat, entry.sdkType)
+      assertTranscriptionOptionsSupported(body, entry.sdkType)
       const fileSizeKB = Math.round(file.length / 1024)
       app.qvac.logger.info(
         `  transcribe model=${alias} file=${fileMeta?.filename ?? ''} size=${fileSizeKB}KB ` +
@@ -186,7 +193,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           {
             modelId: sdkModelId,
             audioChunk: tmpPath,
-            ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {})
+            ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {}),
+            ...(body.hotwords !== undefined ? { hotwords: body.hotwords } : {}),
+            ...(body.max_new_tokens !== undefined ? { maxNewTokens: body.max_new_tokens } : {})
           },
           isTimedTranscriptionFormat(responseFormat),
           'transcription'
@@ -555,6 +564,8 @@ interface TranscriptionInvocationOptions {
   modelId: string
   audioChunk: string
   prompt?: string
+  hotwords?: string[]
+  maxNewTokens?: number
 }
 
 interface TranscriptionInvocationResult {
@@ -635,11 +646,23 @@ function assertKnownTranscriptionFormat(responseFormat: string): void {
 
 function assertTimedFormatSupported(responseFormat: string, sdkType: string): void {
   if (!isTimedTranscriptionFormat(responseFormat)) return
-  if (sdkType === 'whisper' || sdkType === 'whispercpp-transcription') return
+  if (
+    responseFormat === 'verbose_json' &&
+    (sdkType === 'parakeet' || sdkType === 'parakeet-transcription')
+  ) {
+    return
+  }
+  if (
+    sdkType === 'whisper' ||
+    sdkType === 'whispercpp-transcription' ||
+    sdkType === 'moss-transcribe'
+  ) {
+    return
+  }
   throw new HttpError(
     400,
     'unsupported_response_format',
-    `response_format "${responseFormat}" requires Whisper segment metadata. Use "json" or "text" with this model.`
+    `response_format "${responseFormat}" requires Whisper or MOSS segment metadata. Use "json" or "text" with this model.`
   )
 }
 

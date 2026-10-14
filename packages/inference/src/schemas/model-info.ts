@@ -67,6 +67,7 @@ export const modelInfoSchema = z.object({
       'whisper',
       'bci',
       'parakeet',
+      'moss-transcribe',
       'embeddings',
       'nmt',
       'vad',

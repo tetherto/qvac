@@ -978,6 +978,56 @@ function splitTtsManifest(): Record<string, unknown> {
 }
 
 describe('checkPrebuilds with per-platform prebuild packages', () => {
+  it('accepts ASR 0.8 platform packages with an addon/prebuilds layout', async () => {
+    await withTempDir(async (root) => {
+      const name = '@qvac/asr-ggml'
+      const version = '0.8.1'
+      const metaRoot = writePackageJson(root, 'node_modules/@qvac/asr-ggml', {
+        name,
+        version,
+        addon: true,
+        imports: {
+          '#host-addon': { linux: { x64: [`${name}-linux-x64`, './addon-unavailable.js'] } }
+        }
+      })
+      const platformRoot = writePackageJson(root, 'node_modules/@qvac/asr-ggml-linux-x64', {
+        name: `${name}-linux-x64`,
+        version,
+        main: 'index.js'
+      })
+      const nestedRoot = writePackageJson(platformRoot, 'addon', { name, version, addon: true })
+      writePrebuild(nestedRoot, 'linux-x64')
+      const addon = {
+        name,
+        version,
+        packageRoot: metaRoot,
+        packageJsonPath: path.join(metaRoot, 'package.json')
+      }
+      assert.deepEqual(await checkPrebuilds({ addon, hosts: ['linux-x64'] }), [])
+      const locations = await resolvePrebuildLocations(addon, 'linux-x64')
+      assert.equal(locations.length, 1)
+      assert.equal(
+        locations[0]?.hostDir,
+        path.join(await fs.promises.realpath(nestedRoot), 'prebuilds', 'linux-x64')
+      )
+      writeJson(path.join(nestedRoot, 'package.json'), { name, version: '0.8.0', addon: true })
+      assert.equal(
+        (await checkPrebuilds({ addon, hosts: ['linux-x64'] })).length,
+        1,
+        'a nested binary at a different version does not satisfy the prebuild check'
+      )
+      writeJson(path.join(platformRoot, 'package.json'), {
+        name: `${name}-linux-x64`,
+        version: '0.7.0'
+      })
+      assert.equal(
+        (await resolvePrebuildLocations(addon, 'linux-x64'))[0]?.mismatchedVersion,
+        '0.7.0',
+        'the platform package version mismatch takes precedence over its inner addon mismatch'
+      )
+    })
+  })
+
   it('accepts a prebuild shipped by a platform package hoisted next to the meta package', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
@@ -1018,6 +1068,36 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
         hosts
       })
       const issues = await checkPrebuilds({ addon: metaAddon(packageRoot), hosts })
+      assert.deepEqual(issues, [])
+    })
+  })
+
+  it('finds the prebuild in the inner addon of a platform package that is not an addon', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      const platformRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml-android-arm64', {
+        name: '@qvac/tts-ggml-android-arm64',
+        version: '0.9.0'
+      })
+      const innerAddonRoot = writePackageJson(platformRoot, 'addon', {
+        name: '@qvac/tts-ggml',
+        version: '0.9.0',
+        addon: true
+      })
+      writePrebuild(innerAddonRoot, 'android-arm64')
+
+      const locations = await resolvePrebuildLocations(metaAddon(packageRoot), 'android-arm64')
+      assert.deepEqual(locations, [
+        {
+          hostDir: path.join(innerAddonRoot, 'prebuilds', 'android-arm64'),
+          platformPackage: '@qvac/tts-ggml-android-arm64'
+        }
+      ])
+
+      const issues = await checkPrebuilds({
+        addon: metaAddon(packageRoot),
+        hosts: ['android-arm64']
+      })
       assert.deepEqual(issues, [])
     })
   })
