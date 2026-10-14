@@ -26,7 +26,9 @@ export const startRpcServerOptionsSchema = z.object({
   expectRdma: z
     .boolean()
     .optional()
-    .describe('Require an RDMA-capable native backend. Reject before startup if unavailable.'),
+    .describe(
+      'Require runtime RDMA availability: a capable native backend, libibverbs, an RDMA device, and GGML_RPC_NO_RDMA unset. Reject before startup if unavailable.'
+    ),
   allowNonLoopbackHost: z
     .boolean()
     .optional()
@@ -45,7 +47,7 @@ export const rpcServerInfoSchema = z.object({
   rdmaCapable: z
     .boolean()
     .describe(
-      'Whether the native backend supports RDMA. It falls back to TCP for clients without RDMA.'
+      'Whether the server will try RDMA: the native backend supports it, libibverbs loaded, an RDMA device is present, and GGML_RPC_NO_RDMA is unset. Each connection can still fall back to TCP.'
     )
 })
 export const startRpcServerRequestSchema = startRpcServerOptionsSchema.extend({

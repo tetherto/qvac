@@ -22718,7 +22718,7 @@ class StartRpcServerRequest(GeneratedBaseModel):
         bool | None,
         Field(
             alias="expectRdma",
-            description="Require an RDMA-capable native backend. Reject before startup if unavailable.",
+            description="Require runtime RDMA availability: a capable native backend, libibverbs, an RDMA device, and GGML_RPC_NO_RDMA unset. Reject before startup if unavailable.",
         ),
     ] = None
     allow_non_loopback_host: Annotated[
@@ -22758,7 +22758,7 @@ class StartRpcServerResponse(GeneratedBaseModel):
         bool,
         Field(
             alias="rdmaCapable",
-            description="Whether the native backend supports RDMA. It falls back to TCP for clients without RDMA.",
+            description="Whether the server will try RDMA: the native backend supports it, libibverbs loaded, an RDMA device is present, and GGML_RPC_NO_RDMA is unset. Each connection can still fall back to TCP.",
         ),
     ]
     type: Literal["startRpcServer"] = "startRpcServer"
