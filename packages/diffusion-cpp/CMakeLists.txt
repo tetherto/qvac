@@ -76,10 +76,22 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
+# The module is named after the platform package that ships it,
+# qvac__diffusion-cpp-<suffix> (every iOS host shares `ios`), so that package
+# is an ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare there. cmake-bare installs
+# the dynamically loadable ggml backends to <host>/<module name>, the directory
+# the addon looks in next to itself (see ModuleBackendsDir.hpp); bare-link
+# flattens them next to the module in a mobile app instead. Keep the suffix in
+# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__diffusion-cpp-ios")
+else()
+  set(module_name "qvac__diffusion-cpp-${bare_target_value}")
+endif()
+message("Building inference-addon-sd module '${module_name}'")
 
 # On Android and desktop Linux with GGML_BACKEND_DL, install GPU backend .so
 # modules alongside the addon so ggml can dlopen them at runtime.  CPU
@@ -113,7 +125,7 @@ if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   endforeach()
 endif()
 
-add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
+add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPORTS})
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
@@ -170,7 +182,8 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
 
 target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)
-target_compile_definitions(${inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${inference-addon-sd} PRIVATE
+  QVAC_ADDON_MODULE_NAME="${module_name}")
 
 if(WIN32)
   # cmake-bare enables WINDOWS_EXPORT_ALL_SYMBOLS. Exporting addon internals

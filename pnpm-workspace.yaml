@@ -52,6 +52,14 @@ overrides:
   "@qvac/audiogen-ggml-darwin-arm64": "-"
   "@qvac/audiogen-ggml-darwin-x64": "-"
   "@qvac/audiogen-ggml-win32-x64": "-"
+  # diffusion-cpp's desktop platform packages are not on npm until the split
+  # release publishes them. The workspace stages a source build with
+  # `npm run link:platform` instead.
+  "@qvac/diffusion-cpp-linux-x64": "-"
+  "@qvac/diffusion-cpp-linux-arm64": "-"
+  "@qvac/diffusion-cpp-darwin-arm64": "-"
+  "@qvac/diffusion-cpp-darwin-x64": "-"
+  "@qvac/diffusion-cpp-win32-x64": "-"
 
 blockExoticSubdeps: true
 
