@@ -87,6 +87,42 @@ async function createReadyAudioServer(t: TestContext) {
   return { app, calls, boundRequestIds }
 }
 
+describe('serve: audio advisory warnings', () => {
+  for (const route of ['transcriptions', 'translations']) {
+    it(`omits ignored values from ${route} warnings`, async (t) => {
+      const { app } = await createReadyAudioServer(t)
+      const warnings: string[] = []
+      app.qvac.logger.warn = (message) => warnings.push(message)
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/audio/${route}`,
+        ...multipart([
+          {
+            name: 'model',
+            value: route === 'transcriptions' ? 'whisper-transcription' : 'whisper-translation'
+          },
+          { name: 'temperature', value: '0.7319' },
+          ...(route === 'transcriptions'
+            ? [{ name: 'language', value: 'private language override\nforged log line' }]
+            : []),
+          EMPTY_FILE
+        ])
+      })
+
+      assert.equal(res.statusCode, 200)
+      assert.deepEqual(res.json(), { text: 'Hello world' })
+      assert.deepEqual(warnings, [
+        ...(route === 'transcriptions'
+          ? [
+              'language is configured at model load time. Per-request language override is not yet supported.'
+            ]
+          : []),
+        'Ignoring unsupported param: temperature'
+      ])
+    })
+  }
+})
+
 describe('serve: transcriptions validation', () => {
   const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 

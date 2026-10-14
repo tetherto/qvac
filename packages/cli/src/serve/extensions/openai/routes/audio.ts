@@ -156,11 +156,11 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       assertKnownTranscriptionFormat(responseFormat)
       if (body.language !== undefined) {
         app.qvac.logger.warn(
-          `language="${String(body.language)}" is configured at model load time. Per-request language override is not yet supported.`
+          'language is configured at model load time. Per-request language override is not yet supported.'
         )
       }
       if (body.temperature !== undefined) {
-        app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
+        app.qvac.logger.warn('Ignoring unsupported param: temperature')
       }
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
@@ -238,7 +238,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       assertKnownTranscriptionFormat(responseFormat)
       if (body.temperature !== undefined) {
-        app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
+        app.qvac.logger.warn('Ignoring unsupported param: temperature')
       }
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
