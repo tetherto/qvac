@@ -126,7 +126,9 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   })
 
   const response = await model.run({
-    mode: request.mode,
+    ...(request.mode === 'img2vid'
+      ? { mode: 'img2vid' as const, init_image: Buffer.from(request.init_image!, 'base64') }
+      : { mode: 'txt2vid' as const }),
     prompt: request.prompt,
     ...(request.negative_prompt !== undefined && {
       negative_prompt: request.negative_prompt
@@ -171,9 +173,6 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     }),
     ...(request.vace_strength !== undefined && {
       vace_strength: request.vace_strength
-    }),
-    ...(request.init_image !== undefined && {
-      init_image: Buffer.from(request.init_image, 'base64')
     }),
     ...(request.strength !== undefined && {
       strength: request.strength

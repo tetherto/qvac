@@ -1,4 +1,5 @@
 import test from 'brittle'
+import Ajv2020 from 'ajv/dist/2020'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import {
@@ -349,6 +350,33 @@ test('every registered public constant is merged into schema.json as its own $de
 
   const verbosity = defs['constants.Verbosity']
   t.alike(verbosity?.['x-enum-varnames'], ['ERROR', 'WARN', 'INFO', 'DEBUG'])
+})
+
+test('world fit length survives the generated load contract', function (t) {
+  const { schemaDocument } = buildContract()
+  const nodes: JsonSchema[] = []
+  collectTitleableNodes(schemaDocument.$defs['loadModel.request'], nodes)
+  const schema = nodes.find(function (node) {
+    return node['title'] === 'LoadModelSrcRequestSdcppGeneration'
+  })
+  t.ok(schema, 'diffusion load schema is exported')
+  if (schema === undefined) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+  const request = {
+    type: 'loadModel',
+    modelType: 'sdcpp-generation',
+    modelSrc: '/models/abot.gguf',
+    modelConfig: { mode: 'world', world: {} }
+  }
+  t.ok(validate(request), 'length stays optional')
+  for (const fitSteps of [1, 100, 1000000]) {
+    request.modelConfig.world = { fitSteps }
+    t.ok(validate(request), `accepts ${fitSteps} steps`)
+  }
+  for (const fitSteps of [0, -1, 1.5, 1000001]) {
+    request.modelConfig.world = { fitSteps }
+    t.absent(validate(request), `rejects ${fitSteps} steps`)
+  }
 })
 
 test('export is deterministic across runs', async (t) => {

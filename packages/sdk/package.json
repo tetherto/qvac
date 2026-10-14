@@ -220,7 +220,7 @@
     "@qvac/bci-whispercpp": "^0.11.0",
     "@qvac/classification-ggml": "^0.29.0",
     "@qvac/decoder-audio": "^0.8.0",
-    "@qvac/diffusion-cpp": "^0.26.0",
+    "@qvac/diffusion-cpp": "^0.29.2",
     "@qvac/embed-llamacpp": "^0.46.0",
     "@qvac/error": "^0.1.1",
     "@qvac/ggml-rpc-server": "^0.2.0",

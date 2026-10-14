@@ -329,6 +329,15 @@ export const sdcppConfigSchema = z.object({
   world: z
     .object({
       seed: z.number().int().optional().describe('Walk RNG seed.'),
+      fitSteps: z
+        .number()
+        .int()
+        .min(1)
+        .max(1000000)
+        .optional()
+        .describe(
+          'Walk steps covered by memory fit. Defaults to 100; does not limit generation or retained history.'
+        ),
       // Mirrors parseAutoOrPositiveInt in the addon's WorldSessionHandlers.cpp:
       // -1 or > 0. Zero and other negatives throw natively at load, after the
       // multi-gigabyte artifacts have already been resolved.
@@ -443,7 +452,7 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       "ABot-World session tuning — mode: 'world' only, rejected in every other " +
-        'mode. Forwarded to the native session as-is.'
+        'mode. Session settings reach the addon; fitSteps controls only memory fit.'
     ),
   upscaler: z
     .object({
