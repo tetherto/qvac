@@ -110,6 +110,7 @@ MossTranscribeModel::toEngineOptions(const MossTranscribeConfig& cfg) {
   if (cfg.maxThreads > 0)
     options.n_threads = cfg.maxThreads;
   options.use_gpu = cfg.useGPU;
+  options.backend = cfg.backend;
   options.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return options;
 }

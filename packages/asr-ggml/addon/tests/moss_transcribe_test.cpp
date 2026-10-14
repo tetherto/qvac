@@ -152,6 +152,23 @@ TEST(MossTranscribeEngineOptions, MapsModelThreadsAndGpu) {
   EXPECT_TRUE(options.use_gpu);
 }
 
+TEST(MossTranscribeEngineOptions, BackendDefaultsToAuto) {
+  EXPECT_EQ(MossTranscribeModel::toEngineOptions(stubConfig()).backend, "auto");
+}
+
+TEST(MossTranscribeEngineOptions, ExplicitBackendPreservesGpuFlag) {
+  for (const auto* backend : {"cpu", "cuda", "vulkan", "CUDA1", "Vulkan0"}) {
+    for (const bool useGpu : {false, true}) {
+      auto cfg = stubConfig();
+      cfg.backend = backend;
+      cfg.useGPU = useGpu;
+      const auto options = MossTranscribeModel::toEngineOptions(cfg);
+      EXPECT_EQ(options.backend, backend);
+      EXPECT_EQ(options.use_gpu, useGpu);
+    }
+  }
+}
+
 TEST(MossTranscribeEngineOptions, ZeroThreadsKeepsEngineDefault) {
   EXPECT_EQ(
       MossTranscribeModel::toEngineOptions(stubConfig()).n_threads,

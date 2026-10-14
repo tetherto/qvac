@@ -108,21 +108,30 @@ test('generated Parakeet names match the SDK and work in managed config', () => 
   }
 })
 
-test('Parakeet Core ML components remain catalog records without standalone exports', () => {
-  const component = allModels
-    .filter((model) => model.addon === 'parakeet')
-    .find((model) => model.registryPath.includes('.mlmodelc/'))
-  assert.ok(component, 'catalog contains a compiled Parakeet bundle component')
-  const [processed] = groupCompanionSets([{ ...component, modelName: '', tags: [] }])
+test('Parakeet Core ML components are excluded from the generated provider catalog', () => {
+  const component = {
+    registryPath: 'parakeet/encoder.mlmodelc/weights/weight.bin',
+    registrySource: 's3',
+    modelId: 'weight.bin',
+    addon: 'parakeet' as const,
+    engine: 'parakeet-transcription' as const,
+    modelName: 'encoder',
+    tags: [],
+    quantization: '',
+    params: '',
+    expectedSize: 1,
+    sha256Checksum: '',
+    blobCoreKey: '',
+    blobBlockOffset: 0,
+    blobBlockLength: 1,
+    blobByteOffset: 0
+  }
+  const [processed] = groupCompanionSets([component])
   assert.equal(processed?.isCompanionOnly, true)
   const output = generateModelsFileContent([processed!])
-  assert.ok(
-    output.includes(component.registryPath),
-    'component remains in allModels for registry use'
-  )
+  assert.equal(output.includes(component.registryPath), false, 'bundle components are excluded')
   assert.equal(
-    output.includes('export const PARAKEET_'),
-    false,
-    'component has no model constant export'
+    allModels.some((model) => model.registryPath.includes('.mlmodelc/')),
+    false
   )
 })
