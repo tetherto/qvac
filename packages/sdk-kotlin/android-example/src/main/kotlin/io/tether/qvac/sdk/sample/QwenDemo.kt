@@ -4,12 +4,15 @@ import io.tether.qvac.sdk.QvacClient
 import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completion
 import io.tether.qvac.sdk.models
-import io.tether.qvac.sdk.generated.CompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
+import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import kotlinx.coroutines.flow.collect
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.math.roundToInt
@@ -99,56 +102,36 @@ class QwenDemo(
         client.completion.stream(
             CompletionStreamRequest(
                 captureThinking = true,
-                generationParams = buildJsonObject {
-                    put("predict", -1)
-                    put("reasoning_budget", -1)
-                    put("temp", 0.7)
-                },
-                history = listOf(
-                    buildJsonObject {
-                        put("role", "user")
-                        put("content", prompt)
-                    },
+                generationParams = CompletionStreamRequestGenerationParams(
+                    predict = -1.0,
+                    reasoning_budget = -1,
+                    temp = 0.7,
                 ),
+                history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = prompt)),
                 modelId = modelId,
                 stream = true,
-                type = "completionStream",
             ),
         ).collect { response ->
-            response.events.forEach { element ->
-                val event = element.jsonObject
-                when (event["type"]?.jsonPrimitive?.contentOrNull) {
-                    "contentDelta" -> {
-                        val delta = event["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                        content.append(delta)
-                        onContent(delta)
+            response.events.forEach { event ->
+                when (event) {
+                    is CompletionStreamResponseEventsItem.ContentDelta -> {
+                        content.append(event.value.text)
+                        onContent(event.value.text)
                     }
-                    "completionStats" -> {
-                        tokensPerSecond = event["stats"]
-                            ?.jsonObject
-                            ?.get("tokensPerSecond")
-                            ?.jsonPrimitive
-                            ?.doubleOrNull
-                    }
-                    "completionDone" -> {
-                        stopReason = event["stopReason"]?.jsonPrimitive?.contentOrNull
-                        if (stopReason == "error") {
-                            val message = event["error"]
-                                ?.jsonObject
-                                ?.get("message")
-                                ?.jsonPrimitive
-                                ?.contentOrNull
-                                ?: "Inference failed"
-                            throw QvacDemoException(message)
-                        }
-                    }
+                    is CompletionStreamResponseEventsItem.CompletionStats ->
+                        tokensPerSecond = event.value.stats.tokensPerSecond
+                    is CompletionStreamResponseEventsItem.CompletionDoneError ->
+                        throw QvacDemoException(event.value.error.message)
+                    is CompletionStreamResponseEventsItem.CompletionDone ->
+                        stopReason = event.value.stopReason?.let { Json.encodeToJsonElement(it).jsonPrimitive.content }
+                    else -> Unit
                 }
             }
         }
         return CompletionResult(content.toString(), tokensPerSecond, stopReason)
     }
 
-    private fun io.tether.qvac.sdk.generated.ModelProgressResponse.toModelProgress(): ModelProgress {
+    private fun ModelProgressResponse.toModelProgress(): ModelProgress {
         return ModelProgress(
             downloaded = downloaded.toLong(),
             total = total.toLong(),
