@@ -354,10 +354,15 @@ export const pluginDefinitionRuntimeSchema = z
 export const PLUGIN_LLM = '@qvac/inference/llamacpp-completion/plugin' as const
 
 /**
+ * Laya decision plugin (llama.cpp).
+ * Provides: typed choice, score, and noul answers about a state.
+ */
+export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
+
+/**
  * Text embedding plugin (llama.cpp).
  * Provides: vector embeddings for RAG and semantic search.
  */
-export const PLUGIN_DECISION = '@qvac/inference/llamacpp-decision/plugin' as const
 export const PLUGIN_EMBEDDING = '@qvac/inference/llamacpp-embedding/plugin' as const
 
 /**
