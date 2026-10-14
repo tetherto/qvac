@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <common/common.h>
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <nlohmann/json.hpp>
@@ -1011,7 +1012,7 @@ TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
 
   bool threw = false;
   try {
-    (void)ctx->loadCache(cachePath.string());
+    (void)ctx->loadCache(cachePath.string(), /*adoptFileCheckpoints=*/true);
   } catch (const qvac_errors::StatusError&) {
     threw = true;
   }
@@ -1107,7 +1108,10 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   ASSERT_EQ(llama_memory_seq_token_count(mem, seqId), 0u);
 
   EXPECT_THROW(
-      { (void)ctx->loadCache(nPastMismatchPath.string()); },
+      {
+        (void)ctx->loadCache(
+            nPastMismatchPath.string(), /*adoptFileCheckpoints=*/true);
+      },
       qvac_errors::StatusError)
       << "loadCache must reject metadata nPast that differs from live KV";
   EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
@@ -1116,7 +1120,10 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   EXPECT_EQ(ctx->getCacheTokens(), 0);
 
   EXPECT_THROW(
-      { (void)ctx->loadCache(cacheTokensMismatchPath.string()); },
+      {
+        (void)ctx->loadCache(
+            cacheTokensMismatchPath.string(), /*adoptFileCheckpoints=*/true);
+      },
       qvac_errors::StatusError)
       << "loadCache must reject metadata cacheTokens that differs from live KV";
   EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
@@ -1159,6 +1166,70 @@ TEST_F(MtmdLlmContextTest, NonexistentFile) {
   prompt.input =
       R"([{"type": "media", "content": "nonexistent_image.jpg"}, {"role": "user", "content": "What is this?"}])";
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
+}
+
+namespace {
+
+void expectUnableToLoadModel(const qvac_errors::StatusError& error) {
+  // A code that reads as JSLibraryError is taken by the JS binding for an
+  // exception already pending, so the load would resolve instead of failing.
+  EXPECT_FALSE(error.isJSError()) << error.codeString();
+  EXPECT_NE(error.codeString().find("UnableToLoadModel"), std::string::npos)
+      << error.codeString();
+}
+
+} // namespace
+
+// A load fabric fails reaches the context as an init result without a model.
+TEST(MtmdLlmContextLoadFailure, ContextWithoutModelThrowsUnableToLoadModel) {
+  common_params params;
+  params.model.path =
+      (fs::temp_directory_path() / "qvac-missing-mtmd-model.gguf").string();
+  params.fit_params = false;
+  common_init_result_ptr failed = std::make_unique<common_init_result>(params);
+  ASSERT_EQ(failed->model(), nullptr);
+
+  try {
+    MtmdLlmContext context(params, std::move(failed));
+    FAIL() << "a context without a model must not construct";
+  } catch (const qvac_errors::StatusError& error) {
+    expectUnableToLoadModel(error);
+  }
+}
+
+// The whole load with a projector: a model fabric cannot load must fail it,
+// not leave an instance without a context for the first request to crash on.
+TEST_F(MtmdLlmContextTest, UnloadableModelFailsTheLoad) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  // The metadata survives the cut, so only fabric's tensor load fails.
+  const fs::path truncated =
+      fs::temp_directory_path() / "qvac-truncated-mtmd-model.gguf";
+  {
+    std::ifstream in(test_model_path, std::ios::binary);
+    std::ofstream out(truncated, std::ios::binary | std::ios::trunc);
+    std::vector<char> head(48U * 1024U * 1024U);
+    in.read(head.data(), static_cast<std::streamsize>(head.size()));
+    out.write(head.data(), in.gcount());
+  }
+
+  std::string modelPath = truncated.string();
+  std::string projectionPath = test_projection_path;
+  auto configCopy = config_files;
+  {
+    LlamaModel model(
+        std::move(modelPath), std::move(projectionPath), std::move(configCopy));
+    try {
+      model.waitForLoadInitialization();
+      ADD_FAILURE() << "a model fabric cannot load must fail the load";
+    } catch (const qvac_errors::StatusError& error) {
+      expectUnableToLoadModel(error);
+    }
+    EXPECT_FALSE(model.isLoaded());
+  }
+  fs::remove(truncated);
 }
 
 /// A batch prompt may carry media as a string file path (not just inline

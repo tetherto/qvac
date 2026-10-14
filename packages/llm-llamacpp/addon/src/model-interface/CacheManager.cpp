@@ -182,13 +182,14 @@ bool CacheManager::loadCache() {
     return false;
   }
 
-  if (llama_state_seq_load_file(
-          ctx,
-          sessionPath_.c_str(),
-          llmContext_->getSeqId(),
-          stateTokens.data(),
-          stateTokens.size(),
-          &nTokenCount) == 0) {
+  const size_t loadedBytes = llama_state_seq_load_file(
+      ctx,
+      sessionPath_.c_str(),
+      llmContext_->getSeqId(),
+      stateTokens.data(),
+      stateTokens.size(),
+      &nTokenCount);
+  if (loadedBytes == 0) {
     std::string errorMsg = string_format(
         "%s: failed to load session file '%s'\n",
         __func__,
@@ -203,6 +204,12 @@ bool CacheManager::loadCache() {
   const bool accepted = acceptLoadedState(stateTokens, sessionPath_);
   if (accepted) {
     activeCacheDirty_ = false;
+    // Accepting the state cleared the checkpoints; the file may carry the
+    // ones it was saved with.
+    if (auto* driver = dynamic_cast<SequenceDriver*>(llmContext_);
+        driver != nullptr) {
+      driver->adoptCheckpointsFromCacheFile(sessionPath_, loadedBytes);
+    }
   }
   return accepted;
 }
@@ -557,6 +564,10 @@ void CacheManager::writeCacheFile(const std::string& path) {
             "%s: failed to save session file to '%s'\n",
             __func__,
             path.c_str()));
+  }
+  if (const auto* driver = dynamic_cast<const SequenceDriver*>(llmContext_);
+      driver != nullptr) {
+    driver->appendCheckpointsToCacheFile(tmpPath);
   }
   atomicPromoteFile(tmpPath, path);
 }

@@ -172,6 +172,35 @@ target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)
 target_compile_definitions(${inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
+if(WIN32)
+  # cmake-bare enables WINDOWS_EXPORT_ALL_SYMBOLS. Exporting addon internals
+  # makes them linker roots, preventing otherwise-unused code from being removed.
+  # This addon exposes its JS API through Bare's two registration entry points;
+  # no consumer links against its C++ implementation.
+  set_target_properties(${inference-addon-sd}_module PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+  target_sources(${inference-addon-sd}_module PRIVATE ${PROJECT_SOURCE_DIR}/addon/windows-exports.def)
+
+  if(MSVC)
+    # clang-cl and MSVC use the same COFF options. Preserve the existing compiler
+    # optimization level and debug settings; package functions/data separately
+    # so the release linker can discard unused sections and fold identical code.
+    target_compile_options(${inference-addon-sd} PRIVATE
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/Gy>"
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/Gw>")
+    target_link_options(${inference-addon-sd}_module PRIVATE
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:REF>"
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:ICF>")
+
+    # The registry ports enable upstream LTO for ggml and
+    # stable-diffusion. Optimize across those static-library boundaries at the
+    # final lld-link step, while retaining the existing optimization level.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+      target_compile_options(${inference-addon-sd} PRIVATE
+        "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-flto=thin>")
+    endif()
+  endif()
+endif()
+
 if(GGML_BACKEND_DL)
   target_compile_definitions(${inference-addon-sd} PRIVATE GGML_BACKEND_DL)
 endif()

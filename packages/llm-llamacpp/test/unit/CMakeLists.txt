@@ -14,6 +14,7 @@ add_executable(
   test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
   test_cache_ledger.cpp
+  test_cache_checkpoint_file.cpp
   test_kv_cache_extended.cpp
   test_text_llm_context.cpp
   test_addon_cpp.cpp
@@ -46,6 +47,7 @@ add_executable(
   test_continuous_batch_finalize.cpp
   test_batch_entry_guard.cpp
   test_media_load_order.cpp
+  test_image_token_budget.cpp
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
@@ -72,6 +74,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp

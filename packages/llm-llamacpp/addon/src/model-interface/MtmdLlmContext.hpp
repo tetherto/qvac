@@ -152,7 +152,7 @@ public:
 
   void adoptCheckpoints(
       qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
-    if (needsFullStateSnapshot_) {
+    if (takesHistoryCheckpoints()) {
       cacheCheckpoints_ = std::move(checkpoints);
     }
   }
@@ -160,6 +160,9 @@ public:
   releaseCheckpoints() override {
     return std::exchange(cacheCheckpoints_, {});
   }
+  void appendCheckpointsToCacheFile(const std::string& path) const override;
+  void adoptCheckpointsFromCacheFile(
+      const std::string& path, uint64_t offset) override;
   [[nodiscard]] std::optional<
       qvac_lib_inference_addon_llama::utils::ReasoningTags>
   historyReasoningTags() const override {
@@ -289,7 +292,8 @@ public:
 
   /// Disk prompt-cache for a multimodal batch slot, embedding the versioned
   /// token/media ledger in the sequence-state file.
-  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
@@ -476,6 +480,13 @@ private:
   // `needsFullStateSnapshot` in ModelMemoryPolicy.hpp, shared with
   // TextLlmContext so both contexts gate identically.
   bool needsFullStateSnapshot_ = false;
+  // A sliding-window model: it trims for rollback but takes end-of-history
+  // checkpoints (see `takesSlidingWindowCheckpoints`).
+  bool slidingWindowCheckpoints_ = false;
+
+  [[nodiscard]] bool takesHistoryCheckpoints() const noexcept {
+    return needsFullStateSnapshot_ || slidingWindowCheckpoints_;
+  }
 
   // Tracks whether the current request is prefill-only so the cache
   // transaction can commit immediately after successful prefill.

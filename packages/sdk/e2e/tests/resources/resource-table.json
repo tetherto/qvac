@@ -153,6 +153,34 @@
       }
     }
   },
+  "ocr-main-gpu": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "OCR_LATIN"
+    },
+    "type": "ggml-ocr",
+    "config": {
+      "langList": [
+        "en"
+      ],
+      "detectorModelSrc": {
+        "$const": "OCR_CRAFT"
+      },
+      "backendDevice": "vulkan",
+      "mainGpu": 0
+    },
+    "configOn": {
+      "desktop-macos": {
+        "backendDevice": "metal"
+      },
+      "electron-macos": {
+        "backendDevice": "metal"
+      }
+    }
+  },
   "doctr": {
     "on": [
       "desktop",
@@ -405,6 +433,39 @@
       "streamFirstChunkTokens": 10
     }
   },
+  "tts-moss-sfx": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "AUDIOGEN_MOSS_SFX_V2_Q8_0"
+    },
+    "constantSourceOnly": true,
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "moss-sfx",
+      "useGPU": true,
+      "seed": 42
+    }
+  },
+  "tts-moss-speech": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "TTS_MOSS_SPEECH_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "moss-speech",
+      "useGPU": true,
+      "mossSpeechCodecModelSrc": {
+        "$const": "TTS_CODEC_MOSS_SPEECH_F16"
+      }
+    }
+  },
   "tts-audio8": {
     "constant": {
       "$const": "TTS_LM_MULTILINGUAL_AUDIO8_Q8_0"
@@ -587,7 +648,6 @@
   "diffusion": {
     "skipPreDownloadOn": [
       "electron",
-      "snap",
       "mobile"
     ],
     "constant": {
@@ -635,7 +695,6 @@
   "audiogen-turbo": {
     "skipPreDownloadOn": [
       "electron",
-      "snap",
       "mobile"
     ],
     "type": "audiogen-ggml",
