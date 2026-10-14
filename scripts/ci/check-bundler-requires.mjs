@@ -20,7 +20,6 @@ import process from 'node:process'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
 
 const LEXER_PACKAGE = 'bare-module-lexer'
 // The mobile app bundle is produced by the `bare-pack` that @qvac/sdk depends
