@@ -13,6 +13,14 @@ type Rule = {
 }
 
 const RULES: Rule[] = [
+  {
+    match: /^tts-moss-/,
+    skip: {
+      reason:
+        'MOSS-SoundEffect and MOSS-Speech require desktop GPU memory; Python MOSS step bindings are not yet exposed.',
+      platforms: ['mobile', 'desktop-python']
+    }
+  },
   // ── every leg but Snap ───────────────────────────────────────────────────
   {
     match: /^snap-storage-/,

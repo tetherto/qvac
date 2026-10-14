@@ -203,7 +203,7 @@ export const whisperConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`."
+      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
     ),
   vad_params: vadParamsSchema,
   audio_format: audioFormatSchema
@@ -341,7 +341,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.'
+      'Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.'
     ),
   openclCacheDir: z
     .string()

@@ -1,7 +1,5 @@
 'use strict'
 
-const { resolveBackendsDir } = require('./backends')
-
 /**
  * Projects one model set against the memory free right now, reading GGUF
  * metadata and never weight data. The registry's weightless copy of each stage
@@ -18,13 +16,7 @@ const { resolveBackendsDir } = require('./backends')
 function assessFit(request) {
   const binding = require('../binding.js')
 
-  return binding.assessFit({
-    ...request,
-    backendsDir:
-      typeof request.backendsDir === 'string' && request.backendsDir.length > 0
-        ? request.backendsDir
-        : resolveBackendsDir()
-  })
+  return binding.assessFit(request)
 }
 
 module.exports = { assessFit }

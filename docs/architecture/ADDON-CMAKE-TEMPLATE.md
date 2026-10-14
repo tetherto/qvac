@@ -50,11 +50,11 @@ Concretely, relative to the legacy `classification-ggml/CMakeLists.txt`:
 |---|---|
 | `find_package(ggml CONFIG REQUIRED)` | `set(qvac-fabric_DIR …/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake)` + `find_package(qvac-fabric CONFIG REQUIRED)` + `qvac_addon_fabric_layout()` + `include_bare_module(<resolved specifier> qvac_fabric_target PREBUILD WORKING_DIRECTORY <resolved dir>)` |
 | `foreach(_backend ${GGML_AVAILABLE_BACKENDS}) … INSTALL TARGET ggml::${_backend}` loop feeding `add_bare_module(… EXPORTS ${BACKEND_DL_LIBS})` | **deleted**; `add_bare_module(… EXPORTS)` (no exports) |
-| `BACKENDS_SUBDIR = ${bare_target_value}/${module_name}` (per-addon) | `BACKENDS_SUBDIR = ${bare_target_value}/qvac__fabric` (fixed, points at fabric's shared backend dir) |
+| `BACKENDS_SUBDIR = ${bare_target_value}/${module_name}` (per-addon) | **deleted**; the addon calls `qvac_fabric_load_backends()` and fabric finds its backends beside its own module (`prebuilds/<host>/qvac__fabric-<suffix>/`) |
 | `target_link_libraries(${tgt} PRIVATE ggml::ggml ggml::ggml-base)` + conditional `ggml::ggml-cpu` | `target_link_libraries(${tgt} PRIVATE qvac-fabric::headers)` (headers on lib target) **and** `target_link_libraries(${tgt}_module PRIVATE ${qvac_fabric_target}_module)` (dynamic link on module target) |
 | `if(GGML_BACKEND_DL)` (read from the ggml vcpkg var) | `if((ANDROID OR UNIX) AND NOT APPLE)` (platform-derived; the ggml var no longer exists) |
-| `vcpkg.json` depends on `qvac-fabric` | dependency removed; JS gains `resolveBackendsDir()` |
-| test links `ggml::*` | test links `qvac-fabric::headers` + `${qvac_fabric_target}_module`, stages the `.bare` + backends next to the test exe, sets `$ORIGIN`/`@loader_path` rpath, links `bare_delay_load` on win32, and runs limited-ASan with `ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0` |
+| `vcpkg.json` depends on `qvac-fabric` | dependency removed; the addon declares `@qvac/fabric` and its platform packages (optional deps for desktop, optional peers for mobile) |
+| test links `ggml::*` | test links `qvac-fabric::headers` + `${qvac_fabric_target}_module`, stages the `.bare` (under its SONAME `qvac__fabric-<suffix>@<major>.bare`) + backends next to the test exe, sets `$ORIGIN`/`@loader_path` rpath, links `bare_delay_load` on win32, and runs limited-ASan with `ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0` |
 
 Net effect on the template: the migration **shrinks** the common surface and
 removes most of the drift-prone code, while adding a small, uniform runtime-
@@ -85,7 +85,7 @@ Present, in the same order, in essentially every addon:
   narrowing the module's exports to the bare entry points
   (`cmake/qvac-addon/addon-symbols.map`, generalizing what `asr-ggml` applies by
   hand).
-- `JS_LOGGER` + `BACKENDS_SUBDIR` compile definitions.
+- `JS_LOGGER` compile definition.
 
 New shared blocks introduced by the fabric form (also extract):
 
@@ -93,19 +93,21 @@ New shared blocks introduced by the fabric form (also extract):
   + `qvac_addon_fabric_layout()` + `include_bare_module`.
 - **Two-target link split**: `::headers` on the lib target, `_module` on the
   module target.
-- **Fixed `BACKENDS_SUBDIR = <host>/qvac__fabric`**.
+- **Backend discovery in fabric**: no backends define; the addon calls
+  `qvac_fabric_load_backends()` (or loads an explicit `backendsDir` it was
+  given).
 - **Platform-derived `GGML_BACKEND_DL`**.
 - **Test-harness staging**: copy `.bare` + glob fabric backends next to the test
   exe, set rpath, win32 delay-load helper. This is **test-only** — the
   production addon build stages no backends (see note below).
 
 > **The addon never packages ggml backends.** `add_bare_module(… EXPORTS)`
-> exports nothing. On desktop the runtime resolves backends from `@qvac/fabric`'s
-> own `node_modules` prebuilds (`resolveBackendsDir()` in `src/index.ts`); on
-> mobile the app/link bundling co-locates the `.bare` modules and their backends
-> (the addon's `__dirname/prebuilds` fallback just points at wherever that
-> bundling landed them). The only backend copying in the package is the
-> **test** harness staging backends next to the test binary.
+> exports nothing. Fabric loads the backends itself: `qvac_fabric_load_backends()`
+> looks in `qvac__fabric-<suffix>/` beside the loaded fabric module (the platform
+> package's `prebuilds/<host>/` on desktop) and falls back to the module's own
+> directory, which is where bare-link flattens them in a mobile app.
+> `$QVAC_FABRIC_BACKENDS_DIR` overrides both. The only backend copying in the
+> package is the **test** harness staging backends next to the test binary.
 
 ### Addon-specific (keep as explicit customization points)
 
@@ -179,15 +181,17 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
   on Linux, lint-cpp `.clang-format`/`.clang-tidy` sync (the `.valgrind.supp`
   file and pre-commit hook are opt-in), C++20 block, WIN32 defs.
 - `qvac_addon_use_fabric()` (macro) — fabric discovery (`set(qvac-fabric_DIR …)`
-  + `find_package` + `include_bare_module`). Sets `qvac_fabric_target` and
-  `BACKENDS_SUBDIR_VALUE` (`<host>/qvac__fabric`) in the caller's scope.
+  + `find_package` + `include_bare_module`). Sets `qvac_fabric_target` in the
+  caller's scope.
 - `qvac_addon_fabric_layout(<host> <base_dir> <out_specifier> <out_working_dir>
-  <out_prebuilds>)` — locates the fabric runtime for `<host>`: the meta
-  package's own `prebuilds/<host>` when present (fabric ≤0.17, source builds, the
-  CI overlay), otherwise `@qvac/fabric-<host>/addon` resolved from fabric's real
-  path (0.18+ platform packages). Returns the `include_bare_module` specifier
-  and working directory, and the `prebuilds` root that holds
-  `<host>/qvac__fabric`.
+  <out_prebuilds>)` — locates the fabric runtime for `<host>`: always the
+  platform package `@qvac/fabric`'s `#host-addon` names for it
+  (`@qvac/fabric-<suffix>`, every iOS host sharing `@qvac/fabric-ios`), resolved
+  from fabric's real path and then from the addon. A source-built fabric
+  exposes its build there with `npm run link:platform`; a cross-built target
+  the addon lists as an exact devDependency. Returns the `include_bare_module`
+  specifier and working directory, and the platform package's `prebuilds`
+  root. Requires `@qvac/fabric` >= 0.21.
 - `qvac_addon_link_fabric(<addon_target> <fabric_target>)` — the two-target link
   split (`qvac-fabric::headers` on the lib, `${fabric_target}_module` on the
   module), plus `qvac_addon_import_fabric_cxx_runtime` on the module.
@@ -206,15 +210,15 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
   has no runtime to import. Applied for you by `qvac_addon_add_fuzz_target` when
   `LINK_FABRIC` is omitted. Mutually exclusive with the helper above: both on one
   target leaves `-static-libstdc++` inert and the driver says so.
-- `qvac_addon_finalize(<addon_target> [SUBDIR <value>])` — everything applied to
-  every module: Linux `--exclude-libs,ALL`, `JS_LOGGER`, `BACKENDS_SUBDIR`
-  define, platform-derived `GGML_BACKEND_DL`, and (via dedicated helpers it
+- `qvac_addon_finalize(<addon_target>)` — everything applied to
+  every module: Linux `--exclude-libs,ALL`, `JS_LOGGER` define,
+  platform-derived `GGML_BACKEND_DL`, and (via dedicated helpers it
   calls) the Android 16 KB page-size flags and Apple `compiler-rt` `force_load`.
   The two platform fixes are also exposed as standalone helpers
   (`qvac_addon_android_page_size` / `qvac_addon_apple_force_load_compiler_rt`)
   for the rare addon that needs to opt out of `finalize` and wire them by hand.
 - `qvac_addon_stage_fabric_for_test(<test_target> <fabric_target>)` — test-only:
-  `GGML_BACKEND_DL`/`GGML_BACKEND_DIR`, copy `qvac__fabric@0.bare` + glob fabric
+  `GGML_BACKEND_DL`/`GGML_BACKEND_DIR`, copy `qvac__fabric-<suffix>@<major>.bare` + glob fabric
   backends next to the test binary, set `$ORIGIN`/`@loader_path` rpath, link
   `bare_delay_load` on win32, and take fabric's C++ runtime on Linux so the test
   binary links the way the production module does. (ASan and coverage stay in the
@@ -235,7 +239,7 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
   "inference-addon-cpp/JsInterface.hpp" REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)          # addon-specific
 
-qvac_addon_use_fabric()   # sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE
+qvac_addon_use_fabric()   # sets qvac_fabric_target
 
 add_bare_module(classification-ggml EXPORTS)
 
@@ -248,7 +252,7 @@ qvac_addon_link_fabric(${classification-ggml} ${qvac_fabric_target})
 # addon-specific extra libs, if any:
 # target_link_libraries(${classification-ggml} PRIVATE llama::llama ...)
 
-qvac_addon_finalize(${classification-ggml} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${classification-ggml})
 
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)

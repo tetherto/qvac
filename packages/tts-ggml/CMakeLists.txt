@@ -82,22 +82,22 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
-# Bare module subfolder for dynamically-loadable ggml backends. Same
-# shape qvac/packages/transcription-parakeet + llm-llamacpp use:
-# cmake-bare derives the subdir from `<bare_target>/<module_name>`
-# (e.g. `android-arm64/qvac__tts-ggml`) and installs the
-# .so / .dll / .dylib backend files there. The runtime resolves the
-# directory via the same shape on the JS side
-# (`path.join(__dirname, 'prebuilds')`); ChatterboxConfig.backendsDir
-# and SupertonicConfig.backendsDir will be forwarded to the new
-# `tts_cpp::{chatterbox,supertonic}::EngineOptions::backends_dir`
-# field (calls `ggml_backend_load_all_from_path()` against it) once
-# the JS / C++ wiring lands. The C++ define below tells the addon
-# what relative subdir to scan under that root.
+# The module is named after the platform package that ships it,
+# qvac__tts-ggml-<suffix> (every iOS host shares `ios`), so that package is an
+# ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__tts-ggml-<suffix>.bare there. cmake-bare installs the
+# dynamically loadable ggml backends to <host>/<module name>, the directory the
+# addon looks in next to itself (see ModuleBackendsDir.hpp); bare-link
+# flattens them next to the module in a mobile app instead. Keep the suffix in
+# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__tts-ggml-ios")
+else()
+  set(module_name "qvac__tts-ggml-${bare_target_value}")
+endif()
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message(STATUS "Building tts-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
 # Collect every dynamically-loadable ggml backend the ggml-speech port
 # produced ($CURRENT_PACKAGES_DIR/lib/libqvac-speech-ggml-*.so on
@@ -116,8 +116,7 @@ message(STATUS "Building tts-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}
 # `GGML_AVAILABLE_BACKENDS`' IMPORTED set (the loader is expected to
 # find them via `ggml_backend_load_all_from_path()` at runtime). We
 # pick those up with an explicit `install(FILES ...)` below so the
-# runtime scan against BACKENDS_SUBDIR actually finds them next to
-# the .bare module.
+# runtime scan of the module's backends directory actually finds them.
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
@@ -182,7 +181,7 @@ if(APPLE)
   endforeach()
 endif()
 
-add_bare_module(tts-ggml EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(tts-ggml NAME ${module_name} EXPORTS ${BACKEND_DL_LIBS})
 if(BACKEND_DYLIB_FILES)
   list(REMOVE_DUPLICATES BACKEND_DYLIB_FILES)
   install(FILES ${BACKEND_DYLIB_FILES} DESTINATION ${BACKENDS_SUBDIR_VALUE})
@@ -191,15 +190,14 @@ endif()
 # Stage every loose MODULE backend (Vulkan / OpenCL on Android, CUDA on desktop, ...)
 # into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
 # branch uses for IMPORTED targets (see cmake-bare.cmake's
-# `DESTINATION ${host}/${name}` -- e.g. `android-arm64/qvac__tts-ggml`).
-# Keeping the destinations identical means
-# `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`
-# on the C++ side discovers IMPORTED-target CPU and loose-file
-# GPU backends with a single scan.
+# `DESTINATION ${host}/${name}` -- e.g.
+# `android-arm64/qvac__tts-ggml-android-arm64`). Keeping the destinations
+# identical means one `ggml_backend_load_all_from_path()` scan discovers
+# IMPORTED-target CPU and loose-file GPU backends.
 if(BACKEND_DL_LOOSE_SOS)
   install(
     FILES ${BACKEND_DL_LOOSE_SOS}
-    DESTINATION ${bare_target_value}/${module_name}
+    DESTINATION ${BACKENDS_SUBDIR_VALUE}
   )
 endif()
 
@@ -247,14 +245,8 @@ target_link_libraries(
 )
 
 target_compile_definitions(${tts-ggml} PUBLIC JS_LOGGER)
-# Same value the JS side appends to the host-provided `backendsDir`
-# default (`path.join(__dirname, 'prebuilds', <subdir>)`). Defining
-# it here lets the addon compute the full backends path from a
-# host-provided prebuilds root without the host needing to know the
-# `<bare-target>/<module-name>` shape itself. Mirrors
-# qvac/packages/transcription-parakeet/CMakeLists.txt.
 target_compile_definitions(${tts-ggml} PRIVATE
-  BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+  QVAC_ADDON_MODULE_NAME="${module_name}")
 
 # Android 15+ on Pixel 9 / Pixel 9 Pro / Pixel 9 Pro XL ships with a
 # 16 KB page size kernel (`getconf PAGE_SIZE` -> 16384). The dynamic
@@ -428,10 +420,11 @@ if(BUILD_TESTING)
       GTest::gmock_main
       tts-cpp::tts-cpp
   )
-  # Standalone tests do not receive the JS addon's packaged backendsDir.
-  # Hybrid ggml builds keep even the CPU backend in runtime-loaded modules.
+  # The test binary does not sit next to the addon's backends, and hybrid
+  # ggml builds keep even the CPU backend in runtime-loaded modules.
   target_compile_definitions(tts_ggml_tests PRIVATE
     QVAC_TTS_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
+    QVAC_ADDON_MODULE_NAME="${module_name}"
   )
 
   if(ENABLE_COVERAGE)

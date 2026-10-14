@@ -846,7 +846,8 @@ inline tts_cpp::acestep::FitOptions acestepFitOptions(FitRequest& request) {
   options.lm_model_path = request.text("lmPath");
   options.dit_model_path = request.text("ditPath");
   options.vae_model_path = request.text("vaePath");
-  options.backends_dir = resolveBackendsDir(request.text("backendsDir"));
+  options.backends_dir =
+      resolveBackendsDir(request.text("backendsDir")).string();
   request.readInt("gpuLayers", options.n_gpu_layers);
   request.readInt("threads", options.n_threads);
   request.readInt("textTokens", options.text_tokens);
@@ -879,7 +880,8 @@ inline tts_cpp::minimax::EngineOptions minimaxFitOptions(FitRequest& request) {
   options.lm_model_path = request.text("lmPath");
   options.synth_model_path = request.text("synthPath");
   options.device = minimaxFitDevice(request);
-  options.backends_dir = resolveBackendsDir(request.text("backendsDir"));
+  options.backends_dir =
+      resolveBackendsDir(request.text("backendsDir")).string();
   request.readInt("threads", options.n_threads);
   return options;
 }

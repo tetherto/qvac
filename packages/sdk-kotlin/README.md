@@ -285,9 +285,11 @@ fun main() = runBlocking {
 
 `installWorkerIfMissing = true` installs and caches the pinned `@qvac/sdk`
 version on first use; cached packages are re-checked. The transport launches
-`bare` and creates a loopback-only TCP endpoint. The channel is unauthenticated,
-so any local process can connect; do not use JVM hosting across a hostile
-local-user boundary.
+`bare` and creates a loopback-only TCP endpoint. The worker authenticates with a
+per-session token passed in its environment, and the transport rejects any
+other local connection before a frame is exchanged. A worker whose `@qvac/sdk`
+`package.json` does not declare `"qvacIpcAuthentication": "token-v1"` is refused;
+`connect(..., authenticated = false)` is the only way to run one.
 
 Worker stdout/stderr are continuously drained into `transport.recentWorkerLogs`
 (a bounded 16K-character tail); `isWorkerAlive` reports the child process state.
@@ -327,15 +329,12 @@ client.stream(
 ## Typed and idiomatic Kotlin API
 
 The contract generator produces Kotlin serialization models and typed methods
-for every operation in `manifest.json`. The generated layer is available under
-`io.tether.qvac.sdk.generated` and includes request/response models, call-shape
-metadata, model constants, model-type maps, error codes, and `SDK_VERSION`.
-
-For new code, use request/response types from
+for every operation in `manifest.json`. Request/response types live in
 `io.tether.qvac.sdk.generated.schema`: discriminated unions are sealed classes,
 engine configurations are nested typed models, and serializers preserve the
-worker's JSON shape (no Kotlin wrapper fields on the wire). Existing flat models
-remain source-compatible. Import one model namespace, not both wildcards.
+worker's JSON shape (no Kotlin wrapper fields on the wire).
+`io.tether.qvac.sdk.generated` holds call-shape metadata, model constants,
+model-type maps, error codes, and `SDK_VERSION`.
 Worker numeric/range and addon-specific validation remains authoritative.
 
 ```kotlin

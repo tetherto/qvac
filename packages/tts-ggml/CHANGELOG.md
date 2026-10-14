@@ -5,7 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.0] - 2026-10-14
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/tts-ggml`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__tts-ggml-<suffix>` (every iOS host shares
+  `ios`) and sits at `prebuilds/<host>/qvac__tts-ggml-<suffix>.bare`, with its
+  ggml backends in `prebuilds/<host>/qvac__tts-ggml-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module. An
+  explicit `backendsDir` is now scanned as given rather than as a prebuilds
+  root under which `<host>/<module>` is appended. `resolveBackendsDir()` and
+  `lib/backends.js` are removed.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`) stages it as the host's platform package in `node_modules/`.
+
+## [0.11.1] - 2026-10-13
 
 ### Added
 
@@ -15,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   record the same build.
 
 ### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update the shared `speech-cpp` pin to `2026-10-12` for CosyVoice3 CUDA LM flash
+  attention and decode graph reuse, plus Vulkan flow attention with f16 K/V.
+  Unsupported attention operations retain the regular-attention fallback.
 
 - Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS, MOSS,
   MOSS-TTSD, MOSS-SoundEffect and MOSS-Speech run one stage each on a Core ML

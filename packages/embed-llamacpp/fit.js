@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
-const addon_1 = require("./addon");
 /**
  * Projects one model against the memory free right now, reading GGUF metadata
  * and never weight data. The registry's weightless copy of a model answers the
@@ -22,9 +21,5 @@ const addon_1 = require("./addon");
 function assessFit(request) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
     const binding = require('./binding.js');
-    const config = { ...request.config };
-    if (config['backendsDir'] === undefined || config['backendsDir'] === '') {
-        config['backendsDir'] = (0, addon_1.resolveBackendsDir)();
-    }
-    return binding.assessFit({ ...request, config });
+    return binding.assessFit({ ...request, config: { ...request.config } });
 }

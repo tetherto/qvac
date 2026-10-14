@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { loadAddon, packageDir } = require("./load-addon.cjs");
+const { loadAddon } = require("./load-addon.cjs");
 
 function recordingBinding(overrides = {}) {
   const calls = [];
@@ -21,16 +21,17 @@ function recordingBinding(overrides = {}) {
 
 test("rdmaCapable reports the installed backend's RDMA build", async () => {
   for (const capable of [false, true]) {
-    let queriedDir;
+    let queried;
     const { binding } = recordingBinding({
-      rpcBackendSupportsRdma: ({ backendsDir }) => {
-        queriedDir = backendsDir;
+      rpcBackendSupportsRdma: (options) => {
+        queried = options;
         return capable;
       },
     });
     const server = await loadAddon(binding).startRpcServer({ port: 50052 });
     assert.equal(server.rdmaCapable, capable);
-    assert.equal(queriedDir, packageDir);
+    // The native side checks the module @qvac/fabric loads; JS names no path.
+    assert.deepEqual(Object.keys(queried), []);
     await server.stop();
   }
 });

@@ -141,10 +141,10 @@ struct ParakeetConfig {
   // `.bare` module while the GPU backends ship as separately
   // dlopen()'d `.so` files (libqvac-speech-ggml-{vulkan,opencl}.so
   // plus the per-arch CPU variants under
-  // libqvac-speech-ggml-cpu-android_armv*_*.so). The JS layer
-  // resolves `backendsDir` to that prebuild folder at construction
-  // time so `ggml_backend_load_all_from_path()` finds them at
-  // runtime; `openclCacheDir` sets `$GGML_OPENCL_CACHE_DIR` for
+  // libqvac-speech-ggml-cpu-android_armv*_*.so). A set `backendsDir`
+  // is scanned as given; unset, the addon looks beside the loaded
+  // module, and `ggml_backend_load_all_from_path()` finds them at
+  // runtime. `openclCacheDir` sets `$GGML_OPENCL_CACHE_DIR` for
   // ggml-opencl's program-binary cache (Android-only, ignored
   // elsewhere). Both default to empty -> let parakeet-cpp fall back
   // to its own resolution (ggml's compile-time default search path
