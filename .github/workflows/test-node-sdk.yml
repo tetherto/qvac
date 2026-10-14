@@ -200,10 +200,6 @@ jobs:
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
-      # The Windows GPU runner is the maintained two-GPU host. The macOS and
-      # Ubuntu GPU runners currently provide one eligible GPU, so multi-GPU
-      # tests must skip there instead of submitting a two-way tensor split.
-      QVAC_HAS_MULTI_GPU: ${{ startsWith(matrix.os, 'qvac-win25-x64-gpu') && '1' || '0' }}
     steps:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
