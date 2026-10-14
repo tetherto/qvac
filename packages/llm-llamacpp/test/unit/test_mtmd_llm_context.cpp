@@ -15,6 +15,7 @@
 #include <nlohmann/json.hpp>
 
 #include "model-interface/CacheLedger.hpp"
+#include "model-interface/ImagePixelLimit.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/SequenceDriver.hpp"
@@ -1190,7 +1191,8 @@ TEST(MtmdLlmContextLoadFailure, ContextWithoutModelThrowsUnableToLoadModel) {
   ASSERT_EQ(failed->model(), nullptr);
 
   try {
-    MtmdLlmContext context(params, std::move(failed));
+    MtmdLlmContext context(
+        params, std::move(failed), image_pixel_limit::DEFAULT_MAX_PIXELS);
     FAIL() << "a context without a model must not construct";
   } catch (const qvac_errors::StatusError& error) {
     expectUnableToLoadModel(error);
