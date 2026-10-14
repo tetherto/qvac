@@ -5573,7 +5573,17 @@
                           {
                             "type": "array",
                             "items": {
-                              "type": ["string", "number", "boolean"]
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
                             }
                           },
                           {
@@ -5946,7 +5956,17 @@
                           {
                             "type": "array",
                             "items": {
-                              "type": ["string", "number", "boolean"]
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
                             }
                           },
                           {
@@ -6317,7 +6337,17 @@
                             "const": "choice"
                           },
                           "choice": {
-                            "type": ["string", "number", "boolean"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              }
+                            ]
                           },
                           "probabilities": {
                             "type": "object",
@@ -6476,7 +6506,14 @@
                             "type": "number"
                           },
                           "tokens_per_option": {
-                            "type": ["number", "null"]
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": ["total", "distinct", "tokens_per_option"],
@@ -6542,7 +6579,17 @@
                               "const": "choice"
                             },
                             "choice": {
-                              "type": ["string", "number", "boolean"]
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
                             },
                             "probabilities": {
                               "type": "object",
@@ -6701,7 +6748,14 @@
                               "type": "number"
                             },
                             "tokens_per_option": {
-                              "type": ["number", "null"]
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           },
                           "required": ["total", "distinct", "tokens_per_option"],
