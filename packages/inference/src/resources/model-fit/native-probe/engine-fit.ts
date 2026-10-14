@@ -4,6 +4,7 @@ import type { BciFitRequest, BciFitResult } from '@qvac/bci-whispercpp'
 import type { DiffusionFitRequest, DiffusionFitResult } from '@qvac/diffusion-cpp'
 import type { EmbedFitRequest, EmbedFitResult } from '@qvac/embed-llamacpp'
 import type LlmLlamacpp from '@qvac/llm-llamacpp'
+import type { OcrFitRequest, OcrFitResult } from '@qvac/ocr-ggml'
 import type { TtsFitRequest, TtsFitResult } from '@qvac/tts-ggml'
 
 /**
@@ -19,6 +20,7 @@ export type FitProbeRequest =
   | { engine: 'tts-ggml'; request: TtsFitRequest }
   | { engine: 'audiogen-ggml'; request: AudiogenFitRequest }
   | { engine: 'diffusion-cpp'; request: DiffusionFitRequest }
+  | { engine: 'ocr-ggml'; request: OcrFitRequest }
 
 export type FitProbeEngine = FitProbeRequest['engine']
 
@@ -30,6 +32,7 @@ export type FitProbeResult =
   | { engine: 'tts-ggml'; result: TtsFitResult }
   | { engine: 'audiogen-ggml'; result: AudiogenFitResult }
   | { engine: 'diffusion-cpp'; result: DiffusionFitResult }
+  | { engine: 'ocr-ggml'; result: OcrFitResult }
 
 /** Calls one engine's fitter, taken from the plugin that owns its addon. */
 export async function callEngineFit(probe: FitProbeRequest): Promise<FitProbeResult> {

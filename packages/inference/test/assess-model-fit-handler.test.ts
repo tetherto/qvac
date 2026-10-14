@@ -181,6 +181,22 @@ test('handler: a minimax device is read in place of the switch', (t) => {
   }
 })
 
+test('handler: an ocr backend device other than the CPU is the GPU', (t) => {
+  const devices = { cpu: 'cpu', vulkan: 'gpu', metal: 'gpu', opencl: 'gpu' }
+
+  for (const [backendDevice, expected] of Object.entries(devices)) {
+    const target = estimateTargetFor({
+      modelSrc: CONSTANT,
+      modelType: ModelType.ggmlOcr,
+      modelConfig: { backendDevice }
+    })
+    t.is(target.device, expected, backendDevice)
+  }
+
+  const unset = estimateTargetFor({ modelSrc: CONSTANT, modelType: ModelType.ggmlOcr })
+  t.is(unset.device, 'cpu', 'the addon defaults to the CPU')
+})
+
 // `nGpuLayers` takes effect on its own and the config schema rejects it
 // disagreeing with `useGPU`, so it is read first.
 test('handler: tts reads its layer count ahead of its switch', (t) => {

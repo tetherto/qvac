@@ -744,15 +744,87 @@ test('diffusion: a configured upscaler is a second resident model the projection
   )
 })
 
-test('a model type with no fitter is refused by name', (t) => {
+test('ocr: carries both models and the placement the load uses', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ggmlOcr,
+    modelPath: '/models/recognizer.gguf',
+    modelConfig: {
+      pipelineType: 'doctr',
+      backendDevice: 'vulkan',
+      gpuDevice: 1,
+      nThreads: 4
+    },
+    artifacts: { detectorModelPath: '/models/detector.gguf' },
+    isShardedModel: false,
+    marginBytes: 1024
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.alike(plan.probe, {
+    engine: 'ocr-ggml',
+    request: {
+      pathDetector: '/models/detector.gguf',
+      pathRecognizer: '/models/recognizer.gguf',
+      pipelineType: 'doctr',
+      nThreads: 4,
+      backendDevice: 'vulkan',
+      gpuDevice: 1,
+      marginBytes: 1024
+    }
+  })
+})
+
+test('ocr: a main-gpu selector reaches the fitter as the load sends it', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ggmlOcr,
+    modelPath: '/models/recognizer.gguf',
+    modelConfig: { backendDevice: 'vulkan', mainGpu: 'dedicated' },
+    artifacts: { detectorModelPath: '/models/detector.gguf' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'ocr-ggml') return
+  t.is(plan.probe.request.backendDevice, 'vulkan')
+  t.is(plan.probe.request['main-gpu'], 'dedicated')
+})
+
+test('ocr: an easyocr load names English when it names no language', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ggmlOcr,
+    modelPath: '/models/recognizer.gguf',
+    modelConfig: {},
+    artifacts: { detectorModelPath: '/models/detector.gguf' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'ocr-ggml') return
+  t.alike(plan.probe.request.langList, ['en'])
+})
+
+test('ocr: a load without its detector is refused', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.ggmlOcr,
-      modelPath: '/models/ocr.gguf',
+      modelPath: '/models/recognizer.gguf',
       modelConfig: {},
       isShardedModel: false
     }),
-    { supported: false, detail: `no fitter for model type: ${ModelType.ggmlOcr}` }
+    { supported: false, detail: 'the ocr detector is not resolved' }
+  )
+})
+
+test('a model type with no fitter is refused by name', (t) => {
+  t.alike(
+    createFitRequest({
+      modelType: ModelType.ggmlClassification,
+      modelPath: '/models/classifier.gguf',
+      modelConfig: {},
+      isShardedModel: false
+    }),
+    { supported: false, detail: `no fitter for model type: ${ModelType.ggmlClassification}` }
   )
 })
 

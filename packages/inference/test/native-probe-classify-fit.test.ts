@@ -276,3 +276,36 @@ test('an engine reporting only a total has no breakdown', (t) => {
   t.absent(outcome.projection?.computeBytes)
   t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
 })
+
+test('an ocr projection carries its weights and no working memory', (t) => {
+  const outcome = classifyFit(
+    {
+      engine: 'ocr-ggml',
+      result: {
+        status: 'fits',
+        reason: 'fits',
+        deviceName: 'CPU',
+        deviceBytes: 96 * 1024 ** 2,
+        hostBytes: 0,
+        weightsBytes: 96 * 1024 ** 2,
+        deviceFreeBytes: 8 * 1024 ** 3,
+        deviceTotalBytes: 16 * 1024 ** 3,
+        report: 'table'
+      }
+    },
+    PROVENANCE
+  )
+
+  t.is(outcome.engine, 'ocr-ggml')
+  t.is(outcome.verdict, 'fit')
+  t.absent(outcome.plan)
+  t.alike(outcome.projection, {
+    deviceName: 'CPU',
+    deviceBytes: 96 * 1024 ** 2,
+    hostBytes: 0,
+    deviceFreeBytes: 8 * 1024 ** 3,
+    deviceTotalBytes: 16 * 1024 ** 3,
+    report: 'table',
+    weightsBytes: 96 * 1024 ** 2
+  })
+})

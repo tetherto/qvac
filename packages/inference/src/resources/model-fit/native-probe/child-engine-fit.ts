@@ -36,6 +36,10 @@ async function assessFitOf(probe: FitProbeRequest): Promise<unknown> {
       const { assessFit } = await import('@qvac/diffusion-cpp')
       return assessFit(probe.request)
     }
+    case 'ocr-ggml': {
+      const { assessFit } = await import('@qvac/ocr-ggml')
+      return assessFit(probe.request)
+    }
   }
 }
 

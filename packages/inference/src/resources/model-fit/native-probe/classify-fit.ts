@@ -60,7 +60,8 @@ function breakdown(
 /**
  * The parts of `deviceBytes` the engine separates. Audiogen reports a peak
  * across pipeline phases and diffusion a per-module table, neither of which
- * divides into these three, so both come back empty.
+ * divides into these three, so both come back empty. OCR sizes its weights
+ * alone and leaves the image-dependent memory uncounted.
  *
  * The llama rows are summed over the same devices the engine's own
  * `deviceBytes` covers, which is every row but `host`.
@@ -100,6 +101,10 @@ function breakdownFor(probe: FitProbeResult): Breakdown {
       result.stateBytes,
       sumOf(result.lmComputeBytes, result.codecComputeBytes)
     )
+  }
+
+  if (probe.engine === 'ocr-ggml') {
+    return breakdown(probe.result.weightsBytes, undefined, undefined)
   }
 
   return {}

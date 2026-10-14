@@ -98,7 +98,8 @@ const GPU_SWITCH: Record<string, (config: Record<string, unknown>) => boolean> =
   [ModelType.audiogenGgml]: audiogenUsesGpu,
   [ModelType.parakeetTranscription]: (config) => config['useGPU'] === true,
   [ModelType.whispercppTranscription]: (config) => contextUsesGpu(config) === true,
-  [ModelType.bciWhispercppTranscription]: (config) => contextUsesGpu(config) !== false
+  [ModelType.bciWhispercppTranscription]: (config) => contextUsesGpu(config) !== false,
+  [ModelType.ggmlOcr]: (config) => (config['backendDevice'] ?? 'cpu') !== 'cpu'
 }
 
 /**

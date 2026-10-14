@@ -44,6 +44,7 @@ export const modelFitEmbeddings = assessCase('embeddings', 'embeddings', 'native
 export const modelFitParakeet = assessCase('parakeet', 'parakeet-tdt', 'native-fit')
 export const modelFitAudiogen = assessCase('audiogen', 'audiogen-turbo', 'native-fit')
 export const modelFitDiffusion = assessCase('diffusion', 'diffusion', 'native-fit')
+export const modelFitOcr = assessCase('ocr', 'ocr', 'native-fit')
 
 /**
  * One per voice engine: `assessFit` in `@qvac/tts-ggml` takes a different
@@ -75,6 +76,7 @@ export const modelFitProbeBci = probeCase('bci', 'bci', 'bci-whispercpp')
 export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', 'tts-ggml')
 export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', 'audiogen-ggml')
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', 'diffusion-cpp')
+export const modelFitProbeOcr = probeCase('ocr', 'ocr', 'ocr-ggml')
 
 export const modelFitAssessTests = [
   modelFitLlm,
@@ -87,6 +89,7 @@ export const modelFitAssessTests = [
   modelFitTtsSupertonic,
   modelFitAudiogen,
   modelFitDiffusion,
+  modelFitOcr,
   modelFitWhisper,
   modelFitBci
 ]
@@ -99,7 +102,8 @@ export const modelFitProbeTests = [
   modelFitProbeBci,
   modelFitProbeTts,
   modelFitProbeAudiogen,
-  modelFitProbeDiffusion
+  modelFitProbeDiffusion,
+  modelFitProbeOcr
 ]
 
 export const modelFitTests = [...modelFitAssessTests, ...modelFitProbeTests]
