@@ -142,6 +142,13 @@ test('fabric exports its own C API on every platform', () => {
   )
 })
 
+test('the Mach-O export list does not re-export host symbols', () => {
+  const patterns = read('exports.txt').split('\n').filter((line) => line && !line.startsWith('#'))
+  for (const host of ['_js_', '_napi_']) {
+    assert.ok(!patterns.some((pattern) => pattern.startsWith(host)), host)
+  }
+})
+
 test('optionalDependencies are injected at publish, not declared in the source manifest', () => {
   assert.equal(packageJson.optionalDependencies, undefined)
   assert.equal(packageJson.peerDependencies, undefined)

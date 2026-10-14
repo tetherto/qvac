@@ -1,6 +1,7 @@
+# No _js_* or _napi_*: the host provides them. ld64 turns a listed undefined
+# symbol into a flat-lookup re-export, consumers then bind to it through this
+# module, and dyld refuses to load them.
 _bare_*
-_napi_*
-_js_*
 _qvac_fabric_*
 _llama_*
 _LLAMA_*
