@@ -34,10 +34,11 @@ function usesNodeTestRunner(filePath: string): boolean {
 
 // Each file runs in its own Node process with tsx loaded, so TypeScript sources
 // and the tsconfig path aliases resolve without a build step. brittle files run
-// as plain scripts; node:test files go through Node's test runner.
+// as plain scripts; node:test files go through Node's test runner, with
+// `mock.module` enabled for tests that replace a module before importing it.
 for (const file of testFiles) {
   const args = usesNodeTestRunner(file)
-    ? ['--import', 'tsx', '--test', file]
+    ? ['--experimental-test-module-mocks', '--import', 'tsx', '--test', file]
     : ['--import', 'tsx', file]
   const result = spawnSync(process.execPath, args, {
     stdio: 'inherit'
