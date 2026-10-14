@@ -2,6 +2,44 @@ import test from 'brittle'
 import { assertModelSrcMatchesModelType } from '@/utils/load-model-validation'
 import { ModelSrcTypeMismatchError } from '@/errors'
 import { ModelType, ERROR_CODES } from '@/schemas'
+import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
+import { LAYA_MULTILINGUAL_322M_Q8_0 } from '@/models/registry/models'
+
+test('embedding descriptors accept an explicit decision type without changing inference', (t) => {
+  t.execution(() =>
+    assertModelSrcMatchesModelType(LAYA_MULTILINGUAL_322M_Q8_0, ModelType.llamacppDecision)
+  )
+  t.is(inferModelTypeFromModelSrc(LAYA_MULTILINGUAL_322M_Q8_0), ModelType.llamacppEmbedding)
+})
+
+test('legacy embedding engines and addon-only descriptors accept an explicit decision type', (t) => {
+  for (const descriptor of [
+    { src: 'registry://example/laya.gguf', engine: 'embeddings' },
+    { src: 'registry://example/laya.gguf', engine: '@qvac/embed-llamacpp' },
+    { src: 'registry://example/laya.gguf', addon: 'embeddings' }
+  ]) {
+    t.execution(() => assertModelSrcMatchesModelType(descriptor, ModelType.llamacppDecision))
+  }
+})
+
+test('the embedding-to-decision override rejects the reverse and unrelated engine mismatches', (t) => {
+  for (const [inferred, explicit] of [
+    [ModelType.llamacppDecision, ModelType.llamacppEmbedding],
+    [ModelType.llamacppDecision, 'embeddings'],
+    [ModelType.llamacppEmbedding, ModelType.llamacppCompletion],
+    [ModelType.llamacppCompletion, ModelType.llamacppDecision]
+  ] as const) {
+    try {
+      assertModelSrcMatchesModelType(
+        { src: 'registry://example/model.gguf', engine: inferred },
+        explicit
+      )
+      t.fail('Expected ModelSrcTypeMismatchError')
+    } catch (error) {
+      t.ok(error instanceof ModelSrcTypeMismatchError)
+    }
+  }
+})
 
 test('assertModelSrcMatchesModelType: descriptor engine vs incompatible canonical modelType throws', (t) => {
   const llamaDescriptor = {
