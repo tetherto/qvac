@@ -1,4 +1,4 @@
-import { mossTranscribeJobFields, type MossTranscribeRunOptions } from '../engines/moss/driver'
+import { mossTranscribeBackend, mossTranscribeJobFields, type MossTranscribeRunOptions } from '../engines/moss/driver'
 
 interface AsrFitCommon {
   /** Absolute path to the model, or to a weightless copy where one exists. */
@@ -39,6 +39,8 @@ export interface WhisperFitRequest extends AsrFitCommon {
 
 export interface MossTranscribeFitRequest extends AsrFitCommon, MossTranscribeRunOptions {
   engine: 'moss-transcribe'
+  /** Same selector as mossTranscribeConfig.backend; overrides gpuLayers. */
+  backend?: string
   audioSeconds: number
   threads?: number
 }
@@ -110,6 +112,7 @@ export function assessFit(request: AsrFitRequest): AsrFitResult {
   const binding = require('../binding.js') as FitBinding
 
   if (request.engine === 'moss-transcribe') {
+    mossTranscribeBackend(request.backend)
     mossTranscribeJobFields({
       prompt: request.prompt,
       hotwords: request.hotwords,

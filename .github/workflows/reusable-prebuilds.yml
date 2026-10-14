@@ -7,7 +7,7 @@
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
 # ggml-rpc-server, llm-llamacpp, nmtcpp, parakeet, tts-ggml,
-# whispercpp. All prebuild workflows in the monorepo
+# turbovec-ggml, whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
 
@@ -485,7 +485,7 @@ jobs:
 
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Overlay PR @qvac/fabric prebuilds
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@10b5b0b0a410a116d81e0f76c4c5027fecda1a64
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
@@ -734,7 +734,7 @@ jobs:
       # Export-leak findings stay warnings during rollout (enforce-exports
       # defaults to false) until every ggml addon ships a symbols.map.
       - name: Verify prebuild symbols
-        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@f54dae7d8156e7f7e29ceb8d5b316026dc0d1dfd
+        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@10b5b0b0a410a116d81e0f76c4c5027fecda1a64
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
