@@ -42,6 +42,8 @@ export type FitStubUnavailableReason =
   | 'download-failed'
   /** The lookup and the fetch together did not finish within the budget. */
   | 'timed-out'
+  /** The engine's fitter reads the files themselves and no registry description. */
+  | 'files-only-engine'
 
 export type FitStubOutcome =
   /** `path` is the caller's to remove once the fitter has read it. */

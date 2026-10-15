@@ -15,17 +15,17 @@ function request(overrides = {}) {
   }
 }
 
-test('MOSS sound-effect fit rejects missing workload and invalid load controls', (t) => {
-  t.exception(() => TTSGgml.assessFit(request({ prompt: undefined })))
-  t.exception(() => TTSGgml.assessFit(request({ seconds: undefined })))
-  t.exception(() => TTSGgml.assessFit(request({ seconds: NaN })))
-  t.exception(() => TTSGgml.assessFit(request({ threads: -1 })))
-  t.exception(() => TTSGgml.assessFit(request({ useGPU: true, nGpuLayers: 0 })))
-  t.exception(() => TTSGgml.assessFit(request({ marginBytes: -1 })))
+test('MOSS sound-effect fit rejects missing workload and invalid load controls', async (t) => {
+  await t.exception(TTSGgml.assessFit(request({ prompt: undefined })))
+  await t.exception(TTSGgml.assessFit(request({ seconds: undefined })))
+  await t.exception(TTSGgml.assessFit(request({ seconds: NaN })))
+  await t.exception(TTSGgml.assessFit(request({ threads: -1 })))
+  await t.exception(TTSGgml.assessFit(request({ useGPU: true, nGpuLayers: 0 })))
+  await t.exception(TTSGgml.assessFit(request({ marginBytes: -1 })))
 })
 
-test('MOSS sound-effect fit reports unreadable models', (t) => {
-  const fit = TTSGgml.assessFit(request())
+test('MOSS sound-effect fit reports unreadable models', async (t) => {
+  const fit = await TTSGgml.assessFit(request())
   t.is(fit.status, 'error')
   t.is(fit.reason, 'model-unreadable')
   t.is(fit.modelVariant, 'moss-sfx')
@@ -36,10 +36,10 @@ test(
   {
     skip: !process.env.QVAC_TEST_MOSS_SFX_GGUF
   },
-  (t) => {
+  async (t) => {
     const model = process.env.QVAC_TEST_MOSS_SFX_GGUF
     const cfg = { mossSoundEffectPath: model }
-    const fit = TTSGgml.assessFit(request(cfg))
+    const fit = await TTSGgml.assessFit(request(cfg))
     t.ok(fit.status === 'fits' || fit.status === 'does-not-fit')
     t.is(fit.modelVariant, 'moss-sfx')
     t.ok(fit.deviceIsCpu)
@@ -51,12 +51,12 @@ test(
       fit.deviceBytes,
       fit.weightsBytes + fit.stateBytes + fit.lmComputeBytes + fit.codecComputeBytes
     )
-    const shorter = TTSGgml.assessFit(request({ ...cfg, seconds: 1 }))
+    const shorter = await TTSGgml.assessFit(request({ ...cfg, seconds: 1 }))
     t.is(shorter.weightsBytes, fit.weightsBytes)
     t.is(shorter.lmComputeBytes, fit.lmComputeBytes)
-    const noHeadroom = TTSGgml.assessFit(request({ ...cfg, marginBytes: Number.MAX_VALUE }))
+    const noHeadroom = await TTSGgml.assessFit(request({ ...cfg, marginBytes: Number.MAX_VALUE }))
     t.is(noHeadroom.status, 'does-not-fit')
-    const invalid = TTSGgml.assessFit(request({ ...cfg, seconds: 0 }))
+    const invalid = await TTSGgml.assessFit(request({ ...cfg, seconds: 0 }))
     t.is(invalid.status, 'error')
     t.is(invalid.reason, 'invalid-arguments')
   }

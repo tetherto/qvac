@@ -106,13 +106,6 @@ const RULES: Rule[] = [
     }
   },
   {
-    match: /^multi-gpu-/,
-    skip: {
-      reason: 'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)',
-      platforms: ['mobile']
-    }
-  },
-  {
     match: /^deferred-tools-(?!prompt-cost$|load-then-call$)/,
     skip: {
       reason:

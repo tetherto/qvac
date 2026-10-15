@@ -284,17 +284,14 @@ for a local check of a Unified GGUF and its encoder bundle.
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
 
 1. Build the SDK from source (see [Build](#build) section).
-2. Run using Bare, Node.js, or Bun as the runtime:
+2. Run with Node.js:
 
 ```bash
-# With Bare
-bun run bare:example dist/examples/path/to/example.js
-
-# With Node
+# Compiled output
 node dist/examples/path/to/example.js
 
-# With bun, straight from source
-bun run examples/path/to/example.ts
+# Straight from source, with the tsx dev dependency
+npx tsx examples/path/to/example.ts
 ```
 
 `examples/abot-world.ts` has a companion guide covering the hardware
@@ -304,40 +301,38 @@ of an interactive world session: see
 
 ## Build
 
-Use the [Bun](https://bun.sh/) package manager:
+Node.js 22 and npm are the only tools needed. No lockfile is committed; `package-lock.json` is gitignored.
+
+Build and test against the in-repo engine at the same commit (this is what CI does):
 
 ```bash
-bun i
+npm run sdk-source:workspace
 ```
 
-`@qvac/inference` resolves to its published release by default. To build and test against the in-repo engine at the same commit, link it first:
+This installs and builds `../inference`, points `@qvac/inference` at it, and installs the SDK's dependencies. A plain `npm install` resolves `@qvac/inference` to its published release instead, which fails with `ERESOLVE` whenever the SDK on `main` already depends on addon versions the published engine has not been released against.
 
 ```bash
-bun run sdk-source:workspace
+npm run build  # or `watch` for hotreload
 ```
 
 ```bash
-bun run build  # or `watch` for hotreload
+npm run build:pack
 ```
 
-```bash
-bun run build:pack
-```
-
-This outputs a tarball under `dist/sdk-{version}.tgz` that you can install in your project, e.g.:
+This outputs a tarball under `dist/qvac-sdk-{version}.tgz` that you can install in your project, e.g.:
 
 ```bash
-npm i path/to/sdk-0.3.0.tgz
+npm i path/to/qvac-sdk-0.21.0.tgz
 ```
 
 ## Testing
 
 The SDK test suite is organized into two buckets by runtime:
 
-| Bucket            | Runtime    | Location | Command                                |
-| ----------------- | ---------- | -------- | -------------------------------------- |
-| Unit              | Bun / Node | `test/`  | `bun run test:unit`                    |
-| Client (consumer) | Node / RN  | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
+| Bucket            | Runtime   | Location | Command                                |
+| ----------------- | --------- | -------- | -------------------------------------- |
+| Unit              | Node      | `test/`  | `npm run test:unit`                    |
+| Client (consumer) | Node / RN | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
 
 See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 
@@ -508,9 +503,9 @@ For a runnable example with download progress and resource cleanup, see
 From `packages/sdk`, run:
 
 ```bash
-bun run examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
+npx tsx examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
 # Use local weights and per-request hotwords:
-bun run examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
+npx tsx examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
 ```
 
 Segments retain `speaker` labels such as `S01`, zero-based `speakerId`, and
@@ -568,5 +563,5 @@ preserved. CLI `verbose_json` exposes offline turns as `speaker_segments` with
 See [the local Nemotron diarization example](examples/asr/nemotron-diarization-filesystem.ts):
 
 ```bash
-bun run examples/asr/nemotron-diarization-filesystem.ts ./nemotron-diarization.gguf meeting.wav
+npx tsx examples/asr/nemotron-diarization-filesystem.ts ./nemotron-diarization.gguf meeting.wav
 ```

@@ -190,11 +190,11 @@ fi
 
 QVAC_REAL_BIN="$SMOKE_DIR/node_modules/.bin/qvac"
 
-# OpenClaw's localService spawns `qvac serve` itself, so its stdout/stderr are
-# not on any handle this script owns -- which is why a wedged server leaves no
-# trace in the artifacts. Hand the plugin a wrapper that tees both streams to
-# disk and still passes them through to OpenClaw, so readiness detection and
-# shutdown are unaffected. `exec` keeps the PID the plugin sees.
+# The plugin spawns `qvac serve` itself and keeps its output, so its
+# stdout/stderr are not on any handle this script owns -- which is why a wedged
+# server leaves no trace in the artifacts. Hand the plugin a wrapper that tees
+# both streams to disk and still passes them through to the plugin. `exec` keeps
+# the PID and the inherited ready descriptor the plugin checks.
 QVAC_BIN="$SMOKE_DIR/qvac-serve-wrapper.sh"
 cat > "$QVAC_BIN" <<WRAPPER
 #!/usr/bin/env bash

@@ -5,7 +5,9 @@ import {
   buildContract,
   callShapeByHandlerType,
   contractDir,
-  renderContractFiles
+  renderContractFiles,
+  registryEngineManifestFile,
+  renderRegistryEngineManifest
 } from '../scripts/contract/build-contract'
 import { buildModelsRegistry } from '../scripts/contract/build-models-registry'
 import { constantsRegistry } from '../scripts/contract/constants-registry'
@@ -44,6 +46,16 @@ function collectTitleableNodes(node: unknown, out: JsonSchema[]): void {
   if (isSchemaObject(node['additionalProperties'])) {
     collectTitleableNodes(node['additionalProperties'], out)
   }
+}
+
+function collectTypeArrays(node: unknown, out: unknown[][]): void {
+  if (Array.isArray(node)) {
+    for (const child of node) collectTypeArrays(child, out)
+    return
+  }
+  if (!isSchemaObject(node)) return
+  if (Array.isArray(node['type'])) out.push(node['type'] as unknown[])
+  for (const child of Object.values(node)) collectTypeArrays(child, out)
 }
 
 test('manifest lists every method with its call shape', (t) => {
@@ -113,6 +125,13 @@ test('schema document has request and response defs for every method', (t) => {
     manifest.methods.map((method) => `#/$defs/${method.name}.request`),
     'request union references every method request'
   )
+})
+
+test('schema document uses codegen-compatible primitive unions', (t) => {
+  const { schemaDocument } = buildContract()
+  const typeArrays: unknown[][] = []
+  collectTypeArrays(schemaDocument, typeArrays)
+  t.alike(typeArrays, [], 'primitive unions use anyOf instead of type arrays')
 })
 
 test('videoStream contract exports LTX IC-LoRA field constraints and one scheduler enum', (t) => {
@@ -384,4 +403,11 @@ test('MOSS plugin ID is exported with its name for generated clients', (t) => {
   const index = pluginIds?.['x-enum-varnames']?.indexOf('MOSS_TRANSCRIBE') ?? -1
   t.ok(index >= 0, 'MOSS_TRANSCRIBE is a named contract constant')
   t.is(pluginIds?.enum?.[index], PLUGIN_MOSS_TRANSCRIBE, 'contract value matches the SDK export')
+})
+
+test('registry package engine manifest is deterministic and fresh', async (t) => {
+  const content = await renderRegistryEngineManifest()
+  t.is(content, await renderRegistryEngineManifest())
+  const committed = await readFile(registryEngineManifestFile, 'utf8')
+  t.is(committed, content, 'registry engine manifest matches the canonical definitions')
 })

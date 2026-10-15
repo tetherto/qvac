@@ -21,7 +21,7 @@
  * `parallel` in flight, admitting one more waits FIFO until a slot frees.
  *
  * Run from packages/sdk:
- *   bun run examples/multi-job-completion.ts
+ *   npx tsx examples/multi-job-completion.ts
  */
 
 import {

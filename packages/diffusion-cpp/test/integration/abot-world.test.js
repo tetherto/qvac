@@ -224,7 +224,7 @@ test(
       return
     }
 
-    const fit = assessFit({
+    const fit = await assessFit({
       mode: 'world',
       files: { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath },
       config: { seed: 42 }
@@ -441,7 +441,7 @@ for (const lane of [
         reportedEvidence.clear()
         const started = Date.now()
         console.log('[ABot streaming] starting walk', JSON.stringify(config))
-        const fit = assessFit({
+        const fit = await assessFit({
           mode: 'world',
           files,
           config: { backend: 'gpu', ...config },

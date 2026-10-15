@@ -2,9 +2,9 @@
  * MOSS-Transcribe-Diarize: one model produces text, timestamps, and speaker labels.
  *
  * Run from packages/sdk:
- *   bun run examples/asr/moss-transcribe-filesystem.ts <audio.wav> [moss.gguf] [hotword ...]
- *   bun run examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
- *   bun run examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
+ *   npx tsx examples/asr/moss-transcribe-filesystem.ts <audio.wav> [moss.gguf] [hotword ...]
+ *   npx tsx examples/asr/moss-transcribe-filesystem.ts examples/audio/diarization-sample-16k.wav
+ *   npx tsx examples/asr/moss-transcribe-filesystem.ts meeting.wav ./moss.gguf QVAC OpenMOSS
  *
  * Omit the GGUF path to download MOSS_TRANSCRIBE_DIARIZE_Q8_0 from the registry.
  * Use a 16 kHz mono PCM WAV recording. Hotwords are optional names/domain terms
@@ -18,7 +18,7 @@ const [audioFilePath, modelPath, ...hotwords] = process.argv.slice(2)
 
 if (!audioFilePath || audioFilePath === '--help') {
   console.error(
-    'Usage: bun run examples/asr/moss-transcribe-filesystem.ts <audio.wav> [moss.gguf] [hotword ...]'
+    'Usage: npx tsx examples/asr/moss-transcribe-filesystem.ts <audio.wav> [moss.gguf] [hotword ...]'
   )
   process.exit(audioFilePath === '--help' ? 0 : 1)
 }

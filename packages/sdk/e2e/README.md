@@ -68,11 +68,13 @@ Which rebuild command you run depends on what changed.
 | Only the producer side (filter, suite)    | none                                    | No — use `--skip-build`                          |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
-- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`), clears the
-  SDK snapshot, reconciles `@qvac/inference` if it was previously pinned (see below), then reinstalls and
-  bundles — skipping the inference rebuild and leaving `@qvac/inference` on its published range. Only
-  reach for it when you know your local `packages/inference` matches what's published. CI always builds
-  inference from the branch, so anything else can pass here and still fail there.
+- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`, through the
+  SDK's workspace link to `packages/inference`), clears the SDK snapshot, reconciles `@qvac/inference` if it
+  was previously pinned (see below), then reinstalls and bundles — skipping the inference pack and leaving
+  the e2e tree's `@qvac/inference` on its published range. Only reach for it when you know your local
+  `packages/inference` matches what's published; when the SDK is ahead of that release, the e2e install
+  fails with `ERESOLVE` and `install:build:full` is the way through. CI always builds inference from the
+  branch, so anything else can pass here and still fail there.
 - `install:build:full` builds the whole local chain — `packages/inference` → `packages/sdk` → `e2e` — and is
   the one to run when in doubt. `packages/sdk` pins `@qvac/inference` to a published range, so the script
   packs the local inference to a tarball, swaps the spec in for the install, and restores the manifest
