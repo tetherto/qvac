@@ -9,8 +9,6 @@
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
-#include <uv.h>
-
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "ReasoningRecoveryHelpers.hpp"
