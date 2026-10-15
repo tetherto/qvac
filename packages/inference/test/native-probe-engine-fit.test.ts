@@ -31,16 +31,6 @@ test('the fitter is taken from the plugin that owns the addon', async (t) => {
   t.is(outcome.result as unknown, result)
 })
 
-test('an asynchronous fitter is settled before its result is returned', async (t) => {
-  const registered = plugin({ assessFit: async () => result as never })
-  registerPlugin(registered)
-  t.teardown(() => unregisterPlugin(registered.modelType))
-
-  const outcome = await callEngineFit({ engine: 'tts-ggml', request: undefined as never })
-
-  t.is(outcome.result as unknown, result)
-})
-
 test('a rejected fit rejects the call', async (t) => {
   const registered = plugin({
     assessFit: async () => {

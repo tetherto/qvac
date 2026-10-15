@@ -909,7 +909,7 @@ importers:
         specifier: ^0.12.0
         version: link:../bci-whispercpp
       '@qvac/classification-ggml':
-        specifier: ^0.31.0
+        specifier: ^0.31.1
         version: link:../classification-ggml
       '@qvac/decoder-audio':
         specifier: ^0.8.1
@@ -918,28 +918,28 @@ importers:
         specifier: ^0.30.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
-        specifier: ^0.48.0
+        specifier: ^0.48.1
         version: link:../embed-llamacpp
       '@qvac/ggml-rpc-server':
-        specifier: ^0.5.0
+        specifier: ^0.5.1
         version: link:../ggml-rpc-server
       '@qvac/langdetect-text':
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.61.0
+        specifier: ^0.61.1
         version: link:../llm-llamacpp
       '@qvac/ocr-ggml':
-        specifier: ^0.29.0
+        specifier: ^0.29.1
         version: link:../ocr-ggml
       '@qvac/translation-nmtcpp':
-        specifier: ^0.21.0
+        specifier: ^0.21.1
         version: link:../translation-nmtcpp
       '@qvac/tts-ggml':
         specifier: ^0.13.0
         version: link:../tts-ggml
       '@qvac/vla-ggml':
-        specifier: ^0.32.1
+        specifier: ^0.32.2
         version: link:../vla-ggml
       '@types/brittle':
         specifier: ^3.5.0
@@ -1387,10 +1387,10 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/embed-llamacpp':
-        specifier: ^0.48.0
+        specifier: ^0.48.1
         version: link:../embed-llamacpp
       '@qvac/llm-llamacpp':
-        specifier: ^0.61.0
+        specifier: ^0.61.1
         version: link:../llm-llamacpp
       '@qvac/registry-client':
         specifier: ^0.6.0
@@ -1647,7 +1647,7 @@ importers:
         specifier: ^0.12.0
         version: link:../bci-whispercpp
       '@qvac/classification-ggml':
-        specifier: ^0.31.0
+        specifier: ^0.31.1
         version: link:../classification-ggml
       '@qvac/decoder-audio':
         specifier: ^0.8.1
@@ -1656,13 +1656,13 @@ importers:
         specifier: ^0.30.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
-        specifier: ^0.48.0
+        specifier: ^0.48.1
         version: link:../embed-llamacpp
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
       '@qvac/ggml-rpc-server':
-        specifier: ^0.5.0
+        specifier: ^0.5.1
         version: link:../ggml-rpc-server
       '@qvac/inference':
         specifier: ^0.21.0
@@ -1671,22 +1671,22 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.61.0
+        specifier: ^0.61.1
         version: link:../llm-llamacpp
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/ocr-ggml':
-        specifier: ^0.29.0
+        specifier: ^0.29.1
         version: link:../ocr-ggml
       '@qvac/translation-nmtcpp':
-        specifier: ^0.21.0
+        specifier: ^0.21.1
         version: link:../translation-nmtcpp
       '@qvac/tts-ggml':
         specifier: ^0.13.0
         version: link:../tts-ggml
       '@qvac/vla-ggml':
-        specifier: ^0.32.1
+        specifier: ^0.32.2
         version: link:../vla-ggml
       bare-abort-controller:
         specifier: ^1.0.0
