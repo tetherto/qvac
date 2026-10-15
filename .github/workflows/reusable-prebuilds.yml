@@ -7,7 +7,7 @@
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
 # ggml-rpc-server, llm-llamacpp, nmtcpp, parakeet, tts-ggml,
-# whispercpp. All prebuild workflows in the monorepo
+# turbovec-ggml, whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
 
@@ -152,6 +152,14 @@ on:
           vcpkg feature for binary-cache isolation, and installs
           libqvac-ggml-cuda-jetson.so beside the CUDA 13 module. It has no
           effect unless include-cuda and include-cuda-arm64 are also enabled.
+        type: boolean
+        required: false
+        default: false
+      verify-linux-x64-cuda-module:
+        description: >-
+          Fail the linux-x64 job unless the install tree contains exactly one
+          *ggml-cuda.so. Off by default because other include-cuda callers do
+          not all install that module name.
         type: boolean
         required: false
         default: false
@@ -477,7 +485,7 @@ jobs:
 
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Overlay PR @qvac/fabric prebuilds
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@10b5b0b0a410a116d81e0f76c4c5027fecda1a64
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
@@ -555,6 +563,19 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: bare-make install
+
+      - if: ${{ inputs.verify-linux-x64-cuda-module && inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Verify Linux x64 CUDA module
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          shopt -s nullglob globstar
+          cuda_modules=(prebuilds/linux-x64/**/*ggml-cuda.so)
+          if [ "${#cuda_modules[@]}" -ne 1 ]; then
+            echo "::error::expected one Linux x64 CUDA module, found ${#cuda_modules[@]}"
+            exit 1
+          fi
+          ls -l "${cuda_modules[0]}"
 
       - if: ${{ inputs.include-cuda && inputs.include-cuda-win32 && matrix.platform == 'win32' && matrix.arch == 'x64' }}
         name: Verify Windows CUDA and Vulkan modules
@@ -712,8 +733,26 @@ jobs:
       # dlopen crash) -- caught here, off the artifact, before any device run.
       # Export-leak findings stay warnings during rollout (enforce-exports
       # defaults to false) until every ggml addon ships a symbols.map.
-      - name: Verify prebuild symbols
+      # Each verifier revision finds @qvac/fabric's runtime in one install
+      # layout, and a backport built here still installs its own release line's
+      # fabric, so the selector names the revision per addon and version. Every
+      # id in its verifiers.json needs a step below.
+      - name: Select prebuild symbols verifier
+        id: symbols-verifier
+        uses: tetherto/qvac/.github/actions/select-prebuild-symbols-verifier@67b35e94c1c979089e633fe7e974dceef5c27133
+        with:
+          workdir: ${{ env.WORKDIR }}
+
+      - name: Verify prebuild symbols (fabric 0.20 and earlier)
+        if: steps.symbols-verifier.outputs.verifier == 'fabric-0.20'
         uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@f54dae7d8156e7f7e29ceb8d5b316026dc0d1dfd
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
+
+      - name: Verify prebuild symbols
+        if: steps.symbols-verifier.outputs.verifier == 'current'
+        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@10b5b0b0a410a116d81e0f76c4c5027fecda1a64
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}

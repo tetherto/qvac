@@ -116,6 +116,37 @@ function recordingLogger(): { logger: Logger; records: Recorded[] } {
 
 const zeroResident = () => Promise.resolve(0)
 
+test('advisory fit forwards candidate-level MOSS workload without load config fields', async (t) => {
+  let recorded: FitProbeRequest | undefined
+  await runAdvisoryFitCheck(
+    {
+      modelId: 'moss-sfx-fit',
+      modelType: ModelType.ttsGgml,
+      modelPath: '/models/sfx.gguf',
+      modelConfig: { ttsEngine: 'moss-sfx' },
+      ttsWorkload: { prompt: 'Rain', seconds: 2 },
+      isShardedModel: false
+    },
+    {
+      mobile: false,
+      residentModelBytes: zeroResident,
+      logger: recordingLogger().logger,
+      runFit: async (probe) => {
+        recorded = probe
+        return { status: 'unknown', reason: 'timeout', message: 'test timeout' }
+      }
+    }
+  )
+  t.ok(recorded)
+  if (recorded?.engine === 'tts-ggml') {
+    t.is(recorded.request.engineType, 'moss-sfx')
+    if (recorded.request.engineType === 'moss-sfx') {
+      t.is(recorded.request.prompt, 'Rain')
+      t.is(recorded.request.seconds, 2)
+    }
+  }
+})
+
 // Every outcome carries the same provenance, so `alike` needs it in each
 // expectation. Asserted rather than ignored: it is what tells a caller which
 // evidence class and headroom policy produced the verdict.
@@ -233,7 +264,7 @@ test('advisory fit: never launches a child for a load with no fitter', async (t)
   const { calls, runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(
-    { ...COMPLETION_INPUT, modelType: ModelType.ggmlOcr },
+    { ...COMPLETION_INPUT, modelType: ModelType.ggmlClassification },
     { mobile: false, runFit, logger }
   )
 

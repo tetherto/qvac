@@ -7,9 +7,9 @@ schemaType: HowTo
 
 ## Overview
 
-Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) (GGML) as the inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio.
+Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) (GGML) as the inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio. MOSS-SoundEffect also generates sound effects from descriptions, and MOSS-Speech accepts text or audio questions to generate a reply.
 
-`textToSpeech()` returns synchronously with `buffer`, `bufferStream`, `done`, `requestId`, `sampleRate`, `stats` and `stopReason`; see [Audio output](#audio-output), [Cancelling a run](#cancelling-a-run) and [Runtime statistics](#runtime-statistics) below.
+`textToSpeech()` returns synchronously with `buffer`, `bufferStream`, `done`, `requestId`, `text`, `sampleRate`, `stats` and `stopReason`; see [Audio output](#audio-output), [Cancelling a run](#cancelling-a-run) and [Runtime statistics](#runtime-statistics) below.
 
 ## Functions
 
@@ -46,6 +46,8 @@ For reference, the rate each configuration produces:
 | CosyVoice3              | 24,000 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 24,000 Hz unless the LavaSR enhancer is loaded |
 | Audio8                  | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | MOSS                    | 24,000 Hz only; MOSS takes no `outputSampleRate`                                                                    |
+| MOSS-SoundEffect        | 48,000 Hz only |
+| MOSS-Speech             | 24,000 Hz for spoken replies; no audio for `textReply: true` |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
 
 ## Cancelling a run
@@ -560,6 +562,55 @@ const result = textToSpeech({
   post-processing, and no `streamFirstChunkTokens`.
 </Callout>
 
+### MOSS-SoundEffect-v2
+
+Load a single sound-effect GGUF with `modelType: "tts-ggml"` and
+`modelConfig.ttsEngine: "moss-sfx"`. Pass `AUDIOGEN_MOSS_SFX_V2_Q8_0.src`
+as `modelSrc`: the full catalog descriptor selects the audiogen plugin. For TTS fit assessment, use a downloaded local file with explicit `modelType`
+and `ttsEngine`. The bare `.src` URL lacks registry coordinates for a weightless
+stub, and the audiogen descriptor/resource profile does not select the TTS engine.
+Use `textToSpeech({ modelId, text, stream: false })` with a sound description.
+The output is 48 kHz mono PCM.
+
+Set `seconds` (up to 30), `negativePrompt`, `steps`, `guidance` and `shift`
+per request or as load defaults. The examples use `steps: 20`; omitting it
+uses the slower baked default of 100 diffusion steps. Each clip denoises a
+30-second latent regardless of the requested output duration.
+
+For metadata-only fit, pass `ttsWorkload: { prompt, seconds }` beside
+`modelConfig` on the [`assessModelFit()`](/sdk/reference/api#assessmodelfit)
+candidate. MOSS-TTS/TTSD instead uses
+`ttsWorkload: { promptRows, referenceSamples, streaming }`, where `promptRows`
+covers the complete native prompt. These workloads are fit-only and do not
+belong in `loadModel` configuration. Missing workloads return `unknown`;
+MOSS-Speech has no native fitter in this release.
+
+### MOSS-Speech
+
+Load `TTS_MOSS_SPEECH_Q8_0` as `modelSrc` with
+`modelConfig: { ttsEngine: "moss-speech", mossSpeechCodecModelSrc: TTS_CODEC_MOSS_SPEECH_F16 }`.
+Use either `text`, or `audio` plus `sampleRate`.
+Input audio is a JSON array of normalized mono samples in `[-1, 1]`.
+Earlier turns go in `messages`; each turn has a `role` and either `text`
+or `audio` plus `sampleRate`.
+
+Request controls include `systemPrompt`, `replyVoice` plus
+`replyVoiceSampleRate`, `maxReplySeconds`, `maxNewTokens`, `textReply`,
+`greedy`, `temperature`, `topP` and `topK`. Consume `result.bufferStream`
+with the default streaming mode, or await `result.buffer` with `stream: false`,
+then await `result.text` for any reply text. Spoken mode can return audio without text;
+use `textReply: true` when text is required, which returns an empty audio
+buffer. Omitting `maxNewTokens` preserves the remaining-context budget.
+
+<Callout type="warn">
+  MOSS-SoundEffect and MOSS-Speech are desktop batch engines. The default
+  `stream: true` returns completed audio in one chunk; `stream: false` collects
+  it in `buffer`. Sentence streaming and
+  [`textToSpeechStream()`](/sdk/reference/api#texttospeechstream) are
+  unsupported. The examples recommend a GPU with enough memory for the model and
+  codec.
+</Callout>
+
 ### LavaSR
 
 With Chatterbox, Supertonic, Parler, or CosyVoice3, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag. (Audio8 and MOSS do not support them.)
@@ -785,6 +836,94 @@ Both save the PCM output with
 
 ```
 
+</WrapCode>
+</Tab>
+</Tabs>
+
+### MOSS-SoundEffect
+
+The following script generates a two-second, 48 kHz sound effect with 20 diffusion steps and saves it as a WAV file:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/moss-sound-effect.js title="moss-sound-effect.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/moss-sound-effect.ts title="moss-sound-effect.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### MOSS-SoundEffect controls
+
+The following script generates a sound effect using duration, negative-prompt, guidance and shift controls:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/moss-sound-effect-controls.js title="moss-sound-effect-controls.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/moss-sound-effect-controls.ts title="moss-sound-effect-controls.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### MOSS-Speech text reply
+
+The following script asks a typed question and reads a text-only reply with an empty audio buffer:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/moss-speech.js title="moss-speech.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/moss-speech.ts title="moss-speech.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### MOSS-Speech audio reply
+
+The following script reads a WAV question, generates a 24 kHz spoken reply and saves it as a WAV file:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/moss-speech-audio.js title="moss-speech-audio.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/moss-speech-audio.ts title="moss-speech-audio.ts" lineNumbers
+```
 </WrapCode>
 </Tab>
 </Tabs>

@@ -32,11 +32,17 @@ export const ENGINE_MOSS_TRANSCRIBE = "moss-transcribe" as const;
 export interface MossTranscribeConfig {
   /** Maximum CPU threads for inference (0 lets the engine pick). */
   maxThreads?: number;
-  /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL / CUDA). */
+  /** Select the GPU automatically when backend is auto (default: false). */
   useGPU?: boolean;
   /**
-   * Directory containing dynamically-loaded ggml backend libraries. Defaults
-   * to the package's own `prebuilds/` folder.
+   * Native backend selector: auto (default), cpu, cuda, vulkan, or an exact
+   * ggml device name such as CUDA0. Explicit selection overrides useGPU and
+   * fails at load if unavailable.
+   */
+  backend?: string;
+  /**
+   * Directory scanned, as given, for dynamically-loaded ggml backend
+   * libraries. Unset scans the addon's own, next to its native module.
    */
   backendsDir?: string;
 }
@@ -63,7 +69,7 @@ export interface MossTranscribeRunOptions {
   maxNewTokens?: number;
 }
 
-const MOSS_CONFIG_KEYS: readonly string[] = ["maxThreads", "useGPU", "backendsDir"];
+const MOSS_CONFIG_KEYS: readonly string[] = ["maxThreads", "useGPU", "backend", "backendsDir"];
 const MOSS_RUN_OPTION_KEYS: readonly string[] = ["hotwords", "prompt", "maxNewTokens"];
 const MAX_HOTWORDS = 64;
 const MAX_HOTWORD_BYTES = 64;
@@ -79,6 +85,15 @@ function asError(error: unknown): Error {
 
 function invalidRunOption(adds: string): QvacErrorAddonASRGgml {
   return new QvacErrorAddonASRGgml({ code: ERR_CODES_PARAKEET.INVALID_CONFIG, adds });
+}
+
+/** Preserve native selector names; availability is checked by the engine. */
+export function mossTranscribeBackend(value: unknown): string {
+  if (value === undefined) return "auto";
+  if (typeof value !== "string") {
+    throw invalidRunOption("backend must be a string");
+  }
+  return value;
 }
 
 function utf8Bytes(codePoint: number): number {
@@ -179,6 +194,7 @@ export class MossTranscribeDriver implements AsrDriver {
   }
 
   validateConfig(): void {
+    mossTranscribeBackend(this.params.backend);
     for (const key of Object.keys(this.params)) {
       if (!MOSS_CONFIG_KEYS.includes(key)) {
         throw new QvacErrorAddonASRGgml({
@@ -265,6 +281,7 @@ export class MossTranscribeDriver implements AsrDriver {
       modelPath: this._files.model || "",
       maxThreads: this.params.maxThreads ?? 0,
       useGPU: this.params.useGPU === true,
+      backend: mossTranscribeBackend(this.params.backend),
       backendsDir: this.params.backendsDir,
     };
   }

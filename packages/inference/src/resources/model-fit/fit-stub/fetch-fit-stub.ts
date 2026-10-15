@@ -42,6 +42,8 @@ export type FitStubUnavailableReason =
   | 'download-failed'
   /** The lookup and the fetch together did not finish within the budget. */
   | 'timed-out'
+  /** The engine's fitter reads the files themselves and no registry description. */
+  | 'files-only-engine'
 
 export type FitStubOutcome =
   /** `path` is the caller's to remove once the fitter has read it. */
@@ -193,7 +195,12 @@ function withinBudget(
 async function makeStagingDir(options: FitStubOptions): Promise<string> {
   const root = options.cacheDir ?? getCacheDir('fit-stubs')
   await fsPromises.mkdir(root, { recursive: true })
-  return fsPromises.mkdtemp(path.join(root, 'stub-'))
+  // On Windows `mkdtemp` returns the `\\?\` namespaced form of the path, and
+  // an engine that derives a companion's path by appending `/<name>` to it
+  // (bci's colocated embedder) then names a file that does not resolve.
+  // Keep the root as given and take only the generated directory name.
+  const created = await fsPromises.mkdtemp(path.join(root, 'stub-'))
+  return path.join(root, path.basename(created))
 }
 
 async function bindingFor(

@@ -1,10 +1,12 @@
 'use strict'
 
 const path = require('bare-path')
+const fs = require('bare-fs')
 const proc = require('bare-process')
 const test = require('brittle')
 
 const TTSGgml = require('@qvac/tts-ggml')
+const { assertMossBackend } = require('../utils/mossBackend')
 
 const SFX_SAMPLE_RATE = 48000
 const TENTHS_PER_SECOND = 10
@@ -14,12 +16,34 @@ const MODEL_DIR_ENV = 'QVAC_TEST_MOSS_SFX_MODEL_DIR'
 const QUICK_STEPS = 2
 const SHORT_SECONDS = 1.5
 const LONGER_SECONDS = 2.5
-const CPU_DEVICE = 0
-const GPU_DEVICE = 1
+const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 
 const modelDir = (proc.env && proc.env[MODEL_DIR_ENV]) || ''
 const skipWithoutModels = modelDir === ''
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
+
+if (proc.env && proc.env.QVAC_TEST_MOSS_FULL_GPU === 'true') {
+  if (noGpu || !['cuda', 'vulkan', 'metal', 'opencl'].includes(PINNED_GPU_BACKEND.toLowerCase())) {
+    throw new Error(
+      'MOSS-SFX full GPU validation requires an explicit GPU backend and NO_GPU=false'
+    )
+  }
+  if (
+    !modelDir ||
+    !fs.existsSync(modelDir) ||
+    !fs
+      .readdirSync(modelDir)
+      .some(
+        (name) =>
+          /^moss-sfx(-[a-z0-9_]+)*\.gguf$/i.test(name) &&
+          fs.statSync(path.join(modelDir, name)).isFile()
+      )
+  ) {
+    throw new Error(
+      'MOSS-SFX full GPU validation requires QVAC_TEST_MOSS_SFX_MODEL_DIR with a GGUF'
+    )
+  }
+}
 
 function createSfxModel(useGPU = false) {
   return new TTSGgml({
@@ -70,7 +94,7 @@ test(
     try {
       const result = await generate(model, { seconds: SHORT_SECONDS })
       assertClip(t, 'cpu clip', result, SHORT_SECONDS)
-      t.is(result.stats.backendDevice, CPU_DEVICE, 'the clip ran on the CPU')
+      assertMossBackend(t, 'cpu clip', result.stats, false, PINNED_GPU_BACKEND)
     } finally {
       await model.unload()
     }
@@ -88,7 +112,8 @@ test(
       const longer = await generate(model, { seconds: LONGER_SECONDS, negativePrompt: 'music' })
       assertClip(t, 'short clip', short, SHORT_SECONDS)
       assertClip(t, 'longer clip', longer, LONGER_SECONDS)
-      t.is(short.stats.backendDevice, GPU_DEVICE, 'the clips ran on the GPU')
+      assertMossBackend(t, 'short clip', short.stats, true, PINNED_GPU_BACKEND)
+      assertMossBackend(t, 'longer clip', longer.stats, true, PINNED_GPU_BACKEND)
     } finally {
       await model.unload()
     }

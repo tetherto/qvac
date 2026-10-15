@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -545,19 +546,17 @@ activateUpscaler(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/**
- * Project a load against the memory free right now. Args: [request], shaped
- * like the createInstance model map plus a `workload` sub-object.
- *
- * Takes no instance and loads nothing: the engine reads model metadata only. A
- * model it cannot read is an "error" status rather than a throw.
- *
- * A placement the engine reached only by changing the backend assignment is
- * reported as "does-not-fit", because nothing here applies such a plan. A
- * params-on-CPU load is the exception: the engine replans it in full, so the
- * plan is compared against the placement that load already uses.
- */
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+/** A fit request parsed into owned C++ values the worker thread can use. */
+struct FitTask {
+  bool rejected = false;
+  /** Built on the JS thread: their constructors install the sd log callback. */
+  std::shared_ptr<const SdModel> sdModel;
+  std::shared_ptr<const WorldSessionModel> worldModel;
+  SdModel::FitWorkload workload;
+  int walkSteps = 100;
+};
+
+inline FitTask parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
@@ -590,7 +589,8 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   auto request = args.getJsObject(0, "request")
                      .getOptionalProperty<js::Object>(env, "request");
 
-  SdModel::FitWorkload workload;
+  FitTask task;
+  SdModel::FitWorkload& workload = task.workload;
   if (request.has_value()) {
     if (auto prompt = request->getOptionalProperty<js::String>(env, "prompt")) {
       workload.prompt = prompt->as<std::string>(env);
@@ -636,7 +636,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto repeats = count("upscaleRepeats", 1, 64)) {
     workload.upscaleRepeats = *repeats;
   }
-  const auto walkSteps = count("walkSteps", 1, 1000000).value_or(100);
+  if (auto walkSteps = count("walkSteps", 1, 1000000)) {
+    task.walkSteps = *walkSteps;
+  }
   if (request.has_value()) {
     if (auto tiling =
             request->getOptionalProperty<js::Boolean>(env, "vaeTiling")) {
@@ -657,23 +659,44 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  SdModel::FitOutcome outcome;
+  task.rejected = rejected;
   if (rejected) {
-    outcome.reason = "unsupported-config";
-  } else if (mode == "world") {
+    return task;
+  }
+  if (mode == "world") {
     WorldSessionConfig worldConfig;
     worldConfig.ditModelPath = args.getMapEntry(0, "path");
     worldConfig.taehvPath = args.getMapEntry(0, "taehvPath");
     worldConfig.scenePath = args.getMapEntry(0, "scenePath");
     applyWorldSessionHandlers(worldConfig, configMap);
-    const WorldSessionModel model{std::move(worldConfig)};
+    task.worldModel =
+        std::make_shared<const WorldSessionModel>(std::move(worldConfig));
+  } else {
+    task.sdModel = std::make_shared<const SdModel>(std::move(config));
+  }
+  return task;
+}
+
+/**
+ * Fits are serialised: the planners enumerate the shared ggml backend
+ * registry and log through the process-wide sd log callback.
+ */
+inline SdModel::FitOutcome runFit(const FitTask& task) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+
+  SdModel::FitOutcome outcome;
+  if (task.rejected) {
+    outcome.reason = "unsupported-config";
+  } else if (task.worldModel) {
     sd_fit_result_t fit{};
     struct FitResultGuard {
       sd_fit_result_t& result;
       ~FitResultGuard() { sd_fit_result_free(&result); }
     } guard{fit};
     bool unsupportedConfig = false;
-    outcome.status = model.assessFit(walkSteps, fit, unsupportedConfig);
+    outcome.status =
+        task.worldModel->assessFit(task.walkSteps, fit, unsupportedConfig);
     outcome.reason = unsupportedConfig                  ? "unsupported-config"
                      : outcome.status == SD_FIT_SUCCESS ? "fits"
                      : outcome.status == SD_FIT_FAILURE ? "does-not-fit"
@@ -681,9 +704,14 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     if (fit.report)
       outcome.report = fit.report;
   } else {
-    const SdModel model{std::move(config)};
-    outcome = model.assessFit(workload);
+    outcome = task.sdModel->assessFit(task.workload);
   }
+  return outcome;
+}
+
+inline js_value_t*
+fitOutcomeObject(js_env_t* env, const SdModel::FitOutcome& outcome) {
+  using namespace qvac_lib_inference_addon_cpp;
 
   const char* status = "error";
   if (outcome.reason == "fits") {
@@ -706,6 +734,31 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       env, "paramsBackend", js::String::create(env, outcome.paramsBackend));
   result.setProperty(env, "report", js::String::create(env, outcome.report));
   return result;
+}
+
+/**
+ * Project a load against the memory free right now. Args: [request], shaped
+ * like the createInstance model map plus a `workload` sub-object.
+ *
+ * Takes no instance and loads nothing: the engine reads model metadata only. A
+ * model it cannot read is an "error" status.
+ *
+ * A placement the engine reached only by changing the backend assignment is
+ * reported as "does-not-fit", because nothing here applies such a plan. A
+ * params-on-CPU load is the exception: the engine replans it in full, so the
+ * plan is compared against the placement that load already uses.
+ *
+ * Returns a Promise. The request is parsed on the JS thread, the projection
+ * runs on a native worker thread, and the result object is built back on the
+ * JS thread. A malformed request throws before the Promise exists.
+ */
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  return js::JsAsyncTask::run(
+      env,
+      [task = parseFitRequest(env, info)]() { return runFit(task); },
+      fitOutcomeObject);
 }
 JSCATCH
 

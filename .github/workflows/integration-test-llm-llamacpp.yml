@@ -213,7 +213,7 @@ jobs:
 
       - name: Overlay PR @qvac/fabric prebuilds
         if: ${{ inputs.fabric-overlay-artifact != '' }}
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@10b5b0b0a410a116d81e0f76c4c5027fecda1a64
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
@@ -373,6 +373,8 @@ jobs:
             npx brittle -r test/integration/all.js "${{ matrix.single_test }}"
           } else {
             npm run test:integration:generate
+            bare test/integration/fit.test.js
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           bare test/integration/all.js --exit | Tee-Object test-output.log
         shell: powershell

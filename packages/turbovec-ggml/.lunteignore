@@ -1,0 +1,15 @@
+node_modules
+build
+dist
+prebuilds
+coverage
+package-lock.json
+**/*.auto.cjs
+test/integration/all.js
+test/results
+addon
+benchmarks
+*.d.ts
+index.js
+test/types/consumer-cjs.test.js
+src

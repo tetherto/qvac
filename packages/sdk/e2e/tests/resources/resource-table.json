@@ -201,7 +201,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "vla-pi05": {
@@ -213,7 +215,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "vla-groot": {
@@ -225,7 +229,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "vla-groot-multi": {
@@ -237,7 +243,9 @@
     },
     "type": "ggml-vla",
     "config": {
-      "backend": "cpu"
+      "backend": [
+        "cpu"
+      ]
     }
   },
   "classification": {
@@ -256,13 +264,6 @@
   "echo": {
     "type": "echo",
     "modelSrc": "",
-    "skipPreDownload": true
-  },
-  "multi-gpu-embeddings": {
-    "constant": {
-      "$const": "EMBEDDINGGEMMA_300M_Q8_0"
-    },
-    "type": "llamacpp-embedding",
     "skipPreDownload": true
   },
   "sharded-embeddings": {
@@ -433,6 +434,39 @@
       "streamFirstChunkTokens": 10
     }
   },
+  "tts-moss-sfx": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "AUDIOGEN_MOSS_SFX_V2_Q8_0"
+    },
+    "constantSourceOnly": true,
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "moss-sfx",
+      "useGPU": true,
+      "seed": 42
+    }
+  },
+  "tts-moss-speech": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "TTS_MOSS_SPEECH_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "moss-speech",
+      "useGPU": true,
+      "mossSpeechCodecModelSrc": {
+        "$const": "TTS_CODEC_MOSS_SPEECH_F16"
+      }
+    }
+  },
   "tts-audio8": {
     "constant": {
       "$const": "TTS_LM_MULTILINGUAL_AUDIO8_Q8_0"
@@ -543,6 +577,26 @@
     },
     "type": "parakeet-transcription",
     "config": {}
+  },
+  "moss-transcribe": {
+    "constant": {
+      "$const": "MOSS_TRANSCRIBE_DIARIZE_Q8_0"
+    },
+    "type": "moss-transcribe",
+    "config": {
+      "useGPU": false,
+      "maxThreads": 4
+    }
+  },
+  "nemotron-diarization": {
+    "constant": {
+      "$const": "PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "useGPU": false,
+      "maxThreads": 4
+    }
   },
   "parakeet-eou": {
     "constant": {

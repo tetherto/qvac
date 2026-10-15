@@ -1,5 +1,110 @@
 # Changelog
 
+## [0.22.0] - 2026-10-14
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11018.1.0#1` -> `11018.2.0`, which changes
+  the native ABI and the RPC wire protocol:
+  - `GGML_MAX_NAME` is 128 (was 64), and `ggml_tensor::name` is an inline
+    array, so native consumers must be rebuilt against this release.
+  - The RPC protocol moves 109 -> 111. RPC clients and servers from earlier
+    releases fail the handshake.
+  - 13 new ggml ops shift `GGML_OP_COUNT` and `GGML_GLU_OP_COUNT`.
+
+### Fixed
+
+- Tensor names longer than 63 characters (ACE-Step DiT) load instead of being
+  truncated or rejected.
+- On Linux the RPC backend loads on hosts without libibverbs and uses TCP;
+  it previously failed to load even for TCP-only use.
+- The RPC server rejects a malformed endpoint port instead of binding a
+  different one (`:65536`, `:-1` and `:50052abc` bound 0, 65535 and 50052).
+
+### Added
+
+- `ggml_backend_rpc_server_get_port()` reports the port a server bound, and
+  `ggml_backend_rpc_rdma_supported()` reports whether new connections will
+  try RDMA.
+- ggml ops `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`, `SCALE_RESIDUAL`, `BIAS_GELU`,
+  `PAD_REPLICATE_1D`, `GRU`, `ZERO_UPSAMPLE`, `CHANNEL_SHUFFLE`,
+  `AFFINE_PRELU`, `SNAKE`, `LSTM_CELL`, `TDT_STEP` and the `SIGLU` GLU op
+  (CPU implementations).
+- `common_fit_params_measured()` returns the measured memory of the fitted
+  parameters.
+
+## [0.21.1] - 2026-10-14
+
+### Fixed
+
+- On macOS and iOS the runtime no longer re-exports the `js_*` functions its
+  JS binding imports from the host. 0.21.0 re-exported them with a flat
+  lookup, so a consumer linked against it bound them to the runtime, and dyld
+  failed to load that consumer (`re-export ordinal -2 ... out of range for
+  _js_create_function`). Consumers built against 0.21.0 must be rebuilt.
+
+## [0.21.0] - 2026-10-14
+
+### Breaking
+
+- `binding.js` is now just `module.exports = require('#host-addon')`, so
+  `bare-pack` can follow it. The Bare module lexer only sees literal
+  specifiers, so the old loader's computed `require.addon()` calls left the
+  runtime out of every bundle. Each supported host maps to exactly one
+  platform package, with no fallback. A host whose platform package is not
+  installed fails at bundle time, and at require time names the package to
+  install. `addon-unavailable.js` now covers only unsupported hosts.
+- Platform packages are now ordinary addons. `@qvac/fabric-<suffix>` has
+  `addon: true` and a `require.addon()` entry, and carries
+  `prebuilds/<host>/qvac__fabric-<suffix>.bare` with the ggml backends in
+  `prebuilds/<host>/qvac__fabric-<suffix>/`. The inner `addon/` package is
+  gone. Every iOS host shares the `ios` suffix. The module's SONAME is
+  `qvac__fabric-<suffix>@<major>.bare`, so a consumer's `DT_NEEDED` names
+  its platform package and bare-link rewrites it like any other addon
+  dependency.
+- `@qvac/fabric/backends` is removed. Fabric locates its own backends:
+  `qvac_fabric_load_backends()` (new in `qvac-fabric.h`) loads them once per
+  process from `$QVAC_FABRIC_BACKENDS_DIR`, else
+  `qvac__fabric-<suffix>/` beside the loaded runtime, else the runtime's own
+  directory (where bare-link flattens them in a mobile app).
+  `qvac_fabric_backends_dir()` reports the directory it picked, and the JS
+  binding exposes both as `backendsDir()` and `loadBackends()`. The
+  `BACKENDS_SUBDIR` define and `qvac_addon_finalize(... SUBDIR ...)` are gone;
+  consumers call `qvac_fabric_load_backends()` unless a `backendsDir` was
+  passed explicitly.
+- Consumers must declare the platform packages themselves:
+  - the desktop ones as `optionalDependencies`;
+  - `@qvac/fabric-android-arm64` and `@qvac/fabric-ios` as optional
+    `peerDependencies`;
+  - the mobile ones also as exact-pinned `devDependencies` when the consumer
+    cross-builds.
+
+  bare-link resolves `DT_NEEDED` replacements only from a package's own
+  dependencies.
+- A source-built fabric no longer serves its own `prebuilds/<host>`. Run
+  `npm run link:platform` to expose the build as
+  `node_modules/@qvac/fabric-<suffix>` inside the package. The CMake template
+  resolves the platform package only, and requires `@qvac/fabric` >= 0.21.
+- Package names are now part of the native ABI (the `.bare` name is the
+  mangled package name). A renamed GitHub Packages dev build
+  (`@tetherto/fabric-mono`) is an unsliced archive for CI to assemble
+  platform packages from, not a runnable install.
+
+### Changed
+
+- The CI fabric overlay links the overlaid build's platform packages into
+  each overlaid meta, so consumers build and run against the PR's runtime.
+- Mobile CI installs or assembles the platform packages
+  (`install-platform-packages.mjs`) instead of overlaying prebuilds into the
+  meta package.
+
+### Notes
+
+- On Linux, desktop `bare-link` needs to keep the `vn_file` of a
+  `DT_VERNEED` it rewrites: fabric's exports carry the named version node
+  `QVAC_FABRIC_ABI_1`. Android uses an anonymous node and is unaffected.
+- pnpm consumers that run `bare-pack` need `nodeLinker: hoisted`.
+
 ## [0.20.3] - 2026-10-09
 
 ### Changed

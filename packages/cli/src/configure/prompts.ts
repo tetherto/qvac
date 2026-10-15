@@ -307,7 +307,7 @@ async function editField(field: ParamField, current: unknown): Promise<FieldEdit
     )
   )
   if (raw === BACK) return BACK
-  const coerced = coerceParam(raw)
+  const coerced = coerceParam(raw, field)
   return coerced === undefined ? { clear: true } : { value: coerced }
 }
 

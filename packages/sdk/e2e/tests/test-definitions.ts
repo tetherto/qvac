@@ -1,3 +1,4 @@
+import { speakerAwareTests } from './speaker-aware-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
@@ -22,6 +23,7 @@ import { toolsTests } from './tools-tests.js'
 import { deferredToolsTests } from './deferred-tools-tests.js'
 import { ocrTests } from './ocr-tests.js'
 import { classificationTests } from './classification-tests.js'
+import { ttsMossTests } from './tts-moss-tests.js'
 import { ttsTests } from './tts-tests.js'
 import { configReloadTests } from './config-reload-tests.js'
 import { loggingTests } from './logging-tests.js'
@@ -42,7 +44,6 @@ import { lifecycleTests } from './lifecycle-tests.js'
 import { configTests } from './config-tests.js'
 import { noLingeringBareTests } from './no-lingering-bare-tests.js'
 import { wrongModelTests } from './wrong-model-tests.js'
-import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
@@ -453,6 +454,7 @@ const catalog: TestDefinition[] = [
 
   // Parakeet transcription tests
   ...parakeetTests,
+  ...speakerAwareTests,
   ...parakeetStreamTests,
 
   // Completion tests
@@ -520,6 +522,7 @@ const catalog: TestDefinition[] = [
 
   // TTS tests
   ...ttsTests,
+  ...ttsMossTests,
 
   // Config reload tests
   ...configReloadTests,
@@ -563,9 +566,6 @@ const catalog: TestDefinition[] = [
 
   // No-lingering-bare regression tests
   ...noLingeringBareTests,
-
-  // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
-  ...multiGpuTests,
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,

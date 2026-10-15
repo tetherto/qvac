@@ -13,6 +13,8 @@
 #include <string>
 #include <thread>
 #include <type_traits>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include <js.h>
@@ -839,15 +841,23 @@ std::vector<CppType> toVector(js_env_t* env, Array array) {
 /// deferred env teardown callback keeps a dying env (worklet terminate /
 /// unload) alive until the worker finishes, and completion skips every
 /// promise/JS operation once teardown has begun — the promise is simply
-/// abandoned, its env is going away with it.
+/// abandoned, its env is going away with it. A rejection carries the same
+/// `code` and `message` as an error thrown through `JSCATCH`.
 ///
 /// @example
 /// return js::JsAsyncTask::run(env, []() {
-///   // Blocking operation here
 ///   heavyComputation();
 /// });
+///
+/// return js::JsAsyncTask::run(
+///     env,
+///     []() { return heavyComputation(); },
+///     [](js_env_t* env, const Result& result) { return toJs(env, result); });
 class JsAsyncTask {
-  struct CallbackData {
+  template <typename Result> struct CallbackData {
+    using Work = std::function<Result()>;
+    using Marshal = std::function<js_value_t*(js_env_t*, const Result&)>;
+
     js_env_t* env;
     js_deferred_t* deferred;
     uv_async_t* async_handle;
@@ -865,12 +875,14 @@ class JsAsyncTask {
     /// have JS-facing destructors, and once the teardown is finished the env
     /// can be gone. A worker-owned copy would be destroyed after uv_async_send,
     /// racing exactly that.
-    std::function<void()> work;
+    Work work;
+    Marshal marshal;
+    std::optional<Result> result;
 
     CallbackData(
-        js_env_t* e, js_deferred_t* d, uv_async_t* h, std::function<void()> w)
+        js_env_t* e, js_deferred_t* d, uv_async_t* h, Work w, Marshal m)
         : env(e), deferred(d), async_handle(h), error(nullptr),
-          work(std::move(w)) {}
+          work(std::move(w)), marshal(std::move(m)) {}
   };
 
   /// Deferred env teardown hook (loop thread): the env is dying while the
@@ -880,29 +892,58 @@ class JsAsyncTask {
   /// the env's loop running until the worker is done, so the detached
   /// thread's uv_async_send always targets a live loop and the uv close
   /// callback finishes the teardown afterwards.
+  template <typename Result>
   static void onEnvTeardown(js_deferred_teardown_t*, void* data) {
-    static_cast<CallbackData*>(data)->envAlive = false;
+    static_cast<CallbackData<Result>*>(data)->envAlive = false;
+  }
+
+  static js_value_t* utf8(js_env_t* env, const std::string& text) {
+    js_value_t* value;
+    JS(js_create_string_utf8(
+        env,
+        reinterpret_cast<const utf8_t*>(text.c_str()),
+        text.size(),
+        &value));
+    return value;
   }
 
   static void
-  rejectWithError(js_env_t* env, js_deferred_t* deferred, const char* msg) {
-    js_value_t* error_msg;
-    JS(js_create_string_utf8(env, (const utf8_t*)msg, strlen(msg), &error_msg));
-    js_value_t* error;
-    JS(js_create_error(env, nullptr, error_msg, &error));
-    JS(js_reject_deferred(env, deferred, error));
+  reject(js_env_t* env, js_deferred_t* deferred, std::exception_ptr error) {
+    std::string code = "INTERNAL_ERROR";
+    std::string message = "Unknown error";
+    try {
+      std::rethrow_exception(error);
+    } catch (const qvac_errors::StatusError& e) {
+      code = e.codeString();
+      message = e.what();
+      // Completion runs with an empty JavaScript stack, so libjs hands a failed
+      // call's exception to the uncaught exception handler.
+      if (e.isJSError() && message.empty()) {
+        message = "a JavaScript call failed and its exception was reported as "
+                  "uncaught";
+      }
+    } catch (const std::exception& e) {
+      message = e.what();
+    } catch (...) {
+    }
+    js_value_t* value;
+    JS(js_create_error(env, utf8(env, code), utf8(env, message), &value));
+    JS(js_reject_deferred(env, deferred, value));
   }
 
   /// Loop-side end of every task, successful or aborted (settlement failure,
   /// worker that never started): provides fallback destruction for the work,
   /// then finishes the deferred teardown and frees the handle. Requires a
   /// registered teardown.
-  static void onCloseHandle(uv_handle_t* h) {
+  template <typename Result> static void onCloseHandle(uv_handle_t* h) {
     auto* async = reinterpret_cast<uv_async_t*>(h);
-    std::unique_ptr<CallbackData> data(static_cast<CallbackData*>(async->data));
+    std::unique_ptr<CallbackData<Result>> data(
+        static_cast<CallbackData<Result>*>(async->data));
     // Normally cleared by onComplete before promise settlement. This also
     // handles thread-start failure, where completion never runs.
     data->work = nullptr;
+    data->marshal = nullptr;
+    data->result.reset();
     data->error = nullptr;
     // Lets a pending env teardown complete; on the live-env path it just
     // unregisters the hook. Legal either way (see bare-signals).
@@ -910,8 +951,8 @@ class JsAsyncTask {
     delete async;
   }
 
-  static void onComplete(uv_async_t* handle) {
-    auto* data = static_cast<CallbackData*>(handle->data);
+  template <typename Result> static void onComplete(uv_async_t* handle) {
+    auto* data = static_cast<CallbackData<Result>*>(handle->data);
 
     // Release captures before making completion observable to JavaScript.
     // Otherwise an awaited cancel can proceed into destroyInstance while this
@@ -930,20 +971,22 @@ class JsAsyncTask {
       try {
         JS(js_open_handle_scope(data->env, &scope));
 
-        if (data->error) {
+        std::exception_ptr failure = data->error;
+        js_value_t* value = nullptr;
+        if (!failure) {
           try {
-            std::rethrow_exception(data->error);
-          } catch (const std::exception& e) {
-            rejectWithError(data->env, data->deferred, e.what());
+            value = data->marshal(data->env, *data->result);
           } catch (...) {
-            const char* unknownMsg = "Unknown error at JsAsyncTask";
-            rejectWithError(data->env, data->deferred, unknownMsg);
+            failure = std::current_exception();
           }
+        }
+        data->marshal = nullptr;
+        data->result.reset();
+
+        if (failure) {
+          reject(data->env, data->deferred, failure);
         } else {
-          // Resolve promise with undefined
-          js_value_t* undefined;
-          JS(js_get_undefined(data->env, &undefined));
-          JS(js_resolve_deferred(data->env, data->deferred, undefined));
+          JS(js_resolve_deferred(data->env, data->deferred, value));
         }
       } catch (...) {
         // Settlement failed; fall through to the handshake regardless.
@@ -952,44 +995,47 @@ class JsAsyncTask {
         js_close_handle_scope(data->env, scope);
       }
     }
+    data->marshal = nullptr;
+    data->result.reset();
+    data->error = nullptr;
 
     uv_close(
-        reinterpret_cast<uv_handle_t*>(handle), &JsAsyncTask::onCloseHandle);
+        reinterpret_cast<uv_handle_t*>(handle),
+        &JsAsyncTask::onCloseHandle<Result>);
   }
 
-public:
-  /// @brief Execute blocking work asynchronously and return a promise
-  /// @param env JavaScript environment
-  /// @param work Blocking operation to execute on a background thread
-  /// @return JavaScript Promise that resolves when work completes
-  static js_value_t* run(js_env_t* env, std::function<void()> work) {
-    // Create promise
+  template <typename Result>
+  static js_value_t* start(
+      js_env_t* env, typename CallbackData<Result>::Work work,
+      typename CallbackData<Result>::Marshal marshal) {
     js_deferred_t* deferred;
     js_value_t* promise;
     JS(js_create_promise(env, &deferred, &promise));
 
-    // Set up async handle
     uv_loop_t* loop;
     JS(js_get_env_loop(env, &loop));
     auto* async_handle = new uv_async_t{};
-    if (uv_async_init(loop, async_handle, &JsAsyncTask::onComplete) != 0) {
+    if (uv_async_init(loop, async_handle, &JsAsyncTask::onComplete<Result>) !=
+        0) {
       delete async_handle;
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,
           "Failed to initialize async handle for JsAsyncTask");
     }
 
-    auto* data = new CallbackData(env, deferred, async_handle, std::move(work));
+    auto* data = new CallbackData<Result>(
+        env, deferred, async_handle, std::move(work), std::move(marshal));
     async_handle->data = data;
 
     // Environment-scope the task before the worker exists, so env teardown
     // can never race a thread the env does not know about.
     if (js_add_deferred_teardown_callback(
-            env, &JsAsyncTask::onEnvTeardown, data, &data->teardown) != 0) {
+            env, &JsAsyncTask::onEnvTeardown<Result>, data, &data->teardown) !=
+        0) {
       uv_close(
           reinterpret_cast<uv_handle_t*>(async_handle), [](uv_handle_t* h) {
             auto* async = reinterpret_cast<uv_async_t*>(h);
-            delete static_cast<CallbackData*>(async->data);
+            delete static_cast<CallbackData<Result>*>(async->data);
             delete async;
           });
       throw qvac_errors::StatusError(
@@ -1003,7 +1049,7 @@ public:
       // inert even if the loop finishes the teardown immediately.
       std::thread([data]() {
         try {
-          data->work();
+          data->result.emplace(data->work());
         } catch (...) {
           data->error = std::current_exception();
         }
@@ -1017,13 +1063,47 @@ public:
       // blocks unload forever.
       uv_close(
           reinterpret_cast<uv_handle_t*>(async_handle),
-          &JsAsyncTask::onCloseHandle);
+          &JsAsyncTask::onCloseHandle<Result>);
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,
           "Failed to start worker thread for JsAsyncTask");
     }
 
     return promise;
+  }
+
+public:
+  /// @brief Execute blocking work asynchronously and return a promise
+  /// @param env JavaScript environment
+  /// @param work Blocking operation to execute on a background thread
+  /// @return JavaScript Promise that resolves when work completes
+  template <typename Work> static js_value_t* run(js_env_t* env, Work&& work) {
+    static_assert(
+        std::is_void_v<std::invoke_result_t<Work&>>,
+        "work with a result uses JsAsyncTask::run(env, work, marshal)");
+    return start<std::monostate>(
+        env,
+        [work = std::forward<Work>(work)]() mutable {
+          work();
+          return std::monostate{};
+        },
+        [](js_env_t* env, const std::monostate&) {
+          js_value_t* undefined;
+          JS(js_get_undefined(env, &undefined));
+          return undefined;
+        });
+  }
+
+  /// @brief Execute blocking work asynchronously and resolve the promise with
+  /// `marshal(env, result)`, called on the JS thread
+  template <typename Work, typename Marshal>
+  static js_value_t* run(js_env_t* env, Work&& work, Marshal&& marshal) {
+    using Result = std::decay_t<std::invoke_result_t<Work&>>;
+    static_assert(
+        !std::is_void_v<Result>,
+        "work without a result uses JsAsyncTask::run(env, work)");
+    return start<Result>(
+        env, std::forward<Work>(work), std::forward<Marshal>(marshal));
   }
 };
 

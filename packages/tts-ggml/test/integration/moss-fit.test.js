@@ -5,7 +5,7 @@ const process = require('bare-process')
 const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 
-test('MOSS fit requires explicit, representable workload counts', (t) => {
+test('MOSS fit requires explicit, representable workload counts', async (t) => {
   const request = {
     engineType: 'moss',
     mossBackbonePath: '/models/moss-tts-delay.gguf',
@@ -15,18 +15,18 @@ test('MOSS fit requires explicit, representable workload counts', (t) => {
     streaming: false
   }
   for (const invalid of [NaN, Infinity, -1, 0.5, 2147483648]) {
-    t.exception(() => TTSGgml.assessFit({ ...request, promptRows: invalid }))
-    t.exception(() => TTSGgml.assessFit({ ...request, referenceSamples: invalid }))
+    await t.exception(TTSGgml.assessFit({ ...request, promptRows: invalid }))
+    await t.exception(TTSGgml.assessFit({ ...request, referenceSamples: invalid }))
   }
-  t.exception(() => TTSGgml.assessFit({ ...request, promptRows: undefined }))
-  t.exception(() => TTSGgml.assessFit({ ...request, streaming: undefined }))
-  t.exception(() => TTSGgml.assessFit({ ...request, threads: -1 }))
-  t.exception(() => TTSGgml.assessFit({ ...request, durationTokens: -1 }))
-  t.exception(() => TTSGgml.assessFit({ ...request, streamChunkTokens: -1 }))
-  t.exception(() => TTSGgml.assessFit({ ...request, useGPU: true, nGpuLayers: 0 }))
+  await t.exception(TTSGgml.assessFit({ ...request, promptRows: undefined }))
+  await t.exception(TTSGgml.assessFit({ ...request, streaming: undefined }))
+  await t.exception(TTSGgml.assessFit({ ...request, threads: -1 }))
+  await t.exception(TTSGgml.assessFit({ ...request, durationTokens: -1 }))
+  await t.exception(TTSGgml.assessFit({ ...request, streamChunkTokens: -1 }))
+  await t.exception(TTSGgml.assessFit({ ...request, useGPU: true, nGpuLayers: 0 }))
 })
 
-test('MOSS metadata-only fit covers batch, streaming and cloning', (t) => {
+test('MOSS metadata-only fit covers batch, streaming and cloning', async (t) => {
   const modelDir = process.env.QVAC_TEST_MOSS_MODEL_DIR
   if (!modelDir) {
     t.comment('Set QVAC_TEST_MOSS_MODEL_DIR to exercise real MOSS GGUFs')
@@ -40,14 +40,14 @@ test('MOSS metadata-only fit covers batch, streaming and cloning', (t) => {
     referenceSamples: 0,
     streaming: false
   }
-  const batch = TTSGgml.assessFit(request)
+  const batch = await TTSGgml.assessFit(request)
   t.not(batch.status, 'error', batch.report)
   t.ok(batch.weightsBytes > 0)
   t.ok(batch.lmComputeBytes > 0)
   t.ok(batch.codecComputeBytes > 0)
-  const stream = TTSGgml.assessFit({ ...request, streaming: true })
+  const stream = await TTSGgml.assessFit({ ...request, streaming: true })
   t.not(stream.status, 'error', stream.report)
-  const cloning = TTSGgml.assessFit({
+  const cloning = await TTSGgml.assessFit({
     ...request,
     mossCodecEncoderPath: path.join(modelDir, 'moss-codec-encoder-f16.gguf'),
     referenceSamples: 24000

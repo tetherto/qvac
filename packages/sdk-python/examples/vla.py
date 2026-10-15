@@ -56,7 +56,7 @@ async def main() -> int:
                 t,
                 model_src=model_src,
                 model_type="ggml-vla",
-                model_config={"backend": "cpu"},
+                model_config={"backend": ["cpu"]},
                 on_progress=print_progress,
             )
             print(f"▸ Model loaded: {model_id}")

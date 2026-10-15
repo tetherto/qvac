@@ -23,6 +23,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -449,23 +450,31 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+namespace {
+
+struct FitRequest {
+  std::string detector;
+  std::string recognizer;
+  OcrConfig config;
+  uint64_t marginBytes = 0;
+};
+
+FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
   JsArgsParser args(env, info);
   auto request = args.getJsObject(0, "request");
-  const auto detector =
+  FitRequest parsed;
+  parsed.detector =
       request.getProperty<js::String>(env, "pathDetector").as<std::string>(env);
-  const auto recognizer = request.getProperty<js::String>(env, "pathRecognizer")
-                              .as<std::string>(env);
-  OcrConfig config;
-  applyMainGpu(env, request, config);
-  applyGpuDevice(env, request, config);
-  applyBackendDevice(env, request, config);
-  applyPipelineMode(env, request, config);
+  parsed.recognizer = request.getProperty<js::String>(env, "pathRecognizer")
+                          .as<std::string>(env);
+  applyMainGpu(env, request, parsed.config);
+  applyGpuDevice(env, request, parsed.config);
+  applyBackendDevice(env, request, parsed.config);
+  applyPipelineMode(env, request, parsed.config);
   if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
-    config.backendsDir = dir->as<std::string>(env);
+    parsed.config.backendsDir = dir->as<std::string>(env);
   }
-  uint64_t margin = 0;
   if (auto value =
           request.getOptionalProperty<js::Number>(env, "marginBytes")) {
     const double n = value->as<double>(env);
@@ -475,9 +484,28 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
           general_error::InvalidArgument,
           "marginBytes must be a non-negative safe integer"};
     }
-    margin = static_cast<uint64_t>(n);
+    parsed.marginBytes = static_cast<uint64_t>(n);
   }
-  const auto fit = ocr_fit::assessOcrFit(detector, recognizer, config, margin);
+  return parsed;
+}
+
+// Runs on the worker thread with owned values only. Fits are serialised
+// because backend registration, device selection and memory queries go
+// through the process-wide ggml backend registry. The fit holds its own
+// backend handle, and ggml backends stay loaded for the process lifetime, so
+// unloading a model cannot release them underneath it.
+ocr_fit::OcrFitResult runFit(const FitRequest& request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  return ocr_fit::assessOcrFit(
+      request.detector,
+      request.recognizer,
+      request.config,
+      request.marginBytes);
+}
+
+js_value_t* fitResultObject(js_env_t* env, const ocr_fit::OcrFitResult& fit) {
+  using namespace qvac_lib_inference_addon_cpp;
   auto out = js::Object::create(env);
   out.setProperty(env, "status", js::String::create(env, fit.status));
   out.setProperty(env, "reason", js::String::create(env, fit.reason));
@@ -504,6 +532,19 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       "deviceTotalBytes",
       js::Number::create(env, static_cast<double>(fit.deviceTotalBytes)));
   return out;
+}
+
+} // namespace
+
+// Resolves the weight-load fit on a worker thread. The request is parsed and
+// the result marshalled on the JS thread; the worker makes no js_* calls.
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  return js::JsAsyncTask::run(
+      env,
+      [request = parseFitRequest(env, info)]() { return runFit(request); },
+      fitResultObject);
 }
 JSCATCH
 
