@@ -2,10 +2,6 @@
 
 #include "../addon/AddonJs.hpp"
 
-namespace qvac_lib_inference_addon_embed::vector_index {
-bool registerBindings(js_env_t* env, js_value_t* exports);
-}
-
 js_value_t*
 qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
 
@@ -35,11 +31,6 @@ qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
-
-  if (!qvac_lib_inference_addon_embed::vector_index::registerBindings(
-          env, exports)) {
-    return nullptr;
-  }
 
   return exports;
 }
