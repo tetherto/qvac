@@ -10,6 +10,10 @@ import { buildErrorCodes } from './build-error-codes'
 import { buildNumericConstants } from './build-numeric-constants'
 
 export const contractDir = new URL('../../contract/', import.meta.url)
+export const registryEngineManifestFile = new URL(
+  '../../../registry-server/lib/generated/engine-manifest.json',
+  import.meta.url
+)
 
 export const callShapeByHandlerType = {
   reply: 'request-reply',
@@ -722,4 +726,13 @@ export async function renderContractFiles() {
     'error-codes.json': await formatJson(errorCodes, 'error-codes.json'),
     'numeric-constants.json': await formatJson(numericConstants, 'numeric-constants.json')
   }
+}
+
+// Build-time export only: registry validation reads its own packaged artifact.
+export async function renderRegistryEngineManifest() {
+  const { engineToAddon, legacyEngineToCanonical, legacyRegistryEngineRules } = buildModelTypeMaps()
+  return formatJson(
+    { engineToAddon, legacyEngineToCanonical, legacyRegistryEngineRules },
+    'engine-manifest.json'
+  )
 }
