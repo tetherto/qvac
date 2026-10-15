@@ -1,22 +1,12 @@
 import { decide, RequestValidationFailedError } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
-import { decisionTests } from '../../decision-tests.js'
-
-const questions = {
-  department: {
-    type: 'choice' as const,
-    instructions: 'Which team should handle this ticket?',
-    criteria: ['billing', 'technical']
-  },
-  urgency: {
-    type: 'score' as const,
-    instructions: 'How urgent is this?',
-    criteria: ['not urgent', 'somewhat urgent', 'very urgent']
-  },
-  refund: { type: 'noul' as const, instructions: 'The customer asks for a refund.' }
-}
-const state = 'My payment failed twice and I was charged both times. Please refund the duplicate.'
+import {
+  decisionTests,
+  type DecisionSingleParams,
+  type DecisionBatchParams,
+  type DecisionInvalidBudgetParams
+} from '../../decision-tests.js'
 
 export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests> {
   pattern = /^decision-/
@@ -27,17 +17,15 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     'decision-invalid-budget': this.invalidBudget.bind(this)
   }
 
-  async ticket(_params: object, expectation: Expectation): Promise<TestResult> {
+  async ticket(params: DecisionSingleParams, expectation: Expectation): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('decision')
-    return ValidationHelpers.validate(await decide({ modelId, state, questions }), expectation)
+    return ValidationHelpers.validate(await decide({ ...params, modelId }), expectation)
   }
 
-  async concurrent(_params: object, expectation: Expectation): Promise<TestResult> {
+  async concurrent(params: DecisionBatchParams, expectation: Expectation): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('decision')
-    const results = await Promise.all([
-      decide({ modelId, state, questions }),
-      decide({ modelId, state: 'The app crashes on startup.', questions })
-    ])
+    const { states, ...request } = params
+    const results = await Promise.all(states.map((state) => decide({ ...request, modelId, state })))
     return ValidationHelpers.validate(
       results
         .map((result) =>
@@ -48,31 +36,24 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     )
   }
 
-  async batch(_params: object, expectation: Expectation): Promise<TestResult> {
+  async batch(params: DecisionBatchParams, expectation: Expectation): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('decision')
-    return ValidationHelpers.validate(
-      await decide({
-        modelId,
-        states: [
-          { message: 'The app crashes on startup.' },
-          [{ role: 'user', content: "Please send me last month's invoice." }]
-        ],
-        questions
-      }),
-      expectation
-    )
+    return ValidationHelpers.validate(await decide({ ...params, modelId }), expectation)
   }
 
-  async invalidBudget(_params: object, expectation: Expectation): Promise<TestResult> {
+  async invalidBudget(
+    params: DecisionInvalidBudgetParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('decision')
     let rejected = false
     try {
-      await decide({ modelId, state, questions, maxLen: -1 })
+      await decide({ ...params.invalid, modelId })
     } catch (error) {
       rejected = error instanceof RequestValidationFailedError
     }
     if (!rejected) throw new Error('Invalid token budget did not produce a validation error')
-    const result = await decide({ modelId, state, questions })
+    const result = await decide({ ...params.recovery, modelId })
     const team = result.answers['department']
     if (team?.type !== 'choice' || team.choice !== 'billing')
       throw new Error('Decision failed after invalid budget')
