@@ -112,7 +112,7 @@ means the check could not reach a reliable capacity verdict.
 ```js
 const { assessFit } = require('@qvac/ocr-ggml')
 
-const fit = assessFit({
+const fit = await assessFit({
   pathDetector: '/abs/path/craft_mlt_25k.gguf',
   pathRecognizer: '/abs/path/latin_g2.gguf',
   backendDevice: 'cpu',
@@ -120,6 +120,9 @@ const fit = assessFit({
 })
 console.log(fit.status, fit.reason, fit.report)
 ```
+
+`assessFit` returns a Promise. Concurrent calls run one at a time. An invalid
+request rejects.
 
 Use the same `pipelineType`, `backendDevice`, `gpuDevice`, and `main-gpu`
 settings intended for the eventual `OcrGgml` load. DocTR configurations that

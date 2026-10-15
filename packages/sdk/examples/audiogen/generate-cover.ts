@@ -13,7 +13,7 @@ import {
 // optionally conditioning the timbre on a second reference clip.
 //
 // Usage:
-//   bun examples/audiogen/generate-cover.ts <source.wav|mp3|...> "orchestral arrangement" [reference.wav] [output.wav]
+//   npx tsx examples/audiogen/generate-cover.ts <source.wav|mp3|...> "orchestral arrangement" [reference.wav] [output.wav]
 //
 // Both audio inputs are file paths: the SDK decodes them (any FFmpeg-decodable
 // format) to the 48 kHz stereo float PCM the engine expects. Pass raw
@@ -26,7 +26,7 @@ const outputPath = process.argv[5] ?? 'audiogen-cover.wav'
 
 if (!sourcePath) {
   console.error(
-    'Usage: bun examples/audiogen/generate-cover.ts <source-audio> "<caption>" [reference-audio] [output.wav]'
+    'Usage: npx tsx examples/audiogen/generate-cover.ts <source-audio> "<caption>" [reference-audio] [output.wav]'
   )
   process.exit(1)
 }
