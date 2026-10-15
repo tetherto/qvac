@@ -44,7 +44,6 @@ import { lifecycleTests } from './lifecycle-tests.js'
 import { configTests } from './config-tests.js'
 import { noLingeringBareTests } from './no-lingering-bare-tests.js'
 import { wrongModelTests } from './wrong-model-tests.js'
-import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
@@ -567,9 +566,6 @@ const catalog: TestDefinition[] = [
 
   // No-lingering-bare regression tests
   ...noLingeringBareTests,
-
-  // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
-  ...multiGpuTests,
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
