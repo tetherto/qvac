@@ -2,7 +2,7 @@ name: OpenClaw Upstream Compatibility
 
 # Scheduled tripwire for the published OpenClaw integration. This installs the
 # latest public OpenClaw and QVAC plugin packages in a fresh project so upstream
-# localService, config, model-catalog, and agent-run drift is caught early.
+# provider-hook, config, model-catalog, and agent-run drift is caught early.
 
 on:
   pull_request:

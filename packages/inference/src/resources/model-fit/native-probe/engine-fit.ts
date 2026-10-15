@@ -49,6 +49,6 @@ export async function callEngineFit(probe: FitProbeRequest): Promise<FitProbeRes
 
   return {
     engine: probe.engine,
-    result: plugin.assessFit(probe.request as never)
+    result: await plugin.assessFit(probe.request as never)
   } as FitProbeResult
 }

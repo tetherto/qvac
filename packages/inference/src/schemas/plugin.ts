@@ -165,7 +165,8 @@ export interface QvacPlugin<
   /**
    * The engine's own fitter. Carrying it here keeps every addon specifier
    * inside the module graph of the plugin that owns it, so a bundler walking a
-   * host that ships one engine never resolves the others.
+   * host that ships one engine never resolves the others. It returns the
+   * engine's fit result or a Promise of it.
    */
   assessFit?: (request: never) => unknown
   handlers: Record<string, PluginHandlerDefinition>
