@@ -2,7 +2,6 @@
 
 // Server logic with no Bare or JS dependency, so C++ unit tests can link it.
 
-#include <filesystem>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -19,11 +18,17 @@ struct RpcServerApi {
   using RunFn = void (*)(ggml_backend_rpc_server_t);
   using StopFn = void (*)(ggml_backend_rpc_server_t);
   using FreeFn = void (*)(ggml_backend_rpc_server_t);
+  using GetPortFn = int (*)(ggml_backend_rpc_server_t);
+  using RdmaSupportedFn = bool (*)();
 
   CreateFn create;
   RunFn run;
   StopFn stop;
   FreeFn free;
+  // The port a created server is listening on, which resolves port 0.
+  GetPortFn getPort;
+  // Whether new connections will try RDMA before falling back to TCP.
+  RdmaSupportedFn rdmaSupported;
 };
 
 // Runs a created server on its own thread. stop() stops, joins and frees it
@@ -52,13 +57,9 @@ private:
 // requested name is empty or unknown.
 std::vector<ggml_backend_dev_t> selectDevices(const std::string& requested);
 
-// Reads the lifecycle entry points from the registered RPC backend. Throws
+// Reads the server entry points from the registered RPC backend. Throws
 // std::runtime_error when the backend or any entry point is missing.
 RpcServerApi resolveRpcServerApi();
-
-// Whether the RPC backend module in moduleDir was built with RDMA. Always
-// false outside Linux, where Fabric does not build RDMA.
-bool rpcBackendHasRdmaMarker(const std::filesystem::path& moduleDir);
 
 // The llama.cpp RPC cache directory, or an empty string when no base
 // directory is set in the environment.

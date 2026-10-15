@@ -19,6 +19,7 @@ interface ServeOptions {
   loadConcurrency?: string
   loadTimeout?: string
   cancelLoadOnDisconnect?: boolean
+  readyFd?: string
   verbose?: boolean
   /** One boolean per registered extension, plus `default` from `--no-default`. */
   [extension: string]: unknown
@@ -102,6 +103,10 @@ function addServeOptions(command: Command): Command {
       '--no-cancel-load-on-disconnect',
       'Keep loading a model even if the client that triggered the load disconnects'
     )
+    .option(
+      '--ready-fd <fd>',
+      'Write the bound port to this inherited descriptor once listening (for supervisors using --port 0)'
+    )
     .option('-v, --verbose', 'Detailed output')
 }
 
@@ -129,6 +134,7 @@ async function runServe(options: ServeOptions): Promise<void> {
       loadTimeoutMs:
         options.loadTimeout !== undefined ? parseInt(options.loadTimeout, 10) : undefined,
       cancelLoadOnDisconnect: options.cancelLoadOnDisconnect === false ? false : undefined,
+      readyFd: options.readyFd !== undefined ? Number(options.readyFd) : undefined,
       verbose: options.verbose
     })
   } catch (error: unknown) {

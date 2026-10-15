@@ -15,6 +15,9 @@ interface ProbeParams {
 
 const REAL_VERDICTS = ['likely-fits', 'likely-too-large']
 
+/** The llama model types, under their canonical names and their aliases. */
+const DEVICE_MEMORY_FITTERS = ['llamacpp-completion', 'llm', 'llamacpp-embedding', 'embeddings']
+
 /**
  * The two stub failures that say nothing about this build. A missing record, a
  * missing blob and a corrupt one are defects, so none of them is listed here.
@@ -62,10 +65,13 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
         oneModelAssessed: result.models.length === 1
       }
 
-      // Only the fitters that read device memory alone decline a load the host
-      // pinned to the CPU; the speech and voice fitters answer for one like any
-      // other.
-      const declinedOnCpu = model.device === 'cpu' && result.evidence !== 'native-fit'
+      // Only the llama fitters read device memory alone and decline a load the
+      // host pinned to the CPU; every other fitter answers for one like any
+      // other device.
+      const declinedOnCpu =
+        model.device === 'cpu' &&
+        DEVICE_MEMORY_FITTERS.includes(load.modelType) &&
+        result.evidence !== 'native-fit'
 
       if (p.evidence !== 'native-fit') {
         checks['neverConfirms'] = result.verdict !== 'likely-fits'

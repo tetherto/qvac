@@ -733,7 +733,25 @@ jobs:
       # dlopen crash) -- caught here, off the artifact, before any device run.
       # Export-leak findings stay warnings during rollout (enforce-exports
       # defaults to false) until every ggml addon ships a symbols.map.
+      # Each verifier revision finds @qvac/fabric's runtime in one install
+      # layout, and a backport built here still installs its own release line's
+      # fabric, so the selector names the revision per addon and version. Every
+      # id in its verifiers.json needs a step below.
+      - name: Select prebuild symbols verifier
+        id: symbols-verifier
+        uses: tetherto/qvac/.github/actions/select-prebuild-symbols-verifier@67b35e94c1c979089e633fe7e974dceef5c27133
+        with:
+          workdir: ${{ env.WORKDIR }}
+
+      - name: Verify prebuild symbols (fabric 0.20 and earlier)
+        if: steps.symbols-verifier.outputs.verifier == 'fabric-0.20'
+        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@f54dae7d8156e7f7e29ceb8d5b316026dc0d1dfd
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
+
       - name: Verify prebuild symbols
+        if: steps.symbols-verifier.outputs.verifier == 'current'
         uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@10b5b0b0a410a116d81e0f76c4c5027fecda1a64
         with:
           platform: ${{ matrix.platform }}
