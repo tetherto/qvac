@@ -171,13 +171,6 @@ export const RESOURCE_TABLE: ResourceTable = {
     skipPreDownload: true
   },
 
-  /** The embedding model the multi-GPU split tests load. */
-  'multi-gpu-embeddings': {
-    constant: { $const: 'EMBEDDINGGEMMA_300M_Q8_0' },
-    type: 'llamacpp-embedding',
-    skipPreDownload: true
-  },
-
   'sharded-embeddings': {
     constant: { $const: 'GTE_LARGE_335M_FP16_SHARD' },
     type: 'llamacpp-embedding',
