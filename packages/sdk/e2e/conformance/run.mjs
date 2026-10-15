@@ -6,7 +6,7 @@
  * (packages/sdk-python/tests/test_conformance.py) checks. One corpus, both
  * clients — so they cannot drift on the covered behaviour.
  *
- * Run from packages/sdk with a built dist:  bun e2e/conformance/run.mjs
+ * Run from packages/sdk with a built dist:  node e2e/conformance/run.mjs
  */
 import { readFileSync } from 'node:fs'
 import * as sdk from '@qvac/sdk'

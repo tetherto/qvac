@@ -9,6 +9,13 @@ on:
         required: false
         type: string
         default: "packages/fabric"
+      cuda-platforms-only:
+        description: >-
+          Build only the platforms that compile a CUDA backend (linux-x64,
+          linux-arm64 including the Jetson module, and win32-x64).
+        required: false
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -26,6 +33,13 @@ on:
         required: false
         type: string
         default: "packages/fabric"
+      cuda-platforms-only:
+        description: >-
+          Build only the platforms that compile a CUDA backend (linux-x64,
+          linux-arm64 including the Jetson module, and win32-x64).
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -55,4 +69,6 @@ jobs:
       include-cuda-win32: true
       include-cuda-arm64: true
       include-cuda-arm64-jetson: true
+      verify-linux-x64-cuda-module: true
+      matrix-include: ${{ inputs.cuda-platforms-only == true && '[{"os":"ubuntu-22.04","runner_key":"linux_ubuntu2204_x64","platform":"linux","arch":"x64"},{"os":"ubuntu-22.04-arm","runner_key":"ubuntu_2204_arm","platform":"linux","arch":"arm64"},{"os":"windows-2025","runner_key":"win_2025_x64","platform":"win32","arch":"x64"}]' || 'default' }}
     secrets: inherit

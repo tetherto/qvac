@@ -99,7 +99,7 @@ if(USE_BERGAMOT)
 endif()
 
 # ggml runtime is the shared @qvac/fabric prebuild (dynamically linked, loaded
-# once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE.
+# once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
 add_bare_module(translation-nmtcpp EXPORTS)
@@ -209,7 +209,7 @@ if(USE_BERGAMOT)
   )
 endif()
 
-qvac_addon_finalize(${translation-nmtcpp} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${translation-nmtcpp})
 
 if(BUILD_TESTING)
   enable_testing()

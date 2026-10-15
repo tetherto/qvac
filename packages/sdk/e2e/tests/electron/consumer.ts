@@ -1,3 +1,4 @@
+import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
 import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import * as os from 'node:os'
 import mqtt from 'mqtt'
@@ -50,7 +51,6 @@ import { DownloadResilienceExecutor } from '../shared/executors/node/download-re
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
-import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
@@ -147,6 +147,7 @@ const snapStorageHandler = new SnapStorageExecutor()
 
 export const executor = createExecutor({
   handlers: [
+    new SpeakerAwareExecutor(resources),
     snapStorageHandler,
     // What Electron excludes -- resource-heavy suites, and anything that asserts on worker
     // processes outside the packaged app lifecycle -- is declared in the catalog now; see
@@ -192,7 +193,6 @@ export const executor = createExecutor({
     new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
-    new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
     new PluginExecutor(resources)
   ],

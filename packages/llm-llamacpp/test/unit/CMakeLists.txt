@@ -26,6 +26,7 @@ add_executable(
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
   test_load_config_handlers.cpp
+  test_image_pixel_limit.cpp
   test_finetune_param_defaults.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
@@ -77,6 +78,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheCheckpointFile.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -127,6 +129,7 @@ get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 target_compile_definitions(addon-test PRIVATE
   STANDALONE_TEST_BUILD
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
+  TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
 )
 
 # Optional coverage instrumentation
@@ -158,7 +161,7 @@ qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 
 # AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
 # addon-test dynamically links the shared @qvac/fabric runtime
-# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
+# (qvac__fabric-<host>@0.bare), and the shipped fabric prebuild is built with
 # -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
 # for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI
 # runs: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1.

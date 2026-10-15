@@ -211,3 +211,6 @@ const addonType: LlmLlamacpp.Addon | null = null;
 void addonType;
 const args: LlmLlamacpp.LlmLlamacppArgs = { files: { model: ["/a.gguf"] }, config: {} };
 void args;
+
+const fit: Promise<LlmLlamacpp.FitResult> = LlmLlamacpp.assessFit({ modelPath: "/abs/model.gguf" });
+void fit;

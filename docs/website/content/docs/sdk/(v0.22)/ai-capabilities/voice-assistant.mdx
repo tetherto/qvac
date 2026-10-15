@@ -89,11 +89,11 @@ To use a different mic, set the `MIC_DEVICE` environment variable:
 
 ```bash
 # macOS — pick by index (list with `ffmpeg -f avfoundation -list_devices true -i ""`)
-MIC_DEVICE=":1" bun run examples/voice-assistant/voice-assistant.ts
+MIC_DEVICE=":1" npx tsx examples/voice-assistant/voice-assistant.ts
 
 # Linux — pick a PulseAudio source (list with `pactl list short sources`)
 MIC_DEVICE="alsa_input.usb-Blue_Microphones_Yeti-00" \
-  bun run examples/voice-assistant/voice-assistant.ts
+  npx tsx examples/voice-assistant/voice-assistant.ts
 ```
 </Accordion>
 </Accordions>

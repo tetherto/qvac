@@ -1,0 +1,142 @@
+name: MOSS packaged addon GPU validation
+
+on:
+  workflow_call:
+    secrets:
+      AWS_OIDC_ROLE_ARN:
+        required: true
+      MODEL_S3_BUCKET:
+        required: true
+
+permissions:
+  contents: read
+
+# Serialize manual runs as well as the backend/suite processes within each run.
+concurrency:
+  group: moss-packaged-gpu
+  cancel-in-progress: false
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  validate:
+    needs: runner_names
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+    environment: release
+    timeout-minutes: 540
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    env:
+      VCPKG_MAX_CONCURRENCY: '2'
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      VCPKG_BUILD_TYPE: release
+      NATIVE_SHA: 84b02694001cfea863167776dbc185474a816656
+    steps:
+      - name: Manual Workspace Cleanup
+        shell: bash
+        working-directory: .
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # Reuse the exact native run's download, q8_0 conversion and shared-GPU
+      # admission implementation. This checkout supplies tooling, not binaries.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: tetherto/qvac-fabric-speech.cpp
+          ref: ${{ env.NATIVE_SHA }}
+          path: .moss-native
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-bare-tooling
+      - uses: ./.github/actions/setup-aws-prebuild
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+      - uses: ./.github/actions/setup-vcpkg
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: linux
+          arch: x64
+      - uses: ./.github/actions/setup-cuda
+
+      - name: Prepare quantization tooling and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/ci -p test_moss_packaged_gpu.py
+          mkdir -p moss-packaged-results
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C .moss-native rev-parse HEAD)" = "$NATIVE_SHA"
+          node -e 'require("fs").writeFileSync("moss-packaged-results/dispatch.json", JSON.stringify({runId:process.env.GITHUB_RUN_ID,sha:process.env.GITHUB_SHA,ref:process.env.GITHUB_REF,inputs:require(process.env.GITHUB_EVENT_PATH).inputs},null,2))'
+          git rev-parse HEAD > moss-packaged-results/qvac-commit.txt
+          git -C .moss-native rev-parse HEAD > moss-packaged-results/native-commit.txt
+          nvidia-smi > moss-packaged-results/gpu.txt
+          python3 -m venv .moss-venv
+          .moss-venv/bin/python -m pip install 'gguf==0.18.0' 'numpy==2.2.6'
+          # Native libraries may use the existing content-addressed cache, but
+          # never write to it or restore an addon from a published package.
+          printf '%s\n' "VCPKG_BINARY_SOURCES=${VCPKG_BINARY_SOURCES%,readwrite},read" >> "$GITHUB_ENV"
+
+      - name: Fresh CUDA and Vulkan addon builds and platform staging
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/moss-packaged-build.sh 2>&1 | tee moss-packaged-results/build.log
+
+      - name: Refresh model-source credentials after compilation
+        uses: ./.github/actions/setup-aws-prebuild
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Stage only small MOSS backbones and required codecs
+        id: models
+        shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: .moss-venv/bin/python scripts/ci/moss-packaged-gpu.py stage
+
+      - name: Strict packaged addon CUDA inference
+        id: cuda
+        shell: bash
+        run: .moss-venv/bin/python scripts/ci/moss-packaged-gpu.py cuda
+
+      - name: Strict packaged addon Vulkan inference
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.models.outcome == 'success' }}
+        shell: bash
+        run: .moss-venv/bin/python scripts/ci/moss-packaged-gpu.py vulkan
+
+      - name: Upload build, model and backend evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: moss-packaged-evidence-${{ github.sha }}
+          path: moss-packaged-results/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload the freshly tested prebuilds
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: moss-packaged-prebuilds-${{ github.sha }}
+          path: |
+            packages/tts-ggml/prebuilds/linux-x64/
+            packages/asr-ggml/prebuilds/linux-x64/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove model weights
+        if: always()
+        shell: bash
+        run: rm -rf .moss-models

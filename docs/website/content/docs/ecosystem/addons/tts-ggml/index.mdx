@@ -60,11 +60,12 @@ The native prebuild for each desktop host installs through a version-locked,
 
 Do not depend on the desktop platform packages directly. Supported installers
 are npm 7+, pnpm, bun, and Yarn Berry; Yarn v1 and `--omit=optional` installs
-skip the platform package and fail at require time with an error naming it. A
-locally built `prebuilds/` directory in the package root always takes
-precedence, and `require('@qvac/tts-ggml').resolveBackendsDir()` locates the
-directory holding the host's binaries and dynamically loaded ggml backends.
-Unsupported targets require an explicit source build; installation does not
+skip the platform package and fail at require time, and at `bare-pack` time,
+with an error naming it. Each platform package is an ordinary Bare addon whose
+native module finds its dynamically loaded ggml backends next to itself, so no
+`backendsDir` is needed. A source build becomes loadable once
+`npm run link:platform` stages it as the host's platform package. Unsupported
+targets require an explicit source build; installation does not
 automatically compile a local addon.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,

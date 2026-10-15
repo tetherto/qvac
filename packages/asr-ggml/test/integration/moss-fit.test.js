@@ -6,18 +6,18 @@ const ASRGgml = require('../../index.js')
 
 const missing = '/nonexistent/moss-transcribe.gguf'
 
-test('MOSS fit requires a model and an explicit positive duration', (t) => {
+test('MOSS fit requires a model and an explicit positive duration', async (t) => {
   for (const audioSeconds of [undefined, 0, -1, NaN, Infinity]) {
-    t.exception(() =>
+    await t.exception(
       ASRGgml.assessFit({ engine: 'moss-transcribe', modelPath: missing, audioSeconds })
     )
   }
-  t.exception(() =>
+  await t.exception(
     ASRGgml.assessFit({ engine: 'moss-transcribe', modelPath: '', audioSeconds: 30 })
   )
 })
 
-test('MOSS fit validates the same transcription options as run', (t) => {
+test('MOSS fit validates the same transcription options as run', async (t) => {
   const base = { engine: 'moss-transcribe', modelPath: missing, audioSeconds: 30 }
   for (const options of [
     { prompt: 'custom', hotwords: ['QVAC'] },
@@ -31,12 +31,16 @@ test('MOSS fit validates the same transcription options as run', (t) => {
     { marginBytes: -1 },
     { marginBytes: NaN }
   ]) {
-    t.exception(() => ASRGgml.assessFit({ ...base, ...options }))
+    await t.exception(ASRGgml.assessFit({ ...base, ...options }))
   }
 })
 
-test('MOSS fit reports an unreadable model as an outcome', (t) => {
-  const fit = ASRGgml.assessFit({ engine: 'moss-transcribe', modelPath: missing, audioSeconds: 30 })
+test('MOSS fit reports an unreadable model as an outcome', async (t) => {
+  const fit = await ASRGgml.assessFit({
+    engine: 'moss-transcribe',
+    modelPath: missing,
+    audioSeconds: 30
+  })
   t.is(fit.status, 'error')
   t.is(fit.reason, 'model-unreadable')
   t.is(fit.modelType, 'moss-transcribe')
@@ -45,7 +49,7 @@ test('MOSS fit reports an unreadable model as an outcome', (t) => {
 test(
   'MOSS fit projects weights, graphs and KV without loading the model',
   { skip: !process.env.QVAC_TEST_MOSS_TRANSCRIBE_GGUF },
-  (t) => {
+  async (t) => {
     const request = {
       engine: 'moss-transcribe',
       modelPath: process.env.QVAC_TEST_MOSS_TRANSCRIBE_GGUF,
@@ -55,7 +59,7 @@ test(
       threads: 4,
       marginBytes: 0
     }
-    const fit = ASRGgml.assessFit(request)
+    const fit = await ASRGgml.assessFit(request)
     t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', fit.report)
     t.is(fit.modelType, 'moss-transcribe')
     t.ok(fit.deviceIsCpu)
@@ -68,11 +72,11 @@ test(
       fit.deviceBytes,
       fit.weightsBytes + fit.encoderComputeBytes + fit.decoderStateBytes + fit.decoderComputeBytes
     )
-    const longer = ASRGgml.assessFit({ ...request, audioSeconds: 90 })
+    const longer = await ASRGgml.assessFit({ ...request, audioSeconds: 90 })
     t.not(longer.status, 'error', longer.report)
     t.ok(longer.decoderStateBytes > fit.decoderStateBytes)
     t.ok(longer.hostBytes > fit.hostBytes)
-    const margin = ASRGgml.assessFit({ ...request, marginBytes: Number.MAX_VALUE })
+    const margin = await ASRGgml.assessFit({ ...request, marginBytes: Number.MAX_VALUE })
     t.is(margin.status, 'does-not-fit')
     t.is(margin.reason, 'does-not-fit')
   }

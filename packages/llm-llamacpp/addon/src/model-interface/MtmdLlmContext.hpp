@@ -43,6 +43,7 @@ public:
    */
   MtmdLlmContext(
       common_params& commonParams, common_init_result_ptr llamaInit,
+      uint64_t maxImagePixels,
       std::unique_ptr<
           qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
           speculative = nullptr);
@@ -53,7 +54,7 @@ public:
   MtmdLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
       mtmd_context* sharedVision, llama_seq_id seqId,
-      llama_pos perSeqCtxCeiling = -1);
+      llama_pos perSeqCtxCeiling, uint64_t maxImagePixels);
 
   /**
    * The destructor.
@@ -477,6 +478,7 @@ private:
   CommonSamplerPtr smpl_;
 
   common_params params_;
+  uint64_t maxImagePixels_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
   // Per-request stop strings supplied by the chat template

@@ -1,8 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
-import fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   QvacResponse,
@@ -29,22 +26,6 @@ import { IndicProcessor } from "./third-party/indic-processor";
 const BERGAMOT_TARGET_TOKEN_BY_PAIR: Record<string, string> = {
   "en:pt": ">>por<<",
 };
-
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
-// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
-// copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
-// package holds the runtime. On mobile the package tree isn't resolvable at
-// runtime (the worklet runs from a packed bundle), so fall back to this addon's
-// own prebuilds, where the mobile packaging stages the backends. The native side
-// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir(): string {
-  // fabric's resolver only checks that the platform package resolves, not that
-  // its prebuilds are on disk.
-  const fabricRoot = fabricBackends.resolveBackendsDir();
-  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
-  return path.join(__dirname, "prebuilds");
-}
 
 function isAbsoluteModelPath(modelPath: string): boolean {
   return (
@@ -190,8 +171,11 @@ interface TranslationNmtcpp {
  */
 interface TranslationNmtcppConstructor {
   new (args: TranslationNmtcppArgs): TranslationNmtcpp;
-  /** Assess a model before loading it, using current device memory. */
-  assessFit(request: TranslationNmtcpp.FitRequest): TranslationNmtcpp.FitResult;
+  /**
+   * Assess a model before loading it, using current device memory. Concurrent
+   * calls run one at a time. A malformed request rejects.
+   */
+  assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
   /**
    * Available model types for translation
    */
@@ -210,9 +194,9 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     Bergamot: "Bergamot",
   };
 
-  static assessFit(
+  static async assessFit(
     request: TranslationNmtcpp.FitRequest,
-  ): TranslationNmtcpp.FitResult {
+  ): Promise<TranslationNmtcpp.FitResult> {
     if (
       !request ||
       !request.files ||
@@ -245,19 +229,16 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     }
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
     const binding = require("./binding") as {
-      assessFit?: (input: TranslationNmtcpp.FitRequest) => TranslationNmtcpp.FitResult;
+      assessFit?: (input: TranslationNmtcpp.FitRequest) => Promise<TranslationNmtcpp.FitResult>;
     };
     if (typeof binding.assessFit !== "function") {
       throw new Error("the translation-nmtcpp prebuild does not expose assessFit");
     }
     const config = { ...request.config };
     normalizeGpuAliases(config);
-    return binding.assessFit({
+    return await binding.assessFit({
       ...request,
-      config: {
-        ...config,
-        backendsDir: request.config.backendsDir ?? resolveBackendsDir(),
-      },
+      config,
     });
   }
 
@@ -517,10 +498,6 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     // translate camelCase → snake_case here. snake_case takes precedence
     // when both are present (explicit user choice wins over alias).
     normalizeGpuAliases(otherConfig);
-
-    if (otherConfig.backendsDir === undefined) {
-      otherConfig.backendsDir = resolveBackendsDir();
-    }
 
     const configurationParams: TranslationConfigurationParams = {
       path: this._files.model,
@@ -841,9 +818,8 @@ namespace TranslationNmtcpp {
 
     /**
      * Path to the directory containing backend shared libraries
-     * (libqvac-ggml-vulkan.so, etc.). Defaults to the root `@qvac/fabric/backends`
-     * resolves on desktop, falling back to this package's `prebuilds/` on mobile where
-     * the package tree isn't resolvable from the packed worklet.
+     * (libqvac-ggml-vulkan.so, etc.). Defaults to the ones @qvac/fabric ships,
+     * which it locates itself next to its runtime.
      */
     backendsDir?: string;
 

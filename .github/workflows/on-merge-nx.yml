@@ -26,6 +26,7 @@ on:
       - "packages/ocr-ggml/**"
       - "packages/translation-nmtcpp/**"
       - "packages/tts-ggml/**"
+      - "packages/turbovec-ggml/**"
       - "packages/vla-ggml/**"
   workflow_dispatch:
     inputs:
@@ -47,6 +48,7 @@ on:
           - ocr-ggml
           - translation-nmtcpp
           - tts-ggml
+          - turbovec-ggml
           - vla-ggml
       npm_tag:
         description: "NPM dist-tag override (release publish only, default: latest)"
@@ -111,6 +113,7 @@ jobs:
             ocr-ggml: packages/ocr-ggml/**
             translation-nmtcpp: packages/translation-nmtcpp/**
             tts-ggml: packages/tts-ggml/**
+            turbovec-ggml: packages/turbovec-ggml/**
             vla-ggml: packages/vla-ggml/**
 
       - name: Compute per-package config rows

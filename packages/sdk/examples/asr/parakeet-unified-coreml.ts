@@ -2,7 +2,7 @@
  * Transcribe a WAV file with Parakeet Unified and its Core ML encoder sidecar.
  *
  * From packages/sdk:
- *   bun run examples/asr/parakeet-unified-coreml.ts \
+ *   npx tsx examples/asr/parakeet-unified-coreml.ts \
  *     /path/to/parakeet-unified-en-0.6b.q4_0.gguf [16-kHz-wav-file]
  *
  * The GGUF must be a regenerated Unified artifact. The five compiled Core ML
@@ -85,7 +85,7 @@ async function stageModel(path: string): Promise<{ modelSrc: string; dir: string
 async function main(): Promise<void> {
   if (!modelPath) {
     throw new Error(
-      'Usage: bun run examples/asr/parakeet-unified-coreml.ts ' +
+      'Usage: npx tsx examples/asr/parakeet-unified-coreml.ts ' +
         '<regenerated-unified-gguf> [16-kHz-wav-file]'
     )
   }

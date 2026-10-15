@@ -27,6 +27,9 @@ function describe(error: unknown): string {
 /** How long a marker keeps a model off the native path. */
 const MARKER_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
+/** Fits this process has in flight, per `.running` marker path. */
+const inFlight = new Map<string, number>()
+
 /**
  * `marginBytes` is excluded: it carries the bytes of every model resident at
  * the time, so it differs between two attempts at the same load.
@@ -76,14 +79,16 @@ async function resolveStateDir(explicit: string | undefined): Promise<string> {
 }
 
 /**
- * Runs one engine's fitter on the calling thread, for hosts that cannot spawn a
+ * Runs one engine's fitter in this process, for hosts that cannot spawn a
  * disposable child.
  *
  * There is no boundary here to contain a fitter that aborts: it takes the host
  * with it. A leftover `.running` marker is that abort, observed on the next
  * launch, and it is promoted to `.crashed` so the same request skips native
- * rather than repeating the abort. `timeoutMs` has no meaning on this path,
- * since the native call blocks the thread until it returns.
+ * rather than repeating the abort. `timeoutMs` is not applied on this path.
+ *
+ * Fits of the same request can be in flight together. A `.running` marker this
+ * process holds is not an abort, so it is shared and removed by the last fit.
  */
 export async function runInProcessFit(
   probe: FitProbeRequest,
@@ -96,29 +101,37 @@ export async function runInProcessFit(
   const stateDir = await resolveStateDir(options.stateDir)
   const running = crashMarkerPath(stateDir, probe)
   const crashed = crashedMarkerPath(stateDir, probe)
+  const held = inFlight.get(running) ?? 0
 
-  for (const marker of [crashed, running]) {
-    if (exists(marker) && expired(marker)) clearRunning(marker)
-  }
-
-  if (exists(crashed) || exists(running)) {
-    try {
-      fs.mkdirSync(path.dirname(crashed), { recursive: true })
-      fs.writeFileSync(crashed, '')
-      clearRunning(running)
-    } catch {
-      // Keep `.running` if `.crashed` could not be written so the next launch
-      // still skips native.
+  if (held === 0) {
+    for (const marker of [crashed, running]) {
+      if (exists(marker) && expired(marker)) clearRunning(marker)
     }
-    return unknown('crashed', 'Previous fit did not finish; treating this model as unknown')
+
+    if (exists(crashed) || exists(running)) {
+      try {
+        fs.mkdirSync(path.dirname(crashed), { recursive: true })
+        fs.writeFileSync(crashed, '')
+        clearRunning(running)
+      } catch {
+        // Keep `.running` if `.crashed` could not be written so the next launch
+        // still skips native.
+      }
+      return unknown('crashed', 'Previous fit did not finish; treating this model as unknown')
+    }
+
+    try {
+      fs.mkdirSync(path.dirname(running), { recursive: true })
+      fs.writeFileSync(running, '')
+    } catch (error) {
+      return unknown(
+        'invocation-error',
+        `Fit crash marker could not be written: ${describe(error)}`
+      )
+    }
   }
 
-  try {
-    fs.mkdirSync(path.dirname(running), { recursive: true })
-    fs.writeFileSync(running, '')
-  } catch (error) {
-    return unknown('invocation-error', `Fit crash marker could not be written: ${describe(error)}`)
-  }
+  inFlight.set(running, held + 1)
 
   try {
     const callFit = options.callFit ?? callEngineFit
@@ -126,6 +139,12 @@ export async function runInProcessFit(
   } catch (error) {
     return unknown('invocation-error', describe(error))
   } finally {
-    clearRunning(running)
+    const remaining = (inFlight.get(running) ?? 1) - 1
+    if (remaining === 0) {
+      inFlight.delete(running)
+      clearRunning(running)
+    } else {
+      inFlight.set(running, remaining)
+    }
   }
 }

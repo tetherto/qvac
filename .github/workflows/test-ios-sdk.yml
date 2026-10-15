@@ -206,10 +206,6 @@ jobs:
         with:
           node-version: 22
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
-
       - name: Select Xcode
         run: |
           echo "Available Xcode versions:"
@@ -369,7 +365,7 @@ jobs:
 
       - name: Install dependencies (project)
         working-directory: ${{ inputs.project-directory }}
-        run: bun install
+        run: npm install --ignore-scripts
 
       - name: Build project
         working-directory: ${{ inputs.project-directory }}
@@ -381,7 +377,7 @@ jobs:
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           if (packageJson.scripts && packageJson.scripts.build) {
             console.log('Building project...');
-            execSync('bun run build', { stdio: 'inherit' });
+            execSync('npm run build', { stdio: 'inherit' });
           } else {
             console.log('No build script found in package.json - skipping');
           }
@@ -408,7 +404,7 @@ jobs:
       - name: Build consumer
         if: inputs.working-directory != inputs.project-directory
         working-directory: ${{ inputs.working-directory }}
-        run: bun run build
+        run: npm run build
 
       - name: Build iOS consumer IPA
         working-directory: ${{ inputs.working-directory }}
@@ -731,10 +727,6 @@ jobs:
         with:
           node-version: 22
 
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
-
       - name: Configure npm registries
         shell: node {0}
         run: |
@@ -803,7 +795,7 @@ jobs:
 
       - name: Install dependencies (project)
         working-directory: ${{ inputs.project-directory }}
-        run: bun install
+        run: npm install --ignore-scripts
 
       - name: Build project
         working-directory: ${{ inputs.project-directory }}
@@ -814,7 +806,7 @@ jobs:
 
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           if (packageJson.scripts && packageJson.scripts.build) {
-            execSync('bun run build', { stdio: 'inherit' });
+            execSync('npm run build', { stdio: 'inherit' });
           }
 
       - name: Install dependencies (consumer)
@@ -825,7 +817,7 @@ jobs:
       - name: Build consumer
         if: inputs.working-directory != inputs.project-directory
         working-directory: ${{ inputs.working-directory }}
-        run: bun run build
+        run: npm run build
 
       - name: Run producer
         working-directory: ${{ inputs.working-directory }}
