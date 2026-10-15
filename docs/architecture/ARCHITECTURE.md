@@ -168,6 +168,9 @@ Worker-backed clients use the same JSON request/response envelopes over differen
 - TypeScript Node/Bun/Electron clients use `bare-rpc` over a Unix socket or Windows named pipe.
 - Expo clients use `bare-rpc` over the BareKit worklet IPC bridge.
 - Python clients use `bare-rpc-python` over loopback TCP (`127.0.0.1:0`) because asyncio has no cross-platform Unix-socket/named-pipe server.
+- Kotlin JVM clients (`JvmBareRpcTransport`) also use `bare-rpc` framing over loopback TCP.
+
+Any local user can reach a loopback port, so on TCP endpoints the worker first sends a per-session token it receives in `QVAC_IPC_AUTH_TOKEN` (environment, not argv); the client drops every connection that does not present it.
 
 In-process Bare (`@qvac/inference`) bypasses sockets and calls the dispatch layer directly.
 
@@ -209,7 +212,7 @@ The language-neutral SDK contract lives under `packages/sdk/contract/**`:
 - `manifest.json` lists every RPC method and call shape (`request-reply`, `server-stream`, `duplex`).
 - `models.json` contains the generated model constants catalog.
 
-`packages/sdk` owns contract generation via `bun run contract:export` and drift detection via `bun run contract:check`. `packages/sdk-python` consumes the contract to generate Pydantic models, typed method stubs, model type maps, error-code registries, model constants, and the pinned SDK version.
+`packages/sdk` owns contract generation via `npm run contract:export` and drift detection via `npm run contract:check`. `packages/sdk-python` consumes the contract to generate Pydantic models, typed method stubs, model type maps, error-code registries, model constants, and the pinned SDK version.
 
 The Python package provides:
 
@@ -314,6 +317,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
 | `rag` | `@qvac/rag` | RAG with HyperDB |
+| `turbovec-ggml` | `@qvac/turbovec-ggml` | CPU vector index (`IdMapIndex`, TurboVec quantization) |
 | `decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `logging` | `@qvac/logging` | Logging utilities |
 | `error` | `@qvac/error` | Base error types |

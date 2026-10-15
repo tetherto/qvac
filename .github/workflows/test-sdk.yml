@@ -380,7 +380,7 @@ jobs:
             }
           }
 
-          // Same runner-label -> platform-key mapping as test-node-sdk.yml.
+          // Same runner-label -> platform-key mapping as the sdk-e2e-node-leg action.
           function platformKey(label) {
             const s = String(label).toLowerCase();
             if (s.includes('win')) return 'windows';
@@ -444,26 +444,19 @@ jobs:
     name: Resolve inference source
     needs: resolve
     runs-on: ubuntu-latest
-    environment: release
     permissions:
       contents: read
-      packages: read
     outputs:
       checkout-sha: ${{ steps.checkout.outputs.commit }}
       source: ${{ steps.inference.outputs.source }}
       dependency-spec: ${{ steps.inference.outputs.dependency-spec }}
       provenance: ${{ steps.inference.outputs.provenance }}
       artifact-name: ${{ steps.artifact.outputs.name }}
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
     steps:
       - id: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
           persist-credentials: false
           sparse-checkout: |
             packages/sdk/package.json
@@ -474,27 +467,6 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
-
-      - name: Configure package registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-          ];
-          if (process.env.NPM_TOKEN) {
-            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
-          }
-          if (process.env.PAT_TOKEN) {
-            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
-          }
-          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
 
       - name: Resolve and prepare inference
         id: inference
@@ -529,25 +501,18 @@ jobs:
     name: Resolve test-suite source
     needs: resolve
     runs-on: ubuntu-latest
-    environment: release
     permissions:
       contents: read
-      packages: read
     outputs:
       source: ${{ steps.test-suite.outputs.source }}
       dependency-spec: ${{ steps.test-suite.outputs.dependency-spec }}
       provenance: ${{ steps.test-suite.outputs.provenance }}
       artifact-name: ${{ steps.artifact.outputs.name }}
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
     steps:
       - id: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
           persist-credentials: false
           sparse-checkout: |
             packages/sdk/e2e/package.json
@@ -558,23 +523,6 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-
-      - name: Configure package registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-          ];
-          if (process.env.NPM_TOKEN) {
-            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
-          }
-          if (process.env.PAT_TOKEN) {
-            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
-          }
-          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
 
       - name: Resolve and prepare test-suite
         id: test-suite
@@ -693,9 +641,8 @@ jobs:
   snap-tests:
     needs: [resolve, prepare-inference, prepare-test-suite]
     if: needs.resolve.outputs.run-snap == 'true'
-    uses: ./.github/workflows/test-node-sdk.yml
+    uses: ./.github/workflows/test-snap-sdk.yml
     with:
-      consumer: snap
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       platforms: ${{ needs.resolve.outputs.snap-platforms }}

@@ -13,6 +13,14 @@ type Rule = {
 }
 
 const RULES: Rule[] = [
+  {
+    match: /^tts-moss-/,
+    skip: {
+      reason:
+        'MOSS-SoundEffect and MOSS-Speech require desktop GPU memory; Python MOSS step bindings are not yet exposed.',
+      platforms: ['mobile', 'desktop-python']
+    }
+  },
   // ── every leg but Snap ───────────────────────────────────────────────────
   {
     match: /^snap-storage-/,
@@ -94,13 +102,6 @@ const RULES: Rule[] = [
     skip: {
       reason:
         'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route',
-      platforms: ['mobile']
-    }
-  },
-  {
-    match: /^multi-gpu-/,
-    skip: {
-      reason: 'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)',
       platforms: ['mobile']
     }
   },

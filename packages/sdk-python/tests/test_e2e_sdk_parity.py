@@ -5,7 +5,7 @@ so the Python client is held to the JS client's output bar, not a loose
 "non-empty" check.
 
 Gated exactly like test_bare_rpc_transport.py: needs bare_rpc and a
-built SDK worker (`bun run build` in packages/sdk). Models are the SDK e2e's
+built SDK worker (`npm run build` in packages/sdk). Models are the SDK e2e's
 own smoke resources; all are commonly cached, and fetch over P2P otherwise.
 """
 

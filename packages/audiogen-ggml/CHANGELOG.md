@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Align the shared native `speech-cpp` source pin to `2026-10-14` across
+  the speech addons so they use the same source revision.
+
+## [0.8.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = assessFit(request)` to `const fit = await assessFit(request)`.
+
+### Changed
+
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5065](https://github.com/tetherto/qvac/pull/5065)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+- `speech-cpp` is pinned to `2026-10-12` port-version 1, the registry
+  revision that ships the merged MOSS CUDA/Vulkan backend source, the same
+  pin as the other speech addons ([#5001](https://github.com/tetherto/qvac/pull/5001)).
+
+### Fixed
+
+- The linux-x64 prebuild ships the CUDA backend again, next to Vulkan and
+  the CPU variants; releases 0.5.0 to 0.7.0 left it out. Where the NVIDIA
+  driver and the CUDA 13 runtime libraries (cudart, cuBLAS) resolve, GPU
+  requests run on CUDA instead of Vulkan; other hosts keep Vulkan or CPU
+  ([#4985](https://github.com/tetherto/qvac/pull/4985)).
+
+## [0.7.0] - 2026-10-14
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/audiogen-ggml`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__audiogen-ggml-<suffix>` (every iOS host
+  shares `ios`) and sits at `prebuilds/<host>/qvac__audiogen-ggml-<suffix>.bare`,
+  with its ggml backends in `prebuilds/<host>/qvac__audiogen-ggml-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module. An
+  explicit `backendsDir` is now scanned as given rather than as a prebuilds
+  root under which `<host>/<module>` is appended. `resolveBackendsDir()` and
+  `lib/backends.js` are removed.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`) stages it as the host's platform package in `node_modules/`.
+
+## [0.6.1] - 2026-10-13
+
+### Added
+
+- `package.json` records the `ggml-speech` build the prebuilds ship as
+  `qvac["ggml-speech"]`. The speech addons ship their ggml backends under the
+  same file names, so an app that bundles several of them needs releases that
+  record the same build.
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
+
+- Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
+  same versions as the other speech addons. `speech-cpp` moves from
+  `2026-10-07#2`; its changes are in engines this package does not build, so
+  published behavior is unchanged.
+
 ## [0.6.0] - 2026-10-09
 
 ### Added

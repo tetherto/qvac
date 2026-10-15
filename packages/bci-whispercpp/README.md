@@ -82,6 +82,14 @@ npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
+`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the
+same versions in every speech addon (`@qvac/asr-ggml`,
+`@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and
+`package.json` records the `ggml-speech` build as `qvac["ggml-speech"]`.
+The speech addons ship their ggml backends under the same file names, so
+an app that bundles several of them keeps one copy of each: use releases
+that record the same `ggml-speech`.
+
 **CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ENABLE_CUDA` CMake option. The published linux-x64 prebuild
 does not enable it; build it yourself with `npm run build:cuda` (or
@@ -320,7 +328,7 @@ In streaming `delta` mode each segment is annotated with `windowStartTimestep`. 
 ```js
 const { assessFit } = require('@qvac/bci-whispercpp')
 
-const fit = assessFit({
+const fit = await assessFit({
   modelPath: '/models/bci-whisper.bin',
   embedderPath: '/models/bci-embedder.bin',
   audioSeconds: 300,
@@ -353,7 +361,9 @@ The projection covers the whisper model and the embedder. `embedderBytes` is the
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to whisper's own headroom. |
 | `backendsDir` | Where the dynamically-loaded ggml backends live. Defaults to the directory a real load uses, since the native side registers backends once per process. |
 
-A model or embedder the fitter cannot read is `status: "error"`; a broken request, or a host with no native binding, throws.
+`assessFit` returns a Promise. Concurrent calls run one at a time.
+
+A model or embedder the fitter cannot read resolves to `status: "error"`; a broken request, or a host with no native binding, rejects.
 
 ## Tests
 

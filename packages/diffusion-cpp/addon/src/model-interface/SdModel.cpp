@@ -17,7 +17,6 @@
 #include <vector>
 
 #include <inference-addon-cpp/Errors.hpp>
-#include <inference-addon-cpp/Logger.hpp>
 #include <picojson/picojson.h>
 
 #include "utils/AviWriter.hpp"

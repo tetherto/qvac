@@ -8,6 +8,7 @@ const { binding, ASRGgml, setupJsLogger, getTestPaths } = require('./parakeet-he
 
 const { samplesDir } = getTestPaths()
 const modelPath = process.env.QVAC_TEST_MOSS_TRANSCRIBE_GGUF || ''
+const backend = process.env.QVAC_TEST_MOSS_TRANSCRIBE_BACKEND || 'auto'
 const samplePath = path.join(samplesDir, 'LastQuestion_long_ES.raw')
 const SAMPLE_RATE = 16000
 const AUDIO_SECONDS = 20
@@ -16,13 +17,21 @@ const INT16_SCALE = 32768
 const TEST_TIMEOUT_MS = 900000
 const HOTWORDS = ['Multivac', 'Alexander Adell', 'Bertram Lupov']
 
+function missingFixture(t, message) {
+  if (backend !== 'auto') {
+    t.fail(`${message}; explicit backend validation requires all fixtures`)
+  } else {
+    t.pass(`${message} - skipping`)
+  }
+}
+
 function loadSpanishOrSkip(t) {
   if (!modelPath || !fs.existsSync(modelPath)) {
-    t.pass('QVAC_TEST_MOSS_TRANSCRIBE_GGUF is not available - skipping')
+    missingFixture(t, 'QVAC_TEST_MOSS_TRANSCRIBE_GGUF is not available')
     return null
   }
   if (!fs.existsSync(samplePath)) {
-    t.pass('LastQuestion_long_ES.raw is not available - skipping')
+    missingFixture(t, 'LastQuestion_long_ES.raw is not available')
     return null
   }
   const raw = fs.readFileSync(samplePath)
@@ -71,12 +80,22 @@ test(
       files: { model: modelPath },
       config: {
         engine: 'moss-transcribe',
-        mossTranscribeConfig: { maxThreads: 4, useGPU: process.env.NO_GPU !== 'true' }
+        mossTranscribeConfig: { maxThreads: 4, useGPU: process.env.NO_GPU !== 'true', backend }
       }
     })
 
     try {
       await model.load()
+      const info = model.getBackendInfo()
+      t.ok(info, 'backend info is available')
+      if (backend !== 'auto') {
+        const expectedId = { cpu: 0, cuda: 2, vulkan: 3 }[backend]
+        if (expectedId !== undefined) {
+          t.is(info.backendId, expectedId, 'requested backend is active')
+        } else {
+          t.is(info.backendName, backend, 'requested device is active')
+        }
+      }
       const plain = await collect(await model.run(audio, { maxNewTokens: MAX_NEW_TOKENS }))
       assertLabelledSegments(t, 'default prompt', plain.segments)
 
@@ -84,7 +103,6 @@ test(
         await model.run(audio, { hotwords: HOTWORDS, maxNewTokens: MAX_NEW_TOKENS })
       )
       assertLabelledSegments(t, 'hotword prompt', biased.segments)
-      t.ok(model.getBackendInfo(), 'backend info is available')
     } finally {
       await model.unload().catch(() => {})
       logger.releaseLogger()

@@ -1,8 +1,11 @@
 {
   "name": "@qvac/bci-whispercpp",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
+  "qvac": {
+    "ggml-speech": "2026-10-07#1"
+  },
   "engines": {
     "bare": ">=1.24.0"
   },
@@ -92,7 +95,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.6.2",
+    "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"

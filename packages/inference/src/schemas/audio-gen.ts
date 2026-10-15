@@ -8,13 +8,22 @@ import {
 import { encodeBase64 } from '@/utils/encoding'
 
 const base64Schema = z.string().min(1)
-// Mirrors requireMinimaxInferenceSteps and requireMinimaxCfgScale in @qvac/audiogen-ggml.
-const MINIMAX_MAX_INFERENCE_STEPS = 1000
-const MINIMAX_CFG_SCALE_MAX = 3.4028234663852886e38
-const MINIMAX_CFG_SCALE_MIN_POSITIVE = 1.401298464324817e-45
+// Mirror requireInferenceSteps, requireAcestepShift, requireMinimaxCfgScale and
+// optionalFloat32 in @qvac/audiogen-ggml, so a value the addon would refuse
+// fails here instead.
+const MAX_INFERENCE_STEPS = 1000
+const FLOAT32_MAX = 3.4028234663852886e38
+const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45
 
 export const AUDIOGEN_ENGINES = ['acestep', 'minimax'] as const
 export const audioGenEngineSchema = z.enum(AUDIOGEN_ENGINES)
+
+/**
+ * Where MiniMax-Music3 runs: `gpu` requires a usable GPU and fails the load
+ * otherwise, `auto` (what `useGPU: true` means) falls back to the CPU, `cpu`
+ * never touches a GPU.
+ */
+const MINIMAX_DEVICES = ['cpu', 'gpu', 'auto'] as const
 
 /** Sample rate the ACE-Step engine expects for reference and source audio. */
 export const AUDIOGEN_INPUT_SAMPLE_RATE = 48000
@@ -96,26 +105,37 @@ const commonAudioGenRuntimeConfigShape = {
     .min(1)
     .optional()
     .describe(
-      'Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
+      'Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
     )
 }
 
+/** Diffusion steps, 0..1000. `0` lets the engine pick its default. */
+const inferenceStepsSchema = z.number().int().min(0).max(MAX_INFERENCE_STEPS)
+
+/**
+ * ACE-Step DiT timestep shift. `0` lets the engine pick; a positive value too
+ * small for a float32 would round to `0` and silently select that default, so
+ * it is refused instead.
+ */
+const acestepShiftSchema = z
+  .number()
+  .min(0)
+  .max(FLOAT32_MAX)
+  .refine((value) => value === 0 || value >= FLOAT32_MIN_POSITIVE, {
+    message: 'shift must be 0 or a positive float32 value'
+  })
+
 const acestepRuntimeConfigShape = {
   ...commonAudioGenRuntimeConfigShape,
-  inferenceSteps: z
-    .number()
-    .int()
-    .nonnegative()
+  inferenceSteps: inferenceStepsSchema
     .optional()
     .describe(
-      'DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).'
+      'DiT sampling steps, 0..1000; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / base and sft 50). A generation or edit can override it per run.'
     ),
-  shift: z
-    .number()
-    .nonnegative()
+  shift: acestepShiftSchema
     .optional()
     .describe(
-      'Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).'
+      'Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / base and sft 1.0). A generation or edit can override it per run.'
     ),
   nGpuLayers: z
     .number()
@@ -128,22 +148,37 @@ const acestepRuntimeConfigShape = {
 const minimaxCfgScaleSchema = z
   .number()
   .min(0)
-  .max(MINIMAX_CFG_SCALE_MAX)
-  .refine((value) => value === 0 || value >= MINIMAX_CFG_SCALE_MIN_POSITIVE, {
+  .max(FLOAT32_MAX)
+  .refine((value) => value === 0 || value >= FLOAT32_MIN_POSITIVE, {
     message: 'cfgScale must be 0 or a positive float32 value'
   })
   .describe('MiniMax flow classifier-free guidance scale; `0` uses the model default.')
 
 const minimaxRuntimeConfigShape = {
   ...commonAudioGenRuntimeConfigShape,
-  inferenceSteps: z
-    .number()
-    .int()
-    .min(0)
-    .max(MINIMAX_MAX_INFERENCE_STEPS)
+  device: z
+    .enum(MINIMAX_DEVICES)
+    .optional()
+    .describe(
+      "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`."
+    ),
+  inferenceSteps: inferenceStepsSchema
     .optional()
     .describe('MiniMax flow sampling steps; `0` uses the engine default (20).'),
   cfgScale: minimaxCfgScaleSchema.optional()
+}
+
+/** The addon takes `useGPU` or `device` for MiniMax, never both. */
+function refineMinimaxDevice(
+  value: { useGPU?: boolean | undefined; device?: string | undefined },
+  ctx: z.RefinementCtx
+) {
+  if (value.device === undefined || value.useGPU === undefined) return
+  ctx.addIssue({
+    code: 'custom',
+    path: ['device'],
+    message: 'MiniMax accepts either useGPU or device, not both'
+  })
 }
 
 const acestepAudioGenRuntimeConfigSchema = z
@@ -153,12 +188,15 @@ const acestepAudioGenRuntimeConfigSchema = z
   })
   .strict()
 
+const minimaxEngineShape = {
+  engine: z.literal('minimax').describe('Use the MiniMax-Music3 generation engine.'),
+  ...minimaxRuntimeConfigShape
+}
+
 const minimaxAudioGenRuntimeConfigSchema = z
-  .object({
-    engine: z.literal('minimax').describe('Use the MiniMax-Music3 generation engine.'),
-    ...minimaxRuntimeConfigShape
-  })
+  .object(minimaxEngineShape)
   .strict()
+  .superRefine(refineMinimaxDevice)
 
 export const audioGenRuntimeConfigSchema = z.discriminatedUnion('engine', [
   acestepAudioGenRuntimeConfigSchema,
@@ -180,8 +218,11 @@ const acestepAudioGenConfigSchema = acestepAudioGenRuntimeConfigSchema
   })
   .strict()
 
-const minimaxAudioGenConfigSchema = minimaxAudioGenRuntimeConfigSchema
-  .extend({
+// Built from the shape rather than extended from the runtime schema, so the
+// device refinement is declared on the schema that carries it.
+const minimaxAudioGenConfigSchema = z
+  .object({
+    ...minimaxEngineShape,
     lmModelSrc: modelSrcInputSchema.describe(
       'MiniMax language-model source; generates semantic music tokens.'
     ),
@@ -190,6 +231,7 @@ const minimaxAudioGenConfigSchema = minimaxAudioGenRuntimeConfigSchema
     )
   })
   .strict()
+  .superRefine(refineMinimaxDevice)
 
 export const audioGenConfigSchema = z.discriminatedUnion('engine', [
   acestepAudioGenConfigSchema,
@@ -254,13 +296,29 @@ export const audioGenClientAudioCodesSchema = z
   ])
   .pipe(audioCodesWireSchema)
 
+/**
+ * The ACE-Step controls a generation and an edit session's run share. The
+ * addon validates them identically on both paths: `seed` a safe integer (which
+ * zod's `int()` already is), `bpm` a non-negative int32, the DCW scalers
+ * within the float32 range.
+ */
+const seedSchema = z.number().int()
+const bpmSchema = z.number().int().min(0).max(INT32_MAX)
+const dcwScalerSchema = z.number().nonnegative().max(FLOAT32_MAX)
+
 const audioGenGenerationShape = {
   modelId: z.string().min(1),
   caption: z.string().trim().min(1, 'caption must not be empty or whitespace-only'),
   lyrics: z.string().optional(),
-  seed: z.number().int().optional(),
+  seed: seedSchema
+    .optional()
+    .describe(
+      'RNG seed; omit for a random one. An ACE-Step run reports the seed it used in `stats.metadata.seed`, so an unseeded take can be replayed.'
+    ),
   vocalLanguage: z.string().min(1).optional(),
-  bpm: z.number().int().positive().optional(),
+  bpm: bpmSchema
+    .optional()
+    .describe('Beats per minute; `0` or unset lets the LM infer it. ACE-Step only.'),
   keyscale: z.string().min(1).optional(),
   timesignature: z.string().min(1).optional(),
   augmentCaptionWithMetadata: z
@@ -327,14 +385,15 @@ const audioGenGenerationShape = {
     .describe(
       'MiniMax semantic-frame cap. Cannot be combined with duration. MiniMax only; rejected by ACE-Step.'
     ),
-  inferenceSteps: z
-    .number()
-    .int()
-    .min(0)
-    .max(MINIMAX_MAX_INFERENCE_STEPS)
+  inferenceSteps: inferenceStepsSchema
     .optional()
     .describe(
-      'MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.'
+      'Diffusion steps for this generation, 0..1000; omit to keep the load-time `inferenceSteps`. 0 is the engine default: MiniMax 20 flow steps, ACE-Step 8 on turbo DiTs and 50 on base/sft.'
+    ),
+  shift: acestepShiftSchema
+    .optional()
+    .describe(
+      'DiT timestep shift for this generation; omit to keep the load-time `shift`. 0 is the engine default: 3.0 on turbo DiTs, 1.0 on base/sft. ACE-Step only; rejected by MiniMax.'
     ),
   cfgScale: minimaxCfgScaleSchema
     .optional()
@@ -363,14 +422,10 @@ const audioGenGenerationShape = {
     .describe(
       'Apply the official ACE-Step Haar DCW correction during DiT sampling (default: true).'
     ),
-  dcwScaler: z
-    .number()
-    .nonnegative()
+  dcwScaler: dcwScalerSchema
     .optional()
     .describe('DCW low-frequency correction strength (official default: 0.05).'),
-  dcwHighScaler: z
-    .number()
-    .nonnegative()
+  dcwHighScaler: dcwScalerSchema
     .optional()
     .describe('DCW high-frequency correction strength (official default: 0.02).'),
   taskType: audioGenTaskTypeSchema
@@ -637,11 +692,53 @@ const audioEditShape = {
     .describe(
       'Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only.'
     ),
-  seed: z
-    .number()
-    .int()
+  seed: seedSchema
     .optional()
-    .describe('Seeds the first operation; each following operation uses seed + its index.')
+    .describe(
+      'Seeds the first operation; each following operation uses seed + its index. Omit for a random one, reported in `stats.metadata.seed`.'
+    ),
+  vocalLanguage: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Vocal language hint for the edit prompts; the engine defaults to 'unknown'."),
+  bpm: bpmSchema
+    .optional()
+    .describe('Beats per minute for the edit prompts; `0` or unset leaves it unset.'),
+  keyscale: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Key and scale for the edit prompts, e.g. 'C minor'."),
+  timesignature: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Time signature for the edit prompts, e.g. '4/4'."),
+  augmentCaptionWithMetadata: z
+    .boolean()
+    .optional()
+    .describe(
+      "Append BPM, time signature and key to each operation's conditioning caption (default: false)."
+    ),
+  dcwEnabled: z
+    .boolean()
+    .optional()
+    .describe('Repaint only: apply the Haar DCW sampler correction (default: true).'),
+  dcwScaler: dcwScalerSchema
+    .optional()
+    .describe('Repaint only: DCW low-frequency correction strength (default: 0.05).'),
+  dcwHighScaler: dcwScalerSchema
+    .optional()
+    .describe('Repaint only: DCW high-frequency correction strength (default: 0.02).'),
+  inferenceSteps: inferenceStepsSchema
+    .optional()
+    .describe(
+      'DiT steps for every operation, 0..1000; omit to keep the load-time `inferenceSteps`.'
+    ),
+  shift: acestepShiftSchema
+    .optional()
+    .describe('DiT timestep shift for every operation; omit to keep the load-time `shift`.')
 }
 
 /**
@@ -676,7 +773,8 @@ function validateAudioEditOperations(
 export const audioEditClientParamsSchema = z
   .object({
     ...audioEditShape,
-    sourceAudio: audioGenClientAudioInputSchema
+    sourceAudio: audioGenClientAudioInputSchema,
+    referenceAudio: audioGenClientAudioInputSchema.optional()
   })
   .strict()
   .superRefine(validateAudioEditOperations)
@@ -687,6 +785,11 @@ export const audioEditStreamRequestSchema = z
     sourceAudio: audioGenAudioInputSchema.describe(
       'Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].'
     ),
+    referenceAudio: audioGenAudioInputSchema
+      .optional()
+      .describe(
+        'Optional timbre reference for every operation: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM.'
+      ),
     type: z.literal('audioEditStream'),
     requestId: z.string().min(1).optional()
   })
@@ -730,6 +833,48 @@ export const audioGenUnderstandResultSchema = z.object({
     .max(AUDIOGEN_MAX_AUDIO_CODES)
     .describe(
       "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+    ),
+  seed: z
+    .number()
+    .describe(
+      'The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced.'
+    )
+})
+
+/**
+ * What an ACE-Step run rendered, after the LM filled in what the caller left
+ * unset (Phase 1, Simple Mode, Query Rewriting). An edit reports its base seed
+ * and the prompt metadata it was given, with an empty caption and no code
+ * frames. MiniMax runs report none.
+ */
+export const audioGenGenerationMetadataSchema = z.object({
+  caption: z
+    .string()
+    .describe(
+      'The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own.'
+    ),
+  lyrics: z.string().describe('The lyrics the run used (LM-written under Simple Mode).'),
+  bpm: z.number().describe('Beats per minute; 0 when unresolved.'),
+  keyscale: z.string(),
+  beatsPerBar: z
+    .number()
+    .describe('Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved.'),
+  vocalLanguage: z.string(),
+  seed: z
+    .number()
+    .describe(
+      'The seed the run used: the engine-drawn one when none was passed, so the take can be replayed.'
+    ),
+  codeFrames: z
+    .number()
+    .describe(
+      '5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits).'
+    ),
+  qualityReport: z
+    .string()
+    .optional()
+    .describe(
+      'Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.'
     )
 })
 
@@ -739,6 +884,30 @@ export const audioGenStatsSchema = z.object({
   realTimeFactor: z.number().optional(),
   backendDevice: z.number().optional(),
   backendId: z.number().optional(),
+  emittedFrames: z
+    .number()
+    .optional()
+    .describe(
+      'MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.'
+    ),
+  arMs: z
+    .number()
+    .optional()
+    .describe('MiniMax only: engine time in the autoregressive semantic stage, in ms.'),
+  conditionMs: z
+    .number()
+    .optional()
+    .describe('MiniMax only: engine time building the flow conditioning, in ms.'),
+  flowMs: z
+    .number()
+    .optional()
+    .describe('MiniMax only: engine time in the flow-matching DiT, in ms.'),
+  vocoderMs: z.number().optional().describe('MiniMax only: engine time in the vocoder, in ms.'),
+  metadata: audioGenGenerationMetadataSchema
+    .optional()
+    .describe(
+      'What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.'
+    ),
   lyricsScore: z
     .number()
     .optional()
@@ -861,6 +1030,7 @@ export type AudioGenConfig = z.infer<typeof audioGenConfigSchema>
 export type AudioGenClientParams = z.input<typeof audioGenClientParamsSchema>
 export type AudioGenStreamRequest = z.infer<typeof audioGenStreamRequestSchema>
 export type AudioGenStats = z.infer<typeof audioGenStatsSchema>
+export type AudioGenGenerationMetadata = z.infer<typeof audioGenGenerationMetadataSchema>
 export type AudioGenStreamResponse = z.infer<typeof audioGenStreamResponseSchema>
 export type AudioGenTrack = z.infer<typeof audioGenTrackSchema>
 export type AudioGenUnderstandResult = z.infer<typeof audioGenUnderstandResultSchema>

@@ -171,7 +171,7 @@ test('enhanced examples have package scripts', () => {
 test('WER helper uses asr-ggml as a development dependency', () => {
   assert.equal(packageJson.dependencies['@qvac/transcription-whispercpp'], undefined)
   assert.equal(packageJson.dependencies['@qvac/asr-ggml'], undefined)
-  assert.equal(packageJson.devDependencies['@qvac/asr-ggml'], '^0.3.2')
+  assert.equal(packageJson.devDependencies['@qvac/asr-ggml'], '0.8.1')
   const source = fs.readFileSync(path.join(packageRoot, 'test/utils/runWhisper.js'), 'utf8')
   assert.match(source, /@qvac\/asr-ggml/)
   assert.doesNotMatch(source, /transcription-whispercpp/)
@@ -196,6 +196,15 @@ test('published commands include their runtime files', () => {
   assert.ok(files.has('examples/chatterbox-enhanced.js'))
   assert.ok(files.has('examples/supertonic-enhanced.js'))
   assert.ok(files.has('examples/parler-enhanced.js'))
+  for (const helper of [
+    'mossBackend',
+    'mossGpuValidation',
+    'gpuOnly',
+    'testThreads',
+    'perf-helper'
+  ]) {
+    assert.ok(files.has(`test/utils/${helper}.js`))
+  }
 })
 
 test('published runtime files declare their external imports', () => {

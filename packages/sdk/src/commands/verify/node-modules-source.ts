@@ -39,18 +39,25 @@ export async function collectAddonsFromNodeModules(
   const limit = createLimiter(FS_CONCURRENCY)
   const results = await walkNodeModules(nodeModulesRoot, limit, true)
 
+  // A split addon is checked through its meta, which looks for each host's
+  // prebuild in the platform package it names; checking the installed
+  // platform packages as well would fail each one on every other host.
   const addons: NativeAddon[] = []
+  const platformPackages = new Set<string>()
   for (const result of results) {
     if (result.record !== undefined && diagnostics !== undefined) {
       diagnostics.packages.push(result.record)
     }
     if (result.isAddon && result.addon) {
       addons.push(result.addon)
+    } else if (result.splitAddon !== undefined) {
+      addons.push(result.splitAddon.addon)
+      for (const name of result.splitAddon.platformPackages) platformPackages.add(name)
     } else if (result.invalid !== undefined && diagnostics !== undefined) {
       diagnostics.invalidPackageJsons.push(result.invalid)
     }
   }
-  return deduplicateAddons(addons)
+  return deduplicateAddons(addons.filter((addon) => !platformPackages.has(addon.name)))
 }
 
 /**

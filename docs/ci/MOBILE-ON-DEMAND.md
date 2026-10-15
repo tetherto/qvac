@@ -5,12 +5,13 @@ To cut that cost, they **no longer run automatically on PRs**. Instead you start
 them by hand, choosing exactly one platform, the device(s) to run on, and,
 where supported, a subset of tests.
 
-This applies to all 15 mobile addons: `asr-ggml`, `audiogen-ggml`,
+This applies to all 16 mobile addons: `asr-ggml`, `audiogen-ggml`,
 `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`,
 `embed-llamacpp`, `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`,
-`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `vla`.
+`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml`,
+`vla`.
 
-Except for its dedicated section, the guidance below applies to the other 14
+Except for its dedicated section, the guidance below applies to the other 15
 addons. `ggml-rpc-server` has different device inputs and no test filter or
 package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 
@@ -52,7 +53,7 @@ artifact, failing if the artifact cannot be used.
 
 ### Quick start — test your own PR on a device
 
-For the other 14 addons, this is the common case end to end. A first run should
+For the other 15 addons, this is the common case end to end. A first run should
 cover every supported device and every test — see
 [Which devices to run on](#which-devices-to-run-on).
 The single-device, single-test form below is the follow-up shape: once you are
@@ -349,13 +350,18 @@ addon — it installs a **prebuilt** one. Sources are tried in this order:
 on the phone", so setting **both is an error** — the run fails and tells you to
 clear one, rather than picking for you.
 
-Some addons publish their `@qvac` release as a JS-only meta package plus
-per-platform packages (`@qvac/<addon>-ios`, `@qvac/<addon>-android-arm64`). For
-those you will see the setup step resolve twice — the meta package, then the
-platform package its `#host-addon` map names, at the same version — and the second
-`Verified:` line names the package the binaries actually came from. Nothing
-changes about what you pass; the `@tetherto` dev builds are published unsliced
-and always resolve in one step.
+Split addons (`@qvac/fabric` and the speech addons) publish their `@qvac`
+release as a JS-only meta package plus per-platform packages (`@qvac/<addon>-ios`,
+`@qvac/<addon>-android-arm64`); the meta's `binding.js` is just
+`require('#host-addon')`. For those you will see the setup step resolve twice —
+the meta package, then the platform package its `#host-addon` map names, at the
+same version — and the second `Verified:` line names the package the binaries
+actually came from. Nothing changes about what you pass. The `@tetherto` dev
+builds are published unsliced and resolve in one step; the app build's "Install
+mobile platform packages" step then assembles the platform package from the
+meta's own `prebuilds/<host>/`, and npm-installs the ones the app's other
+dependencies (every fabric consumer needs `@qvac/fabric-<host>`) name at their
+meta's version.
 
 ### Testing unmerged / unpublished native code
 
@@ -591,7 +597,7 @@ the pin did not arrive and you are testing the published release.
 
 | input | addons |
 |---|---|
-| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `vla` |
+| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `turbovec-ggml`, `vla` |
 | `-f package_spec=` | `asr-ggml`, `audiogen-ggml`, `tts-ggml` |
 | *(no such input)* | `inference-addon-cpp` |
 | `-f prebuild_run_id=` | every addon above **except** `decoder-audio` and `inference-addon-cpp` (see *Addons that need none of this*) |

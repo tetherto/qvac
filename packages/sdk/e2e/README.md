@@ -68,11 +68,13 @@ Which rebuild command you run depends on what changed.
 | Only the producer side (filter, suite)    | none                                    | No — use `--skip-build`                          |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
-- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`), clears the
-  SDK snapshot, reconciles `@qvac/inference` if it was previously pinned (see below), then reinstalls and
-  bundles — skipping the inference rebuild and leaving `@qvac/inference` on its published range. Only
-  reach for it when you know your local `packages/inference` matches what's published. CI always builds
-  inference from the branch, so anything else can pass here and still fail there.
+- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`, through the
+  SDK's workspace link to `packages/inference`), clears the SDK snapshot, reconciles `@qvac/inference` if it
+  was previously pinned (see below), then reinstalls and bundles — skipping the inference pack and leaving
+  the e2e tree's `@qvac/inference` on its published range. Only reach for it when you know your local
+  `packages/inference` matches what's published; when the SDK is ahead of that release, the e2e install
+  fails with `ERESOLVE` and `install:build:full` is the way through. CI always builds inference from the
+  branch, so anything else can pass here and still fail there.
 - `install:build:full` builds the whole local chain — `packages/inference` → `packages/sdk` → `e2e` — and is
   the one to run when in doubt. `packages/sdk` pins `@qvac/inference` to a published range, so the script
   packs the local inference to a tarball, swaps the spec in for the install, and restores the manifest
@@ -196,7 +198,8 @@ consumers.
 Each platform bundles the worker with the plugin included through its normal build path:
 
 - **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
-  (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes
+  for the machine's own host (equivalent to `npx qvac bundle sdk --host <host>`, without requiring
+  `@qvac/cli` as a dependency) and writes
   `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
 - **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
   `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
@@ -296,6 +299,27 @@ Non-obvious inputs:
 
 The remaining inputs (`filter`, `exclude-suite`, timeouts, device pools, and `cache-models`) are described
 in the form.
+
+### How the CI legs are laid out
+
+`test-sdk.yml` fans out one reusable workflow per family, and each family gets one job per runner:
+
+- `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
+- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
+  its own steps, so none of them show up as skipped steps on the other families' jobs.
+- `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm.
+
+The runner-hosted families take their shared steps from the `sdk-e2e-node-*` composite actions in
+`.github/actions`: `leg` resolves the platform and rerun filter, `prepare` installs and builds, `run`
+drives the consumer and producer, and `results` uploads the `results-<family>-<platform>` artifacts. The
+report comments and failed-test reruns read those artifacts. Change a shared step in its action, and a
+family-specific step in that family's workflow. The jobs check these actions out from the commit the
+workflow was loaded from, not from `test-version`, so a PR branch or tag that predates them still runs.
+
+Desktop, Electron, and Python stay separate jobs on the same runner label. Merging them into one job per
+OS would run the three in sequence, end every other client's results when one fails, and change the
+`results-<family>-<platform>` contract that reports and reruns read. Electron would not share the desktop
+model cache either, because it bootstraps a different set of models.
 
 ## Developing new tests
 

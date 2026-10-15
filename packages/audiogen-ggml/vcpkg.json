@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.4.0"
+      "version>=": "1.5.0"
     },
     {
       "name": "qvac-lint-cpp",
@@ -10,12 +10,10 @@
     },
     {
       "name": "ggml-speech",
-      "version>=": "2026-10-07#1",
       "default-features": false
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-07#2",
       "default-features": false,
       "features": [
         "audiogen",
@@ -25,7 +23,6 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-07#2",
       "default-features": false,
       "features": [
         "audiogen",
@@ -36,7 +33,6 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-10-07#2",
       "default-features": false,
       "features": [
         "audiogen",
@@ -52,7 +48,6 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-10-07#2",
           "default-features": false,
           "features": [
             "cuda"
@@ -72,7 +67,6 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-10-07#2",
           "default-features": false,
           "features": [
             "vulkan"
@@ -81,5 +75,16 @@
         }
       ]
     }
-  }
+  },
+  "overrides": [
+    {
+      "name": "ggml-speech",
+      "version": "2026-10-07",
+      "port-version": 1
+    },
+    {
+      "name": "speech-cpp",
+      "version": "2026-10-14"
+    }
+  ]
 }

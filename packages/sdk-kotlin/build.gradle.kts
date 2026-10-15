@@ -103,7 +103,7 @@ val checkWireLiterals = tasks.register<Exec>("checkWireLiterals") {
 checkContract.configure { dependsOn(testContractGenerator, checkWireLiterals) }
 tasks.matching { it.name == "jvmTest" }.configureEach { dependsOn(checkWireFixtures) }
 val testReleaseGate = tasks.register<Exec>("testReleaseGate") {
-    commandLine("node", "--test", "$projectDir/scripts/verify-published-worker.test.mjs")
+    commandLine("node", "--test", "$projectDir/scripts/verify-published-worker.test.mjs", "$projectDir/scripts/platform-package.test.mjs")
 }
 val verifyPublishedWorker = tasks.register<Exec>("verifyPublishedWorker") {
     commandLine("node", "$projectDir/scripts/verify-published-worker.mjs")

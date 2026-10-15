@@ -205,18 +205,26 @@ void [
   modelKey,
 ];
 
+const mossConfig: ASRGgml.MossTranscribeConfig = { backend: "cuda", useGPU: false };
+void mossConfig;
+
 const mossFit: ASRGgml.MossTranscribeFitRequest = {
   engine: "moss-transcribe",
   modelPath: "/models/moss-transcribe.gguf",
   audioSeconds: 30,
+  backend: "vulkan",
   hotwords: ["QVAC"],
   maxNewTokens: 1024,
   threads: 4,
   gpuLayers: 1,
   marginBytes: 0,
 };
-ASRGgml.assessFit(mossFit);
+const mossFitResult: Promise<ASRGgml.AsrFitResult> = ASRGgml.assessFit(mossFit);
+void mossFitResult;
+// @ts-expect-error The fit result arrives through a Promise.
+const syncFitResult: ASRGgml.AsrFitResult = ASRGgml.assessFit(mossFit);
+void syncFitResult;
 // @ts-expect-error MOSS requires an explicit workload duration.
-ASRGgml.assessFit({ engine: "moss-transcribe", modelPath: "/models/moss.gguf" });
+void ASRGgml.assessFit({ engine: "moss-transcribe", modelPath: "/models/moss.gguf" });
 // @ts-expect-error MOSS requires a model path.
-ASRGgml.assessFit({ engine: "moss-transcribe", audioSeconds: 30 });
+void ASRGgml.assessFit({ engine: "moss-transcribe", audioSeconds: 30 });

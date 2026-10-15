@@ -565,15 +565,79 @@ test('audiogen: an incomplete stage set is refused', (t) => {
   )
 })
 
-test('audiogen: the minimax pipeline has no fitter', (t) => {
+const MINIMAX_ARTIFACTS = {
+  lmModelPath: '/models/mm3-lm-q8.gguf',
+  synthModelPath: '/models/mm3-synth-q8.gguf'
+}
+
+test('audiogen: carries the minimax model pair', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.audiogenGgml,
+    modelPath: '',
+    modelConfig: { engine: 'minimax', useGPU: true, threads: 8, inferenceSteps: 12 },
+    artifacts: MINIMAX_ARTIFACTS,
+    isShardedModel: false,
+    marginBytes: 1024
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.is(plan.probe.engine, 'audiogen-ggml')
+  t.alike(plan.probe.request, {
+    engine: 'minimax',
+    lmPath: '/models/mm3-lm-q8.gguf',
+    synthPath: '/models/mm3-synth-q8.gguf',
+    gpuLayers: 1,
+    threads: 8,
+    marginBytes: 1024
+  })
+})
+
+// The fitter projects `auto` for a positive layer count and `cpu` otherwise,
+// the same reading the load gives `useGPU`; a named device goes through as-is.
+test('audiogen: the minimax device follows the load', (t) => {
+  const cases = [
+    { config: {}, expected: { gpuLayers: 0 } },
+    { config: { useGPU: false }, expected: { gpuLayers: 0 } },
+    { config: { useGPU: true }, expected: { gpuLayers: 1 } },
+    { config: { device: 'gpu' }, expected: { device: 'gpu' } },
+    { config: { device: 'auto' }, expected: { device: 'auto' } },
+    { config: { device: 'cpu' }, expected: { device: 'cpu' } }
+  ]
+
+  for (const { config, expected } of cases) {
+    const plan = createFitRequest({
+      modelType: ModelType.audiogenGgml,
+      modelPath: '',
+      modelConfig: { engine: 'minimax', ...config },
+      artifacts: MINIMAX_ARTIFACTS,
+      isShardedModel: false
+    })
+    t.ok(plan.supported, JSON.stringify(config))
+    if (!plan.supported || plan.probe.engine !== 'audiogen-ggml') continue
+    t.alike(
+      plan.probe.request,
+      {
+        engine: 'minimax',
+        lmPath: MINIMAX_ARTIFACTS.lmModelPath,
+        synthPath: MINIMAX_ARTIFACTS.synthModelPath,
+        ...expected
+      },
+      JSON.stringify(config)
+    )
+  }
+})
+
+test('audiogen: an incomplete minimax pair is refused', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.audiogenGgml,
-      modelPath: '/models/minimax.gguf',
+      modelPath: '',
       modelConfig: { engine: 'minimax' },
+      artifacts: { lmModelPath: MINIMAX_ARTIFACTS.lmModelPath },
       isShardedModel: false
     }),
-    { supported: false, detail: 'the minimax pipeline has no fitter' }
+    { supported: false, detail: 'the minimax model pair is not resolved' }
   )
 })
 
@@ -680,14 +744,200 @@ test('diffusion: a configured upscaler is a second resident model the projection
   )
 })
 
-test('a model type with no fitter is refused by name', (t) => {
+test('ocr: carries both models and the placement the load uses', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ggmlOcr,
+    modelPath: '/models/recognizer.gguf',
+    modelConfig: {
+      pipelineType: 'doctr',
+      backendDevice: 'vulkan',
+      gpuDevice: 1,
+      nThreads: 4
+    },
+    artifacts: { detectorModelPath: '/models/detector.gguf' },
+    isShardedModel: false,
+    marginBytes: 1024
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.alike(plan.probe, {
+    engine: 'ocr-ggml',
+    request: {
+      pathDetector: '/models/detector.gguf',
+      pathRecognizer: '/models/recognizer.gguf',
+      pipelineType: 'doctr',
+      nThreads: 4,
+      backendDevice: 'vulkan',
+      gpuDevice: 1,
+      marginBytes: 1024
+    }
+  })
+})
+
+test('ocr: a main-gpu selector reaches the fitter as the load sends it', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ggmlOcr,
+    modelPath: '/models/recognizer.gguf',
+    modelConfig: { backendDevice: 'vulkan', mainGpu: 'dedicated' },
+    artifacts: { detectorModelPath: '/models/detector.gguf' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'ocr-ggml') return
+  t.is(plan.probe.request.backendDevice, 'vulkan')
+  t.is(plan.probe.request['main-gpu'], 'dedicated')
+})
+
+test('ocr: an easyocr load names English when it names no language', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.ggmlOcr,
+    modelPath: '/models/recognizer.gguf',
+    modelConfig: {},
+    artifacts: { detectorModelPath: '/models/detector.gguf' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'ocr-ggml') return
+  t.alike(plan.probe.request.langList, ['en'])
+})
+
+test('ocr: a load without its detector is refused', (t) => {
   t.alike(
     createFitRequest({
       modelType: ModelType.ggmlOcr,
-      modelPath: '/models/ocr.gguf',
+      modelPath: '/models/recognizer.gguf',
       modelConfig: {},
       isShardedModel: false
     }),
-    { supported: false, detail: `no fitter for model type: ${ModelType.ggmlOcr}` }
+    { supported: false, detail: 'the ocr detector is not resolved' }
+  )
+})
+
+test('translation: an IndicTrans load carries its model and generation config', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.nmtcppTranslation,
+    modelPath: '/models/indictrans.bin',
+    modelConfig: { engine: 'IndicTrans', from: 'en', to: 'hi', beamsize: 4 },
+    isShardedModel: false,
+    marginBytes: 1024
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'translation-nmtcpp') return
+  t.alike(plan.probe.request.files, { model: '/models/indictrans.bin' })
+  t.is(plan.probe.request.config.modelType, 'IndicTrans')
+  t.is(plan.probe.request.config['beamsize'], 4)
+  t.is(plan.probe.request.marginBytes, 1024)
+})
+
+test('translation: a Bergamot load finds its vocabulary beside the model', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.nmtcppTranslation,
+    modelPath: '/models/enfr/model.enfr.intgemm.alphas.bin',
+    modelConfig: { engine: 'Bergamot', from: 'en', to: 'fr' },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'translation-nmtcpp') return
+  t.alike(plan.probe.request.files, {
+    model: '/models/enfr/model.enfr.intgemm.alphas.bin',
+    srcVocab: '/models/enfr/vocab.enfr.spm',
+    dstVocab: '/models/enfr/vocab.enfr.spm'
+  })
+  t.is(plan.probe.request.config.modelType, 'Bergamot')
+})
+
+test('translation: a pivot load carries both models and their vocabularies', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.nmtcppTranslation,
+    modelPath: '/models/esen/model.esen.intgemm.alphas.bin',
+    modelConfig: { engine: 'Bergamot', from: 'es', to: 'it' },
+    artifacts: {
+      srcVocabPath: '/models/esen/vocab.esen.spm',
+      dstVocabPath: '/models/esen/vocab.esen.spm',
+      pivotModelPath: '/models/enit/model.enit.intgemm.alphas.bin',
+      pivotSrcVocabPath: '/models/enit/vocab.enit.spm',
+      pivotDstVocabPath: '/models/enit/vocab.enit.spm'
+    },
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'translation-nmtcpp') return
+  t.alike(plan.probe.request.files, {
+    model: '/models/esen/model.esen.intgemm.alphas.bin',
+    srcVocab: '/models/esen/vocab.esen.spm',
+    dstVocab: '/models/esen/vocab.esen.spm',
+    pivotModel: '/models/enit/model.enit.intgemm.alphas.bin',
+    pivotSrcVocab: '/models/enit/vocab.enit.spm',
+    pivotDstVocab: '/models/enit/vocab.enit.spm'
+  })
+})
+
+test('a model type with no fitter is refused by name', (t) => {
+  t.alike(
+    createFitRequest({
+      modelType: ModelType.ggmlClassification,
+      modelPath: '/models/classifier.gguf',
+      modelConfig: {},
+      isShardedModel: false
+    }),
+    { supported: false, detail: `no fitter for model type: ${ModelType.ggmlClassification}` }
+  )
+})
+
+test('MOSS: fit projects the declared recording and matching decoding options', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.mossTranscribe,
+    modelPath: '/models/moss.gguf',
+    modelConfig: { useGPU: true, maxThreads: 4, backendsDir: '/backends' },
+    transcriptionWorkload: { audioSeconds: 90, hotwords: ['Erin'], maxNewTokens: 0 },
+    marginBytes: 1024,
+    isShardedModel: false
+  })
+  t.alike(plan, {
+    supported: true,
+    probe: {
+      engine: 'asr-ggml',
+      request: {
+        engine: 'moss-transcribe',
+        modelPath: '/models/moss.gguf',
+        audioSeconds: 90,
+        hotwords: ['Erin'],
+        maxNewTokens: 0,
+        gpuLayers: 1,
+        threads: 4,
+        backendsDir: '/backends',
+        marginBytes: 1024
+      }
+    }
+  })
+})
+
+test('MOSS: missing workload cannot claim a fit; default load remains CPU', (t) => {
+  const base = {
+    modelType: ModelType.mossTranscribe,
+    modelPath: '/models/moss.gguf',
+    modelConfig: {},
+    isShardedModel: false
+  }
+  t.is(createFitRequest(base).supported, false)
+  const plan = createFitRequest({
+    ...base,
+    transcriptionWorkload: { audioSeconds: 30, prompt: 'Transcribe.' }
+  })
+  t.ok(plan.supported)
+  if (plan.supported && plan.probe.engine === 'asr-ggml') t.is(plan.probe.request.gpuLayers, 0)
+  t.is(
+    createFitRequest({
+      ...base,
+      modelType: ModelType.parakeetTranscription,
+      transcriptionWorkload: { audioSeconds: 30 }
+    }).supported,
+    false
   )
 })

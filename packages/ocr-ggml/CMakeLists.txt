@@ -13,7 +13,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 message(STATUS "ocr-ggml: OpenCV ${OpenCV_VERSION} from ${OpenCV_DIR}")
 
 # ggml runtime is the shared @qvac/fabric prebuild (dynamically linked, loaded
-# once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE.
+# once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
 add_bare_module(ocr-ggml EXPORTS)
@@ -73,7 +73,7 @@ target_link_libraries(
     ${OpenCV_LIBS}
 )
 qvac_addon_link_fabric(${ocr-ggml} ${qvac_fabric_target})
-qvac_addon_finalize(${ocr-ggml} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${ocr-ggml})
 
 if(ANDROID)
   target_link_libraries(${ocr-ggml} PRIVATE log)

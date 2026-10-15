@@ -184,16 +184,25 @@ What "total" and "in use" mean depends on the result's `basis`:
 
 The fitter runs for `llamacpp-completion`, `llamacpp-embedding`,
 `whispercpp-transcription`, `parakeet-transcription`,
-`bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml` and
-`sdcpp-generation`, on every platform the engine's addon is built for.
+`bci-whispercpp-transcription`, `tts-ggml`, `audiogen-ggml`,
+`sdcpp-generation`, `ggml-ocr` and `nmtcpp-translation`, on every platform the
+engine's addon is built for. The translation fitter sizes the model and
+vocabulary files themselves, so it answers for files on disk and never before
+download.
 
 Of those, llama.cpp, whisper, parakeet, BCI whisper and TTS report a byte
-breakdown, so their measurements compose into a combined verdict. Audiogen
+breakdown, so their measurements compose into a combined verdict. The BCI
+projection includes the embedder: the host RAM it keeps is counted in
+`hostBytes`, read from the `bci-embedder.bin` beside the model, or from the
+load's `embedderModelSrc` where it names one. Audiogen
 reports a peak across pipeline phases and diffusion a per-module table; neither
-divides into bytes that can be summed under one budget, so a `fit` from them
-falls back to the [computed floor](#two-kinds-of-evidence) while a refusal still
-stands. `nmtcpp-translation`, `onnx-tts`, `ggml-ocr`, `ggml-vla` and
-`ggml-classification` have no fitter yet and assess from the floor.
+divides into bytes that can be summed under one budget. OCR sizes its weights
+alone and leaves the memory an image needs uncounted, and translation reports
+one allowance for the whole load. Assessed together with other models, a `fit`
+from any of the four falls back to the [computed floor](#two-kinds-of-evidence)
+while a refusal still stands. `onnx-tts`, `ggml-vla` and `ggml-classification`
+have no fitter and assess from the floor, as do a translation model not yet
+downloaded, MOSS-Speech, and diffusion `world` and `upscale` loads.
 
 Two shapes the SDK refuses to put to an engine, so that it is never asked a
 question it cannot answer: a sharded model, which every fitter reads as whole

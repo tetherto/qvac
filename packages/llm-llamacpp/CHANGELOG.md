@@ -1,6 +1,67 @@
 # Changelog
 
-## [Unreleased]
+## [0.61.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = LlmLlamacpp.assessFit(request)` to `const fit = await LlmLlamacpp.assessFit(request)`.
+
+### Added
+
+- `image-max-megapixels` config key (alias `image_max_megapixels`, default
+  `50`): the maximum reported image pixel count, in millions, checked before
+  mtmd decodes an image ([#4777](https://github.com/tetherto/qvac/pull/4777)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`
+  ([#5064](https://github.com/tetherto/qvac/pull/5064)). A caret on a `0.x`
+  version locks the minor, so `^0.21.1` would not have resolved `0.22.0` on
+  its own. `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against
+  the 0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5071](https://github.com/tetherto/qvac/pull/5071)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+
+### Fixed
+
+- Oversized images are rejected before decoding instead of being decoded in
+  full: a crafted 16384 x 16384 PNG under 1 MB raised the inference worker's
+  RSS by about 1.6 GiB. Images whose dimensions cannot be read are rejected,
+  and only regular media files are accepted ([#4777](https://github.com/tetherto/qvac/pull/4777)).
+
+## [0.60.0] - 2026-10-14
+
+### Breaking
+
+- An explicit `backendsDir` is scanned as given. It is no longer a prebuilds
+  root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
+  the backends it ships, next to its runtime.
+- `resolveBackendsDir()` is removed from `./addon.js`, which stays in
+  `exports`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.2` -> `^0.21.1`, whose platform
+  packages are now ordinary addons. This package declares them itself: the
+  desktop ones as `optionalDependencies`, and `@qvac/fabric-android-arm64` and
+  `@qvac/fabric-ios` as optional `peerDependencies`.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.21.1` together.
+
+## [0.59.1] - 2026-10-13
 
 ### Added
 
@@ -11,7 +72,32 @@
   instead of reprocessing the whole conversation, which thinking templates
   forced because they rewrite the previous answer. Older checkpoints stay in
   memory only. Files written this way still load in earlier versions, which
-  ignore the checkpoint.
+  ignore the checkpoint ([#4969](https://github.com/tetherto/qvac/pull/4969)).
+
+### Changed
+
+- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+  end-of-history checkpoints holding the window cells. A turn that diverges
+  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
+  regenerate after a long answer) restores one instead of reprocessing the
+  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
+  of MB on larger models; `cache_checkpoints: 0` turns them off
+  ([#4924](https://github.com/tetherto/qvac/pull/4924)).
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+### Fixed
+
+- Gemma 4 vision models cap an image at 280 tokens again when
+  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
+  applied, so a large image took about four times the tokens and prefill: on
+  Android it ran the app out of memory or produced a wrong description.
+  Set `image_max_tokens` to raise the cap
+  ([#4989](https://github.com/tetherto/qvac/pull/4989)).
 
 ## [0.59.0] - 2026-10-11
 
@@ -25,26 +111,12 @@
   `tool_calls`. A malformed tool turn, or a non-string `content`, fails with
   `InvalidInputFormat` ([#4876](https://github.com/tetherto/qvac/pull/4876)).
 
-### Changed
-
-- Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
-  end-of-history checkpoints holding the window cells. A turn that diverges
-  behind the window (the next turn on gpt-oss and thinking Gemma 4, or a
-  regenerate after a long answer) restores one instead of reprocessing the
-  whole conversation. Each checkpoint costs host RAM per sequence, hundreds
-  of MB on larger models; `cache_checkpoints: 0` turns them off.
-
 ### Fixed
 
 - A multimodal model that failed to load, for example out of GPU memory,
   resolved `load()` instead of rejecting it, and the first request then
   crashed the process. It now rejects with `UnableToLoadModel`, as a
   text-only model does.
-- Gemma 4 vision models cap an image at 280 tokens again when
-  `image_max_tokens` is unset. Since 0.56.0 the encoder's own cap of 1120
-  applied, so a large image took about four times the tokens and prefill: on
-  Android it ran the app out of memory or produced a wrong description.
-  Set `image_max_tokens` to raise the cap.
 
 ## [0.58.0] - 2026-10-09
 

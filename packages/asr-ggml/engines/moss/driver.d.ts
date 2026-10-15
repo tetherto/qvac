@@ -7,11 +7,17 @@ export declare const ENGINE_MOSS_TRANSCRIBE: "moss-transcribe";
 export interface MossTranscribeConfig {
     /** Maximum CPU threads for inference (0 lets the engine pick). */
     maxThreads?: number;
-    /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL / CUDA). */
+    /** Select the GPU automatically when backend is auto (default: false). */
     useGPU?: boolean;
     /**
-     * Directory containing dynamically-loaded ggml backend libraries. Defaults
-     * to the package's own `prebuilds/` folder.
+     * Native backend selector: auto (default), cpu, cuda, vulkan, or an exact
+     * ggml device name such as CUDA0. Explicit selection overrides useGPU and
+     * fails at load if unavailable.
+     */
+    backend?: string;
+    /**
+     * Directory scanned, as given, for dynamically-loaded ggml backend
+     * libraries. Unset scans the addon's own, next to its native module.
      */
     backendsDir?: string;
 }
@@ -35,6 +41,8 @@ export interface MossTranscribeRunOptions {
     /** Bound on generated tokens (0 or unset = model default). */
     maxNewTokens?: number;
 }
+/** Preserve native selector names; availability is checked by the engine. */
+export declare function mossTranscribeBackend(value: unknown): string;
 /** Validates the per-call options and returns the fields the native job reads. */
 export declare function mossTranscribeJobFields(options?: ASRRunOptions | null): Record<string, unknown>;
 /**

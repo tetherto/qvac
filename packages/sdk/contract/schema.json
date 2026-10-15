@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "@qvac/sdk wire contract",
-  "description": "Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
+  "description": "Generated from the SDK Zod schemas by `npm run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
   "$defs": {
     "request": {
       "title": "AnyRequest",
@@ -313,6 +313,38 @@
           "items": {
             "type": "object",
             "properties": {
+              "transcriptionWorkload": {
+                "description": "MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "hotwords": {
+                    "description": "MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+                    "maxItems": 64,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "maxNewTokens": {
+                    "description": "MOSS generated-token limit; 0 uses the model default.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  },
+                  "audioSeconds": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "Longest whole recording to project."
+                  }
+                },
+                "required": ["audioSeconds"],
+                "additionalProperties": false,
+                "title": "AssessModelFitRequestModelsItemTranscriptionWorkload"
+              },
               "modelSrc": {
                 "description": "The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.",
                 "anyOf": [
@@ -376,6 +408,7 @@
                               "onnx-tts",
                               "tts-ggml",
                               "parakeet-transcription",
+                              "moss-transcribe",
                               "ggml-ocr",
                               "sdcpp-generation",
                               "audiogen-ggml",
@@ -420,6 +453,7 @@
                   "onnx-tts",
                   "tts-ggml",
                   "parakeet-transcription",
+                  "moss-transcribe",
                   "ggml-ocr",
                   "sdcpp-generation",
                   "audiogen-ggml",
@@ -439,6 +473,54 @@
                   "classification"
                 ],
                 "title": "AssessModelFitRequestModelsItemModelType"
+              },
+              "ttsWorkload": {
+                "description": "Fit-only MOSS-TTS/TTSD or MOSS-SoundEffect workload; never passed to model loading.",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "promptRows": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 2147483647,
+                        "description": "Complete native prompt rows, including dialogue and references."
+                      },
+                      "referenceSamples": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 2147483647,
+                        "description": "Total mono reference audio samples."
+                      },
+                      "streaming": {
+                        "type": "boolean",
+                        "description": "Whether the MOSS workload uses native streaming."
+                      }
+                    },
+                    "required": ["promptRows", "referenceSamples", "streaming"],
+                    "additionalProperties": false,
+                    "title": "MossTtsFitWorkload"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "prompt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Sound-effect description."
+                      },
+                      "seconds": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 30,
+                        "description": "Sound-effect duration in seconds, up to 30."
+                      }
+                    },
+                    "required": ["prompt", "seconds"],
+                    "additionalProperties": false,
+                    "title": "MossSoundEffectFitWorkload"
+                  }
+                ]
               },
               "modelConfig": {
                 "description": "The config `loadModel` would be given, including any companion model sources.",
@@ -733,10 +815,63 @@
           "description": "Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only."
         },
         "seed": {
-          "description": "Seeds the first operation; each following operation uses seed + its index.",
+          "description": "Seeds the first operation; each following operation uses seed + its index. Omit for a random one, reported in `stats.metadata.seed`.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
+        },
+        "vocalLanguage": {
+          "description": "Vocal language hint for the edit prompts; the engine defaults to 'unknown'.",
+          "type": "string",
+          "minLength": 1
+        },
+        "bpm": {
+          "description": "Beats per minute for the edit prompts; `0` or unset leaves it unset.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "keyscale": {
+          "description": "Key and scale for the edit prompts, e.g. 'C minor'.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timesignature": {
+          "description": "Time signature for the edit prompts, e.g. '4/4'.",
+          "type": "string",
+          "minLength": 1
+        },
+        "augmentCaptionWithMetadata": {
+          "description": "Append BPM, time signature and key to each operation's conditioning caption (default: false).",
+          "type": "boolean"
+        },
+        "dcwEnabled": {
+          "description": "Repaint only: apply the Haar DCW sampler correction (default: true).",
+          "type": "boolean"
+        },
+        "dcwScaler": {
+          "description": "Repaint only: DCW low-frequency correction strength (default: 0.05).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
+        },
+        "dcwHighScaler": {
+          "description": "Repaint only: DCW high-frequency correction strength (default: 0.02).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
+        },
+        "inferenceSteps": {
+          "description": "DiT steps for every operation, 0..1000; omit to keep the load-time `inferenceSteps`.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "shift": {
+          "description": "DiT timestep shift for every operation; omit to keep the load-time `shift`.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "sourceAudio": {
           "oneOf": [
@@ -770,6 +905,39 @@
             }
           ],
           "description": "Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1]."
+        },
+        "referenceAudio": {
+          "description": "Optional timbre reference for every operation: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestReferenceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestReferenceAudioFilePath"
+            }
+          ]
         },
         "type": {
           "type": "string",
@@ -859,6 +1027,78 @@
             "backendId": {
               "type": "number"
             },
+            "emittedFrames": {
+              "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
+              "type": "number"
+            },
+            "arMs": {
+              "description": "MiniMax only: engine time in the autoregressive semantic stage, in ms.",
+              "type": "number"
+            },
+            "conditionMs": {
+              "description": "MiniMax only: engine time building the flow conditioning, in ms.",
+              "type": "number"
+            },
+            "flowMs": {
+              "description": "MiniMax only: engine time in the flow-matching DiT, in ms.",
+              "type": "number"
+            },
+            "vocoderMs": {
+              "description": "MiniMax only: engine time in the vocoder, in ms.",
+              "type": "number"
+            },
+            "metadata": {
+              "description": "What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string",
+                  "description": "The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
+                },
+                "lyrics": {
+                  "type": "string",
+                  "description": "The lyrics the run used (LM-written under Simple Mode)."
+                },
+                "bpm": {
+                  "type": "number",
+                  "description": "Beats per minute; 0 when unresolved."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "beatsPerBar": {
+                  "type": "number",
+                  "description": "Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved."
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
+                },
+                "codeFrames": {
+                  "type": "number",
+                  "description": "5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits)."
+                },
+                "qualityReport": {
+                  "description": "Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "caption",
+                "lyrics",
+                "bpm",
+                "keyscale",
+                "beatsPerBar",
+                "vocalLanguage",
+                "seed",
+                "codeFrames"
+              ],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseStatsMetadata"
+            },
             "lyricsScore": {
               "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
               "type": "number"
@@ -903,6 +1143,10 @@
                     "maximum": 2147483647
                   },
                   "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
                 }
               },
               "required": [
@@ -912,7 +1156,8 @@
                 "keyscale",
                 "timesignature",
                 "vocalLanguage",
-                "audioCodes"
+                "audioCodes",
+                "seed"
               ],
               "additionalProperties": false,
               "title": "AudioEditStreamResponseStatsUnderstand"
@@ -1037,6 +1282,7 @@
           "type": "string"
         },
         "seed": {
+          "description": "RNG seed; omit for a random one. An ACE-Step run reports the seed it used in `stats.metadata.seed`, so an unseeded take can be replayed.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -1046,9 +1292,10 @@
           "minLength": 1
         },
         "bpm": {
+          "description": "Beats per minute; `0` or unset lets the LM infer it. ACE-Step only.",
           "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "minimum": 0,
+          "maximum": 2147483647
         },
         "keyscale": {
           "type": "string",
@@ -1118,10 +1365,16 @@
           "maximum": 9007199254740991
         },
         "inferenceSteps": {
-          "description": "MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.",
+          "description": "Diffusion steps for this generation, 0..1000; omit to keep the load-time `inferenceSteps`. 0 is the engine default: MiniMax 20 flow steps, ACE-Step 8 on turbo DiTs and 50 on base/sft.",
           "type": "integer",
           "minimum": 0,
           "maximum": 1000
+        },
+        "shift": {
+          "description": "DiT timestep shift for this generation; omit to keep the load-time `shift`. 0 is the engine default: 3.0 on turbo DiTs, 1.0 on base/sft. ACE-Step only; rejected by MiniMax.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "cfgScale": {
           "description": "MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.",
@@ -1162,12 +1415,14 @@
         "dcwScaler": {
           "description": "DCW low-frequency correction strength (official default: 0.05).",
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "dcwHighScaler": {
           "description": "DCW high-frequency correction strength (official default: 0.02).",
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "taskType": {
           "description": "Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).",
@@ -1352,6 +1607,78 @@
             "backendId": {
               "type": "number"
             },
+            "emittedFrames": {
+              "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
+              "type": "number"
+            },
+            "arMs": {
+              "description": "MiniMax only: engine time in the autoregressive semantic stage, in ms.",
+              "type": "number"
+            },
+            "conditionMs": {
+              "description": "MiniMax only: engine time building the flow conditioning, in ms.",
+              "type": "number"
+            },
+            "flowMs": {
+              "description": "MiniMax only: engine time in the flow-matching DiT, in ms.",
+              "type": "number"
+            },
+            "vocoderMs": {
+              "description": "MiniMax only: engine time in the vocoder, in ms.",
+              "type": "number"
+            },
+            "metadata": {
+              "description": "What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string",
+                  "description": "The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
+                },
+                "lyrics": {
+                  "type": "string",
+                  "description": "The lyrics the run used (LM-written under Simple Mode)."
+                },
+                "bpm": {
+                  "type": "number",
+                  "description": "Beats per minute; 0 when unresolved."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "beatsPerBar": {
+                  "type": "number",
+                  "description": "Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved."
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
+                },
+                "codeFrames": {
+                  "type": "number",
+                  "description": "5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits)."
+                },
+                "qualityReport": {
+                  "description": "Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "caption",
+                "lyrics",
+                "bpm",
+                "keyscale",
+                "beatsPerBar",
+                "vocalLanguage",
+                "seed",
+                "codeFrames"
+              ],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseStatsMetadata"
+            },
             "lyricsScore": {
               "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
               "type": "number"
@@ -1396,6 +1723,10 @@
                     "maximum": 2147483647
                   },
                   "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
                 }
               },
               "required": [
@@ -1405,7 +1736,8 @@
                 "keyscale",
                 "timesignature",
                 "vocalLanguage",
-                "audioCodes"
+                "audioCodes",
+                "seed"
               ],
               "additionalProperties": false,
               "title": "AudioGenStreamResponseStatsUnderstand"
@@ -1656,6 +1988,10 @@
                 "maximum": 2147483647
               },
               "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+            },
+            "seed": {
+              "type": "number",
+              "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
             }
           },
           "required": [
@@ -1665,7 +2001,8 @@
             "keyscale",
             "timesignature",
             "vocalLanguage",
-            "audioCodes"
+            "audioCodes",
+            "seed"
           ],
           "additionalProperties": false,
           "title": "AudioUnderstandResponseUnderstand"
@@ -1696,6 +2033,78 @@
             },
             "backendId": {
               "type": "number"
+            },
+            "emittedFrames": {
+              "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
+              "type": "number"
+            },
+            "arMs": {
+              "description": "MiniMax only: engine time in the autoregressive semantic stage, in ms.",
+              "type": "number"
+            },
+            "conditionMs": {
+              "description": "MiniMax only: engine time building the flow conditioning, in ms.",
+              "type": "number"
+            },
+            "flowMs": {
+              "description": "MiniMax only: engine time in the flow-matching DiT, in ms.",
+              "type": "number"
+            },
+            "vocoderMs": {
+              "description": "MiniMax only: engine time in the vocoder, in ms.",
+              "type": "number"
+            },
+            "metadata": {
+              "description": "What an ACE-Step generation or edit rendered: the caption, lyrics and musical metadata after the LM filled in what was left unset, and the seed the run used. Absent for MiniMax and for `audioUnderstand()`.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string",
+                  "description": "The caption the run used: the LM-composed one under Simple Mode or Query Rewriting. With `augmentCaptionWithMetadata` it is always your own caption, before the metadata suffix. Empty for an edit, whose operations carry their own."
+                },
+                "lyrics": {
+                  "type": "string",
+                  "description": "The lyrics the run used (LM-written under Simple Mode)."
+                },
+                "bpm": {
+                  "type": "number",
+                  "description": "Beats per minute; 0 when unresolved."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "beatsPerBar": {
+                  "type": "number",
+                  "description": "Beats per bar, the time-signature numerator (4 for 4/4); 0 when unresolved."
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the run used: the engine-drawn one when none was passed, so the take can be replayed."
+                },
+                "codeFrames": {
+                  "type": "number",
+                  "description": "5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and detokenizer are skipped (cover-nofsq, lego, edits)."
+                },
+                "qualityReport": {
+                  "description": "Per-condition breakdown of `qualityScore`. Present only when the run set `computeQualityScore`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "caption",
+                "lyrics",
+                "bpm",
+                "keyscale",
+                "beatsPerBar",
+                "vocalLanguage",
+                "seed",
+                "codeFrames"
+              ],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseStatsMetadata"
             },
             "lyricsScore": {
               "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
@@ -1741,6 +2150,10 @@
                     "maximum": 2147483647
                   },
                   "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                },
+                "seed": {
+                  "type": "number",
+                  "description": "The seed the LM decode used: the engine-drawn one when none was passed, so the description can be reproduced."
                 }
               },
               "required": [
@@ -1750,7 +2163,8 @@
                 "keyscale",
                 "timesignature",
                 "vocalLanguage",
-                "audioCodes"
+                "audioCodes",
+                "seed"
               ],
               "additionalProperties": false,
               "title": "AudioUnderstandResponseStatsUnderstand"
@@ -1884,11 +2298,18 @@
                   "properties": {
                     "role": {
                       "type": "string",
-                      "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+                      "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
                     },
                     "content": {
-                      "type": "string",
-                      "description": "Message content."
+                      "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "attachments": {
                       "description": "Optional file attachments for multimodal models.",
@@ -1904,9 +2325,46 @@
                         "required": ["path"],
                         "title": "BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem"
                       }
+                    },
+                    "toolCalls": {
+                      "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Call id, echoed by the `tool` message that answers it.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Name of the tool that was called."
+                          },
+                          "arguments": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {},
+                            "description": "Arguments the tool was called with.",
+                            "title": "BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItemArguments"
+                          }
+                        },
+                        "required": ["name", "arguments"],
+                        "title": "BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem"
+                      }
+                    },
+                    "toolCallId": {
+                      "description": "On a `tool` turn: the id of the call this result answers.",
+                      "type": "string"
+                    },
+                    "toolName": {
+                      "description": "On a `tool` turn: the name of the tool that produced the result.",
+                      "type": "string"
                     }
                   },
-                  "required": ["role", "content"],
+                  "required": ["role"],
                   "title": "BatchCompletionStreamRequestPromptsItemHistoryItem"
                 },
                 "description": "Array of conversation messages sent to the model."
@@ -2115,7 +2573,20 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": ["string", "number", "boolean", "null"]
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -2718,6 +3189,41 @@
             "id": {
               "type": "number"
             },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "BciTranscribeResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -3014,6 +3520,41 @@
             "id": {
               "type": "number"
             },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "BciTranscribeStreamResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -3217,11 +3758,18 @@
             "properties": {
               "role": {
                 "type": "string",
-                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "type": "string",
-                "description": "Message content."
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -3237,9 +3785,46 @@
                   "required": ["path"],
                   "title": "CompletionOrchestrateRequestHistoryItemAttachmentsItem"
                 }
+              },
+              "toolCalls": {
+                "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Call id, echoed by the `tool` message that answers it.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of the tool that was called."
+                    },
+                    "arguments": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {},
+                      "description": "Arguments the tool was called with.",
+                      "title": "CompletionOrchestrateRequestHistoryItemToolCallsItemArguments"
+                    }
+                  },
+                  "required": ["name", "arguments"],
+                  "title": "CompletionOrchestrateRequestHistoryItemToolCallsItem"
+                }
+              },
+              "toolCallId": {
+                "description": "On a `tool` turn: the id of the call this result answers.",
+                "type": "string"
+              },
+              "toolName": {
+                "description": "On a `tool` turn: the name of the tool that produced the result.",
+                "type": "string"
               }
             },
-            "required": ["role", "content"],
+            "required": ["role"],
             "title": "CompletionOrchestrateRequestHistoryItem"
           },
           "description": "Array of conversation messages sent to the model."
@@ -3337,7 +3922,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -3860,11 +4458,18 @@
             "properties": {
               "role": {
                 "type": "string",
-                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "type": "string",
-                "description": "Message content."
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "attachments": {
                 "description": "Optional file attachments for multimodal models.",
@@ -3880,9 +4485,46 @@
                   "required": ["path"],
                   "title": "CompletionStreamRequestHistoryItemAttachmentsItem"
                 }
+              },
+              "toolCalls": {
+                "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Call id, echoed by the `tool` message that answers it.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of the tool that was called."
+                    },
+                    "arguments": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {},
+                      "description": "Arguments the tool was called with.",
+                      "title": "CompletionStreamRequestHistoryItemToolCallsItemArguments"
+                    }
+                  },
+                  "required": ["name", "arguments"],
+                  "title": "CompletionStreamRequestHistoryItemToolCallsItem"
+                }
+              },
+              "toolCallId": {
+                "description": "On a `tool` turn: the id of the call this result answers.",
+                "type": "string"
+              },
+              "toolName": {
+                "description": "On a `tool` turn: the name of the tool that produced the result.",
+                "type": "string"
               }
             },
-            "required": ["role", "content"],
+            "required": ["role"],
             "title": "CompletionStreamRequestHistoryItem"
           },
           "description": "Array of conversation messages sent to the model."
@@ -3980,7 +4622,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -4521,6 +5176,7 @@
         "onnx-tts",
         "tts-ggml",
         "parakeet-transcription",
+        "moss-transcribe",
         "ggml-ocr",
         "sdcpp-generation",
         "audiogen-ggml",
@@ -4536,6 +5192,7 @@
         "onnxTts",
         "ttsGgml",
         "parakeetTranscription",
+        "mossTranscribe",
         "ggmlOcr",
         "sdcppGeneration",
         "audiogenGgml",
@@ -4551,6 +5208,7 @@
         "@qvac/sdk/llamacpp-embedding/plugin",
         "@qvac/sdk/whispercpp-transcription/plugin",
         "@qvac/sdk/bci-whispercpp-transcription/plugin",
+        "@qvac/sdk/moss-transcribe/plugin",
         "@qvac/sdk/nmtcpp-translation/plugin",
         "@qvac/sdk/tts-ggml/plugin",
         "@qvac/sdk/ggml-ocr/plugin",
@@ -4564,6 +5222,7 @@
         "EMBEDDING",
         "WHISPER",
         "BCI",
+        "MOSS_TRANSCRIBE",
         "NMT",
         "TTS",
         "OCR",
@@ -4696,8 +5355,26 @@
     "constants.TtsEngine": {
       "title": "TtsEngine",
       "type": "string",
-      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8", "moss"],
-      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8", "MOSS"]
+      "enum": [
+        "chatterbox",
+        "supertonic",
+        "parler",
+        "cosyvoice3",
+        "audio8",
+        "moss",
+        "moss-sfx",
+        "moss-speech"
+      ],
+      "x-enum-varnames": [
+        "CHATTERBOX",
+        "SUPERTONIC",
+        "PARLER",
+        "COSYVOICE3",
+        "AUDIO8",
+        "MOSS",
+        "MOSS_SFX",
+        "MOSS_SPEECH"
+      ]
     },
     "constants.TtsPace": {
       "title": "TtsPace",
@@ -6366,6 +7043,7 @@
                 "whisper",
                 "bci",
                 "parakeet",
+                "moss-transcribe",
                 "embeddings",
                 "nmt",
                 "vad",
@@ -10285,6 +10963,16 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "backend": {
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem"
+                      }
+                    },
                     "ctx_size": {
                       "description": "Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
                       "type": "number"
@@ -10632,6 +11320,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -10913,7 +11602,7 @@
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
-                      "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                      "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                       "type": "string"
                     },
                     "vad_params": {
@@ -11053,6 +11742,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -11332,6 +12022,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -11499,6 +12190,22 @@
                       "type": "string",
                       "pattern": "^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
                     },
+                    "streamingSpeakerVad": {
+                      "description": "Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
+                      "type": "boolean"
+                    },
+                    "diarizationThreshold": {
+                      "description": "Speaker-activity threshold; omit for the model default (0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).",
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "diarizationMinSegmentMs": {
+                      "description": "Shortest diarization turn in ms; omit for the model default (510 for Sortformer, 200 for Nemotron 3 Diarization).",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "streamingSpkCacheEnable": {
                       "description": "AOSC (Sortformer v2.1): enable speaker-cache streaming. Default true.",
                       "type": "boolean"
@@ -11516,7 +12223,7 @@
                       "maximum": 9007199254740991
                     },
                     "streamingChunkLeftContextMs": {
-                      "description": "AOSC: encoder left-context window in ms. Default 80.",
+                      "description": "Diarization encoder left-context window in ms. Default 80 for Sortformer, 0 for Nemotron 3 Diarization; explicit 80 is preserved.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
@@ -11534,7 +12241,7 @@
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
-                      "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                      "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                       "type": "string"
                     },
                     "openclCacheDir": {
@@ -11595,6 +12302,79 @@
                   "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
                   "type": "string",
                   "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestMossTranscribeModelFitPolicy"
+                },
+                "requestId": {
+                  "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelType": {
+                  "type": "string",
+                  "const": "moss-transcribe"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "maxThreads": {
+                      "description": "CPU threads; 0 lets the engine choose.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "useGPU": {
+                      "description": "Enable the linked GPU backend, including Metal. Default false.",
+                      "type": "boolean"
+                    },
+                    "backendsDir": {
+                      "description": "Directory containing dynamically loaded ggml backend libraries.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "title": "LoadModelSrcRequestMossTranscribeModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestMossTranscribe"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
                   "title": "LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy"
                 },
                 "requestId": {
@@ -11609,6 +12389,16 @@
                 "modelConfig": {
                   "type": "object",
                   "properties": {
+                    "backend": {
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with splitMode: 'layer'.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem"
+                      }
+                    },
                     "gpuLayers": {
                       "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
                       "type": "integer",
@@ -11974,6 +12764,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -12069,6 +12860,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -12209,6 +13001,7 @@
                                             "onnx-tts",
                                             "tts-ggml",
                                             "parakeet-transcription",
+                                            "moss-transcribe",
                                             "ggml-ocr",
                                             "sdcpp-generation",
                                             "audiogen-ggml",
@@ -12305,6 +13098,7 @@
                                             "onnx-tts",
                                             "tts-ggml",
                                             "parakeet-transcription",
+                                            "moss-transcribe",
                                             "ggml-ocr",
                                             "sdcpp-generation",
                                             "audiogen-ggml",
@@ -12400,6 +13194,7 @@
                                             "onnx-tts",
                                             "tts-ggml",
                                             "parakeet-transcription",
+                                            "moss-transcribe",
                                             "ggml-ocr",
                                             "sdcpp-generation",
                                             "audiogen-ggml",
@@ -12728,7 +13523,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -12800,6 +13595,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -12895,6 +13691,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -12990,6 +13787,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13085,6 +13883,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13180,6 +13979,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13275,6 +14075,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13426,7 +14227,7 @@
                           "minLength": 1
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -13498,6 +14299,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13593,6 +14395,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13798,7 +14601,7 @@
                           "type": "boolean"
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -13865,6 +14668,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -13960,6 +14764,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14115,7 +14920,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -14187,6 +14992,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14282,6 +15088,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14377,6 +15184,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14472,6 +15280,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14567,6 +15376,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14673,7 +15483,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -14739,6 +15549,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14835,6 +15646,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -14930,6 +15742,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15015,7 +15828,7 @@
                           "maximum": 2147483647
                         },
                         "backendsDir": {
-                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
                           "minLength": 1
                         },
@@ -15081,6 +15894,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15177,6 +15991,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15272,6 +16087,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -15371,6 +16187,7 @@
                                           "onnx-tts",
                                           "tts-ggml",
                                           "parakeet-transcription",
+                                          "moss-transcribe",
                                           "ggml-ocr",
                                           "sdcpp-generation",
                                           "audiogen-ggml",
@@ -15408,6 +16225,210 @@
                       "required": ["ttsEngine", "mossCodecDecoderModelSrc"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigMoss"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "moss-sfx",
+                          "description": "TTS engine: MOSS-SoundEffect-v2."
+                        },
+                        "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "seconds": {
+                          "description": "Sound-effect duration in seconds, up to 30.",
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 30
+                        },
+                        "negativePrompt": {
+                          "description": "Description of sounds to avoid in the generated effect.",
+                          "type": "string"
+                        },
+                        "steps": {
+                          "description": "Diffusion denoising steps; the native default is 100.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000
+                        },
+                        "guidance": {
+                          "description": "Classifier-free guidance scale for sound-effect generation.",
+                          "type": "number",
+                          "minimum": 1,
+                          "maximum": 50
+                        },
+                        "shift": {
+                          "description": "Diffusion timestep schedule shift for sound-effect generation.",
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 100
+                        }
+                      },
+                      "required": ["ttsEngine"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSfx"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "moss-speech",
+                          "description": "TTS engine: MOSS-Speech."
+                        },
+                        "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "mossSpeechCodecModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "moss-transcribe",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc"
+                            }
+                          ],
+                          "description": "MOSS-Speech codec GGUF source; modelSrc is the language model."
+                        }
+                      },
+                      "required": ["ttsEngine", "mossSpeechCodecModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigMossSpeech"
                     }
                   ]
                 }
@@ -15599,6 +16620,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -15691,7 +16713,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video", "world"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -15805,7 +16827,14 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "type": ["number", "string"]
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -15892,6 +16921,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -15987,6 +17017,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16082,6 +17113,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16177,6 +17209,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16272,6 +17305,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16367,6 +17401,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16462,6 +17497,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16495,7 +17531,7 @@
                       ]
                     },
                     "clipVisionModelSrc": {
-                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 or MiniMax-H3 (their img2vid paths need no CLIP-vision projection).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -16557,6 +17593,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16590,7 +17627,7 @@
                       ]
                     },
                     "audioVaeModelSrc": {
-                      "description": "Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent LTX-2 video; unsupported by Wan.",
+                      "description": "Audio VAE decoder model — optional for MiniMax-H3 and LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent video; unsupported by Wan.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -16652,6 +17689,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16747,6 +17785,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16842,6 +17881,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -16937,6 +17977,7 @@
                                     "onnx-tts",
                                     "tts-ggml",
                                     "parakeet-transcription",
+                                    "moss-transcribe",
                                     "ggml-ocr",
                                     "sdcpp-generation",
                                     "audiogen-ggml",
@@ -17021,7 +18062,14 @@
                         },
                         "maxVram": {
                           "description": "VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
-                          "type": ["number", "string"]
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
                         },
                         "streamLayers": {
                           "description": "Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -17138,6 +18186,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17278,20 +18327,21 @@
                           "maximum": 9007199254740991
                         },
                         "backendsDir": {
-                          "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+                          "description": "Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
                           "type": "string",
                           "minLength": 1
                         },
                         "inferenceSteps": {
-                          "description": "DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).",
+                          "description": "DiT sampling steps, 0..1000; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / base and sft 50). A generation or edit can override it per run.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 1000
                         },
                         "shift": {
-                          "description": "Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
+                          "description": "Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / base and sft 1.0). A generation or edit can override it per run.",
                           "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "maximum": 3.4028234663852886e38
                         },
                         "nGpuLayers": {
                           "description": "ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
@@ -17361,6 +18411,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17456,6 +18507,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17551,6 +18603,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17646,6 +18699,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17703,9 +18757,15 @@
                           "maximum": 9007199254740991
                         },
                         "backendsDir": {
-                          "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+                          "description": "Advanced: directory scanned as given for dlopen’d ggml backend modules. Unset scans the directory the native module was loaded from. Needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
                           "type": "string",
                           "minLength": 1
+                        },
+                        "device": {
+                          "description": "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`.",
+                          "type": "string",
+                          "enum": ["cpu", "gpu", "auto"],
+                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice"
                         },
                         "inferenceSteps": {
                           "description": "MiniMax flow sampling steps; `0` uses the engine default (20).",
@@ -17781,6 +18841,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17876,6 +18937,7 @@
                                         "onnx-tts",
                                         "tts-ggml",
                                         "parakeet-transcription",
+                                        "moss-transcribe",
                                         "ggml-ocr",
                                         "sdcpp-generation",
                                         "audiogen-ggml",
@@ -17972,10 +19034,24 @@
                   "type": "object",
                   "properties": {
                     "backend": {
-                      "description": "Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
-                      "type": "string",
-                      "enum": ["auto", "cpu"],
-                      "title": "LoadModelSrcRequestGgmlVlaModelConfigBackend"
+                      "description": "Ordered backend names, such as ['cuda', 'vulkan']. Omitted or ['auto'] uses the native default order. Supported GPU names: cuda, vulkan, metal, opencl, hip, rocm, sycl. Names are tried in order; if none has an accepted device, selection falls back to the native default order. ['cpu'] forces CPU regardless of available accelerators and must be used on its own.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "cpu",
+                          "cuda",
+                          "vulkan",
+                          "metal",
+                          "opencl",
+                          "hip",
+                          "rocm",
+                          "sycl"
+                        ],
+                        "title": "LoadModelSrcRequestGgmlVlaModelConfigBackendItem"
+                      }
                     },
                     "verbosity": {
                       "description": "Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",
@@ -18369,7 +19445,7 @@
                   "maximum": 9007199254740991
                 },
                 "backendsDir": {
-                  "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                  "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                   "type": "string"
                 },
                 "vad_params": {
@@ -18509,6 +19585,7 @@
                                 "onnx-tts",
                                 "tts-ggml",
                                 "parakeet-transcription",
+                                "moss-transcribe",
                                 "ggml-ocr",
                                 "sdcpp-generation",
                                 "audiogen-ggml",
@@ -18782,6 +19859,7 @@
                 "tts",
                 "ocr",
                 "parakeet",
+                "moss-transcribe",
                 "diffusion",
                 "audiogen",
                 "vla",
@@ -18811,6 +19889,7 @@
                 "tts-ggml",
                 "ggml-ocr",
                 "parakeet-transcription",
+                "moss-transcribe",
                 "sdcpp-generation",
                 "audiogen-ggml",
                 "ggml-vla",
@@ -18926,6 +20005,7 @@
                   "tts",
                   "ocr",
                   "parakeet",
+                  "moss-transcribe",
                   "diffusion",
                   "audiogen",
                   "vla",
@@ -18955,6 +20035,7 @@
                   "tts-ggml",
                   "ggml-ocr",
                   "parakeet-transcription",
+                  "moss-transcribe",
                   "sdcpp-generation",
                   "audiogen-ggml",
                   "ggml-vla",
@@ -19029,6 +20110,7 @@
             "tts",
             "ocr",
             "parakeet",
+            "moss-transcribe",
             "diffusion",
             "audiogen",
             "vla",
@@ -19100,6 +20182,7 @@
                   "tts",
                   "ocr",
                   "parakeet",
+                  "moss-transcribe",
                   "diffusion",
                   "audiogen",
                   "vla",
@@ -19129,6 +20212,7 @@
                   "tts-ggml",
                   "ggml-ocr",
                   "parakeet-transcription",
+                  "moss-transcribe",
                   "sdcpp-generation",
                   "audiogen-ggml",
                   "ggml-vla",
@@ -20380,12 +21464,135 @@
           "type": "string",
           "minLength": 1
         },
+        "seconds": {
+          "description": "Sound-effect duration in seconds, up to 30.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 30
+        },
+        "negativePrompt": {
+          "description": "Description of sounds to avoid in the generated effect.",
+          "type": "string"
+        },
+        "steps": {
+          "description": "Diffusion denoising steps; the native default is 100.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "guidance": {
+          "description": "Classifier-free guidance scale for sound-effect generation.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "shift": {
+          "description": "Diffusion timestep schedule shift for sound-effect generation.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "audio": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          }
+        },
+        "sampleRate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 192000
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": ["system", "user", "assistant"],
+                "title": "TextToSpeechRequestMessagesItemRole"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "audio": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 1
+                }
+              },
+              "sampleRate": {
+                "type": "integer",
+                "minimum": 8000,
+                "maximum": 192000
+              }
+            },
+            "required": ["role"],
+            "title": "TextToSpeechRequestMessagesItem"
+          }
+        },
+        "systemPrompt": {
+          "type": "string"
+        },
+        "replyVoice": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          }
+        },
+        "replyVoiceSampleRate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 192000
+        },
+        "textReply": {
+          "type": "boolean"
+        },
+        "maxReplySeconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "maxNewTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "greedy": {
+          "type": "boolean"
+        },
+        "temperature": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10
+        },
+        "topP": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "topK": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
         "type": {
           "type": "string",
           "const": "textToSpeech"
         }
       },
-      "required": ["modelId", "text", "type"]
+      "required": ["modelId", "type"]
     },
     "textToSpeech.response": {
       "title": "TextToSpeechResponse",
@@ -20394,6 +21601,10 @@
         "type": {
           "type": "string",
           "const": "textToSpeech"
+        },
+        "text": {
+          "description": "MOSS-Speech reply text, including text-only replies.",
+          "type": "string"
         },
         "buffer": {
           "type": "array",
@@ -20722,6 +21933,21 @@
             }
           ]
         },
+        "hotwords": {
+          "description": "MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "maxNewTokens": {
+          "description": "MOSS generated-token limit; 0 uses the model default.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
         "type": {
           "type": "string",
           "const": "transcribe"
@@ -20865,6 +22091,41 @@
             "id": {
               "type": "number"
             },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "TranscribeResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -20881,6 +22142,12 @@
         "vad": {
           "type": "object",
           "properties": {
+            "speakerId": {
+              "description": "Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "speaking": {
               "type": "boolean"
             },
@@ -21093,6 +22360,19 @@
             "emitEnergyVad": {
               "type": "boolean"
             },
+            "emitSpeakerVad": {
+              "type": "boolean"
+            },
+            "diarizationThreshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "diarizationMinSegmentMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "spkCacheEnable": {
               "type": "boolean"
             },
@@ -21263,6 +22543,41 @@
             "id": {
               "type": "number"
             },
+            "speakerId": {
+              "description": "Zero-based speaker id for diarized transcription.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "speaker": {
+              "description": "MOSS speaker label, such as S01.",
+              "type": "string"
+            },
+            "speakerSegments": {
+              "description": "Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "speakerId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": ["speakerId", "startMs", "endMs"],
+                "additionalProperties": false,
+                "title": "TranscribeStreamResponseSegmentSpeakerSegmentsItem"
+              }
+            },
             "isEndOfTurn": {
               "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
               "type": "boolean"
@@ -21279,6 +22594,12 @@
         "vad": {
           "type": "object",
           "properties": {
+            "speakerId": {
+              "description": "Dominant speaker for Parakeet diarization activity; omitted when unavailable.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "speaking": {
               "type": "boolean"
             },

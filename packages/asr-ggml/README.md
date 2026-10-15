@@ -163,6 +163,13 @@ SDK code — see [Engine Selection](#engine-selection).
 - Bare runtime — see `engines.bare` in `package.json`
 - Linux requires Clang/LLVM 22 with libc++
 
+`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the same
+versions in every speech addon (`@qvac/asr-ggml`, `@qvac/audiogen-ggml`,
+`@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and `package.json` records the
+`ggml-speech` build as `qvac["ggml-speech"]`. The speech addons ship their ggml
+backends under the same file names, so an app that bundles several of them
+keeps one copy of each: use releases that record the same `ggml-speech`.
+
 ## Installation
 
 Make sure the Bare runtime is installed:
@@ -195,11 +202,12 @@ package selected at install time through `os`/`cpu` filtered
 
 Do not depend on desktop platform packages directly. Supported installers are
 npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
-the platform package and fail at require time with an error naming the missing
-package; a locally built `prebuilds/` directory in the package root always
-takes precedence. Use `require('@qvac/asr-ggml').resolveBackendsDir()` to
-locate the directory holding the host's prebuilt binaries and dynamically
-loaded ggml backends.
+the platform package and fail at require time, and at `bare-pack` time, naming
+the missing package. Each platform package is an ordinary Bare addon whose
+`prebuilds/<host>/` holds the native module and, next to it, the dynamically
+loaded ggml backends the module finds on its own. A source build becomes
+loadable once `npm run link:platform` (run by `npm run build:native`) stages it
+as the host's platform package in `node_modules/`.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
 and `optionalDependencies` filtering can never select them. Mobile
@@ -497,10 +505,12 @@ Engine-specific segment fields:
 
 `assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The registry publishes a weightless copy of each model, and passing it answers the same as passing the model itself, so the projection can run before the model is downloaded: for parakeet a GGUF without its data, for whisper and its Silero VAD model a GGUF description of the `.bin` (its settings, vocabulary sizes and tensor list, tens of KB). It is a module export, not an instance method — nothing is loaded to call it.
 
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read resolves with `status: 'error'`; only a broken request rejects.
+
 ```js
 const ASRGgml = require('@qvac/asr-ggml')
 
-const fit = ASRGgml.assessFit({
+const fit = await ASRGgml.assessFit({
   engine: 'whisper',
   modelPath: '/models/whisper.bin',
   vadModelPath: '/models/silero-vad.bin',
@@ -526,7 +536,7 @@ fit.report
 | `audioSeconds` | Longest single transcribe the projection must cover. Required for MOSS; defaults to 300 for whisper and parakeet. |
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, parakeet and MOSS project on the CPU and whisper on the GPU, matching what each load does. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to the engine's own headroom, which is 256 MiB for parakeet and MOSS. |
-| `backendsDir` | The prebuilds root. The backends are read from the per-target subdir under it, the same path a load reads. |
+| `backendsDir` | Directory scanned as given for the ggml backends, the same path a load reads. Unset scans next to the loaded module. |
 | `vadModelPath` | Whisper: projected alongside the model; the VAD model or its weightless copy. Omitted means no VAD. |
 | `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
@@ -536,7 +546,7 @@ fit.report
 MOSS-Transcribe-Diarize uses an explicit duration and the same per-call options as `run`:
 
 ```js
-const fit = ASRGgml.assessFit({
+const fit = await ASRGgml.assessFit({
   engine: 'moss-transcribe',
   modelPath: '/models/moss-transcribe-diarize-q8_0.gguf',
   audioSeconds: 90,
@@ -711,8 +721,18 @@ and one streaming chunk.
 | Option | Default | Description |
 | --- | --- | --- |
 | `maxThreads` | `0` | CPU threads (0 lets the engine pick). |
-| `useGPU` | `false` | Use the linked ggml GPU backend (Metal / Vulkan / OpenCL / CUDA). |
-| `backendsDir` | package `prebuilds/` | Directory of the dynamically loaded ggml backends. |
+| `useGPU` | `false` | Select a GPU automatically when `backend` is `auto`. |
+| `backend` | `auto` | Native selector: `cpu`, `cuda`, `vulkan`, or an exact ggml device name such as `CUDA0` or `Vulkan0`. Explicit selection overrides `useGPU` and fails at load if unavailable. |
+| `backendsDir` | next to the loaded module | Directory scanned as given for the dynamically loaded ggml backends. |
+
+For example, `mossTranscribeConfig: { backend: 'cuda' }` requests CUDA even
+with the default `useGPU: false`; `{ backend: 'cpu', useGPU: true }` selects
+the CPU ggml backend. `auto` (or an empty selector) preserves automatic selection and fallback.
+Pass the same `backend` to `assessFit({ engine: 'moss-transcribe', ... })`
+to project on that device; it overrides `gpuLayers`. A missing explicit device
+returns a fit error instead of a CPU projection. `getBackendInfo()` reports
+the resolved backend after load. CUDA/Vulkan require compatible native
+`speech-cpp` libraries and the corresponding backend in the addon build.
 
 Any other key throws `INVALID_CONFIG` (24015). Prompt, hotwords and the token
 bound are per call; see
@@ -824,15 +844,13 @@ additionally reports
 
 Two paths matter on Android and Linux:
 
-- **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
-  holding dynamically-loaded ggml backend libraries (CUDA, Vulkan, OpenCL,
-  per-arch CPU variants). Defaults to `resolveBackendsDir()`: the package's
-  own `prebuilds/` when present (local builds, mobile flatten), otherwise the
-  installed platform package (see [Platform packages](#platform-packages));
-  the native addon
-  appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
-  when backend libraries ship elsewhere — e.g. Android's
-  `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.
+- **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — directory
+  scanned, as given, for dynamically-loaded ggml backend libraries (CUDA,
+  Vulkan, OpenCL, per-arch CPU variants). Unset scans the addon's own: the
+  directory its native module was loaded from
+  (`prebuilds/<host>/qvac__asr-ggml-<suffix>/` in a platform package, the
+  app's native library directory after `bare-link`). Pass a path only when
+  backend libraries ship somewhere else.
   No-op on Apple, where backends are statically linked.
 - **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
   compiled program-binary cache. Android-only; pass the host app's cache
@@ -999,8 +1017,10 @@ npm run build          # build:ts (TypeScript) + build:native (bare-make)
 npm run build:cuda     # same, with the CUDA backend compiled in (needs nvcc)
 ```
 
-`build:native` runs `bare-make generate` → `bare-make build` →
-`bare-make install`. `build:native:cuda` is the same chain with
+`build:native` runs `bare-make generate`, `bare-make build`,
+`bare-make install` and `npm run link:platform`, which stages
+`prebuilds/<host>/` as `node_modules/@qvac/asr-ggml-<host>`: `#host-addon`
+only ever loads a platform package. `build:native:cuda` is the same chain with
 `-D ASR_CUDA=ON` on the generate step.
 
 ### Test
@@ -1042,7 +1062,54 @@ The MOSS-Transcribe-Diarize integration test (`moss-transcribe.test.js`, part of
 `test:integration:parakeet`) runs when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` points
 at a GGUF and is skipped otherwise; the C++ suite transcribes a real recording
 when `QVAC_TEST_MOSS_TRANSCRIBE_GGUF` and `QVAC_TEST_MOSS_TRANSCRIBE_AUDIO`
-(16 kHz s16le raw) are set.
+(16 kHz s16le raw) are set. To check a specific backend with the JS integration
+test, also set `QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda` or `vulkan` (or an exact
+device name). It asserts the resolved backend before transcription; a missing
+requested backend fails instead of silently validating CPU. An explicit selector
+also fails if the model or audio fixture is missing; only the default `auto`
+mode permits optional-fixture skips. Selectors are case-sensitive, matching
+native device names. Run these model
+tests on provisioned hardware with sufficient memory. Mocked JS forwarding
+tests and the C++ option-mapping tests do not establish GPU execution.
+
+### OpenMOSS native dependency validation
+
+The package pins `speech-cpp` 2026-10-14 and `ggml-speech` 2026-10-07#1.
+The registry baseline remains `e31be272ecdf9f20970302ebf8a2943d47803001`.
+The `speech-cpp` override selects the merged native source
+`bd99d1e2233ad0ff8d314c93633cad84ca823e83` published by
+[registry PR #428](https://github.com/tetherto/qvac-registry-vcpkg/pull/428).
+This speech revision provides the explicit MOSS backend selector used by the
+addon; the selector and dependency pin must ship together.
+
+On a provisioned Linux NVIDIA host with CUDA 13, Vulkan drivers, sufficient
+memory, and package development dependencies installed, run from this package:
+
+```sh
+# Bound both dependency compilation and addon compilation.
+export VCPKG_MAX_CONCURRENCY=2 CMAKE_BUILD_PARALLEL_LEVEL=2
+npm run build:ts
+bare-make generate --build build-moss -D ASR_CUDA=ON -D BUILD_TESTING=OFF
+bare-make build --build build-moss --parallel 2
+bare-make install --build build-moss
+npm run link:platform
+
+# Stage the full MOSS GGUF and examples/samples/LastQuestion_long_ES.raw first.
+: "${QVAC_TEST_MOSS_TRANSCRIBE_GGUF:?Set this to the provisioned MOSS GGUF}"
+export QVAC_TEST_MOSS_TRANSCRIBE_GGUF
+node_modules/.bin/brittle -r test/integration/all.js test/integration/moss-transcribe.test.js
+QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=cuda INTEGRATION_TEST_TIMEOUT=1800 \
+  bash test/integration/parakeet-run-tests.sh
+QVAC_TEST_MOSS_TRANSCRIBE_BACKEND=vulkan INTEGRATION_TEST_TIMEOUT=1800 \
+  bash test/integration/parakeet-run-tests.sh
+```
+
+For a Vulkan-only Linux host, generate with `-D ASR_CUDA=OFF` and run only the
+Vulkan command. These checks must execute both default-prompt and hotword
+transcription and assert the selected backend; an explicit backend run fails
+when a fixture is missing. Registry dry-runs, forwarding tests, and compilation
+alone do not validate packaged addon GPU inference. Run packaged validation on
+the same source revision and native dependencies that will be shipped.
 
 Typical loop: `npm install && npm run build && npm run test:integration`.
 
