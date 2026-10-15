@@ -58,7 +58,7 @@ sealed class AnyRequest {
 internal object AnyRequestSerializer : KSerializer<AnyRequest> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AnyRequest")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"models\",\"type\"],\"properties\":{\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"modelType\"]}},\"execution\":{\"type\":\"string\",\"enum\":[\"sequential\",\"concurrent\"]},\"policy\":{\"type\":\"string\",\"const\":\"interactive-v1\"},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"models\",\"type\"],\"properties\":{\"models\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"execution\":{\"type\":\"string\",\"enum\":[\"sequential\",\"concurrent\"]},\"policy\":{\"type\":\"string\",\"const\":\"interactive-v1\"},\"type\":{\"type\":\"string\",\"const\":\"assessModelFit\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"operations\",\"sourceAudio\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"operations\":{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"from\",\"to\"]},{\"type\":\"object\",\"required\":[\"type\",\"caption\",\"start\"]}]}},\"seed\":{\"type\":\"integer\"},\"sourceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"audioEditStream\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"caption\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"caption\":{\"type\":\"string\"},\"lyrics\":{\"type\":\"string\"},\"seed\":{\"type\":\"integer\"},\"vocalLanguage\":{\"type\":\"string\"},\"bpm\":{\"type\":\"integer\"},\"keyscale\":{\"type\":\"string\"},\"timesignature\":{\"type\":\"string\"},\"augmentCaptionWithMetadata\":{\"type\":\"boolean\"},\"simpleMode\":{\"type\":\"boolean\"},\"rewriteQuery\":{\"type\":\"boolean\"},\"generateLrc\":{\"type\":\"boolean\"},\"computeQualityScore\":{\"type\":\"boolean\"},\"normalizeLoudness\":{\"type\":\"boolean\"},\"guidanceScale\":{\"type\":\"number\"},\"track\":{\"type\":\"string\",\"enum\":[\"vocals\",\"backing_vocals\",\"drums\",\"bass\",\"guitar\",\"keyboard\",\"percussion\",\"strings\",\"synth\",\"fx\",\"brass\",\"woodwinds\"]},\"duration\":{\"type\":\"number\"},\"maxFrames\":{\"type\":\"integer\"},\"inferenceSteps\":{\"type\":\"integer\"},\"cfgScale\":{\"type\":\"number\"},\"lmTemperature\":{\"type\":\"number\"},\"lmTopP\":{\"type\":\"number\"},\"lmTopK\":{\"type\":\"integer\"},\"lmCfgScale\":{\"type\":\"number\"},\"lmPhase1\":{\"type\":\"boolean\"},\"dcwEnabled\":{\"type\":\"boolean\"},\"dcwScaler\":{\"type\":\"number\"},\"dcwHighScaler\":{\"type\":\"number\"},\"taskType\":{\"type\":\"string\",\"enum\":[\"text2music\",\"cover-nofsq\",\"lego\"]},\"audioCoverStrength\":{\"type\":\"number\"},\"coverNoiseStrength\":{\"type\":\"number\"},\"audioCodes\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"referenceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"sourceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"audioGenStream\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"sourceAudio\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"seed\":{\"type\":\"integer\"},\"vocalLanguage\":{\"type\":\"string\"},\"lmTemperature\":{\"type\":\"number\"},\"lmTopP\":{\"type\":\"number\"},\"lmTopK\":{\"type\":\"integer\"},\"sourceAudio\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"audioUnderstand\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
@@ -223,7 +223,7 @@ data class AssessModelFitRequest(
 @Serializable
 data class AssessModelFitRequestModelsItem(
     @SerialName("modelSrc") val `modelSrc`: AssessModelFitRequestModelsItemModelSrc? = null,
-    @SerialName("modelType") val `modelType`: AssessModelFitRequestModelsItemModelType,
+    @SerialName("modelType") val `modelType`: AssessModelFitRequestModelsItemModelType? = null,
     @SerialName("modelConfig") val `modelConfig`: Map<String, JsonElement>? = null,
 )
 
@@ -10312,6 +10312,7 @@ data class AssessModelFitResponseModelsItem(
     @SerialName("estimate") val `estimate`: AssessModelFitResponseModelsItemEstimate? = null,
     @SerialName("floorBytes") val `floorBytes`: Double? = null,
     @SerialName("estimatorVersion") val `estimatorVersion`: String? = null,
+    @SerialName("device") val `device`: String? = null,
     @SerialName("reasons") val `reasons`: List<String>,
 )
 
@@ -11756,6 +11757,7 @@ data class NativeProbeFit(
     @SerialName("verdict") val `verdict`: NativeProbeFitVerdict,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("basis") val `basis`: String = "native-probe",
+    @SerialName("engine") val `engine`: String? = null,
     @SerialName("estimatorVersion") val `estimatorVersion`: String,
     @SerialName("reason") val `reason`: String,
     @SerialName("message") val `message`: String? = null,
@@ -11779,18 +11781,15 @@ data class NativeProbeFitPlan(
 
 @Serializable
 data class NativeProbeFitProjection(
-    @SerialName("devices") val `devices`: List<NativeProbeFitProjectionDevicesItem>,
-)
-
-@Serializable
-data class NativeProbeFitProjectionDevicesItem(
-    @SerialName("name") val `name`: String,
-    @SerialName("totalBytes") val `totalBytes`: Double,
-    @SerialName("freeBytes") val `freeBytes`: Double,
-    @SerialName("marginBytes") val `marginBytes`: Double,
-    @SerialName("modelBytes") val `modelBytes`: Double,
-    @SerialName("contextBytes") val `contextBytes`: Double,
-    @SerialName("computeBytes") val `computeBytes`: Double,
+    @SerialName("deviceName") val `deviceName`: String? = null,
+    @SerialName("deviceBytes") val `deviceBytes`: Double? = null,
+    @SerialName("hostBytes") val `hostBytes`: Double? = null,
+    @SerialName("weightsBytes") val `weightsBytes`: Double? = null,
+    @SerialName("contextBytes") val `contextBytes`: Double? = null,
+    @SerialName("computeBytes") val `computeBytes`: Double? = null,
+    @SerialName("deviceFreeBytes") val `deviceFreeBytes`: Double? = null,
+    @SerialName("deviceTotalBytes") val `deviceTotalBytes`: Double? = null,
+    @SerialName("report") val `report`: String? = null,
 )
 
 @Serializable
